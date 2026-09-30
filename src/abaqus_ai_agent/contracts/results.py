@@ -1,4 +1,4 @@
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field as dataclass_field
 from typing import Any, Dict, Optional, Tuple
 
 
@@ -17,7 +17,7 @@ class ResultRequirement:
     region: Optional[str] = None
     unit: str = ""
     output_kind: str = "field"
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    metadata: Dict[str, Any] = dataclass_field(default_factory=dict)
 
     def __post_init__(self):
         if self.aggregation not in ("max", "min", "average", "last"):
@@ -32,7 +32,7 @@ class ResultRequirement:
 class ResultExtraction:
     requirement: ResultRequirement
     value: float
-    locator: Dict[str, Any] = field(default_factory=dict)
+    locator: Dict[str, Any] = dataclass_field(default_factory=dict)
     evidence: Tuple[Dict[str, Any], ...] = ()
 
 
