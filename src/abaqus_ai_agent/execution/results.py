@@ -47,12 +47,13 @@ def _scalar(item):
 
 
 def _frame_value(executor, path, step, frame):
-    code = """from odbAccess import openOdb
+    code = """import json
+from odbAccess import openOdb
 odb=openOdb(path=%r, readOnly=True)
 st=odb.steps[%r]
 fr=st.frames[%r]
-print({'step':%r,'frame_index':%r,'frame_value':getattr(fr,'frameValue',None),
-       'description':getattr(fr,'description',None)})
+print(json.dumps({'step':%r,'frame_index':%r,'frame_value':getattr(fr,'frameValue',None),
+       'description':getattr(fr,'description',None)}))
 odb.close()
 """ % (path, step, frame, step, frame)
     return _payload(executor.execute(code))
@@ -85,7 +86,7 @@ elif %r == 'average':
     value=sum(values)/float(len(values))
 else:
     value=values[-1]
-print({'region':region_name,'variable':%r,'aggregation':%r,'value':value,'count':len(values)})
+print(json.dumps({'region':region_name,'variable':%r,'aggregation':%r,'value':value,'count':len(values)}))
 odb.close()
 """ % (path, step, region, variable, variable, variable, aggregation,
        aggregation, aggregation, variable, aggregation)
