@@ -15,7 +15,6 @@ class ImagePoint:
 
 @dataclass(frozen=True)
 class ImageRegion:
-    """A normalized annotation region in image coordinates."""
     center: ImagePoint
     width: float
     height: float
@@ -27,7 +26,6 @@ class ImageRegion:
 
 @dataclass(frozen=True)
 class ViewProjection:
-    """Camera/projection metadata supplied by the Abaqus adapter."""
     viewport_id: str
     projection_type: str
     image_width: int
@@ -53,6 +51,7 @@ class GeometryCandidate:
     distance_score: float
     visual_score: float
     topology_score: float
+    screen_polygon: Optional[Tuple[Tuple[float, float], ...]] = None
 
     def __post_init__(self):
         for name, value in (
@@ -65,20 +64,6 @@ class GeometryCandidate:
 
     @property
     def total_score(self) -> float:
-        """Normalized evidence score used for ranking."""
-        return (
-            0.4 * self.distance_score
-            + 0.4 * self.visual_score
-            + 0.2 * self.topology_score
-        )
-
-
-@dataclass(frozen=True)
-class GroundingResult:
-    """Evidence-backed geometry resolution result."""
-    intent_id: str
-    candidates: List[GeometryCandidate]
-    selected: Optional[GeometryCandidate]
-    confidence: float
-    requires_confirmation: bool
-    evidence: Tuple[str, ...] = ()
+        return (0.4 * self.distance_score +
+                0.4 * self.visual_score +
+                0.2 * self.topology_score)
