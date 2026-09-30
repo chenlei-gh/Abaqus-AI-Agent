@@ -15,6 +15,8 @@ class ResultRequirement:
     frame: int = -1
     position: Optional[str] = None
     region: Optional[str] = None
+    history_region: Optional[str] = None
+    history_variable: Optional[str] = None
     unit: str = ""
     output_kind: str = "field"
     metadata: Dict[str, Any] = dataclass_field(default_factory=dict)
@@ -26,6 +28,8 @@ class ResultRequirement:
             raise ValueError("unsupported output_kind: %s" % self.output_kind)
         if self.output_kind == "field" and not self.field:
             raise ValueError("field is required for field output requirements")
+        if self.output_kind == "history" and not self.history_variable:
+            raise ValueError("history_variable is required for history output requirements")
 
 
 @dataclass(frozen=True)
