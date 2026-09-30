@@ -60,7 +60,8 @@ odb.close()
 
 
 def _history_output(executor, path, step, region, variable, aggregation):
-    code = """from odbAccess import openOdb
+    code = """import json
+from odbAccess import openOdb
 odb=openOdb(path=%r, readOnly=True)
 regions=odb.steps[%r].historyRegions
 region_name=%r
