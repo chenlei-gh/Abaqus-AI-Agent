@@ -97,7 +97,13 @@ def _entity_data(entity, index, view=None, owner=None, entity_type="Face"):
         size = float(entity.getSize())
     except Exception:
         pass
-    item = {"index": index, "entity_type": entity_type, "centroid": centroid, "normal": normal, "size": size}
+    locator_point = None
+    try:
+        locator_point = tuple(float(x) for x in entity.pointOn[0][:3])
+    except Exception:
+        locator_point = centroid
+    item = {"index": index, "entity_type": entity_type, "centroid": centroid,
+            "locator_point": locator_point, "normal": normal, "size": size}
     if centroid is not None:
         try:
             forward, _, _ = _camera_basis(view)
