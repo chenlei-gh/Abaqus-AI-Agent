@@ -14,7 +14,17 @@ def validate_action(action):
         "local_seed_size", "local_seed_number", "mesh_controls", "element_type"
     ) and not action.parameters.get("region_expression"):
         raise ValueError("region_expression is required for %s" % action.action_type)
-    mesh = action.action_type in ("seed_part", "local_seed_size", "local_seed_number", "mesh_controls", "element_type", "generate_mesh")
+    geometry = action.action_type in ("inspect_geometry", "ignore_entity", "restore_entity", "repair_geometry", "remove_redundant_entities", "inspect_mesh")
+    if geometry:
+        if not action.parameters.get("part"):
+            raise ValueError("part is required for %s" % action.action_type)
+        if action.action_type in ("ignore_entity", "restore_entity") and not action.parameters.get("region_expression"):
+            raise ValueError("region_expression is required for %s" % action.action_type)
+        if action.action_type == "inspect_geometry":
+            for key in ("min_edge_length", "min_face_size"):
+                if action.parameters.get(key) is not None and action.parameters[key] <= 0:
+                    raise ValueError("%s must be positive" % key)
+    mesh = action.action_type in ("seed_part", "local_seed_size", "local_seed_number", "mesh_controls", "element_type", "generate_mesh", "inspect_mesh")
     if mesh:
         part = action.parameters.get("part")
         if not part:
