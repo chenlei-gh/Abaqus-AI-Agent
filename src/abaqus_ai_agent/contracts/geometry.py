@@ -115,3 +115,23 @@ class GeometrySelection:
             raise ValueError("surfaces require Face or Edge targets")
         if self.surface_side not in (None, "side1", "side2"):
             raise ValueError("surface_side must be side1, side2, or None")
+
+
+@dataclass(frozen=True)
+class RegionBinding:
+    """Plan for materializing a GeometrySelection in an Abaqus model."""
+    region_kind: str
+    name: Optional[str]
+    entity_type: str
+    targets: Tuple[dict, ...]
+    surface_side: Optional[str] = None
+
+    def __post_init__(self):
+        if self.region_kind not in ("temporary", "set", "surface"):
+            raise ValueError("unsupported region kind")
+        if self.region_kind != "temporary" and not self.name:
+            raise ValueError("named region requires a name")
+        if self.region_kind == "surface" and self.entity_type not in ("Face", "Edge"):
+            raise ValueError("surface requires Face or Edge")
+        if self.surface_side not in (None, "side1", "side2"):
+            raise ValueError("surface_side must be side1, side2, or None")
