@@ -147,15 +147,24 @@ def _contact_property_script(model, p):
     lines = ["model=mdb.models[%s]" % _q(model),
              "prop=model.ContactProperty(%s)" % _q(name)]
     if behavior:
-        lines.append("prop.NormalBehavior(pressureOverclosure=%s)" % p.get("pressure_overclosure", "HARD"))
+        lines.append("prop.NormalBehavior(pressureOverclosure=%s)" %
+                     p.get("pressure_overclosure", "HARD"))
     if tangential:
-        lines.append("prop.TangentialBehavior(formulation=%s, table=((%r,),))" %
-                     (tangential.get("formulation", "PENALTY"), tangential.get("friction", 0.0)))
+        formulation = str(tangential.get("formulation", "PENALTY")).upper()
+        if formulation == "FRICTIONLESS":
+            lines.append("prop.TangentialBehavior(formulation=FRICTIONLESS)")
+        elif formulation in ("PENALTY", "LAGRANGE", "ROUGH", "EXPONENTIAL_DECAY", "USER_DEFINED"):
+            args = ["formulation=%s" % formulation]
+            if formulation in ("PENALTY", "LAGRANGE"):
+                args.append("table=((%r,),)" % tangential.get("friction", 0.0))
+            lines.append("prop.TangentialBehavior(%s)" % ", ".join(args))
+        else:
+            raise ValueError("unsupported contact tangential formulation: %s" % formulation)
     return "; ".join(lines)
 
 def _contact_script(model, p):
     return ("model=mdb.models[%s]; model.SurfaceToSurfaceContactStd("
-            "name=%s, createStepName=%s, master=%s, slave=%s, "
+            "name=%s, createStepName=%s, main=%s, secondary=%s, "
             "sliding=%s, interactionProperty=%s)" %
             (_q(model), _q(p["name"]), _q(p.get("step", "Initial")),
              p["master_expression"], p["slave_expression"],
