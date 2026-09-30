@@ -1,7 +1,7 @@
 """Executor-neutral mesh inspection and quality result contracts."""
 
 from dataclasses import dataclass, field
-from typing import Tuple
+from typing import Dict, Optional, Tuple
 
 
 @dataclass(frozen=True)
@@ -48,3 +48,9 @@ class MeshQualityResult:
     def __post_init__(self):
         if self.status not in ("unknown", "pass", "warning", "fail"):
             raise ValueError("invalid status")
+        if any(not isinstance(k, str) or not isinstance(v, (int, float)) for k, v in self.metrics.items()):
+            raise ValueError("metrics must map strings to numeric values")
+
+    @property
+    def passed(self):
+        return self.status == "pass"
