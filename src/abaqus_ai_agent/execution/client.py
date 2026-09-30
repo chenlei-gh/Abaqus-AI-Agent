@@ -14,13 +14,28 @@ class AbaqusExecutor(ABC):
     def ping(self):
         return self.execute("print('ABAQUS_AI_AGENT_PING')")
 
+    def inspect_model(self):
+        from .inspection import get_model_info
+        return get_model_info(self)
+
+    def capture_viewport(self, path="abaqus_viewport.png"):
+        from .inspection import capture_viewport
+        return capture_viewport(self)
+
+    def inspect_odb(self, path):
+        from .odb import inspect_odb
+        return inspect_odb(self)
+
+    def monitor_job(self, name, timeout=3600, poll_seconds=2.0):
+        # A conservative default: a single native status query. Bridges that
+        # provide a richer monitor operation can override this method.
+        return self.execute("print(mdb.jobs[%r].status)" % name, timeout=timeout)
+
 
 class BridgeExecutor(AbaqusExecutor):
-    """Line-delimited JSON client for the Abaqus-Control-MCP bridge protocol."""
+    """Line-delimited JSON client for a compatible local Abaqus bridge."""
     def __init__(self, host="127.0.0.1", port=48152, timeout=120):
-        self.host = host
-        self.port = int(port)
-        self.timeout = float(timeout)
+        self.host, self.port, self.timeout = host, int(port), float(timeout)
 
     def _request(self, method, params=None, timeout=None):
         timeout = self.timeout if timeout is None else float(timeout)
@@ -29,7 +44,7 @@ class BridgeExecutor(AbaqusExecutor):
         params.setdefault("timeout", timeout)
         params.setdefault("executionId", request_id)
         payload = {"id": request_id, "method": method, "params": params}
-        raw = (json.dumps(payload, ensure_ascii=False, separators=(",", ":")) + "\\n").encode("utf-8")
+        raw = (json.dumps(payload, ensure_ascii=False, separators=(",", ":")) + "\n").encode("utf-8")
         try:
             sock = socket.create_connection((self.host, self.port), timeout=timeout)
             sock.settimeout(timeout + 10.0)
@@ -42,7 +57,7 @@ class BridgeExecutor(AbaqusExecutor):
                 chunk = sock.recv(4096)
                 if not chunk:
                     raise AbaqusConnectionError("bridge closed before a complete response")
-                pos = chunk.find(b"\\n")
+                pos = chunk.find(b"\n")
                 if pos >= 0:
                     chunks.append(chunk[:pos]); total += pos; break
                 chunks.append(chunk); total += len(chunk)
@@ -69,6 +84,20 @@ class BridgeExecutor(AbaqusExecutor):
 
     def ping(self):
         return self._request("ping", {}, self.timeout)
+
+    def inspect_model(self):
+        return self._request("model_info", {}, self.timeout)
+
+    def capture_viewport(self, path="abaqus_viewport.png"):
+        return self._request("capture_viewport", {"path": path}, self.timeout)
+
+    def inspect_odb(self, path):
+        return self._request("inspect_odb", {"path": path}, self.timeout)
+
+    def monitor_job(self, name, timeout=3600, poll_seconds=2.0):
+        return self._request("monitor_job_status", {
+            "jobName": name, "timeout": timeout, "pollInterval": poll_seconds
+        }, timeout)
 
 
 class InProcessExecutor(AbaqusExecutor):
