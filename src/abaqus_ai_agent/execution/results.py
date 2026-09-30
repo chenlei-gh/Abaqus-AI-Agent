@@ -9,6 +9,17 @@ from ..contracts.results import (
 
 def _payload(raw):
     if isinstance(raw, dict):
+        if "values" in raw or "frame_value" in raw:
+            return raw
+        for key in ("result", "stdout", "output"):
+            value = raw.get(key)
+            if isinstance(value, dict):
+                return value
+            if isinstance(value, str):
+                try:
+                    return json.loads(value.strip().splitlines()[-1])
+                except Exception:
+                    pass
         return raw
     text = str(raw).strip()
     try:
