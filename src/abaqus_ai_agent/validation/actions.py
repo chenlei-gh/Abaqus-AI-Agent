@@ -10,7 +10,7 @@ def validate_action(action):
         raise ValueError("action_type is required")
     if action.action_type in (
         "fixed_bc", "displacement_bc", "symmetry_bc", "pressure_load",
-        "concentrated_force", "body_force", "section_assignment", "tie",
+        "concentrated_force", "body_force", "body_heat_flux", "surface_heat_flux", "temperature_bc", "section_assignment", "tie",
         "local_seed_size", "local_seed_number", "mesh_controls", "element_type", "contact"
     ) and not action.parameters.get("region_expression"):
         raise ValueError("region_expression is required for %s" % action.action_type)
@@ -46,6 +46,19 @@ def validate_action(action):
                 raise ValueError("%s cannot be negative" % key)
         if action.parameters.get("max_aspect_ratio") == 0:
             raise ValueError("max_aspect_ratio must be positive")
+    if action.action_type in ("body_heat_flux", "surface_heat_flux", "temperature_bc"):
+        if not action.parameters.get("name"):
+            raise ValueError("name is required for %s" % action.action_type)
+        if action.parameters.get("magnitude") is None:
+            raise ValueError("magnitude is required for %s" % action.action_type)
+    if action.action_type in ("heat_transfer_step", "coupled_temp_displacement_step"):
+        if not action.parameters.get("name"):
+            raise ValueError("name is required for %s" % action.action_type)
+        if action.parameters.get("time_period", 1.0) <= 0:
+            raise ValueError("time_period must be positive")
+    if action.action_type in ("material_conductivity", "material_specific_heat", "material_expansion"):
+        if not action.parameters.get("name") or not action.parameters.get("table"):
+            raise ValueError("%s requires name and table" % action.action_type)
     if action.action_type == "contact" and not action.parameters.get("property"):
         raise ValueError("property is required for contact")
     if action.action_type == "contact" and (not action.parameters.get("master_expression") or not action.parameters.get("slave_expression")):
