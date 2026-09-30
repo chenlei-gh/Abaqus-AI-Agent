@@ -1,4 +1,4 @@
-from ..contracts.geometry import ImagePoint, GeometrySelection
+from ..contracts.geometry import ImagePoint, GeometrySelection, RegionBinding
 from .matching import candidates_from_projected_faces
 from .policy import resolve
 
@@ -84,3 +84,14 @@ def resolve_image_point(intent_id, image_point, probe, radius=0.12,
         visual_scores=visual_scores, topology_scores=topology_scores,
     )
     return resolve(intent_id, candidates)
+
+
+def binding_plan(selection):
+    """Convert a grounded selection into an executor-neutral binding plan."""
+    return RegionBinding(
+        region_kind=selection.region_kind,
+        name=selection.name,
+        entity_type=selection.entity_type,
+        targets=selection.targets,
+        surface_side=selection.surface_side,
+    )
