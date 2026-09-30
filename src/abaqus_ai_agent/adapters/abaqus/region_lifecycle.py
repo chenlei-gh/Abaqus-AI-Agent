@@ -100,3 +100,20 @@ def ensure_named_region(assembly, selection, replace=False):
     if selection.region_kind == "set":
         return create_set(assembly, selection), "created"
     return create_surface(assembly, selection), "created"
+
+
+def ensure_named_region_safe(assembly, selection):
+    """Create/reuse only; never delete an existing named region."""
+    existing = inspect_existing(assembly, selection)
+    if existing is not None:
+        ok, reason = validate_existing(assembly, selection)
+        if ok:
+            return existing, "reused"
+        raise ValueError("existing region mismatch: " + reason)
+
+    from .region_binding import create_set, create_surface
+    if selection.region_kind == "set":
+        return create_set(assembly, selection), "created"
+    if selection.region_kind == "surface":
+        return create_surface(assembly, selection), "created"
+    raise ValueError("named region required")
