@@ -46,11 +46,11 @@ class JobController:
             code += ", %s=%r" % (key, value)
         return self.executor.execute(code + ")")
 
-    def submit(self, name, wait=False):
+    def submit(self, name, wait=False, timeout=3600):
         result = self.executor.execute("from abaqusConstants import OFF; mdb.jobs[%r].submit(consistencyChecking=OFF)" % name)
         if not wait:
             return JobStatus(name, JobState.SUBMITTED, result)
-        return self.wait(name)
+        return self.wait(name, timeout=timeout)
 
     def status(self, name):
         result = self.executor.execute("print(mdb.jobs[%r].status)" % name)
