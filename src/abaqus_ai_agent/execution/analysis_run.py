@@ -54,6 +54,9 @@ class AnalysisRunner:
         run=AnalysisRun(str(uuid.uuid4()), model_name, job_name, AnalysisRunState.PREFLIGHTED)
         jobs=JobController(self.executor)
         try:
+            snapshot = self.executor.snapshot() if hasattr(self.executor, "snapshot") else None
+            if snapshot is not None and job_name not in snapshot.jobs:
+                jobs.create(job_name, model_name)
             status=jobs.submit(job_name, wait=True)
             run=run.with_state(AnalysisRunState.COMPLETED if status.state == JobState.COMPLETED else AnalysisRunState.FAILED,
                                job_status=status)
