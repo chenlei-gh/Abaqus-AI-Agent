@@ -52,6 +52,7 @@ class GeometryCandidate:
     visual_score: float
     topology_score: float
     screen_polygon: Optional[Tuple[Tuple[float, float], ...]] = None
+    entity_key: Optional[str] = None
 
     def __post_init__(self):
         for name, value in (
@@ -67,3 +68,18 @@ class GeometryCandidate:
         return (0.4 * self.distance_score +
                 0.4 * self.visual_score +
                 0.2 * self.topology_score)
+
+
+@dataclass(frozen=True)
+class GroundingResult:
+    """Deterministic grounding result; confidence is a policy signal, not proof."""
+    intent_id: str
+    candidates: List[GeometryCandidate]
+    selected: Optional[GeometryCandidate]
+    confidence: float
+    requires_confirmation: bool
+    evidence: Tuple[Tuple[str, ...], ...]
+
+    def __post_init__(self):
+        if not 0.0 <= self.confidence <= 1.0:
+            raise ValueError("confidence must be in [0, 1]")
