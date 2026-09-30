@@ -75,8 +75,8 @@ def validate_action(action):
             friction = action.parameters.get("tangential_behavior", {}).get("friction", 0.0)
             if friction < 0:
                 raise ValueError("friction cannot be negative")
-    if action.action_type == "element_type" and not action.parameters.get("elem_types"):
-        raise ValueError("elem_types is required for element_type")
+    if action.action_type == "element_type" and not action.parameters.get("elem_code"):
+        raise ValueError("elem_code is required for element_type")
     if action.expected_state and not all(isinstance(x, dict) and x.get("path")
                                          for x in action.expected_state):
         raise ValueError("expected_state entries require a path")
