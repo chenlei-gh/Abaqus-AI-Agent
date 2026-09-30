@@ -37,6 +37,9 @@ def validate_action(action):
         raise ValueError("region_expression is required for %s" % action.action_type)
     if action.action_type == "mesh_controls" and not action.parameters.get("technique"):
         raise ValueError("technique is required for mesh_controls")
+    if action.action_type == "mesh_quality":
+        if not action.parameters.get("part"):
+            raise ValueError("part is required for mesh_quality")
     if action.action_type == "contact" and not action.parameters.get("property"):
         raise ValueError("property is required for contact")
     if action.action_type == "contact" and (not action.parameters.get("master_expression") or not action.parameters.get("slave_expression")):
