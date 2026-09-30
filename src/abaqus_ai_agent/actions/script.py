@@ -62,8 +62,10 @@ def action_to_script(action):
         return _mesh_inspection_script(m, p)
     if k == "tie":
         return "mdb.models[%s].Tie(name=%s, master=%s, slave=%s, positionToleranceMethod=COMPUTED)" % (_q(m), _q(p["name"]), p["master_expression"], p["slave_expression"])
+    if k == "contact_property":
+        return _contact_property_script(m, p)
     if k == "contact":
-        return "# Contact requires model-specific ContactProperty/SurfaceToSurfaceContact definitions; parameters=%r" % p
+        return _contact_script(m, p)
     raise ValueError("unsupported action type: %s" % k)
 
 def _bc_script(action):
@@ -134,3 +136,25 @@ if not nodes: warnings.append('no_nodes')
 if not elements: warnings.append('no_elements')
 print({'part':%r,'node_count':len(nodes),'element_count':len(elements),'element_types':types,'warnings':warnings})
 """ % (model,part)
+
+
+def _contact_property_script(model, p):
+    name = p["name"]
+    behavior = p.get("normal_behavior", True)
+    tangential = p.get("tangential_behavior")
+    lines = ["model=mdb.models[%s]" % _q(model),
+             "prop=model.ContactProperty(%s)" % _q(name)]
+    if behavior:
+        lines.append("prop.NormalBehavior(pressureOverclosure=%s)" % p.get("pressure_overclosure", "HARD"))
+    if tangential:
+        lines.append("prop.TangentialBehavior(formulation=%s, table=((%r,),))" %
+                     (tangential.get("formulation", "PENALTY"), tangential.get("friction", 0.0)))
+    return "; ".join(lines)
+
+def _contact_script(model, p):
+    return ("model=mdb.models[%s]; model.SurfaceToSurfaceContactStd("
+            "name=%s, createStepName=%s, master=%s, slave=%s, "
+            "sliding=%s, interactionProperty=%s)" %
+            (_q(model), _q(p["name"]), _q(p.get("step", "Initial")),
+             p["master_expression"], p["slave_expression"],
+             p.get("sliding", "FINITE"), _q(p["property"])))
