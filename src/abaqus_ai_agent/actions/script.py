@@ -37,10 +37,17 @@ def action_to_script(action):
         return "mdb.models[%s].parts[%s].seedPart(size=%r, deviationFactor=%r, minSizeFactor=%r)" % (_q(m), _q(p["part"]), p["size"], p.get("deviation_factor", .1), p.get("min_size_factor", .1))
     if k == "generate_mesh":
         return "mdb.models[%s].parts[%s].generateMesh()" % (_q(m), _q(p["part"]))
+    if k == "local_seed_size":
+        return "mdb.models[%s].parts[%s].seedEdgeBySize(edges=%s, size=%r, constraint=%s)" % (_q(m), _q(p["part"]), p["region_expression"], p["size"], p.get("constraint", "FREE"))
+    if k == "local_seed_number":
+        return "mdb.models[%s].parts[%s].seedEdgeByNumber(edges=%s, number=%d, constraint=%s)" % (_q(m), _q(p["part"]), p["region_expression"], int(p["number"]), p.get("constraint", "FREE"))
     if k == "mesh_controls":
-        return "# Mesh controls require native region expressions; parameters=%r" % p
+        args = ["regions=%s" % p["region_expression"], "technique=%s" % p.get("technique", "FREE")]
+        if p.get("algorithm") is not None: args.append("algorithm=%s" % p["algorithm"])
+        if p.get("elem_shape") is not None: args.append("elemShape=%s" % p["elem_shape"])
+        return "mdb.models[%s].parts[%s].setMeshControls(%s)" % (_q(m), _q(p["part"]), ", ".join(args))
     if k == "element_type":
-        return "# ElementType selection is model/version-specific; use region=%s elem_code=%r" % (p["region_expression"], p["elem_code"])
+        return "mdb.models[%s].parts[%s].setElementType(regions=%s, elemTypes=%s)" % (_q(m), _q(p["part"]), p["region_expression"], p["elem_types"])
     if k == "tie":
         return "mdb.models[%s].Tie(name=%s, master=%s, slave=%s, positionToleranceMethod=COMPUTED)" % (_q(m), _q(p["name"]), p["master_expression"], p["slave_expression"])
     if k == "contact":
