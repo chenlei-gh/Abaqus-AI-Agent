@@ -44,8 +44,8 @@ class AbaqusAIAgent:
         return detect_runtime(self.executor)
 
     def viewport_state(self):
-        from .execution.inspection import viewport_state
-        return viewport_state(self.executor)
+        from .execution.viewport import read_viewport_state
+        return read_viewport_state(self.executor)
 
     def analysis_run(self, model_name, job_name, odb_path=None, criteria=(), result_values=None):
         from .execution.analysis_run import AnalysisRunner
@@ -53,8 +53,8 @@ class AbaqusAIAgent:
                                                 criteria=criteria, result_values=result_values)
 
     def submit(self, job_name, wait=False):
-        from .execution.jobs import submit_job
-        return submit_job(self.executor, job_name, wait=wait)
+        from .execution.jobs import JobController
+        return JobController(self.executor).submit(job_name, wait=wait)
 
     def inspect_odb(self, path):
         from .execution.odb import inspect_odb
