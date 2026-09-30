@@ -36,17 +36,17 @@ def _cross(a, b):
 
 
 def _camera_basis(view):
-    forward, right, up = _camera_basis(view)
+    forward = _norm(tuple(t-p for p, t in zip(view.cameraPosition, view.cameraTarget)))
+    up = _norm(tuple(view.cameraUpVector))
+    right = _norm(_cross(forward, up))
+    up = _norm(_cross(right, forward))
     return forward, right, up
 
 
 def _project(point, view):
     if getattr(view, "projection", None) != PARALLEL:
         return None
-    forward = _norm(tuple(t-p for p, t in zip(view.cameraPosition, view.cameraTarget)))
-    up = _norm(tuple(view.cameraUpVector))
-    right = _norm(_cross(forward, up))
-    up = _norm(_cross(right, forward))
+    forward, right, up = _camera_basis(view)
     delta = tuple(p-t for p, t in zip(point, view.cameraTarget))
     sx = 0.5 + _dot(delta, right) / float(view.width) + float(view.viewOffsetX)
     sy_model = 0.5 + _dot(delta, up) / float(view.height) + float(view.viewOffsetY)
