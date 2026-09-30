@@ -58,8 +58,63 @@ odb.close()
     return _payload(executor.execute(code))
 
 
+def _history_output(executor, path, step, region, variable, aggregation):
+    code = """from odbAccess import openOdb
+odb=openOdb(path=%r, readOnly=True)
+regions=odb.steps[%r].historyRegions
+region_name=%r
+if region_name:
+    hr=regions[region_name]
+else:
+    hr=None
+    for _name,_value in regions.items():
+        hr=_value
+        region_name=_name
+        break
+if hr is None or %r not in hr.historyOutputs:
+    raise KeyError('history output not found: %s' %% %r)
+data=list(hr.historyOutputs[%r].data)
+values=[float(x[1]) for x in data]
+if not values:
+    raise ValueError('history output has no values')
+if %r == 'max':
+    value=max(values)
+elif %r == 'min':
+    value=min(values)
+elif %r == 'average':
+    value=sum(values)/float(len(values))
+else:
+    value=values[-1]
+print({'region':region_name,'variable':%r,'aggregation':%r,'value':value,'count':len(values)})
+odb.close()
+""" % (path, step, region, variable, variable, variable, aggregation,
+       aggregation, aggregation, variable, aggregation)
+    return _payload(executor.execute(code))
+
+
 def extract_requirement(executor, path, requirement):
     from .odb import extract_field
+
+    if requirement.output_kind == "history":
+        if not requirement.step:
+            raise ValueError("step is required for history result %s" % requirement.value_key)
+        payload = _history_output(
+            executor, path, requirement.step, requirement.history_region,
+            requirement.history_variable, requirement.aggregation)
+        value = payload.get("value")
+        if not isinstance(value, (int, float)):
+            raise ValueError("history value unavailable for %s" % requirement.value_key)
+        locator = {
+            "step": requirement.step,
+            "history_region": payload.get("region"),
+            "history_variable": requirement.history_variable,
+        }
+        return ResultExtraction(
+            requirement, float(value), locator,
+            ({"kind": "odb_history_result", "source": "odb",
+              "value_key": requirement.value_key, "value": float(value),
+              "unit": requirement.unit, "locator": locator,
+              "aggregation": requirement.aggregation},))
 
     if requirement.output_kind == "frame_value":
         payload = _frame_value(
