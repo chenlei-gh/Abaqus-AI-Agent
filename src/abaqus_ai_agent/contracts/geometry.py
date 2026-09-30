@@ -14,6 +14,30 @@ class ImagePoint:
 
 
 @dataclass(frozen=True)
+class ImageRegion:
+    """A normalized annotation region in image coordinates."""
+    center: ImagePoint
+    width: float
+    height: float
+
+    def __post_init__(self):
+        if not 0.0 < self.width <= 1.0 or not 0.0 < self.height <= 1.0:
+            raise ValueError("region width and height must be in (0, 1]")
+
+
+@dataclass(frozen=True)
+class ViewProjection:
+    """Camera/projection metadata supplied by the Abaqus adapter."""
+    viewport_id: str
+    projection_type: str
+    image_width: int
+    image_height: int
+    camera_position: Optional[Tuple[float, float, float]] = None
+    camera_target: Optional[Tuple[float, float, float]] = None
+    up_vector: Optional[Tuple[float, float, float]] = None
+
+
+@dataclass(frozen=True)
 class GeometryCandidate:
     """Candidate Abaqus entity plus independent grounding evidence."""
     entity_type: str
