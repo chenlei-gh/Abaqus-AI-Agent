@@ -86,3 +86,31 @@ class GroundingResult:
     def __post_init__(self):
         if not 0.0 <= self.confidence <= 1.0:
             raise ValueError("confidence must be in [0, 1]")
+
+
+@dataclass(frozen=True)
+class GeometrySelection:
+    """A grouped geometric selection ready for Abaqus region binding.
+
+    Targets are executor-neutral locators; integer geometry indices remain
+    diagnostics only. region_kind is one of temporary, set, or surface.
+    """
+    targets: Tuple[dict, ...]
+    entity_type: str
+    region_kind: str = "temporary"
+    name: Optional[str] = None
+    surface_side: Optional[str] = None
+
+    def __post_init__(self):
+        if not self.targets:
+            raise ValueError("geometry selection requires at least one target")
+        if self.entity_type not in ("Face", "Edge", "Vertex"):
+            raise ValueError("unsupported geometry entity type")
+        if self.region_kind not in ("temporary", "set", "surface"):
+            raise ValueError("region_kind must be temporary, set, or surface")
+        if self.region_kind in ("set", "surface") and not self.name:
+            raise ValueError("named selections require a name")
+        if self.region_kind == "surface" and self.entity_type not in ("Face", "Edge"):
+            raise ValueError("surfaces require Face or Edge targets")
+        if self.surface_side not in (None, "side1", "side2"):
+            raise ValueError("surface_side must be side1, side2, or None")
