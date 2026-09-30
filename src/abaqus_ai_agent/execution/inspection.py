@@ -4,12 +4,10 @@ import json
 def get_model_info(executor):
     """Read-only model inventory through the executor."""
     code = ("import json\nresult={}\n"
-            "result['models']=list(mdb.models.keys())\n"
-            "result['parts']=[]\nresult['instances']=[]\n"
+            "result['models']=list(mdb.models.keys())\nresult['parts']=[]\nresult['instances']=[]\n"
             "result['materials']=[]\nresult['sections']=[]\nresult['steps']=[]\n"
-            "result['boundary_conditions']=[]\nresult['loads']=[]\n"
-            "result['interactions']=[]\nresult['output_requests']=[]\n"
-            "result['jobs']=list(mdb.jobs.keys())\n"
+            "result['boundary_conditions']=[]\nresult['loads']=[]\nresult['interactions']=[]\n"
+            "result['output_requests']=[]\nresult['jobs']=list(mdb.jobs.keys())\n"
             "for _n,_m in mdb.models.items():\n"
             " result['parts'] += list(_m.parts.keys())\n"
             " result['materials'] += list(_m.materials.keys())\n"
@@ -19,8 +17,8 @@ def get_model_info(executor):
             " result['loads'] += list(_m.loads.keys())\n"
             " result['interactions'] += list(_m.interactions.keys())\n"
             " result['output_requests'] += list(_m.fieldOutputRequests.keys())\n"
-            "for _a in mdb.models.values():\n"
-            " pass\n"
+            " try: result['instances'] += list(_m.rootAssembly.instances.keys())\n"
+            " except: pass\n"
             "print(json.dumps(result))")
     return executor.execute(code)
 
@@ -30,27 +28,25 @@ def snapshot_model(executor):
 
 
 def runtime_info(executor):
-    code = ("import sys, json\n"
-            "r={}\n"
-            "try: r['version']=str(session.aboutBox().split('\\n')[0])\n"
-            "except: r['version']='unknown'\n"
-            "r['python_version']=sys.version\n"
-            "r['gui_available']=bool(globals().get('session'))\n"
-            "r['capabilities']=['model_inspection','job','odb','viewport']\n"
-            "print(json.dumps(r))")
+    code = ("import sys, json\nresult={}\n"
+            "try:\n from abaqus import getVersion\n result['version']=str(getVersion())\n"
+            "except: result['version']='unknown'\n"
+            "result['python_version']=sys.version\n"
+            "result['gui_available']=bool(globals().get('session'))\n"
+            "result['capabilities']=['model_inspection','job','odb','viewport']\n"
+            "print(json.dumps(result))")
     return executor.execute(code)
 
 
 def viewport_state(executor):
-    code = ("import json\n"
-            "r={}\n"
+    code = ("import json\nresult={}\n"
             "try:\n"
             " v=session.viewports[session.currentViewportName]\n"
-            " r['viewport_name']=session.currentViewportName\n"
-            " r['displayed_object']=str(v.displayedObject)\n"
-            " r['metadata']={}\n"
-            "except Exception as e: r['error']=str(e)\n"
-            "print(json.dumps(r))")
+            " result['viewport_name']=session.currentViewportName\n"
+            " result['displayed_object']=str(v.displayedObject)\n"
+            " try: result['projection']=str(v.view.cameraType)\n except: pass\n"
+            "except Exception as e: result['error']=str(e)\n"
+            "print(json.dumps(result))")
     return executor.execute(code)
 
 
