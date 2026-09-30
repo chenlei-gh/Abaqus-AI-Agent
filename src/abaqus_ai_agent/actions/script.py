@@ -164,10 +164,94 @@ def _contact_script(model, p):
 
 def _mesh_quality_script(model, p):
     part = p["part"]
-    return """model=mdb.models[%r]
+    max_ar = p.get("max_aspect_ratio")
+    min_angle = p.get("min_angle")
+    max_angle = p.get("max_angle")
+    max_skew = p.get("max_skew")
+    min_jac = p.get("min_jacobian")
+    return """from math import sqrt, acos, pi
+model=mdb.models[%r]
 part=model.parts[%r]
-result={'part':%r,'node_count':len(part.nodes),'element_count':len(part.elements),'metrics':{},'warnings':[]}
-if not part.elements:
+nodes={n.label:tuple(n.coordinates) for n in part.nodes}
+elements=list(part.elements)
+result={'part':%r,'node_count':len(nodes),'element_count':len(elements),
+        'metrics':{},'violations':[],'warnings':[],'evidence':[],'status':'unknown'}
+
+def dist(a,b):
+    return sqrt(sum((a[i]-b[i])**2 for i in range(3)))
+
+def angle(a,b,c):
+    ab=[a[i]-b[i] for i in range(3)]
+    cb=[c[i]-b[i] for i in range(3)]
+    la=sqrt(sum(x*x for x in ab)); lc=sqrt(sum(x*x for x in cb))
+    if la == 0.0 or lc == 0.0: return None
+    x=max(-1.0,min(1.0,sum(ab[i]*cb[i] for i in range(3))/(la*lc)))
+    return acos(x)*180.0/pi
+
+aspects=[]; angles=[]; skews=[]; unsupported=set()
+for e in elements:
+    typ=str(getattr(e,'type','')).upper()
+    conn=tuple(getattr(e,'connectivity',()))
+    pts=[nodes.get(label) for label in conn]
+    if not pts or any(x is None for x in pts):
+        unsupported.add('missing_node_coordinates'); continue
+    if typ.startswith(('C3','CPS3','CPE3','S3','STRI3','CAX3')):
+        edge_pairs=((0,1),(1,2),(2,0))
+        vertex_triplets=((1,0,2),(0,1,2),(0,2,1))
+    elif typ.startswith(('C4','CPS4','CPE4','S4','S4R','SC4','SC8','CPS8','CPE8')):
+        edge_pairs=((0,1),(1,2),(2,3),(3,0))
+        vertex_triplets=((3,0,1),(0,1,2),(1,2,3),(2,3,0))
+    else:
+        unsupported.add('element_type:'+typ); continue
+    lengths=[dist(pts[i],pts[j]) for i,j in edge_pairs]
+    positive=[x for x in lengths if x > 0.0]
+    if not positive:
+        unsupported.add('zero_edge'); continue
+    aspects.append(max(positive)/min(positive))
+    for a,b,c in vertex_triplets:
+        q=angle(pts[a],pts[b],pts[c])
+        if q is not None: angles.append(q)
+    if len(lengths) == 4:
+        # A conservative skew proxy: deviation of adjacent-edge dot products
+        local=[]
+        for i in range(4):
+            a=pts[i]; b=pts[(i+1)%4]; c=pts[(i+2)%4]
+            ab=[b[j]-a[j] for j in range(3)]
+            bc=[c[j]-b[j] for j in range(3)]
+            lab=sqrt(sum(x*x for x in ab)); lbc=sqrt(sum(x*x for x in bc))
+            if lab and lbc:
+                local.append(abs(sum(ab[j]*bc[j] for j in range(3))/(lab*lbc)))
+        if local: skews.append(max(local))
+
+if aspects:
+    result['metrics']['max_aspect_ratio']=max(aspects)
+    result['metrics']['avg_aspect_ratio']=sum(aspects)/len(aspects)
+if angles:
+    result['metrics']['min_angle']=min(angles)
+    result['metrics']['max_angle']=max(angles)
+if skews:
+    result['metrics']['max_skew']=max(skews)
+if %r is not None and aspects and max(aspects) > %r:
+    result['violations'].append('max_aspect_ratio')
+if %r is not None and angles and min(angles) < %r:
+    result['violations'].append('min_angle')
+if %r is not None and angles and max(angles) > %r:
+    result['violations'].append('max_angle')
+if %r is not None and skews and max(skews) > %r:
+    result['violations'].append('max_skew')
+if %r is not None:
+    result['warnings'].append('min_jacobian_unsupported_without_element_shape_api')
+if unsupported:
+    result['warnings'].extend(['unsupported_quality:'+x for x in sorted(unsupported)])
+if not elements:
     result['warnings'].append('no_elements')
+if result['violations']:
+    result['status']='fail'
+elif result['warnings']:
+    result['status']='warning'
+elif result['metrics']:
+    result['status']='pass'
+result['evidence']=['part:%s'%part, 'elements:%d'%len(elements)]
 print(result)
-""" % (model, part, part)
+""" % (model, part, part, max_ar, max_ar, min_angle, min_angle,
+       max_angle, max_angle, max_skew, max_skew, min_jac)
