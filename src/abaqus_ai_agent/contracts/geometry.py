@@ -53,6 +53,8 @@ class GeometryCandidate:
     topology_score: float
     screen_polygon: Optional[Tuple[Tuple[float, float], ...]] = None
     entity_key: Optional[str] = None
+    camera_depth: Optional[float] = None
+    facing_score: Optional[float] = None
 
     def __post_init__(self):
         for name, value in (
