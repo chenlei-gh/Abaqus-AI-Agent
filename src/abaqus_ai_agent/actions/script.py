@@ -184,7 +184,7 @@ part=model.parts[%r]
 nodes={n.label:tuple(n.coordinates) for n in part.nodes}
 elements=list(part.elements)
 result={'part':%r,'node_count':len(nodes),'element_count':len(elements),
-        'metrics':{},'violations':[],'warnings':[],'evidence':[],'status':'unknown'}
+        'metrics':{},'violations':[],'warnings':[],'evidence':[],'status':'unknown','source':'unsupported'}
 
 def dist(a,b):
     return sqrt(sum((a[i]-b[i])**2 for i in range(3)))
@@ -260,6 +260,8 @@ elif result['warnings']:
     result['status']='warning'
 elif result['metrics']:
     result['status']='pass'
+if result['metrics']:
+    result['source']='computed_quality'
 result['evidence']=['part:%s'%part, 'elements:%d'%len(elements)]
 print(result)
 """ % (model, part, part, max_ar, max_ar, min_angle, min_angle,
