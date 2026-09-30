@@ -55,9 +55,11 @@ def action_to_script(action):
         args = ["regions=%s" % p["region_expression"], "technique=%s" % p.get("technique", "FREE")]
         if p.get("algorithm") is not None: args.append("algorithm=%s" % p["algorithm"])
         if p.get("elem_shape") is not None: args.append("elemShape=%s" % p["elem_shape"])
-        return "mdb.models[%s].parts[%s].setMeshControls(%s)" % (_q(m), _q(p["part"]), ", ".join(args))
+        return "from abaqusConstants import *; mdb.models[%s].parts[%s].setMeshControls(%s)" % (_q(m), _q(p["part"]), ", ".join(args))
     if k == "element_type":
-        return "mdb.models[%s].parts[%s].setElementType(regions=%s, elemTypes=%s)" % (_q(m), _q(p["part"]), p["region_expression"], p["elem_types"])
+        code = p.get("elem_code", "C3D8R")
+        library = p.get("library", "STANDARD")
+        return "from abaqusConstants import *; import mesh; elemType=mesh.ElemType(elemCode=%s, elemLibrary=%s); mdb.models[%s].parts[%s].setElementType(regions=%s, elemTypes=(elemType,))" % (code, library, _q(m), _q(p["part"]), p["region_expression"])
     if k == "inspect_geometry":
         return _geometry_inspection_script(m, p)
     if k == "ignore_entity":
@@ -160,7 +162,7 @@ def _contact_property_script(model, p):
     name = p["name"]
     behavior = p.get("normal_behavior", True)
     tangential = p.get("tangential_behavior")
-    lines = ["model=mdb.models[%s]" % _q(model),
+    lines = ["from abaqusConstants import *", "model=mdb.models[%s]" % _q(model),
              "prop=model.ContactProperty(%s)" % _q(name)]
     if behavior:
         lines.append("prop.NormalBehavior(pressureOverclosure=%s)" %
@@ -179,7 +181,7 @@ def _contact_property_script(model, p):
     return "; ".join(lines)
 
 def _contact_script(model, p):
-    return ("model=mdb.models[%s]; model.SurfaceToSurfaceContactStd("
+    return ("from abaqusConstants import *; model=mdb.models[%s]; model.SurfaceToSurfaceContactStd("
             "name=%s, createStepName=%s, main=%s, secondary=%s, "
             "sliding=%s, interactionProperty=%s)" %
             (_q(model), _q(p["name"]), _q(p.get("step", "Initial")),
