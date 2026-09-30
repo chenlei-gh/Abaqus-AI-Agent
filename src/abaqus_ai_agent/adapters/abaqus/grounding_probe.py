@@ -81,8 +81,10 @@ def _face_data(face, index, view=None, owner=None):
         size = float(face.getSize())
     except Exception:
         pass
-    return {"index": index, "centroid": centroid, "normal": normal,
-            "size": size}
+    item = {"index": index, "centroid": centroid, "normal": normal, "size": size}
+    item["screen_polygon"] = (_project_vertices(face, owner, view)
+                              if view is not None and owner is not None else [])
+    return item
 
 
 def collect(session):
@@ -107,13 +109,13 @@ def collect(session):
         for name in instances.keys():
             instance = instances[name]
             for index, face in enumerate(instance.faces):
-                item = _face_data(face, index, view, displayed)
+                item = _face_data(face, index, view, instance)
                 item["instance"] = name
                 item["screen"] = _project(item["centroid"], view) if item["centroid"] else None
                 result["faces"].append(item)
     else:
         for index, face in enumerate(displayed.faces):
-            item = _face_data(face, index)
+            item = _face_data(face, index, view, displayed)
             item["instance"] = None
             item["screen"] = _project(item["centroid"], view) if item["centroid"] else None
             result["faces"].append(item)
