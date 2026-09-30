@@ -9,7 +9,19 @@ def preview(action):
     return action_to_script(action)
 
 
-def execute(executor, action, journal=None, snapshot_before=None, snapshot_after=None):
+def execute(executor, action):
+    """Backward-compatible execution API: returns the native bridge result."""
+    if not isinstance(executor, AbaqusExecutor):
+        raise TypeError("executor must implement AbaqusExecutor")
+    preflight = preflight_action(action)
+    if not preflight.passed:
+        raise ValueError("action preflight failed: %s" % (preflight.blockers,))
+    return executor.execute(action_to_script(action))
+
+
+def execute_verified(executor, action, journal=None, snapshot_before=None,
+                     snapshot_after=None):
+    """Execute with journal + optional deterministic post-state verification."""
     if not isinstance(executor, AbaqusExecutor):
         raise TypeError("executor must implement AbaqusExecutor")
     preflight = preflight_action(action, snapshot_before)
@@ -28,8 +40,8 @@ def execute(executor, action, journal=None, snapshot_before=None, snapshot_after
                 raise ValueError("action post-verification failed: %s" %
                                  (verification.failures,))
         journal.finish(record, "COMPLETED", result=result)
-        return {"result": result, "preflight": preflight, "verification": verification,
-                "record": record}
+        return {"result": result, "preflight": preflight,
+                "verification": verification, "record": record}
     except Exception as exc:
         journal.finish(record, "FAILED", error=str(exc))
         raise
