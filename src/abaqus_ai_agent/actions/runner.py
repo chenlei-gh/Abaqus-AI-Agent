@@ -3,6 +3,7 @@ from ..execution.journal import ExecutionJournal
 from ..validation.preflight import preflight_action
 from ..verification import verify_expected_state
 from ..evidence.model import Evidence, EvidenceBundle
+from ..state_diff import diff_snapshots
 from .script import action_to_script
 
 
@@ -42,6 +43,17 @@ def execute_verified(executor, action, journal=None, snapshot_before=None,
                                  (verification.failures,))
         journal.finish(record, "COMPLETED", result=result)
         evidence = EvidenceBundle()
+        if snapshot_before is not None and snapshot_after is not None:
+            try:
+                delta = diff_snapshots(snapshot_before, snapshot_after)
+                evidence = evidence.add(Evidence(
+                    kind="state_diff", source=action.action_type,
+                    locator=action.target or action.parameters.get("part", ""),
+                    value={"added": delta.added, "removed": delta.removed,
+                           "changed_metadata": delta.changed_metadata},
+                ))
+            except TypeError:
+                pass
         evidence = evidence.add(Evidence(
             kind="action_execution",
             source=action.action_type,
