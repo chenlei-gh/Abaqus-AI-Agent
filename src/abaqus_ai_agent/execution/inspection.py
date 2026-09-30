@@ -33,6 +33,11 @@ def runtime_info(executor):
             "except: result['version']='unknown'\n"
             "result['python_version']=sys.version\n"
             "result['gui_available']=bool(globals().get('session'))\n"
+            "def _odb_probe():\n try:\n  import odbAccess; return True\n except Exception: return False\n"
+            "def _contact_probe():\n try:\n  return hasattr(next(iter(mdb.models.values())), 'ContactProperty')\n except Exception: return False\n"
+            "result['capabilities']=[]\n"
+            "for _name,_ok in (('model_inspection','mdb' in globals()),('job',hasattr(mdb,'jobs') if 'mdb' in globals() else False),('odb',_odb_probe()),('viewport','session' in globals()),('contact',_contact_probe())):\n"
+            " result['capabilities'].append(_name) if _ok else None\n"
             "result['capabilities']=['model_inspection','job','odb','viewport']\n"
             "print(json.dumps(result))")
     return executor.execute(code)
