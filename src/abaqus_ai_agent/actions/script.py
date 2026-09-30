@@ -60,6 +60,8 @@ def action_to_script(action):
         return "mdb.models[%s].parts[%s].removeRedundantEntities()" % (_q(m), _q(p["part"]))
     if k == "inspect_mesh":
         return _mesh_inspection_script(m, p)
+    if k == "mesh_quality":
+        return _mesh_quality_script(m, p)
     if k == "tie":
         return "mdb.models[%s].Tie(name=%s, master=%s, slave=%s, positionToleranceMethod=COMPUTED)" % (_q(m), _q(p["name"]), p["master_expression"], p["slave_expression"])
     if k == "contact_property":
@@ -158,3 +160,14 @@ def _contact_script(model, p):
             (_q(model), _q(p["name"]), _q(p.get("step", "Initial")),
              p["master_expression"], p["slave_expression"],
              p.get("sliding", "FINITE"), _q(p["property"])))
+
+
+def _mesh_quality_script(model, p):
+    part = p["part"]
+    return """model=mdb.models[%r]
+part=model.parts[%r]
+result={'part':%r,'node_count':len(part.nodes),'element_count':len(part.elements),'metrics':{},'warnings':[]}
+if not part.elements:
+    result['warnings'].append('no_elements')
+print(result)
+""" % (model, part, part)
