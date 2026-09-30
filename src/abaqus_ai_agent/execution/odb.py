@@ -28,6 +28,7 @@ def _extract_code(path, step, field, component=None, invariant=None,
 
     return (
         "from odbAccess import openOdb\n"
+        "from abaqusConstants import *\n"
         "odb=openOdb(path=%r, readOnly=True)\n"
         "st=odb.steps[%r]\n"
         "fr=st.frames[%r]\n"
