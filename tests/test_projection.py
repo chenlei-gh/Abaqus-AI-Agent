@@ -22,6 +22,15 @@ def test_parallel_projection_right_and_up():
     assert up.y == pytest.approx(0.0)
 
 
+def test_view_offset_matches_abaqus_pan_direction():
+    view = ViewProjection("v", "PARALLEL", 1000, 1000,
+                          (0, 0, 10), (0, 0, 0), (0, 1, 0))
+    p = project_point((0, 0, 0), view, 2.0, 2.0,
+                      view_offset_x=0.1, view_offset_y=0.2)
+    assert p.x == pytest.approx(0.6)
+    assert p.y == pytest.approx(0.3)
+
+
 def test_perspective_is_not_claimed_supported_yet():
     view = ViewProjection("v", "PERSPECTIVE", 1000, 1000,
                           (0, 0, 10), (0, 0, 0), (0, 1, 0))
