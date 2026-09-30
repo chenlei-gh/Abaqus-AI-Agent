@@ -56,10 +56,10 @@ def _project(point, view):
     return (sx, sy)
 
 
-def _project_vertices(face, owner, view):
+def _project_vertices(entity, owner, view):
     points = []
     try:
-        vertex_indices = face.getVertices()
+        vertex_indices = entity.getVertices()
     except Exception:
         return points
     try:
@@ -77,19 +77,19 @@ def _project_vertices(face, owner, view):
     return points
 
 
-def _face_data(face, index, view=None, owner=None):
+def _entity_data(entity, index, view=None, owner=None, entity_type="Face"):
     centroid = None
     try:
         centroid = tuple(float(x) for x in face.getCentroid()[:3])
     except Exception:
         try:
-            centroid = tuple(float(x) for x in face.pointOn[0][:3])
+            centroid = tuple(float(x) for x in entity.pointOn[0][:3])
         except Exception:
             pass
     normal = None
     if centroid is not None:
         try:
-            normal = tuple(float(x) for x in face.getNormal(centroid)[:3])
+            normal = tuple(float(x) for x in entity.getNormal(centroid)[:3])
         except Exception:
             pass
     size = None
@@ -97,7 +97,7 @@ def _face_data(face, index, view=None, owner=None):
         size = float(face.getSize())
     except Exception:
         pass
-    item = {"index": index, "centroid": centroid, "normal": normal, "size": size}
+    item = {"index": index, "entity_type": entity_type, "centroid": centroid, "normal": normal, "size": size}
     if centroid is not None:
         try:
             forward, _, _ = _camera_basis(view)
@@ -109,8 +109,10 @@ def _face_data(face, index, view=None, owner=None):
         except Exception:
             item["camera_depth"] = None
             item["facing_score"] = None
-    item["screen_polygon"] = (_project_vertices(face, owner, view)
-                              if view is not None and owner is not None else [])
+    projected = (_project_vertices(entity, owner, view)
+                  if view is not None and owner is not None else [])
+    item["screen_polygon"] = projected if entity_type == "Face" else []
+    item["screen_path"] = projected if entity_type == "Edge" else []
     return item
 
 
@@ -160,6 +162,7 @@ def collect(session):
         "viewport": viewport.name,
         "projection": str(view.projection),
         "coordinate_space": "assembly" if getattr(displayed, "instances", None) is not None else "part",
+        "edges": [], "vertices": [],
         "view": {
             "camera_position": tuple(view.cameraPosition),
             "camera_target": tuple(view.cameraTarget),
@@ -179,14 +182,27 @@ def collect(session):
                 "state": _instance_state(instance),
             }
             for index, face in enumerate(instance.faces):
-                item = _face_data(face, index, view, instance)
+                item = _entity_data(face, index, view, instance, "Face")
                 item["instance"] = name
                 item["entity_key"] = "%s:Face:%d" % (name, index)
                 item["screen"] = _project(item["centroid"], view) if item["centroid"] else None
                 result["faces"].append(item)
+            for index, edge in enumerate(instance.edges):
+                item = _entity_data(edge, index, view, instance, "Edge")
+                item["instance"] = name
+                item["entity_key"] = "%s:Edge:%d" % (name, index)
+                item["screen"] = _project(item["centroid"], view) if item["centroid"] else None
+                result.setdefault("edges", []).append(item)
+            for index, vertex in enumerate(instance.vertices):
+                item = _entity_data(vertex, index, view, instance, "Vertex")
+                item["instance"] = name
+                item["entity_key"] = "%s:Vertex:%d" % (name, index)
+                point = item["centroid"]
+                item["screen"] = _project(point, view) if point else None
+                result.setdefault("vertices", []).append(item)
     else:
         for index, face in enumerate(displayed.faces):
-            item = _face_data(face, index, view, displayed)
+            item = _entity_data(face, index, view, displayed, "Face")
             item["instance"] = None
             item["entity_key"] = "Part:Face:%d" % index
             item["screen"] = _project(item["centroid"], view) if item["centroid"] else None
