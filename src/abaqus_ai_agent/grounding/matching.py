@@ -65,5 +65,9 @@ def candidates_from_projected_faces(target, faces, radius=0.15,
             visual_score=float(visual_scores.get(key, 0.0)),
             topology_score=float(topology_scores.get(key, 0.0)),
             screen_polygon=polygon or None,
-            entity_key=face.get("entity_key")))
+            entity_key=face.get("entity_key"),
+            camera_depth=(float(face["camera_depth"])
+                          if face.get("camera_depth") is not None else None),
+            facing_score=(float(face["facing_score"])
+                          if face.get("facing_score") is not None else None)))
     return result
