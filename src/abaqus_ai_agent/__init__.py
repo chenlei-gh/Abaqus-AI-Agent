@@ -2,5 +2,6 @@
 
 from .agent import AbaqusAIAgent, RunResult
 from .execution import AbaqusExecutor, BridgeExecutor, InProcessExecutor
+from .contracts.units import UnitSystem
 
-__version__ = "0.2.0"
+__version__ = "0.2.1"
