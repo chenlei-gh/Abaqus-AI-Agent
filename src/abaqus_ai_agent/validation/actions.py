@@ -46,6 +46,12 @@ def validate_action(action):
                 raise ValueError("%s cannot be negative" % key)
         if action.parameters.get("max_aspect_ratio") == 0:
             raise ValueError("max_aspect_ratio must be positive")
+    if action.action_type in ("field_output", "history_output"):
+        variables = action.parameters.get("variables", ())
+        if not variables:
+            raise ValueError("variables are required for %s" % action.action_type)
+        if action.action_type == "history_output" and action.parameters.get("region_expression") and not action.parameters.get("step"):
+            raise ValueError("step is required for regional history_output")
     if action.action_type in ("body_heat_flux", "surface_heat_flux", "temperature_bc"):
         if not action.parameters.get("name"):
             raise ValueError("name is required for %s" % action.action_type)
