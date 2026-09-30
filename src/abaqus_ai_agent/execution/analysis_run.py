@@ -1,7 +1,8 @@
+import json, uuid
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Dict, Optional, Tuple
-from .jobs import JobState, JobStatus
+from .jobs import JobController, JobState, JobStatus
 
 class AnalysisRunState(str, Enum):
     CREATED="created"; PREFLIGHTED="preflighted"; SUBMITTED="submitted"; RUNNING="running"
@@ -10,7 +11,6 @@ class AnalysisRunState(str, Enum):
 
 @dataclass(frozen=True)
 class AnalysisRun:
-    """End-to-end analysis lifecycle record; solver policy stays outside this contract."""
     id: str
     model_name: str
     job_name: str
@@ -33,3 +33,45 @@ class AnalysisRun:
     @property
     def solver_completed(self):
         return self.job_status is not None and self.job_status.state == JobState.COMPLETED
+
+
+def discover_odb(executor, job_name):
+    """Best-effort discovery; returns a path only when the file exists."""
+    raw=executor.execute("import os; print(os.path.abspath(%r + '.odb') if os.path.exists(%r + '.odb') else '')" % (job_name, job_name))
+    if isinstance(raw,dict):
+        for key in ("path","odb_path","stdout","output"):
+            value=raw.get(key)
+            if isinstance(value,str) and value.strip(): return value.strip()
+    if isinstance(raw,str) and raw.strip(): return raw.strip()
+    return None
+
+
+class AnalysisRunner:
+    """Thin lifecycle orchestrator: job -> ODB -> results -> acceptance."""
+    def __init__(self, executor): self.executor=executor
+
+    def run(self, model_name, job_name, odb_path=None, criteria=(), result_values=None, timeout=3600):
+        run=AnalysisRun(str(uuid.uuid4()), model_name, job_name, AnalysisRunState.PREFLIGHTED)
+        jobs=JobController(self.executor)
+        try:
+            status=jobs.submit(job_name, wait=True)
+            run=run.with_state(AnalysisRunState.COMPLETED if status.state == JobState.COMPLETED else AnalysisRunState.FAILED,
+                               job_status=status)
+            if status.state != JobState.COMPLETED:
+                return run
+            path=odb_path or discover_odb(self.executor, job_name)
+            if not path:
+                return run.with_state(AnalysisRunState.FAILED, diagnostics=({"reason":"odb_missing"},))
+            from .odb import inspect_odb
+            odb=inspect_odb(self.executor, path)
+            run=run.with_state(AnalysisRunState.ODB_VALIDATED, odb_path=path,
+                               evidence=(odb,))
+            if criteria:
+                from ..acceptance import evaluate_criteria
+                if result_values is None: raise ValueError("result_values required when criteria are supplied")
+                accepted=evaluate_criteria(result_values, criteria)
+                return run.with_state(AnalysisRunState.ACCEPTED if accepted.passed else AnalysisRunState.RESULTS_EXTRACTED,
+                                      acceptance_passed=accepted.passed, evidence=(odb, accepted))
+            return run.with_state(AnalysisRunState.RESULTS_EXTRACTED)
+        except Exception as exc:
+            return run.with_state(AnalysisRunState.FAILED, diagnostics=({"error":str(exc)},))
