@@ -11,7 +11,7 @@ def validate_action(action):
     if action.action_type in (
         "fixed_bc", "displacement_bc", "symmetry_bc", "pressure_load",
         "concentrated_force", "body_force", "section_assignment", "tie",
-        "local_seed_size", "local_seed_number", "mesh_controls", "element_type"
+        "local_seed_size", "local_seed_number", "mesh_controls", "element_type", "contact"
     ) and not action.parameters.get("region_expression"):
         raise ValueError("region_expression is required for %s" % action.action_type)
     geometry = action.action_type in ("inspect_geometry", "ignore_entity", "restore_entity", "repair_geometry", "remove_redundant_entities", "inspect_mesh")
@@ -37,6 +37,10 @@ def validate_action(action):
         raise ValueError("region_expression is required for %s" % action.action_type)
     if action.action_type == "mesh_controls" and not action.parameters.get("technique"):
         raise ValueError("technique is required for mesh_controls")
+    if action.action_type == "contact" and not action.parameters.get("property"):
+        raise ValueError("property is required for contact")
+    if action.action_type == "contact" and (not action.parameters.get("master_expression") or not action.parameters.get("slave_expression")):
+        raise ValueError("master_expression and slave_expression are required for contact")
     if action.action_type == "element_type" and not action.parameters.get("elem_types"):
         raise ValueError("elem_types is required for element_type")
     if action.expected_state and not all(isinstance(x, dict) and x.get("path")
