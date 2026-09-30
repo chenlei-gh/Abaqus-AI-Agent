@@ -32,3 +32,18 @@ def classify_execution_error(message, payload=None):
         if marker in low:
             return category
     return "execution"
+
+
+def recovery_hint(category):
+    return {
+        "syntax": "Inspect the generated code around the reported source line before retrying.",
+        "abaqus_api": "Check the API signature against the detected Abaqus release before retrying.",
+        "object_missing": "Refresh ModelSnapshot and verify the referenced object still exists.",
+        "region_invalid": "Re-ground the region or validate the named region before retrying.",
+        "license": "Check the required Abaqus license/token availability; do not retry blindly.",
+        "solver": "Inspect the job/solver diagnostics and ODB/log state before retrying.",
+        "odb": "Verify ODB path, job completion and ODB readability.",
+        "timeout": "Inspect job state before retrying; a timeout does not prove solver failure.",
+        "connection": "Check the local bridge process and connection before retrying.",
+        "execution": "Inspect the structured error payload and current model state before retrying.",
+    }.get(category, "Inspect the structured error payload and current model state before retrying.")
