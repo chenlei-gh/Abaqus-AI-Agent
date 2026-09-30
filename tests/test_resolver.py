@@ -52,3 +52,32 @@ def test_grouped_selection_rejects_mixed_entity_types():
         assert "mixed entity types" in str(exc)
     else:
         raise AssertionError("mixed entity types must be rejected")
+
+
+def test_native_region_expression_groups_same_instance_targets():
+    from abaqus_ai_agent.grounding.resolver import native_region_expression, selection_from_candidates
+    from abaqus_ai_agent.contracts.geometry import GeometryCandidate
+    def make(x):
+        return GeometryCandidate(
+            entity_type="Face", name="P-1", index=1,
+            centroid=(float(x), 2.0, 3.0), normal=(0.0, 0.0, 1.0), area=1.0,
+            distance_score=1.0, visual_score=0.5, topology_score=0.5)
+    selection = selection_from_candidates([make(1), make(2)])
+    assert native_region_expression(selection) == "instance.faces.findAt(((1.0, 2.0, 3.0),), ((2.0, 2.0, 3.0),))"
+
+
+def test_native_region_expression_rejects_cross_instance_temporary_selection():
+    from abaqus_ai_agent.grounding.resolver import native_region_expression
+    from abaqus_ai_agent.contracts.geometry import GeometrySelection
+    selection = GeometrySelection(
+        targets=(
+            {"instance": "A-1", "entity_type": "Face", "point": (1,2,3)},
+            {"instance": "B-1", "entity_type": "Face", "point": (4,5,6)},
+        ),
+        entity_type="Face")
+    try:
+        native_region_expression(selection)
+    except ValueError as exc:
+        assert "cross-instance" in str(exc)
+    else:
+        raise AssertionError("cross-instance temporary region must be rejected")
