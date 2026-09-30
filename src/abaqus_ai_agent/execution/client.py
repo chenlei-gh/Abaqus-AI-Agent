@@ -39,9 +39,8 @@ class AbaqusExecutor(ABC):
         return viewport_state(self)
 
     def monitor_job(self, name, timeout=3600, poll_seconds=2.0):
-        # A conservative default: a single native status query. Bridges that
-        # provide a richer monitor operation can override this method.
-        return self.execute("print(mdb.jobs[%r].status)" % name, timeout=timeout)
+        # Native fallback: block until Abaqus reports job completion.
+        return self.execute("mdb.jobs[%r].waitForCompletion(); print(mdb.jobs[%r].status)" % (name, name), timeout=timeout)
 
 
 class BridgeExecutor(AbaqusExecutor):
