@@ -28,6 +28,18 @@ def _targets(selection):
         yield instance_name, point
 
 
+def validate_selection(assembly, selection):
+    """Resolve every target once and fail closed on any locator failure."""
+    resolved = []
+    for instance_name, point in _targets(selection):
+        instance = assembly.instances[instance_name]
+        entity = _find(instance, selection.entity_type, point)
+        resolved.append((instance_name, entity))
+    if not resolved:
+        raise ValueError("empty geometry selection")
+    return tuple(resolved)
+
+
 def materialize_selection(assembly, selection):
     """Materialize a GeometrySelection as a temporary native Abaqus region.
 
