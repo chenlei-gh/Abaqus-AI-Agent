@@ -46,8 +46,17 @@ class JobController:
             code += ", %s=%r" % (key, value)
         return self.executor.execute(code + ")")
 
+    def ensure(self, name, model, **kwargs):
+        """Create a job only when it does not already exist."""
+        code = "from abaqusConstants import OFF; _jobs=mdb.jobs; _name=%r; " % name
+        code += "print(_name if _name in _jobs else \\"\\")"
+        result = self.executor.execute(code)
+        if not (isinstance(result, dict) and any(str(v).strip() == name for v in result.values() if isinstance(v, str))):
+            return self.create(name, model, **kwargs)
+        return {"existing": name}
+
     def submit(self, name, wait=False):
-        result = self.executor.execute("mdb.jobs[%r].submit(consistencyChecking=OFF)" % name)
+        result = self.executor.execute("from abaqusConstants import OFF; mdb.jobs[%r].submit(consistencyChecking=OFF)" % name)
         if not wait:
             return JobStatus(name, JobState.SUBMITTED, result)
         return self.wait(name)
