@@ -1,4 +1,4 @@
-from ..contracts.geometry import ImagePoint, GroundingResult
+from ..contracts.geometry import ImagePoint, GeometrySelection
 from .matching import candidates_from_projected_faces
 from .policy import resolve
 
@@ -37,6 +37,35 @@ def region_expression(target, variable="instance"):
     point_expr = repr((tuple(point),))
     repository = {"Face": "faces", "Edge": "edges", "Vertex": "vertices"}[entity_type]
     return "%s.%s.findAt(%s)" % (variable, repository, point_expr)
+
+
+def selection_from_candidates(candidates, region_kind="temporary", name=None,
+                               surface_side=None):
+    """Create a grouped selection from grounded candidates.
+
+    All candidates must belong to the same Abaqus entity type. Cross-instance
+    selections are allowed because assembly-level sets can span instances;
+    downstream binding decides the appropriate Abaqus scope.
+    """
+    if not candidates:
+        raise ValueError("at least one candidate is required")
+    entity_types = {candidate.entity_type for candidate in candidates}
+    if len(entity_types) != 1:
+        raise ValueError("mixed entity types require separate selections")
+    targets = tuple(target_reference(candidate) for candidate in candidates)
+    return GeometrySelection(
+        targets=targets,
+        entity_type=next(iter(entity_types)),
+        region_kind=region_kind,
+        name=name,
+        surface_side=surface_side,
+    )
+
+
+def selection_expressions(selection, variable="instance"):
+    """Return native findAt expressions for every target in a selection."""
+    return tuple(region_expression(target, variable=variable)
+                 for target in selection.targets)
 
 
 def resolve_image_point(intent_id, image_point, probe, radius=0.12,
