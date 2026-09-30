@@ -8,9 +8,14 @@ def validate_action(action):
         raise ValueError("model_name is required")
     if not action.action_type:
         raise ValueError("action_type is required")
-    if action.action_type in ("fixed_bc", "displacement_bc", "pressure_load", "concentrated_force", "section_assignment"):
-        if not action.parameters.get("region_expression"):
-            raise ValueError("region_expression is required for %s" % action.action_type)
+    if action.action_type in (
+        "fixed_bc", "displacement_bc", "symmetry_bc", "pressure_load",
+        "concentrated_force", "body_force", "section_assignment", "tie"
+    ) and not action.parameters.get("region_expression"):
+        raise ValueError("region_expression is required for %s" % action.action_type)
+    if action.expected_state and not all(isinstance(x, dict) and x.get("path")
+                                         for x in action.expected_state):
+        raise ValueError("expected_state entries require a path")
     return True
 
 
