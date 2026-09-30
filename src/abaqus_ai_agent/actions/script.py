@@ -48,6 +48,18 @@ def action_to_script(action):
         return "mdb.models[%s].parts[%s].setMeshControls(%s)" % (_q(m), _q(p["part"]), ", ".join(args))
     if k == "element_type":
         return "mdb.models[%s].parts[%s].setElementType(regions=%s, elemTypes=%s)" % (_q(m), _q(p["part"]), p["region_expression"], p["elem_types"])
+    if k == "inspect_geometry":
+        return _geometry_inspection_script(m, p)
+    if k == "ignore_entity":
+        return "mdb.models[%s].parts[%s].ignoreEntity(entities=%s)" % (_q(m), _q(p["part"]), p["region_expression"])
+    if k == "restore_entity":
+        return "mdb.models[%s].parts[%s].restoreIgnoredEntity(entities=%s)" % (_q(m), _q(p["part"]), p["region_expression"])
+    if k == "repair_geometry":
+        return "mdb.models[%s].parts[%s].repairGeometry()" % (_q(m), _q(p["part"]))
+    if k == "remove_redundant_entities":
+        return "mdb.models[%s].parts[%s].removeRedundantEntities()" % (_q(m), _q(p["part"]))
+    if k == "inspect_mesh":
+        return _mesh_inspection_script(m, p)
     if k == "tie":
         return "mdb.models[%s].Tie(name=%s, master=%s, slave=%s, positionToleranceMethod=COMPUTED)" % (_q(m), _q(p["name"]), p["master_expression"], p["slave_expression"])
     if k == "contact":
@@ -74,3 +86,51 @@ def _load_script(action):
     if action.action_type == "body_force":
         return "mdb.models[%s].BodyForce(name=%s, createStepName=%s, region=%s, comp1=%r, comp2=%r, comp3=%r)" % (_q(m), _q(name), _q(step), region, p.get("comp1",0), p.get("comp2",0), p.get("comp3",0))
     return "mdb.models[%s].ConcentratedForce(name=%s, createStepName=%s, region=%s, cf1=%r,cf2=%r,cf3=%r)" % (_q(m), _q(name), _q(step), region, p.get("cf1",0), p.get("cf2",0), p.get("cf3",0))
+
+
+def _geometry_inspection_script(model, p):
+    part = p["part"]
+    edge_limit = p.get("min_edge_length")
+    face_limit = p.get("min_face_size")
+    return """from math import sqrt
+model=mdb.models[%r]
+part=model.parts[%r]
+issues=[]
+for i,e in enumerate(part.edges):
+    try:
+        s=e.getSize()
+        if %r is not None and s < %r:
+            issues.append({'entity_type':'Edge','index':i,'issue_type':'small_edge','metric':s,'threshold':%r,'point':getattr(e,'pointOn',None)})
+    except Exception:
+        pass
+for i,f in enumerate(part.faces):
+    try:
+        s=f.getSize()
+        if %r is not None and s < %r:
+            issues.append({'entity_type':'Face','index':i,'issue_type':'small_face','metric':s,'threshold':%r,'point':getattr(f,'pointOn',None)})
+    except Exception:
+        pass
+valid=True
+try:
+    check=part.checkGeometry(detailed=True)
+    if check is False: valid=False
+except Exception:
+    pass
+print({'part':%r,'valid_geometry':valid,'entity_counts':{'faces':len(part.faces),'edges':len(part.edges),'vertices':len(part.vertices)},'issues':issues})
+""" % (model,part,edge_limit,edge_limit,edge_limit,face_limit,face_limit,face_limit,part)
+
+def _mesh_inspection_script(model, p):
+    part = p["part"]
+    return """model=mdb.models[%r]
+part=model.parts[%r]
+nodes=list(part.nodes)
+elements=list(part.elements)
+types={}
+for e in elements:
+    key=str(getattr(e,'type','UNKNOWN'))
+    types[key]=types.get(key,0)+1
+warnings=[]
+if not nodes: warnings.append('no_nodes')
+if not elements: warnings.append('no_elements')
+print({'part':%r,'node_count':len(nodes),'element_count':len(elements),'element_types':types,'warnings':warnings})
+""" % (model,part)
