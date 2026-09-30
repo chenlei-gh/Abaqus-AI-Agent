@@ -1,0 +1,64 @@
+from abaqus_ai_agent.contracts.results import (
+    ResultRequirement, requirement_from_criterion, required_field_variables
+)
+from abaqus_ai_agent.execution.artifacts import JobArtifacts, JobArtifact
+from abaqus_ai_agent.execution.results import extract_criteria
+
+
+def test_common_criteria_map_to_deterministic_odb_queries():
+    stress = requirement_from_criterion({
+        "name": "stress", "value_key": "max_stress",
+        "operator": "<", "limit": 250, "unit": "MPa",
+        "step": "Step-1"
+    })
+    disp = requirement_from_criterion({
+        "name": "disp", "value_key": "max_displacement",
+        "operator": "<=", "limit": 2, "unit": "mm",
+        "step": "Step-1"
+    })
+    assert stress.field == "S"
+    assert stress.invariant == "MISES"
+    assert disp.field == "U"
+    assert disp.invariant == "MAGNITUDE"
+    assert required_field_variables((stress, disp)) == ("S", "U")
+
+
+def test_explicit_result_mapping_is_supported():
+    req = requirement_from_criterion({
+        "value_key": "tip_u2",
+        "operator": "<=",
+        "limit": 1.0,
+        "result": {
+            "field": "U", "component": "U2",
+            "aggregation": "max", "step": "Step-1"
+        }
+    })
+    assert req.component == "U2"
+    assert req.invariant is None
+
+
+def test_result_extraction_uses_max_locator():
+    class FakeExecutor:
+        def execute(self, code, timeout=None):
+            return {
+                "meta": {"step": "Step-1", "frame_index": -1},
+                "values": [
+                    {"data": 10.0, "node_label": 1, "instance": "PART-1-1"},
+                    {"data": 25.0, "node_label": 2, "instance": "PART-1-1"},
+                ]
+            }
+
+    values, evidence = extract_criteria(FakeExecutor(), "job.odb", [{
+        "value_key": "max_stress", "operator": "<", "limit": 30,
+        "step": "Step-1"
+    }])
+    assert values["max_stress"] == 25.0
+    assert evidence[0]["locator"]["node_label"] == 2
+
+
+def test_artifact_missing_is_explicit():
+    artifacts = JobArtifacts("job", ".", (
+        JobArtifact("job", ".odb", "./job.odb", False),
+        JobArtifact("job", ".sta", "./job.sta", True, 100),
+    ))
+    assert artifacts.missing() and artifacts.missing()[0].suffix == ".odb"
