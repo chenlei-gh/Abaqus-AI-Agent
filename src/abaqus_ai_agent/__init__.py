@@ -1,3 +1,6 @@
 """Abaqus AI Agent core package."""
 
-__version__ = "0.1.0"
+from .agent import AbaqusAIAgent, RunResult
+from .execution import AbaqusExecutor, BridgeExecutor, InProcessExecutor
+
+__version__ = "0.2.0"
