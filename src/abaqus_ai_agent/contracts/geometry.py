@@ -4,7 +4,7 @@ from typing import List, Optional, Tuple
 
 @dataclass(frozen=True)
 class ImagePoint:
-    """Normalized image coordinate in the inclusive [0, 1] range."""
+    """Normalized image coordinate, origin at top-left."""
     x: float
     y: float
 
@@ -35,6 +35,10 @@ class ViewProjection:
     camera_position: Optional[Tuple[float, float, float]] = None
     camera_target: Optional[Tuple[float, float, float]] = None
     up_vector: Optional[Tuple[float, float, float]] = None
+    view_width: Optional[float] = None
+    view_height: Optional[float] = None
+    view_offset_x: float = 0.0
+    view_offset_y: float = 0.0
 
 
 @dataclass(frozen=True)
@@ -49,6 +53,24 @@ class GeometryCandidate:
     distance_score: float
     visual_score: float
     topology_score: float
+
+    def __post_init__(self):
+        for name, value in (
+            ("distance_score", self.distance_score),
+            ("visual_score", self.visual_score),
+            ("topology_score", self.topology_score),
+        ):
+            if not 0.0 <= value <= 1.0:
+                raise ValueError("%s must be in [0, 1]" % name)
+
+    @property
+    def total_score(self) -> float:
+        """Normalized evidence score used for ranking."""
+        return (
+            0.4 * self.distance_score
+            + 0.4 * self.visual_score
+            + 0.2 * self.topology_score
+        )
 
 
 @dataclass(frozen=True)
