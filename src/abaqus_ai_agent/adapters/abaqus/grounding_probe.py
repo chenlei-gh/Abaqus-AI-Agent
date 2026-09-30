@@ -80,7 +80,7 @@ def _project_vertices(entity, owner, view):
 def _entity_data(entity, index, view=None, owner=None, entity_type="Face"):
     centroid = None
     try:
-        centroid = tuple(float(x) for x in face.getCentroid()[:3])
+        centroid = tuple(float(x) for x in entity.getCentroid()[:3])
     except Exception:
         try:
             centroid = tuple(float(x) for x in entity.pointOn[0][:3])
@@ -94,7 +94,7 @@ def _entity_data(entity, index, view=None, owner=None, entity_type="Face"):
             pass
     size = None
     try:
-        size = float(face.getSize())
+        size = float(entity.getSize())
     except Exception:
         pass
     item = {"index": index, "entity_type": entity_type, "centroid": centroid, "normal": normal, "size": size}
