@@ -26,6 +26,18 @@ class AbaqusExecutor(ABC):
         from .odb import inspect_odb
         return inspect_odb(self)
 
+    def snapshot(self):
+        from .snapshot import read_model_snapshot
+        return read_model_snapshot(self)
+
+    def runtime_info(self):
+        from .runtime import detect_runtime
+        return detect_runtime(self)
+
+    def viewport_state(self):
+        from .inspection import viewport_state
+        return viewport_state(self)
+
     def monitor_job(self, name, timeout=3600, poll_seconds=2.0):
         # A conservative default: a single native status query. Bridges that
         # provide a richer monitor operation can override this method.
