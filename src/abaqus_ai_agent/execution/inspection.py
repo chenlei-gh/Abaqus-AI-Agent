@@ -34,11 +34,17 @@ def runtime_info(executor):
             "result['python_version']=sys.version\n"
             "result['gui_available']=bool(globals().get('session'))\n"
             "def _odb_probe():\n try:\n  import odbAccess; return True\n except Exception: return False\n"
-            "def _contact_probe():\n try:\n  return hasattr(next(iter(mdb.models.values())), 'ContactProperty')\n except Exception: return False\n"
+            "def _contact_probe():\n"
+            " try:\n"
+            "  if 'mdb' not in globals() or not mdb.models: return False\n"
+            "  return hasattr(next(iter(mdb.models.values())), 'ContactProperty')\n"
+            " except Exception: return False\n"
             "result['capabilities']=[]\n"
-            "for _name,_ok in (('model_inspection','mdb' in globals()),('job',hasattr(mdb,'jobs') if 'mdb' in globals() else False),('odb',_odb_probe()),('viewport','session' in globals()),('contact',_contact_probe())):\n"
-            " result['capabilities'].append(_name) if _ok else None\n"
-            "result['capabilities']=['model_inspection','job','odb','viewport']\n"
+            "for _name,_ok in (('model_inspection','mdb' in globals()),"
+            "('job',hasattr(mdb,'jobs') if 'mdb' in globals() else False),"
+            "('odb',_odb_probe()),('viewport','session' in globals()),"
+            "('contact',_contact_probe())):\n"
+            " if _ok: result['capabilities'].append(_name)\n"
             "print(json.dumps(result))")
     return executor.execute(code)
 
@@ -56,6 +62,8 @@ def viewport_state(executor):
 
 
 def capture_viewport(executor, path="abaqus_viewport.png"):
-    if hasattr(executor, "capture_viewport"):
-        return executor.capture_viewport(path)
-    return executor.execute("session.printToFile(fileName=%r, format=PNG, canvasObjects=(session.viewports[session.currentViewportName],))" % path)
+    code = ("from abaqusConstants import PNG\n"
+            "session.printToFile(fileName=%r, format=PNG, "
+            "canvasObjects=(session.viewports[session.currentViewportName],))\n"
+            "print(%r)") % (path, path)
+    return executor.execute(code)
