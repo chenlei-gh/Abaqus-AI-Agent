@@ -46,6 +46,7 @@ class GeometryCandidate:
     name: Optional[str]
     index: Optional[int]
     centroid: Optional[Tuple[float, float, float]]
+    locator_point: Optional[Tuple[float, float, float]] = None
     normal: Optional[Tuple[float, float, float]]
     area: Optional[float]
     distance_score: float
