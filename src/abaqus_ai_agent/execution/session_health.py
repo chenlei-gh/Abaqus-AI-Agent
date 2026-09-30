@@ -36,7 +36,7 @@ if 'session' in globals(): caps.append('viewport')
 result['capabilities']=caps
 try:
     if mdb.jobs:
-        result['last_job_status']=str(next(reversed(mdb.jobs.values())).status)
+        result['last_job_status']=str(list(mdb.jobs.values())[-1].status)
 except Exception:
     pass
 print(json.dumps(result))
