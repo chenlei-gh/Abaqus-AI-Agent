@@ -9,14 +9,14 @@ def target_reference(candidate):
     Abaqus warns that integer geometry ids are not stable. The geometric point
     is therefore the primary locator; index/entity_key are diagnostics only.
     """
-    if candidate is None or candidate.centroid is None:
+    if candidate is None or (candidate.locator_point is None and candidate.centroid is None):
         raise ValueError("candidate with geometric locator is required")
     return {
         "instance": candidate.name,
         "entity_type": candidate.entity_type,
         "entity_key": candidate.entity_key,
         "index": candidate.index,
-        "point": tuple(candidate.centroid),
+        "point": tuple(candidate.locator_point or candidate.centroid),
         "grounding_score": candidate.total_score,
         "grounding_evidence": {
             "distance": candidate.distance_score,
