@@ -157,10 +157,13 @@ class AnalysisRunner:
                 acceptance_passed=accepted.passed,
                 evidence=evidence, artifacts=artifacts)
         except Exception as exc:
+            artifacts = _collect_artifacts(self.executor, job_name)
+            diagnostics = _collect_diagnostics(self.executor, job_name)
             return run.with_state(
                 AnalysisRunState.FAILED,
                 engineering_status=EngineeringStatus.EXECUTION_FAILED.value,
-                diagnostics=({"error": str(exc)},))
+                artifacts=artifacts,
+                diagnostics=({"error": str(exc), "solver_artifacts": diagnostics},))
 
 
 def _collect_diagnostics(executor, job_name):
