@@ -40,10 +40,28 @@ def validate_action(action):
     if action.action_type == "mesh_quality":
         if not action.parameters.get("part"):
             raise ValueError("part is required for mesh_quality")
+        for key in ("max_aspect_ratio", "max_skew", "min_jacobian", "min_angle", "max_angle"):
+            value = action.parameters.get(key)
+            if value is not None and value < 0:
+                raise ValueError("%s cannot be negative" % key)
+        if action.parameters.get("max_aspect_ratio") == 0:
+            raise ValueError("max_aspect_ratio must be positive")
     if action.action_type == "contact" and not action.parameters.get("property"):
         raise ValueError("property is required for contact")
     if action.action_type == "contact" and (not action.parameters.get("master_expression") or not action.parameters.get("slave_expression")):
         raise ValueError("master_expression and slave_expression are required for contact")
+    if action.action_type == "contact":
+        sliding = str(action.parameters.get("sliding", "FINITE")).upper()
+        if sliding not in ("FINITE", "SMALL"):
+            raise ValueError("sliding must be FINITE or SMALL")
+    if action.action_type == "contact_property":
+        formulation = str(action.parameters.get("tangential_behavior", {}).get("formulation", "PENALTY")).upper()
+        if formulation not in ("FRICTIONLESS", "PENALTY", "LAGRANGE", "ROUGH", "EXPONENTIAL_DECAY", "USER_DEFINED"):
+            raise ValueError("unsupported contact tangential formulation")
+        if formulation in ("PENALTY", "LAGRANGE"):
+            friction = action.parameters.get("tangential_behavior", {}).get("friction", 0.0)
+            if friction < 0:
+                raise ValueError("friction cannot be negative")
     if action.action_type == "element_type" and not action.parameters.get("elem_types"):
         raise ValueError("elem_types is required for element_type")
     if action.expected_state and not all(isinstance(x, dict) and x.get("path")
