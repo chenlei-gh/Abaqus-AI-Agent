@@ -9,6 +9,12 @@ def action_to_script(action):
         return "mdb.models[%s].materials[%s].Density(table=((%r,),))" % (_q(m), _q(p["name"]), p["density"])
     if k == "material_plastic":
         return "mdb.models[%s].materials[%s].Plastic(table=%r)" % (_q(m), _q(p["name"]), tuple(tuple(x) for x in p["table"]))
+    if k == "material_conductivity":
+        return "mdb.models[%s].materials[%s].Conductivity(table=%r)" % (_q(m), _q(p["name"]), tuple(tuple(x) for x in p["table"]))
+    if k == "material_specific_heat":
+        return "mdb.models[%s].materials[%s].SpecificHeat(table=%r)" % (_q(m), _q(p["name"]), tuple(tuple(x) for x in p["table"]))
+    if k == "material_expansion":
+        return "mdb.models[%s].materials[%s].Expansion(table=%r)" % (_q(m), _q(p["name"]), tuple(tuple(x) for x in p["table"]))
     if k == "solid_section":
         return "mdb.models[%s].HomogeneousSolidSection(name=%s, material=%s, thickness=None)" % (_q(m), _q(p["name"]), _q(p["material"]))
     if k == "section_assignment":
@@ -19,9 +25,13 @@ def action_to_script(action):
         return "mdb.models[%s].ExplicitDynamicsStep(name=%s, previous=%s, timePeriod=%r)" % (_q(m), _q(p["name"]), _q(p.get("previous", "Initial")), p["time_period"])
     if k == "frequency_step":
         return "mdb.models[%s].FrequencyStep(name=%s, previous=%s, numEigen=%d)" % (_q(m), _q(p["name"]), _q(p.get("previous", "Initial")), int(p["num_eigen"]))
-    if k in ("fixed_bc", "displacement_bc", "symmetry_bc"):
+    if k == "heat_transfer_step":
+        return "mdb.models[%s].HeatTransferStep(name=%s, previous=%s, response=%s, timePeriod=%r)" % (_q(m), _q(p["name"]), _q(p.get("previous", "Initial")), p.get("response", "TRANSIENT"), p.get("time_period", 1.0))
+    if k == "coupled_temp_displacement_step":
+        return "mdb.models[%s].CoupledTempDisplacementStep(name=%s, previous=%s, response=%s, timePeriod=%r, nlgeom=%s)" % (_q(m), _q(p["name"]), _q(p.get("previous", "Initial")), p.get("response", "TRANSIENT"), p.get("time_period", 1.0), p.get("nlgeom", False))
+    if k in ("fixed_bc", "displacement_bc", "symmetry_bc", "temperature_bc"):
         return _bc_script(action)
-    if k in ("pressure_load", "concentrated_force", "body_force"):
+    if k in ("pressure_load", "concentrated_force", "body_force", "body_heat_flux", "surface_heat_flux"):
         return _load_script(action)
     if k == "field_output":
         return "mdb.models[%s].fieldOutputRequests[%s].setValues(variables=%r)" % (_q(m), _q(p.get("request", "F-Output-1")), tuple(p.get("variables", ("S", "U", "RF"))))
@@ -75,6 +85,8 @@ def _bc_script(action):
     region, name, step = p["region_expression"], p["name"], p.get("step", "Initial")
     if action.action_type == "fixed_bc":
         return "model=mdb.models[%s]; region=%s; model.EncastreBC(name=%s, createStepName=%s, region=region)" % (_q(m), region, _q(name), _q(step))
+    if action.action_type == "temperature_bc":
+        return "model=mdb.models[%s]; region=%s; model.TemperatureBC(name=%s, createStepName=%s, region=region, magnitude=%r)" % (_q(m), region, _q(name), _q(step), p["magnitude"])
     if action.action_type == "symmetry_bc":
         method = {"X":"XsymmBC", "Y":"YsymmBC", "Z":"ZsymmBC"}.get(str(p.get("plane", "X")).upper())
         if not method: raise ValueError("symmetry plane must be X, Y or Z")
@@ -87,6 +99,10 @@ def _load_script(action):
     region, name, step = p["region_expression"], p["name"], p.get("step", "Step-1")
     if action.action_type == "pressure_load":
         return "mdb.models[%s].Pressure(name=%s, createStepName=%s, region=%s, magnitude=%r)" % (_q(m), _q(name), _q(step), region, p["magnitude"])
+    if action.action_type == "body_heat_flux":
+        return "mdb.models[%s].BodyHeatFlux(name=%s, createStepName=%s, region=%s, magnitude=%r)" % (_q(m), _q(name), _q(step), region, p["magnitude"])
+    if action.action_type == "surface_heat_flux":
+        return "mdb.models[%s].SurfaceHeatFlux(name=%s, createStepName=%s, region=%s, magnitude=%r)" % (_q(m), _q(name), _q(step), region, p["magnitude"])
     if action.action_type == "body_force":
         return "mdb.models[%s].BodyForce(name=%s, createStepName=%s, region=%s, comp1=%r, comp2=%r, comp3=%r)" % (_q(m), _q(name), _q(step), region, p.get("comp1",0), p.get("comp2",0), p.get("comp3",0))
     return "mdb.models[%s].ConcentratedForce(name=%s, createStepName=%s, region=%s, cf1=%r,cf2=%r,cf3=%r)" % (_q(m), _q(name), _q(step), region, p.get("cf1",0), p.get("cf2",0), p.get("cf3",0))
