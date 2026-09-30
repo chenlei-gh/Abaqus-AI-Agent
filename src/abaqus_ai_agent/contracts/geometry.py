@@ -46,7 +46,6 @@ class GeometryCandidate:
     name: Optional[str]
     index: Optional[int]
     centroid: Optional[Tuple[float, float, float]]
-    locator_point: Optional[Tuple[float, float, float]] = None
     normal: Optional[Tuple[float, float, float]]
     area: Optional[float]
     distance_score: float
@@ -57,6 +56,7 @@ class GeometryCandidate:
     entity_key: Optional[str] = None
     camera_depth: Optional[float] = None
     facing_score: Optional[float] = None
+    locator_point: Optional[Tuple[float, float, float]] = None
 
     def __post_init__(self):
         for name, value in (
