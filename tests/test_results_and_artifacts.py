@@ -62,3 +62,18 @@ def test_artifact_missing_is_explicit():
         JobArtifact("job", ".sta", "./job.sta", True, 100),
     ))
     assert artifacts.missing() and artifacts.missing()[0].suffix == ".odb"
+
+
+def test_history_requirement_is_first_class():
+    req = requirement_from_criterion({
+        "value_key": "energy", "operator": ">=", "limit": 10,
+        "result": {
+            "output_kind": "history",
+            "history_variable": "ALLIE",
+            "history_region": "Assembly ASSEMBLY",
+            "aggregation": "last",
+            "step": "Step-1"
+        }
+    })
+    assert req.output_kind == "history"
+    assert req.history_variable == "ALLIE"
