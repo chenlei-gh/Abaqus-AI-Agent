@@ -64,5 +64,6 @@ def candidates_from_projected_faces(target, faces, radius=0.15,
             area=face.get("size"), distance_score=distance,
             visual_score=float(visual_scores.get(key, 0.0)),
             topology_score=float(topology_scores.get(key, 0.0)),
-            screen_polygon=polygon or None))
+            screen_polygon=polygon or None,
+            entity_key=face.get("entity_key")))
     return result
