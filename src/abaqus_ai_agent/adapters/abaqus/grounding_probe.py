@@ -36,10 +36,7 @@ def _cross(a, b):
 
 
 def _camera_basis(view):
-    forward = _norm(tuple(t-p for p, t in zip(view.cameraPosition, view.cameraTarget)))
-    up = _norm(tuple(view.cameraUpVector))
-    right = _norm(_cross(forward, up))
-    up = _norm(_cross(right, forward))
+    forward, right, up = _camera_basis(view)
     return forward, right, up
 
 
