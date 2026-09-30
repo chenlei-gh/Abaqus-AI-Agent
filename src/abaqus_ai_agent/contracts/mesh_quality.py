@@ -40,6 +40,7 @@ class MeshQualityPolicy:
 @dataclass(frozen=True)
 class MeshQualityResult:
     status: str
+    source: str = "unsupported"
     metrics: Dict[str, float] = field(default_factory=dict)
     violations: Tuple[str, ...] = field(default_factory=tuple)
     warnings: Tuple[str, ...] = field(default_factory=tuple)
