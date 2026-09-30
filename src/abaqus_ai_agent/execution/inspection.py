@@ -19,6 +19,10 @@ def get_model_info(executor):
             " result['output_requests'] += list(_m.fieldOutputRequests.keys())\n"
             " try: result['instances'] += list(_m.rootAssembly.instances.keys())\n"
             " except: pass\n"
+            "result['metadata']={'model_count':len(mdb.models),'job_count':len(mdb.jobs)}\n"
+            "result['metadata']['job_status']={}\n"
+            "for _jn,_job in mdb.jobs.items():\n"
+            " result['metadata']['job_status'][_jn]=str(getattr(_job,'status','UNKNOWN'))\n"
             "print(json.dumps(result))")
     return executor.execute(code)
 
