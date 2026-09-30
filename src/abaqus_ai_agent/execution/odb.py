@@ -2,6 +2,7 @@ def inspect_odb(executor, path):
     if hasattr(executor, "inspect_odb"):
         return executor.inspect_odb(path)
     code = ("from odbAccess import openOdb\n"
+            "from abaqusConstants import *\n"
             "odb=openOdb(path=%r, readOnly=True)\n"
             "result={'steps':list(odb.steps.keys()),"
             "'instances':list(odb.rootAssembly.instances.keys())}\n"
