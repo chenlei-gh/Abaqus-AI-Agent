@@ -1,5 +1,16 @@
 # Read-only Abaqus/CAE experiment for model-to-image grounding.
 # Call run(session) from the Abaqus Python console.
+#
+# Important coordinate rule:
+#   Geometry read from a PartInstance (instance.faces / instance.vertices) is
+#   treated as assembly-space geometry. We deliberately do not reconstruct the
+#   instance transform from getRotation()/getTranslation(): Abaqus exposes
+#   those operations, but getPosition() only prints state and the documented
+#   API does not expose a single ready-made 4x4 transform. Using the actual
+#   instance-owned geometry avoids inventing transform semantics.
+#
+# The probe also records a lightweight part-vs-instance coordinate diagnostic
+# so a real Abaqus session can verify this assumption on the target release.
 
 try:
     from abaqusConstants import PNG, PARALLEL
@@ -34,9 +45,9 @@ def _project(point, view):
     delta = tuple(p-t for p, t in zip(point, view.cameraTarget))
     sx = 0.5 + _dot(delta, right) / float(view.width) + float(view.viewOffsetX)
     sy_model = 0.5 + _dot(delta, up) / float(view.height) + float(view.viewOffsetY)
+    # Keep projected points even when outside the viewport. A partially visible
+    # face must not lose its polygon just because a vertex is off-screen.
     sy = 1.0 - sy_model
-    if not (0.0 <= sx <= 1.0 and 0.0 <= sy <= 1.0):
-        return None
     return (sx, sy)
 
 
@@ -87,6 +98,44 @@ def _face_data(face, index, view=None, owner=None):
     return item
 
 
+def _coordinate_diagnostic(instance):
+    """Compare one instance face point with its source-part face point.
+
+    This is diagnostic only. It does not infer a transform or alter coordinates.
+    """
+    result = {"checked": False, "delta": None, "same_coordinates": None}
+    try:
+        if len(instance.faces) == 0 or len(instance.part.faces) == 0:
+            return result
+        a = tuple(float(x) for x in instance.faces[0].pointOn[0][:3])
+        p = tuple(float(x) for x in instance.part.faces[0].pointOn[0][:3])
+        delta = tuple(a[i] - p[i] for i in range(3))
+        result["checked"] = True
+        result["delta"] = delta
+        result["same_coordinates"] = max(abs(x) for x in delta) <= 1.0e-9
+    except Exception:
+        return result
+    return result
+
+
+def _instance_state(instance):
+    result = {"translation": None, "rotation": None, "position_available": False}
+    try:
+        result["translation"] = tuple(float(x) for x in instance.getTranslation())
+    except Exception:
+        pass
+    try:
+        result["rotation"] = tuple(instance.getRotation())
+    except Exception:
+        pass
+    # getPosition() is documented as printing rather than returning the state,
+    # so it is intentionally not called from this read-only data path.
+    result["position_available"] = (
+        result["translation"] is not None or result["rotation"] is not None
+    )
+    return result
+
+
 def collect(session):
     viewport = session.viewports[session.currentViewportName]
     view = viewport.view
@@ -94,6 +143,7 @@ def collect(session):
     result = {
         "viewport": viewport.name,
         "projection": str(view.projection),
+        "coordinate_space": "assembly" if getattr(displayed, "instances", None) is not None else "part",
         "view": {
             "camera_position": tuple(view.cameraPosition),
             "camera_target": tuple(view.cameraTarget),
@@ -101,22 +151,28 @@ def collect(session):
             "width": float(view.width), "height": float(view.height),
             "view_offset_x": float(view.viewOffsetX),
             "view_offset_y": float(view.viewOffsetY),
-        }, "faces": []}
+        }, "faces": [], "instances": {}}
     if displayed is None:
         return result
     instances = getattr(displayed, "instances", None)
     if instances is not None:
         for name in instances.keys():
             instance = instances[name]
+            result["instances"][name] = {
+                "coordinate_diagnostic": _coordinate_diagnostic(instance),
+                "state": _instance_state(instance),
+            }
             for index, face in enumerate(instance.faces):
                 item = _face_data(face, index, view, instance)
                 item["instance"] = name
+                item["entity_key"] = "%s:Face:%d" % (name, index)
                 item["screen"] = _project(item["centroid"], view) if item["centroid"] else None
                 result["faces"].append(item)
     else:
         for index, face in enumerate(displayed.faces):
             item = _face_data(face, index, view, displayed)
             item["instance"] = None
+            item["entity_key"] = "Part:Face:%d" % index
             item["screen"] = _project(item["centroid"], view) if item["centroid"] else None
             result["faces"].append(item)
     return result
