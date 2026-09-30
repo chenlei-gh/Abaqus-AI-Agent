@@ -101,7 +101,8 @@ class AnalysisRunner:
                     engineering_status=engineering.value,
                     artifacts=artifacts,
                     diagnostics=({"reason": "job_not_completed",
-                                  "state": status.state.value},))
+                                  "state": status.state.value,
+                                  "solver_artifacts": _collect_diagnostics(self.executor, job_name)},))
 
             run = run.with_state(
                 AnalysisRunState.COMPLETED,
@@ -161,6 +162,13 @@ class AnalysisRunner:
                 engineering_status=EngineeringStatus.EXECUTION_FAILED.value,
                 diagnostics=({"error": str(exc)},))
 
+
+def _collect_diagnostics(executor, job_name):
+    try:
+        from .artifacts import inspect_job_diagnostics
+        return inspect_job_diagnostics(executor, job_name)
+    except Exception:
+        return {}
 
 def _collect_artifacts(executor, job_name):
     try:
