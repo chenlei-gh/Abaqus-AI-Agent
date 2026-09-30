@@ -32,6 +32,7 @@ class AnalysisRun:
     acceptance_passed: Optional[bool] = None
     evidence: Tuple[Any, ...] = ()
     diagnostics: Tuple[Dict[str, Any], ...] = ()
+    artifacts: Tuple[Any, ...] = ()
     metadata: Dict[str, Any] = field(default_factory=dict)
 
     def with_state(self, state, **changes):
@@ -40,7 +41,8 @@ class AnalysisRun:
             state=state, job_status=self.job_status, odb_path=self.odb_path,
             engineering_status=self.engineering_status,
             acceptance_passed=self.acceptance_passed, evidence=self.evidence,
-            diagnostics=self.diagnostics, metadata=dict(self.metadata))
+            diagnostics=self.diagnostics, artifacts=self.artifacts,
+            metadata=dict(self.metadata))
         values.update(changes)
         return AnalysisRun(**values)
 
@@ -70,7 +72,8 @@ def discover_odb(executor, job_name):
 
 
 class AnalysisRunner:
-    """Thin lifecycle: job -> ODB validation -> optional result acceptance."""
+    """Complete lifecycle: job -> artifacts -> ODB -> result extraction -> acceptance."""
+
     def __init__(self, executor):
         self.executor = executor
 
@@ -85,6 +88,7 @@ class AnalysisRunner:
                 jobs.create(job_name, model_name)
 
             status = jobs.submit(job_name, wait=True, timeout=timeout)
+            artifacts = _collect_artifacts(self.executor, job_name)
             if status.state != JobState.COMPLETED:
                 engineering = (
                     EngineeringStatus.SOLVER_FAILED
@@ -94,19 +98,24 @@ class AnalysisRunner:
                 return run.with_state(
                     AnalysisRunState.FAILED,
                     job_status=status,
-                    engineering_status=engineering.value)
+                    engineering_status=engineering.value,
+                    artifacts=artifacts,
+                    diagnostics=({"reason": "job_not_completed",
+                                  "state": status.state.value},))
 
             run = run.with_state(
                 AnalysisRunState.COMPLETED,
                 job_status=status,
-                engineering_status=EngineeringStatus.RESULT_SUSPICIOUS.value)
+                engineering_status=EngineeringStatus.RESULT_SUSPICIOUS.value,
+                artifacts=artifacts)
 
             path = odb_path or discover_odb(self.executor, job_name)
             if not path:
                 return run.with_state(
                     AnalysisRunState.FAILED,
                     engineering_status=EngineeringStatus.ODB_MISSING.value,
-                    diagnostics=({"reason": "odb_missing"},))
+                    diagnostics=({"reason": "odb_missing"},),
+                    artifacts=artifacts)
 
             raw_odb = self.executor.inspect_odb(path) if hasattr(
                 self.executor, "inspect_odb") else None
@@ -117,32 +126,45 @@ class AnalysisRunner:
                     odb_path=path,
                     engineering_status=EngineeringStatus.RESULT_INVALID.value,
                     diagnostics=({"reason": "odb_invalid", "odb": odb},),
-                    evidence=(odb,))
+                    evidence=(odb,), artifacts=artifacts)
 
             run = run.with_state(
                 AnalysisRunState.ODB_VALIDATED,
                 odb_path=path,
                 engineering_status=EngineeringStatus.RESULT_SUSPICIOUS.value,
-                evidence=(odb,))
+                evidence=(odb,), artifacts=artifacts)
 
             if not criteria:
-                return run.with_state(AnalysisRunState.RESULTS_EXTRACTED)
+                return run.with_state(AnalysisRunState.ODB_VALIDATED)
 
             if result_values is None:
-                raise ValueError("result_values required when criteria are supplied")
+                from .results import extract_criteria
+                result_values, result_evidence = extract_criteria(
+                    self.executor, path, criteria)
+            else:
+                result_evidence = ()
 
             from ..acceptance import evaluate_criteria
             accepted = evaluate_criteria(result_values, criteria)
             status_value = (EngineeringStatus.RESULT_VALID.value
                             if accepted.passed else EngineeringStatus.RESULT_INVALID.value)
+            evidence = tuple((odb, accepted)) + tuple(result_evidence)
             return run.with_state(
                 AnalysisRunState.ACCEPTED if accepted.passed
                 else AnalysisRunState.RESULTS_EXTRACTED,
                 engineering_status=status_value,
                 acceptance_passed=accepted.passed,
-                evidence=(odb, accepted))
+                evidence=evidence, artifacts=artifacts)
         except Exception as exc:
             return run.with_state(
                 AnalysisRunState.FAILED,
                 engineering_status=EngineeringStatus.EXECUTION_FAILED.value,
                 diagnostics=({"error": str(exc)},))
+
+
+def _collect_artifacts(executor, job_name):
+    try:
+        from .artifacts import inspect_job_artifacts
+        return inspect_job_artifacts(executor, job_name).items
+    except Exception:
+        return ()
