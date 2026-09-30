@@ -65,3 +65,12 @@ class JobController:
 
     def cancel(self, name):
         return self.executor.execute("mdb.jobs[%r].kill()" % name)
+
+    def artifacts(self, name, workdir=None):
+        from .artifacts import inspect_job_artifacts
+        return inspect_job_artifacts(self.executor, name, workdir=workdir)
+
+    def diagnostics(self, name, workdir=None, tail_lines=80):
+        from .artifacts import inspect_job_diagnostics
+        return inspect_job_diagnostics(
+            self.executor, name, workdir=workdir, tail_lines=tail_lines)
