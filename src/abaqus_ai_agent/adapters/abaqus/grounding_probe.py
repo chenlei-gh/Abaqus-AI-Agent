@@ -35,6 +35,11 @@ def _cross(a, b):
             a[0]*b[1]-a[1]*b[0])
 
 
+def _camera_basis(view):
+    forward, right, up = _camera_basis(view)
+    return forward, right, up
+
+
 def _project(point, view):
     if getattr(view, "projection", None) != PARALLEL:
         return None
@@ -93,6 +98,17 @@ def _face_data(face, index, view=None, owner=None):
     except Exception:
         pass
     item = {"index": index, "centroid": centroid, "normal": normal, "size": size}
+    if centroid is not None:
+        try:
+            forward, _, _ = _camera_basis(view)
+            camera_delta = tuple(p-c for p, c in zip(centroid, view.cameraPosition))
+            item["camera_depth"] = _dot(camera_delta, forward)
+            item["facing_score"] = (max(0.0, min(1.0, _dot(_norm(normal),
+                                      tuple(-x for x in forward))))
+                                    if normal is not None else None)
+        except Exception:
+            item["camera_depth"] = None
+            item["facing_score"] = None
     item["screen_polygon"] = (_project_vertices(face, owner, view)
                               if view is not None and owner is not None else [])
     return item
