@@ -26,9 +26,9 @@ def action_to_script(action):
     if k == "frequency_step":
         return "mdb.models[%s].FrequencyStep(name=%s, previous=%s, numEigen=%d)" % (_q(m), _q(p["name"]), _q(p.get("previous", "Initial")), int(p["num_eigen"]))
     if k == "heat_transfer_step":
-        return "mdb.models[%s].HeatTransferStep(name=%s, previous=%s, response=%s, timePeriod=%r)" % (_q(m), _q(p["name"]), _q(p.get("previous", "Initial")), p.get("response", "TRANSIENT"), p.get("time_period", 1.0))
+        return "from abaqusConstants import *; mdb.models[%s].HeatTransferStep(name=%s, previous=%s, response=%s, timePeriod=%r)" % (_q(m), _q(p["name"]), _q(p.get("previous", "Initial")), p.get("response", "TRANSIENT"), p.get("time_period", 1.0))
     if k == "coupled_temp_displacement_step":
-        return "mdb.models[%s].CoupledTempDisplacementStep(name=%s, previous=%s, response=%s, timePeriod=%r, nlgeom=%s)" % (_q(m), _q(p["name"]), _q(p.get("previous", "Initial")), p.get("response", "TRANSIENT"), p.get("time_period", 1.0), p.get("nlgeom", False))
+        return "from abaqusConstants import *; mdb.models[%s].CoupledTempDisplacementStep(name=%s, previous=%s, response=%s, timePeriod=%r, nlgeom=%s)" % (_q(m), _q(p["name"]), _q(p.get("previous", "Initial")), p.get("response", "TRANSIENT"), p.get("time_period", 1.0), p.get("nlgeom", False))
     if k in ("fixed_bc", "displacement_bc", "symmetry_bc", "temperature_bc"):
         return _bc_script(action)
     if k in ("pressure_load", "concentrated_force", "body_force", "body_heat_flux", "surface_heat_flux"):
