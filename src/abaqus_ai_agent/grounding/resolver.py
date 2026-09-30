@@ -86,6 +86,23 @@ def resolve_image_point(intent_id, image_point, probe, radius=0.12,
     return resolve(intent_id, candidates)
 
 
+def native_region_expression(selection, variable="instance"):
+    """Build one usable native Abaqus region expression.
+
+    A temporary geometry region may be composed directly only when all targets
+    belong to one instance and one entity type. Cross-instance selections should
+    be materialized as an assembly Set instead of guessing Python tuple syntax.
+    """
+    if not selection.targets:
+        raise ValueError("empty geometry selection")
+    instances = {target.get("instance") for target in selection.targets}
+    if len(instances) != 1:
+        raise ValueError("cross-instance temporary regions require an assembly set")
+    repository = {"Face": "faces", "Edge": "edges", "Vertex": "vertices"}[selection.entity_type]
+    args = ", ".join(repr((tuple(target["point"]),)) for target in selection.targets)
+    return "%s.%s.findAt(%s)" % (variable, repository, args)
+
+
 def binding_plan(selection):
     """Convert a grounded selection into an executor-neutral binding plan."""
     return RegionBinding(
