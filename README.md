@@ -1,0 +1,3 @@
+# Abaqus AI Agent
+
+Open-source engineering agent for Abaqus/CAE.\n\nCore workflow: experiment requirements + material data + annotated image + existing Abaqus model → engineering intent → geometry grounding → validated Abaqus actions → solve → ODB evidence.\n\nThe project deliberately separates intent, geometry grounding, action, execution, and evidence. Vision output is evidence for grounding, not authority to select an Abaqus Face/Edge by index.\n\nStatus: early MVP foundation. The primary research target is robust image-to-Abaqus-geometry grounding.\n
