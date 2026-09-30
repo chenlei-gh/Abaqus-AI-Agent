@@ -39,10 +39,13 @@ def discover_odb(executor, job_name):
     """Best-effort discovery; returns a path only when the file exists."""
     raw=executor.execute("import os; print(os.path.abspath(%r + '.odb') if os.path.exists(%r + '.odb') else '')" % (job_name, job_name))
     if isinstance(raw,dict):
-        for key in ("path","odb_path","stdout","output"):
+        for key in ("path","odb_path"):
             value=raw.get(key)
             if isinstance(value,str) and value.strip(): return value.strip()
-    if isinstance(raw,str) and raw.strip(): return raw.strip()
+        for key in ("stdout","output"):
+            value=raw.get(key)
+            if isinstance(value,str) and value.strip(): return value.strip().splitlines()[-1].strip()
+    if isinstance(raw,str) and raw.strip(): return raw.strip().splitlines()[-1].strip()
     return None
 
 
