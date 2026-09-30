@@ -3,7 +3,7 @@ import socket
 import uuid
 from abc import ABC, abstractmethod
 
-from .errors import AbaqusConnectionError, AbaqusExecutionError
+from .errors import AbaqusConnectionError, AbaqusExecutionError, classify_execution_error
 
 
 class AbaqusExecutor(ABC):
@@ -85,7 +85,17 @@ class BridgeExecutor(AbaqusExecutor):
         if not response.get("ok", False):
             error = response.get("error") or {}
             message = error.get("message") if isinstance(error, dict) else str(error)
-            raise AbaqusExecutionError(message or "Abaqus bridge execution failed", payload=response)
+            details = error if isinstance(error, dict) else {}
+            raise AbaqusExecutionError(
+                message or "Abaqus bridge execution failed",
+                payload=response,
+                category=classify_execution_error(message, response),
+                traceback=details.get("traceback"),
+                source_line=details.get("source_line"),
+                code_excerpt=details.get("code_excerpt"),
+                context=details.get("context"),
+                recovery_hint=details.get("recovery_hint"),
+            )
         result = response.get("result")
         if not isinstance(result, dict):
             raise AbaqusExecutionError("Abaqus bridge returned an invalid result envelope", payload=response)
