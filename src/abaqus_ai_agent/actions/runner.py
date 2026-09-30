@@ -2,6 +2,7 @@ from ..execution.client import AbaqusExecutor
 from ..execution.journal import ExecutionJournal
 from ..validation.preflight import preflight_action
 from ..verification import verify_expected_state
+from ..evidence.model import Evidence, EvidenceBundle
 from .script import action_to_script
 
 
@@ -40,8 +41,24 @@ def execute_verified(executor, action, journal=None, snapshot_before=None,
                 raise ValueError("action post-verification failed: %s" %
                                  (verification.failures,))
         journal.finish(record, "COMPLETED", result=result)
+        evidence = EvidenceBundle()
+        evidence = evidence.add(Evidence(
+            kind="action_execution",
+            source=action.action_type,
+            locator=action.target or action.parameters.get("part", ""),
+            value=result,
+            metadata={"model": action.model_name, "requested_evidence": action.evidence},
+        ))
+        if verification is not None:
+            evidence = evidence.add(Evidence(
+                kind="post_verification",
+                source=action.action_type,
+                locator=action.target or action.parameters.get("part", ""),
+                value={"passed": verification.passed, "failures": verification.failures},
+            ))
         return {"result": result, "preflight": preflight,
-                "verification": verification, "record": record}
+                "verification": verification, "record": record,
+                "evidence": evidence}
     except Exception as exc:
         journal.finish(record, "FAILED", error=str(exc))
         raise
