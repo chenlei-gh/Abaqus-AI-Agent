@@ -9,6 +9,10 @@ description = "Open-source AI engineering agent for Abaqus/CAE"
 readme = "README.md"
 requires-python = ">=3.9"
 license = {file = "LICENSE"}
+dependencies = []
+
+[project.optional-dependencies]
+test = ["pytest>=7"]
 
 [tool.pytest.ini_options]
 pythonpath = ["src"]
