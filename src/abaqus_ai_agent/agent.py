@@ -35,6 +35,23 @@ class AbaqusAIAgent:
         from .execution.inspection import get_model_info
         return get_model_info(self.executor)
 
+    def snapshot(self):
+        from .execution.snapshot import read_model_snapshot
+        return read_model_snapshot(self.executor)
+
+    def runtime_info(self):
+        from .execution.runtime import detect_runtime
+        return detect_runtime(self.executor)
+
+    def viewport_state(self):
+        from .execution.inspection import viewport_state
+        return viewport_state(self.executor)
+
+    def analysis_run(self, model_name, job_name, odb_path=None, criteria=(), result_values=None):
+        from .execution.analysis_run import AnalysisRunner
+        return AnalysisRunner(self.executor).run(model_name, job_name, odb_path=odb_path,
+                                                criteria=criteria, result_values=result_values)
+
     def submit(self, job_name, wait=False):
         from .execution.jobs import submit_job
         return submit_job(self.executor, job_name, wait=wait)
