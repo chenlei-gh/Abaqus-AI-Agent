@@ -70,3 +70,33 @@ print(json.dumps({'job_name':job,'workdir':workdir,'items':items}))
             job_name, x.get("suffix", ""), x.get("path", ""),
             bool(x.get("exists")), x.get("size"), x.get("modified_time"))
             for x in payload.get("items", ())))
+
+
+def inspect_job_diagnostics(executor, job_name, workdir=None, tail_lines=80):
+    """Read bounded solver diagnostics from .msg/.sta/.dat without treating them as proof of success."""
+    workdir = workdir or "."
+    code = """import os, json
+job=%r
+workdir=os.path.abspath(%r)
+tail=%d
+result={}
+for suffix in ('.msg', '.sta', '.dat', '.log'):
+    path=os.path.join(workdir, job+suffix)
+    if not os.path.exists(path):
+        continue
+    try:
+        with open(path, 'r') as fh:
+            lines=fh.readlines()
+        result[suffix]={'path':path, 'tail':''.join(lines[-tail:])}
+    except Exception as exc:
+        result[suffix]={'path':path, 'error':str(exc)}
+print(json.dumps(result))
+""" % (job_name, workdir, int(tail_lines))
+    raw = executor.execute(code)
+    if isinstance(raw, dict):
+        return raw
+    try:
+        import json
+        return json.loads(str(raw).strip().splitlines()[-1])
+    except Exception:
+        return {"raw": str(raw)}
