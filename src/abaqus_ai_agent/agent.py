@@ -47,6 +47,18 @@ class AbaqusAIAgent:
         from .execution.viewport import read_viewport_state
         return read_viewport_state(self.executor)
 
+    def session_health(self):
+        from .execution.session_health import session_health
+        return session_health(self.executor)
+
+    def job_artifacts(self, job_name, workdir=None):
+        from .execution.artifacts import inspect_job_artifacts
+        return inspect_job_artifacts(self.executor, job_name, workdir=workdir)
+
+    def plan_outputs(self, criteria=(), outputs=()):
+        from .planning.output import plan_outputs
+        return plan_outputs(criteria, outputs)
+
     def analysis_run(self, model_name, job_name, odb_path=None, criteria=(), result_values=None):
         from .execution.analysis_run import AnalysisRunner
         return AnalysisRunner(self.executor).run(model_name, job_name, odb_path=odb_path,
