@@ -60,7 +60,7 @@ class JobController:
         if hasattr(self.executor, "monitor_job"):
             raw = self.executor.monitor_job(name, timeout=timeout, poll_seconds=poll_seconds)
         else:
-            raw = self.executor.execute("print(mdb.jobs[%r].status)" % name, timeout=timeout)
+            raw = self.executor.execute("mdb.jobs[%r].waitForCompletion(); print(mdb.jobs[%r].status)" % (name, name), timeout=timeout)
         return classify_job_status(name, raw)
 
     def cancel(self, name):
