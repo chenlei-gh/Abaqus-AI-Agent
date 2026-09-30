@@ -40,7 +40,26 @@ def _project(point, view):
     return (sx, sy)
 
 
-def _face_data(face, index):
+def _project_vertices(face, view):
+    points = []
+    try:
+        vertices = face.getVertices()
+    except Exception:
+        return points
+    # Face.getVertices() returns topology indices; resolve them through pointOn.
+    for vertex_index in vertices:
+        try:
+            vertex_point = tuple(float(x) for x in face.pointOn[0][:3])
+        except Exception:
+            vertex_point = None
+        if vertex_point is not None:
+            projected = _project(vertex_point, view)
+            if projected is not None:
+                points.append(projected)
+    return points
+
+
+def _face_data(face, index, view=None):
     centroid = None
     try:
         centroid = tuple(float(x) for x in face.getCentroid()[:3])
@@ -86,7 +105,7 @@ def collect(session):
         for name in instances.keys():
             instance = instances[name]
             for index, face in enumerate(instance.faces):
-                item = _face_data(face, index)
+                item = _face_data(face, index, view)
                 item["instance"] = name
                 item["screen"] = _project(item["centroid"], view) if item["centroid"] else None
                 result["faces"].append(item)
