@@ -34,11 +34,17 @@ def action_to_script(action):
     if k in ("pressure_load", "concentrated_force", "body_force", "body_heat_flux", "surface_heat_flux"):
         return _load_script(action)
     if k == "field_output":
-        return "mdb.models[%s].fieldOutputRequests[%s].setValues(variables=%r)" % (_q(m), _q(p.get("request", "F-Output-1")), tuple(p.get("variables", ("S", "U", "RF"))))
+        request = p.get("request", "F-Output-1")
+        variables = tuple(p.get("variables", ("S", "U", "RF")))
+        step = p.get("step", "Initial")
+        return "model=mdb.models[%s]; req=model.fieldOutputRequests.get(%s); req=req or model.FieldOutputRequest(name=%s, createStepName=%s, variables=%r); req.setValues(variables=%r)" % (_q(m), _q(request), _q(request), _q(step), variables, variables)
     if k == "history_output":
+        request = p.get("request", "H-Output-1")
+        variables = tuple(p.get("variables", ("ALLIE",)))
+        step = p.get("step", "Step-1")
         if not p.get("region_expression"):
-            return "mdb.models[%s].historyOutputRequests[%s].setValues(variables=%r)" % (_q(m), _q(p.get("request", "H-Output-1")), tuple(p.get("variables", ("ALLIE",))))
-        return "mdb.models[%s].HistoryOutputRequest(name=%s, createStepName=%s, variables=%r, region=%s)" % (_q(m), _q(p.get("request", "AI-History")), _q(p.get("step", "Step-1")), tuple(p.get("variables", ("ALLIE",))), p["region_expression"])
+            return "model=mdb.models[%s]; req=model.historyOutputRequests.get(%s); req=req or model.HistoryOutputRequest(name=%s, createStepName=%s, variables=%r); req.setValues(variables=%r)" % (_q(m), _q(request), _q(request), _q(step), variables, variables)
+        return "model=mdb.models[%s]; model.HistoryOutputRequest(name=%s, createStepName=%s, variables=%r, region=%s)" % (_q(m), _q(request), _q(step), variables, p["region_expression"])
     if k == "create_job":
         return "mdb.Job(name=%s, model=%s, type=%s)" % (_q(p["name"]), _q(m), p.get("job_type", "STANDARD"))
     if k == "submit_job":
