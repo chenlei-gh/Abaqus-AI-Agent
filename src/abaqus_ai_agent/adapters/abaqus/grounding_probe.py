@@ -1,9 +1,5 @@
 # Read-only Abaqus/CAE experiment for model-to-image grounding.
 # Call run(session) from the Abaqus Python console.
-#
-# The probe does not modify the model. It captures the active viewport state,
-# Face descriptors and a PNG snapshot. The resulting dictionary is intended
-# for transfer through the MCP bridge or JSON serialization.
 
 try:
     from abaqusConstants import PNG
@@ -32,13 +28,10 @@ def _cross(a, b):
 
 
 def _project(point, view):
-    projection = str(view.projection).upper()
-    if projection != "PARALLEL":
+    if str(view.projection).upper() != "PARALLEL":
         return None
 
-    forward = _norm(
-        tuple(t - p for p, t in zip(view.cameraPosition, view.cameraTarget))
-    )
+    forward = _norm(tuple(t - p for p, t in zip(view.cameraPosition, view.cameraTarget)))
     up = _norm(view.cameraUpVector)
     right = _norm(_cross(forward, up))
     up = _norm(_cross(right, forward))
@@ -53,14 +46,30 @@ def _project(point, view):
     return (sx, sy)
 
 
-def _centroid(face):
+def _face_data(face, index):
+    centroid = None
     try:
-        return tuple(float(x) for x in face.getCentroid()[:3])
+        centroid = tuple(float(x) for x in face.getCentroid()[:3])
     except Exception:
         try:
-            return tuple(float(x) for x in face.pointOn[0][:3])
+            centroid = tuple(float(x) for x in face.pointOn[0][:3])
         except Exception:
-            return None
+            pass
+
+    normal = None
+    if centroid is not None:
+        try:
+            normal = tuple(float(x) for x in face.getNormal(centroid)[:3])
+        except Exception:
+            pass
+
+    size = None
+    try:
+        size = float(face.getSize())
+    except Exception:
+        pass
+
+    return {"index": index, "centroid": centroid, "normal": normal, "size": size}
 
 
 def collect(session):
@@ -90,32 +99,23 @@ def collect(session):
         for name in instances.keys():
             instance = instances[name]
             for index, face in enumerate(instance.faces):
-                c = _centroid(face)
-                result["faces"].append({
-                    "instance": name,
-                    "index": index,
-                    "centroid": c,
-                    "screen": _project(c, view) if c else None,
-                })
+                item = _face_data(face, index)
+                item["instance"] = name
+                item["screen"] = _project(item["centroid"], view) if item["centroid"] else None
+                result["faces"].append(item)
     else:
         for index, face in enumerate(displayed.faces):
-            c = _centroid(face)
-            result["faces"].append({
-                "instance": None,
-                "index": index,
-                "centroid": c,
-                "screen": _project(c, view) if c else None,
-            })
+            item = _face_data(face, index)
+            item["instance"] = None
+            item["screen"] = _project(item["centroid"], view) if item["centroid"] else None
+            result["faces"].append(item)
+
     return result
 
 
 def run(session, output_png="abaqus_grounding_probe.png"):
     viewport = session.viewports[session.currentViewportName]
     data = collect(session)
-    session.printToFile(
-        fileName=output_png,
-        format=PNG,
-        canvasObjects=(viewport,),
-    )
+    session.printToFile(fileName=output_png, format=PNG, canvasObjects=(viewport,))
     data["snapshot_file"] = output_png
     return data
