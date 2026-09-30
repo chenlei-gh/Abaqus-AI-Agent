@@ -3,7 +3,7 @@ import socket
 import uuid
 from abc import ABC, abstractmethod
 
-from .errors import AbaqusConnectionError, AbaqusExecutionError, classify_execution_error
+from .errors import AbaqusConnectionError, AbaqusExecutionError, classify_execution_error, recovery_hint
 
 
 class AbaqusExecutor(ABC):
@@ -94,7 +94,7 @@ class BridgeExecutor(AbaqusExecutor):
                 source_line=details.get("source_line"),
                 code_excerpt=details.get("code_excerpt"),
                 context=details.get("context"),
-                recovery_hint=details.get("recovery_hint"),
+                recovery_hint=details.get("recovery_hint") or recovery_hint(classify_execution_error(message, response)),
             )
         result = response.get("result")
         if not isinstance(result, dict):
