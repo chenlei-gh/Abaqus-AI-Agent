@@ -42,7 +42,7 @@ def action_to_script(action):
     if k == "create_job":
         return "mdb.Job(name=%s, model=%s, type=%s)" % (_q(p["name"]), _q(m), p.get("job_type", "STANDARD"))
     if k == "submit_job":
-        return "mdb.jobs[%s].submit(consistencyChecking=OFF)" % _q(p["name"])
+        return "mdb.jobs[%s].submit(consistencyChecking=ON)" % _q(p["name"])
     if k == "seed_part":
         return "mdb.models[%s].parts[%s].seedPart(size=%r, deviationFactor=%r, minSizeFactor=%r)" % (_q(m), _q(p["part"]), p["size"], p.get("deviation_factor", .1), p.get("min_size_factor", .1))
     if k == "generate_mesh":
