@@ -342,7 +342,12 @@ class AnalysisRunner:
                 else AnalysisRunState.RESULTS_EXTRACTED,
                 engineering_status=status_value,
                 acceptance_passed=accepted.passed,
-                evidence=evidence, artifacts=artifacts)
+                evidence=evidence, artifacts=artifacts,
+                metadata=dict(
+                    run.metadata,
+                    result_values=dict(result_values),
+                    result_source=result_source,
+                ))
         except Exception as exc:
             artifacts = _collect_artifacts(self.executor, job_name)
             diagnostics = _collect_diagnostics(self.executor, job_name)
