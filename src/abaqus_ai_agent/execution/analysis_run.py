@@ -87,6 +87,14 @@ class AnalysisRunner:
             if snapshot is not None and job_name not in snapshot.jobs:
                 jobs.create(job_name, model_name)
 
+            from ..planning.output import plan_outputs, actions_from_output_plan
+            output_plan = plan_outputs(criteria)
+            for output_action in actions_from_output_plan(model_name, output_plan):
+                from ..validation.actions import validate_action
+                from ..actions.runner import execute
+                validate_action(output_action)
+                execute(self.executor, output_action)
+
             status = jobs.submit(job_name, wait=True, timeout=timeout)
             artifacts = _collect_artifacts(self.executor, job_name)
             if status.state != JobState.COMPLETED:
