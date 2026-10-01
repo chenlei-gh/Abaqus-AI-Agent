@@ -3,6 +3,7 @@ import pytest
 from abaqus_ai_agent.contracts.uncertainty import (
     UncertaintyParameter,
     UncertaintyScenario,
+    UncertaintyReport,
 )
 from abaqus_ai_agent.uncertainty import (
     aggregate_uncertainty_outputs,
@@ -41,6 +42,18 @@ def test_uncertainty_requires_explicit_application_plan():
     assert not report.completed
     assert report.failed_cases[0]["diagnostics"][0]["reason"] == "scenario_action_plan_required"
     assert aggregate == ()
+
+
+def test_uncertainty_report_is_not_complete_when_outputs_are_missing():
+    scenarios = (
+        UncertaintyScenario("a", {"load": 90.0}),
+        UncertaintyScenario("b", {"load": 110.0}),
+    )
+    report = UncertaintyReport(
+        scenarios=scenarios,
+        outputs=({"scenario": "a", "status": "completed"},),
+    )
+    assert not report.completed
 
 
 def test_uncertainty_executes_each_scenario_through_analysis_runner():
