@@ -61,6 +61,7 @@ def evaluate_criteria(values, criteria):
 
 
 def evaluate_result_acceptance(result_status, numerical=None, engineering=None,
+                               mesh_quality=None, convergence=None,
                                values=None, criteria=None):
     """Combine execution/result evidence with deterministic acceptance criteria.
 
@@ -75,6 +76,10 @@ def evaluate_result_acceptance(result_status, numerical=None, engineering=None,
         failures.append("numerical_verification_failed")
     if engineering is not None and not getattr(engineering, "passed", False):
         failures.append("engineering_checks_failed")
+    if mesh_quality is not None and getattr(mesh_quality, "status", None) not in ("pass",):
+        failures.append("mesh_quality_failed")
+    if convergence is not None and not getattr(convergence, "converged", False):
+        failures.append("mesh_convergence_failed")
 
     criteria_result = evaluate_criteria(values or {}, criteria or ())
     failures.extend(
