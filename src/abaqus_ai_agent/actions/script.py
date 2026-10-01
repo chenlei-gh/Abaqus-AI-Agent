@@ -1,6 +1,12 @@
 def _q(value):
     return repr(value)
 
+def _amplitude(value, defaults):
+    value = value or defaults
+    if value in ("RAMP", "STEP", "DEFAULT"):
+        return value
+    return _q(value)
+
 def action_to_script(action):
     p, m, k = action.parameters, action.model_name, action.action_type
     if k == "python":
@@ -27,7 +33,7 @@ def action_to_script(action):
                 "stabilizationMethod=%s" % p.get("stabilization_method", "NONE"),
                 "timeIncrementationMethod=%s" % p.get("time_incrementation_method", "AUTOMATIC"),
                 "maxNumInc=%d" % int(p.get("max_num_inc", 100)),
-                "amplitude=%s" % _q(p.get("amplitude", "RAMP"))]
+                "amplitude=%s" % _amplitude(p.get("amplitude"), "RAMP")]
         for key, arg in (("stabilization_magnitude", "stabilizationMagnitude"),
                          ("initial_inc", "initialInc"), ("min_inc", "minInc"), ("max_inc", "maxInc")):
             if p.get(key) is not None: args.append("%s=%r" % (arg, p[key]))
@@ -45,7 +51,7 @@ def action_to_script(action):
                 "maxNumInc=%d" % int(p.get("max_num_inc", 100)),
                 "solutionTechnique=%s" % p.get("solution_technique", "FULL_NEWTON"),
                 "reformKernel=%d" % int(p.get("reform_kernel", 8)),
-                "amplitude=%s" % _q(p.get("amplitude", "STEP"))]
+                "amplitude=%s" % _amplitude(p.get("amplitude"), "STEP")]
         for key, arg in (("initial_inc", "initialInc"), ("min_inc", "minInc"), ("max_inc", "maxInc")):
             if p.get(key) is not None: args.append("%s=%r" % (arg, p[key]))
         return "from abaqusConstants import *; mdb.models[%s].ImplicitDynamicsStep(%s)" % (_q(m), ", ".join(args))
@@ -54,14 +60,16 @@ def action_to_script(action):
     if k == "heat_transfer_step":
         args = ["name=%s" % _q(p["name"]), "previous=%s" % _q(p.get("previous", "Initial")),
                 "response=%s" % p.get("response", "TRANSIENT"), "timePeriod=%r" % p.get("time_period", 1.0),
-                "maxNumInc=%d" % int(p.get("max_num_inc", 100))]
+                "timeIncrementationMethod=%s" % p.get("time_incrementation_method", "AUTOMATIC"),
+                "maxNumInc=%d" % int(p.get("max_num_inc", 100)), "amplitude=%s" % _amplitude(p.get("amplitude"), "RAMP")]
         for key, arg in (("initial_inc", "initialInc"), ("min_inc", "minInc"), ("max_inc", "maxInc")):
             if p.get(key) is not None: args.append("%s=%r" % (arg, p[key]))
         return "from abaqusConstants import *; mdb.models[%s].HeatTransferStep(%s)" % (_q(m), ", ".join(args))
     if k == "coupled_temp_displacement_step":
         args = ["name=%s" % _q(p["name"]), "previous=%s" % _q(p.get("previous", "Initial")),
                 "response=%s" % p.get("response", "TRANSIENT"), "timePeriod=%r" % p.get("time_period", 1.0),
-                "nlgeom=%s" % p.get("nlgeom", False), "maxNumInc=%d" % int(p.get("max_num_inc", 100))]
+                "nlgeom=%s" % p.get("nlgeom", False), "timeIncrementationMethod=%s" % p.get("time_incrementation_method", "AUTOMATIC"),
+                "maxNumInc=%d" % int(p.get("max_num_inc", 100)), "amplitude=%s" % _amplitude(p.get("amplitude"), "RAMP")]
         for key, arg in (("initial_inc", "initialInc"), ("min_inc", "minInc"), ("max_inc", "maxInc")):
             if p.get(key) is not None: args.append("%s=%r" % (arg, p[key]))
         return "from abaqusConstants import *; mdb.models[%s].CoupledTempDisplacementStep(%s)" % (_q(m), ", ".join(args))
