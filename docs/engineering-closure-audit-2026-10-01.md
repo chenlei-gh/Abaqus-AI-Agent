@@ -2,7 +2,7 @@
 
 ## Scope
 
-Audit baseline: current P1-5 head `3cfe0407f5f48b245ba36c33dd988b0058202a86`, compared with the P1-2 base and the repository's current execution chain.
+Audit baseline: current P1-5 head `3fa4538cf5cd432cc0f74d170d8283bfffc538f4`, compared with the P1-2 base and the repository's current execution chain.
 
 Reference set:
 - Whfkl/Abaqus-Control-MCP
@@ -36,7 +36,7 @@ This audit distinguishes capability presence from execution-chain integration. A
 | CAD Part/Sketch/Extrude creation | not implemented | Abaqus geometry skill | ⏸️ Deferred by scope |
 | Tosca / topology optimization | not implemented | Abaqus optimization skills | ⏸️ Deferred by scope |
 | Shape optimization | not implemented | Abaqus shape optimization skill | ⏸️ Deferred by scope |
-| Fatigue: deterministic scalar stress-history post-processing (Rainflow + half/full cycles + range/amplitude/mean + Goodman + S-N + Miner); critical-plane/non-proportional multiaxial criteria remain out of scope
+| Fatigue | deterministic scalar stress-history post-processing (Rainflow + half/full cycles + range/amplitude/mean + Goodman + S-N + Miner); critical-plane/non-proportional multiaxial criteria remain out of scope | Abaqus fatigue skill / fe-safe S-N workflow | 🟢 Bounded scalar post-processing closed; advanced multiaxial criteria remain out of scope |
 | Geometry grounding | calibrated viewport/image grounding | hub skills + viewport tools | ✅ Differentiating capability |
 | Deterministic result acceptance | acceptance gate | reference projects mostly expose execution/results | ✅ Stronger than reference execution boundary |
 | Numerical verification | successive change + Richardson/GCI + executable mesh/time-step refinement studies + explicit singularity interpretation | reference workflows provide validation patterns | 🟢 Execution and interpretation boundary closed; physical adequacy remains problem-specific |
@@ -251,4 +251,13 @@ The following remain intentionally deferred because implementing them now would 
 - STEP/STL typed export.
 - Reliability methods / FORM/SORM.
 - Bayesian inference / distribution fitting.
-- Full rainflow + mean-stress correction matrix.
+- Broader mean-stress correction matrix (Walker/Gerber/etc.) and critical-plane/non-proportional multiaxial fatigue.
+
+
+## Post-P1/P2 audit correction — 2026-10-01
+
+The previous CI result exposed four fatigue test defects rather than four production defects: the ASTM-style open-history case was asserting a fabricated full cycle, the published nine-reversal example's cycle-weight total was arithmetically incorrect (4.0, not 3.5), the compressive Goodman expectation used the wrong formula, and the Goodman integration fixture placed corrected amplitudes below its declared S-N domain. The production rainflow implementation already matched the published reversal-by-reversal cycle list.
+
+The Goodman implementation is now explicit about the fe-safe measured-signal S-N convention: the ordinary Goodman line is used for nonnegative mean stress, while the compressive extension uses half the original slope. This is distinct from other fe-safe contexts that may deliberately make no allowance for compressive mean-stress benefit; the project therefore does not generalize this convention beyond the declared S-N workflow. fe-safe documents the measured-signal equation and the half-slope compressive extension. citeturn1search12turn1search13
+
+The remaining P1/P2 gaps are scope boundaries rather than missing core-chain functions: real B28 execution validation, model calibration/parameter identification, reliability/inference methods, broader fatigue methodologies, CAD authoring, STEP/STL typed export, and Tosca/topology/shape optimization. No additional typed API breadth is justified merely to match the reference projects because native Python remains the controlled escape hatch.
