@@ -70,7 +70,11 @@ class AbaqusAIAgent:
             model_name, job_name, odb_path=odb_path, criteria=criteria,
             result_values=result_values, numerical_verification=numerical_verification,
             engineering_checks=engineering_checks, action_plan=action_plan,
-            environment=environment)
+            environment=environment,
+            contact_expected=contact_expected, contact_evidence=contact_evidence,
+            contact_step=contact_step, contact_frame=contact_frame,
+            contact_history_region=contact_history_region,
+            contact_position=contact_position, contact_region=contact_region)
 
     def submit(self, job_name, wait=False):
         from .execution.jobs import JobController
