@@ -113,3 +113,28 @@ def test_benchmark_result_criteria_preserves_explicit_odb_mapping():
     assert criteria[0]["value_key"] == "tip"
     assert criteria[0]["field"] == "U"
     assert criteria[0]["step"] == "Step-1"
+
+
+
+def test_benchmark_zero_reference_requires_absolute_error():
+    from abaqus_ai_agent.benchmarks import derive_benchmark_observations
+
+    case = BenchmarkCase(
+        "case",
+        "reference",
+        acceptance=(
+            {
+                "value_key": "error",
+                "observed_value_key": "value",
+                "metric": "relative_error",
+                "reference_key": "reference",
+                "operator": "<=",
+                "limit": 0.01,
+            },
+        ),
+    )
+    observed, _, failures = derive_benchmark_observations(
+        case, {"value": 0.1}, {"reference": 0.0}
+    )
+    assert observed == {}
+    assert failures == ("zero_reference_requires_absolute_error:reference",)
