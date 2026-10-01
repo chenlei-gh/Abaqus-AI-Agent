@@ -9,7 +9,7 @@ class VerificationResult:
 
 
 def verify_expected_state(snapshot, expected_state):
-    """Deterministic verification of an action's expected post-state."""
+    """Deterministic verification for mapping or ModelSnapshot-like state."""
     checks, failures = [], []
 
     def lookup(root, path):
@@ -17,15 +17,23 @@ def verify_expected_state(snapshot, expected_state):
         for part in str(path).split("."):
             if not part:
                 continue
-            if not isinstance(value, dict) or part not in value:
+            if isinstance(value, dict):
+                if part not in value:
+                    return None
+                value = value[part]
+            elif hasattr(value, part):
+                value = getattr(value, part)
+            else:
                 return None
-            value = value[part]
         return value
 
     for rule in expected_state or ():
         actual = lookup(snapshot, rule.get("path"))
         if "contains" in rule:
-            ok = actual is not None and rule["contains"] in actual
+            try:
+                ok = actual is not None and rule["contains"] in actual
+            except TypeError:
+                ok = False
         elif "equals" in rule:
             ok = actual == rule["equals"]
         elif "exists" in rule:
