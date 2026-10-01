@@ -1,6 +1,6 @@
 from abaqus_ai_agent.actions import (
     fixed_bc, pressure_load, material_elastic, python_action, static_step,
-    dynamic_explicit_step, implicit_dynamic_step,
+    dynamic_explicit_step, implicit_dynamic_step, heat_transfer_step, coupled_temp_displacement_step,
     tabular_amplitude, smooth_step_amplitude, periodic_amplitude, equally_spaced_amplitude,
     initial_temperature, initial_stress, gravity,
     assembly_inspect, instance_translate, instance_rotate, instance_linear_pattern,
@@ -41,6 +41,7 @@ def test_amplitude_scripts():
 
 def test_predefined_field_and_gravity_scripts():
     assert "Temperature(" in preview(initial_temperature("M", "T0", "a.Set(name='ALL')", 80.0))
+    assert "createStepName='Initial'" in preview(initial_temperature("M", "T0", "a.Set(name='ALL')", 80.0))
     assert "Stress(" in preview(initial_stress("M", "S0", "a.Set(name='ALL')", sigma11=10.0))
     assert "Gravity(" in preview(gravity("M", "G", comp3=-9.81))
 
@@ -51,6 +52,10 @@ def test_implicit_dynamic_and_step_controls():
     assert "maxNumInc=200" in code
     assert "initialInc=0.01" in code
     assert "stabilizationMethod" in preview(static_step("M", stabilization_method="DISSIPATED_ENERGY_FRACTION"))
+    assert "amplitude=RAMP" in preview(static_step("M"))
+    assert "amplitude='LOAD_AMP'" in preview(static_step("M", amplitude="LOAD_AMP"))
+    assert "HeatTransferStep" in preview(heat_transfer_step("M", amplitude="LOAD_AMP"))
+    assert "CoupledTempDisplacementStep" in preview(coupled_temp_displacement_step("M", amplitude="LOAD_AMP"))
 
 
 def test_assembly_and_export_scripts():
