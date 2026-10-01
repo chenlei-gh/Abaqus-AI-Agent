@@ -8,6 +8,7 @@ from .engineering_checks import (
     check_declared_load_balance,
     check_energy_ratio,
     sum_reaction_components,
+    check_numeric_range,
 )
 
 
@@ -71,3 +72,32 @@ def energy_ratio_from_history_evidence(
         numerator_last, denominator_last, tolerance, name=name
     )
     return check, {"numerator": numerator_last, "denominator": denominator_last}
+
+
+def numeric_field_sanity_from_field_evidence(
+    field_evidence, minimum=None, maximum=None, name="field_result_sanity", unit=""
+):
+    """Evaluate scalar/vector magnitudes from an available ODB field envelope.
+
+    The caller supplies any engineering bounds. No default physical threshold
+    is inferred from the field variable name.
+    """
+    evidence = _require_available(field_evidence, "field")
+    values = evidence.get("values") or ()
+    numbers = []
+    for item in values:
+        data = item.get("data") if isinstance(item, dict) else item
+        if isinstance(data, (int, float)):
+            numbers.append(float(data))
+        elif isinstance(data, (tuple, list)):
+            numbers.extend(float(v) for v in data if isinstance(v, (int, float)))
+        if isinstance(item, dict):
+            for key in ("magnitude", "mises", "maxPrincipal"):
+                value = item.get(key)
+                if isinstance(value, (int, float)):
+                    numbers.append(float(value))
+    if not numbers:
+        raise ValueError("field evidence contains no numeric values")
+    return check_numeric_range(
+        name, numbers, minimum=minimum, maximum=maximum, unit=unit
+    ), {"count": len(numbers), "minimum": min(numbers), "maximum": max(numbers)}
