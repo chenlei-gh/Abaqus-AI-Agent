@@ -138,3 +138,36 @@ def test_uncertainty_aggregation_ignores_failed_cases():
     assert result[0]["mean"] == 15.0
     assert result[0]["range"] == 10.0
     assert result[0]["count"] == 2
+
+
+def test_uniform_uncertainty_sampling_is_reproducible_and_bounded():
+    from abaqus_ai_agent.uncertainty import sample_uniform_parameters
+    parameter = UncertaintyParameter("load", 100.0, 90.0, 110.0, "N")
+    first = sample_uniform_parameters((parameter,), 5, seed=7)
+    second = sample_uniform_parameters((parameter,), 5, seed=7)
+    assert first == second
+    assert all(90.0 <= item["load"] <= 110.0 for item in first)
+
+
+def test_probabilistic_summary_reports_sample_statistics():
+    from abaqus_ai_agent.uncertainty import summarize_probabilistic_outputs
+    summary = summarize_probabilistic_outputs((
+        {"status": "completed", "values": {"stress": 10.0}},
+        {"status": "completed", "values": {"stress": 20.0}},
+        {"status": "completed", "values": {"stress": 30.0}},
+        {"status": "failed", "values": {"stress": 999.0}},
+    ))
+    assert summary[0]["count"] == 3
+    assert summary[0]["mean"] == 20.0
+    assert summary[0]["min"] == 10.0
+    assert summary[0]["max"] == 30.0
+    assert summary[0]["quantiles"]["0.5"] == 20.0
+
+
+def test_probabilistic_execution_requires_explicit_action_plan_factory():
+    from abaqus_ai_agent.uncertainty import execute_probabilistic_uncertainty
+    parameter = UncertaintyParameter("load", 100.0, 90.0, 110.0)
+    with pytest.raises(TypeError):
+        execute_probabilistic_uncertainty(
+            object(), object(), "Model", "Job", (parameter,), 2, None
+        )
