@@ -120,3 +120,37 @@ def check_declared_load_balance(applied_components, reaction_components,
             unit,
         ))
     return evaluate_checks(tuple(checks))
+
+
+def check_numeric_range(name, values, minimum=None, maximum=None, unit=""):
+    """Check finite numeric values against caller-declared bounds.
+
+    Bounds are engineering assumptions supplied by the caller; this helper
+    never invents material or physics limits.
+    """
+    if minimum is None and maximum is None:
+        raise ValueError("minimum or maximum must be declared")
+    nums = tuple(float(v) for v in (values or ()))
+    if not nums:
+        raise ValueError("values must contain at least one number")
+    import math
+    if any(not math.isfinite(v) for v in nums):
+        return EngineeringCheck(
+            name=name, passed=False, actual=float("nan"), expected=0.0,
+            tolerance=0.0, unit=unit, message="non-finite value detected"
+        )
+    passed = all(
+        (minimum is None or v >= float(minimum))
+        and (maximum is None or v <= float(maximum))
+        for v in nums
+    )
+    actual = max(nums, key=abs)
+    return EngineeringCheck(
+        name=name,
+        passed=passed,
+        actual=actual,
+        expected=float(maximum if maximum is not None else minimum),
+        tolerance=0.0,
+        unit=unit,
+        message="min=%g max=%g count=%d" % (min(nums), max(nums), len(nums)),
+    )
