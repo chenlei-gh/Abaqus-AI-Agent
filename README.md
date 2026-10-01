@@ -287,6 +287,30 @@ Each stage is treated as separate evidence.
 
 ---
 
+## AI / Agent capability boundary
+
+The AI and the Agent deliberately overlap in what they can reason about or generate. The boundary is **execution authority and engineering evidence**, not raw problem-solving ability.
+
+| State | Meaning |
+|---|---|
+| `SUPPORTED` | Typed Action with explicit validation/execution semantics; the Agent may claim support. |
+| `EXECUTABLE` | Native Abaqus Python Escape Hatch can execute the operation, but domain semantics are not fully owned by the Agent. Execution is **not** engineering verification. |
+| `ASSISTED` | AI can prepare/reason about the operation, but the Agent has no reliable execution path. |
+| `UNSUPPORTED` | No reliable Agent execution path. |
+| `BLOCKED` | A path exists in principle, but required runtime/data/evidence is unavailable. |
+
+The key rule is:
+
+> **AI can generate or reason about an operation without that operation becoming a formally supported Agent capability. Only an explicit execution, verification, and Evidence boundary can raise the capability claim.**
+
+For a capability gap, the Agent therefore uses this progression:
+
+`SUPPORTED` → `EXECUTABLE` (native Python escape hatch) → `ASSISTED` / `BLOCKED`, rather than creating a fake typed capability.
+
+A successful `python_action` is execution evidence only. It does not by itself prove model correctness, solver success, intended ODB results, or engineering acceptance.
+
+See [AI / Agent Capability Boundary](docs/ai-agent-capability-boundary.md) for the detailed contract and promotion rule.
+
 ## Architecture
 
 The repository intentionally uses an action- and evidence-centric architecture rather than introducing a large autonomous orchestration layer.
