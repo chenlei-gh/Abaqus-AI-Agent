@@ -29,8 +29,6 @@ def test_turning_points_removes_duplicates_and_keeps_reversals():
 
 
 def test_rainflow_records_half_cycles_for_open_reversal_history():
-    # This history has no nested closed range; the ASTM-style residual is
-    # therefore four half cycles rather than a fabricated full cycle.
     cycles = rainflow_count([0, 10, 0, -10, 0])
     assert cycles
     assert all(weight in (0.5, 1.0) for _, _, weight in cycles)
@@ -43,7 +41,6 @@ def test_stress_range_amplitude_mean_are_explicit():
 
 
 def test_sn_uses_log_log_interpolation():
-    # geometric midpoint in stress gives geometric midpoint in life.
     value = sn_cycles_to_failure(math.sqrt(10.0 * 20.0), ((10.0, 1.0e6), (20.0, 1.0e5)))
     assert value == pytest.approx(math.sqrt(1.0e6 * 1.0e5))
 
@@ -64,6 +61,24 @@ def test_goodman_and_miner_damage_are_explicit():
     assert all(c.corrected_amplitude > 0 for c in result.cycles)
 
 
+def test_supported_mean_stress_corrections_are_contractually_admitted():
+    base = dict(
+        name="correction",
+        stress_variable="S11",
+        stress_semantics="scalar_component",
+        material_curve=((5.0, 1.0e6), (30.0, 1.0e4)),
+    )
+    for correction in ("NONE", "GOODMAN", "GERBER", "SODERBERG", "WALKER"):
+        intent = FatigueAnalysisIntent(
+            **base,
+            mean_stress_correction=correction,
+            ultimate_strength=100.0,
+            yield_strength=80.0,
+            walker_gamma=0.5,
+        )
+        assert intent.mean_stress_correction == correction
+
+
 def test_stress_variable_semantics_reject_ambiguous_usage():
     with pytest.raises(ValueError):
         FatigueAnalysisIntent(name="bad", stress_variable="S11", stress_semantics="scalar_invariant")
@@ -79,7 +94,6 @@ def test_eps_n_is_not_claimed_implemented():
 
 
 def test_rainflow_matches_reference_reversal_sequence():
-    # ASTM E1049 example: range, mean, and count are deterministic.
     cycles = rainflow_count([-2, 1, -3, 5, -1, 3, -4, 4, -2])
     observed = sorted(
         (round(abs(a - b), 10), round((a + b) / 2.0, 10), weight)
