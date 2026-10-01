@@ -124,3 +124,17 @@ def test_result_acceptance_benchmark_failure_blocks_without_solver_failure():
     )
     assert result.passed is False
     assert result.failures == ("benchmark:missing_reference:x",)
+
+
+def test_result_acceptance_experimental_validation_failure_blocks():
+    from abaqus_ai_agent.contracts.experimental_validation import ExperimentalValidationReport, ExperimentalValidationResult
+    from abaqus_ai_agent.acceptance import evaluate_result_acceptance
+    validation = ExperimentalValidationReport((ExperimentalValidationResult(
+        name="tip_u", measured=10.0, simulated=11.0, error=1.0,
+        relative_error=0.1, tolerance=0.5, passed=False,
+    ),))
+    result = evaluate_result_acceptance(
+        "completed", values={}, criteria=(), experimental_validation=validation,
+    )
+    assert result.passed is False
+    assert "experimental_validation_failed" in result.failures
