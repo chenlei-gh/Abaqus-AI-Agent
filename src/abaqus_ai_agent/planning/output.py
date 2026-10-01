@@ -31,3 +31,14 @@ def plan_outputs(criteria=(), outputs=()):
             else:
                 fields.update(variables)
     return OutputPlan(tuple(sorted(fields)), tuple(sorted(histories)), requirements)
+
+
+def actions_from_output_plan(model_name, plan, field_request="AI-F-Output-1", history_request="AI-H-Output-1"):
+    """Materialize an OutputPlan into explicit Abaqus output-request actions."""
+    from ..actions.builders import field_output, history_output
+    actions = []
+    if plan.field_variables:
+        actions.append(field_output(model_name, variables=plan.field_variables, request=field_request, step="Initial"))
+    if plan.history_variables:
+        actions.append(history_output(model_name, variables=plan.history_variables, request=history_request, step="Step-1"))
+    return tuple(actions)
