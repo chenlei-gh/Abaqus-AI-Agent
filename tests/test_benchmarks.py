@@ -1,3 +1,4 @@
+import pytest
 from abaqus_ai_agent.benchmarks import evaluate_benchmark
 from abaqus_ai_agent.contracts.benchmarks import BenchmarkCase
 
@@ -63,7 +64,7 @@ def test_benchmark_derives_relative_error_only_from_explicit_reference():
         {"reference_displacement": 10.0},
     )
     assert failures == ()
-    assert observed["displacement_error"] == 0.02
+    assert observed["displacement_error"] == pytest.approx(0.02)
     assert evidence[0]["reference"] == 10.0
 
 
