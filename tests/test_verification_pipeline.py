@@ -180,7 +180,7 @@ def test_contact_warning_does_not_block_the_analysis_acceptance_chain():
     contact_evidence = {
         "step": "Step-1",
         "frame": -1,
-        "region": None,
+        "region": "Surface-A-B",
         "fields": {
             "CSTATUS": {
                 "status": "available",
