@@ -1,6 +1,36 @@
 from .contracts.engineering_checks import EngineeringCheck, EngineeringCheckReport
 
 
+# Declared check families only; numerical limits remain problem-specific.
+STANDARD_ENGINEERING_CHECKS = {
+    "static": (
+        "global_equilibrium",
+        "displacement_sanity",
+        "stress_result_sanity",
+        "energy_sanity",
+    ),
+    "dynamic": (
+        "energy_balance",
+        "kinetic_internal_energy",
+        "time_step_evidence",
+    ),
+    "contact": (
+        "contact_state",
+        "contact_opening_pressure",
+        "contact_reaction_consistency",
+    ),
+    "thermal": (
+        "temperature_result_sanity",
+        "thermal_energy_sanity",
+    ),
+    "coupled": (
+        "temperature_result_sanity",
+        "displacement_sanity",
+        "thermal_mechanical_consistency",
+    ),
+}
+
+
 def relative_error(actual, expected):
     denominator = max(abs(float(expected)), 1e-30)
     return abs(float(actual) - float(expected)) / denominator
