@@ -23,8 +23,6 @@ class MeshConvergencePoint:
         object.__setattr__(self, "qoi_type", qoi_type)
         if qoi_type not in _ALLOWED_QOI_TYPES:
             raise ValueError("unsupported mesh convergence QoI type")
-        if not self.qoi_name:
-            raise ValueError("qoi_name is required for mesh convergence evidence")
         if not math.isfinite(self.mesh_size) or self.mesh_size <= 0:
             raise ValueError("mesh_size must be finite and > 0")
         if not math.isfinite(self.result_value):
