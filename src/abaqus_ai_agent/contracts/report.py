@@ -2,6 +2,14 @@ from dataclasses import dataclass, field
 from typing import Any, Dict, Tuple
 
 @dataclass(frozen=True)
+class ReportFigure:
+    kind: str
+    path: str
+    caption: str = ""
+    source: str = ""
+    metadata: Dict[str, Any] = field(default_factory=dict)
+
+@dataclass(frozen=True)
 class EngineeringReportData:
     """Structured, source-first data model for an engineering deliverable."""
     title: str
@@ -13,6 +21,7 @@ class EngineeringReportData:
     loads: Tuple[Dict[str, Any], ...] = ()
     mesh: Dict[str, Any] = field(default_factory=dict)
     results: Tuple[Any, ...] = ()
+    figures: Tuple[ReportFigure, ...] = ()
     engineering_checks: Tuple[Any, ...] = ()
     acceptance: Any = None
     sensitivity: Any = None
@@ -33,8 +42,10 @@ class EngineeringReportData:
         state = getattr(run, "state", None)
         metadata.setdefault("run_state", getattr(state, "value", state))
         metadata.setdefault("engineering_status", getattr(run, "engineering_status", None))
+        sections.setdefault("results", getattr(run, "metrics", ()))
         return cls(title or "Abaqus Engineering Analysis Report", objective=objective,
                    results=tuple(sections.pop("results", ()) or ()),
+                   figures=tuple(sections.pop("figures", ()) or ()),
                    engineering_checks=tuple(sections.pop("engineering_checks", ()) or ()),
                    acceptance=sections.pop("acceptance", None),
                    evidence=tuple(sections.pop("evidence", tuple(getattr(getattr(run, "evidence", None), "items", ()) or ())) or ()),
