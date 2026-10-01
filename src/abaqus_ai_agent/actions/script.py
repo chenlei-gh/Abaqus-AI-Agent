@@ -34,8 +34,9 @@ def action_to_script(action):
         return "from abaqusConstants import *; mdb.models[%s].StaticStep(%s)" % (_q(m), ", ".join(args))
     if k == "dynamic_explicit_step":
         args = ["name=%s" % _q(p["name"]), "previous=%s" % _q(p.get("previous", "Initial")),
-                "timePeriod=%r" % p["time_period"], "nlgeom=%s" % p.get("nlgeom", False)]
-        if p.get("max_num_inc") is not None: args.append("maxNumInc=%d" % int(p["max_num_inc"]))
+                "timePeriod=%r" % p["time_period"], "nlgeom=%s" % p.get("nlgeom", True),
+                "improvedDtMethod=%s" % p.get("improved_dt_method", True)]
+        if p.get("max_increment") is not None: args.append("maxIncrement=%r" % p["max_increment"])
         return "from abaqusConstants import *; mdb.models[%s].ExplicitDynamicsStep(%s)" % (_q(m), ", ".join(args))
     if k == "implicit_dynamic_step":
         args = ["name=%s" % _q(p["name"]), "previous=%s" % _q(p.get("previous", "Initial")),
