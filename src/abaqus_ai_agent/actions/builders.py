@@ -35,4 +35,36 @@ def history_output(model, variables=("ALLIE", "ALLKE", "ALLSE"), request="H-Outp
 def create_job(model, name, job_type="STANDARD"): return _action("create_job", model, name=name, job_type=job_type)
 def submit_job(model, name): return _action("submit_job", model, name=name)
 def tie(model, name, master_expression, slave_expression): return _action("tie", model, name=name, master_expression=master_expression, slave_expression=slave_expression)
-def contact(model, name, master_expression, slave_expression, friction=0.0): return _action("contact", model, name=name, master_expression=master_expression, slave_expression=slave_expression, friction=friction)
+
+def local_seed_size(model, part, region_expression, size, constraint="FREE"):
+    return _action("local_seed_size", model, region_expression, part=part, region_expression=region_expression, size=size, constraint=constraint)
+
+def local_seed_number(model, part, region_expression, number, constraint="FREE"):
+    return _action("local_seed_number", model, region_expression, part=part, region_expression=region_expression, number=number, constraint=constraint)
+
+def inspect_geometry(model, part, min_edge_length=None, min_face_size=None):
+    return _action("inspect_geometry", model, part=part, min_edge_length=min_edge_length, min_face_size=min_face_size)
+
+def ignore_entity(model, part, region_expression):
+    return _action("ignore_entity", model, region_expression, part=part, region_expression=region_expression)
+
+def restore_entity(model, part, region_expression):
+    return _action("restore_entity", model, region_expression, part=part, region_expression=region_expression)
+
+def repair_geometry(model, part):
+    return _action("repair_geometry", model, part=part)
+
+def remove_redundant_entities(model, part):
+    return _action("remove_redundant_entities", model, part=part)
+
+def inspect_mesh(model, part):
+    return _action("inspect_mesh", model, part=part)
+
+def mesh_quality(model, part, **params):
+    return _action("mesh_quality", model, part=part, **params)
+
+def contact_property(model, name, normal_behavior=True, pressure_overclosure="HARD", tangential_behavior=None):
+    return _action("contact_property", model, name=name, normal_behavior=normal_behavior, pressure_overclosure=pressure_overclosure, tangential_behavior=tangential_behavior)
+
+def contact(model, name, master_expression, slave_expression, property, sliding="FINITE", step="Initial"):
+    return _action("contact", model, name=name, master_expression=master_expression, slave_expression=slave_expression, property=property, sliding=sliding, step=step)
