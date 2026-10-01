@@ -10,6 +10,14 @@ from .contracts.session import SessionHealth
 from .contracts.results import ResultRequirement, ResultExtraction
 from .contracts.fatigue import FatigueAnalysisIntent, FatigueWorkflow
 from .contracts.convergence import MeshConvergencePoint, MeshConvergencePolicy, MeshConvergenceResult
+from .contracts.engineering_checks import EngineeringCheck, EngineeringCheckReport
+from .contracts.provenance import AnalysisProvenance
+from .contracts.sensitivity import SensitivityCase, SensitivityResult, SensitivityReport
+from .contracts.uncertainty import UncertaintyParameter, UncertaintyScenario, UncertaintyReport
+from .contracts.correction import RepairCandidate, CorrectionAttempt, CorrectionPolicy
+from .contracts.benchmarks import BenchmarkCase, BenchmarkResult
+from .contracts.contact import ContactDiagnostic, ContactDiagnosticReport
+from .contracts.numerical import NumericalVerificationResult
 from .execution.analysis_run import AnalysisRun, AnalysisRunState, AnalysisRunner
 from .execution.artifacts import JobArtifact, JobArtifacts
 from .execution.batch import BatchExecutor, BatchResult
