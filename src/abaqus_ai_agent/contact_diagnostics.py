@@ -63,6 +63,14 @@ def _is_contact(value):
     return isinstance(value, (int, float)) and float(value) in (0.5, 1.0)
 
 
+def _status_kind(value):
+    if _is_open(value):
+        return "open"
+    if _is_contact(value):
+        return "contact"
+    return None
+
+
 def _required_output_names(expected):
     return tuple(dict.fromkeys(expected.required_outputs))
 
@@ -148,41 +156,55 @@ def expected_contact_state(evidence, expected):
             message="CSTATUS is required to determine contact state",
         )
 
-    observed_contact = any(_is_contact(value) for value in statuses)
-    observed_open = any(_is_open(value) for value in statuses)
+    kinds = tuple(_status_kind(value) for value in statuses)
+    observed_contact = "contact" in kinds
+    observed_open = "open" in kinds
+    has_unknown = any(kind is None for kind in kinds)
 
     if expected.expected_state == "either":
+        if has_unknown:
+            return ContactDiagnostic(
+                "expected_contact_state",
+                "ambiguous",
+                message="CSTATUS contains values whose contact state cannot be mapped confidently",
+            )
         return ContactDiagnostic(
             "expected_contact_state",
             "pass",
-            message="observed contact status is compatible with either declared state",
+            message="observed CSTATUS is compatible with either declared state",
         )
     if expected.expected_state == "contact":
-        if observed_contact and not observed_open:
+        if observed_contact and not observed_open and not has_unknown:
             return ContactDiagnostic(
                 "expected_contact_state", "pass",
-                message="observed contact status includes contact and no open status",
+                message="all supplied CSTATUS values indicate contact",
             )
         if observed_contact and observed_open:
             return ContactDiagnostic(
                 "expected_contact_state", "ambiguous",
                 message="CSTATUS contains both contact and open locations; mixed interface state is not sufficient to prove contact failure",
             )
-        if observed_open:
+        if observed_open and not observed_contact and not has_unknown:
             return ContactDiagnostic(
                 "expected_contact_state", "fail",
-                message="observed CSTATUS is open throughout the supplied evidence although contact is required",
+                message="all supplied CSTATUS values are open although contact is required",
             )
     if expected.expected_state == "open":
-        if observed_open and not observed_contact:
+        if observed_open and not observed_contact and not has_unknown:
             return ContactDiagnostic(
                 "expected_contact_state", "pass",
-                message="observed CSTATUS is open as expected",
+                message="all supplied CSTATUS values are open as expected",
             )
-        if observed_contact:
+        if observed_contact and not observed_open and not has_unknown:
             return ContactDiagnostic(
                 "expected_contact_state", "fail",
-                message="observed CSTATUS contains contact although separation is expected",
+                message="all supplied CSTATUS values indicate contact although separation is expected",
+            )
+        if observed_contact and observed_open:
+            return ContactDiagnostic(
+                "expected_contact_state",
+                "ambiguous",
+                message="CSTATUS contains both contact and open locations; the supplied evidence is not uniformly separated",
             )
 
     return ContactDiagnostic(
