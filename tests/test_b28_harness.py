@@ -11,7 +11,7 @@ def test_b28_script_uses_python27_compatible_markers_and_apis():
     assert "job.writeInput" in script
     assert "job.waitForCompletion()" in script
     assert "openOdb" in script
-    assert "f"" not in script
+    assert 'f"' not in script
     assert "regionToolset.Region" in script
 
 
