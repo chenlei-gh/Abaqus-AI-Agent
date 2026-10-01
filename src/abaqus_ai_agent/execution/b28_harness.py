@@ -73,10 +73,10 @@ try:
     instance = assembly.Instance(name="Block-1", part=part, dependent=ON)
 
     model.StaticStep(name="Step-1", previous="Initial")
-    region = (instance.faces.findAt(((0.0, 0.5, 0.5),)),)
+    region = regionToolset.Region(faces=instance.faces.findAt(((0.0, 0.5, 0.5),)))
     model.EncastreBC(name="BC-1", createStepName="Initial", region=region)
 
-    load_region = (instance.vertices.findAt(((1.0, 1.0, 1.0),)),)
+    load_region = regionToolset.Region(vertices=instance.vertices.findAt(((1.0, 1.0, 1.0),)))
     model.ConcentratedForce(name="Load-1", createStepName="Step-1",
                             region=load_region, cf3=-1.0)
 
