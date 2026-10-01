@@ -9,6 +9,8 @@ def snapshot(mdb):
             "sections": list(model.sections.keys()),
             "steps": list(model.steps.keys()),
             "loads": list(model.loads.keys()),
+            "amplitudes": list(model.amplitudes.keys()),
+            "predefined_fields": list(model.predefinedFields.keys()),
             "boundary_conditions": list(model.boundaryConditions.keys()),
             "interactions": list(model.interactions.keys()),
             "constraints": list(model.constraints.keys()),
