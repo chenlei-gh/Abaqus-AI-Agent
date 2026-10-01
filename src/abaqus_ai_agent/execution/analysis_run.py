@@ -150,13 +150,28 @@ class AnalysisRunner:
                 from .results import extract_criteria
                 result_values, result_evidence = extract_criteria(
                     self.executor, path, criteria)
+                result_source = "odb"
             else:
-                result_evidence = ()
+                result_evidence = ({
+                    "kind": "injected_result",
+                    "source": "external_input",
+                    "value": dict(result_values),
+                    "metadata": {
+                        "odb_backed": False,
+                        "engineering_validity": "not_established",
+                    },
+                },)
+                result_source = "external_input"
 
             from ..acceptance import evaluate_criteria
             accepted = evaluate_criteria(result_values, criteria)
-            status_value = (EngineeringStatus.RESULT_VALID.value
-                            if accepted.passed else EngineeringStatus.RESULT_INVALID.value)
+            status_value = (
+                EngineeringStatus.RESULT_VALID.value
+                if accepted.passed and result_source == "odb"
+                else EngineeringStatus.RESULT_SUSPICIOUS.value
+                if accepted.passed
+                else EngineeringStatus.RESULT_INVALID.value
+            )
             evidence = tuple((odb, accepted)) + tuple(result_evidence)
             return run.with_state(
                 AnalysisRunState.ACCEPTED if accepted.passed
