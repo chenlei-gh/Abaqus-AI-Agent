@@ -128,3 +128,33 @@ def test_sensitivity_execution_uses_existing_runner():
     assert report.completed
     assert report.ranking == (("stress", 0.2),)
     assert runner.calls[0][0] == ("Model-1", "Job-1_load_plus")
+
+
+def test_reproducibility_manifest_is_deterministic():
+    from abaqus_ai_agent.provenance import build_reproducibility_manifest
+    from abaqus_ai_agent.contracts.provenance import AnalysisProvenance
+    from abaqus_ai_agent.execution.artifacts import JobArtifact
+    provenance = AnalysisProvenance(
+        "run-1", "Model-1", "Job-1", executor="TestExecutor"
+    )
+    artifacts = (JobArtifact("Job-1", ".odb", "Job-1.odb", True, 10, 2.0),)
+    first = build_reproducibility_manifest(provenance, artifacts)
+    second = build_reproducibility_manifest(provenance, artifacts)
+    assert first == second
+    assert first["content_hashes_available"] is False
+    assert first["manifest_hash"]
+
+
+def test_correction_attempt_records_confirmation_and_retry_gate():
+    from abaqus_ai_agent.correction import record_attempt
+    policy = CorrectionPolicy(max_attempts=1)
+    proposed = record_attempt(
+        0, "missing_output_request", "add_output", confirmed=False, policy=policy
+    )
+    assert proposed.confirmed is False
+    assert proposed.retry_allowed is False
+    confirmed = record_attempt(
+        0, "missing_output_request", "add_output", confirmed=True, policy=policy
+    )
+    assert confirmed.confirmed is True
+    assert confirmed.retry_allowed is True
