@@ -35,3 +35,40 @@ def check_energy_ratio(numerator, denominator, tolerance, name="energy_ratio"):
         return EngineeringCheck(name, False, float(numerator), 0.0, float(tolerance), "", "zero energy denominator")
     ratio = abs(float(numerator)) / denominator
     return EngineeringCheck(name, ratio <= float(tolerance), ratio, 0.0, float(tolerance), "ratio", "ratio=%g" % ratio)
+
+
+def sum_reaction_components(field_values):
+    """Sum RF field values explicitly; does not infer the applied load."""
+    totals = [0.0, 0.0, 0.0]
+    count = 0
+    for item in field_values or ():
+        data = item.get("data") if isinstance(item, dict) else item
+        if isinstance(data, (int, float)):
+            data = (data,)
+        if not isinstance(data, (tuple, list)):
+            continue
+        for i in range(min(3, len(data))):
+            if isinstance(data[i], (int, float)):
+                totals[i] += float(data[i])
+        if data:
+            count += 1
+    return {"components": tuple(totals), "count": count}
+
+
+def check_declared_load_balance(applied_components, reaction_components,
+                                tolerance, unit=""):
+    """Compare declared applied-load components with extracted RF resultants.
+
+    The applied components must be supplied explicitly by the caller. This
+    function never infers loads from the ODB or from model names.
+    """
+    if len(applied_components) != len(reaction_components):
+        raise ValueError("applied/reaction component lengths must match")
+    checks = []
+    for i, (applied, reaction) in enumerate(
+            zip(applied_components, reaction_components), 1):
+        checks.append(check_balance(
+            "global_load_balance_RF%d" % i,
+            reaction, applied, tolerance, unit
+        ))
+    return evaluate_checks(tuple(checks))
