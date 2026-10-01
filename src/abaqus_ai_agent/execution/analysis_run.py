@@ -88,7 +88,7 @@ class AnalysisRunner:
             timeout=3600, action_plan=(), environment=None,
             contact_expected=None, contact_evidence=None, contact_step=None,
             contact_frame=-1, contact_history_region=None, contact_position=None,
-            contact_region=None):
+            contact_region=None, benchmark=None, benchmark_reference_values=None):
         run_id = str(uuid.uuid4())
         runtime = _runtime_provenance(self.executor)
         initial_snapshot = None
@@ -132,7 +132,12 @@ class AnalysisRunner:
                 jobs.create(job_name, model_name)
 
             from ..planning.output import plan_outputs, actions_from_output_plan
-            output_plan = plan_outputs(criteria)
+            benchmark_execution_criteria = ()
+            if benchmark is not None:
+                from ..benchmarks import benchmark_result_criteria
+                benchmark_execution_criteria = benchmark_result_criteria(benchmark)
+            execution_criteria = tuple(criteria or ()) + tuple(benchmark_execution_criteria)
+            output_plan = plan_outputs(execution_criteria)
             output_actions = actions_from_output_plan(model_name, output_plan)
             if not action_plan and output_actions:
                 run = run.with_state(
@@ -211,14 +216,14 @@ class AnalysisRunner:
                 engineering_status=EngineeringStatus.RESULT_SUSPICIOUS.value,
                 evidence=EvidenceBundle((Evidence(kind="odb_summary", source="odb", locator=path, value=odb),)), artifacts=artifacts)
 
-            if (not criteria and numerical_verification is None and
+            if (not criteria and benchmark is None and numerical_verification is None and
                     engineering_checks is None and contact_expected is None):
                 return run.with_state(AnalysisRunState.ODB_VALIDATED)
 
             if result_values is None:
                 from .results import extract_criteria
                 result_values, result_evidence = extract_criteria(
-                    self.executor, path, criteria)
+                    self.executor, path, execution_criteria)
                 result_source = "odb"
             else:
                 result_evidence = (Evidence(
@@ -231,6 +236,36 @@ class AnalysisRunner:
                     },
                 ),)
                 result_source = "external_input"
+
+            benchmark_result = None
+            benchmark_evidence = ()
+            if benchmark is not None:
+                from ..benchmarks import derive_benchmark_observations, evaluate_benchmark
+                benchmark_observed, benchmark_derivation, benchmark_pre_failures = (
+                    derive_benchmark_observations(
+                        benchmark, result_values, benchmark_reference_values
+                    )
+                )
+                benchmark_result = evaluate_benchmark(
+                    benchmark,
+                    benchmark_observed,
+                    benchmark.acceptance,
+                    pre_failures=benchmark_pre_failures,
+                )
+                benchmark_evidence = (
+                    Evidence(
+                        kind="benchmark_derivation",
+                        source="odb" if result_source == "odb" else "external_input",
+                        locator=job_name,
+                        value=benchmark_derivation,
+                    ),
+                    Evidence(
+                        kind="benchmark_result",
+                        source="benchmark",
+                        locator=job_name,
+                        value=benchmark_result,
+                    ),
+                )
 
             contact_diagnostics = None
             if contact_expected is not None:
@@ -266,6 +301,7 @@ class AnalysisRunner:
                 values=result_values,
                 criteria=criteria,
                 contact_diagnostics=contact_diagnostics,
+                benchmark_result=benchmark_result,
             )
             verification_evidence = []
             if numerical_verification is not None:
@@ -300,7 +336,7 @@ class AnalysisRunner:
             ), Evidence(
                 kind="acceptance", source="acceptance", locator=job_name,
                 value=accepted
-            ))).extend(tuple(verification_evidence)).extend(result_evidence)
+            ))).extend(tuple(verification_evidence)).extend(tuple(benchmark_evidence)).extend(result_evidence)
             return run.with_state(
                 AnalysisRunState.ACCEPTED if accepted.passed
                 else AnalysisRunState.RESULTS_EXTRACTED,
