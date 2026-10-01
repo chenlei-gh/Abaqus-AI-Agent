@@ -92,3 +92,22 @@ def test_extract_contact_evidence_preserves_region_identity():
     )
     assert result["region"] == "Surface-A-B"
     assert result["history_region"] == "Assembly ASSEMBLY"
+
+def test_contact_extractors_emit_executable_multiline_abaqus_code():
+    from abaqus_ai_agent.execution.odb import (
+        extract_contact_field,
+        extract_contact_history,
+    )
+
+    class FakeExecutor:
+        def __init__(self):
+            self.codes = []
+        def execute(self, code):
+            self.codes.append(code)
+            return {"status": "unavailable"}
+
+    executor = FakeExecutor()
+    extract_contact_field(executor, "job.odb", "Step-1", "CPRESS")
+    extract_contact_history(executor, "job.odb", "Step-1", region="Assembly ASSEMBLY")
+    assert all("\n" in code for code in executor.codes)
+    assert all("\\n" not in code for code in executor.codes)
