@@ -160,9 +160,9 @@ def extract_contact_field(executor, path, step, field, frame=-1, position=None,
         operations.append("fo=fo.getSubset(position=%r)" % position)
     if region:
         operations.append("fo=fo.getSubset(region=%s)" % region)
-    subset_code = "\\n".join(operations)
+    subset_code = "\n".join(operations)
     if subset_code:
-        subset_code += "\\n"
+        subset_code += "\n"
     code = (
         "from odbAccess import openOdb\\n"
         "odb=openOdb(path=%r, readOnly=True)\\n"
@@ -251,6 +251,34 @@ def extract_contact_evidence(executor, path, step, fields=("CPRESS", "COPEN", "C
     history = extract_contact_history(
         executor, path, step, region=history_region, variables=history_variables)
     return {"step": step, "frame": frame, "fields": field_results, "history": history}
+
+def extract_energy_history(executor, path, step, region, variables=(
+    "ALLIE", "ALLKE", "ALLWK", "ALLAE", "ALLPD", "ALLCD", "ALLFD", "ALLSD"
+)):
+    """Extract Abaqus energy history outputs without interpreting balance or quality.
+
+    Missing variables are represented by None so unavailable outputs are not
+    confused with zero-valued histories.
+    """
+    return extract_history(executor, path, step, region, variables)
+
+
+def extract_energy_evidence(executor, path, step, history_region,
+                            variables=(
+                                "ALLIE", "ALLKE", "ALLWK", "ALLAE",
+                                "ALLPD", "ALLCD", "ALLFD", "ALLSD"
+                            )):
+    """Collect energy history evidence without applying engineering thresholds."""
+    history = extract_energy_history(
+        executor, path, step, history_region, variables
+    )
+    return {
+        "step": step,
+        "region": history_region,
+        "variables": tuple(variables),
+        "history": history,
+    }
+
 
 def extract_reaction_history(executor, path, step, region, variables=("RF1", "RF2", "RF3")):
     """Extract nodal reaction-force history outputs without inferring equilibrium."""
