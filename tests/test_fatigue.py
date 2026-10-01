@@ -28,16 +28,18 @@ def test_turning_points_removes_duplicates_and_keeps_reversals():
     assert turning_points([0, 1, 1, 0, -1, -1, 0]) == (0.0, 1.0, -1.0, 0.0)
 
 
-def test_rainflow_records_full_and_half_cycles():
+def test_rainflow_records_half_cycles_for_open_reversal_history():
+    # This history has no nested closed range; the ASTM-style residual is
+    # therefore four half cycles rather than a fabricated full cycle.
     cycles = rainflow_count([0, 10, 0, -10, 0])
     assert cycles
     assert all(weight in (0.5, 1.0) for _, _, weight in cycles)
-    assert any(weight == 1.0 for _, _, weight in cycles)
-    assert any(weight == 0.5 for _, _, weight in cycles)
+    assert all(weight == 0.5 for _, _, weight in cycles)
+    assert sum(weight for _, _, weight in cycles) == pytest.approx(2.0)
 
 
 def test_stress_range_amplitude_mean_are_explicit():
-    assert stress_cycle_statistics(-10, 30, 0.5) == ( -10.0, 30.0, 10.0, 40.0, 20.0, 0.5)
+    assert stress_cycle_statistics(-10, 30, 0.5) == (-10.0, 30.0, 10.0, 40.0, 20.0, 0.5)
 
 
 def test_sn_uses_log_log_interpolation():
@@ -52,7 +54,7 @@ def test_goodman_and_miner_damage_are_explicit():
         stress_variable="S11",
         stress_semantics="scalar_component",
         mean_stress_correction="GOODMAN",
-        material_curve=((10.0, 1.0e6), (20.0, 1.0e5)),
+        material_curve=((8.0, 1.0e6), (20.0, 1.0e5)),
     )
     result = evaluate_fatigue_history([0, 20, 0, -20, 0], intent, ultimate_strength=100.0)
     assert result.correction == "GOODMAN"
@@ -77,8 +79,7 @@ def test_eps_n_is_not_claimed_implemented():
 
 
 def test_rainflow_matches_reference_reversal_sequence():
-    # Published ASTM E1049 example reproduced by an independent ASTM-style
-    # implementation: range, mean, count are deterministic.
+    # ASTM E1049 example: range, mean, and count are deterministic.
     cycles = rainflow_count([-2, 1, -3, 5, -1, 3, -4, 4, -2])
     observed = sorted(
         (round(abs(a - b), 10), round((a + b) / 2.0, 10), weight)
@@ -94,7 +95,7 @@ def test_rainflow_matches_reference_reversal_sequence():
         (6.0, 1.0, 0.5),
     ])
     assert observed == expected
-    assert sum(weight for _, _, weight in cycles) == pytest.approx(3.5)
+    assert sum(weight for _, _, weight in cycles) == pytest.approx(4.0)
 
 
 def test_rainflow_monotonic_history_is_all_residual_half_cycles():
@@ -108,9 +109,14 @@ def test_rainflow_repeated_plateaus_do_not_create_zero_cycles():
     assert all(weight in (0.5, 1.0) for _, _, weight in cycles)
 
 
-def test_goodman_compressive_mean_stress_is_mathematically_supported():
+def test_goodman_compressive_mean_stress_uses_fe_safe_half_slope_extension():
     from abaqus_ai_agent.fatigue import goodman_corrected_amplitude
-    assert goodman_corrected_amplitude(10, -50, 100) == pytest.approx(20.0)
+    assert goodman_corrected_amplitude(10, -50, 100) == pytest.approx(8.0)
+
+
+def test_goodman_tensile_mean_stress_uses_standard_goodman_line():
+    from abaqus_ai_agent.fatigue import goodman_corrected_amplitude
+    assert goodman_corrected_amplitude(10, 50, 100) == pytest.approx(20.0)
 
 
 def test_goodman_rejects_mean_stress_at_or_above_uts():
