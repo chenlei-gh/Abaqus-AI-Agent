@@ -148,7 +148,7 @@ def action_to_script(action):
         edge_arg = "end1Edges" if end == "END1" else "end2Edges"
         return "from abaqusConstants import *; mdb.models[%s].parts[%s].seedEdgeByBias(biasMethod=SINGLE, %s=%s, number=%d, ratio=%r, constraint=%s)" % (_q(m), _q(p["part"]), edge_arg, p["region_expression"], int(p["number"]), p["ratio"], p.get("constraint", "FREE"))
     if k == "sweep_path":
-        sense = p.get("sense", "FORWARD")
+        sense = str(p.get("sense", "FORWARD")).upper()
         if sense not in ("FORWARD", "REVERSE"):
             raise ValueError("sweep path sense must be FORWARD or REVERSE")
         return "from abaqusConstants import *; mdb.models[%s].parts[%s].setSweepPath(region=%s, edge=%s, sense=%s)" % (
