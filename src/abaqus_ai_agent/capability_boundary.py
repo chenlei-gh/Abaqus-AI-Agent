@@ -1,6 +1,8 @@
 from dataclasses import dataclass
 from enum import Enum
 
+from .actions.script import action_to_script
+
 
 class CapabilityStatus(str, Enum):
     """What the Agent can legitimately claim about an operation."""
@@ -47,14 +49,18 @@ def classify_action(action) -> CapabilityBoundary:
         )
 
     if isinstance(action_type, str):
-        return CapabilityBoundary(
-            CapabilityStatus.SUPPORTED,
-            action_type,
-            "typed Agent Action; validation and execution are explicit",
-        )
+        # Script generation is the existing executable registry. Do not
+        # duplicate the action-type list in a second capability registry.
+        script = action_to_script(action)
+        if script is not None:
+            return CapabilityBoundary(
+                CapabilityStatus.SUPPORTED,
+                action_type,
+                "typed Agent Action; validation and execution are explicit",
+            )
 
     return CapabilityBoundary(
         CapabilityStatus.UNSUPPORTED,
         str(action_type),
-        "action type is not represented by the Agent capability contract",
+        "action type has no native Agent script path",
     )
