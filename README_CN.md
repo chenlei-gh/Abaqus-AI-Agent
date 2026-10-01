@@ -85,7 +85,7 @@
 - INP 导出
 - ODB Field CSV 导出
 - 网格收敛评价
-- 针对已有 Abaqus 应力历史的疲劳后处理契约/工作流
+- 针对已有 Abaqus 标量应力历史的确定性疲劳后处理：Rainflow 循环计数、应力范围/幅值/均值、半循环/整循环权重、Goodman 修正、log-log S-N 插值与 Palmgren-Miner 损伤
 - 有界概率不确定性执行：可复现采样与统计
 - 针对明确实测值的确定性实验验证
 
@@ -307,11 +307,11 @@ Action 必须小、明确、可检查。
 
 不能因为存在一个 API 风格的类，就宣称一个工程能力已经完成。
 
-例如当前 Fatigue 能力是：
+当前 Fatigue 能力已经闭合为：
 
-**针对已有 Abaqus 应力历史进行后处理的 Contract / Workflow**
+**针对已有 Abaqus 标量应力历史的确定性疲劳后处理引擎**，覆盖 Rainflow、半/整循环、应力范围/幅值/均值、Goodman、log-log S-N 与 Palmgren-Miner。
 
-而不是已经实现完整数值疲劳求解器。
+但不宣称已经实现临界面法或非比例多轴疲劳准则。
 
 ### 6. Release-aware Compatibility
 
@@ -404,10 +404,10 @@ action = python_action(
 | Result Extraction | 已实现 |
 | Mesh Convergence | 已实现 |
 | Geometry Grounding | 已实现：当前针对标定 Viewport / Projection 路径 |
-| Fatigue | 已实现：已有应力历史的 Contract / Workflow |
+| Fatigue | 已实现：确定性应力历史后处理（Rainflow / S-N / Goodman / Miner） |
 | Arbitrary Native Abaqus API | 已通过 Python Escape Hatch 支持 |
 | 任意外部照片的全自动几何注册 | 当前不宣称 |
-| 完整独立 Fatigue Solver | 未实现 |
+| 临界面/非比例多轴 Fatigue Solver | 未实现 |
 | CAD / Part / Sketch / Extrude 自动建模 | 当前有意延后 |
 | Tosca / Topology Optimization 自动化 | 当前有意延后 |
 
