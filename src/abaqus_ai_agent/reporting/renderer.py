@@ -63,7 +63,8 @@ def render_pdf(report, output_path):
 
 def _conclusion(report):
     acceptance = report.acceptance
-    if acceptance is not None and getattr(acceptance, "passed", False):
+    passed = acceptance if isinstance(acceptance, bool) else getattr(acceptance, "passed", False)
+    if acceptance is not None and passed:
         return "Acceptance criteria passed based on the structured evidence supplied to this report."
     if acceptance is not None:
         return "Acceptance criteria were not fully satisfied by the structured evidence supplied to this report."
