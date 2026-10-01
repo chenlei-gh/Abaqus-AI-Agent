@@ -55,6 +55,14 @@ class AbaqusAIAgent:
         from .execution.artifacts import inspect_job_artifacts
         return inspect_job_artifacts(self.executor, job_name, workdir=workdir)
 
+    def select_solver(self, intent):
+        from .solver_selection import select_solver
+        return select_solver(intent)
+
+    def build_report(self, run, title=None, objective="", **sections):
+        from .contracts.report import EngineeringReportData
+        return EngineeringReportData.from_analysis(run, title=title, objective=objective, **sections)
+
     def plan_outputs(self, criteria=(), outputs=()):
         from .planning.output import plan_outputs
         return plan_outputs(criteria, outputs)

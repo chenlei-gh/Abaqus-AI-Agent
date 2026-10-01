@@ -203,3 +203,15 @@ def extract_criteria(executor, path, criteria):
         results[requirement.value_key] = result.value
         evidence.extend(result.evidence)
     return results, tuple(evidence)
+
+
+def extract_requirements(executor, path, criteria):
+    """Extract typed ResultExtraction objects without collapsing them to values."""
+    requirements = requirements_from_criteria(criteria)
+    extractions = []
+    evidence = []
+    for requirement in requirements:
+        result = extract_requirement(executor, path, requirement)
+        extractions.append(result)
+        evidence.extend(result.evidence)
+    return tuple(extractions), tuple(evidence)

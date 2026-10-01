@@ -39,6 +39,7 @@ class AnalysisRun:
     diagnostics: Tuple[Dict[str, Any], ...] = ()
     artifacts: Tuple[Any, ...] = ()
     metadata: Dict[str, Any] = field(default_factory=dict)
+    metrics: Tuple[Any, ...] = ()
 
     def with_state(self, state, **changes):
         values = dict(
@@ -48,7 +49,7 @@ class AnalysisRun:
             acceptance_passed=self.acceptance_passed, provenance=self.provenance,
             evidence=self.evidence,
             diagnostics=self.diagnostics, artifacts=self.artifacts,
-            metadata=dict(self.metadata))
+            metadata=dict(self.metadata), metrics=self.metrics)
         values.update(changes)
         return AnalysisRun(**values)
 
@@ -212,9 +213,12 @@ class AnalysisRunner:
                 return run.with_state(AnalysisRunState.ODB_VALIDATED)
 
             if result_values is None:
-                from .results import extract_criteria
-                result_values, result_evidence = extract_criteria(
+                from .results import extract_requirements
+                extractions, result_evidence = extract_requirements(
                     self.executor, path, criteria)
+                result_values = {item.requirement.value_key: item.value for item in extractions}
+                from ..contracts.metrics import metrics_from_extractions
+                run_metrics = metrics_from_extractions(extractions)
                 result_source = "odb"
             else:
                 result_evidence = (Evidence(
@@ -264,7 +268,7 @@ class AnalysisRunner:
                 else AnalysisRunState.RESULTS_EXTRACTED,
                 engineering_status=status_value,
                 acceptance_passed=accepted.passed,
-                evidence=evidence, artifacts=artifacts)
+                evidence=evidence, artifacts=artifacts, metrics=locals().get("run_metrics", ()))
         except Exception as exc:
             artifacts = _collect_artifacts(self.executor, job_name)
             diagnostics = _collect_diagnostics(self.executor, job_name)
