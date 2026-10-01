@@ -33,6 +33,12 @@ def validate_action(action):
         raise ValueError("size must be positive")
     if action.action_type == "local_seed_number" and int(action.parameters.get("number", 0)) < 1:
         raise ValueError("number must be positive")
+    if action.action_type == "bias_seed_size":
+        if action.parameters.get("min_size", 0) <= 0 or action.parameters.get("max_size", 0) <= 0: raise ValueError("biased seed sizes must be positive")
+        if action.parameters["max_size"] < action.parameters["min_size"]: raise ValueError("max_size must be >= min_size")
+    if action.action_type == "bias_seed_number":
+        if int(action.parameters.get("number", 0)) < 1: raise ValueError("number must be positive")
+        if action.parameters.get("ratio", 0) < 1: raise ValueError("ratio must be >= 1")
     if action.action_type in ("local_seed_size", "local_seed_number", "mesh_controls", "element_type") and not action.parameters.get("region_expression"):
         raise ValueError("region_expression is required for %s" % action.action_type)
     if action.action_type == "mesh_controls" and not action.parameters.get("technique"):
