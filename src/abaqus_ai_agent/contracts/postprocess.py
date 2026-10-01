@@ -10,17 +10,18 @@ class PostProcessingProfile:
     checks: Tuple[str, ...] = ()
     plots: Tuple[str, ...] = ()
     notes: Tuple[str, ...] = ()
+    history_step: str = "Step-1"
 
 def profile_for_solver_selection(selection):
     strategy = getattr(selection, "strategy", "")
     if strategy == "STATIC_GENERAL":
-        return PostProcessingProfile("static_structural", ("max_mises", "max_displacement", "max_reaction_force"), ("RF",), ("reaction_balance",), ("stress_contour", "displacement_contour", "reaction_history"))
+        return PostProcessingProfile("static_structural", ("max_mises", "max_displacement", "max_reaction_force"), ("RF",), ("reaction_balance",), ("stress_contour", "displacement_contour", "reaction_history"), (), "Step-1")
     if strategy == "QUASI_STATIC_EXPLICIT":
-        return PostProcessingProfile("explicit_quasi_static", ("max_mises", "max_displacement"), ("ALLIE", "ALLKE", "ETOTAL"), ("energy_ratio", "reaction_balance"), ("stress_contour", "displacement_contour", "energy_history"), ("Kinetic energy should remain small relative to internal energy for a quasi-static interpretation.",))
+        return PostProcessingProfile("explicit_quasi_static", ("max_mises", "max_displacement"), ("ALLIE", "ALLKE", "ETOTAL"), ("energy_ratio", "reaction_balance"), ("stress_contour", "displacement_contour", "energy_history"), ("Kinetic energy should remain small relative to internal energy for a quasi-static interpretation.",), "Step-1")
     if strategy == "DYNAMIC_EXPLICIT":
-        return PostProcessingProfile("dynamic_explicit", ("max_mises", "max_displacement"), ("ALLIE", "ALLKE", "ETOTAL", "RF"), ("energy_balance",), ("stress_contour", "displacement_contour", "energy_history", "force_history"))
+        return PostProcessingProfile("dynamic_explicit", ("max_mises", "max_displacement"), ("ALLIE", "ALLKE", "ETOTAL", "RF"), ("energy_balance",), ("stress_contour", "displacement_contour", "energy_history", "force_history"), (), "Step-1")
     if strategy == "DYNAMIC_IMPLICIT":
-        return PostProcessingProfile("dynamic_implicit", ("max_mises", "max_displacement"), ("RF",), ("reaction_balance",), ("stress_contour", "displacement_contour", "force_history"))
+        return PostProcessingProfile("dynamic_implicit", ("max_mises", "max_displacement"), ("RF",), ("reaction_balance",), ("stress_contour", "displacement_contour", "force_history"), (), "Step-1")
     if strategy == "FREQUENCY":
         return PostProcessingProfile("frequency", ("frequency",), (), (), ("mode_shape", "frequency_table"))
     if strategy == "BUCKLING":
