@@ -514,3 +514,63 @@ def test_contact_contract_requires_copen_for_quantitative_limits():
             allowed_initial_interference=0.01,
             required_outputs=("CSTATUS",),
         )
+
+
+def test_sensitivity_separates_execution_result_and_acceptance_status():
+    from abaqus_ai_agent.sensitivity import execute_sensitivity
+
+    class Run:
+        state = type("S", (), {"value": "accepted"})()
+        diagnostics = ()
+        acceptance_passed = False
+
+    class Runner:
+        def run(self, *args, **kwargs):
+            return Run()
+
+    report = execute_sensitivity(
+        executor=object(),
+        runner=Runner(),
+        model_name="Model-1",
+        job_name="Job-1",
+        baseline_values={"stress": 100.0},
+        cases=(SensitivityCase("load_plus", {"load": 1.1}),),
+        value_extractor=lambda executor, run, case: {"stress": 120.0},
+    )
+    result = report.cases[0]
+    assert result.status == "completed"
+    assert result.execution_status == "completed"
+    assert result.result_status == "available"
+    assert result.acceptance_status == "failed"
+    assert report.completed
+
+
+def test_sensitivity_result_extraction_failure_is_not_execution_success():
+    from abaqus_ai_agent.sensitivity import execute_sensitivity
+
+    class Run:
+        state = type("S", (), {"value": "results_extracted"})()
+        diagnostics = ()
+        acceptance_passed = None
+
+    class Runner:
+        def run(self, *args, **kwargs):
+            return Run()
+
+    report = execute_sensitivity(
+        executor=object(),
+        runner=Runner(),
+        model_name="Model-1",
+        job_name="Job-1",
+        baseline_values={"stress": 100.0},
+        cases=(SensitivityCase("load_plus", {"load": 1.1}),),
+        value_extractor=lambda executor, run, case: (_ for _ in ()).throw(
+            RuntimeError("missing declared result")
+        ),
+    )
+    result = report.cases[0]
+    assert result.status == "failed"
+    assert result.execution_status == "completed"
+    assert result.result_status == "error"
+    assert result.acceptance_status == "not_evaluated"
+    assert not report.completed
