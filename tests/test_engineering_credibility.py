@@ -2,7 +2,7 @@ from abaqus_ai_agent.engineering_checks import check_balance, evaluate_checks
 from abaqus_ai_agent.provenance import stable_hash, hash_text
 from abaqus_ai_agent.sensitivity import evaluate_sensitivity
 from abaqus_ai_agent.contracts.sensitivity import SensitivityCase
-from abaqus_ai_agent.correction import can_retry, select_repairs
+from abaqus_ai_agent.correction import can_retry, select_repairs, can_apply_repair
 from abaqus_ai_agent.contracts.correction import CorrectionPolicy, RepairCandidate
 from abaqus_ai_agent.numerical_verification import verify_series
 from abaqus_ai_agent.contact_diagnostics import evaluate_contact_checks
@@ -41,6 +41,8 @@ def test_correction_policy_is_bounded():
         "add_output", "missing_output_request", {"field": "S"})
     assert select_repairs("missing_output_request", (candidate,), policy)
     assert can_retry(0, policy)
+    assert not can_apply_repair(candidate)
+    assert can_apply_repair(candidate, confirmed=True)
     assert not can_retry(1, policy)
     assert not select_repairs("solver_failed", (candidate,), policy)
 
