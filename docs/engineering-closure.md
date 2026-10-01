@@ -71,3 +71,8 @@ Remaining non-runtime work is deliberately limited to broader problem-specific e
 ## Deferred runtime validation
 
 The B28 smoke harness must still be executed on an actual Abaqus V5 R2018/B28 installation. Until then, B28 compatibility remains unverified.
+
+
+### Fatigue post-processing
+
+Fatigue post-processing is implemented for existing scalar Abaqus stress histories: Rainflow cycle counting with half/full-cycle weights, explicit range/amplitude/mean semantics, optional Goodman correction, log-log S-N interpolation, and Palmgren-Miner damage. Critical-plane and non-proportional multiaxial fatigue criteria remain outside the implemented scope.
