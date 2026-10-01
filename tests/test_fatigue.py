@@ -74,3 +74,35 @@ def test_stress_variable_semantics_reject_ambiguous_usage():
 def test_eps_n_is_not_claimed_implemented():
     with pytest.raises(ValueError):
         FatigueAnalysisIntent(name="bad", method="EPSILON_N")
+
+
+def test_rainflow_matches_reference_reversal_sequence():
+    # Published ASTM E1049 example reproduced by an independent ASTM-style
+    # implementation: range, mean, count are deterministic.
+    cycles = rainflow_count([-2, 1, -3, 5, -1, 3, -4, 4, -2])
+    observed = sorted(
+        (round(abs(a - b), 10), round((a + b) / 2.0, 10), weight)
+        for a, b, weight in cycles
+    )
+    expected = sorted([
+        (3.0, -0.5, 0.5),
+        (4.0, -1.0, 0.5),
+        (4.0, 1.0, 1.0),
+        (8.0, 1.0, 0.5),
+        (9.0, 0.5, 0.5),
+        (8.0, 0.0, 0.5),
+        (6.0, 1.0, 0.5),
+    ])
+    assert observed == expected
+    assert sum(weight for _, _, weight in cycles) == pytest.approx(3.5)
+
+
+def test_rainflow_monotonic_history_is_all_residual_half_cycles():
+    cycles = rainflow_count([0, 1, 2, 3, 4])
+    assert cycles == ((0.0, 4.0, 0.5),)
+
+
+def test_rainflow_repeated_plateaus_do_not_create_zero_cycles():
+    cycles = rainflow_count([0, 5, 5, 0, 0, -5, -5, 0])
+    assert all(a != b for a, b, _ in cycles)
+    assert all(weight in (0.5, 1.0) for _, _, weight in cycles)
