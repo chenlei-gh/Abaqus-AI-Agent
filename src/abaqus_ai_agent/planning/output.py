@@ -8,6 +8,7 @@ from ..contracts.results import required_field_variables, requirements_from_crit
 class OutputPlan:
     field_variables: Tuple[str, ...] = ()
     history_variables: Tuple[str, ...] = ()
+    history_step: str = "Step-1"
     requirements: Tuple[object, ...] = ()
 
 
@@ -19,9 +20,14 @@ def plan_outputs(criteria=(), outputs=()):
     """
     requirements = requirements_from_criteria(criteria)
     fields = set(required_field_variables(requirements))
-    histories = set(
-        r.history_variable for r in requirements
+    history_requirements = tuple(
+        r for r in requirements
         if getattr(r, "output_kind", None) == "history" and r.history_variable
+    )
+    histories = set(r.history_variable for r in history_requirements)
+    history_step = next(
+        (r.step for r in history_requirements if getattr(r, "step", None)),
+        "Step-1",
     )
     for item in outputs or ():
         if isinstance(item, str):
@@ -33,7 +39,9 @@ def plan_outputs(criteria=(), outputs=()):
                 histories.update(variables)
             else:
                 fields.update(variables)
-    return OutputPlan(tuple(sorted(fields)), tuple(sorted(histories)), requirements)
+    return OutputPlan(
+        tuple(sorted(fields)), tuple(sorted(histories)), history_step, requirements
+    )
 
 
 def actions_from_output_plan(model_name, plan, field_request="AI-F-Output-1", history_request="AI-H-Output-1"):
@@ -43,5 +51,5 @@ def actions_from_output_plan(model_name, plan, field_request="AI-F-Output-1", hi
     if plan.field_variables:
         actions.append(field_output(model_name, variables=plan.field_variables, request=field_request, step="Initial"))
     if plan.history_variables:
-        actions.append(history_output(model_name, variables=plan.history_variables, request=history_request, step="Step-1"))
+        actions.append(history_output(model_name, variables=plan.history_variables, request=history_request, step=plan.history_step))
     return tuple(actions)
