@@ -111,10 +111,6 @@ def action_to_script(action):
         return _export_inp_script(m, p)
     if k == "export_odb_csv":
         return _export_odb_csv_script(p)
-    if k in ("fixed_bc", "displacement_bc", "symmetry_bc", "temperature_bc"):
-        return _bc_script(action)
-    if k in ("pressure_load", "concentrated_force", "body_force", "body_heat_flux", "surface_heat_flux"):
-        return _load_script(action)
     if k == "field_output":
         request = p.get("request", "F-Output-1")
         variables = tuple(p.get("variables", ("S", "U", "RF")))
