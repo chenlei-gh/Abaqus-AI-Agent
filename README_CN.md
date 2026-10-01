@@ -265,6 +265,32 @@ Evidence
 
 ---
 
+## AI / Agent 能力边界
+
+AI 与 Agent 在“能否理解/生成某项 Abaqus 操作”上允许重叠；真正的边界是**执行权限与工程证据**。
+
+| 状态 | 含义 |
+|---|---|
+| `SUPPORTED` | 存在明确的 Typed Action、Validation 与 Execution 语义，可以宣称 Agent 支持。 |
+| `EXECUTABLE` | 可以通过原生 Python Escape Hatch 执行，但 Agent 尚未完整拥有该操作的领域语义；执行不等于工程验证。 |
+| `ASSISTED` | AI 可以规划/推理，但 Agent 没有可靠执行路径。 |
+| `UNSUPPORTED` | 没有可靠的 Agent 执行路径。 |
+| `BLOCKED` | 原则上存在路径，但缺少运行环境、输入或必要证据。 |
+
+核心规则：
+
+> **AI 能够生成或推理某项操作，并不意味着该操作已经成为 Agent 的正式工程能力。只有进入明确的执行、验证与 Evidence 边界，才能提升能力声明。**
+
+因此，发现“AI 能做、当前 Typed Action 没有覆盖”的能力缺口时，不应该直接伪造一个已支持能力，而应按：
+
+`SUPPORTED` → `EXECUTABLE`（原生 Python Escape Hatch）→ `ASSISTED` / `BLOCKED`
+
+进行处理。
+
+`python_action` 成功只能证明请求跨过了执行边界；不能单独证明模型正确、Solver 成功、目标 ODB 结果存在或工程验收通过。
+
+详见 [AI / Agent 能力边界](docs/ai-agent-capability-boundary.md)。
+
 ## 架构
 
 项目刻意采用 **Action + Evidence** 为核心的架构，而不是继续增加一个庞大的 Autonomous Orchestrator。
@@ -509,7 +535,7 @@ action = python_action(
 | Engineering Report | 已实现 |
 | Geometry Grounding | 已实现：当前针对标定 Viewport / Projection 路径 |
 | Fatigue | 已实现：已有应力历史的 Contract / Workflow，并覆盖循环计数、应力范围/幅值、均值应力修正及多分量语义边界 |
-| Arbitrary Native Abaqus API | 已通过 Python Escape Hatch 支持 |
+| Arbitrary Native Abaqus API | EXECUTABLE：Python Escape Hatch；不等同于工程验证 |
 | 任意外部照片的全自动几何注册 | 当前不宣称 |
 | 完整独立 Fatigue Solver | 未实现 |
 | CAD / Part / Sketch / Extrude 自动建模 | 当前有意延后 |
