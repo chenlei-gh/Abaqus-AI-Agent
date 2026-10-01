@@ -28,6 +28,59 @@
 
 ---
 
+## At a glance
+
+`````mermaid
+flowchart LR
+    U["Engineering Intent"] --> AI["AI<br/>Reason · Plan · Explain"]
+    AI --> B{"Capability Boundary"}
+    B -->|SUPPORTED| A["Typed Action"]
+    B -->|EXECUTABLE| X["Native Python<br/>Escape Hatch"]
+    B -->|ASSISTED / BLOCKED| P["Proposal / Blocker"]
+    A --> V["Validation + Preflight"]
+    V --> E["Abaqus Execution"]
+    X --> E
+    E --> O["Job / ODB / Artifacts"]
+    O --> R["Result Extraction"]
+    R --> Q["Verification"]
+    Q --> C["Acceptance"]
+    C --> EV["Evidence"]
+    EV --> REP["Engineering Report"]
+````
+
+**The visual boundary is intentional:** AI can reason beyond the Agent's typed capability surface, but only an explicit execution and evidence path can turn an operation into a formal Agent capability.
+
+### The engineering evidence ladder
+
+`````mermaid
+flowchart TB
+    I["API Invocation"] --> M["Model-State Evidence"]
+    M --> J["Job Execution Evidence"]
+    J --> S["Solver Artifact Evidence"]
+    S --> O["ODB Evidence"]
+    O --> R["Result Evidence"]
+    R --> A["Acceptance Evidence"]
+    N["A successful Python call"] -. "does NOT imply" .-> A
+````
+
+This distinction is the project's central protection against **"the code ran, therefore the engineering result is correct."**
+
+### Capability lifecycle
+
+`````mermaid
+flowchart LR
+    D["Capability Gap"] --> T{"Typed contract exists?"}
+    T -->|Yes| S["SUPPORTED"]
+    T -->|No| P{"Native Abaqus API<br/>can execute it?"}
+    P -->|Yes| X["EXECUTABLE<br/>(unverified)"]
+    P -->|No| A["ASSISTED / BLOCKED"]
+    X --> H["Repeated engineering need"]
+    H --> C["Contract + Validation<br/>Result semantics + Tests"]
+    C --> S
+````
+
+This gives the project a controlled way to grow: **do not inflate the capability list just because an LLM can generate plausible Abaqus Python.**
+
 ## Overview
 
 **Abaqus AI Agent** is an engineering-analysis agent for working with existing Abaqus/CAE models and native Abaqus capabilities.
