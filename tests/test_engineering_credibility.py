@@ -83,7 +83,7 @@ def test_sum_reaction_components_preserves_explicit_resultant():
 def test_declared_load_balance_does_not_infer_applied_load():
     from abaqus_ai_agent.engineering_checks import check_declared_load_balance
     report = check_declared_load_balance(
-        (100.0, 0.0, 0.0), (99.0, 0.0, 0.0), 0.02, "N"
+        (100.0, 0.0, 0.0), (-99.0, 0.0, 0.0), 0.02, "N"
     )
     assert report.passed
     assert report.checks[0].name == "global_load_balance_RF1"
