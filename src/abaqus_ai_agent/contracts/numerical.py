@@ -14,6 +14,7 @@ class NumericalVerificationResult:
     observed_order: Optional[float] = None
     extrapolated_value: Optional[float] = None
     gci: Optional[float] = None
+    interpretation: str = "global"
 
     @property
     def passed(self):
