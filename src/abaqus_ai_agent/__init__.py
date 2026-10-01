@@ -24,3 +24,5 @@ from .execution.batch import BatchExecutor, BatchResult
 from .workflow import AnalysisWorkflow
 
 __version__ = "0.2.2"
+
+from .benchmark_catalog import standard_benchmarks

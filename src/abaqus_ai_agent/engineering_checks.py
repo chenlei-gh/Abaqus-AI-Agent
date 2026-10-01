@@ -24,17 +24,29 @@ def evaluate_checks(checks, warnings=()):
 
 
 def check_load_balance(applied_load, reaction_load, tolerance, unit=""):
-    """Check global applied-load/reaction equilibrium from extracted ODB evidence."""
-    return check_balance("global_load_balance", reaction_load, applied_load, tolerance, unit)
+    """Check scalar equilibrium using the convention applied + reaction = 0."""
+    return check_balance(
+        "global_load_balance",
+        float(reaction_load),
+        -float(applied_load),
+        tolerance,
+        unit,
+    )
 
 
 def check_energy_ratio(numerator, denominator, tolerance, name="energy_ratio"):
     """Check an energy component ratio against a declared engineering limit."""
     denominator = abs(float(denominator))
     if denominator <= 1e-30:
-        return EngineeringCheck(name, False, float(numerator), 0.0, float(tolerance), "", "zero energy denominator")
+        return EngineeringCheck(
+            name, False, float(numerator), 0.0, float(tolerance), "",
+            "zero energy denominator"
+        )
     ratio = abs(float(numerator)) / denominator
-    return EngineeringCheck(name, ratio <= float(tolerance), ratio, 0.0, float(tolerance), "ratio", "ratio=%g" % ratio)
+    return EngineeringCheck(
+        name, ratio <= float(tolerance), ratio, 0.0, float(tolerance),
+        "ratio", "ratio=%g" % ratio
+    )
 
 
 def sum_reaction_components(field_values):
@@ -59,7 +71,10 @@ def check_declared_load_balance(applied_components, reaction_components,
                                 tolerance, unit=""):
     """Compare declared applied-load components with extracted RF resultants.
 
-    The applied components must be supplied explicitly by the caller. This
+    The engineering convention is:
+        sum(applied) + sum(reaction) = 0
+
+    Applied components must be supplied explicitly by the caller. This
     function never infers loads from the ODB or from model names.
     """
     if len(applied_components) != len(reaction_components):
@@ -69,6 +84,9 @@ def check_declared_load_balance(applied_components, reaction_components,
             zip(applied_components, reaction_components), 1):
         checks.append(check_balance(
             "global_load_balance_RF%d" % i,
-            reaction, -float(applied), tolerance, unit
+            reaction,
+            -float(applied),
+            tolerance,
+            unit,
         ))
     return evaluate_checks(tuple(checks))
