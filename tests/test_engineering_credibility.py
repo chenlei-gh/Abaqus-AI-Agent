@@ -490,3 +490,27 @@ def test_quantitative_contact_check_requires_explicit_region_scope():
         and item.status == "insufficient_evidence"
         for item in report.diagnostics
     )
+
+def test_contact_contract_requires_cstatus_for_behavior_expectation():
+    import pytest
+    with pytest.raises(ValueError):
+        ExpectedContactBehavior(
+            expected_state="contact",
+            required_outputs=("COPEN",),
+        )
+
+
+def test_contact_contract_requires_copen_for_quantitative_limits():
+    import pytest
+    with pytest.raises(ValueError):
+        ExpectedContactBehavior(
+            expected_state="contact",
+            expected_separation=0.1,
+            required_outputs=("CSTATUS",),
+        )
+    with pytest.raises(ValueError):
+        ExpectedContactBehavior(
+            expected_state="contact",
+            allowed_initial_interference=0.01,
+            required_outputs=("CSTATUS",),
+        )
