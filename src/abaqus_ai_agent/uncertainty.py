@@ -152,3 +152,89 @@ def execute_uncertainty(
         outputs=tuple(outputs),
         method="tolerance_bounds",
     ), aggregate_uncertainty_outputs(outputs)
+
+
+def sample_uniform_parameters(parameters, sample_count, seed=0):
+    """Generate reproducible uniform samples from explicit parameter bounds."""
+    import random
+    if int(sample_count) < 1:
+        raise ValueError("sample_count must be positive")
+    params = tuple(parameters)
+    if not params:
+        raise ValueError("parameters must not be empty")
+    rng = random.Random(seed)
+    return tuple(
+        {
+            parameter.name: float(parameter.lower)
+            + rng.random() * (float(parameter.upper) - float(parameter.lower))
+            for parameter in params
+        }
+        for _ in range(int(sample_count))
+    )
+
+
+def summarize_probabilistic_outputs(outputs, quantiles=(0.05, 0.5, 0.95)):
+    """Summarize completed outputs without assuming a fitted distribution."""
+    completed = [item for item in outputs if item.get("status") == "completed"]
+    if not completed:
+        return ()
+    result = []
+    keys = sorted({
+        key for item in completed
+        for key, value in (item.get("values") or {}).items()
+        if isinstance(value, (int, float))
+    })
+    for key in keys:
+        values = sorted(
+            float(item["values"][key])
+            for item in completed
+            if isinstance(item.get("values", {}).get(key), (int, float))
+        )
+        n = len(values)
+        mean = sum(values) / n
+        variance = sum((value - mean) ** 2 for value in values) / n
+        quantile_values = {}
+        for q in quantiles:
+            q = float(q)
+            if not 0.0 <= q <= 1.0:
+                raise ValueError("quantiles must be between 0 and 1")
+            position = q * (n - 1)
+            lo = int(position)
+            hi = min(lo + 1, n - 1)
+            fraction = position - lo
+            quantile_values[str(q)] = values[lo] + fraction * (values[hi] - values[lo])
+        result.append({
+            "value_key": key,
+            "count": n,
+            "mean": mean,
+            "stddev_population": variance ** 0.5,
+            "min": values[0],
+            "max": values[-1],
+            "quantiles": quantile_values,
+        })
+    return tuple(result)
+
+
+def execute_probabilistic_uncertainty(
+    executor, runner, model_name, job_name, parameters, sample_count,
+    action_plan_factory, criteria=(), seed=0, timeout=3600,
+):
+    """Execute reproducible uniform samples through the existing AnalysisRunner."""
+    if not callable(action_plan_factory):
+        raise TypeError("action_plan_factory must be callable")
+    samples = sample_uniform_parameters(parameters, sample_count, seed=seed)
+    scenarios = tuple(
+        UncertaintyScenario(
+            name="sample_%04d" % index,
+            parameters=dict(sample),
+            model_name=model_name,
+            job_name="%s_sample_%04d" % (job_name, index),
+            action_plan=tuple(action_plan_factory(dict(sample))),
+        )
+        for index, sample in enumerate(samples, 1)
+    )
+    report, _ = execute_uncertainty(
+        executor, runner, model_name, job_name, scenarios,
+        criteria=criteria, timeout=timeout,
+    )
+    return report, summarize_probabilistic_outputs(report.outputs)
