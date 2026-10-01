@@ -84,7 +84,7 @@ def action_to_script(action):
         return "from abaqusConstants import *; mdb.models[%s].PeriodicAmplitude(name=%s, frequency=%r, start=%r, a_0=%r, data=%r, timeSpan=%s)" % (_q(m), _q(p["name"]), p["frequency"], p["start"], p["a0"], tuple(tuple(x) for x in p["data"]), p.get("time_span", "STEP"))
     if k == "equally_spaced_amplitude":
         args = ["name=%s" % _q(p["name"]), "fixedInterval=%r" % p["fixed_interval"],
-                "data=%r" % tuple(p["data"]), "begin=%r" % p.get("begin", 0.0),
+                "data=%r" % (tuple(p["data"]),), "begin=%r" % p.get("begin", 0.0),
                 "timeSpan=%s" % p.get("time_span", "STEP")]
         if p.get("smooth") is not None: args.append("smooth=%r" % p["smooth"])
         return "from abaqusConstants import *; mdb.models[%s].EquallySpacedAmplitude(%s)" % (_q(m), ", ".join(args))
