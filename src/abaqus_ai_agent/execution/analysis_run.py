@@ -353,7 +353,7 @@ class AnalysisRunner:
             ), Evidence(
                 kind="acceptance", source="acceptance", locator=job_name,
                 value=accepted
-            ))).extend(tuple(verification_evidence)).extend(tuple(benchmark_evidence)).extend(result_evidence)
+            ))).extend(tuple(verification_evidence)).extend(tuple(benchmark_evidence)).extend(tuple(experimental_evidence)).extend(result_evidence)
             return run.with_state(
                 AnalysisRunState.ACCEPTED if accepted.passed
                 else AnalysisRunState.RESULTS_EXTRACTED,
@@ -364,7 +364,6 @@ class AnalysisRunner:
                     run.metadata,
                     result_values=dict(result_values),
                     result_source=result_source,
-                    experimental_validation=experimental_validation,
                     experimental_validation=experimental_validation,
                 ))
         except Exception as exc:
