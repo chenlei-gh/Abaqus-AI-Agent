@@ -138,11 +138,11 @@ def action_to_script(action):
     if k == "generate_mesh":
         return "mdb.models[%s].parts[%s].generateMesh()" % (_q(m), _q(p["part"]))
     if k == "bias_seed_size":
-        return "mdb.models[%s].parts[%s].seedEdgeByBias(edges=%s, biasMethod=DOUBLE, end1Edges=%s, end2Edges=%s, ratio=%r, constraint=%s)" % (
-            _q(m), _q(p["part"]), p["region_expression"], p["end1"], p["end2"], p["size"], p.get("constraint", "FREE"))
+        return "mdb.models[%s].parts[%s].seedEdgeByBias(edges=%s, biasMethod=SINGLE, %sEdges=%s, ratio=%r, constraint=%s)" % (
+            _q(m), _q(p["part"]), p["region_expression"], p["ratio"], p["end"], p.get("constraint", "FREE"))
     if k == "bias_seed_number":
-        return "mdb.models[%s].parts[%s].seedEdgeByBias(edges=%s, biasMethod=DOUBLE, end1Edges=%s, end2Edges=%s, number=%d, constraint=%s)" % (
-            _q(m), _q(p["part"]), p["region_expression"], p["end1"], p["end2"], int(p["number"]), p.get("constraint", "FREE"))
+        return "mdb.models[%s].parts[%s].seedEdgeByBias(edges=%s, biasMethod=SINGLE, %sEdges=%s, number=%d, constraint=%s)" % (
+            _q(m), _q(p["part"]), p["region_expression"], p["ratio"], int(p["number"]), p.get("constraint", "FREE"))
     if k == "sweep_path":
         sense = p.get("sense", "FORWARD")
         if sense not in ("FORWARD", "REVERSE"):
