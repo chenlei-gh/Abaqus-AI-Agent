@@ -43,3 +43,5 @@ from .correction import execute_authorized_correction
 
 from .contracts.experimental_validation import ExperimentalObservation, ExperimentalValidationReport, ExperimentalValidationResult
 from .experimental_validation import validate_observations, validate_result_values
+
+from .fatigue import evaluate_fatigue_history, rainflow_count, stress_cycle_statistics, sn_cycles_to_failure
