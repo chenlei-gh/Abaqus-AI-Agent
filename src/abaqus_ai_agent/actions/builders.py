@@ -1,4 +1,5 @@
 from ..contracts.action import AbaqusAction
+from ..contracts.element_strategy import ElementStrategy, resolve_element_code
 
 def _action(kind, model, target=None, **parameters):
     return AbaqusAction(kind, model, target, parameters, True)
@@ -24,7 +25,20 @@ def sweep_path(model, part, region_expression, edge_expression, sense="FORWARD")
     return _action("sweep_path", model, region_expression, part=part, region_expression=region_expression,
                    edge_expression=edge_expression, sense=sense)
 def generate_mesh(model, part): return _action("generate_mesh", model, part=part)
-def element_type(model, part, region_expression, elem_code="C3D8R", library="STANDARD"): return _action("element_type", model, part=part, region_expression=region_expression, elem_code=elem_code, library=library)
+def element_type(model, part, region_expression, elem_code="C3D8R", library="STANDARD"):
+    return _action("element_type", model, part=part, region_expression=region_expression, elem_code=elem_code, library=library)
+
+def element_strategy(model, part, region_expression, family, dimension, shape,
+                     order="LINEAR", formulation="REDUCED", integration="DEFAULT",
+                     library="STANDARD"):
+    strategy = ElementStrategy(family, dimension, shape, order, formulation, integration)
+    code = resolve_element_code(strategy)
+    return _action(
+        "element_strategy", model, part=part, region_expression=region_expression,
+        elem_code=code, library=library, family=strategy.family,
+        dimension=strategy.dimension, shape=strategy.shape, order=strategy.order,
+        formulation=strategy.formulation, integration=strategy.integration,
+    )
 
 def static_step(model, name="Step-1", previous="Initial", nlgeom=False, time_period=1.0,
                 stabilization_method="NONE", stabilization_magnitude=None,
