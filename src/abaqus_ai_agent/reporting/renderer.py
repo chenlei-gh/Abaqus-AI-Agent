@@ -16,16 +16,17 @@ def render_markdown(report):
         ("2. Model Information", report.model), ("3. Material", report.materials),
         ("4. Boundary Conditions", report.boundary_conditions), ("5. Loads", report.loads),
         ("6. Solver / Analysis Procedure", report.solver), ("7. Mesh", report.mesh),
-        ("8. Results", report.results), ("9. Engineering Checks", report.engineering_checks),
-        ("10. Acceptance Criteria", report.acceptance),
-        ("11. Sensitivity / Uncertainty", (report.sensitivity, report.uncertainty)),
-        ("12. Fatigue", report.fatigue), ("13. Contact Diagnostics", report.contact_diagnostics),
-        ("14. Assumptions / Limitations", (report.assumptions, report.limitations)),
-        ("15. Evidence", report.evidence), ("16. Provenance", report.provenance)]
+        ("8. Results", report.results),
+        ("9. Figures", report.figures), ("10. Engineering Checks", report.engineering_checks),
+        ("11. Acceptance Criteria", report.acceptance),
+        ("12. Sensitivity / Uncertainty", (report.sensitivity, report.uncertainty)),
+        ("13. Fatigue", report.fatigue), ("14. Contact Diagnostics", report.contact_diagnostics),
+        ("15. Assumptions / Limitations", (report.assumptions, report.limitations)),
+        ("16. Evidence", report.evidence), ("17. Provenance", report.provenance)]
     for heading, value in sections:
         if value in (None, {}, (), [], ""): continue
         lines += ["## %s" % heading, "", "```json", json.dumps(_plain(value), indent=2, ensure_ascii=False, default=str), "```", ""]
-    lines += ["## 17. Conclusion", "", _conclusion(report), ""]
+    lines += ["## 18. Conclusion", "", _conclusion(report), ""]
     return "\n".join(lines)
 
 def render_html(report):
