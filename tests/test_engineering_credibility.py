@@ -412,3 +412,38 @@ def test_contact_report_helpers_match_acceptance_blocking_statuses():
     ))
     assert not report.passed
     assert len(report.failed) == 2
+
+def test_contact_unmapped_status_does_not_pass_as_contact():
+    expected = ExpectedContactBehavior(
+        expected_state="contact",
+        required_outputs=("CSTATUS",),
+    )
+    evidence = {
+        "fields": {
+            "CSTATUS": {
+                "status": "available",
+                "values": [{"data": 1.0}, {"data": 2.0}],
+            },
+        },
+        "history": {"status": "available"},
+    }
+    diagnostic = expected_contact_state(evidence, expected)
+    assert diagnostic.status == "ambiguous"
+
+
+def test_contact_either_rejects_unmapped_status():
+    expected = ExpectedContactBehavior(
+        expected_state="either",
+        required_outputs=("CSTATUS",),
+    )
+    evidence = {
+        "fields": {
+            "CSTATUS": {
+                "status": "available",
+                "values": [{"data": "open"}, {"data": "unknown-state"}],
+            },
+        },
+        "history": {"status": "available"},
+    }
+    diagnostic = expected_contact_state(evidence, expected)
+    assert diagnostic.status == "ambiguous"
