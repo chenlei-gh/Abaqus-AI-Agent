@@ -49,6 +49,16 @@ class EngineeringReportData:
             sections.setdefault("metadata", {})
             sections["metadata"] = dict(sections["metadata"], postprocess_profile=profile)
         sections.setdefault("acceptance", getattr(run, "acceptance_passed", None))
+        if "mesh" not in sections:
+            sections["mesh"] = {}
+        if getattr(run, "metadata", None):
+            if run.metadata.get("mesh_strategy") is not None:
+                sections["mesh"] = dict(sections["mesh"], strategy=run.metadata["mesh_strategy"])
+        if getattr(run, "evidence", None):
+            mesh_quality = tuple(x for x in run.evidence.items if getattr(x, "kind", None) == "mesh_quality")
+            mesh_convergence = tuple(x for x in run.evidence.items if getattr(x, "kind", None) == "mesh_convergence")
+            if mesh_quality or mesh_convergence:
+                sections["mesh"] = dict(sections["mesh"], quality=mesh_quality, convergence=mesh_convergence)
         return cls(title or "Abaqus Engineering Analysis Report", objective=objective,
                    results=tuple(sections.pop("results", ()) or ()),
                    figures=tuple(sections.pop("figures", ()) or ()),
