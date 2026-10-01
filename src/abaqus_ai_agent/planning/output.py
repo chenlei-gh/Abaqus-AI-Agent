@@ -44,7 +44,9 @@ def plan_outputs(criteria=(), outputs=(), postprocess_profile=None):
     from different analysis steps cannot be silently emitted into one request.
     """
     if postprocess_profile is not None:
-        criteria = tuple(criteria or ()) + criteria_from_postprocess_profile(postprocess_profile)
+        profile_criteria = criteria_from_postprocess_profile(postprocess_profile)
+        existing_keys = {c.get("value_key") for c in criteria or () if isinstance(c, dict)}
+        criteria = tuple(criteria or ()) + tuple(c for c in profile_criteria if c.get("value_key") not in existing_keys)
     requirements = requirements_from_criteria(criteria)
     fields = set(required_field_variables(requirements))
     history_requirements = tuple(
