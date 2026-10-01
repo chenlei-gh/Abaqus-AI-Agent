@@ -85,7 +85,7 @@ The current action layer covers:
 - INP export
 - ODB field CSV export
 - mesh-convergence evaluation
-- contract-level fatigue workflow for post-processing existing Abaqus stress histories
+- deterministic fatigue post-processing for existing Abaqus stress histories: Rainflow cycle counting, explicit range/amplitude/mean semantics, half/full-cycle weighting, Goodman correction, log-log S-N interpolation, and Palmgren-Miner damage
 - bounded probabilistic uncertainty execution with reproducible sampling/statistics
 - deterministic experimental validation against explicit measured observations
 
@@ -325,7 +325,7 @@ The project does not silently assume that an index, name, or ordering is a stabl
 
 A capability is not considered implemented merely because an API-shaped class exists.
 
-For example, the current fatigue capability is a **contract/workflow for post-processing existing Abaqus stress histories**, not a claim that the repository contains a complete fatigue solver.
+For example, the current fatigue capability is a **deterministic post-processing engine for existing scalar Abaqus stress histories**. It explicitly covers Rainflow counting, half/full-cycle weighting, stress range/amplitude/mean semantics, Goodman correction, log-log S-N interpolation, and Palmgren-Miner damage. It does **not** claim critical-plane or non-proportional multiaxial fatigue criteria.
 
 ### 6. Release-aware compatibility
 
