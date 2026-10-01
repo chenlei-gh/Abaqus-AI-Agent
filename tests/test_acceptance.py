@@ -74,3 +74,32 @@ def test_result_acceptance_blocks_failed_engineering_checks():
     )
     assert not result.passed
     assert "engineering_checks_failed" in result.failures
+
+def test_result_acceptance_contact_only_status_mapping():
+    from abaqus_ai_agent.acceptance import evaluate_result_acceptance
+    from abaqus_ai_agent.contracts.contact import (
+        ContactDiagnostic,
+        ContactDiagnosticReport,
+    )
+
+    cases = (
+        ("pass", True, ()),
+        ("warning", True, ()),
+        ("fail", False, ("contact:contact_state:fail",)),
+        ("insufficient_evidence", False, (
+            "contact:contact_state:insufficient_evidence",
+        )),
+        ("ambiguous", False, ("contact:contact_state:ambiguous",)),
+        ("not_applicable", True, ()),
+    )
+    for diagnostic_status, expected_passed, expected_failures in cases:
+        result = evaluate_result_acceptance(
+            "completed",
+            values=None,
+            criteria=(),
+            contact_diagnostics=ContactDiagnosticReport((
+                ContactDiagnostic("contact_state", diagnostic_status),
+            )),
+        )
+        assert result.passed is expected_passed
+        assert result.failures == expected_failures
