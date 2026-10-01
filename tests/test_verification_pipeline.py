@@ -222,3 +222,15 @@ def test_contact_not_applicable_is_not_silent_pass():
     )
     assert result.passed
     assert "contact_diagnostics_not_applicable" in result.warnings
+
+
+def test_agent_analysis_run_exposes_all_verification_domains():
+    from abaqus_ai_agent.agent import AbaqusAIAgent
+    import inspect
+
+    signature = inspect.signature(AbaqusAIAgent.analysis_run)
+    for name in (
+        "mesh_quality", "mesh_convergence", "fatigue",
+        "contact_diagnostics", "sensitivity", "uncertainty",
+    ):
+        assert name in signature.parameters
