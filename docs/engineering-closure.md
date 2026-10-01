@@ -77,7 +77,7 @@ The B28 smoke harness must still be executed on an actual Abaqus V5 R2018/B28 in
 
 ### Mesh strategy and verification
 
-The mesh action layer now exposes global/local seeding, biased edge seeding, mesh controls, explicit sweep-path assignment, element-type assignment, generation, lightweight custom prechecks, and native Abaqus mesh verification. Native verification delegates analysis-quality checks to Abaqus rather than inventing a solver-equivalent Jacobian standard. Mesh quality and mesh convergence remain separate claims: convergence must be demonstrated against an engineering quantity of interest rather than inferred from element quality alone.
+The mesh action layer now exposes global/local seeding, biased edge seeding, mesh controls, explicit sweep-path assignment, semantic element-strategy mapping plus legacy element-type assignment, generation, lightweight custom prechecks, and native Abaqus mesh verification. Native verification delegates analysis-quality checks to Abaqus rather than inventing a solver-equivalent Jacobian standard. Mesh quality and mesh convergence remain separate claims: convergence must be demonstrated against an engineering quantity of interest rather than inferred from element quality alone.
 
 
 ### Fatigue post-processing
