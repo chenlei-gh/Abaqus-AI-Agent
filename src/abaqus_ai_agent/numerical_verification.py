@@ -88,7 +88,7 @@ def verify_richardson(name, values, refinement_ratio, tolerance, safety_factor=1
             message="invalid refinement difference ratio",
         )
 
-    observed_order = math.log(quotient) / math.log(ratio)
+    observed_order = -math.log(quotient) / math.log(ratio)
     if observed_order <= 0.0 or not math.isfinite(observed_order):
         return NumericalVerificationResult(
             name=name,
