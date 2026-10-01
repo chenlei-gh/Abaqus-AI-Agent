@@ -60,6 +60,10 @@ def validate_action(action):
     if action.action_type == "initial_stress" and not action.parameters.get("name"):
         raise ValueError("name is required for initial_stress")
     if action.action_type in ("static_step", "dynamic_explicit_step", "implicit_dynamic_step", "heat_transfer_step", "coupled_temp_displacement_step"):
+        if action.action_type in ("static_step", "implicit_dynamic_step", "heat_transfer_step", "coupled_temp_displacement_step"):
+            amplitude = action.parameters.get("amplitude")
+            if amplitude is not None and amplitude not in ("RAMP", "STEP"):
+                raise ValueError("step amplitude must be RAMP or STEP")
         if action.action_type == "dynamic_explicit_step":
             value = action.parameters.get("max_increment")
             if value is not None and value <= 0:
