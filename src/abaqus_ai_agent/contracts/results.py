@@ -1,6 +1,8 @@
 from dataclasses import dataclass, field as dataclass_field
 from typing import Any, Dict, Optional, Tuple
 
+from .units import validate_quantity_unit
+
 
 @dataclass(frozen=True)
 class ResultRequirement:
@@ -20,6 +22,7 @@ class ResultRequirement:
     history_variable: Optional[str] = None
     unit: str = ""
     output_kind: str = "field"
+    quantity: Optional[str] = None
     metadata: Dict[str, Any] = dataclass_field(default_factory=dict)
 
     def __post_init__(self):
@@ -39,6 +42,41 @@ class ResultExtraction:
     value: float
     locator: Dict[str, Any] = dataclass_field(default_factory=dict)
     evidence: Tuple[Dict[str, Any], ...] = ()
+
+
+
+_RESULT_QUANTITIES = {
+    "max_stress": "stress",
+    "max_mises": "stress",
+    "max_displacement": "displacement",
+    "max_u": "displacement",
+    "min_displacement": "displacement",
+    "max_temperature": "temperature",
+    "max_strain": None,
+    "max_reaction_force": "force",
+    "max_rf": "force",
+    "frequency": "frequency",
+}
+
+
+def _infer_quantity(key, field=None, history_variable=None, output_kind="field"):
+    quantity = _RESULT_QUANTITIES.get(key)
+    if quantity:
+        return quantity
+    if field == "S":
+        return "stress"
+    if field == "U":
+        return "displacement"
+    if field == "RF":
+        return "force"
+    if field == "NT11":
+        return "temperature"
+    if output_kind == "history" and history_variable:
+        if str(history_variable).startswith("ALL"):
+            return "energy"
+        if str(history_variable).startswith("RF"):
+            return "force"
+    return None
 
 
 _FIELD_ALIASES = {
@@ -64,13 +102,25 @@ def requirement_from_criterion(criterion):
         data.setdefault("name", criterion.get("name", key))
         data.setdefault("value_key", key)
         data.setdefault("unit", criterion.get("unit", ""))
+        data.setdefault("quantity", _infer_quantity(
+            key,
+            field=data.get("field"),
+            history_variable=data.get("history_variable"),
+            output_kind=data.get("output_kind", "field"),
+        ))
+        if data.get("unit") and data.get("quantity"):
+            validate_quantity_unit(
+                data["quantity"], data["unit"], criterion.get("unit_system")
+            )
         return ResultRequirement(**data)
 
     if key == "frequency":
+        unit = criterion.get("unit", "Hz")
+        validate_quantity_unit("frequency", unit, criterion.get("unit_system"))
         return ResultRequirement(
             name=criterion.get("name", key), value_key=key,
             aggregation="last", output_kind="frame_value",
-            step=criterion.get("step"), unit=criterion.get("unit", "Hz"))
+            step=criterion.get("step"), unit=unit, quantity="frequency")
 
     alias = _FIELD_ALIASES.get(key)
     if not alias:
@@ -80,12 +130,16 @@ def requirement_from_criterion(criterion):
 
     field, invariant = alias
     aggregation = "min" if key == "min_displacement" else "max"
+    quantity = _infer_quantity(key, field=field, output_kind="field")
+    unit = criterion.get("unit", "")
+    if unit and quantity:
+        validate_quantity_unit(quantity, unit, criterion.get("unit_system"))
     return ResultRequirement(
         name=criterion.get("name", key), value_key=key,
         field=field, invariant=invariant, aggregation=aggregation,
         step=criterion.get("step"), frame=criterion.get("frame", -1),
         position=criterion.get("position"), region=criterion.get("region"),
-        unit=criterion.get("unit", ""))
+        unit=unit, quantity=quantity)
 
 
 def requirements_from_criteria(criteria):
