@@ -63,18 +63,20 @@ class AbaqusAIAgent:
         from .contracts.report import EngineeringReportData
         return EngineeringReportData.from_analysis(run, title=title, objective=objective, **sections)
 
-    def plan_outputs(self, criteria=(), outputs=()):
+    def plan_outputs(self, criteria=(), outputs=(), postprocess_profile=None):
         from .planning.output import plan_outputs
-        return plan_outputs(criteria, outputs)
+        return plan_outputs(criteria, outputs, postprocess_profile=postprocess_profile)
 
     def analysis_run(self, model_name, job_name, odb_path=None, criteria=(), result_values=None,
-                     numerical_verification=None, engineering_checks=None,
+                     numerical_verification=None, engineering_checks=None, engineering_intent=None,
+                     postprocess_profile=None,
                      action_plan=(), environment=None):
         from .execution.analysis_run import AnalysisRunner
         return AnalysisRunner(self.executor).run(
             model_name, job_name, odb_path=odb_path, criteria=criteria,
             result_values=result_values, numerical_verification=numerical_verification,
-            engineering_checks=engineering_checks, action_plan=action_plan,
+            engineering_checks=engineering_checks, engineering_intent=engineering_intent,
+            postprocess_profile=postprocess_profile, action_plan=action_plan,
             environment=environment)
 
     def submit(self, job_name, wait=False):
