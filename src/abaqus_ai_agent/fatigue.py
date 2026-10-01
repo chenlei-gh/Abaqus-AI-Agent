@@ -56,15 +56,39 @@ def rainflow_count(values: Iterable[float]):
 
 
 def _goodman(amplitude, mean, ultimate_strength):
+    amplitude = float(amplitude)
+    mean = float(mean)
+    ultimate_strength = float(ultimate_strength)
+    if not math.isfinite(amplitude) or not math.isfinite(mean) or not math.isfinite(ultimate_strength):
+        raise ValueError("Goodman inputs must be finite")
+    if amplitude <= 0:
+        raise ValueError("Goodman amplitude must be positive")
     if ultimate_strength <= 0:
         raise ValueError("ultimate_strength must be positive")
-    denominator = 1.0 - mean / float(ultimate_strength)
+
+    # fe-safe's measured-signal S-N Goodman implementation uses the normal
+    # Goodman line for tensile mean stress and extends the line into the
+    # compressive region with half the original slope.
+    slope_factor = 1.0 if mean >= 0.0 else 0.5
+    denominator = 1.0 - mean / (slope_factor * ultimate_strength)
     if denominator <= 0:
-        raise ValueError("Goodman correction is undefined for mean stress at or above ultimate strength")
-    return float(amplitude) / denominator
+        raise ValueError(
+            "Goodman correction is undefined for mean stress at or above "
+            "ultimate strength"
+        )
+    return amplitude / denominator
+
 
 def goodman_corrected_amplitude(amplitude, mean, ultimate_strength):
-    """Return zero-mean-equivalent amplitude using the declared UTS."""
+    """Return zero-mean-equivalent amplitude using the declared UTS.
+
+    For mean >= 0, this is the conventional Goodman relation:
+        Sa0 = Sa / (1 - Sm / UTS)
+
+    For compressive mean stress, the fe-safe measured-signal S-N method
+    extends the Goodman line with half the original slope:
+        Sa0 = Sa / (1 - Sm / (0.5 * UTS))
+    """
     return _goodman(float(amplitude), float(mean), float(ultimate_strength))
 
 
