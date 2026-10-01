@@ -53,7 +53,8 @@ def test_result_extraction_uses_max_locator():
         "step": "Step-1"
     }])
     assert values["max_stress"] == 25.0
-    assert evidence[0]["locator"]["node_label"] == 2
+    assert evidence[0].metadata["value_key"] == "max_stress"
+    assert evidence[0].locator.find("'node_label': 2") >= 0
 
 
 def test_artifact_missing_is_explicit():
