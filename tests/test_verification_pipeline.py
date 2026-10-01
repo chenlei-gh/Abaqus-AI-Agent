@@ -2,6 +2,7 @@ from unittest.mock import patch
 
 from abaqus_ai_agent.execution.analysis_run import AnalysisRunner
 from abaqus_ai_agent.contracts.numerical import NumericalVerificationResult
+from abaqus_ai_agent.contracts.results import ResultExtraction, ResultRequirement
 from abaqus_ai_agent.contracts.engineering_checks import (
     EngineeringCheck,
     EngineeringCheckReport,
@@ -64,9 +65,18 @@ def _run(result_values=True, **kwargs):
         if result_values is not False:
             call["result_values"] = {"tip_displacement": 0.5}
             return AnalysisRunner(executor).run(**call, **kwargs)
+        extraction = ResultExtraction(
+            ResultRequirement(
+                name="tip_displacement",
+                value_key="tip_displacement",
+                field="U",
+                step="Step-1",
+            ),
+            0.5,
+        )
         with patch(
-            "abaqus_ai_agent.execution.results.extract_criteria",
-            return_value=({"tip_displacement": 0.5}, ()),
+            "abaqus_ai_agent.execution.results.extract_requirements",
+            return_value=((extraction,), ()),
         ):
             return AnalysisRunner(executor).run(**call, **kwargs)
 
