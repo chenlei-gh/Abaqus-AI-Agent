@@ -109,7 +109,7 @@ def export_odb_csv(model, odb_path, output_path, step=None, frame=-1, variable="
     return _action("export_odb_csv", model, odb_path=odb_path, output_path=output_path,
                    step=step, frame=frame, variable=variable, component=component, position=position)
 
-def tie(model, name, master_expression, slave_expression): return _action("tie", model, name=name, master_expression=master_expression, slave_expression=slave_expression, property=None)
+def tie(model, name, master_expression, slave_expression): return _action("tie", model, name=name, master_expression=master_expression, slave_expression=slave_expression)
 
 def local_seed_size(model, part, region_expression, size, constraint="FREE"):
     return _action("local_seed_size", model, region_expression, part=part, region_expression=region_expression, size=size, constraint=constraint)
