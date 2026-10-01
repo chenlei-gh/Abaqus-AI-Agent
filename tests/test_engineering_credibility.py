@@ -90,3 +90,41 @@ def test_declared_load_balance_does_not_infer_applied_load():
     )
     assert report.passed
     assert report.checks[0].name == "global_load_balance_RF1"
+
+
+def test_sensitivity_case_normalization():
+    from abaqus_ai_agent.sensitivity import build_sensitivity_cases
+    cases = build_sensitivity_cases(
+        "Model-1", "Job-1", (SensitivityCase("load_plus", {"load": 1.1}),)
+    )
+    assert cases[0].model_name == "Model-1"
+    assert cases[0].job_name == "Job-1_load_plus"
+
+
+def test_sensitivity_execution_uses_existing_runner():
+    from abaqus_ai_agent.sensitivity import execute_sensitivity
+
+    class Run:
+        state = type("S", (), {"value": "odb_validated"})()
+        diagnostics = ()
+
+    class Runner:
+        calls = []
+        def run(self, *args, **kwargs):
+            self.calls.append((args, kwargs))
+            return Run()
+
+    runner = Runner()
+    cases = (SensitivityCase("load_plus", {"load": 1.1}),)
+    report = execute_sensitivity(
+        executor=object(),
+        runner=runner,
+        model_name="Model-1",
+        job_name="Job-1",
+        baseline_values={"stress": 100.0},
+        cases=cases,
+        value_extractor=lambda executor, run, case: {"stress": 120.0},
+    )
+    assert report.completed
+    assert report.ranking == (("stress", 0.2),)
+    assert runner.calls[0][0] == ("Model-1", "Job-1_load_plus")
