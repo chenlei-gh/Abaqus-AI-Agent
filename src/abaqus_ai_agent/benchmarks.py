@@ -29,9 +29,59 @@ def _criterion_passes(actual, criterion):
     return _OPERATORS[operator](actual, effective_limit)
 
 
-def evaluate_benchmark(case, observed, acceptance):
+def benchmark_result_criteria(case):
+    """Build deterministic ODB result requirements for an executable benchmark."""
+    criteria = []
+    for criterion in case.acceptance:
+        source = dict(criterion.get("result") or {})
+        source_key = criterion.get("observed_value_key", criterion["value_key"])
+        source["value_key"] = source_key
+        source.setdefault("name", source_key)
+        source["operator"] = criterion.get("operator", "<=")
+        source["limit"] = criterion.get("limit", 0.0)
+        criteria.append(source)
+    return tuple(criteria)
+
+
+def derive_benchmark_observations(case, result_values, reference_values=None):
+    """Derive explicit benchmark metrics from extracted ODB values."""
+    references = dict(reference_values or {})
+    observed, evidence, failures = {}, [], []
+    for criterion in case.acceptance:
+        key = criterion["value_key"]
+        source_key = criterion.get("observed_value_key", key)
+        if source_key not in result_values:
+            failures.append("missing:%s" % source_key)
+            evidence.append({"value_key": key, "status": "missing"})
+            continue
+        actual = float(result_values[source_key])
+        metric = criterion.get("metric")
+        if metric is None:
+            observed[key] = actual
+            evidence.append({"value_key": key, "actual": actual, "metric": "identity", "status": "available"})
+            continue
+        if metric != "relative_error":
+            raise ValueError("unsupported benchmark metric: %s" % metric)
+        reference_key = criterion.get("reference_key", key)
+        if reference_key not in references:
+            failures.append("missing_reference:%s" % reference_key)
+            evidence.append({"value_key": key, "reference_key": reference_key, "status": "missing_reference"})
+            continue
+        reference = float(references[reference_key])
+        value = abs(actual - reference) / max(abs(reference), 1e-30)
+        observed[key] = value
+        evidence.append({
+            "value_key": key, "actual": actual, "reference": reference,
+            "reference_key": reference_key, "metric": metric,
+            "derived": value, "status": "available",
+        })
+    return observed, tuple(evidence), tuple(failures)
+
+
+def evaluate_benchmark(case, observed, acceptance=None, pre_failures=()):
     """Evaluate deterministic benchmark criteria without inferring physics."""
-    failures = []
+    acceptance = tuple(acceptance if acceptance is not None else case.acceptance)
+    failures = list(pre_failures)
     evidence = []
     for criterion in acceptance:
         key = criterion["value_key"]
