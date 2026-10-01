@@ -57,7 +57,7 @@ def _run(result_values=True, **kwargs):
             call["result_values"] = {"tip_displacement": 0.5}
             return AnalysisRunner(executor).run(**call, **kwargs)
         with patch(
-            "abaqus_ai_agent.execution.analysis_run.extract_criteria",
+            "abaqus_ai_agent.execution.results.extract_criteria",
             return_value=({"tip_displacement": 0.5}, ()),
         ):
             return AnalysisRunner(executor).run(**call, **kwargs)
