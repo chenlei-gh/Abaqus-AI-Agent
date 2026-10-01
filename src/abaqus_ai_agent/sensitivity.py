@@ -67,9 +67,36 @@ def execute_sensitivity(executor, runner, model_name, job_name, baseline_values,
                 result_values=None,
                 timeout=timeout,
             )
-            values = dict(value_extractor(executor, run, case) or {})
-            status = "completed" if run.state.value in ("accepted", "completed", "results_extracted", "odb_validated") else "failed"
-            diagnostics = tuple(run.diagnostics or ())
+            execution_completed = run.state.value != "failed"
+            try:
+                values = dict(value_extractor(executor, run, case) or {})
+                result_status = "available" if values else "unavailable"
+            except Exception as exc:
+                values = {}
+                result_status = "error"
+                extraction_error = {"error": str(exc), "stage": "result_extraction"}
+            else:
+                extraction_error = None
+
+            acceptance_value = getattr(run, "acceptance_passed", None)
+            acceptance_status = (
+                "passed" if acceptance_value is True
+                else "failed" if acceptance_value is False
+                else "not_evaluated"
+            )
+            status = (
+                "completed"
+                if execution_completed and result_status == "available"
+                else "failed"
+            )
+            diagnostics = list(run.diagnostics or ())
+            if extraction_error:
+                diagnostics.append(extraction_error)
+            if acceptance_status == "failed":
+                diagnostics.append({
+                    "stage": "acceptance",
+                    "acceptance_passed": False,
+                })
             results.append(SensitivityResult(
                 case=case,
                 values=values,
@@ -79,7 +106,10 @@ def execute_sensitivity(executor, runner, model_name, job_name, baseline_values,
                     if key in baseline
                 },
                 status=status,
-                diagnostics=diagnostics,
+                execution_status="completed" if execution_completed else "failed",
+                result_status=result_status,
+                acceptance_status=acceptance_status,
+                diagnostics=tuple(diagnostics),
             ))
         except Exception as exc:
             results.append(SensitivityResult(
