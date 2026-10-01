@@ -10,7 +10,8 @@ from .contracts.session import SessionHealth
 from .contracts.results import ResultRequirement, ResultExtraction
 from .contracts.metrics import EngineeringMetric
 from .contracts.solver_selection import SolverSelection, select_solver
-from .contracts.report import EngineeringReportData
+from .contracts.report import EngineeringReportData, ReportFigure
+from .contracts.postprocess import PostProcessingProfile, profile_for_solver_selection
 from .contracts.fatigue import FatigueAnalysisIntent, FatigueWorkflow
 from .contracts.convergence import MeshConvergencePoint, MeshConvergencePolicy, MeshConvergenceResult
 from .contracts.engineering_checks import EngineeringCheck, EngineeringCheckReport
