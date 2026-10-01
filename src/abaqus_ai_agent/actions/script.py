@@ -138,11 +138,15 @@ def action_to_script(action):
     if k == "generate_mesh":
         return "mdb.models[%s].parts[%s].generateMesh()" % (_q(m), _q(p["part"]))
     if k == "bias_seed_size":
-        return "mdb.models[%s].parts[%s].seedEdgeByBias(edges=%s, biasMethod=SINGLE, %sEdges=%s, ratio=%r, constraint=%s)" % (
-            _q(m), _q(p["part"]), p["region_expression"], p["ratio"], p["end"], p.get("constraint", "FREE"))
+        end = str(p.get("end", "END1")).upper()
+        if end not in ("END1", "END2"): raise ValueError("bias seed end must be END1 or END2")
+        edge_arg = "end1Edges" if end == "END1" else "end2Edges"
+        return "from abaqusConstants import *; mdb.models[%s].parts[%s].seedEdgeByBias(biasMethod=SINGLE, %s=%s, minSize=%r, maxSize=%r, constraint=%s)" % (_q(m), _q(p["part"]), edge_arg, p["region_expression"], p["min_size"], p["max_size"], p.get("constraint", "FREE"))
     if k == "bias_seed_number":
-        return "mdb.models[%s].parts[%s].seedEdgeByBias(edges=%s, biasMethod=SINGLE, %sEdges=%s, number=%d, constraint=%s)" % (
-            _q(m), _q(p["part"]), p["region_expression"], p["ratio"], int(p["number"]), p.get("constraint", "FREE"))
+        end = str(p.get("end", "END1")).upper()
+        if end not in ("END1", "END2"): raise ValueError("bias seed end must be END1 or END2")
+        edge_arg = "end1Edges" if end == "END1" else "end2Edges"
+        return "from abaqusConstants import *; mdb.models[%s].parts[%s].seedEdgeByBias(biasMethod=SINGLE, %s=%s, number=%d, ratio=%r, constraint=%s)" % (_q(m), _q(p["part"]), edge_arg, p["region_expression"], int(p["number"]), p["ratio"], p.get("constraint", "FREE"))
     if k == "sweep_path":
         sense = p.get("sense", "FORWARD")
         if sense not in ("FORWARD", "REVERSE"):
