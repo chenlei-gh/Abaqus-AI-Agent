@@ -1,3 +1,5 @@
+import pytest
+
 from abaqus_ai_agent.contracts.experimental_validation import ExperimentalObservation
 from abaqus_ai_agent.experimental_validation import validate_observations
 
@@ -11,8 +13,8 @@ def test_experimental_validation_uses_explicit_tolerance():
     ))
     result = report.results[0]
     assert report.passed
-    assert result.error == 0.2
-    assert result.relative_error == 0.02
+    assert result.error == pytest.approx(0.2)
+    assert result.relative_error == pytest.approx(0.02)
     assert result.uncertainty == 0.3
     assert result.source == "test-rig-01"
 
