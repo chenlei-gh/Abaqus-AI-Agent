@@ -61,7 +61,10 @@ class AbaqusAIAgent:
 
     def analysis_run(self, model_name, job_name, odb_path=None, criteria=(), result_values=None,
                      numerical_verification=None, engineering_checks=None,
-                     action_plan=(), environment=None):
+                     action_plan=(), environment=None,
+                     contact_expected=None, contact_evidence=None, contact_step=None,
+                     contact_frame=-1, contact_history_region=None,
+                     contact_position=None, contact_region=None):
         from .execution.analysis_run import AnalysisRunner
         return AnalysisRunner(self.executor).run(
             model_name, job_name, odb_path=odb_path, criteria=criteria,
