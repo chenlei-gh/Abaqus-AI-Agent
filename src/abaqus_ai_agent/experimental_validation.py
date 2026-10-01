@@ -22,8 +22,8 @@ def validate_observations(observations):
         denominator = abs(float(observation.measured))
         relative_error = error / denominator if denominator > 0.0 else None
         passed = error <= float(observation.tolerance)
-        if observation.uncertainty is not None:
-            passed = passed and error <= float(observation.tolerance) + float(observation.uncertainty)
+        # Measurement uncertainty is recorded as evidence; it does not
+        # silently relax the caller-declared acceptance tolerance.
         if not all(math.isfinite(value) for value in (
             float(observation.measured), float(observation.simulated), error
         )):
