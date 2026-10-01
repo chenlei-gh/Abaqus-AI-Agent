@@ -212,12 +212,23 @@ def expected_contact_state(evidence, expected):
     )
 
 
+def _quantitative_scope_available(evidence, expected):
+    if expected.expected_regions:
+        return True
+    return isinstance(evidence, dict) and evidence.get("region") is not None
+
+
 def unexpected_opening(evidence, expected):
     """Detect opening only against an explicitly declared separation limit."""
     if "COPEN" not in _required_output_names(expected):
         return ContactDiagnostic(
             "unexpected_opening", "not_applicable",
             message="COPEN was not required by the declared contact evidence contract",
+        )
+    if not _quantitative_scope_available(evidence, expected):
+        return ContactDiagnostic(
+            "unexpected_opening", "insufficient_evidence",
+            message="no contact region scope was declared for quantitative opening assessment",
         )
     if expected.expected_state != "contact" or not expected.contact_required:
         return ContactDiagnostic(
@@ -267,6 +278,11 @@ def unexpected_overclosure(evidence, expected):
         return ContactDiagnostic(
             "unexpected_overclosure", "not_applicable",
             message="COPEN was not required by the declared contact evidence contract",
+        )
+    if not _quantitative_scope_available(evidence, expected):
+        return ContactDiagnostic(
+            "unexpected_overclosure", "insufficient_evidence",
+            message="no contact region scope was declared for quantitative overclosure assessment",
         )
     copen = _numeric_values(_field(evidence, "COPEN"))
     if not copen:
