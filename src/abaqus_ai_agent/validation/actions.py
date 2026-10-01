@@ -1,4 +1,5 @@
 from ..contracts.action import AbaqusAction
+from ..contracts.element_strategy import ElementStrategy, resolve_element_code
 
 
 def validate_action(action):
@@ -167,6 +168,13 @@ def validate_action(action):
         required = ("family", "dimension", "shape", "order", "formulation", "integration")
         if not all(action.parameters.get(key) for key in required):
             raise ValueError("semantic element strategy requires family/dimension/shape/order/formulation/integration")
+        strategy = ElementStrategy(
+            action.parameters["family"], action.parameters["dimension"], action.parameters["shape"],
+            action.parameters["order"], action.parameters["formulation"], action.parameters["integration"],
+        )
+        resolved_code = resolve_element_code(strategy)
+        if str(action.parameters["elem_code"]).upper() != resolved_code:
+            raise ValueError("elem_code does not match semantic element strategy: expected %s" % resolved_code)
     if action.expected_state and not all(isinstance(x, dict) and x.get("path")
                                          for x in action.expected_state):
         raise ValueError("expected_state entries require a path")
