@@ -187,3 +187,35 @@ Abaqus-Control-MCP is primarily a live execution/diagnostic bridge: its current 
 CAE-Agent-Hub is broader: it packages MCP servers, Abaqus workflow Skills, subagents, solver workflows, optimization skills, and result viewers.
 
 The current Abaqus-AI-Agent should not copy that breadth indiscriminately. Its differentiating engineering value is the evidence/verification/acceptance chain around a native Abaqus execution boundary.
+
+
+## 2026-10-01 engineering analysis closure update
+
+The solver/post-processing/reporting gap identified in the previous review is now structurally closed at the contract level without introducing new orchestration services.
+
+### Solver selection
+- `EngineeringIntent -> SolverSelection` is deterministic and evidence-carrying.
+- The selector distinguishes analysis type, solver, and strategy.
+- Explicit-event triggers include impact, short transient, complex contact, severe discontinuity, large deformation, and material failure.
+- Ambiguous dynamic cases remain confirmation-required.
+
+### Engineering metrics
+- `ResultExtraction -> EngineeringMetric` is now wired through `AnalysisRun.metrics`.
+- Metrics retain value, unit, quantity, ODB locator, step/frame, component, source, and evidence.
+
+### Post-processing profiles
+- Solver strategy now maps to deterministic required field/history outputs, engineering checks, and plot classes.
+- `AnalysisRunner` can derive its ODB output plan from an `EngineeringIntent` without requiring the caller to manually enumerate every default output.
+- Explicit user criteria are preserved and profile defaults are de-duplicated by result key.
+
+### Engineering report
+- `EngineeringReportData` is source-first and can be constructed directly from `AnalysisRun`.
+- Markdown and HTML renderers are present; PDF rendering is available when ReportLab is installed.
+- `ReportFigure` provides a structured path for viewport/contour/XY evidence rather than asking an LLM to recreate numerical results.
+- Existing Abaqus viewport capture helpers can supply PNG evidence; full automated contour/XY capture remains runtime-dependent and is therefore part of the deferred B28 validation rather than being simulated in unit tests.
+
+### Verification status
+- Deterministic unit tests were added for solver selection, metrics, post-processing profile linkage, output planning, and report rendering.
+- Local pytest execution was attempted but the environment could not resolve GitHub, so no local test result is claimed here.
+- No GitHub Actions workflow run was available for the updated commits.
+- Real Abaqus V5/B28 execution remains deliberately deferred.
