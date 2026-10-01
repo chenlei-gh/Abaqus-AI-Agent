@@ -1,5 +1,6 @@
 from dataclasses import dataclass, field
 from datetime import datetime
+import uuid
 
 
 @dataclass
@@ -19,7 +20,7 @@ class ExecutionJournal:
     records: list = field(default_factory=list)
 
     def start(self, action):
-        record = ActionRecord(str(id(action)), action.action_type, "execute",
+        record = ActionRecord(str(uuid.uuid4()), action.action_type, "execute",
                               datetime.utcnow().isoformat() + "Z")
         self.records.append(record)
         return record
