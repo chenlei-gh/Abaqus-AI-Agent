@@ -88,10 +88,21 @@ class AnalysisRunner:
             timeout=3600, action_plan=(), environment=None):
         run_id = str(uuid.uuid4())
         runtime = _runtime_provenance(self.executor)
-        initial_snapshot = self.executor.snapshot() if hasattr(self.executor, "snapshot") else None
+        initial_snapshot = None
+        try:
+            if hasattr(self.executor, "snapshot"):
+                initial_snapshot = self.executor.snapshot()
+        except Exception:
+            # Snapshot is provenance enrichment, never an execution prerequisite.
+            initial_snapshot = None
         runtime_environment = dict(getattr(runtime, "metadata", {}) or {}) if runtime else {}
         if environment:
             runtime_environment.update(dict(environment))
+        normalized_action_plan = (
+            _action_records(action_plan)
+            if action_plan and not isinstance(next(iter(action_plan), None), dict)
+            else tuple(action_plan)
+        )
         provenance = AnalysisProvenance(
             run_id=run_id,
             model_name=model_name,
@@ -102,12 +113,13 @@ class AnalysisRunner:
             abaqus_version=getattr(runtime, "version", None) if runtime else None,
             python_version=getattr(runtime, "python_version", None) if runtime else None,
             executor=self.executor.__class__.__name__,
-            action_plan=tuple(action_plan),
+            action_plan=normalized_action_plan,
             environment=runtime_environment,
             metadata={
                 "model_snapshot_hash": stable_hash(initial_snapshot)
                 if initial_snapshot is not None else None,
                 "content_hash_scope": "not_captured",
+                "action_plan_scope": "caller" if normalized_action_plan else "none",
             },
         )
         run = AnalysisRun(
