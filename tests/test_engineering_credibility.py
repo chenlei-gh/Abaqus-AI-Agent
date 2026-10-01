@@ -8,6 +8,7 @@ from abaqus_ai_agent.numerical_verification import verify_series
 from abaqus_ai_agent.contact_diagnostics import (
     diagnose_contact,
     evaluate_contact_checks,
+    expected_contact_state,
 )
 from abaqus_ai_agent.contracts.contact import (
     ContactDiagnostic,
@@ -356,3 +357,42 @@ def test_contact_mixed_status_is_ambiguous_not_failure():
     }
     diagnostic = expected_contact_state(evidence, expected)
     assert diagnostic.status == "ambiguous"
+
+def test_contact_numeric_cstatus_is_not_interpreted_without_verified_mapping():
+    expected = ExpectedContactBehavior(
+        expected_state="contact",
+        required_outputs=("CSTATUS",),
+    )
+    evidence = {
+        "fields": {
+            "CSTATUS": {
+                "status": "available",
+                "values": [{"data": 1.0}],
+            },
+        },
+        "history": {"status": "available"},
+    }
+    diagnostic = diagnose_contact(evidence, expected).diagnostics[0]
+    assert diagnostic.status == "pass"
+    state = expected_contact_state(evidence, expected)
+    assert state.status == "insufficient_evidence"
+
+
+def test_contact_expected_region_mismatch_is_insufficient():
+    expected = ExpectedContactBehavior(
+        expected_state="contact",
+        expected_regions=("Surface-A-B",),
+        required_outputs=("CSTATUS",),
+    )
+    evidence = {
+        "region": "Surface-C-D",
+        "fields": {
+            "CSTATUS": {
+                "status": "available",
+                "values": [{"data": "sticking"}],
+            },
+        },
+        "history": {"status": "available"},
+    }
+    diagnostic = diagnose_contact(evidence, expected).diagnostics[0]
+    assert diagnostic.status == "insufficient_evidence"
