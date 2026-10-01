@@ -109,6 +109,7 @@ def extract_requirement(executor, path, requirement):
         locator = {
             "step": requirement.step,
             "history_region": payload.get("region"),
+            "history_region_expression": requirement.history_region_expression,
             "history_variable": requirement.history_variable,
         }
         return ResultExtraction(
