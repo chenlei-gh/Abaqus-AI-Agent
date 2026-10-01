@@ -37,3 +37,79 @@ def test_benchmark_rejects_unknown_operator():
         pass
     else:
         raise AssertionError("unknown benchmark operator must fail")
+
+
+
+def test_benchmark_derives_relative_error_only_from_explicit_reference():
+    from abaqus_ai_agent.benchmarks import derive_benchmark_observations
+
+    case = BenchmarkCase(
+        "case",
+        "reference",
+        acceptance=(
+            {
+                "value_key": "displacement_error",
+                "observed_value_key": "displacement",
+                "metric": "relative_error",
+                "reference_key": "reference_displacement",
+                "operator": "<=",
+                "limit": 0.02,
+            },
+        ),
+    )
+    observed, evidence, failures = derive_benchmark_observations(
+        case,
+        {"displacement": 10.2},
+        {"reference_displacement": 10.0},
+    )
+    assert failures == ()
+    assert observed["displacement_error"] == 0.02
+    assert evidence[0]["reference"] == 10.0
+
+
+def test_benchmark_missing_reference_is_explicit_failure():
+    from abaqus_ai_agent.benchmarks import derive_benchmark_observations
+
+    case = BenchmarkCase(
+        "case",
+        "reference",
+        acceptance=(
+            {
+                "value_key": "displacement_error",
+                "observed_value_key": "displacement",
+                "metric": "relative_error",
+                "operator": "<=",
+                "limit": 0.02,
+            },
+        ),
+    )
+    observed, _, failures = derive_benchmark_observations(case, {"displacement": 10.0})
+    assert observed == {}
+    assert failures == ("missing_reference:displacement_error",)
+
+
+def test_benchmark_result_criteria_preserves_explicit_odb_mapping():
+    from abaqus_ai_agent.benchmarks import benchmark_result_criteria
+
+    case = BenchmarkCase(
+        "case",
+        "reference",
+        acceptance=(
+            {
+                "value_key": "tip_error",
+                "observed_value_key": "tip",
+                "operator": "<=",
+                "limit": 0.05,
+                "result": {
+                    "field": "U",
+                    "invariant": "MAGNITUDE",
+                    "aggregation": "max",
+                    "step": "Step-1",
+                },
+            },
+        ),
+    )
+    criteria = benchmark_result_criteria(case)
+    assert criteria[0]["value_key"] == "tip"
+    assert criteria[0]["field"] == "U"
+    assert criteria[0]["step"] == "Step-1"
