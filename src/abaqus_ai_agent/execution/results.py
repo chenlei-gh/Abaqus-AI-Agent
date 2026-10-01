@@ -194,6 +194,41 @@ def extract_requirement(executor, path, requirement):
     return ResultExtraction(requirement, float(value), locator, (evidence,))
 
 
+def extract_history_series(executor, path, step, region, variable):
+    """Extract an explicit ODB history series for deterministic post-processing."""
+    if not step or not variable:
+        raise ValueError("step and variable are required")
+    code = """import json
+from odbAccess import openOdb
+odb=openOdb(path=%r, readOnly=True)
+hr=odb.steps[%r].historyRegions
+region_name=%r
+if region_name:
+    history_region=hr[region_name]
+else:
+    matches=[(_name,_value) for _name,_value in hr.items() if %r in _value.historyOutputs]
+    if len(matches) != 1:
+        raise KeyError('history output is ambiguous; specify history_region')
+    region_name, history_region=matches[0]
+if %r not in history_region.historyOutputs:
+    raise KeyError('history output not found: %s' %% %r)
+data=list(history_region.historyOutputs[%r].data)
+print(json.dumps({'region':region_name,'variable':%r,'data':data}))
+odb.close()
+""" % (path, step, region, variable, variable, variable, variable)
+    payload = _payload(executor.execute(code))
+    data = payload.get("data") or ()
+    series = tuple((float(item[0]), float(item[1])) for item in data)
+    if len(series) < 2:
+        raise ValueError("history series must contain at least two samples")
+    return series, {
+        "step": step,
+        "history_region": payload.get("region"),
+        "history_variable": variable,
+        "sample_count": len(series),
+    }
+
+
 def extract_criteria(executor, path, criteria):
     requirements = requirements_from_criteria(criteria)
     results = {}
