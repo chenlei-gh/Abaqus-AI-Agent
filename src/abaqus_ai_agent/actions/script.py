@@ -162,7 +162,7 @@ def action_to_script(action):
         if p.get("algorithm") is not None: args.append("algorithm=%s" % p["algorithm"])
         if p.get("elem_shape") is not None: args.append("elemShape=%s" % p["elem_shape"])
         return "from abaqusConstants import *; mdb.models[%s].parts[%s].setMeshControls(%s)" % (_q(m), _q(p["part"]), ", ".join(args))
-    if k == "element_type":
+    if k in ("element_type", "element_strategy"):
         code = p.get("elem_code", "C3D8R")
         library = p.get("library", "STANDARD")
         return "from abaqusConstants import *; import mesh; elemType=mesh.ElemType(elemCode=%s, elemLibrary=%s); mdb.models[%s].parts[%s].setElementType(regions=%s, elemTypes=(elemType,))" % (code, library, _q(m), _q(p["part"]), p["region_expression"])
