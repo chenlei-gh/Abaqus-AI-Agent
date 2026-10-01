@@ -14,3 +14,5 @@ from .contact import (
 from .numerical import NumericalVerificationResult
 
 from .numerical import NumericalRefinementCase, NumericalRefinementReport, NumericalVerificationResult
+
+from .convergence import MeshConvergencePoint, MeshConvergencePolicy, MeshConvergenceResult, evaluate_mesh_convergence
