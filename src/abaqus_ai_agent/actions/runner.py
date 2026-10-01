@@ -5,10 +5,17 @@ from ..verification import verify_expected_state
 from ..evidence.model import Evidence, EvidenceBundle
 from ..state_diff import diff_snapshots
 from .script import action_to_script
+from .mesh_verification import native_mesh_verification_script
+
+
+def _render_action_script(action):
+    if action.action_type == "verify_mesh_quality":
+        return native_mesh_verification_script(action.model_name, action.parameters)
+    return action_to_script(action)
 
 
 def preview(action):
-    return action_to_script(action)
+    return _render_action_script(action)
 
 
 def execute(executor, action):
@@ -18,7 +25,7 @@ def execute(executor, action):
     preflight = preflight_action(action)
     if not preflight.passed:
         raise ValueError("action preflight failed: %s" % (preflight.blockers,))
-    return executor.execute(action_to_script(action))
+    return executor.execute(_render_action_script(action))
 
 
 def execute_verified(executor, action, journal=None, snapshot_before=None,
@@ -32,7 +39,7 @@ def execute_verified(executor, action, journal=None, snapshot_before=None,
     journal = journal or ExecutionJournal()
     record = journal.start(action)
     try:
-        result = executor.execute(action_to_script(action))
+        result = executor.execute(_render_action_script(action))
         verification = None
         if snapshot_after is not None and action.expected_state:
             verification = verify_expected_state(snapshot_after, action.expected_state)
@@ -61,9 +68,6 @@ def execute_verified(executor, action, journal=None, snapshot_before=None,
             value=result,
             metadata={"model": action.model_name, "requested_evidence": action.evidence},
         ))
-        # Native mesh verification is already the authoritative quality check.
-        # Preserve its raw result as a typed evidence item instead of converting
-        # it into a synthetic score or silently treating execution as quality.
         if action.action_type == "verify_mesh_quality":
             evidence = evidence.add(Evidence(
                 kind="mesh_quality_verification",
