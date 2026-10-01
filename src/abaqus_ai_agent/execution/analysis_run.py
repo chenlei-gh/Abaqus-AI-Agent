@@ -88,7 +88,8 @@ class AnalysisRunner:
             timeout=3600, action_plan=(), environment=None,
             contact_expected=None, contact_evidence=None, contact_step=None,
             contact_frame=-1, contact_history_region=None, contact_position=None,
-            contact_region=None, benchmark=None, benchmark_reference_values=None, benchmark_result_overrides=None):
+            contact_region=None, benchmark=None, benchmark_reference_values=None, benchmark_result_overrides=None,
+            experimental_observations=()):
         run_id = str(uuid.uuid4())
         runtime = _runtime_provenance(self.executor)
         initial_snapshot = None
@@ -269,6 +270,18 @@ class AnalysisRunner:
                     ),
                 )
 
+            if experimental_observations:
+                from ..experimental_validation import validate_result_values
+                experimental_validation = validate_result_values(
+                    result_values, experimental_observations
+                )
+                experimental_evidence = (Evidence(
+                    kind="experimental_validation",
+                    source="experimental_validation",
+                    locator=job_name,
+                    value=experimental_validation,
+                ),)
+
             contact_diagnostics = None
             if contact_expected is not None:
                 from ..execution.odb import extract_contact_evidence
@@ -350,6 +363,7 @@ class AnalysisRunner:
                     run.metadata,
                     result_values=dict(result_values),
                     result_source=result_source,
+                    experimental_validation=experimental_validation,
                     experimental_validation=experimental_validation,
                 ))
         except Exception as exc:
