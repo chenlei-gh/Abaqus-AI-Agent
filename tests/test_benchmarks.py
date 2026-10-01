@@ -167,3 +167,43 @@ def test_benchmark_reference_metadata_is_preserved_in_evidence():
     assert failures == ()
     assert evidence[0]["reference_source"] == "analytical PL/(AE)"
     assert evidence[0]["reference_unit"] == "mm"
+
+
+def test_benchmark_result_overrides_are_explicit():
+    from abaqus_ai_agent.benchmarks import benchmark_result_criteria
+
+    case = BenchmarkCase(
+        "case",
+        "override",
+        acceptance=(
+            {"value_key": "tip_error", "observed_value_key": "tip",
+             "result": {"field": "U", "invariant": "MAGNITUDE", "step": "Step-1"}},
+        ),
+    )
+    criteria = benchmark_result_criteria(
+        case, {"tip_error": {"field": "U", "component": "U2", "position": "NODAL"}}
+    )
+    assert criteria[0]["field"] == "U"
+    assert criteria[0]["component"] == "U2"
+    assert criteria[0]["position"] == "NODAL"
+
+
+def test_benchmark_rejects_duplicate_observed_result_keys():
+    from abaqus_ai_agent.benchmarks import benchmark_result_criteria
+
+    case = BenchmarkCase(
+        "case",
+        "duplicate extraction",
+        acceptance=(
+            {"value_key": "a", "observed_value_key": "same",
+             "result": {"field": "U", "step": "Step-1"}},
+            {"value_key": "b", "observed_value_key": "same",
+             "result": {"field": "RF", "step": "Step-1"}},
+        ),
+    )
+    try:
+        benchmark_result_criteria(case)
+    except ValueError as exc:
+        assert "duplicate benchmark observed_value_key" in str(exc)
+    else:
+        raise AssertionError("duplicate benchmark extraction keys must fail")
