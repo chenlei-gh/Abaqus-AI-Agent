@@ -63,6 +63,10 @@ def _goodman(amplitude, mean, ultimate_strength):
         raise ValueError("Goodman correction is undefined for mean stress at or above ultimate strength")
     return float(amplitude) / denominator
 
+def goodman_corrected_amplitude(amplitude, mean, ultimate_strength):
+    """Return zero-mean-equivalent amplitude using the declared UTS."""
+    return _goodman(float(amplitude), float(mean), float(ultimate_strength))
+
 
 def stress_cycle_statistics(minimum, maximum, weight=1.0):
     minimum, maximum, weight = float(minimum), float(maximum), float(weight)
@@ -82,6 +86,9 @@ def sn_cycles_to_failure(amplitude, material_curve):
         raise ValueError("positive amplitude and at least two S-N points are required")
     if any(s <= 0 or n <= 0 for s, n in curve):
         raise ValueError("S-N points must be positive")
+    for (s1, _), (s2, _) in zip(curve, curve[1:]):
+        if s2 <= s1:
+            raise ValueError("S-N stress points must be strictly increasing")
     if amplitude > curve[-1][0] or amplitude < curve[0][0]:
         raise ValueError("stress amplitude is outside the declared S-N range")
     for (s1, n1), (s2, n2) in zip(curve, curve[1:]):
@@ -100,6 +107,8 @@ def evaluate_fatigue_history(values: Sequence[float], intent: FatigueAnalysisInt
     if not isinstance(intent, FatigueAnalysisIntent):
         raise TypeError("intent must be FatigueAnalysisIntent")
     raw_cycles = rainflow_count(values)
+    if not intent.material_curve:
+        raise ValueError("material_curve is required for S-N fatigue")
     correction = (intent.mean_stress_correction or "NONE").upper()
     if correction == "GOODMAN" and ultimate_strength is None:
         raise ValueError("ultimate_strength is required for Goodman correction")
