@@ -1,4 +1,5 @@
 import math
+from dataclasses import replace
 
 from .contracts.numerical import NumericalVerificationResult
 
@@ -174,6 +175,7 @@ def execute_refinement_study(
     refinement_ratio=None,
     value_key=None,
     timeout=3600,
+    singularity_evidence=None,
 ):
     """Execute mesh/time-step refinements through AnalysisRunner.
 
@@ -276,6 +278,15 @@ def execute_refinement_study(
         )
     else:
         raise ValueError("unsupported numerical refinement method: %s" % method)
+
+    if singularity_evidence is not None:
+        interpretation = assess_singularity_interpretation(**dict(singularity_evidence))
+        verification = replace(
+            verification,
+            interpretation=interpretation["interpretation"],
+            message="%s; interpretation=%s"
+            % (verification.message, interpretation["interpretation"]),
+        )
 
     return NumericalRefinementReport(
         name=name,
