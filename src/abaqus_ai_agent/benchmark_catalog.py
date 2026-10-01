@@ -14,7 +14,7 @@ def standard_benchmarks():
             name="linear_elastic_axial_bar",
             description=(
                 "1D/3D linear-elastic axial loading case. Compare displacement "
-                "with the analytical PL/(AE) reference and verify reaction balance."
+                "with the analytical PL/(AE) reference and compare the declared reaction resultant."
             ),
             expected_actions=("material", "section", "static_step", "load", "boundary_condition"),
             acceptance=(
@@ -49,8 +49,8 @@ def standard_benchmarks():
         BenchmarkCase(
             name="gravity_static_balance",
             description=(
-                "Static gravity case. Verify that the declared body force is "
-                "balanced by the extracted support reaction."
+                "Static gravity case. Compare the extracted support reaction with the "
+                "independently declared reaction reference."
             ),
             expected_actions=("material", "section", "static_step", "gravity", "boundary_condition"),
             acceptance=(
