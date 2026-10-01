@@ -85,20 +85,72 @@ class AnalysisRunner:
 
     def run(self, model_name, job_name, odb_path=None, criteria=(),
             result_values=None, numerical_verification=None, engineering_checks=None,
-            timeout=3600):
+            timeout=3600, action_plan=(), environment=None):
         run_id = str(uuid.uuid4())
-        run = AnalysisRun(run_id, model_name, job_name, AnalysisRunState.PREFLIGHTED,
-                          provenance=AnalysisProvenance(run_id=run_id, model_name=model_name,
-                          job_name=job_name, executor=self.executor.__class__.__name__))
+        runtime = _runtime_provenance(self.executor)
+        initial_snapshot = None
+        try:
+            if hasattr(self.executor, "snapshot"):
+                initial_snapshot = self.executor.snapshot()
+        except Exception:
+            # Snapshot is provenance enrichment, never an execution prerequisite.
+            initial_snapshot = None
+        runtime_environment = dict(getattr(runtime, "metadata", {}) or {}) if runtime else {}
+        if environment:
+            runtime_environment.update(dict(environment))
+        normalized_action_plan = _normalize_action_plan(action_plan)
+        provenance = AnalysisProvenance(
+            run_id=run_id,
+            model_name=model_name,
+            job_name=job_name,
+            model_hash=None,
+            input_hash=None,
+            output_hash=None,
+            abaqus_version=getattr(runtime, "version", None) if runtime else None,
+            python_version=getattr(runtime, "python_version", None) if runtime else None,
+            executor=self.executor.__class__.__name__,
+            action_plan=normalized_action_plan,
+            environment=runtime_environment,
+            metadata={
+                "model_snapshot_hash": stable_hash(initial_snapshot)
+                if initial_snapshot is not None else None,
+                "content_hash_scope": "not_captured",
+                "action_plan_scope": "caller" if normalized_action_plan else "none",
+            },
+        )
+        run = AnalysisRun(
+            run_id, model_name, job_name, AnalysisRunState.PREFLIGHTED,
+            provenance=provenance,
+        )
         jobs = JobController(self.executor)
         try:
-            snapshot = self.executor.snapshot() if hasattr(self.executor, "snapshot") else None
+            snapshot = initial_snapshot
             if snapshot is not None and job_name not in snapshot.jobs:
                 jobs.create(job_name, model_name)
 
             from ..planning.output import plan_outputs, actions_from_output_plan
             output_plan = plan_outputs(criteria)
-            for output_action in actions_from_output_plan(model_name, output_plan):
+            output_actions = actions_from_output_plan(model_name, output_plan)
+            if not action_plan and output_actions:
+                run = run.with_state(
+                    run.state,
+                    provenance=AnalysisProvenance(
+                        run_id=run.provenance.run_id,
+                        model_name=run.provenance.model_name,
+                        job_name=run.provenance.job_name,
+                        model_hash=run.provenance.model_hash,
+                        input_hash=run.provenance.input_hash,
+                        output_hash=run.provenance.output_hash,
+                        artifact_manifest_hash=run.provenance.artifact_manifest_hash,
+                        abaqus_version=run.provenance.abaqus_version,
+                        python_version=run.provenance.python_version,
+                        executor=run.provenance.executor,
+                        action_plan=_action_records(output_actions),
+                        environment=dict(run.provenance.environment),
+                        metadata=dict(run.provenance.metadata, action_plan_scope="output_plan"),
+                    ),
+                )
+            for output_action in output_actions:
                 from ..validation.actions import validate_action
                 from ..actions.runner import execute
                 validate_action(output_action)
@@ -252,3 +304,34 @@ def _collect_artifacts(executor, job_name):
         return inspect_job_artifacts(executor, job_name).items
     except Exception:
         return ()
+
+
+def _normalize_action_plan(action_plan):
+    items = tuple(action_plan or ())
+    if not items:
+        return ()
+    if all(isinstance(item, dict) for item in items):
+        return items
+    return _action_records(items)
+
+
+def _runtime_provenance(executor):
+    """Best-effort runtime metadata; absence never masquerades as verification."""
+    try:
+        if hasattr(executor, "runtime_info"):
+            return executor.runtime_info()
+    except Exception:
+        return None
+    return None
+
+
+def _action_records(actions):
+    records = []
+    for action in actions or ():
+        records.append({
+            "action_type": getattr(action, "action_type", None),
+            "model_name": getattr(action, "model_name", None),
+            "target": getattr(action, "target", None),
+            "parameters": dict(getattr(action, "parameters", {}) or {}),
+        })
+    return tuple(records)

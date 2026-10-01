@@ -7,6 +7,7 @@ from abaqus_ai_agent.contracts.engineering_checks import (
     EngineeringCheckReport,
 )
 from abaqus_ai_agent.execution.jobs import JobState, JobStatus
+from abaqus_ai_agent.contracts.version import AbaqusRuntimeInfo
 
 
 class FakeExecutor:
@@ -18,6 +19,13 @@ class FakeExecutor:
 
     def inspect_odb(self, path):
         return {"status": "available", "steps": ("Step-1",)}
+
+    def runtime_info(self):
+        return AbaqusRuntimeInfo(
+            version="B28",
+            python_version="2.7",
+            metadata={"runtime_source": "test"},
+        )
 
 
 def _run(result_values=True, **kwargs):
@@ -114,6 +122,10 @@ def test_passing_verification_allows_odb_backed_acceptance():
     assert run.acceptance_passed is True
     assert run.state.value == "accepted"
     assert run.engineering_status == "RESULT_VALID"
+    assert run.provenance.abaqus_version == "B28"
+    assert run.provenance.python_version == "2.7"
+    assert run.provenance.executor == "FakeExecutor"
+    assert run.provenance.metadata["content_hash_scope"] == "not_captured"
 
 
 def test_verification_runs_without_explicit_acceptance_criteria():

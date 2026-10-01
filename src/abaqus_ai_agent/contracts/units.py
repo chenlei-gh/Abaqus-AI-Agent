@@ -2,36 +2,119 @@ from dataclasses import dataclass
 from typing import Dict
 
 UNIT_SYSTEMS = {
-    "SI": {"length": "m", "force": "N", "stress": "Pa", "mass": "kg", "time": "s"},
-    "MM_N_MPA": {"length": "mm", "force": "N", "stress": "MPa", "mass": "tonne", "time": "s"},
-    "M_N_PA": {"length": "m", "force": "N", "stress": "Pa", "mass": "kg", "time": "s"},
+    "SI": {
+        "length": "m", "force": "N", "stress": "Pa", "mass": "kg",
+        "time": "s", "temperature": "K", "energy": "J", "frequency": "Hz",
+    },
+    "MM_N_MPA": {
+        "length": "mm", "force": "N", "stress": "MPa", "mass": "tonne",
+        "time": "s", "temperature": "K", "energy": "N*mm", "frequency": "Hz",
+    },
+    "M_N_PA": {
+        "length": "m", "force": "N", "stress": "Pa", "mass": "kg",
+        "time": "s", "temperature": "K", "energy": "J", "frequency": "Hz",
+    },
 }
 
-UNIT_DIMENSIONS = {"m":"length", "mm":"length", "N":"force", "Pa":"stress", "MPa":"stress", "kg":"mass", "tonne":"mass", "s":"time", "Hz":"frequency", "K":"temperature", "C":"temperature", "degC":"temperature"}
+UNIT_DIMENSIONS = {
+    "m": "length",
+    "mm": "length",
+    "N": "force",
+    "Pa": "stress",
+    "MPa": "stress",
+    "kg": "mass",
+    "tonne": "mass",
+    "s": "time",
+    "Hz": "frequency",
+    "K": "temperature",
+    "C": "temperature",
+    "degC": "temperature",
+    "J": "energy",
+    "N*mm": "energy",
+}
+
+QUANTITY_DIMENSIONS = {
+    "length": "length",
+    "displacement": "length",
+    "force": "force",
+    "pressure": "stress",
+    "stress": "stress",
+    "mass": "mass",
+    "time": "time",
+    "temperature": "temperature",
+    "energy": "energy",
+    "frequency": "frequency",
+}
+
 
 @dataclass(frozen=True)
 class UnitSystem:
     name: str
     units: Dict[str, str]
+
     @classmethod
     def named(cls, name):
         key = str(name).upper()
-        if key not in UNIT_SYSTEMS: raise ValueError("unsupported unit system: %s" % name)
+        if key not in UNIT_SYSTEMS:
+            raise ValueError("unsupported unit system: %s" % name)
         return cls(key, dict(UNIT_SYSTEMS[key]))
-    def unit(self, quantity): return self.units[quantity]
+
+    def unit(self, quantity):
+        return self.units[quantity]
+
     def validate(self, quantity, unit):
         expected = self.unit(quantity)
-        if str(unit) != expected: raise ValueError("unit mismatch for %s: expected %s, got %s" % (quantity, expected, unit))
+        if str(unit) != expected:
+            raise ValueError(
+                "unit mismatch for %s: expected %s, got %s"
+                % (quantity, expected, unit)
+            )
         return True
+
 
 def unit_dimension(unit):
     key = str(unit)
-    if key not in UNIT_DIMENSIONS: raise ValueError("unsupported unit: %s" % unit)
+    if key not in UNIT_DIMENSIONS:
+        raise ValueError("unsupported unit: %s" % unit)
     return UNIT_DIMENSIONS[key]
+
+
+def quantity_dimension(quantity):
+    key = str(quantity).lower()
+    if key not in QUANTITY_DIMENSIONS:
+        raise ValueError("unsupported quantity: %s" % quantity)
+    return QUANTITY_DIMENSIONS[key]
+
+
+def validate_quantity_unit(quantity, unit, unit_system=None):
+    """Validate a declared quantity/unit pair without performing conversion.
+
+    Abaqus uses user-selected, self-consistent units rather than a built-in
+    unit system. When a unit system is supplied, the unit must match that
+    system exactly; otherwise only dimensional compatibility is checked.
+    """
+    if unit in (None, ""):
+        return True
+    dimension = quantity_dimension(quantity)
+    if unit_system is not None:
+        UnitSystem.named(unit_system).validate(
+            quantity if quantity in UNIT_SYSTEMS[str(unit_system).upper()] else dimension,
+            unit,
+        )
+        return True
+    if unit_dimension(unit) != dimension:
+        raise ValueError(
+            "unit dimension mismatch for %s: expected dimension %s, got %s"
+            % (quantity, dimension, unit_dimension(unit))
+        )
+    return True
+
 
 def validate_same_dimension(units):
     values = tuple(str(unit) for unit in units if unit not in (None, ""))
-    if not values: return None
+    if not values:
+        return None
     dimensions = tuple(unit_dimension(unit) for unit in values)
-    if len(set(dimensions)) != 1: raise ValueError("incompatible dimensions: %s" % (", ".join(dimensions)))
+    if len(set(dimensions)) != 1:
+        raise ValueError("incompatible dimensions: %s" % (", ".join(dimensions)))
     return dimensions[0]
