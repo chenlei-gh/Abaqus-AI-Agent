@@ -34,3 +34,6 @@ from .engineering_evidence import (
 from .uncertainty import execute_uncertainty, aggregate_uncertainty_outputs, build_uncertainty_scenarios
 from .numerical_verification import execute_refinement_study
 from .correction import execute_authorized_correction
+
+from .contracts.experimental_validation import ExperimentalObservation, ExperimentalValidationReport, ExperimentalValidationResult
+from .experimental_validation import validate_observations
