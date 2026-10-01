@@ -11,6 +11,7 @@ class AnalysisProvenance:
     model_hash: Optional[str] = None
     input_hash: Optional[str] = None
     output_hash: Optional[str] = None
+    artifact_manifest_hash: Optional[str] = None
     abaqus_version: Optional[str] = None
     python_version: Optional[str] = None
     executor: Optional[str] = None
