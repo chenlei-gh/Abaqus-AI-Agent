@@ -9,6 +9,7 @@ class OutputPlan:
     field_variables: Tuple[str, ...] = ()
     history_variables: Tuple[str, ...] = ()
     history_step: str = "Step-1"
+    history_region_expression: object = None
     requirements: Tuple[object, ...] = ()
 
 
@@ -29,6 +30,11 @@ def plan_outputs(criteria=(), outputs=()):
         (r.step for r in history_requirements if getattr(r, "step", None)),
         "Step-1",
     )
+    history_region_expression = next(
+        (r.history_region_expression for r in history_requirements
+         if getattr(r, "history_region_expression", None)),
+        None,
+    )
     for item in outputs or ():
         if isinstance(item, str):
             fields.add(item)
@@ -40,7 +46,8 @@ def plan_outputs(criteria=(), outputs=()):
             else:
                 fields.update(variables)
     return OutputPlan(
-        tuple(sorted(fields)), tuple(sorted(histories)), history_step, requirements
+        tuple(sorted(fields)), tuple(sorted(histories)), history_step,
+        history_region_expression, requirements
     )
 
 
@@ -51,5 +58,5 @@ def actions_from_output_plan(model_name, plan, field_request="AI-F-Output-1", hi
     if plan.field_variables:
         actions.append(field_output(model_name, variables=plan.field_variables, request=field_request, step="Initial"))
     if plan.history_variables:
-        actions.append(history_output(model_name, variables=plan.history_variables, request=history_request, step=plan.history_step))
+        actions.append(history_output(model_name, variables=plan.history_variables, request=history_request, region_expression=plan.history_region_expression, step=plan.history_step))
     return tuple(actions)
