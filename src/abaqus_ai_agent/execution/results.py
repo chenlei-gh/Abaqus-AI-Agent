@@ -5,6 +5,7 @@ from ..contracts.results import (
     ResultRequirement,
     requirements_from_criteria,
 )
+from ..evidence.model import Evidence
 
 
 def _payload(raw):
@@ -128,7 +129,9 @@ def extract_requirement(executor, path, requirement):
         return ResultExtraction(
             requirement, float(value),
             locator={"step": requirement.step, "frame": requirement.frame},
-            evidence=(payload,))
+            evidence=(Evidence(kind="odb_frame_value", source="odb",
+                        locator=str({"step": requirement.step, "frame": requirement.frame}),
+                        value=float(value), metadata={"payload": payload}),))
 
     if not requirement.step:
         raise ValueError("step is required for field result %s" % requirement.value_key)
@@ -174,18 +177,20 @@ def extract_requirement(executor, path, requirement):
             "position": item.get("position"),
         }
 
-    evidence = {
-        "kind": "odb_result",
-        "source": "odb",
-        "value_key": requirement.value_key,
-        "value": value,
-        "unit": requirement.unit,
-        "locator": locator,
-        "field": requirement.field,
-        "component": requirement.component,
-        "invariant": requirement.invariant,
-        "aggregation": requirement.aggregation,
-    }
+    evidence = Evidence(
+        kind="odb_result",
+        source="odb",
+        locator=str(locator),
+        value=float(value),
+        unit=requirement.unit,
+        metadata={
+            "value_key": requirement.value_key,
+            "field": requirement.field,
+            "component": requirement.component,
+            "invariant": requirement.invariant,
+            "aggregation": requirement.aggregation,
+        },
+    )
     return ResultExtraction(requirement, float(value), locator, (evidence,))
 
 
