@@ -1,3 +1,5 @@
+import pytest
+
 from abaqus_ai_agent.actions import (
     fixed_bc, pressure_load, material_elastic, python_action, static_step,
     dynamic_explicit_step, implicit_dynamic_step, heat_transfer_step, coupled_temp_displacement_step,
@@ -53,9 +55,11 @@ def test_implicit_dynamic_and_step_controls():
     assert "initialInc=0.01" in code
     assert "stabilizationMethod" in preview(static_step("M", stabilization_method="DISSIPATED_ENERGY_FRACTION"))
     assert "amplitude=RAMP" in preview(static_step("M"))
-    assert "amplitude='LOAD_AMP'" in preview(static_step("M", amplitude="LOAD_AMP"))
-    assert "HeatTransferStep" in preview(heat_transfer_step("M", amplitude="LOAD_AMP"))
-    assert "CoupledTempDisplacementStep" in preview(coupled_temp_displacement_step("M", amplitude="LOAD_AMP"))
+    assert "amplitude=STEP" in preview(implicit_dynamic_step("M"))
+    assert "amplitude=STEP" in preview(heat_transfer_step("M"))
+    assert "amplitude=STEP" in preview(coupled_temp_displacement_step("M"))
+    with pytest.raises(ValueError):
+        preview(static_step("M", amplitude="LOAD_AMP"))
 
 
 def test_assembly_and_export_scripts():
