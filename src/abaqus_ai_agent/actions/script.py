@@ -294,100 +294,64 @@ def _contact_script(model, p):
 
 def _mesh_quality_script(model, p):
     part = p["part"]
-    max_ar = p.get("max_aspect_ratio")
-    min_angle = p.get("min_angle")
-    max_angle = p.get("max_angle")
-    max_skew = p.get("max_skew")
-    min_jac = p.get("min_jacobian")
-    return """from math import sqrt, acos, pi
+    criteria = []
+    if p.get("max_aspect_ratio") is not None:
+        criteria.append(("ASPECT_RATIO", p["max_aspect_ratio"], "max_aspect_ratio"))
+    if p.get("max_angular_deviation") is not None:
+        criteria.append(("ANGULAR_DEVIATION", p["max_angular_deviation"], "max_angular_deviation"))
+    if p.get("min_angle") is not None:
+        criteria.append(("SMALL_ANGLE", p["min_angle"], "min_angle"))
+    if p.get("max_angle") is not None:
+        criteria.append(("LARGE_ANGLE", p["max_angle"], "max_angle"))
+    if p.get("max_geometric_deviation_factor") is not None:
+        criteria.append(("GEOM_DEVIATION_FACTOR", p["max_geometric_deviation_factor"], "max_geometric_deviation_factor"))
+    analysis_checks = bool(p.get("analysis_checks", True))
+    return """from abaqusConstants import *
 model=mdb.models[%r]
 part=model.parts[%r]
-nodes={n.label:tuple(n.coordinates) for n in part.nodes}
-elements=list(part.elements)
-result={'part':%r,'node_count':len(nodes),'element_count':len(elements),
-        'metrics':{},'violations':[],'warnings':[],'evidence':[],'status':'unknown','source':'unsupported'}
-
-def dist(a,b):
-    return sqrt(sum((a[i]-b[i])**2 for i in range(3)))
-
-def angle(a,b,c):
-    ab=[a[i]-b[i] for i in range(3)]
-    cb=[c[i]-b[i] for i in range(3)]
-    la=sqrt(sum(x*x for x in ab)); lc=sqrt(sum(x*x for x in cb))
-    if la == 0.0 or lc == 0.0: return None
-    x=max(-1.0,min(1.0,sum(ab[i]*cb[i] for i in range(3))/(la*lc)))
-    return acos(x)*180.0/pi
-
-aspects=[]; angles=[]; skews=[]; unsupported=set()
-for e in elements:
-    typ=str(getattr(e,'type','')).upper()
-    conn=tuple(getattr(e,'connectivity',()))
-    pts=[nodes.get(label) for label in conn]
-    if not pts or any(x is None for x in pts):
-        unsupported.add('missing_node_coordinates'); continue
-    if typ.startswith(('C3','CPS3','CPE3','S3','STRI3','CAX3')):
-        edge_pairs=((0,1),(1,2),(2,0))
-        vertex_triplets=((1,0,2),(0,1,2),(0,2,1))
-    elif typ.startswith(('C4','CPS4','CPE4','S4','S4R','SC4','SC8','CPS8','CPE8')):
-        edge_pairs=((0,1),(1,2),(2,3),(3,0))
-        vertex_triplets=((3,0,1),(0,1,2),(1,2,3),(2,3,0))
-    else:
-        unsupported.add('element_type:'+typ); continue
-    lengths=[dist(pts[i],pts[j]) for i,j in edge_pairs]
-    positive=[x for x in lengths if x > 0.0]
-    if not positive:
-        unsupported.add('zero_edge'); continue
-    aspects.append(max(positive)/min(positive))
-    for a,b,c in vertex_triplets:
-        q=angle(pts[a],pts[b],pts[c])
-        if q is not None: angles.append(q)
-    if len(lengths) == 4:
-        # A conservative skew proxy: deviation of adjacent-edge dot products
-        local=[]
-        for i in range(4):
-            a=pts[i]; b=pts[(i+1)%4]; c=pts[(i+2)%4]
-            ab=[b[j]-a[j] for j in range(3)]
-            bc=[c[j]-b[j] for j in range(3)]
-            lab=sqrt(sum(x*x for x in ab)); lbc=sqrt(sum(x*x for x in bc))
-            if lab and lbc:
-                local.append(abs(sum(ab[j]*bc[j] for j in range(3))/(lab*lbc)))
-        if local: skews.append(max(local))
-
-if aspects:
-    result['metrics']['max_aspect_ratio']=max(aspects)
-    result['metrics']['avg_aspect_ratio']=sum(aspects)/len(aspects)
-if angles:
-    result['metrics']['min_angle']=min(angles)
-    result['metrics']['max_angle']=max(angles)
-if skews:
-    result['metrics']['max_skew']=max(skews)
-if %r is not None and aspects and max(aspects) > %r:
-    result['violations'].append('max_aspect_ratio')
-if %r is not None and angles and min(angles) < %r:
-    result['violations'].append('min_angle')
-if %r is not None and angles and max(angles) > %r:
-    result['violations'].append('max_angle')
-if %r is not None and skews and max(skews) > %r:
-    result['violations'].append('max_skew')
+result={'part':%r,'node_count':len(part.nodes),'element_count':len(part.elements),
+        'metrics':{},'violations':[],'warnings':[],'evidence':[],
+        'status':'unknown','source':'native_abaqus_verifyMeshQuality',
+        'failed_element_count':0,'warning_element_count':0}
+criteria=%r
+for criterion_name, threshold, output_name in criteria:
+    try:
+        criterion = globals()[criterion_name]
+        data=part.verifyMeshQuality(criterion=criterion, threshold=threshold)
+        result['metrics'][output_name]=float(data.get('worst', 0.0))
+        result['evidence'].append('native_verify:%s'%criterion_name)
+        failed=len(data.get('failedElements', ()))
+        warnings=len(data.get('warningElements', ()))
+        result['failed_element_count'] += failed
+        result['warning_element_count'] += warnings
+        if failed:
+            result['violations'].append(output_name)
+    except Exception as exc:
+        result['warnings'].append('unsupported_quality:%s:%s'%(criterion_name, type(exc).__name__))
+if %r:
+    try:
+        data=part.verifyMeshQuality(criterion=ANALYSIS_CHECKS)
+        result['evidence'].append('native_verify:ANALYSIS_CHECKS')
+        result['failed_element_count'] += len(data.get('failedElements', ()))
+        result['warning_element_count'] += len(data.get('warningElements', ()))
+        if data.get('failedElements'):
+            result['violations'].append('analysis_checks')
+        if data.get('warningElements'):
+            result['warnings'].append('analysis_check_warnings')
+    except Exception as exc:
+        result['warnings'].append('unsupported_quality:ANALYSIS_CHECKS:%s'%type(exc).__name__)
 if %r is not None:
-    result['warnings'].append('min_jacobian_unsupported_without_element_shape_api')
-if unsupported:
-    result['warnings'].extend(['unsupported_quality:'+x for x in sorted(unsupported)])
-if not elements:
-    result['warnings'].append('no_elements')
+    result['warnings'].append('min_jacobian_requires_native_analysis_check_or_element_specific_api')
+if %r is not None:
+    result['warnings'].append('max_skew_not_mapped_to_native_verifyMeshQuality_criterion')
 if result['violations']:
     result['status']='fail'
 elif result['warnings']:
     result['status']='warning'
-elif result['metrics']:
+elif result['metrics'] or result['evidence']:
     result['status']='pass'
-if result['metrics']:
-    result['source']='computed_quality'
-result['evidence']=['part:%s'%part, 'elements:%d'%len(elements)]
 print(result)
-""" % (model, part, part, max_ar, max_ar, min_angle, min_angle,
-       max_angle, max_angle, max_skew, max_skew, min_jac)
-
+""" % (model, part, part, criteria, analysis_checks, p.get("min_jacobian"), p.get("max_skew"))
 
 def _assembly_inspection_script(model):
     return """a=mdb.models[%r].rootAssembly
