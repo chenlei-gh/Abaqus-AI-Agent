@@ -79,6 +79,20 @@ class AbaqusAIAgent:
             benchmark=benchmark, benchmark_reference_values=benchmark_reference_values,
             benchmark_result_overrides=benchmark_result_overrides)
 
+    def uncertainty_run(self, model_name, job_name, scenarios, criteria=(), scenario_action_plans=None, timeout=3600):
+        from .execution.analysis_run import AnalysisRunner
+        from .uncertainty import execute_uncertainty
+        return execute_uncertainty(
+            self.executor,
+            AnalysisRunner(self.executor),
+            model_name,
+            job_name,
+            scenarios,
+            criteria=criteria,
+            scenario_action_plans=scenario_action_plans,
+            timeout=timeout,
+        )
+
     def submit(self, job_name, wait=False):
         from .execution.jobs import JobController
         return JobController(self.executor).submit(job_name, wait=wait)
