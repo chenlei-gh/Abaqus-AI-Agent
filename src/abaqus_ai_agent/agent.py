@@ -76,7 +76,8 @@ class AbaqusAIAgent:
             contact_step=contact_step, contact_frame=contact_frame,
             contact_history_region=contact_history_region,
             contact_position=contact_position, contact_region=contact_region,
-            benchmark=benchmark, benchmark_reference_values=benchmark_reference_values,\n            benchmark_result_overrides=benchmark_result_overrides)
+            benchmark=benchmark, benchmark_reference_values=benchmark_reference_values,
+            benchmark_result_overrides=benchmark_result_overrides)
 
     def submit(self, job_name, wait=False):
         from .execution.jobs import JobController
