@@ -1,4 +1,5 @@
 from dataclasses import dataclass, field
+from math import isfinite
 from typing import Optional, Tuple
 
 
@@ -26,6 +27,28 @@ class FatigueAnalysisIntent:
             raise ValueError("unsupported damage_model")
         if any(len(point) != 2 for point in self.material_curve):
             raise ValueError("material_curve points must be (x, y) pairs")
+
+
+@dataclass(frozen=True)
+class FatigueResult:
+    """Evidence-backed fatigue result; it is not inferred from workflow intent."""
+    status: str
+    life_cycles: Optional[float] = None
+    damage: Optional[float] = None
+    warnings: Tuple[str, ...] = ()
+    evidence: Tuple[str, ...] = ()
+
+    def __post_init__(self):
+        if self.status not in ("not_verified", "pass", "warning", "fail"):
+            raise ValueError("invalid fatigue status")
+        if self.life_cycles is not None and (not isfinite(self.life_cycles) or self.life_cycles <= 0):
+            raise ValueError("life_cycles must be a positive finite value")
+        if self.damage is not None and (not isfinite(self.damage) or self.damage < 0):
+            raise ValueError("damage must be a finite non-negative value")
+
+    @property
+    def passed(self):
+        return self.status == "pass"
 
 
 @dataclass(frozen=True)
