@@ -88,7 +88,7 @@ class AnalysisRunner:
             timeout=3600, action_plan=(), environment=None,
             contact_expected=None, contact_evidence=None, contact_step=None,
             contact_frame=-1, contact_history_region=None, contact_position=None,
-            contact_region=None, benchmark=None, benchmark_reference_values=None):
+            contact_region=None, benchmark=None, benchmark_reference_values=None, benchmark_result_overrides=None):
         run_id = str(uuid.uuid4())
         runtime = _runtime_provenance(self.executor)
         initial_snapshot = None
@@ -135,7 +135,7 @@ class AnalysisRunner:
             benchmark_execution_criteria = ()
             if benchmark is not None:
                 from ..benchmarks import benchmark_result_criteria
-                benchmark_execution_criteria = benchmark_result_criteria(benchmark)
+                benchmark_execution_criteria = benchmark_result_criteria(benchmark, benchmark_result_overrides)
             execution_criteria = tuple(criteria or ()) + tuple(benchmark_execution_criteria)
             output_plan = plan_outputs(execution_criteria)
             output_actions = actions_from_output_plan(model_name, output_plan)
