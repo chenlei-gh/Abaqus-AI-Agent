@@ -6,6 +6,7 @@ from typing import Any, Dict, Optional, Tuple
 from .jobs import JobController, JobState, JobStatus
 from ..engineering_status import EngineeringStatus
 from ..evidence.result import summarize_odb
+from ..evidence.model import Evidence, EvidenceBundle
 
 
 class AnalysisRunState(str, Enum):
@@ -30,7 +31,7 @@ class AnalysisRun:
     odb_path: Optional[str] = None
     engineering_status: Optional[str] = None
     acceptance_passed: Optional[bool] = None
-    evidence: Tuple[Any, ...] = ()
+    evidence: EvidenceBundle = field(default_factory=EvidenceBundle)
     diagnostics: Tuple[Dict[str, Any], ...] = ()
     artifacts: Tuple[Any, ...] = ()
     metadata: Dict[str, Any] = field(default_factory=dict)
@@ -135,13 +136,13 @@ class AnalysisRunner:
                     odb_path=path,
                     engineering_status=EngineeringStatus.RESULT_INVALID.value,
                     diagnostics=({"reason": "odb_invalid", "odb": odb},),
-                    evidence=(odb,), artifacts=artifacts)
+                    evidence=EvidenceBundle((Evidence(kind="odb_summary", source="odb", locator=path, value=odb),)), artifacts=artifacts)
 
             run = run.with_state(
                 AnalysisRunState.ODB_VALIDATED,
                 odb_path=path,
                 engineering_status=EngineeringStatus.RESULT_SUSPICIOUS.value,
-                evidence=(odb,), artifacts=artifacts)
+                evidence=EvidenceBundle((Evidence(kind="odb_summary", source="odb", locator=path, value=odb),)), artifacts=artifacts)
 
             if not criteria:
                 return run.with_state(AnalysisRunState.ODB_VALIDATED)
@@ -152,15 +153,15 @@ class AnalysisRunner:
                     self.executor, path, criteria)
                 result_source = "odb"
             else:
-                result_evidence = ({
-                    "kind": "injected_result",
-                    "source": "external_input",
-                    "value": dict(result_values),
-                    "metadata": {
+                result_evidence = (Evidence(
+                    kind="injected_result",
+                    source="external_input",
+                    value=dict(result_values),
+                    metadata={
                         "odb_backed": False,
                         "engineering_validity": "not_established",
                     },
-                },)
+                ),)
                 result_source = "external_input"
 
             from ..acceptance import evaluate_criteria
@@ -172,7 +173,12 @@ class AnalysisRunner:
                 if accepted.passed
                 else EngineeringStatus.RESULT_INVALID.value
             )
-            evidence = tuple((odb, accepted)) + tuple(result_evidence)
+            evidence = EvidenceBundle((Evidence(
+                kind="odb_summary", source="odb", locator=path, value=odb
+            ), Evidence(
+                kind="acceptance", source="acceptance", locator=job_name,
+                value=accepted
+            ))).extend(result_evidence)
             return run.with_state(
                 AnalysisRunState.ACCEPTED if accepted.passed
                 else AnalysisRunState.RESULTS_EXTRACTED,
