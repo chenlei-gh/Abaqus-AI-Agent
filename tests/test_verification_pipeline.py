@@ -2,6 +2,7 @@ from unittest.mock import patch
 
 from abaqus_ai_agent.execution.analysis_run import AnalysisRunner
 from abaqus_ai_agent.contracts.numerical import NumericalVerificationResult
+from abaqus_ai_agent.contracts.contact import ExpectedContactBehavior
 from abaqus_ai_agent.contracts.engineering_checks import (
     EngineeringCheck,
     EngineeringCheckReport,
@@ -136,3 +137,67 @@ def test_verification_runs_without_explicit_acceptance_criteria():
     run = _run(result_values=False, numerical_verification=numerical)
     assert run.acceptance_passed is False
     assert run.state.value == "results_extracted"
+
+
+def test_contact_failure_blocks_the_analysis_acceptance_chain():
+    expected = ExpectedContactBehavior(
+        contact_required=True,
+        expected_state="contact",
+        required_outputs=("CSTATUS",),
+    )
+    contact_evidence = {
+        "step": "Step-1",
+        "frame": -1,
+        "region": None,
+        "fields": {
+            "CSTATUS": {
+                "status": "available",
+                "values": [{"data": "open"}],
+            },
+        },
+        "history": {"status": "available"},
+    }
+    with patch(
+        "abaqus_ai_agent.execution.analysis_run.extract_contact_evidence",
+        return_value=contact_evidence,
+    ):
+        run = _run(contact_expected=expected)
+    assert run.acceptance_passed is False
+    assert run.state.value == "results_extracted"
+    acceptance = next(e.value for e in run.evidence.items if e.kind == "acceptance")
+    assert "contact:expected_contact_state:fail" in acceptance.failures
+    assert any(e.kind == "contact_evidence" for e in run.evidence.items)
+    assert any(e.kind == "contact_diagnostics" for e in run.evidence.items)
+
+
+def test_contact_warning_does_not_block_the_analysis_acceptance_chain():
+    expected = ExpectedContactBehavior(
+        contact_required=True,
+        expected_state="contact",
+        required_outputs=("CSTATUS", "COPEN"),
+    )
+    contact_evidence = {
+        "step": "Step-1",
+        "frame": -1,
+        "region": None,
+        "fields": {
+            "CSTATUS": {
+                "status": "available",
+                "values": [{"data": "closed"}],
+            },
+            "COPEN": {
+                "status": "available",
+                "values": [{"data": -0.01}],
+            },
+        },
+        "history": {"status": "available"},
+    }
+    with patch(
+        "abaqus_ai_agent.execution.analysis_run.extract_contact_evidence",
+        return_value=contact_evidence,
+    ):
+        run = _run(contact_expected=expected)
+    assert run.acceptance_passed is True
+    acceptance = next(e.value for e in run.evidence.items if e.kind == "acceptance")
+    assert not acceptance.failures
+    assert any(item.startswith("contact:unexpected_overclosure:warning") for item in acceptance.warnings)
