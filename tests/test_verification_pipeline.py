@@ -202,3 +202,50 @@ def test_contact_warning_does_not_block_the_analysis_acceptance_chain():
     acceptance = next(e.value for e in run.evidence.items if e.kind == "acceptance")
     assert not acceptance.failures
     assert any(item.startswith("contact:unexpected_overclosure:warning") for item in acceptance.warnings)
+
+def test_contact_missing_outputs_become_insufficient_evidence_not_execution_failure():
+    expected = ExpectedContactBehavior(
+        contact_required=True,
+        expected_state="contact",
+        required_outputs=("CSTATUS", "COPEN"),
+    )
+    contact_evidence = {
+        "step": "Step-1",
+        "frame": -1,
+        "region": None,
+        "fields": {
+            "CSTATUS": {"status": "unavailable", "reason": "field_output_missing"},
+            "COPEN": {"status": "unavailable", "reason": "field_output_missing"},
+        },
+        "history": {"status": "unavailable", "reason": "history_output_missing"},
+    }
+    with patch(
+        "abaqus_ai_agent.execution.odb.extract_contact_evidence",
+        return_value=contact_evidence,
+    ):
+        run = _run(contact_expected=expected)
+    assert run.state.value == "results_extracted"
+    assert run.acceptance_passed is False
+    acceptance = next(e.value for e in run.evidence.items if e.kind == "acceptance")
+    assert "contact:contact_evidence_sufficiency:insufficient_evidence" in acceptance.failures
+
+
+def test_contact_extractor_execution_error_remains_failed():
+    expected = ExpectedContactBehavior(
+        contact_required=True,
+        expected_state="contact",
+        required_outputs=("CSTATUS",),
+    )
+
+    class ContactExtractionError(RuntimeError):
+        pass
+
+    with patch(
+        "abaqus_ai_agent.execution.odb.extract_contact_evidence",
+        side_effect=ContactExtractionError("invalid region expression"),
+    ):
+        run = _run(contact_expected=expected)
+
+    assert run.state.value == "failed"
+    assert run.acceptance_passed is None
+    assert run.engineering_status == "EXECUTION_FAILED"
