@@ -28,3 +28,5 @@ __version__ = "0.2.2"
 from .benchmark_catalog import standard_benchmarks
 
 from .engineering_evidence import reaction_balance_from_field_evidence, energy_ratio_from_history_evidence
+
+from .uncertainty import execute_uncertainty, aggregate_uncertainty_outputs, build_uncertainty_scenarios
