@@ -106,7 +106,10 @@ class AnalysisRunner:
 
             status = jobs.submit(job_name, wait=True, timeout=timeout)
             artifacts = _collect_artifacts(self.executor, job_name)
-            run = run.with_state(provenance=_provenance_with_artifacts(run.provenance, artifacts))
+            run = run.with_state(
+                run.state,
+                provenance=_provenance_with_artifacts(run.provenance, artifacts),
+            )
             if status.state != JobState.COMPLETED:
                 engineering = (
                     EngineeringStatus.SOLVER_FAILED
