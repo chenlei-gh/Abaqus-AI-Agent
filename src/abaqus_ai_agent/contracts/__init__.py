@@ -16,3 +16,5 @@ from .numerical import NumericalVerificationResult
 from .numerical import NumericalRefinementCase, NumericalRefinementReport, NumericalVerificationResult
 
 from .convergence import MeshConvergencePoint, MeshConvergencePolicy, MeshConvergenceResult, evaluate_mesh_convergence
+
+from .element_strategy import ElementStrategy, resolve_element_code, element_strategy_metadata
