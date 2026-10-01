@@ -18,6 +18,8 @@ class CorrectionAttempt:
     repair: Optional[str]
     status: str
     diagnostics: Tuple[Dict[str, Any], ...] = ()
+    confirmed: bool = False
+    retry_allowed: bool = False
 
 
 @dataclass(frozen=True)
