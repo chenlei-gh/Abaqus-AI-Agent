@@ -396,3 +396,18 @@ def test_contact_expected_region_mismatch_is_insufficient():
     }
     diagnostic = diagnose_contact(evidence, expected).diagnostics[0]
     assert diagnostic.status == "insufficient_evidence"
+
+def test_contact_report_helpers_match_acceptance_blocking_statuses():
+    assert ContactDiagnosticReport((
+        ContactDiagnostic("x", "pass"),
+        ContactDiagnostic("y", "not_applicable"),
+    )).passed
+    assert not ContactDiagnosticReport((
+        ContactDiagnostic("x", "warning"),
+    )).passed
+    report = ContactDiagnosticReport((
+        ContactDiagnostic("x", "insufficient_evidence"),
+        ContactDiagnostic("y", "ambiguous"),
+    ))
+    assert not report.passed
+    assert len(report.failed) == 2
