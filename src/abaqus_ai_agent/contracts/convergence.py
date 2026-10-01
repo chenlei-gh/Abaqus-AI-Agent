@@ -13,6 +13,7 @@ class MeshConvergencePoint:
     quantity: Optional[str] = None
     source: Optional[str] = None
     quality_status: Optional[str] = None
+    singularity_suspected: bool = False
 
     def __post_init__(self):
         if not isfinite(self.mesh_size) or self.mesh_size <= 0:
@@ -49,6 +50,7 @@ class MeshConvergenceResult:
     warnings: Tuple[str, ...] = ()
     evidence: Tuple[str, ...] = ()
     quality_gate_passed: Optional[bool] = None
+    singularity_suspected: bool = False
 
 
 def evaluate_mesh_convergence(points, policy):
@@ -58,26 +60,35 @@ def evaluate_mesh_convergence(points, policy):
         or p.refinement_target == policy.refinement_target
     )
     ordered = tuple(sorted(selected, key=lambda x: x.mesh_size, reverse=True))
+    singularity_suspected = any(p.singularity_suspected for p in ordered)
 
     if len(ordered) < policy.minimum_points:
+        warnings = ["minimum_points_not_reached"]
+        if singularity_suspected:
+            warnings.append("stress_singularity_suspected")
         return MeshConvergenceResult(
             "insufficient_data", ordered, None, False,
-            ("minimum_points_not_reached",),
+            tuple(warnings),
             ("convergence_points:%d" % len(ordered),),
-            None,
+            None, singularity_suspected,
         )
 
     sizes = tuple(p.mesh_size for p in ordered)
     if len(set(sizes)) != len(sizes):
+        warnings = ["duplicate_mesh_size"]
+        if singularity_suspected:
+            warnings.append("stress_singularity_suspected")
         return MeshConvergenceResult(
             "invalid_data", ordered, None, False,
-            ("duplicate_mesh_size",),
+            tuple(warnings),
             ("convergence_points:%d" % len(ordered),),
-            None,
+            None, singularity_suspected,
         )
 
     quality_gate = None
     warnings = []
+    if singularity_suspected:
+        warnings.append("stress_singularity_suspected")
     if policy.require_quality_pass:
         quality_gate = all(p.quality_status == "pass" for p in ordered)
         if not quality_gate:
@@ -95,15 +106,21 @@ def evaluate_mesh_convergence(points, policy):
             evidence.append("source:%s" % p.source)
         if p.quantity:
             evidence.append("quantity:%s" % p.quantity)
+    if singularity_suspected:
+        evidence.append("stress_singularity_suspected")
 
     converged = change <= policy.tolerance
     if policy.require_quality_pass and not quality_gate:
         converged = False
         status = "quality_gate_failed"
+    elif converged and singularity_suspected:
+        status = "converged_with_singularity_warning"
+    elif not converged and singularity_suspected:
+        status = "singularity_limited"
     else:
         status = "converged" if converged else "not_converged"
 
     return MeshConvergenceResult(
         status, ordered, change, converged,
-        tuple(warnings), tuple(evidence), quality_gate,
+        tuple(warnings), tuple(evidence), quality_gate, singularity_suspected,
     )
