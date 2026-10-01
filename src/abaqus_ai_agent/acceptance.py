@@ -61,12 +61,12 @@ def evaluate_criteria(values, criteria):
 
 
 def evaluate_result_acceptance(result_status, numerical=None, engineering=None,
-                               mesh_quality=None, convergence=None,
+                               mesh_quality=None, convergence=None, fatigue=None,
                                values=None, criteria=None):
     """Combine execution/result evidence with deterministic acceptance criteria.
 
     Missing upstream evidence prevents acceptance instead of being treated as a
-    pass. This is a gate, not a score.
+    pass. Optional verification domains are gates only when supplied.
     """
     failures = []
     warnings = []
@@ -80,11 +80,16 @@ def evaluate_result_acceptance(result_status, numerical=None, engineering=None,
         failures.append("mesh_quality_failed")
     if convergence is not None and not getattr(convergence, "converged", False):
         failures.append("mesh_convergence_failed")
+    if fatigue is not None:
+        fatigue_status = getattr(fatigue, "status", None)
+        if fatigue_status == "warning":
+            warnings.append("fatigue_warning")
+        elif fatigue_status != "pass":
+            failures.append("fatigue_verification_failed")
+        warnings.extend(tuple(getattr(fatigue, "warnings", ()) or ()))
 
     criteria_result = evaluate_criteria(values or {}, criteria or ())
-    failures.extend(
-        "criterion:%s" % item.name for item in criteria_result.failures
-    )
+    failures.extend("criterion:%s" % item.name for item in criteria_result.failures)
     warnings.extend(criteria_result.warnings)
 
     if not criteria and values is None:
