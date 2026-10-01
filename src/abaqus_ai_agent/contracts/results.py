@@ -16,6 +16,7 @@ class ResultRequirement:
     position: Optional[str] = None
     region: Optional[str] = None
     history_region: Optional[str] = None
+    history_region_expression: Optional[str] = None
     history_variable: Optional[str] = None
     unit: str = ""
     output_kind: str = "field"
