@@ -48,7 +48,14 @@ class EngineeringReportData:
         if profile is not None:
             sections.setdefault("metadata", {})
             sections["metadata"] = dict(sections["metadata"], postprocess_profile=profile)
-        sections.setdefault("acceptance", getattr(run, "acceptance_passed", None))
+        acceptance_evidence = ()
+        fatigue_evidence = ()
+        if getattr(run, "evidence", None):
+            acceptance_evidence = tuple(x for x in run.evidence.items if getattr(x, "kind", None) == "acceptance")
+            fatigue_evidence = tuple(x for x in run.evidence.items if getattr(x, "kind", None) == "fatigue")
+        sections.setdefault("acceptance", acceptance_evidence[-1].value if acceptance_evidence else getattr(run, "acceptance_passed", None))
+        if fatigue_evidence:
+            sections.setdefault("fatigue", fatigue_evidence[-1].value)
         if "mesh" not in sections:
             sections["mesh"] = {}
         if getattr(run, "metadata", None):
