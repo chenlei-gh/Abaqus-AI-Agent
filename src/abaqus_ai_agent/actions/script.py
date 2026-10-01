@@ -27,7 +27,7 @@ def action_to_script(action):
                 "stabilizationMethod=%s" % p.get("stabilization_method", "NONE"),
                 "timeIncrementationMethod=%s" % p.get("time_incrementation_method", "AUTOMATIC"),
                 "maxNumInc=%d" % int(p.get("max_num_inc", 100)),
-                "amplitude=%s" % p.get("amplitude", "RAMP")]
+                "amplitude=%s" % _q(p.get("amplitude", "RAMP"))]
         for key, arg in (("stabilization_magnitude", "stabilizationMagnitude"),
                          ("initial_inc", "initialInc"), ("min_inc", "minInc"), ("max_inc", "maxInc")):
             if p.get(key) is not None: args.append("%s=%r" % (arg, p[key]))
@@ -45,7 +45,7 @@ def action_to_script(action):
                 "maxNumInc=%d" % int(p.get("max_num_inc", 100)),
                 "solutionTechnique=%s" % p.get("solution_technique", "FULL_NEWTON"),
                 "reformKernel=%d" % int(p.get("reform_kernel", 8)),
-                "amplitude=%s" % p.get("amplitude", "STEP")]
+                "amplitude=%s" % _q(p.get("amplitude", "STEP"))]
         for key, arg in (("initial_inc", "initialInc"), ("min_inc", "minInc"), ("max_inc", "maxInc")):
             if p.get(key) is not None: args.append("%s=%r" % (arg, p[key]))
         return "from abaqusConstants import *; mdb.models[%s].ImplicitDynamicsStep(%s)" % (_q(m), ", ".join(args))
@@ -168,7 +168,13 @@ def _bc_script(action):
     if action.action_type == "fixed_bc":
         return "model=mdb.models[%s]; region=%s; model.EncastreBC(name=%s, createStepName=%s, region=region)" % (_q(m), region, _q(name), _q(step))
     if action.action_type == "temperature_bc":
-        return "model=mdb.models[%s]; region=%s; model.TemperatureBC(name=%s, createStepName=%s, region=region, magnitude=%r)" % (_q(m), region, _q(name), _q(step), p["magnitude"])
+        amp = ", amplitude=%s" % _q(p["amplitude"]) if p.get("amplitude") else ""
+        return "model=mdb.models[%s]; region=%s; model.TemperatureBC(name=%s, createStepName=%s, region=region, magnitude=%r%s)" % (_q(m), region, _q(name), _q(step), p["magnitude"], amp)
+    if action.action_type == "initial_temperature":
+        amp = ", amplitude=%s" % _q(p["amplitude"]) if p.get("amplitude") else ""
+        return "from abaqusConstants import *; model=mdb.models[%s]; region=%s; model.Temperature(name=%s, createStepName=%s, region=region, distributionType=UNIFORM, magnitudes=(%r,)%s)" % (_q(m), region, _q(name), _q("Initial"), p["magnitude"], amp)
+    if action.action_type == "initial_stress":
+        return "from abaqusConstants import *; model=mdb.models[%s]; region=%s; model.Stress(name=%s, region=region, distributionType=UNIFORM, sigma11=%r, sigma22=%r, sigma33=%r, sigma12=%r, sigma13=%r, sigma23=%r)" % (_q(m), region, _q(name), p.get("sigma11",0.0), p.get("sigma22",0.0), p.get("sigma33",0.0), p.get("sigma12",0.0), p.get("sigma13",0.0), p.get("sigma23",0.0))
     if action.action_type == "symmetry_bc":
         method = {"X":"XsymmBC", "Y":"YsymmBC", "Z":"ZsymmBC"}.get(str(p.get("plane", "X")).upper())
         if not method: raise ValueError("symmetry plane must be X, Y or Z")
