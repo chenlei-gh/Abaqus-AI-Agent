@@ -30,6 +30,8 @@ A successful Python invocation is not treated as solver success, and solver comp
 - reaction-force field/history evidence;
 - standard energy-history evidence;
 - stable provenance hashing and artifact-manifest hashing;
+- bounded deterministic parameter identification/calibration;
+- empirical reliability and two-parameter Weibull MLE with right censoring;
 - sensitivity, uncertainty, benchmark, numerical-verification and bounded-correction contracts;
 - explicit repair authorization when a repair candidate requires confirmation;
 - unit-system and dimensional consistency primitives;
@@ -66,7 +68,7 @@ Completed in the current non-runtime closure tranche:
 7. unit/dimensional validation at planning and result-requirement boundaries;
 8. bounded standard engineering-check families.
 
-Remaining non-runtime work is deliberately limited to broader problem-specific engineering evidence and future release-specific validation. Benchmark, uncertainty, numerical-refinement, and controlled-correction execution paths are already implemented.
+Remaining non-runtime work is deliberately limited to broader problem-specific engineering evidence: FORM/SORM, Bayesian inference, critical-plane/non-proportional fatigue, and future release-specific validation. Benchmark, uncertainty, numerical-refinement, controlled-correction, bounded calibration, and bounded reliability execution paths are implemented.
 
 ## Deferred runtime validation
 
@@ -75,4 +77,4 @@ The B28 smoke harness must still be executed on an actual Abaqus V5 R2018/B28 in
 
 ### Fatigue post-processing
 
-Fatigue post-processing is implemented for existing scalar Abaqus stress histories: Rainflow cycle counting with half/full-cycle weights, explicit range/amplitude/mean semantics, optional Goodman correction, log-log S-N interpolation, and Palmgren-Miner damage. Critical-plane and non-proportional multiaxial fatigue criteria remain outside the implemented scope.
+Fatigue post-processing is implemented for existing scalar Abaqus stress histories: Rainflow cycle counting with half/full-cycle weights, explicit range/amplitude/mean semantics, Goodman, Gerber, Soderberg and Walker mean-stress corrections, log-log S-N interpolation, and Palmgren-Miner damage. Critical-plane and non-proportional multiaxial fatigue criteria remain outside the implemented scope.
