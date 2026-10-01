@@ -130,6 +130,22 @@ A key safety rule is:
 
 For example, `Face[17]` is not accepted merely because a model happens to contain a face with that index. The region must be grounded from viewport/image evidence or explicitly supplied by the user.
 
+### Engineering credibility foundations
+
+The repository also includes deterministic engineering-credibility primitives:
+
+- explicit result-acceptance gating;
+- reaction/load balance and energy-ratio sanity checks;
+- RF, energy and contact ODB evidence extraction;
+- evidence-to-engineering-check adapters;
+- successive-change and Richardson/GCI numerical verification;
+- a declarative benchmark catalog;
+- sensitivity and uncertainty contracts;
+- provenance and artifact-manifest hashing;
+- bounded correction policies with explicit repair authorization.
+
+These primitives are evidence mechanisms, not claims of physical correctness by themselves. Real benchmark execution and release-specific validation remain dependent on a licensed Abaqus runtime.
+
 ### Planning, validation, and evidence
 
 The project provides:
