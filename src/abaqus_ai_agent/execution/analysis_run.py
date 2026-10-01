@@ -86,7 +86,8 @@ class AnalysisRunner:
 
     def run(self, model_name, job_name, odb_path=None, criteria=(),
             result_values=None, numerical_verification=None, engineering_checks=None,
-            timeout=3600, action_plan=(), environment=None):
+            timeout=3600, action_plan=(), environment=None, engineering_intent=None,
+            postprocess_profile=None):
         run_id = str(uuid.uuid4())
         runtime = _runtime_provenance(self.executor)
         initial_snapshot = None
@@ -130,7 +131,16 @@ class AnalysisRunner:
                 jobs.create(job_name, model_name)
 
             from ..planning.output import plan_outputs, actions_from_output_plan
-            output_plan = plan_outputs(criteria)
+            if engineering_intent is not None:
+                from ..contracts.solver_selection import select_solver
+                from ..contracts.postprocess import profile_for_solver_selection
+                selection = select_solver(engineering_intent)
+                postprocess_profile = postprocess_profile or profile_for_solver_selection(selection)
+                metadata = dict(run.metadata)
+                metadata["solver_selection"] = selection
+                metadata["postprocess_profile"] = postprocess_profile
+                run = run.with_state(run.state, metadata=metadata)
+            output_plan = plan_outputs(criteria, postprocess_profile=postprocess_profile)
             output_actions = actions_from_output_plan(model_name, output_plan)
             if not action_plan and output_actions:
                 run = run.with_state(
@@ -209,7 +219,7 @@ class AnalysisRunner:
                 engineering_status=EngineeringStatus.RESULT_SUSPICIOUS.value,
                 evidence=EvidenceBundle((Evidence(kind="odb_summary", source="odb", locator=path, value=odb),)), artifacts=artifacts)
 
-            if not criteria and numerical_verification is None and engineering_checks is None:
+            if not criteria and postprocess_profile is None and numerical_verification is None and engineering_checks is None:
                 return run.with_state(AnalysisRunState.ODB_VALIDATED)
 
             if result_values is None:
