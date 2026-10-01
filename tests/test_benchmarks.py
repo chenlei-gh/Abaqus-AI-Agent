@@ -138,3 +138,31 @@ def test_benchmark_zero_reference_requires_absolute_error():
     )
     assert observed == {}
     assert failures == ("zero_reference_requires_absolute_error:reference",)
+
+
+
+def test_benchmark_reference_metadata_is_preserved_in_evidence():
+    from abaqus_ai_agent.benchmarks import derive_benchmark_observations
+
+    case = BenchmarkCase(
+        "case",
+        "reference",
+        acceptance=(
+            {
+                "value_key": "error",
+                "observed_value_key": "value",
+                "metric": "relative_error",
+                "reference_key": "reference",
+                "operator": "<=",
+                "limit": 0.05,
+            },
+        ),
+    )
+    _, evidence, failures = derive_benchmark_observations(
+        case,
+        {"value": 10.5},
+        {"reference": {"value": 10.0, "source": "analytical PL/(AE)", "unit": "mm"}},
+    )
+    assert failures == ()
+    assert evidence[0]["reference_source"] == "analytical PL/(AE)"
+    assert evidence[0]["reference_unit"] == "mm"
