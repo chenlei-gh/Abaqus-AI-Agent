@@ -110,3 +110,39 @@ def summarize_numeric(values):
         return {"count": 0, "minimum": None, "maximum": None, "average": None}
     return {"count": len(nums), "minimum": min(nums), "maximum": max(nums),
             "average": sum(nums) / len(nums)}
+
+
+
+def extract_history(executor, path, step, region, variables):
+    """Extract ODB history-output data as bounded, machine-readable evidence."""
+    code = (
+        "from odbAccess import openOdb\n"
+        "odb=openOdb(path=%r, readOnly=True)\n"
+        "st=odb.steps[%r]\n"
+        "hr=st.historyRegions[%r]\n"
+        "wanted=%r\n"
+        "result={}\n"
+        "for name in wanted:\n"
+        "    out=hr.historyOutputs.get(name)\n"
+        "    result[name]=list(out.data) if out is not None else None\n"
+        "odb.close()\n"
+        "print({'step':%r,'region':%r,'variables':result})"
+    ) % (path, step, region, tuple(variables), step, region)
+    return executor.execute(code)
+
+
+def summarize_history(data):
+    """Summarize history evidence without interpreting engineering correctness."""
+    if not isinstance(data, dict):
+        return {"status": "invalid", "variables": {}}
+    variables = data.get("variables", {})
+    summary = {}
+    for name, series in variables.items():
+        values = [float(pair[1]) for pair in (series or ()) if isinstance(pair, (tuple, list)) and len(pair) >= 2]
+        summary[name] = {
+            "count": len(values),
+            "minimum": min(values) if values else None,
+            "maximum": max(values) if values else None,
+            "last": values[-1] if values else None,
+        }
+    return {"status": "available", "step": data.get("step"), "region": data.get("region"), "variables": summary}
