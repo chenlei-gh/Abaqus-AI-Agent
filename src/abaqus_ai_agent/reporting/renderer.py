@@ -30,12 +30,14 @@ def render_markdown(report):
     return "\n".join(lines)
 
 def render_html(report):
-    return "<!doctype html><html><head><meta charset='utf-8'><title>%s</title></head><body><pre>%s</pre></body></html>" % (html.escape(report.title), html.escape(render_markdown(report)))
+    body = html.escape(render_markdown(report))
+    figures = "".join("<figure><img src=\\\"%s\\\" alt=\\\"%s\\\" style=\\\"max-width:100%%\\\"><figcaption>%s</figcaption></figure>" % (html.escape(f.path, quote=True), html.escape(f.caption or f.kind, quote=True), html.escape(f.caption or f.kind)) for f in report.figures)
+    return "<!doctype html><html><head><meta charset='utf-8'><title>%s</title></head><body><pre>%s</pre>%s</body></html>" % (html.escape(report.title), body, figures)
 
 def render_pdf(report, output_path):
     try:
         from reportlab.lib.pagesizes import A4
-        from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Preformatted
+        from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Preformatted, Image
         from reportlab.lib.styles import getSampleStyleSheet
     except ImportError:
         raise RuntimeError("PDF rendering requires optional dependency: reportlab")
@@ -44,7 +46,13 @@ def render_pdf(report, output_path):
     story = [Paragraph(html.escape(report.title), styles["Title"]), Spacer(1, 12)]
     for line in render_markdown(report).splitlines():
         if line.startswith("## "): story.append(Paragraph(html.escape(line[3:]), styles["Heading2"]))
-        elif line and not line.startswith("# ") and not line.startswith("```"): story.append(Preformatted(line, styles["Code"]))
+        elif line and not line.startswith("# ") and not line.startswith("```") and not line.startswith("!["): story.append(Preformatted(line, styles["Code"]))
+    for figure in report.figures:
+        try:
+            story.append(Image(figure.path, width=500, height=300))
+            if figure.caption: story.append(Paragraph(html.escape(figure.caption), styles["BodyText"]))
+        except Exception:
+            story.append(Preformatted("Figure unavailable: %s" % figure.path, styles["Code"]))
     doc.build(story)
     return output_path
 
