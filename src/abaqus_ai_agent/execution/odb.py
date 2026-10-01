@@ -160,9 +160,9 @@ def extract_contact_field(executor, path, step, field, frame=-1, position=None,
         operations.append("fo=fo.getSubset(position=%r)" % position)
     if region:
         operations.append("fo=fo.getSubset(region=%s)" % region)
-    suffix = "\\n".join(operations)
-    if suffix:
-        suffix += "\\n"
+    subset_code = "\\n".join(operations)
+    if subset_code:
+        subset_code += "\\n"
     code = (
         "from odbAccess import openOdb\\n"
         "odb=openOdb(path=%r, readOnly=True)\\n"
@@ -171,10 +171,8 @@ def extract_contact_field(executor, path, step, field, frame=-1, position=None,
         "requested=%r\\n"
         "available=list(fr.fieldOutputs.keys())\\n"
         "if requested not in fr.fieldOutputs:\\n"
-        "    odb.close()\\n"
-        "    print({'status':'unavailable','reason':'field_output_missing',"
-        "'step':%r,'frame_index':%r,'field':requested,"
-        "'available':available})\\n"
+        "    result={'status':'unavailable','reason':'field_output_missing',"
+        "'step':%r,'frame_index':%r,'field':requested,'available':available}\\n"
         "else:\\n"
         "    fo=fr.fieldOutputs[requested]\\n"
         "%s"
@@ -187,11 +185,12 @@ def extract_contact_field(executor, path, step, field, frame=-1, position=None,
         "'data':v.data,'magnitude':getattr(v,'magnitude',None),"
         "'mises':getattr(v,'mises',None),"
         "'status':getattr(v,'status',None)})\\n"
-        "    odb.close()\\n"
-        "    print({'status':'available','step':%r,'frame_index':%r,"
+        "    result={'status':'available','step':%r,'frame_index':%r,"
         "'frame_value':getattr(fr,'frameValue',None),'field':requested,"
-        "'count':len(values),'values':values})\\n"
-    ) % (path, step, frame, field, step, frame, suffix, step, frame)
+        "'count':len(values),'values':values}\\n"
+        "odb.close()\\n"
+        "print(result)\\n"
+    ) % (path, step, frame, field, step, frame, subset_code, step, frame)
     return executor.execute(code)
 
 
@@ -203,41 +202,41 @@ def extract_contact_history(executor, path, step, region=None,
         "odb=openOdb(path=%r, readOnly=True)\\n"
         "st=odb.steps[%r]\\n"
         "regions=st.historyRegions\\n"
+        "requested=%r\\n"
         "region_name=%r\\n"
+        "result={}\\n"
         "if region_name:\\n"
         "    if region_name not in regions:\\n"
-        "        odb.close()\\n"
-        "        print({'status':'unavailable','reason':'history_region_missing',"
-        "'step':%r,'region':region_name,'variables':{}})\\n"
-        "        raise SystemExit\\n"
-        "    hr=regions[region_name]\\n"
+        "        result={'status':'unavailable','reason':'history_region_missing',"
+        "'step':%r,'region':region_name,'variables':{}}\\n"
+        "    else:\\n"
+        "        hr=regions[region_name]\\n"
+        "        result={'status':'available','step':%r,'region':region_name,'variables':{}}\\n"
         "else:\\n"
-        "    hr=None\\n"
         "    matches=[]\\n"
         "    for _name,_hr in regions.items():\\n"
-        "        if any(_var in _hr.historyOutputs for _var in %r):\\n"
+        "        if any(_var in _hr.historyOutputs for _var in requested):\\n"
         "            matches.append((_name,_hr))\\n"
         "    if len(matches) == 1:\\n"
         "        region_name,hr=matches[0]\\n"
+        "        result={'status':'available','step':%r,'region':region_name,'variables':{}}\\n"
         "    elif len(matches) == 0:\\n"
-        "        odb.close()\\n"
-        "        print({'status':'unavailable','reason':'history_output_missing',"
-        "'step':%r,'region':None,'variables':{}})\\n"
-        "        raise SystemExit\\n"
+        "        result={'status':'unavailable','reason':'history_output_missing',"
+        "'step':%r,'region':None,'variables':{}}\\n"
         "    else:\\n"
-        "        odb.close()\\n"
-        "        print({'status':'ambiguous','reason':'multiple_history_regions',"
-        "'step':%r,'regions':[x[0] for x in matches],'variables':{}})\\n"
-        "        raise SystemExit\\n"
-        "result={}\\n"
-        "for name in %r:\\n"
-        "    if name in hr.historyOutputs:\\n"
-        "        result[name]={'status':'available','data':list(hr.historyOutputs[name].data)}\\n"
-        "    else:\\n"
-        "        result[name]={'status':'unavailable','reason':'history_output_missing'}\\n"
+        "        result={'status':'ambiguous','reason':'multiple_history_regions',"
+        "'step':%r,'regions':[x[0] for x in matches],'variables':{}}\\n"
+        "if result['status'] == 'available':\\n"
+        "    for name in requested:\\n"
+        "        if name in hr.historyOutputs:\\n"
+        "            result['variables'][name]={'status':'available',"
+        "'data':list(hr.historyOutputs[name].data)}\\n"
+        "        else:\\n"
+        "            result['variables'][name]={'status':'unavailable',"
+        "'reason':'history_output_missing'}\\n"
         "odb.close()\\n"
-        "print({'status':'available','step':%r,'region':region_name,'variables':result})\\n"
-    ) % (path, step, region, step, tuple(variables), step, step, tuple(variables), step)
+        "print(result)\\n"
+    ) % (path, step, tuple(variables), region, step, step, step, step, step)
     return executor.execute(code)
 
 
