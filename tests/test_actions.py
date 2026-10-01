@@ -9,6 +9,7 @@ from abaqus_ai_agent.actions import (
     export_inp, export_odb_csv, bias_seed_size, bias_seed_number, sweep_path, verify_mesh_quality,
 )
 from abaqus_ai_agent.actions.runner import preview
+from abaqus_ai_agent.validation.actions import validate_action
 
 
 def test_fixed_bc_script():
@@ -82,3 +83,12 @@ def test_mesh_strategy_scripts():
     assert "threshold=5.0" in preview(verify_mesh_quality("M", "P", criterion="ASPECT_RATIO", threshold=5.0))
     with pytest.raises(ValueError):
         preview(verify_mesh_quality("M", "P", criterion="ASPECT_RATIO"))
+
+
+def test_mesh_actions_validate():
+    assert validate_action(bias_seed_size("M", "P", "p.edges", 0.5, 2.0))
+    assert validate_action(bias_seed_number("M", "P", "p.edges", 12, 4.0, end="END2"))
+    assert validate_action(sweep_path("M", "P", "p.cells", "p.edges[0]"))
+    assert validate_action(verify_mesh_quality("M", "P"))
+    with pytest.raises(ValueError):
+        validate_action(verify_mesh_quality("M", "P", criterion="ASPECT_RATIO"))
