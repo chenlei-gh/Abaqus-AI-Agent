@@ -6,7 +6,7 @@ from abaqus_ai_agent.actions import (
     tabular_amplitude, smooth_step_amplitude, periodic_amplitude, equally_spaced_amplitude,
     initial_temperature, initial_stress, gravity,
     assembly_inspect, instance_translate, instance_rotate, instance_linear_pattern,
-    export_inp, export_odb_csv,
+    export_inp, export_odb_csv, bias_seed_size, bias_seed_number, sweep_path, verify_mesh_quality,
 )
 from abaqus_ai_agent.actions.runner import preview
 
@@ -69,3 +69,16 @@ def test_assembly_and_export_scripts():
     assert "LinearInstancePattern" in preview(instance_linear_pattern("M", ("PART-1-1",), 2, 10.0))
     assert "writeInput" in preview(export_inp("M", "Job-1"))
     assert "openOdb" in preview(export_odb_csv("M", "Job-1.odb", "results.csv", variable="S"))
+
+
+def test_mesh_strategy_scripts():
+    assert "seedEdgeByBias" in preview(bias_seed_size("M", "P", "p.edges", 0.5, 2.0))
+    assert "minSize=0.5" in preview(bias_seed_size("M", "P", "p.edges", 0.5, 2.0))
+    assert "number=12" in preview(bias_seed_number("M", "P", "p.edges", 12, 4.0, end="END2"))
+    assert "end2Edges" in preview(bias_seed_number("M", "P", "p.edges", 12, 4.0, end="END2"))
+    assert "setSweepPath" in preview(sweep_path("M", "P", "p.cells", "p.edges[0]"))
+    assert "verifyMeshQuality" in preview(verify_mesh_quality("M", "P"))
+    assert "criterion=ANALYSIS_CHECKS" in preview(verify_mesh_quality("M", "P"))
+    assert "threshold=5.0" in preview(verify_mesh_quality("M", "P", criterion="ASPECT_RATIO", threshold=5.0))
+    with pytest.raises(ValueError):
+        preview(verify_mesh_quality("M", "P", criterion="ASPECT_RATIO"))
