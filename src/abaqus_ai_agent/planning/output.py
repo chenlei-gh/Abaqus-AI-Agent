@@ -19,7 +19,10 @@ def plan_outputs(criteria=(), outputs=()):
     """
     requirements = requirements_from_criteria(criteria)
     fields = set(required_field_variables(requirements))
-    histories = set()
+    histories = set(
+        r.history_variable for r in requirements
+        if getattr(r, "output_kind", None) == "history" and r.history_variable
+    )
     for item in outputs or ():
         if isinstance(item, str):
             fields.add(item)
