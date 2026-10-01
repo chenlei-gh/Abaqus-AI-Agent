@@ -43,7 +43,7 @@ This audit distinguishes capability presence from execution-chain integration. A
 | Engineering sanity checks | load/reaction + energy | evidence-oriented hub workflows | 🟡 Standard catalog not yet closed |
 | Provenance | contract + artifact manifest hash | not a first-class comparable feature in references | 🟡 Partial population |
 | Sensitivity | contract + execution helper | reference workflow patterns | 🟡 Executable helper, not a full acceptance-bound experiment |
-| Uncertainty | contracts only | reference workflows vary | 🟡 Contract-only |
+| Uncertainty | bounded scenario execution through AnalysisRunner + deterministic envelope aggregation | reference workflows vary | 🟡 Executable tolerance-bound propagation; probabilistic/full UQ deferred |
 | Benchmarks | catalog + evaluator | reference examples/models | 🟡 Evaluation-only, no solver execution path |
 | Controlled correction | policy/attempt evidence | reference error-recovery patterns | 🟡 Policy/evidence only; no concrete repair workflow |
 | Unit/dimensional consistency | primitives only | engineering workflow requirement | 🔴 Main-chain integration missing |
@@ -166,7 +166,7 @@ No universal engineering threshold should be invented here; limits remain proble
 
 1. ContactDiagnostic engineering interpretation.
 2. Benchmark execution through AnalysisRunner.
-3. Uncertainty scenario execution through AnalysisRunner.
+3. Uncertainty scenario execution through AnalysisRunner. **Completed in P1-3 as bounded tolerance propagation; probabilistic sampling/reliability remains deferred.**
 4. Time-step and element-sensitivity numerical verification.
 5. First narrow, explicitly authorized correction workflow.
 
