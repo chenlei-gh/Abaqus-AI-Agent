@@ -39,3 +39,36 @@ def evaluate_criteria(values, criteria):
         results.append(item)
         if not passed: failures.append(item)
     return AcceptanceResult(not failures, tuple(results), tuple(failures), tuple(warnings))
+
+
+def evaluate_result_acceptance(result_status, numerical=None, engineering=None,
+                               values=None, criteria=None):
+    """Combine execution/result evidence with deterministic acceptance criteria.
+
+    This is intentionally a gate, not a score. Missing upstream evidence
+    prevents acceptance instead of being treated as a pass.
+    """
+    failures = []
+    warnings = []
+    if result_status != "completed":
+        failures.append("solver_status:%s" % result_status)
+    if numerical is not None and not getattr(numerical, "passed", False):
+        failures.append("numerical_verification_failed")
+    if engineering is not None and not getattr(engineering, "passed", False):
+        failures.append("engineering_checks_failed")
+
+    criteria_result = evaluate_criteria(values or {}, criteria or ())
+    failures.extend(
+        "criterion:%s" % item.name for item in criteria_result.failures
+    )
+    warnings.extend(criteria_result.warnings)
+
+    if not criteria and values is None:
+        warnings.append("no_explicit_acceptance_criteria")
+
+    return AcceptanceResult(
+        passed=not failures,
+        criteria=criteria_result.criteria,
+        failures=tuple(failures),
+        warnings=tuple(warnings),
+    )
