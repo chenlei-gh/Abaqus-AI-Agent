@@ -39,7 +39,7 @@ A successful Python invocation is not treated as solver success, and solver comp
 
 ### Numerical verification
 
-The current numerical verifier checks successive relative change. It is a deterministic primitive, not yet a complete mesh/time convergence or GCI implementation.
+The verifier now includes successive relative change and Richardson/GCI. These are numerical evidence primitives only; time-step refinement, element sensitivity, and singularity-aware interpretation remain outside the current closure.
 
 ### Benchmarks
 
@@ -47,7 +47,7 @@ Benchmark contracts and deterministic evaluation exist. A licensed Abaqus runtim
 
 ### Provenance
 
-The current artifact manifest hashes metadata (path, existence, size and modification time). It does not pretend to hash solver/model bytes when those bytes are not available to the host process.
+The normal analysis path now records executor/runtime metadata, a model-snapshot hash when a snapshot is available, and the generated output-action plan. Artifact-manifest hashing remains a metadata hash (path, existence, size and modification time); solver/model byte hashes are deliberately left unset unless a future executor can provide them reliably.
 
 ### Controlled correction
 
@@ -55,19 +55,24 @@ Repair candidates are policy-filtered, and confirmation is an explicit execution
 
 ## Next non-runtime work
 
-Completed in the non-runtime closure tranche:
+Completed in the current non-runtime closure tranche:
 
 1. declarative engineering benchmark catalog;
 2. Richardson/GCI numerical verification primitive;
 3. RF/energy evidence-to-engineering-check adapters;
-4. explicit repair authorization gate.
+4. explicit repair authorization gate;
+5. bounded sensitivity execution through the existing AnalysisRunner;
+6. runtime-aware provenance population;
+7. unit/dimensional validation at planning and result-requirement boundaries;
+8. bounded standard engineering-check families.
 
 Remaining non-runtime work:
 
-1. sensitivity execution helpers around the existing executor;
-2. stronger reproducibility manifest population from available runtime metadata;
-3. bounded self-correction attempt/evidence records;
-4. contact-specific engineering interpretation where thresholds are explicitly declared.
+1. contact-specific engineering interpretation where thresholds are explicitly declared;
+2. benchmark execution through AnalysisRunner;
+3. uncertainty scenario execution through AnalysisRunner;
+4. time-step/element numerical verification;
+5. one concrete, explicitly authorized correction workflow.
 
 ## Deferred runtime validation
 
