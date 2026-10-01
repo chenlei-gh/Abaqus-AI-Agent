@@ -6,7 +6,7 @@ combinations fail closed rather than guessing an element formulation.
 """
 
 from dataclasses import dataclass
-from typing import Optional, Tuple
+from typing import Tuple
 
 
 @dataclass(frozen=True)
@@ -34,9 +34,15 @@ class ElementStrategy:
             raise ValueError("formulation must be REDUCED, FULL or STANDARD")
         if self.integration not in {"DEFAULT", "FULL", "REDUCED"}:
             raise ValueError("unsupported integration")
+        if self.formulation == "REDUCED" and self.integration == "FULL":
+            raise ValueError("reduced formulation cannot request full integration")
+        if self.formulation == "FULL" and self.integration == "REDUCED":
+            raise ValueError("full formulation cannot request reduced integration")
+        if self.formulation == "STANDARD":
+            raise ValueError("STANDARD formulation is not mapped by this contract")
 
 
-# Deliberately small: common structural element choices only.
+# Deliberately small: common structural continuum element choices only.
 # Abaqus element code is the authoritative runtime representation.
 _ELEMENT_CODES = {
     ("CONTINUUM", "3D", "HEX", "LINEAR", "REDUCED"): "C3D8R",
@@ -48,12 +54,17 @@ _ELEMENT_CODES = {
     ("CONTINUUM", "3D", "WEDGE", "LINEAR", "REDUCED"): "C3D6",
     ("CONTINUUM", "3D", "WEDGE", "QUADRATIC", "FULL"): "C3D15",
     ("CONTINUUM", "2D_PLANE_STRESS", "QUAD", "LINEAR", "REDUCED"): "CPS4R",
-    ("CONTINUUM", "2D", "QUAD", "LINEAR", "FULL"): "CPS4",
-    ("CONTINUUM", "2D", "QUAD", "QUADRATIC", "REDUCED"): "CPS8R",
-    ("CONTINUUM", "2D", "QUAD", "QUADRATIC", "FULL"): "CPS8",
+    ("CONTINUUM", "2D_PLANE_STRESS", "QUAD", "LINEAR", "FULL"): "CPS4",
+    ("CONTINUUM", "2D_PLANE_STRESS", "QUAD", "QUADRATIC", "REDUCED"): "CPS8R",
+    ("CONTINUUM", "2D_PLANE_STRESS", "QUAD", "QUADRATIC", "FULL"): "CPS8",
     ("CONTINUUM", "2D_PLANE_STRESS", "TRI", "LINEAR", "FULL"): "CPS3",
+    ("CONTINUUM", "2D_PLANE_STRESS", "TRI", "QUADRATIC", "FULL"): "CPS6",
+    ("CONTINUUM", "2D_PLANE_STRAIN", "QUAD", "LINEAR", "REDUCED"): "CPE4R",
+    ("CONTINUUM", "2D_PLANE_STRAIN", "QUAD", "LINEAR", "FULL"): "CPE4",
+    ("CONTINUUM", "2D_PLANE_STRAIN", "QUAD", "QUADRATIC", "REDUCED"): "CPE8R",
+    ("CONTINUUM", "2D_PLANE_STRAIN", "QUAD", "QUADRATIC", "FULL"): "CPE8",
     ("CONTINUUM", "2D_PLANE_STRAIN", "TRI", "LINEAR", "FULL"): "CPE3",
-    ("CONTINUUM", "2D", "TRI", "QUADRATIC", "FULL"): "CPS6",
+    ("CONTINUUM", "2D_PLANE_STRAIN", "TRI", "QUADRATIC", "FULL"): "CPE6",
 }
 
 
