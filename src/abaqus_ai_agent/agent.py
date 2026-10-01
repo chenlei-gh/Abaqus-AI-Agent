@@ -56,7 +56,7 @@ class AbaqusAIAgent:
         return inspect_job_artifacts(self.executor, job_name, workdir=workdir)
 
     def select_solver(self, intent):
-        from .solver_selection import select_solver
+        from .contracts.solver_selection import select_solver
         return select_solver(intent)
 
     def build_report(self, run, title=None, objective="", **sections):
