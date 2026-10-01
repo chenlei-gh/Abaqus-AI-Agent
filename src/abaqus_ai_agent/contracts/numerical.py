@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import Tuple
+from typing import Optional, Tuple
 
 
 @dataclass(frozen=True)
@@ -11,6 +11,9 @@ class NumericalVerificationResult:
     points: Tuple[float, ...] = ()
     method: str = "successive_relative_change"
     message: str = ""
+    observed_order: Optional[float] = None
+    extrapolated_value: Optional[float] = None
+    gci: Optional[float] = None
 
     @property
     def passed(self):
