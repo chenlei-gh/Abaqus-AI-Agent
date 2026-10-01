@@ -3,6 +3,7 @@ import pytest
 from abaqus_ai_agent.contracts.element_strategy import ElementStrategy, resolve_element_code
 from abaqus_ai_agent.actions import element_strategy
 from abaqus_ai_agent.actions.runner import preview
+from abaqus_ai_agent.validation.actions import validate_action
 
 
 def test_common_3d_hex_strategy_resolves():
@@ -45,3 +46,14 @@ def test_action_exposes_semantic_intent_and_native_code():
     assert action.parameters["elem_code"] == "C3D8R"
     assert action.parameters["family"] == "CONTINUUM"
     assert "C3D8R" in preview(action)
+
+
+def test_validation_rejects_semantic_native_code_mismatch():
+    action = element_strategy(
+        "M", "P", "p.cells",
+        family="continuum", dimension="3d", shape="hex",
+        order="linear", formulation="reduced",
+    )
+    action.parameters["elem_code"] = "C3D8"
+    with pytest.raises(ValueError, match="does not match semantic element strategy"):
+        validate_action(action)
