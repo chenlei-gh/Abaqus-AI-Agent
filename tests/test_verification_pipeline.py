@@ -194,3 +194,31 @@ def test_singularity_warning_is_distinct_from_mesh_nonconvergence():
     assert result.status == "converged_with_singularity_warning"
     assert result.singularity_suspected
     assert "stress_singularity_suspected" in result.warnings
+
+
+def test_contact_diagnostics_gate_supplied_contact_verification():
+    from abaqus_ai_agent.acceptance import evaluate_result_acceptance
+    from abaqus_ai_agent.contracts.contact import ContactDiagnostic, ContactDiagnosticReport
+
+    report = ContactDiagnosticReport((
+        ContactDiagnostic("contact_state", "fail", message="expected contact was open"),
+    ))
+    result = evaluate_result_acceptance(
+        "completed", contact_diagnostics=report, values={}, criteria=(),
+    )
+    assert not result.passed
+    assert "contact_diagnostics_failed" in result.failures
+
+
+def test_contact_not_applicable_is_not_silent_pass():
+    from abaqus_ai_agent.acceptance import evaluate_result_acceptance
+    from abaqus_ai_agent.contracts.contact import ContactDiagnostic, ContactDiagnosticReport
+
+    report = ContactDiagnosticReport((
+        ContactDiagnostic("contact_state", "not_applicable"),
+    ))
+    result = evaluate_result_acceptance(
+        "completed", contact_diagnostics=report, values={}, criteria=(),
+    )
+    assert result.passed
+    assert "contact_diagnostics_not_applicable" in result.warnings
