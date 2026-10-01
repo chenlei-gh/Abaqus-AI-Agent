@@ -12,7 +12,7 @@ def stress_range_and_amplitude(stress_a: float, stress_b: float) -> Tuple[float,
     return r, r / 2.0
 
 
-def reversals_to_reversals(points: Sequence[float]) -> Tuple[float, ...]:
+def turning_points(points: Sequence[float]) -> Tuple[float, ...]:
     values = tuple(float(x) for x in points)
     if any(not isfinite(x) for x in values):
         raise ValueError("stress history values must be finite")
@@ -34,7 +34,7 @@ def reversals_to_reversals(points: Sequence[float]) -> Tuple[float, ...]:
 
 def rainflow_count(stress_history: Sequence[float]) -> Tuple[Tuple[float, float, float], ...]:
     """Return (range, mean, count); count is 1.0 full or 0.5 half cycle."""
-    points = reversals_to_reversals(stress_history)
+    points = turning_points(stress_history)
     if len(points) < 2:
         return ()
     stack: List[float] = []
@@ -84,6 +84,31 @@ def reduce_multiaxial_history(history: Iterable[dict], measure: str = "von_mises
             raise ValueError("stress history values must be finite")
         result.append(value)
     return tuple(result)
+
+
+def miner_damage(cycles: Sequence[Tuple[float, float, float]], material_curve: Sequence[Tuple[float, float]], ultimate_strength: float = None) -> float:
+    """Accumulate Palmgren-Miner damage from counted stress cycles."""
+    damage = 0.0
+    for stress_range, mean, count in cycles:
+        if count < 0:
+            raise ValueError("cycle count cannot be negative")
+        amplitude = float(stress_range) / 2.0
+        corrected = (
+            goodman_corrected_amplitude(amplitude, mean, ultimate_strength)
+            if ultimate_strength is not None else amplitude
+        )
+        if corrected <= 0:
+            continue
+        damage += float(count) / sn_life(corrected, material_curve)
+    return damage
+
+
+def fatigue_life_blocks(cycles: Sequence[Tuple[float, float, float]], material_curve: Sequence[Tuple[float, float]], ultimate_strength: float = None) -> float:
+    """Return repeated-spectrum blocks to Miner failure (unit damage)."""
+    damage = miner_damage(cycles, material_curve, ultimate_strength)
+    if damage <= 0:
+        raise ValueError("cycle spectrum has zero damage")
+    return 1.0 / damage
 
 
 def sn_life(alternating_stress: float, material_curve: Sequence[Tuple[float, float]]) -> float:
