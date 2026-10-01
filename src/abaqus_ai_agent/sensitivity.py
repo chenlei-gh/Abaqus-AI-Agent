@@ -50,16 +50,29 @@ def summarize_sensitivity_results(baseline, results):
 
 
 def execute_sensitivity(executor, runner, model_name, job_name, baseline_values,
-                        cases, value_extractor, timeout=3600):
+                        cases, value_extractor, timeout=3600, case_applier=None):
     """Run declared sensitivity cases through the existing AnalysisRunner.
 
     This helper does not create a new orchestration layer. The caller supplies
     the runner and a result extractor, while each case remains explicit.
     """
     baseline = dict(baseline_values)
+    if case_applier is None:
+        return SensitivityReport(
+            baseline, tuple(
+                SensitivityResult(
+                    case=case,
+                    values={},
+                    relative_changes={},
+                    status="failed",
+                    diagnostics=({"error": "case_applier is required to materialize sensitivity parameters"},),
+                ) for case in build_sensitivity_cases(model_name, job_name, cases)
+            ), ()
+        )
     results = []
     for case in build_sensitivity_cases(model_name, job_name, cases):
         try:
+            case_applier(executor, case)
             run = runner.run(
                 case.model_name or model_name,
                 case.job_name or ("%s_%s" % (job_name, case.name)),
