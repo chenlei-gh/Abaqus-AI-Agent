@@ -32,11 +32,15 @@ def _criterion_passes(actual, criterion):
 def benchmark_result_criteria(case, result_overrides=None):
     """Build deterministic ODB result requirements for an executable benchmark."""
     criteria = []
+    seen_source_keys = set()
     overrides = dict(result_overrides or {})
     for criterion in case.acceptance:
         source = dict(criterion.get("result") or {})
         source.update(dict(overrides.get(criterion["value_key"], {}) or {}))
         source_key = criterion.get("observed_value_key", criterion["value_key"])
+        if source_key in seen_source_keys:
+            raise ValueError("duplicate benchmark observed_value_key: %s" % source_key)
+        seen_source_keys.add(source_key)
         source["value_key"] = source_key
         source.setdefault("name", source_key)
         source["operator"] = criterion.get("operator", "<=")
