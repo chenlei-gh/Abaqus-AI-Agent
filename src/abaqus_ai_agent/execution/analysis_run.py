@@ -98,11 +98,7 @@ class AnalysisRunner:
         runtime_environment = dict(getattr(runtime, "metadata", {}) or {}) if runtime else {}
         if environment:
             runtime_environment.update(dict(environment))
-        normalized_action_plan = (
-            _action_records(action_plan)
-            if action_plan and not isinstance(next(iter(action_plan), None), dict)
-            else tuple(action_plan)
-        )
+        normalized_action_plan = _normalize_action_plan(action_plan)
         provenance = AnalysisProvenance(
             run_id=run_id,
             model_name=model_name,
@@ -308,6 +304,15 @@ def _collect_artifacts(executor, job_name):
         return inspect_job_artifacts(executor, job_name).items
     except Exception:
         return ()
+
+
+def _normalize_action_plan(action_plan):
+    items = tuple(action_plan or ())
+    if not items:
+        return ()
+    if all(isinstance(item, dict) for item in items):
+        return items
+    return _action_records(items)
 
 
 def _runtime_provenance(executor):
