@@ -54,3 +54,22 @@ def test_postprocess_profile_drives_output_plan():
     assert "U" in plan.field_variables
     assert "RF" in plan.field_variables
     assert "RF" in plan.history_variables
+
+
+def test_report_preserves_mesh_verification_evidence():
+    from abaqus_ai_agent.contracts.report import EngineeringReportData
+    from abaqus_ai_agent.evidence.model import Evidence, EvidenceBundle
+    from types import SimpleNamespace
+
+    run = SimpleNamespace(
+        id="r1", model_name="M", job_name="J", state=SimpleNamespace(value="accepted"),
+        engineering_status="result_valid", acceptance_passed=True,
+        metadata={}, metrics=(), provenance=None,
+        evidence=EvidenceBundle((
+            Evidence(kind="mesh_quality", source="verification", value={"status": "pass"}),
+            Evidence(kind="mesh_convergence", source="verification", value={"converged": True}),
+        ))
+    )
+    report = EngineeringReportData.from_analysis(run)
+    assert report.mesh["quality"]
+    assert report.mesh["convergence"]
