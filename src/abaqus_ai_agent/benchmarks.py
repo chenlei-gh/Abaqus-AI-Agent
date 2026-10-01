@@ -62,7 +62,7 @@ def derive_benchmark_observations(case, result_values, reference_values=None):
             observed[key] = actual
             evidence.append({"value_key": key, "actual": actual, "metric": "identity", "status": "available"})
             continue
-        if metric != "relative_error":
+        if metric not in ("relative_error", "absolute_error"):
             raise ValueError("unsupported benchmark metric: %s" % metric)
         reference_key = criterion.get("reference_key", key)
         if reference_key not in references:
@@ -70,7 +70,17 @@ def derive_benchmark_observations(case, result_values, reference_values=None):
             evidence.append({"value_key": key, "reference_key": reference_key, "status": "missing_reference"})
             continue
         reference = float(references[reference_key])
-        value = abs(actual - reference) / max(abs(reference), 1e-30)
+        if metric == "relative_error":
+            if reference == 0.0:
+                failures.append("zero_reference_requires_absolute_error:%s" % reference_key)
+                evidence.append({
+                    "value_key": key, "reference_key": reference_key,
+                    "status": "invalid_reference", "reason": "zero_reference",
+                })
+                continue
+            value = abs(actual - reference) / abs(reference)
+        else:
+            value = abs(actual - reference)
         observed[key] = value
         evidence.append({
             "value_key": key, "actual": actual, "reference": reference,
@@ -103,6 +113,7 @@ def evaluate_benchmark(case, observed, acceptance=None, pre_failures=()):
         })
         if not passed:
             failures.append("%s:%s" % (key, criterion.get("operator", "<=")))
+    failures = tuple(dict.fromkeys(failures))
     return BenchmarkResult(
         case=case,
         passed=not failures,
