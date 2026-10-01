@@ -20,7 +20,7 @@ class FakeExecutor:
         return {"status": "available", "steps": ("Step-1",)}
 
 
-def _run(**kwargs):
+def _run(result_values=True, **kwargs):
     executor = FakeExecutor()
     with patch(
         "abaqus_ai_agent.execution.analysis_run._collect_artifacts",
@@ -48,12 +48,19 @@ def _run(**kwargs):
         "abaqus_ai_agent.execution.analysis_run.JobController.submit",
         return_value=JobStatus("Job", JobState.COMPLETED),
     ):
-        return AnalysisRunner(executor).run(
-            "Model", "Job",
-            criteria=({"value_key": "tip_displacement", "operator": "<=", "limit": 1.0},),
-            result_values={"tip_displacement": 0.5},
-            **kwargs
-        )
+        call = {
+            "model_name": "Model",
+            "job_name": "Job",
+            "criteria": ({"value_key": "tip_displacement", "operator": "<=", "limit": 1.0},),
+        }
+        if result_values is not False:
+            call["result_values"] = {"tip_displacement": 0.5}
+            return AnalysisRunner(executor).run(**call, **kwargs)
+        with patch(
+            "abaqus_ai_agent.execution.analysis_run.extract_criteria",
+            return_value=({"tip_displacement": 0.5}, ()),
+        ):
+            return AnalysisRunner(executor).run(**call, **kwargs)
 
 
 def test_failed_numerical_verification_blocks_acceptance():
@@ -98,9 +105,20 @@ def test_passing_verification_allows_odb_backed_acceptance():
         ),
     ))
     run = _run(
+        result_values=False,
         numerical_verification=numerical,
         engineering_checks=engineering,
     )
     assert run.acceptance_passed is True
     assert run.state.value == "accepted"
     assert run.engineering_status == "RESULT_VALID"
+
+
+def test_verification_runs_without_explicit_acceptance_criteria():
+    numerical = NumericalVerificationResult(
+        name="mesh", status="not_converged", error=0.2, tolerance=0.05,
+        points=(1.0, 1.2),
+    )
+    run = _run(result_values=False, numerical_verification=numerical)
+    assert run.acceptance_passed is False
+    assert run.state.value == "results_extracted"
