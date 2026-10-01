@@ -188,3 +188,10 @@ A family name alone is not treated as automatic ODB verification. Problem-specif
 
 ### Provenance population boundary
 AnalysisRunner populates runtime version/Python metadata when available, preserves caller environment metadata, records the effective action plan, and records model-snapshot/artifact metadata hashes. content_hash_scope="not_captured" remains explicit when model/input/ODB bytes are not captured. The resulting claim is bounded traceability, not byte-identical reproducibility.
+
+
+## P2 engineering-credibility tranche
+
+The first P2 step extends deterministic engineering evidence without introducing universal physics thresholds. The new bounded field-sanity adapter can evaluate scalar/vector field evidence (including temperature, stress, or displacement-derived magnitudes) only when the caller declares explicit minimum/maximum limits. Non-finite values fail closed. This expands executable coverage of the existing static/thermal/coupled check families while keeping problem-specific engineering assumptions outside the library.
+
+This remains deliberately below calibration/experimental validation and probabilistic UQ: it is an evidence-to-check primitive, not a new solver, unit-conversion engine, or autonomous engineering-judgment layer.
