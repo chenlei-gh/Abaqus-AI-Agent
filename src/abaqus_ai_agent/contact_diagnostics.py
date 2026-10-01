@@ -162,10 +162,15 @@ def expected_contact_state(evidence, expected):
                 "expected_contact_state", "pass",
                 message="observed contact status includes contact and no open status",
             )
+        if observed_contact and observed_open:
+            return ContactDiagnostic(
+                "expected_contact_state", "ambiguous",
+                message="CSTATUS contains both contact and open locations; mixed interface state is not sufficient to prove contact failure",
+            )
         if observed_open:
             return ContactDiagnostic(
                 "expected_contact_state", "fail",
-                message="observed CSTATUS contains open locations although contact is required",
+                message="observed CSTATUS is open throughout the supplied evidence although contact is required",
             )
     if expected.expected_state == "open":
         if observed_open and not observed_contact:
