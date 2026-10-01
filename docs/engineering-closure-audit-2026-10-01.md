@@ -46,7 +46,7 @@ This audit distinguishes capability presence from execution-chain integration. A
 | Uncertainty | bounded scenario execution through AnalysisRunner + deterministic envelope aggregation | reference workflows vary | 🟡 Executable tolerance-bound propagation; probabilistic/full UQ deferred |
 | Benchmarks | catalog + evaluator | reference examples/models | 🟡 Evaluation-only, no solver execution path |
 | Controlled correction | policy/attempt evidence | reference error-recovery patterns | 🟡 Policy/evidence only; no concrete repair workflow |
-| Unit/dimensional consistency | primitives only | engineering workflow requirement | 🔴 Main-chain integration missing |
+| Unit/dimensional consistency | intent planning + ResultRequirement validation + dimensional checks | Declared intent/result units are validated without automatic conversion | 🟢 Main-chain validation closed for declared units |
 | MCP server packaging | not the repository's core role | both references provide MCP servers | ⏸️ Not required for current architecture |
 
 ### Interpretation
@@ -87,11 +87,11 @@ Intent
 | Job | JobController + artifacts | Present |
 | ODB | inspect/summarize/extract | Present |
 | Evidence | EvidenceBundle + result evidence | Present |
-| Numerical verification | verification.py + numerical_verification.py | Present, partial dimensions |
-| Engineering checks | load/reaction + energy + adapters | Present, standard catalog incomplete |
+| Numerical verification | verification.py + numerical_verification.py | Present; executable element/time-step refinement with successive-change and Richardson/GCI methods |
+| Engineering checks | load/reaction + energy + adapters | Present, standard catalog still incomplete |
 | Acceptance | evaluate_result_acceptance + AnalysisRunner | Present and wired by PR #16 |
 | Provenance | AnalysisProvenance + manifest | Present but under-populated |
-| Correction/retry | bounded policy and attempt record | Present as policy/evidence, not concrete workflow |
+| Correction/retry | bounded policy + explicitly confirmed Action execution + AnalysisRunner rerun + Acceptance gate | Present as one-shot controlled workflow; autonomous repair loops remain out of scope |
 
 ### No silent pass-through found in the reviewed P0 path
 
