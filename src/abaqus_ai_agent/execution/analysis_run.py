@@ -177,7 +177,7 @@ class AnalysisRunner:
                 result_source = "external_input"
 
             accepted = evaluate_result_acceptance(
-                result_status=status.state.value,
+                result_status=status.state.value.lower(),
                 numerical=numerical_verification,
                 engineering=engineering_checks,
                 values=result_values,
