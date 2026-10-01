@@ -13,7 +13,7 @@
 
 它的目标不是替代 Abaqus 求解器，也不是把自然语言直接转换成未经验证的 CAD/有限元模型，而是把 AI 辅助工程分析过程连接成一条可验证的链路：
 
-**工程需求 → 工程意图 → 模型检查 → 几何定位 → 原生 Abaqus 操作 → Abaqus 执行 → Job/ODB 证据 → 结果提取 → 工程验收**
+**工程需求 → 工程意图 → Solver 选择 → 几何/网格策略 → 经过验证的原生 Abaqus 操作 → Abaqus 执行 → ODB/结果提取 → 工程验证 → 工程验收 → Evidence → 工程报告**
 
 项目刻意将 AI 层与 Abaqus 求解器解耦。
 
@@ -84,8 +84,17 @@
 - Job 创建与提交
 - INP 导出
 - ODB Field CSV 导出
-- 网格收敛评价
-- 针对已有 Abaqus 应力历史的疲劳后处理契约/工作流
+- 网格收敛评价，并明确质量与应力奇异性边界
+- 基于几何特征与工程关键区域的 Geometry → Mesh 策略
+- 原生 Abaqus Mesh Quality 验证
+- 确定性的 Solver Selection
+- 按分析类型生成 Post-Processing Profile，并将其转化为实际结果要求
+- Contact Diagnostics 与显式工程期望
+- Fatigue 后处理 Contract / Workflow：cycle counting、应力幅/范围、半/全循环、mean-stress correction、多轴/应力分量语义
+- Sensitivity / Uncertainty Evidence Contract
+- 针对已有 Abaqus 应力历史的疲劳后处理工作流
+- Engineering Report：Markdown / HTML / 可选 PDF
+- 数值验证、工程检查、网格质量/收敛、疲劳、显式 Contact Diagnostics 的结构化 Acceptance Gate
 
 Action 层并不追求把 Abaqus 全部 API 重新封装一遍。Abaqus 本身拥有庞大且随版本变化的 Python API，因此项目同时提供受控的原生 Python 扩展入口。
 
@@ -150,6 +159,51 @@ Action 层并不追求把 Abaqus 全部 API 重新封装一遍。Abaqus 本身�
 
 ## 工程闭环
 
+当前完整工程闭环已经收敛为：
+
+```text
+Engineering Intent
+        ↓
+Solver Selection
+        ↓
+Post-Processing Profile
+        ↓
+Effective Result Criteria
+        ↓
+Output Planning
+        ↓
+Native Abaqus Output Requests
+        ↓
+Job Execution
+        ↓
+Artifacts / ODB
+        ↓
+Result Extraction
+        ↓
+Verification
+ ┌──────────────┬──────────────┬──────────────┐
+ │ Numerical    │ Engineering  │ Mesh Quality │
+ │ Verification │ Checks       │ / Convergence│
+ ├──────────────┼──────────────┼──────────────┤
+ │ Fatigue      │ Contact      │ Sensitivity /│
+ │ Verification │ Diagnostics  │ Uncertainty  │
+ └──────────────┴──────────────┴──────────────┘
+        ↓
+Acceptance
+        ↓
+Engineering Status
+        ↓
+Evidence
+        ↓
+Engineering Report
+```
+
+其中有一个重要规则：
+
+> **没有提供某项验证，不自动等于失败；但一旦显式提供验证结果，其失败就不能被 Acceptance 静默绕过。**
+
+
+
 项目最重要的设计目标之一，是把“工程验收”真正闭环：
 
 ```text
@@ -184,7 +238,7 @@ Evidence
 "工程要求已经满足"
 ```
 
-每一个阶段都必须有相应证据。
+每一个阶段都必须有相应证据，并且 Contract 不能只停留在定义层：它必须进入实际的 Planning / Execution / Extraction / Verification / Acceptance / Report 链路。
 
 ## 架构
 
@@ -301,7 +355,17 @@ Action 必须小、明确、可检查。
 
 项目不会把名称、索引或集合顺序默认为稳定的视觉身份。
 
-### 5. 不伪造求解能力
+### 5. Verification 与 Solver Execution 必须分离
+
+Job 完成首先只是执行事实，不自动等于工程有效。
+
+工程有效性需要由结果提取、数值验证、工程检查、网格质量/收敛、疲劳验证以及在明确提供时的接触诊断共同支撑。
+
+Sensitivity / Uncertainty 属于分析证据域，不作为所有问题的普遍 Pass/Fail Gate。
+
+一旦某项验证结果被明确提供，其失败必须进入 Acceptance，不能静默降级。
+
+### 6. 不伪造求解能力
 
 不能因为存在一个 API 风格的类，就宣称一个工程能力已经完成。
 
@@ -311,7 +375,7 @@ Action 必须小、明确、可检查。
 
 而不是已经实现完整数值疲劳求解器。
 
-### 6. Release-aware Compatibility
+### 7. Release-aware Compatibility
 
 Abaqus 自带 Python 运行时和原生 API 具有明显的版本依赖。
 
@@ -400,9 +464,18 @@ action = python_action(
 | INP Export | 已实现 |
 | ODB CSV Export | 已实现 |
 | Result Extraction | 已实现 |
+| Solver Selection | 已实现 |
+| Post-Processing Profile | 已实现 |
+| Geometry → Mesh Strategy | 已实现：Contract / Planning 层；B28 真机执行验证待完成 |
+| Native Mesh Quality Verification | 已实现：Action / Script 层；B28 真机验证待完成 |
 | Mesh Convergence | 已实现 |
+| Engineering Acceptance Gates | 已实现 |
+| Contact Diagnostics | Contract + Acceptance 集成已实现 |
+| Fatigue Verification | Contract / Workflow + Acceptance 集成已实现 |
+| Sensitivity / Uncertainty | Evidence / Report 集成已实现 |
+| Engineering Report | 已实现 |
 | Geometry Grounding | 已实现：当前针对标定 Viewport / Projection 路径 |
-| Fatigue | 已实现：已有应力历史的 Contract / Workflow |
+| Fatigue | 已实现：已有应力历史的 Contract / Workflow，并覆盖循环计数、应力范围/幅值、均值应力修正及多分量语义边界 |
 | Arbitrary Native Abaqus API | 已通过 Python Escape Hatch 支持 |
 | 任意外部照片的全自动几何注册 | 当前不宣称 |
 | 完整独立 Fatigue Solver | 未实现 |
@@ -456,6 +529,9 @@ python -m pytest -q
 - Abaqus Python 正常返回不能直接作为 Solver 成功证据；
 - Job 完成不能自动等同于工程验收；
 - ODB 存在不能自动证明目标结果正确；
+- 局部网格加密本身不能证明网格已经收敛；
+- 疑似应力奇异点附近的峰值不能自动当作物理收敛峰值；
+- Sensitivity / Uncertainty 不自动成为普遍的工程 Pass/Fail 标准；
 - API 参数看起来兼容不能自动证明 Release 兼容；
 - Model-specific contact、mesh 以及 release-specific API 在无法泛化验证时必须保持显式。
 
@@ -487,11 +563,12 @@ python -m pytest -q
 
 近期工程路线：
 
-1. 保持 Action / Validation / Execution / Evidence 链路稳定；
-2. 完成 B28 Smoke-Test Harness；
-3. 在真实 Abaqus R2018/B28 环境运行；
-4. 对真实 Release-specific incompatibility 进行分类与修复；
-5. 只有真实工程流程证明需要时，才继续扩展能力。
+1. 保持 Action / Validation / Execution / Verification / Evidence 链路稳定；
+2. 完成剩余的全仓 Contract Closure Audit；
+3. 完成 B28 Smoke-Test Harness；
+4. 在真实 Abaqus R2018/B28 环境运行；
+5. 对真实 Release-specific incompatibility 进行分类与修复；
+6. 只有真实工程流程证明需要时，才继续扩展能力。
 
 后续可能扩展：
 
