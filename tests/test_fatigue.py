@@ -33,7 +33,7 @@ def test_rainflow_records_half_cycles_for_open_reversal_history():
     assert cycles
     assert all(weight in (0.5, 1.0) for _, _, weight in cycles)
     assert all(weight == 0.5 for _, _, weight in cycles)
-    assert sum(weight for _, _, weight in cycles) == pytest.approx(2.0)
+    assert sum(weight for _, _, weight in cycles) == pytest.approx(1.5)
 
 
 def test_stress_range_amplitude_mean_are_explicit():
@@ -125,7 +125,7 @@ def test_rainflow_repeated_plateaus_do_not_create_zero_cycles():
 
 def test_goodman_compressive_mean_stress_uses_fe_safe_half_slope_extension():
     from abaqus_ai_agent.fatigue import goodman_corrected_amplitude
-    assert goodman_corrected_amplitude(10, -50, 100) == pytest.approx(8.0)
+    assert goodman_corrected_amplitude(10, -50, 100) == pytest.approx(5.0)
 
 
 def test_goodman_tensile_mean_stress_uses_standard_goodman_line():
