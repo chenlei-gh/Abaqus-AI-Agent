@@ -14,7 +14,23 @@ class OutputPlan:
     history_requests: Tuple[Tuple[str, object, Tuple[str, ...]], ...] = ()
 
 
-def plan_outputs(criteria=(), outputs=()):
+def criteria_from_postprocess_profile(profile):
+    """Convert deterministic post-processing requirements into ODB output criteria."""
+    criteria = []
+    for key in getattr(profile, "required_results", ()):
+        criteria.append({"name": key, "value_key": key})
+    for variable in getattr(profile, "history_variables", ()):
+        criteria.append({
+            "name": variable,
+            "value_key": "history_%s" % variable,
+            "output_kind": "history",
+            "history_variable": variable,
+            "step": getattr(profile, "history_step", None),
+        })
+    return tuple(criteria)
+
+
+def plan_outputs(criteria=(), outputs=(), postprocess_profile=None):
     """Derive the minimum deterministic output-variable plan.
 
     Explicit user outputs are preserved; criterion-driven variables are added
@@ -23,6 +39,8 @@ def plan_outputs(criteria=(), outputs=()):
     History outputs are grouped by step and region expression so requirements
     from different analysis steps cannot be silently emitted into one request.
     """
+    if postprocess_profile is not None:
+        criteria = tuple(criteria or ()) + criteria_from_postprocess_profile(postprocess_profile)
     requirements = requirements_from_criteria(criteria)
     fields = set(required_field_variables(requirements))
     history_requirements = tuple(
