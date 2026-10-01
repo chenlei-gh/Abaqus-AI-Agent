@@ -115,10 +115,10 @@ def extract_requirement(executor, path, requirement):
         }
         return ResultExtraction(
             requirement, float(value), locator,
-            ({"kind": "odb_history_result", "source": "odb",
-              "value_key": requirement.value_key, "value": float(value),
-              "unit": requirement.unit, "locator": locator,
-              "aggregation": requirement.aggregation},))
+            (Evidence(kind="odb_history_result", source="odb",
+              locator=str(locator), value=float(value), unit=requirement.unit,
+              metadata={"value_key": requirement.value_key,
+                        "aggregation": requirement.aggregation}),))
 
     if requirement.output_kind == "frame_value":
         payload = _frame_value(
