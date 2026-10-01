@@ -56,3 +56,32 @@ def observations_from_mappings(items):
         )
         for item in items
     )
+
+
+def validate_result_values(result_values, observations):
+    """Validate extracted result values against explicit measured observations.
+
+    Each mapping must provide result_key, measured and tolerance. The simulated
+    value always comes from result_values; no external simulated value is
+    accepted on this path.
+    """
+    result_values = dict(result_values or {})
+    normalized = []
+    for item in observations or ():
+        if not isinstance(item, dict):
+            raise TypeError("experimental observations must be mappings")
+        result_key = item.get("result_key")
+        if not result_key:
+            raise ValueError("experimental observation result_key is required")
+        if result_key not in result_values:
+            raise KeyError("missing experimental result value: %s" % result_key)
+        normalized.append(ExperimentalObservation(
+            name=item.get("name", result_key),
+            measured=item["measured"],
+            simulated=result_values[result_key],
+            tolerance=item["tolerance"],
+            unit=item.get("unit", ""),
+            uncertainty=item.get("uncertainty"),
+            source=item.get("source", ""),
+        ))
+    return validate_observations(tuple(normalized))
