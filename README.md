@@ -30,7 +30,7 @@
 
 ## At a glance
 
-`````mermaid
+```mermaid
 flowchart LR
     U["Engineering Intent"] --> AI["AI<br/>Reason · Plan · Explain"]
     AI --> B{"Capability Boundary"}
@@ -46,13 +46,13 @@ flowchart LR
     Q --> C["Acceptance"]
     C --> EV["Evidence"]
     EV --> REP["Engineering Report"]
-````
+```
 
 **The visual boundary is intentional:** AI can reason beyond the Agent's typed capability surface, but only an explicit execution and evidence path can turn an operation into a formal Agent capability.
 
 ### The engineering evidence ladder
 
-`````mermaid
+```mermaid
 flowchart TB
     I["API Invocation"] --> M["Model-State Evidence"]
     M --> J["Job Execution Evidence"]
@@ -61,13 +61,13 @@ flowchart TB
     O --> R["Result Evidence"]
     R --> A["Acceptance Evidence"]
     N["A successful Python call"] -. "does NOT imply" .-> A
-````
+```
 
 This distinction is the project's central protection against **"the code ran, therefore the engineering result is correct."**
 
 ### Capability lifecycle
 
-`````mermaid
+```mermaid
 flowchart LR
     D["Capability Gap"] --> T{"Typed contract exists?"}
     T -->|Yes| S["SUPPORTED"]
@@ -77,7 +77,7 @@ flowchart LR
     X --> H["Repeated engineering need"]
     H --> C["Contract + Validation<br/>Result semantics + Tests"]
     C --> S
-````
+```
 
 This gives the project a controlled way to grow: **do not inflate the capability list just because an LLM can generate plausible Abaqus Python.**
 
