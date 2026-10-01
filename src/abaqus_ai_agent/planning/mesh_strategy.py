@@ -1,5 +1,6 @@
 """Deterministic geometry-to-mesh strategy planning."""
 from ..contracts.mesh_strategy import GeometryMeshPlan, MeshRefinementRequest
+from ..contracts.mesh import LocalSeed, MeshSpecification
 
 def plan_geometry_mesh(geometry, global_size, critical_regions=(), refinement_factor=0.5, small_feature_ratio=0.75):
     if global_size <= 0:
@@ -46,3 +47,26 @@ def plan_geometry_mesh(geometry, global_size, critical_regions=(), refinement_fa
     if any(x.requires_partition for x in refinements):
         evidence.append("partition_may_be_required_for_region_refinement")
     return GeometryMeshPlan(float(global_size), tuple(refinements), tuple(reviews), tuple(warnings), tuple(evidence))
+
+
+def local_seeds_from_geometry_plan(plan):
+    """Convert only directly seedable plan items into LocalSeed contracts."""
+    return tuple(
+        LocalSeed(
+            region_expression=request.target,
+            size=request.target_size,
+            constraint=request.transition,
+        )
+        for request in plan.refinements
+        if request.method == "local_seed" and not request.requires_partition
+    )
+
+
+def mesh_specification_from_geometry_plan(part, plan, **kwargs):
+    """Build MeshSpecification without silently executing blocked refinements."""
+    return MeshSpecification(
+        part=part,
+        global_size=plan.global_size,
+        local_seeds=local_seeds_from_geometry_plan(plan),
+        **kwargs
+    )
