@@ -219,7 +219,7 @@ class AnalysisRunner:
 
             if (not criteria and benchmark is None and numerical_verification is None and
                     engineering_checks is None and contact_expected is None and
-                    not experimental_observations):
+                    not experimental_observations and fatigue_intent is None):
                 return run.with_state(AnalysisRunState.ODB_VALIDATED)
 
             if result_values is None:
