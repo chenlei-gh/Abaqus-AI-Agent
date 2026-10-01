@@ -137,6 +137,18 @@ def action_to_script(action):
         return "mdb.models[%s].parts[%s].seedPart(size=%r, deviationFactor=%r, minSizeFactor=%r)" % (_q(m), _q(p["part"]), p["size"], p.get("deviation_factor", .1), p.get("min_size_factor", .1))
     if k == "generate_mesh":
         return "mdb.models[%s].parts[%s].generateMesh()" % (_q(m), _q(p["part"]))
+    if k == "bias_seed_size":
+        return "mdb.models[%s].parts[%s].seedEdgeByBias(edges=%s, biasMethod=DOUBLE, end1Edges=%s, end2Edges=%s, ratio=%r, constraint=%s)" % (
+            _q(m), _q(p["part"]), p["region_expression"], p["end1"], p["end2"], p["size"], p.get("constraint", "FREE"))
+    if k == "bias_seed_number":
+        return "mdb.models[%s].parts[%s].seedEdgeByBias(edges=%s, biasMethod=DOUBLE, end1Edges=%s, end2Edges=%s, number=%d, constraint=%s)" % (
+            _q(m), _q(p["part"]), p["region_expression"], p["end1"], p["end2"], int(p["number"]), p.get("constraint", "FREE"))
+    if k == "sweep_path":
+        sense = p.get("sense", "FORWARD")
+        if sense not in ("FORWARD", "REVERSE"):
+            raise ValueError("sweep path sense must be FORWARD or REVERSE")
+        return "from abaqusConstants import *; mdb.models[%s].parts[%s].setSweepPath(region=%s, edge=%s, sense=%s)" % (
+            _q(m), _q(p["part"]), p["region_expression"], p["edge_expression"], sense)
     if k == "local_seed_size":
         return "mdb.models[%s].parts[%s].seedEdgeBySize(edges=%s, size=%r, constraint=%s)" % (_q(m), _q(p["part"]), p["region_expression"], p["size"], p.get("constraint", "FREE"))
     if k == "local_seed_number":
@@ -164,6 +176,8 @@ def action_to_script(action):
         return _mesh_inspection_script(m, p)
     if k == "mesh_quality":
         return _mesh_quality_script(m, p)
+    if k == "verify_mesh_quality":
+        return _mesh_verify_script(m, p)
     if k == "tie":
         return "mdb.models[%s].Tie(name=%s, master=%s, slave=%s, positionToleranceMethod=COMPUTED)" % (_q(m), _q(p["name"]), p["master_expression"], p["slave_expression"])
     if k == "contact_property":
@@ -387,6 +401,27 @@ result['evidence']=['part:%s'%part, 'elements:%d'%len(elements)]
 print(result)
 """ % (model, part, part, max_ar, max_ar, min_angle, min_angle,
        max_angle, max_angle, max_skew, max_skew, min_jac)
+
+
+def _mesh_verify_script(model, p):
+    part = p["part"]
+    criterion = p.get("criterion", "ANALYSIS_CHECKS")
+    allowed = ("ANALYSIS_CHECKS", "ASPECT_RATIO", "SHAPE_FACTOR", "ANGLE", "GEOMETRIC_DEVIATION_FACTOR",
+               "MINIMUM_ANGLE", "MAXIMUM_ANGLE", "STABLE_TIME_INCREMENT", "SHORTEST_EDGE", "LONGEST_EDGE")
+    if criterion not in allowed:
+        raise ValueError("unsupported Abaqus mesh verification criterion: %s" % criterion)
+    create_set = p.get("create_set")
+    set_arg = ", createSet=%s" % _q(create_set) if create_set else ""
+    return """from abaqusConstants import *
+model=mdb.models[%r]
+part=model.parts[%r]
+poor=part.verifyMeshQuality(criterion=%s%s)
+labels=[]
+for element in poor:
+    try: labels.append(int(element.label))
+    except Exception: pass
+print({'part':%r,'criterion':%r,'poor_element_count':len(labels),'poor_element_labels':labels,'status':'fail' if labels else 'pass','source':'abaqus_native_verify'})
+""" % (model, part, criterion, set_arg, part, criterion)
 
 
 def _assembly_inspection_script(model):
