@@ -64,6 +64,8 @@ def project_point(
     view: ViewProjection,
     width: Optional[float] = None,
     height: Optional[float] = None,
+    view_offset_x: Optional[float] = None,
+    view_offset_y: Optional[float] = None,
 ):
     """Project a point from an adapter ViewProjection.
 
@@ -87,6 +89,6 @@ def project_point(
         view.up_vector,
         width,
         height,
-        view.view_offset_x,
-        view.view_offset_y,
+        view.view_offset_x if view_offset_x is None else view_offset_x,
+        view.view_offset_y if view_offset_y is None else view_offset_y,
     )
