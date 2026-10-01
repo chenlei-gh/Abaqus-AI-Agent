@@ -109,6 +109,8 @@ def test_passing_verification_allows_odb_backed_acceptance():
         numerical_verification=numerical,
         engineering_checks=engineering,
     )
+    acceptance = next(e.value for e in run.evidence.items if e.kind == "acceptance")
+    assert acceptance.passed, acceptance.failures
     assert run.acceptance_passed is True
     assert run.state.value == "accepted"
     assert run.engineering_status == "RESULT_VALID"
