@@ -39,3 +39,38 @@ def test_acceptance_warns_when_tolerance_has_no_order_semantics():
     )
     assert not result.passed
     assert result.warnings == ("relative_tolerance_ignored_for_==",)
+
+
+def test_result_acceptance_requires_completed_solver_status():
+    from abaqus_ai_agent.acceptance import evaluate_result_acceptance
+    result = evaluate_result_acceptance(
+        "completed",
+        values={"max_stress": 180.0},
+        criteria=[{"value_key": "max_stress", "operator": "<", "limit": 250.0}],
+    )
+    assert result.passed
+
+
+def test_result_acceptance_does_not_treat_failed_solver_as_engineering_pass():
+    from abaqus_ai_agent.acceptance import evaluate_result_acceptance
+    result = evaluate_result_acceptance(
+        "error",
+        values={"max_stress": 180.0},
+        criteria=[{"value_key": "max_stress", "operator": "<", "limit": 250.0}],
+    )
+    assert not result.passed
+    assert "solver_status:error" in result.failures
+
+
+def test_result_acceptance_blocks_failed_engineering_checks():
+    from abaqus_ai_agent.acceptance import evaluate_result_acceptance
+    class Checks:
+        passed = False
+    result = evaluate_result_acceptance(
+        "completed",
+        engineering=Checks(),
+        values={"max_stress": 180.0},
+        criteria=[{"value_key": "max_stress", "operator": "<", "limit": 250.0}],
+    )
+    assert not result.passed
+    assert "engineering_checks_failed" in result.failures
