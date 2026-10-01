@@ -174,6 +174,7 @@ def test_contact_warning_does_not_block_the_analysis_acceptance_chain():
     expected = ExpectedContactBehavior(
         contact_required=True,
         expected_state="contact",
+        expected_separation=0.02,
         required_outputs=("CSTATUS", "COPEN"),
     )
     contact_evidence = {
