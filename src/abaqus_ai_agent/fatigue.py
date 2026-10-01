@@ -1,7 +1,7 @@
 """Deterministic fatigue post-processing for existing scalar Abaqus stress histories.
 
 Scope is deliberately narrow: Rainflow counting, explicit range/amplitude/mean
-semantics, optional Goodman correction, log-log S-N interpolation, and
+semantics, mean-stress correction, log-log S-N interpolation, and
 Palmgren-Miner damage. Multiaxial critical-plane criteria are not implemented.
 """
 
@@ -58,6 +58,8 @@ def rainflow_count(values: Iterable[float]):
 def _goodman(amplitude, mean, ultimate_strength):
     amplitude = float(amplitude)
     mean = float(mean)
+    if ultimate_strength is None:
+        raise ValueError("ultimate_strength is required for Goodman correction")
     ultimate_strength = float(ultimate_strength)
     if not math.isfinite(amplitude) or not math.isfinite(mean) or not math.isfinite(ultimate_strength):
         raise ValueError("Goodman inputs must be finite")
@@ -66,9 +68,9 @@ def _goodman(amplitude, mean, ultimate_strength):
     if ultimate_strength <= 0:
         raise ValueError("ultimate_strength must be positive")
 
-    # fe-safe's measured-signal S-N Goodman implementation uses the normal
-    # Goodman line for tensile mean stress and extends the line into the
-    # compressive region with half the original slope.
+    # fe-safe measured-signal S-N Goodman implementation: the normal Goodman
+    # line is used for tensile mean stress and extended into compression with
+    # half the original slope.
     slope_factor = 1.0 if mean >= 0.0 else 0.5
     denominator = 1.0 - mean / (slope_factor * ultimate_strength)
     if denominator <= 0:
@@ -77,7 +79,6 @@ def _goodman(amplitude, mean, ultimate_strength):
             "ultimate strength"
         )
     return amplitude / denominator
-
 
 
 def mean_stress_corrected_amplitude(amplitude, minimum, maximum, method,
@@ -94,26 +95,32 @@ def mean_stress_corrected_amplitude(amplitude, minimum, maximum, method,
     if method == "NONE":
         return amplitude
     if method == "GOODMAN":
-        return _goodman(amplitude, mean, float(ultimate_strength))
+        return _goodman(amplitude, mean, ultimate_strength)
     if method == "GERBER":
+        if ultimate_strength is None:
+            raise ValueError("ultimate_strength is required for Gerber correction")
         uts = float(ultimate_strength)
-        if uts <= 0:
-            raise ValueError("ultimate_strength must be positive")
+        if not math.isfinite(uts) or uts <= 0:
+            raise ValueError("ultimate_strength must be positive and finite")
         denominator = 1.0 - (mean / uts) ** 2
         if denominator <= 0:
             raise ValueError("Gerber correction is undefined at or beyond UTS")
         return amplitude / denominator
     if method == "SODERBERG":
+        if yield_strength is None:
+            raise ValueError("yield_strength is required for Soderberg correction")
         ys = float(yield_strength)
-        if ys <= 0:
-            raise ValueError("yield_strength must be positive")
+        if not math.isfinite(ys) or ys <= 0:
+            raise ValueError("yield_strength must be positive and finite")
         denominator = 1.0 - mean / ys
         if denominator <= 0:
             raise ValueError("Soderberg correction is undefined at or above yield strength")
         return amplitude / denominator
     if method == "WALKER":
+        if walker_gamma is None:
+            raise ValueError("walker_gamma is required for Walker correction")
         gamma = float(walker_gamma)
-        if not 0.0 <= gamma <= 1.0:
+        if not math.isfinite(gamma) or not 0.0 <= gamma <= 1.0:
             raise ValueError("walker_gamma must be between 0 and 1")
         if maximum <= 0:
             raise ValueError("Walker correction requires positive maximum stress")
@@ -123,16 +130,9 @@ def mean_stress_corrected_amplitude(amplitude, minimum, maximum, method,
         return amplitude * (2.0 / (1.0 - ratio)) ** (1.0 - gamma)
     raise ValueError("unsupported mean-stress correction: %s" % method)
 
+
 def goodman_corrected_amplitude(amplitude, mean, ultimate_strength):
-    """Return zero-mean-equivalent amplitude using the declared UTS.
-
-    For mean >= 0, this is the conventional Goodman relation:
-        Sa0 = Sa / (1 - Sm / UTS)
-
-    For compressive mean stress, the fe-safe measured-signal S-N method
-    extends the Goodman line with half the original slope:
-        Sa0 = Sa / (1 - Sm / (0.5 * UTS))
-    """
+    """Return zero-mean-equivalent amplitude using the declared UTS."""
     return _goodman(float(amplitude), float(mean), float(ultimate_strength))
 
 
@@ -152,8 +152,8 @@ def sn_cycles_to_failure(amplitude, material_curve):
     curve = sorted((float(s), float(n)) for s, n in material_curve)
     if amplitude <= 0 or len(curve) < 2:
         raise ValueError("positive amplitude and at least two S-N points are required")
-    if any(s <= 0 or n <= 0 for s, n in curve):
-        raise ValueError("S-N points must be positive")
+    if any(not math.isfinite(s) or not math.isfinite(n) or s <= 0 or n <= 0 for s, n in curve):
+        raise ValueError("S-N points must be finite and positive")
     for (s1, _), (s2, _) in zip(curve, curve[1:]):
         if s2 <= s1:
             raise ValueError("S-N stress points must be strictly increasing")
