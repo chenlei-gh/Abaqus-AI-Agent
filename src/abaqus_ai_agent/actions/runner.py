@@ -61,6 +61,23 @@ def execute_verified(executor, action, journal=None, snapshot_before=None,
             value=result,
             metadata={"model": action.model_name, "requested_evidence": action.evidence},
         ))
+        # Native mesh verification is already the authoritative quality check.
+        # Preserve its raw result as a typed evidence item instead of converting
+        # it into a synthetic score or silently treating execution as quality.
+        if action.action_type == "verify_mesh_quality":
+            evidence = evidence.add(Evidence(
+                kind="mesh_quality_verification",
+                source="abaqus_native_verify",
+                locator=action.parameters.get("part", ""),
+                value=result,
+                metadata={
+                    "model": action.model_name,
+                    "criterion": action.parameters.get("criterion", "ANALYSIS_CHECKS"),
+                    "threshold": action.parameters.get("threshold"),
+                    "element_shape": action.parameters.get("elem_shape"),
+                    "regions_expression": action.parameters.get("regions_expression"),
+                },
+            ))
         if verification is not None:
             evidence = evidence.add(Evidence(
                 kind="post_verification",
