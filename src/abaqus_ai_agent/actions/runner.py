@@ -39,8 +39,8 @@ def execute_verified(executor, action, journal=None, snapshot_before=None,
             if not verification.passed:
                 journal.finish(record, "VERIFICATION_FAILED", result=result,
                                error=str(verification.failures))
-                raise ValueError("action post-verification failed: %s" %
-                                 (verification.failures,))
+                raise RuntimeError("action post-verification failed: %s" %
+                                   (verification.failures,))
         journal.finish(record, "COMPLETED", result=result)
         evidence = EvidenceBundle()
         if snapshot_before is not None and snapshot_after is not None:
@@ -72,5 +72,6 @@ def execute_verified(executor, action, journal=None, snapshot_before=None,
                 "verification": verification, "record": record,
                 "evidence": evidence}
     except Exception as exc:
-        journal.finish(record, "FAILED", error=str(exc))
+        if record.status == "PENDING":
+            journal.finish(record, "FAILED", error=str(exc))
         raise
