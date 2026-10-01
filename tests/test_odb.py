@@ -76,3 +76,19 @@ def test_extract_energy_evidence_requests_standard_energy_history():
     assert "ALLAE" in result["variables"]
     assert "historyRegions" in executor.code
     assert "historyOutputs" in executor.code
+
+def test_extract_contact_evidence_preserves_region_identity():
+    from abaqus_ai_agent.execution.odb import extract_contact_evidence
+
+    class FakeExecutor:
+        def execute(self, code):
+            return {"status": "available", "values": []}
+
+    result = extract_contact_evidence(
+        FakeExecutor(), "job.odb", "Step-1",
+        fields=(), history_variables=(),
+        region="Surface-A-B",
+        history_region="Assembly ASSEMBLY",
+    )
+    assert result["region"] == "Surface-A-B"
+    assert result["history_region"] == "Assembly ASSEMBLY"
