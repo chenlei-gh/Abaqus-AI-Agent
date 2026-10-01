@@ -6,6 +6,7 @@ from typing import Optional, Tuple
 class MeshConvergencePoint:
     mesh_size: float
     result_value: float
+    refinement_target: Optional[str] = None
 
 
 @dataclass(frozen=True)
@@ -13,6 +14,7 @@ class MeshConvergencePolicy:
     tolerance: float
     minimum_points: int = 3
     relative: bool = True
+    refinement_target: Optional[str] = None
 
     def __post_init__(self):
         if self.tolerance < 0:
@@ -31,7 +33,8 @@ class MeshConvergenceResult:
 
 
 def evaluate_mesh_convergence(points, policy):
-    ordered = tuple(sorted(points, key=lambda x: x.mesh_size, reverse=True))
+    selected = tuple(p for p in points if policy.refinement_target is None or p.refinement_target == policy.refinement_target)
+    ordered = tuple(sorted(selected, key=lambda x: x.mesh_size, reverse=True))
     if len(ordered) < policy.minimum_points:
         return MeshConvergenceResult(
             "insufficient_data", ordered, None, False,
