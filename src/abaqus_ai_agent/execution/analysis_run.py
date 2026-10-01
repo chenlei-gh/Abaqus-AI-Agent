@@ -239,6 +239,8 @@ class AnalysisRunner:
 
             benchmark_result = None
             benchmark_evidence = ()
+            experimental_validation = None
+            experimental_evidence = ()
             if benchmark is not None:
                 from ..benchmarks import derive_benchmark_observations, evaluate_benchmark
                 benchmark_observed, benchmark_derivation, benchmark_pre_failures = (
@@ -302,6 +304,7 @@ class AnalysisRunner:
                 criteria=criteria,
                 contact_diagnostics=contact_diagnostics,
                 benchmark_result=benchmark_result,
+                experimental_validation=experimental_validation,
             )
             verification_evidence = []
             if numerical_verification is not None:
@@ -347,6 +350,7 @@ class AnalysisRunner:
                     run.metadata,
                     result_values=dict(result_values),
                     result_source=result_source,
+                    experimental_validation=experimental_validation,
                 ))
         except Exception as exc:
             artifacts = _collect_artifacts(self.executor, job_name)
