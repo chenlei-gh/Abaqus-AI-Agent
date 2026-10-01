@@ -64,8 +64,13 @@ def render_pdf(report, output_path):
 def _conclusion(report):
     acceptance = report.acceptance
     passed = acceptance if isinstance(acceptance, bool) else getattr(acceptance, "passed", False)
+    warnings = tuple(getattr(acceptance, "warnings", ()) or ()) if acceptance is not None else ()
+    failures = tuple(getattr(acceptance, "failures", ()) or ()) if acceptance is not None else ()
     if acceptance is not None and passed:
+        if warnings:
+            return "Acceptance criteria passed based on the structured evidence supplied to this report; warnings remain: %s." % ", ".join(warnings)
         return "Acceptance criteria passed based on the structured evidence supplied to this report."
     if acceptance is not None:
-        return "Acceptance criteria were not fully satisfied by the structured evidence supplied to this report."
+        detail = (" Failures: %s." % ", ".join(failures)) if failures else ""
+        return "Acceptance criteria were not fully satisfied by the structured evidence supplied to this report.%s" % detail
     return "No acceptance verdict is asserted because no structured acceptance result was supplied."
