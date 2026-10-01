@@ -36,7 +36,7 @@ This audit distinguishes capability presence from execution-chain integration. A
 | CAD Part/Sketch/Extrude creation | not implemented | Abaqus geometry skill | ⏸️ Deferred by scope |
 | Tosca / topology optimization | not implemented | Abaqus optimization skills | ⏸️ Deferred by scope |
 | Shape optimization | not implemented | Abaqus shape optimization skill | ⏸️ Deferred by scope |
-| Fatigue | deterministic scalar stress-history post-processing (Rainflow + half/full cycles + range/amplitude/mean + Goodman + S-N + Miner); critical-plane/non-proportional multiaxial criteria remain out of scope | Abaqus fatigue skill / fe-safe S-N workflow | 🟢 Bounded scalar post-processing closed; advanced multiaxial criteria remain out of scope |
+| Fatigue | deterministic scalar stress-history post-processing (Rainflow + half/full cycles + range/amplitude/mean + Goodman + Gerber + Soderberg + Walker + S-N + Miner); critical-plane/non-proportional multiaxial criteria remain out of scope | Abaqus fatigue skill / fe-safe S-N workflow | 🟢 Bounded scalar post-processing closed; advanced multiaxial criteria remain out of scope |
 | Geometry grounding | calibrated viewport/image grounding | hub skills + viewport tools | ✅ Differentiating capability |
 | Deterministic result acceptance | acceptance gate | reference projects mostly expose execution/results | ✅ Stronger than reference execution boundary |
 | Numerical verification | successive change + Richardson/GCI + executable mesh/time-step refinement studies + explicit singularity interpretation | reference workflows provide validation patterns | 🟢 Execution and interpretation boundary closed; physical adequacy remains problem-specific |
@@ -139,11 +139,11 @@ No universal engineering threshold should be invented here; limits remain proble
 
 1. Contact diagnostic chain — **closed**.
 2. Benchmark execution through AnalysisRunner — **closed**.
-3. Uncertainty scenario execution through AnalysisRunner — **closed for bounded deterministic and first reproducible probabilistic sampling/statistics**; reliability/inference remain deferred.
+3. Uncertainty scenario execution through AnalysisRunner — **closed for bounded deterministic and first reproducible probabilistic sampling/statistics**; distribution fitting/reliability inference remain separately bounded below.
 4. Time-step and element refinement verification — **closed for executable successive-change and Richardson/GCI paths**; singularity interpretation is explicit-evidence-only.
 5. First narrow authorized correction workflow — **closed as one-shot confirmed Action → AnalysisRunner → Acceptance**.
 
-Remaining engineering credibility work is now outside the P1 execution tranche: broader physical check coverage, calibration/parameter identification, and reliability/inference methods. The legacy convergence contract is retained as a deterministic evaluation-only compatibility helper; executable mesh/time-step refinement belongs to numerical_verification.py, so there is no second refinement execution path.
+Remaining engineering credibility work is now outside the P1 execution tranche: broader physical check coverage, FORM/SORM, Bayesian inference, and critical-plane/non-proportional fatigue. The legacy convergence contract is retained as a deterministic evaluation-only compatibility helper; executable mesh/time-step refinement belongs to numerical_verification.py, so there is no second refinement execution path.
 
 ## Deferred
 
@@ -151,10 +151,9 @@ Remaining engineering credibility work is now outside the P1 execution tranche: 
 - CAD geometry authoring.
 - STEP/STL.
 - Tosca/topology/shape optimization.
-- Full standalone fatigue solver.
-- Bounded parameter identification/calibration utility is now closed as a post-processing capability; it never mutates an Abaqus model or launches a solver.
-- Reliability analysis is now closed for empirical survival and two-parameter Weibull MLE with right censoring; FORM/SORM and Bayesian reliability remain deferred.
-- Full probabilistic UQ framework remains deferred.
+- Full standalone fatigue solver / critical-plane and non-proportional multiaxial fatigue.
+- FORM/SORM reliability and Bayesian inference.
+- Full probabilistic UQ framework.
 
 ## Reference observations
 
@@ -243,7 +242,7 @@ This is sufficient for a first probabilistic-UQ execution capability without int
 
 A current reference check confirms that the reference projects emphasize live execution, model/ODB inspection, reusable workflow skills, optimization workflows, and viewers. Abaqus-Control-MCP exposes arbitrary kernel Python plus job/ODB/viewport controls, while CAE-Agent-Hub routes complete analysis intents to specialized skills including fatigue and optimization.
 
-The audit does **not** justify copying their full typed API surface because this repository already has a native Python escape hatch. Fatigue: deterministic scalar stress-history post-processing (Rainflow + half/full cycles + range/amplitude/mean + Goodman + S-N + Miner); critical-plane/non-proportional multiaxial criteria remain out of scope
+The audit does **not** justify copying their full typed API surface because this repository already has a native Python escape hatch. Fatigue is now closed for deterministic scalar stress-history post-processing with Rainflow, explicit cycle semantics, Goodman/Gerber/Soderberg/Walker corrections, S-N and Miner; critical-plane/non-proportional multiaxial criteria remain out of scope.
 
 The following remain intentionally deferred because implementing them now would expand scope rather than close a demonstrated core-chain gap:
 
@@ -251,7 +250,7 @@ The following remain intentionally deferred because implementing them now would 
 - CAD authoring.
 - STEP/STL typed export.
 - Reliability methods beyond the bounded Weibull path: FORM/SORM and Bayesian inference.
-- Broader mean-stress correction matrix (Walker/Gerber/etc.) and critical-plane/non-proportional multiaxial fatigue.
+- Critical-plane/non-proportional multiaxial fatigue.
 
 
 ## Post-P1/P2 audit correction — 2026-10-01
@@ -260,7 +259,7 @@ The previous CI result exposed four fatigue test defects rather than four produc
 
 The Goodman implementation is now explicit about the fe-safe measured-signal S-N convention: the ordinary Goodman line is used for nonnegative mean stress, while the compressive extension uses half the original slope. This is distinct from other fe-safe contexts that may deliberately make no allowance for compressive mean-stress benefit; the project therefore does not generalize this convention beyond the declared S-N workflow. fe-safe documents the measured-signal equation and the half-slope compressive extension.
 
-The remaining P1/P2 gaps are scope boundaries rather than missing core-chain functions: real B28 execution validation, model calibration/parameter identification, reliability/inference methods, broader fatigue methodologies, CAD authoring, STEP/STL typed export, and Tosca/topology/shape optimization. No additional typed API breadth is justified merely to match the reference projects because native Python remains the controlled escape hatch.
+The remaining P1/P2 gaps are scope boundaries rather than missing core-chain functions: real B28 execution validation, FORM/SORM or Bayesian inference, critical-plane/non-proportional multiaxial fatigue, CAD authoring, STEP/STL typed export, and Tosca/topology/shape optimization. No additional typed API breadth is justified merely to match the reference projects because native Python remains the controlled escape hatch.
 
 
 ## P2-4 calibration and reliability closure — 2026-10-01
