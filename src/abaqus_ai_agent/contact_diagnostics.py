@@ -49,18 +49,18 @@ def _status_values(field):
 
 
 def _is_open(value):
-    if isinstance(value, str):
-        return value in ("open", "0", "0.0")
-    return value == 0.0
+    if not isinstance(value, str):
+        return False
+    return value in ("open",)
 
 
 def _is_contact(value):
-    if isinstance(value, str):
-        return value in (
-            "closed", "sticking", "slipping", "contact",
-            "1", "1.0", "2", "2.0", "3", "3.0",
-        )
-    return value in (1.0, 2.0, 3.0)
+    if not isinstance(value, str):
+        return False
+    return value in (
+        "closed", "closed (sticking)", "closed (slipping)",
+        "sticking", "slipping", "contact",
+    )
 
 
 def _required_output_names(expected):
@@ -87,7 +87,8 @@ def contact_evidence_sufficiency(evidence, expected):
                 "insufficient_evidence",
                 message="expected_regions declared but evidence has no region identity",
             )
-        if not set(expected.expected_regions).issubset({str(evidence_region)}):
+        expected_regions = {str(region) for region in expected.expected_regions}
+        if str(evidence_region) not in expected_regions:
             return ContactDiagnostic(
                 "contact_evidence_sufficiency",
                 "insufficient_evidence",
@@ -145,6 +146,13 @@ def expected_contact_state(evidence, expected):
             "expected_contact_state",
             "insufficient_evidence",
             message="CSTATUS is required to determine contact state",
+        )
+
+    if any(not isinstance(value, str) for value in statuses):
+        return ContactDiagnostic(
+            "expected_contact_state",
+            "insufficient_evidence",
+            message="CSTATUS numeric representation is not interpreted without a verified Abaqus mapping",
         )
 
     observed_contact = any(_is_contact(value) for value in statuses)
