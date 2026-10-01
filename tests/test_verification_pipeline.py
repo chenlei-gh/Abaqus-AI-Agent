@@ -249,3 +249,144 @@ def test_contact_extractor_execution_error_remains_failed():
     assert run.state.value == "failed"
     assert run.acceptance_passed is None
     assert run.engineering_status == "EXECUTION_FAILED"
+
+
+
+def test_benchmark_execution_runs_through_analysis_runner_and_acceptance():
+    from abaqus_ai_agent.contracts.benchmarks import BenchmarkCase
+    from abaqus_ai_agent.execution.analysis_run import AnalysisRunner
+
+    benchmark = BenchmarkCase(
+        "cantilever",
+        "explicit reference comparison",
+        acceptance=(
+            {
+                "value_key": "tip_displacement_error",
+                "observed_value_key": "tip_displacement",
+                "metric": "relative_error",
+                "reference_key": "tip_reference",
+                "operator": "<=",
+                "limit": 0.05,
+                "result": {
+                    "field": "U",
+                    "invariant": "MAGNITUDE",
+                    "aggregation": "max",
+                    "step": "Step-1",
+                },
+            },
+        ),
+    )
+    executor = FakeExecutor()
+    with patch(
+        "abaqus_ai_agent.execution.analysis_run._collect_artifacts",
+        return_value=(),
+    ), patch(
+        "abaqus_ai_agent.execution.analysis_run._collect_diagnostics",
+        return_value={},
+    ), patch(
+        "abaqus_ai_agent.execution.analysis_run.discover_odb",
+        return_value="/tmp/Job.odb",
+    ), patch(
+        "abaqus_ai_agent.execution.analysis_run.summarize_odb",
+        return_value={"status": "available", "steps": ("Step-1",)},
+    ), patch(
+        "abaqus_ai_agent.planning.output.plan_outputs",
+        return_value=(),
+    ), patch(
+        "abaqus_ai_agent.planning.output.actions_from_output_plan",
+        return_value=(),
+    ), patch(
+        "abaqus_ai_agent.validation.actions.validate_action",
+    ), patch(
+        "abaqus_ai_agent.actions.runner.execute",
+    ), patch(
+        "abaqus_ai_agent.execution.analysis_run.JobController.submit",
+        return_value=JobStatus("Job", JobState.COMPLETED),
+    ), patch(
+        "abaqus_ai_agent.execution.results.extract_criteria",
+        return_value=({"tip_displacement": 10.2}, ()),
+    ):
+        run = AnalysisRunner(executor).run(
+            "Model",
+            "Job",
+            criteria=(),
+            benchmark=benchmark,
+            benchmark_reference_values={"tip_reference": 10.0},
+        )
+
+    assert run.acceptance_passed is True
+    assert run.state.value == "accepted"
+    benchmark_evidence = next(
+        e.value for e in run.evidence.items if e.kind == "benchmark_result"
+    )
+    assert benchmark_evidence.passed is True
+    assert benchmark_evidence.observed["tip_displacement_error"] == 0.02
+    assert any(e.kind == "benchmark_derivation" for e in run.evidence.items)
+
+
+def test_benchmark_missing_reference_blocks_acceptance_without_solver_failure():
+    from abaqus_ai_agent.contracts.benchmarks import BenchmarkCase
+    from abaqus_ai_agent.execution.analysis_run import AnalysisRunner
+
+    benchmark = BenchmarkCase(
+        "cantilever",
+        "explicit reference comparison",
+        acceptance=(
+            {
+                "value_key": "tip_displacement_error",
+                "observed_value_key": "tip_displacement",
+                "metric": "relative_error",
+                "operator": "<=",
+                "limit": 0.05,
+                "result": {
+                    "field": "U",
+                    "invariant": "MAGNITUDE",
+                    "aggregation": "max",
+                    "step": "Step-1",
+                },
+            },
+        ),
+    )
+    executor = FakeExecutor()
+    with patch(
+        "abaqus_ai_agent.execution.analysis_run._collect_artifacts",
+        return_value=(),
+    ), patch(
+        "abaqus_ai_agent.execution.analysis_run._collect_diagnostics",
+        return_value={},
+    ), patch(
+        "abaqus_ai_agent.execution.analysis_run.discover_odb",
+        return_value="/tmp/Job.odb",
+    ), patch(
+        "abaqus_ai_agent.execution.analysis_run.summarize_odb",
+        return_value={"status": "available", "steps": ("Step-1",)},
+    ), patch(
+        "abaqus_ai_agent.planning.output.plan_outputs",
+        return_value=(),
+    ), patch(
+        "abaqus_ai_agent.planning.output.actions_from_output_plan",
+        return_value=(),
+    ), patch(
+        "abaqus_ai_agent.validation.actions.validate_action",
+    ), patch(
+        "abaqus_ai_agent.actions.runner.execute",
+    ), patch(
+        "abaqus_ai_agent.execution.analysis_run.JobController.submit",
+        return_value=JobStatus("Job", JobState.COMPLETED),
+    ), patch(
+        "abaqus_ai_agent.execution.results.extract_criteria",
+        return_value=({"tip_displacement": 10.2}, ()),
+    ):
+        run = AnalysisRunner(executor).run(
+            "Model",
+            "Job",
+            criteria=(),
+            benchmark=benchmark,
+        )
+
+    assert run.acceptance_passed is False
+    assert run.state.value == "results_extracted"
+    benchmark_evidence = next(
+        e.value for e in run.evidence.items if e.kind == "benchmark_result"
+    )
+    assert benchmark_evidence.failures == ("missing_reference:tip_displacement_error",)
