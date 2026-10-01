@@ -13,7 +13,7 @@ from .contracts.solver_selection import SolverSelection, select_solver
 from .contracts.report import EngineeringReportData, ReportFigure
 from .contracts.postprocess import PostProcessingProfile, profile_for_solver_selection
 from .reporting.figures import figure_specs_for_profile, capture_viewport_report_figure
-from .contracts.fatigue import FatigueAnalysisIntent, FatigueWorkflow
+from .contracts.fatigue import FatigueAnalysisIntent, FatigueWorkflow, FatigueResult
 from .contracts.convergence import MeshConvergencePoint, MeshConvergencePolicy, MeshConvergenceResult, evaluate_mesh_convergence
 from .contracts.mesh_quality import MeshSummary, MeshQualityPolicy, MeshQualityResult
 from .contracts.engineering_checks import EngineeringCheck, EngineeringCheckReport
@@ -37,7 +37,5 @@ from .engineering_evidence import reaction_balance_from_field_evidence, energy_r
 
 from .contracts.mesh_strategy import MeshRefinementRequest, GeometryMeshPlan
 from .planning.mesh_strategy import plan_geometry_mesh
-
 from .planning.mesh_strategy import local_seeds_from_geometry_plan, mesh_specification_from_geometry_plan
-
 from .contracts.geometry_features import GeometryFeature, GeometryFeatureEvidence, characterize_geometry
