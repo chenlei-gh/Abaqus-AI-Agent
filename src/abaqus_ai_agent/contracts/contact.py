@@ -62,8 +62,13 @@ class ContactDiagnosticReport:
 
     @property
     def passed(self):
-        return bool(self.diagnostics) and all(d.status == "pass" for d in self.diagnostics)
+        return bool(self.diagnostics) and all(
+            d.status in ("pass", "not_applicable") for d in self.diagnostics
+        )
 
     @property
     def failed(self):
-        return tuple(d for d in self.diagnostics if d.status == "fail")
+        return tuple(
+            d for d in self.diagnostics
+            if d.status in ("fail", "insufficient_evidence", "ambiguous")
+        )
