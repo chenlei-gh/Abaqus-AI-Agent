@@ -1,4 +1,4 @@
-from abaqus_ai_agent.engineering_checks import check_balance, evaluate_checks
+from abaqus_ai_agent.engineering_checks import check_balance, evaluate_checks, STANDARD_ENGINEERING_CHECKS
 from abaqus_ai_agent.provenance import stable_hash, hash_text
 from abaqus_ai_agent.sensitivity import evaluate_sensitivity
 from abaqus_ai_agent.contracts.sensitivity import SensitivityCase
@@ -8,6 +8,13 @@ from abaqus_ai_agent.numerical_verification import verify_series
 from abaqus_ai_agent.contact_diagnostics import evaluate_contact_checks
 from abaqus_ai_agent.contracts.contact import ContactDiagnostic
 from abaqus_ai_agent.contracts.uncertainty import UncertaintyParameter
+
+
+def test_standard_engineering_check_families_are_bounded():
+    assert "global_equilibrium" in STANDARD_ENGINEERING_CHECKS["static"]
+    assert "energy_balance" in STANDARD_ENGINEERING_CHECKS["dynamic"]
+    assert "contact_state" in STANDARD_ENGINEERING_CHECKS["contact"]
+    assert "contact_reaction_consistency" in STANDARD_ENGINEERING_CHECKS["contact"]
 
 
 def test_balance_check_is_deterministic():
