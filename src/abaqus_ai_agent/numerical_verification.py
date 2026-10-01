@@ -130,3 +130,130 @@ def verify_richardson(name, values, refinement_ratio, tolerance, safety_factor=1
         extrapolated_value=extrapolated,
         gci=gci,
     )
+
+
+def execute_refinement_study(
+    executor,
+    runner,
+    name,
+    dimension,
+    model_name,
+    job_name,
+    cases,
+    criteria,
+    tolerance,
+    method="successive_relative_change",
+    refinement_ratio=None,
+    value_key=None,
+    timeout=3600,
+):
+    """Execute mesh/time-step refinements through AnalysisRunner.
+
+    Cases are ordered coarse -> fine by refinement_value. The value is only a
+    declared refinement coordinate; an explicit action_plan is required to
+    actually change the Abaqus model/step. Results are extracted through the
+    existing AnalysisRunner criteria path. No new solver or extraction layer
+    is introduced.
+    """
+    from .contracts.numerical import NumericalRefinementReport
+
+    normalized = tuple(sorted(
+        cases,
+        key=lambda case: case.refinement_value,
+        reverse=True,
+    ))
+    runs = []
+    values = []
+
+    for case in normalized:
+        action_plan = tuple(case.action_plan or ())
+        if not action_plan:
+            runs.append({
+                "case": case.name,
+                "refinement_value": case.refinement_value,
+                "status": "failed",
+                "diagnostics": ({
+                    "reason": "refinement_action_plan_required",
+                    "dimension": dimension,
+                },),
+            })
+            continue
+        try:
+            run = runner.run(
+                case.model_name or model_name,
+                case.job_name or ("%s_%s" % (job_name, case.name)),
+                criteria=criteria,
+                action_plan=action_plan,
+                timeout=timeout,
+            )
+            if run.state.value == "failed":
+                runs.append({
+                    "case": case.name,
+                    "refinement_value": case.refinement_value,
+                    "status": "failed",
+                    "run_id": run.id,
+                    "diagnostics": tuple(run.diagnostics or ()),
+                    "provenance": run.provenance,
+                })
+                continue
+
+            observed = dict(run.metadata.get("result_values") or {})
+            if value_key is None:
+                if len(observed) != 1:
+                    raise ValueError("value_key is required when refinement result is not unique")
+                observed_value = next(iter(observed.values()))
+            else:
+                if value_key not in observed:
+                    raise ValueError("missing refinement result: %s" % value_key)
+                observed_value = observed[value_key]
+
+            observed_value = float(observed_value)
+            values.append(observed_value)
+            runs.append({
+                "case": case.name,
+                "refinement_value": case.refinement_value,
+                "status": "completed",
+                "run_id": run.id,
+                "value": observed_value,
+                "acceptance_passed": run.acceptance_passed,
+                "evidence": run.evidence,
+                "provenance": run.provenance,
+                "diagnostics": tuple(run.diagnostics or ()),
+            })
+        except Exception as exc:
+            runs.append({
+                "case": case.name,
+                "refinement_value": case.refinement_value,
+                "status": "failed",
+                "diagnostics": ({"error": str(exc)},),
+            })
+
+    if len(values) < len(normalized):
+        verification = NumericalVerificationResult(
+            name=name,
+            status="insufficient_data",
+            error=float("inf"),
+            tolerance=float(tolerance),
+            points=tuple(values),
+            method=method,
+            message="one or more refinement cases failed",
+        )
+    elif method == "successive_relative_change":
+        verification = verify_series(name, values, tolerance)
+    elif method == "richardson_gci":
+        if refinement_ratio is None:
+            raise ValueError("refinement_ratio is required for richardson_gci")
+        verification = verify_richardson(
+            name, values, refinement_ratio, tolerance
+        )
+    else:
+        raise ValueError("unsupported numerical refinement method: %s" % method)
+
+    return NumericalRefinementReport(
+        name=name,
+        dimension=dimension,
+        cases=normalized,
+        values=tuple(values),
+        verification=verification,
+        runs=tuple(runs),
+    )
