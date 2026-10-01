@@ -46,3 +46,19 @@ The characterization layer is deliberately evidence-first. Current extraction pr
 
 This prevents a common failure mode: turning a small edge into an automatic geometry mutation simply because it is small. Engineering relevance may be supplied independently by a critical-region binding, and only then can mesh planning use it as a refinement driver.
 
+
+
+## Mesh quality gate and convergence evidence
+
+The mesh-quality stage now prefers Abaqus native verification over a hand-written geometric proxy. The executor can use `Part.verifyMeshQuality()` for native shape/size criteria such as aspect ratio, angular deviation, large/small corner angles, geometric deviation factor, and the solver/input-processor analysis checks. The result records aggregate metrics, violations, warnings, evidence, and failed/warning element counts. This keeps the agent aligned with the Abaqus mesh-verification semantics rather than silently inventing a universal quality score.
+
+Two boundaries are deliberate:
+
+- `min_jacobian` and the legacy `max_skew` fields are retained for contract compatibility, but are reported as unsupported/unmapped unless a native criterion or element-specific API is available.
+- Mesh quality is a quality gate/evidence source, not convergence proof. A mesh can pass quality checks and still be too coarse for the engineering quantity of interest.
+
+Mesh convergence now rejects duplicate mesh sizes, can carry result quantity/source and per-point quality status, and can optionally require all convergence points to have passed the mesh-quality gate. A failed quality gate prevents the result from being marked converged. This follows the engineering distinction between mesh quality and mesh-convergence evidence: NAFEMS recommends convergence studies based on the critical result at a defined location across increasing mesh density, while local refinement and transition regions can be used around the region of interest. citeturn0search4turn0search5
+
+For Abaqus specifically, the native Verify Mesh workflow reports worst/average values and can identify elements failing shape, size, or analysis checks; Abaqus documentation also recommends changing seeds, partitions, or mesh technique before resorting to direct mesh editing. citeturn1search0turn1search1
+
+B28 runtime verification remains deferred: the repository-side contract and script generation are closed, but the exact B28 behavior of every native verification criterion still needs a real Abaqus execution check.
