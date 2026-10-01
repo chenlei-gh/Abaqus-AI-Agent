@@ -409,25 +409,36 @@ print(result)
 
 def _mesh_verify_script(model, p):
     part = p["part"]
-    criterion = p.get("criterion", "ANALYSIS_CHECKS")
-    allowed = ("ANALYSIS_CHECKS", "ASPECT_RATIO", "SHAPE_FACTOR", "ANGLE", "GEOMETRIC_DEVIATION_FACTOR",
-               "MINIMUM_ANGLE", "MAXIMUM_ANGLE", "STABLE_TIME_INCREMENT", "SHORTEST_EDGE", "LONGEST_EDGE")
-    if criterion not in allowed:
-        raise ValueError("unsupported Abaqus mesh verification criterion: %s" % criterion)
-    create_set = p.get("create_set")
-    set_arg = ", createSet=%s" % _q(create_set) if create_set else ""
+    criterion = str(p.get("criterion", "ANALYSIS_CHECKS")).upper()
+    allowed = ("ANALYSIS_CHECKS", "ANGULAR_DEVIATION", "ASPECT_RATIO", "GEOM_DEVIATION_FACTOR",
+               "LARGE_ANGLE", "LONGEST_EDGE", "MAX_FREQUENCY", "SHAPE_FACTOR",
+               "SHORTEST_EDGE", "SMALL_ANGLE", "STABLE_TIME_INCREMENT")
+    if criterion not in allowed: raise ValueError("unsupported Abaqus mesh verification criterion: %s" % criterion)
+    args = ["criterion=%s" % criterion]
+    if criterion != "ANALYSIS_CHECKS":
+        if p.get("threshold") is None: raise ValueError("threshold is required for non-analysis mesh verification")
+        args.append("threshold=%r" % p["threshold"])
+    if p.get("elem_shape") is not None: args.append("elemShape=%s" % p["elem_shape"])
+    if p.get("regions_expression") is not None: args.append("regions=%s" % p["regions_expression"])
     return """from abaqusConstants import *
 model=mdb.models[%r]
 part=model.parts[%r]
-poor=part.verifyMeshQuality(criterion=%s%s)
-labels=[]
-for element in poor:
-    try: labels.append(int(element.label))
-    except Exception: pass
-print({'part':%r,'criterion':%r,'poor_element_count':len(labels),'poor_element_labels':labels,'status':'fail' if labels else 'pass','source':'abaqus_native_verify'})
-""" % (model, part, criterion, set_arg, part, criterion)
-
-
+verification=part.verifyMeshQuality(%s)
+failed=verification.get("failedElements", ())
+warnings=verification.get("warningElements", ())
+na=verification.get("naElements", ())
+def labels(values):
+    out=[]
+    for element in values:
+        try: out.append(int(element.label))
+        except Exception: pass
+    return out
+print({"part":%r,"criterion":%r,"num_elements":verification.get("numElements"),
+       "average":verification.get("average"),"worst":verification.get("worst"),
+       "failed_element_labels":labels(failed),"warning_element_labels":labels(warnings),
+       "na_element_labels":labels(na),"status":"fail" if failed else ("warning" if warnings else "pass"),
+       "source":"abaqus_native_verify"})
+""" % (model, part, ", ".join(args))
 def _assembly_inspection_script(model):
     return """a=mdb.models[%r].rootAssembly
 result={'instances':[],'instance_count':len(a.instances)}
