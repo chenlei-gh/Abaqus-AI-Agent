@@ -3,7 +3,9 @@ def _q(value):
 
 def action_to_script(action):
     p, m, k = action.parameters, action.model_name, action.action_type
-    if k == "python":\n        return p["code"]\n    if k == "material_elastic":
+    if k == "python":
+        return p["code"]
+    if k == "material_elastic":
         return "model=mdb.models[%s]; mat=model.Material(%s); mat.Elastic(table=((%r,%r),))" % (_q(m), _q(p["name"]), p["youngs_modulus"], p["poisson"])
     if k == "material_density":
         return "mdb.models[%s].materials[%s].Density(table=((%r,),))" % (_q(m), _q(p["name"]), p["density"])
