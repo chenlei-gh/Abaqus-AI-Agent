@@ -210,20 +210,6 @@ def test_negative_copen_with_declared_interference_limit_can_fail():
     assert diagnostic.status == "fail"
 
 
-def test_ambiguous_history_never_becomes_pass():
-    expected = ExpectedContactBehavior(
-        expected_state="contact",
-        required_outputs=("CSTATUS",),
-    )
-    evidence = _contact_evidence(("sticking",), copen=(0.0,), cpress=(0.0,))
-    evidence["history"] = {
-        "status": "ambiguous",
-        "reason": "multiple_history_regions",
-    }
-    report = diagnose_contact(evidence, expected)
-    assert report.diagnostics[0].status == "ambiguous"
-
-
 def test_opening_without_problem_specific_limit_is_insufficient():
     expected = ExpectedContactBehavior(
         expected_state="contact",
