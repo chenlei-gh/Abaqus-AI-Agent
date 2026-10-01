@@ -14,7 +14,8 @@ from .contracts.report import EngineeringReportData, ReportFigure
 from .contracts.postprocess import PostProcessingProfile, profile_for_solver_selection
 from .reporting.figures import figure_specs_for_profile, capture_viewport_report_figure
 from .contracts.fatigue import FatigueAnalysisIntent, FatigueWorkflow
-from .contracts.convergence import MeshConvergencePoint, MeshConvergencePolicy, MeshConvergenceResult
+from .contracts.convergence import MeshConvergencePoint, MeshConvergencePolicy, MeshConvergenceResult, evaluate_mesh_convergence
+from .contracts.mesh_quality import MeshSummary, MeshQualityPolicy, MeshQualityResult
 from .contracts.engineering_checks import EngineeringCheck, EngineeringCheckReport
 from .contracts.provenance import AnalysisProvenance
 from .contracts.sensitivity import SensitivityCase, SensitivityResult, SensitivityReport
