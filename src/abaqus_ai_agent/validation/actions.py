@@ -39,6 +39,13 @@ def validate_action(action):
     if action.action_type == "bias_seed_number":
         if int(action.parameters.get("number", 0)) < 1: raise ValueError("number must be positive")
         if action.parameters.get("ratio", 0) < 1: raise ValueError("ratio must be >= 1")
+    if action.action_type == "sweep_path":
+        if str(action.parameters.get("sense", "FORWARD")).upper() not in ("FORWARD", "REVERSE"): raise ValueError("sense must be FORWARD or REVERSE")
+    if action.action_type == "verify_mesh_quality":
+        criterion = str(action.parameters.get("criterion", "ANALYSIS_CHECKS")).upper()
+        allowed = ("ANALYSIS_CHECKS", "ANGULAR_DEVIATION", "ASPECT_RATIO", "GEOM_DEVIATION_FACTOR", "LARGE_ANGLE", "LONGEST_EDGE", "MAX_FREQUENCY", "SHAPE_FACTOR", "SHORTEST_EDGE", "SMALL_ANGLE", "STABLE_TIME_INCREMENT")
+        if criterion not in allowed: raise ValueError("unsupported mesh verification criterion")
+        if criterion != "ANALYSIS_CHECKS" and action.parameters.get("threshold") is None: raise ValueError("threshold is required")
     if action.action_type in ("local_seed_size", "local_seed_number", "mesh_controls", "element_type") and not action.parameters.get("region_expression"):
         raise ValueError("region_expression is required for %s" % action.action_type)
     if action.action_type == "mesh_controls" and not action.parameters.get("technique"):
