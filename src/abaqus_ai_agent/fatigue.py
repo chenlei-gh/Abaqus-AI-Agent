@@ -79,6 +79,50 @@ def _goodman(amplitude, mean, ultimate_strength):
     return amplitude / denominator
 
 
+
+def mean_stress_corrected_amplitude(amplitude, minimum, maximum, method,
+                                    ultimate_strength=None, yield_strength=None,
+                                    walker_gamma=None):
+    """Convert a cycle to a declared fully-reversed equivalent amplitude."""
+    amplitude, minimum, maximum = map(float, (amplitude, minimum, maximum))
+    method = (method or "NONE").upper()
+    if amplitude <= 0 or not all(math.isfinite(x) for x in (amplitude, minimum, maximum)):
+        raise ValueError("cycle stresses must be finite and amplitude must be positive")
+    if maximum < minimum:
+        minimum, maximum = maximum, minimum
+    mean = (maximum + minimum) / 2.0
+    if method == "NONE":
+        return amplitude
+    if method == "GOODMAN":
+        return _goodman(amplitude, mean, float(ultimate_strength))
+    if method == "GERBER":
+        uts = float(ultimate_strength)
+        if uts <= 0:
+            raise ValueError("ultimate_strength must be positive")
+        denominator = 1.0 - (mean / uts) ** 2
+        if denominator <= 0:
+            raise ValueError("Gerber correction is undefined at or beyond UTS")
+        return amplitude / denominator
+    if method == "SODERBERG":
+        ys = float(yield_strength)
+        if ys <= 0:
+            raise ValueError("yield_strength must be positive")
+        denominator = 1.0 - mean / ys
+        if denominator <= 0:
+            raise ValueError("Soderberg correction is undefined at or above yield strength")
+        return amplitude / denominator
+    if method == "WALKER":
+        gamma = float(walker_gamma)
+        if not 0.0 <= gamma <= 1.0:
+            raise ValueError("walker_gamma must be between 0 and 1")
+        if maximum <= 0:
+            raise ValueError("Walker correction requires positive maximum stress")
+        ratio = minimum / maximum
+        if ratio >= 1.0:
+            raise ValueError("Walker stress ratio must be below 1")
+        return amplitude * (2.0 / (1.0 - ratio)) ** (1.0 - gamma)
+    raise ValueError("unsupported mean-stress correction: %s" % method)
+
 def goodman_corrected_amplitude(amplitude, mean, ultimate_strength):
     """Return zero-mean-equivalent amplitude using the declared UTS.
 
@@ -126,7 +170,7 @@ def sn_cycles_to_failure(amplitude, material_curve):
     raise ValueError("unable to interpolate S-N curve")
 
 
-def evaluate_fatigue_history(values: Sequence[float], intent: FatigueAnalysisIntent, ultimate_strength=None):
+def evaluate_fatigue_history(values: Sequence[float], intent: FatigueAnalysisIntent, ultimate_strength=None, yield_strength=None, walker_gamma=None):
     """Count cycles, apply declared mean-stress correction, and accumulate Miner damage."""
     if not isinstance(intent, FatigueAnalysisIntent):
         raise TypeError("intent must be FatigueAnalysisIntent")
@@ -141,8 +185,13 @@ def evaluate_fatigue_history(values: Sequence[float], intent: FatigueAnalysisInt
     for index, (a, b, weight) in enumerate(raw_cycles):
         minimum, maximum, mean, rng, amplitude, weight = stress_cycle_statistics(a, b, weight)
         corrected = amplitude
-        if correction == "GOODMAN":
-            corrected = _goodman(amplitude, mean, float(ultimate_strength))
+        if correction != "NONE":
+            corrected = mean_stress_corrected_amplitude(
+                amplitude, minimum, maximum, correction,
+                ultimate_strength if ultimate_strength is not None else intent.ultimate_strength,
+                yield_strength if yield_strength is not None else intent.yield_strength,
+                walker_gamma if walker_gamma is not None else intent.walker_gamma,
+            )
         nf = sn_cycles_to_failure(corrected, intent.material_curve)
         damage += weight / nf
         result_cycles.append(FatigueCycle(
