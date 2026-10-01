@@ -68,3 +68,22 @@ def test_load_balance_and_energy_ratio():
     assert check_load_balance(100.0, 90.0, 0.02, "N").passed is False
     assert check_energy_ratio(1.0, 100.0, 0.02).passed
     assert check_energy_ratio(5.0, 100.0, 0.02).passed is False
+
+
+def test_sum_reaction_components_preserves_explicit_resultant():
+    from abaqus_ai_agent.engineering_checks import sum_reaction_components
+    result = sum_reaction_components([
+        {"data": (1.0, 2.0, 3.0)},
+        {"data": (-0.5, 1.0, -1.0)},
+    ])
+    assert result["components"] == (0.5, 3.0, 2.0)
+    assert result["count"] == 2
+
+
+def test_declared_load_balance_does_not_infer_applied_load():
+    from abaqus_ai_agent.engineering_checks import check_declared_load_balance
+    report = check_declared_load_balance(
+        (100.0, 0.0, 0.0), (-99.0, 0.0, 0.0), 0.02, "N"
+    )
+    assert report.passed
+    assert report.checks[0].name == "global_load_balance_RF1"
