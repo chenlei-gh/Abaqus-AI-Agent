@@ -77,3 +77,42 @@ def test_history_requirement_is_first_class():
     })
     assert req.output_kind == "history"
     assert req.history_variable == "ALLIE"
+
+
+def test_history_output_plan_preserves_step_boundaries():
+    from abaqus_ai_agent.planning.output import plan_outputs, actions_from_output_plan
+
+    criteria = [
+        {
+            "value_key": "energy_1",
+            "operator": ">=",
+            "limit": 1,
+            "result": {
+                "output_kind": "history",
+                "history_variable": "ALLIE",
+                "step": "Step-1",
+                "history_region_expression": "model.rootAssembly.nodeSets['N1']",
+            },
+        },
+        {
+            "value_key": "energy_2",
+            "operator": ">=",
+            "limit": 1,
+            "result": {
+                "output_kind": "history",
+                "history_variable": "ALLKE",
+                "step": "Step-2",
+                "history_region_expression": "model.rootAssembly.nodeSets['N2']",
+            },
+        },
+    ]
+
+    plan = plan_outputs(criteria)
+    actions = actions_from_output_plan("M", plan)
+    assert len(actions) == 2
+    assert actions[0].parameters["step"] == "Step-1"
+    assert actions[0].parameters["variables"] == ("ALLIE",)
+    assert actions[0].parameters["region_expression"].endswith("['N1']")
+    assert actions[1].parameters["step"] == "Step-2"
+    assert actions[1].parameters["variables"] == ("ALLKE",)
+    assert actions[1].parameters["region_expression"].endswith("['N2']")
