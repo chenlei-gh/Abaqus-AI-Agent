@@ -84,7 +84,8 @@ class AnalysisRunner:
         self.executor = executor
 
     def run(self, model_name, job_name, odb_path=None, criteria=(),
-            result_values=None, timeout=3600):
+            result_values=None, numerical_verification=None, engineering_checks=None,
+            timeout=3600):
         run_id = str(uuid.uuid4())
         run = AnalysisRun(run_id, model_name, job_name, AnalysisRunState.PREFLIGHTED,
                           provenance=AnalysisProvenance(run_id=run_id, model_name=model_name,
@@ -174,9 +175,22 @@ class AnalysisRunner:
 
             accepted = evaluate_result_acceptance(
                 result_status=status.state.value,
+                numerical=numerical_verification,
+                engineering=engineering_checks,
                 values=result_values,
                 criteria=criteria,
             )
+            verification_evidence = []
+            if numerical_verification is not None:
+                verification_evidence.append(Evidence(
+                    kind="numerical_verification", source="verification",
+                    locator=job_name, value=numerical_verification,
+                ))
+            if engineering_checks is not None:
+                verification_evidence.append(Evidence(
+                    kind="engineering_checks", source="verification",
+                    locator=job_name, value=engineering_checks,
+                ))
             status_value = (
                 EngineeringStatus.RESULT_VALID.value
                 if accepted.passed and result_source == "odb"
@@ -189,7 +203,7 @@ class AnalysisRunner:
             ), Evidence(
                 kind="acceptance", source="acceptance", locator=job_name,
                 value=accepted
-            ))).extend(result_evidence)
+            ))).extend(tuple(verification_evidence)).extend(result_evidence)
             return run.with_state(
                 AnalysisRunState.ACCEPTED if accepted.passed
                 else AnalysisRunState.RESULTS_EXTRACTED,
