@@ -316,7 +316,7 @@ Action 必须小、明确、可检查。
 
 当前 Fatigue 能力已经闭合为：
 
-**针对已有 Abaqus 标量应力历史的确定性疲劳后处理引擎**，覆盖 Rainflow、半/整循环、应力范围/幅值/均值、Goodman、log-log S-N 与 Palmgren-Miner。
+**针对已有 Abaqus 标量应力历史的确定性疲劳后处理引擎**，覆盖 Rainflow、半/整循环、应力范围/幅值/均值、Goodman、Gerber、Soderberg、Walker、log-log S-N 与 Palmgren-Miner。
 
 但不宣称已经实现临界面法或非比例多轴疲劳准则。
 
