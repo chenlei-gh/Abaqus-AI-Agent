@@ -234,3 +234,12 @@ def test_agent_analysis_run_exposes_all_verification_domains():
         "contact_diagnostics", "sensitivity", "uncertainty",
     ):
         assert name in signature.parameters
+
+
+def test_agent_analysis_run_exposes_runner_timeout():
+    from abaqus_ai_agent.agent import AbaqusAIAgent
+    import inspect
+
+    signature = inspect.signature(AbaqusAIAgent.analysis_run)
+    assert "timeout" in signature.parameters
+    assert signature.parameters["timeout"].default == 3600
