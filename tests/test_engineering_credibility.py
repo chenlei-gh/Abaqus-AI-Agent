@@ -358,7 +358,7 @@ def test_contact_mixed_status_is_ambiguous_not_failure():
     diagnostic = expected_contact_state(evidence, expected)
     assert diagnostic.status == "ambiguous"
 
-def test_contact_numeric_cstatus_is_not_interpreted_without_verified_mapping():
+def test_contact_numeric_cstatus_uses_abaqus_three_state_encoding():
     expected = ExpectedContactBehavior(
         expected_state="contact",
         required_outputs=("CSTATUS",),
@@ -375,7 +375,7 @@ def test_contact_numeric_cstatus_is_not_interpreted_without_verified_mapping():
     diagnostic = diagnose_contact(evidence, expected).diagnostics[0]
     assert diagnostic.status == "pass"
     state = expected_contact_state(evidence, expected)
-    assert state.status == "insufficient_evidence"
+    assert state.status == "pass"
 
 
 def test_contact_expected_region_mismatch_is_insufficient():
