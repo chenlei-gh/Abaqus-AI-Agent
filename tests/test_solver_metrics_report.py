@@ -41,4 +41,5 @@ def test_postprocess_profile_links_explicit_to_energy_checks():
 def test_report_is_source_first():
     report = EngineeringReportData(title="Bracket Analysis", objective="Static strength check", results=(EngineeringMetric("Maximum Mises Stress", 238.4, "MPa"),), figures=(ReportFigure("contour", "stress.png", "Stress contour", "viewport"),))
     assert "238.4" in render_markdown(report) and "238.4" in render_html(report)
-    assert "AI" not in render_markdown(report)\n    assert "stress.png" in render_markdown(report)
+    assert "AI" not in render_markdown(report)
+    assert "stress.png" in render_markdown(report)
