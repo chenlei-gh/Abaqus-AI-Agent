@@ -55,12 +55,19 @@ Repair candidates are policy-filtered, and confirmation is an explicit execution
 
 ## Next non-runtime work
 
-1. build a small declarative engineering benchmark catalog;
-2. add mesh/time convergence beyond successive-point comparison;
-3. add sensitivity execution helpers around the existing executor;
-4. add evidence-to-engineering-check adapters for reaction, energy and contact results;
-5. add reproducibility manifest fields that are available without inventing content hashes;
-6. add bounded self-correction diagnostics and retry evidence.
+Completed in the non-runtime closure tranche:
+
+1. declarative engineering benchmark catalog;
+2. Richardson/GCI numerical verification primitive;
+3. RF/energy evidence-to-engineering-check adapters;
+4. explicit repair authorization gate.
+
+Remaining non-runtime work:
+
+1. sensitivity execution helpers around the existing executor;
+2. stronger reproducibility manifest population from available runtime metadata;
+3. bounded self-correction attempt/evidence records;
+4. contact-specific engineering interpretation where thresholds are explicitly declared.
 
 ## Deferred runtime validation
 
