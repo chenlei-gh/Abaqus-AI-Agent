@@ -40,7 +40,7 @@ def validate_action(action):
     if action.action_type == "mesh_quality":
         if not action.parameters.get("part"):
             raise ValueError("part is required for mesh_quality")
-        for key in ("max_aspect_ratio", "max_skew", "min_jacobian", "min_angle", "max_angle"):
+        for key in ("max_aspect_ratio", "max_skew", "min_jacobian", "min_angle", "max_angle", "max_angular_deviation", "max_geometric_deviation_factor"):
             value = action.parameters.get(key)
             if value is not None and value < 0:
                 raise ValueError("%s cannot be negative" % key)
