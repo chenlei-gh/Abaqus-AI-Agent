@@ -12,6 +12,7 @@ from abaqus_ai_agent.contact_diagnostics import (
 )
 from abaqus_ai_agent.contracts.contact import (
     ContactDiagnostic,
+    ContactDiagnosticReport,
     ExpectedContactBehavior,
 )
 from abaqus_ai_agent.contracts.uncertainty import UncertaintyParameter
