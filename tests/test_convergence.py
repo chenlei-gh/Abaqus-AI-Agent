@@ -20,9 +20,22 @@ def test_mesh_convergence_rejects_nonfinite_mesh_data():
 
 
 def test_mesh_convergence_can_require_consecutive_stable_refinements():
-    points = tuple(MeshConvergencePoint(size, value) for size, value in ((8.0, 100.0), (4.0, 101.0), (2.0, 101.5), (1.0, 101.6)))
+    points = tuple(MeshConvergencePoint(size, value, "DISPLACEMENT", "tip_u3", "U3", "NODAL")
+                   for size, value in ((8.0, 100.0), (4.0, 101.0), (2.0, 101.5), (1.0, 101.6)))
     result = evaluate_mesh_convergence(points, MeshConvergencePolicy(0.01, required_consecutive=2))
     assert result.status == "converged"
+    assert result.points[-1].qoi_type == "DISPLACEMENT"
+
+
+def test_mesh_convergence_rejects_mixed_qois():
+    points = (
+        MeshConvergencePoint(2.0, 10.0, "DISPLACEMENT", "tip_u3"),
+        MeshConvergencePoint(1.0, 10.1, "REACTION_FORCE", "support_rf3"),
+        MeshConvergencePoint(0.5, 10.1, "DISPLACEMENT", "tip_u3"),
+    )
+    result = evaluate_mesh_convergence(points, MeshConvergencePolicy(0.01))
+    assert result.status == "invalid_data"
+    assert not result.converged
 
 
 def test_mesh_convergence_requires_enough_points_for_consecutive_window():
