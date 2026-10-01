@@ -23,6 +23,8 @@ class MeshConvergencePolicy:
             raise ValueError("minimum_points must be >= 2")
         if self.required_consecutive < 1:
             raise ValueError("required_consecutive must be >= 1")
+        if self.minimum_points < self.required_consecutive + 1:
+            raise ValueError("minimum_points must cover required consecutive refinements")
 
 
 @dataclass(frozen=True)
