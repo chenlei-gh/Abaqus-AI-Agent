@@ -29,9 +29,9 @@ def static_step(model, name="Step-1", previous="Initial", nlgeom=False, time_per
                    max_inc=max_inc, amplitude=amplitude)
 
 def dynamic_explicit_step(model, name="Step-1", previous="Initial", time_period=1.0,
-                           nlgeom=False, max_num_inc=None, improved_dt_method=None):
+                           nlgeom=True, max_increment=None, improved_dt_method=True):
     return _action("dynamic_explicit_step", model, name=name, previous=previous,
-                   time_period=time_period, nlgeom=nlgeom, max_num_inc=max_num_inc,
+                   time_period=time_period, nlgeom=nlgeom, max_increment=max_increment,
                    improved_dt_method=improved_dt_method)
 
 def implicit_dynamic_step(model, name="Step-1", previous="Initial", time_period=1.0,
