@@ -74,5 +74,5 @@ def test_extract_energy_evidence_requests_standard_energy_history():
     assert "ALLKE" in result["variables"]
     assert "ALLWK" in result["variables"]
     assert "ALLAE" in result["variables"]
-    assert "historyRegions" not in executor.code
+    assert "historyRegions" in executor.code
     assert "historyOutputs" in executor.code
