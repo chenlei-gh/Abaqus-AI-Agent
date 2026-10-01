@@ -86,6 +86,8 @@ The current action layer covers:
 - ODB field CSV export
 - mesh-convergence evaluation
 - contract-level fatigue workflow for post-processing existing Abaqus stress histories
+- bounded probabilistic uncertainty execution with reproducible sampling/statistics
+- deterministic experimental validation against explicit measured observations
 
 The action layer is intentionally extensible rather than exhaustive. Abaqus exposes a very large, release-dependent Python API; the project therefore also provides a controlled native-Python escape hatch.
 
