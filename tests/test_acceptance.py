@@ -19,3 +19,23 @@ def test_acceptance_fails():
     )
     assert not result.passed
     assert len(result.failures) == 1
+
+
+def test_acceptance_relative_tolerance_and_warning():
+    result = evaluate_criteria(
+        {"stress": 101.0},
+        [{"name": "stress", "value_key": "stress", "operator": "<", "limit": 100.0,
+          "relative_tolerance": 0.02, "unit": "MPa"}],
+    )
+    assert result.passed
+    assert result.criteria[0].relative_error == 0.01
+
+
+def test_acceptance_warns_when_tolerance_has_no_order_semantics():
+    result = evaluate_criteria(
+        {"stress": 100.1},
+        [{"value_key": "stress", "operator": "==", "limit": 100.0,
+          "relative_tolerance": 0.01}],
+    )
+    assert not result.passed
+    assert result.warnings == ("relative_tolerance_ignored_for_==",)
