@@ -131,7 +131,15 @@ class AnalysisRunner:
             if snapshot is not None and job_name not in snapshot.jobs:
                 jobs.create(job_name, model_name)
 
-            from ..planning.output import plan_outputs, actions_from_output_plan
+            from ..planning.output import plan_outputs, actions_from_output_plan, criteria_from_postprocess_profile
+            effective_criteria = tuple(criteria or ())
+            if postprocess_profile is not None:
+                profile_criteria = criteria_from_postprocess_profile(postprocess_profile)
+                existing_keys = {item.get("value_key") for item in effective_criteria if isinstance(item, dict)}
+                effective_criteria = effective_criteria + tuple(
+                    item for item in profile_criteria
+                    if item.get("value_key") not in existing_keys
+                )
             if engineering_intent is not None:
                 from ..contracts.solver_selection import select_solver
                 from ..contracts.postprocess import profile_for_solver_selection
@@ -141,7 +149,7 @@ class AnalysisRunner:
                 metadata["solver_selection"] = selection
                 metadata["postprocess_profile"] = postprocess_profile
                 run = run.with_state(run.state, metadata=metadata)
-            output_plan = plan_outputs(criteria, postprocess_profile=postprocess_profile)
+            output_plan = plan_outputs(effective_criteria, postprocess_profile=None)
             output_actions = actions_from_output_plan(model_name, output_plan)
             if not action_plan and output_actions:
                 run = run.with_state(
@@ -220,13 +228,13 @@ class AnalysisRunner:
                 engineering_status=EngineeringStatus.RESULT_SUSPICIOUS.value,
                 evidence=EvidenceBundle((Evidence(kind="odb_summary", source="odb", locator=path, value=odb),)), artifacts=artifacts)
 
-            if not criteria and postprocess_profile is None and numerical_verification is None and engineering_checks is None and mesh_quality is None and mesh_convergence is None and fatigue is None and contact_diagnostics is None and sensitivity is None and uncertainty is None:
+            if not effective_criteria and numerical_verification is None and engineering_checks is None and mesh_quality is None and mesh_convergence is None and fatigue is None and contact_diagnostics is None and sensitivity is None and uncertainty is None:
                 return run.with_state(AnalysisRunState.ODB_VALIDATED)
 
             if result_values is None:
                 from .results import extract_requirements
                 extractions, result_evidence = extract_requirements(
-                    self.executor, path, criteria)
+                    self.executor, path, effective_criteria)
                 result_values = {item.requirement.value_key: item.value for item in extractions}
                 from ..contracts.metrics import metrics_from_extractions
                 run_metrics = metrics_from_extractions(extractions)
@@ -252,7 +260,7 @@ class AnalysisRunner:
                 fatigue=fatigue,
                 contact_diagnostics=contact_diagnostics,
                 values=result_values,
-                criteria=criteria,
+                criteria=effective_criteria,
             )
             verification_evidence = []
             if numerical_verification is not None:
