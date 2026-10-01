@@ -1,6 +1,6 @@
 from .builders import (
     python_action, material_elastic, material_density, material_plastic, solid_section,
-    section_assignment, mesh_controls, seed_part, bias_seed_size, bias_seed_number, sweep_path, generate_mesh, element_type,
+    section_assignment, mesh_controls, seed_part, bias_seed_size, bias_seed_number, sweep_path, generate_mesh, element_type, element_strategy,
     local_seed_size, local_seed_number, inspect_geometry, ignore_entity,
     restore_entity, repair_geometry, remove_redundant_entities, inspect_mesh,
     mesh_quality, verify_mesh_quality, contact_property,
