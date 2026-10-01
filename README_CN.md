@@ -30,7 +30,7 @@
 
 ## 一眼看懂
 
-`````mermaid
+```mermaid
 flowchart LR
     U["工程意图"] --> AI["AI<br/>理解 · 推理 · 规划 · 解释"]
     AI --> B{"能力边界"}
@@ -46,13 +46,13 @@ flowchart LR
     Q --> C["Acceptance"]
     C --> EV["Evidence"]
     EV --> REP["工程报告"]
-````
+```
 
 **这个边界是刻意设计的：** AI 可以理解和生成超出 Agent Typed Capability 的操作，但只有进入明确的执行与 Evidence 链路，才能成为 Agent 的正式工程能力。
 
 ### 工程证据阶梯
 
-`````mermaid
+```mermaid
 flowchart TB
     I["API 调用"] --> M["Model-State 证据"]
     M --> J["Job 执行证据"]
@@ -61,13 +61,13 @@ flowchart TB
     O --> R["结果证据"]
     R --> A["工程验收证据"]
     N["Python 调用成功"] -. "不能直接推出" .-> A
-````
+```
 
 这条链路是项目避免“**代码跑通了，所以工程结果就是正确的**”这一常见 AI 工程陷阱的核心机制。
 
 ### 能力生命周期
 
-`````mermaid
+```mermaid
 flowchart LR
     D["发现能力缺口"] --> T{"已有 Typed Contract？"}
     T -->|是| S["SUPPORTED"]
@@ -77,7 +77,7 @@ flowchart LR
     X --> H["重复出现的工程需求"]
     H --> C["Contract + Validation<br/>结果语义 + Tests"]
     C --> S
-````
+```
 
 这样项目可以持续扩展能力，同时避免因为 **LLM 能生成一段看起来可用的 Abaqus Python**，就虚增 Agent 的正式能力范围。
 
