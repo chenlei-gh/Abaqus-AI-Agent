@@ -158,7 +158,7 @@ def test_contact_failure_blocks_the_analysis_acceptance_chain():
         "history": {"status": "available"},
     }
     with patch(
-        "abaqus_ai_agent.execution.analysis_run.extract_contact_evidence",
+        "abaqus_ai_agent.execution.odb.extract_contact_evidence",
         return_value=contact_evidence,
     ):
         run = _run(contact_expected=expected)
@@ -193,7 +193,7 @@ def test_contact_warning_does_not_block_the_analysis_acceptance_chain():
         "history": {"status": "available"},
     }
     with patch(
-        "abaqus_ai_agent.execution.analysis_run.extract_contact_evidence",
+        "abaqus_ai_agent.execution.odb.extract_contact_evidence",
         return_value=contact_evidence,
     ):
         run = _run(contact_expected=expected)
