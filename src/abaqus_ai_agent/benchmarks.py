@@ -69,7 +69,22 @@ def derive_benchmark_observations(case, result_values, reference_values=None):
             failures.append("missing_reference:%s" % reference_key)
             evidence.append({"value_key": key, "reference_key": reference_key, "status": "missing_reference"})
             continue
-        reference = float(references[reference_key])
+        reference_record = references[reference_key]
+        if isinstance(reference_record, dict):
+            if "value" not in reference_record:
+                failures.append("invalid_reference:%s" % reference_key)
+                evidence.append({
+                    "value_key": key, "reference_key": reference_key,
+                    "status": "invalid_reference",
+                })
+                continue
+            reference = float(reference_record["value"])
+            reference_source = reference_record.get("source")
+            reference_unit = reference_record.get("unit")
+        else:
+            reference = float(reference_record)
+            reference_source = None
+            reference_unit = None
         if metric == "relative_error":
             if reference == 0.0:
                 failures.append("zero_reference_requires_absolute_error:%s" % reference_key)
@@ -84,7 +99,8 @@ def derive_benchmark_observations(case, result_values, reference_values=None):
         observed[key] = value
         evidence.append({
             "value_key": key, "actual": actual, "reference": reference,
-            "reference_key": reference_key, "metric": metric,
+            "reference_key": reference_key, "reference_source": reference_source,
+            "reference_unit": reference_unit, "metric": metric,
             "derived": value, "status": "available",
         })
     return observed, tuple(evidence), tuple(failures)
