@@ -51,7 +51,16 @@ def classify_action(action) -> CapabilityBoundary:
     if isinstance(action_type, str):
         # Script generation is the existing executable registry. Do not
         # duplicate the action-type list in a second capability registry.
-        script = action_to_script(action)
+        try:
+            script = action_to_script(action)
+        except ValueError as exc:
+            if str(exc) == "unsupported action type: %s" % action_type:
+                return CapabilityBoundary(
+                    CapabilityStatus.UNSUPPORTED,
+                    str(action_type),
+                    "action type has no native Agent script path",
+                )
+            raise
         if script is not None:
             return CapabilityBoundary(
                 CapabilityStatus.SUPPORTED,
