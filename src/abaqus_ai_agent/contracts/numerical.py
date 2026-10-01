@@ -9,6 +9,7 @@ class NumericalVerificationResult:
     error: float
     tolerance: float
     points: Tuple[float, ...] = ()
+    method: str = "successive_relative_change"
     message: str = ""
 
     @property
