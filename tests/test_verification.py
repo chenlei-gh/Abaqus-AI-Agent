@@ -34,7 +34,7 @@ def test_verification_failure_is_not_overwritten_in_journal():
     from abaqus_ai_agent.execution.client import InProcessExecutor
 
     action = AbaqusAction(
-        "material_elastic", "Model-1", None, {"name": "Steel"},
+        "material_elastic", "Model-1", None, {"name": "Steel", "youngs_modulus": 210000.0, "poisson": 0.3},
         expected_state=({"path": "materials", "contains": "Missing"},),
     )
     executor = InProcessExecutor(lambda code: {"ok": True})
