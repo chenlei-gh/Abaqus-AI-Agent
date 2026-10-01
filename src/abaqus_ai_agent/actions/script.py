@@ -319,7 +319,7 @@ for criterion_name, threshold, output_name in criteria:
         criterion = globals()[criterion_name]
         data=part.verifyMeshQuality(criterion=criterion, threshold=threshold)
         result['metrics'][output_name]=float(data.get('worst', 0.0))
-        result['evidence'].append('native_verify:%s'%criterion_name)
+        result['evidence'].append('native_verify:%%s'%%criterion_name)
         failed=len(data.get('failedElements', ()))
         warnings=len(data.get('warningElements', ()))
         result['failed_element_count'] += failed
@@ -327,7 +327,7 @@ for criterion_name, threshold, output_name in criteria:
         if failed:
             result['violations'].append(output_name)
     except Exception as exc:
-        result['warnings'].append('unsupported_quality:%s:%s'%(criterion_name, type(exc).__name__))
+        result['warnings'].append('unsupported_quality:%%s:%%s'%%(criterion_name, type(exc).__name__))
 if %r:
     try:
         data=part.verifyMeshQuality(criterion=ANALYSIS_CHECKS)
@@ -339,7 +339,7 @@ if %r:
         if data.get('warningElements'):
             result['warnings'].append('analysis_check_warnings')
     except Exception as exc:
-        result['warnings'].append('unsupported_quality:ANALYSIS_CHECKS:%s'%type(exc).__name__)
+        result['warnings'].append('unsupported_quality:ANALYSIS_CHECKS:%%s'%%type(exc).__name__)
 if %r is not None:
     result['warnings'].append('min_jacobian_requires_native_analysis_check_or_element_specific_api')
 if %r is not None:
