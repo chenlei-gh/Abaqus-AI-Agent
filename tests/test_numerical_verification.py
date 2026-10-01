@@ -1,5 +1,7 @@
 import pytest
-from abaqus_ai_agent.numerical_verification import (\n    verify_series, verify_richardson, assess_singularity_interpretation,\n)
+from abaqus_ai_agent.numerical_verification import (
+    verify_series, verify_richardson, assess_singularity_interpretation,
+)
 
 
 def test_verify_series_insufficient_data_is_explicit():
