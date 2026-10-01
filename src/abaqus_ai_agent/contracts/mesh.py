@@ -29,6 +29,8 @@ class MeshSpecification:
     deviation_factor: float = 0.1
     min_size_factor: float = 0.1
     local_seeds: Tuple[LocalSeed, ...] = field(default_factory=tuple)
+    bias_seeds: Tuple[Dict[str, Any], ...] = field(default_factory=tuple)
+    sweep_paths: Tuple[Dict[str, Any], ...] = field(default_factory=tuple)
     controls: Tuple[Dict[str, Any], ...] = field(default_factory=tuple)
     element_types: Tuple[Dict[str, Any], ...] = field(default_factory=tuple)
     generate: bool = True
