@@ -13,6 +13,8 @@ class ModelSnapshot:
     steps: Tuple[str, ...] = ()
     boundary_conditions: Tuple[str, ...] = ()
     loads: Tuple[str, ...] = ()
+    amplitudes: Tuple[str, ...] = ()
+    predefined_fields: Tuple[str, ...] = ()
     interactions: Tuple[str, ...] = ()
     output_requests: Tuple[str, ...] = ()
     jobs: Tuple[str, ...] = ()
@@ -30,6 +32,7 @@ class ModelSnapshot:
             models=names("models"), parts=names("parts"), instances=names("instances"),
             materials=names("materials"), sections=names("sections"), steps=names("steps"),
             boundary_conditions=names("boundary_conditions"), loads=names("loads"),
+            amplitudes=names("amplitudes"), predefined_fields=names("predefined_fields"),
             interactions=names("interactions"), output_requests=names("output_requests"),
             jobs=names("jobs"), metadata=dict(data.get("metadata", {}) or {}))
 
