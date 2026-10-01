@@ -39,7 +39,7 @@ A successful Python invocation is not treated as solver success, and solver comp
 
 ### Numerical verification
 
-The verifier now includes successive relative change and Richardson/GCI. These are numerical evidence primitives only; time-step refinement, element sensitivity, and singularity-aware interpretation remain outside the current closure.
+The verifier includes successive relative change and Richardson/GCI, plus executable element-size/time-step refinement studies through AnalysisRunner. Singularity interpretation is explicit-evidence-only; physical adequacy remains problem-specific.
 
 ### Benchmarks
 
@@ -66,13 +66,7 @@ Completed in the current non-runtime closure tranche:
 7. unit/dimensional validation at planning and result-requirement boundaries;
 8. bounded standard engineering-check families.
 
-Remaining non-runtime work:
-
-1. contact-specific engineering interpretation where thresholds are explicitly declared;
-2. benchmark execution through AnalysisRunner;
-3. uncertainty scenario execution through AnalysisRunner;
-4. time-step/element numerical verification;
-5. one concrete, explicitly authorized correction workflow.
+Remaining non-runtime work is deliberately limited to broader problem-specific engineering evidence and future release-specific validation. Benchmark, uncertainty, numerical-refinement, and controlled-correction execution paths are already implemented.
 
 ## Deferred runtime validation
 
