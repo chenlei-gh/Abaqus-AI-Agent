@@ -212,6 +212,7 @@ The solver/post-processing/reporting gap identified in the previous review is no
 - `EngineeringReportData` is source-first and can be constructed directly from `AnalysisRun`.
 - Markdown and HTML renderers are present; PDF rendering is available when ReportLab is installed.
 - `ReportFigure` provides a structured path for viewport/contour/XY evidence rather than asking an LLM to recreate numerical results.
+- `figure_specs_for_profile()` derives the expected plot slots from the post-processing profile, while `capture_viewport_report_figure()` reuses the existing real Abaqus viewport capture bridge.
 - Existing Abaqus viewport capture helpers can supply PNG evidence; full automated contour/XY capture remains runtime-dependent and is therefore part of the deferred B28 validation rather than being simulated in unit tests.
 
 ### Verification status
