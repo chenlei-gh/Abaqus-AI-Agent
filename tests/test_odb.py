@@ -52,3 +52,27 @@ def test_extract_reaction_evidence_uses_rf_field_and_history():
     assert len(executor.calls) == 2
     assert "'RF'" in executor.calls[0]
     assert "historyRegions" in executor.calls[1]
+
+
+def test_extract_energy_evidence_requests_standard_energy_history():
+    from abaqus_ai_agent.execution.odb import extract_energy_evidence
+
+    class FakeExecutor:
+        def __init__(self):
+            self.code = None
+        def execute(self, code):
+            self.code = code
+            return {"step": "Step-1", "region": "Assembly ASSEMBLY",
+                    "variables": {"ALLIE": [(0.0, 1.0)], "ALLKE": None}}
+
+    executor = FakeExecutor()
+    result = extract_energy_evidence(
+        executor, "job.odb", "Step-1", "Assembly ASSEMBLY"
+    )
+    assert result["step"] == "Step-1"
+    assert "ALLIE" in result["variables"]
+    assert "ALLKE" in result["variables"]
+    assert "ALLWK" in result["variables"]
+    assert "ALLAE" in result["variables"]
+    assert "historyRegions" in executor.code
+    assert "historyOutputs" in executor.code
