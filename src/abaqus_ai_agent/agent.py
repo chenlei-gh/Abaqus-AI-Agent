@@ -65,7 +65,8 @@ class AbaqusAIAgent:
                      contact_expected=None, contact_evidence=None, contact_step=None,
                      contact_frame=-1, contact_history_region=None,
                      contact_position=None, contact_region=None,
-                     benchmark=None, benchmark_reference_values=None, benchmark_result_overrides=None):
+                     benchmark=None, benchmark_reference_values=None, benchmark_result_overrides=None,
+                     experimental_observations=()):
         from .execution.analysis_run import AnalysisRunner
         return AnalysisRunner(self.executor).run(
             model_name, job_name, odb_path=odb_path, criteria=criteria,
@@ -77,7 +78,8 @@ class AbaqusAIAgent:
             contact_history_region=contact_history_region,
             contact_position=contact_position, contact_region=contact_region,
             benchmark=benchmark, benchmark_reference_values=benchmark_reference_values,
-            benchmark_result_overrides=benchmark_result_overrides)
+            benchmark_result_overrides=benchmark_result_overrides,
+            experimental_observations=experimental_observations)
 
     def uncertainty_run(self, model_name, job_name, scenarios, criteria=(), scenario_action_plans=None, timeout=3600):
         from .execution.analysis_run import AnalysisRunner
