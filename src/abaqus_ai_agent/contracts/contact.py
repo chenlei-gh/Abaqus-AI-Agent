@@ -40,6 +40,25 @@ class ExpectedContactBehavior:
             raise ValueError("allowed_initial_interference must be non-negative")
         if not self.required_outputs:
             raise ValueError("required_outputs must not be empty")
+        outputs = set(self.required_outputs)
+        if self.contact_required and "CSTATUS" not in outputs:
+            raise ValueError(
+                "CSTATUS is required when contact behavior is part of the contract"
+            )
+        if (
+            self.expected_separation is not None
+            and "COPEN" not in outputs
+        ):
+            raise ValueError(
+                "COPEN is required when expected_separation is declared"
+            )
+        if (
+            self.allowed_initial_interference is not None
+            and "COPEN" not in outputs
+        ):
+            raise ValueError(
+                "COPEN is required when allowed_initial_interference is declared"
+            )
 
 
 @dataclass(frozen=True)
