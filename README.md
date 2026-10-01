@@ -13,7 +13,7 @@
 
 It is designed to connect:
 
-**engineering requirements → engineering intent → model inspection → geometry grounding → validated native actions → Abaqus execution → job/ODB evidence → result extraction → acceptance**
+**engineering requirements → engineering intent → solver selection → geometry/mesh strategy → validated native actions → Abaqus execution → ODB/result extraction → verification → acceptance → evidence → engineering report**
 
 The project deliberately keeps the AI layer separate from the Abaqus solver. It does not attempt to replace Abaqus, invent a new finite-element solver, or turn arbitrary natural-language prompts into unverified geometry.
 
@@ -84,12 +84,17 @@ The current action layer covers:
 - job creation and submission
 - INP export
 - ODB field CSV export
-- mesh-convergence evaluation
-- contract-level fatigue workflow for post-processing existing Abaqus stress histories
+- mesh-convergence evaluation with explicit quality/singularity boundaries
 - deterministic solver selection from engineering intent
+- analysis-type post-processing profiles linking solver strategy to required results/checks/plots
+- geometry-to-mesh strategy with local refinement, partition candidates, and small-feature review
+- native Abaqus mesh-quality verification
+- contact diagnostics with explicit engineering expectations
+- fatigue post-processing contracts covering cycle counting, stress range/amplitude semantics, mean-stress correction, and multi-component stress semantics
+- sensitivity and uncertainty evidence contracts
 - normalized engineering metrics from ODB result extraction
 - source-first engineering report data with Markdown/HTML and optional PDF rendering
-- analysis-type post-processing profiles linking solver strategy to default results/checks/plots
+- structured acceptance gates for numerical verification, engineering checks, mesh quality/convergence, fatigue, and supplied contact diagnostics
 
 The action layer is intentionally extensible rather than exhaustive. Abaqus exposes a very large, release-dependent Python API; the project therefore also provides a controlled native-Python escape hatch.
 
@@ -169,6 +174,51 @@ The project provides:
 - `AbaqusAIAgent` orchestration facade
 
 ## Engineering closure
+
+The current closure chain is intentionally explicit:
+
+```text
+Engineering Intent
+        ↓
+Solver Selection
+        ↓
+Post-Processing Profile
+        ↓
+Effective Result Criteria
+        ↓
+Output Planning
+        ↓
+Native Abaqus Output Requests
+        ↓
+Job Execution
+        ↓
+Artifacts / ODB
+        ↓
+Result Extraction
+        ↓
+Verification
+ ┌──────────────┬──────────────┬──────────────┐
+ │ Numerical    │ Engineering  │ Mesh Quality │
+ │ Verification │ Checks       │ / Convergence│
+ ├──────────────┼──────────────┼──────────────┤
+ │ Fatigue      │ Contact      │ Sensitivity /│
+ │ Verification │ Diagnostics  │ Uncertainty  │
+ └──────────────┴──────────────┴──────────────┘
+        ↓
+Acceptance
+        ↓
+Engineering Status
+        ↓
+Evidence
+        ↓
+Engineering Report
+```
+
+The important architectural rule is:
+
+> **Not supplied does not automatically mean failed; explicitly supplied verification failures cannot be silently bypassed.**
+
+
 
 A central design goal is to close the engineering evidence loop:
 
@@ -329,13 +379,19 @@ Visual references must be mapped to actual Abaqus regions through explicit evide
 
 The project does not silently assume that an index, name, or ordering is a stable visual identity.
 
-### 5. No fake solver capabilities
+### 5. Verification is not the same as execution
+
+A completed Abaqus job is only an execution fact. Engineering validity is established separately through result extraction, numerical verification, engineering checks, mesh quality/convergence, fatigue verification, contact diagnostics when supplied, and explicit acceptance criteria.
+
+Not every analysis needs every verification domain. However, once a verification result is explicitly supplied, its failure participates in acceptance rather than being silently ignored.
+
+### 6. No fake solver capabilities
 
 A capability is not considered implemented merely because an API-shaped class exists.
 
 For example, the current fatigue capability is a **contract/workflow for post-processing existing Abaqus stress histories**, not a claim that the repository contains a complete fatigue solver.
 
-### 6. Release-aware compatibility
+### 7. Release-aware compatibility
 
 Abaqus Python environments are release-dependent. The external package targets modern Python, while generated Abaqus-side scripts intentionally avoid unnecessary modern Python-only syntax.
 
@@ -422,9 +478,18 @@ This escape hatch is deliberate: the action layer should not become a bottleneck
 | INP export | Implemented |
 | ODB CSV export | Implemented |
 | Result extraction | Implemented |
+| Solver selection | Implemented |
+| Post-processing profiles | Implemented |
+| Geometry-to-mesh strategy | Implemented at contract/planning level; B28 execution verification pending |
+| Native mesh quality verification | Implemented at action/script level; B28 verification pending |
 | Mesh convergence | Implemented |
+| Engineering acceptance gates | Implemented |
+| Contact diagnostics | Contract + acceptance integration implemented |
+| Fatigue verification | Contract/workflow + acceptance integration implemented |
+| Sensitivity / uncertainty | Evidence/report integration implemented |
+| Engineering report | Implemented |
 | Geometry grounding | Implemented for calibrated viewport/projection paths |
-| Fatigue | Contract/workflow for existing stress histories |
+| Fatigue | Contract/workflow for existing stress histories, including cycle/stress semantics and mean-stress correction boundaries |
 | Arbitrary native Abaqus API access | Implemented through Python escape hatch |
 | Full automatic arbitrary-photo geometry registration | Not claimed |
 | Full standalone fatigue solver | Not implemented |
@@ -478,6 +543,9 @@ The agent intentionally refuses several unsafe assumptions:
 - an Abaqus Python call returning normally is not solver-success evidence;
 - a completed job is not automatically engineering acceptance;
 - an ODB existing is not proof that the required result is correct;
+- local mesh refinement is not, by itself, convergence evidence;
+- a stress peak at a suspected singularity must not automatically be treated as a physical converged peak;
+- sensitivity and uncertainty are evidence domains, not universal pass/fail gates;
 - an API-compatible-looking parameter is not automatically release-compatible;
 - model-specific contact, mesh, and release-specific operations must remain explicit when they cannot be validated generically.
 
@@ -509,11 +577,12 @@ These boundaries are part of the architecture, not optional documentation.
 
 The near-term engineering path is:
 
-1. keep the action/validation/evidence chain stable;
-2. complete the B28 smoke-test harness;
-3. execute the smoke suite on a real Abaqus R2018/B28 machine;
-4. classify and fix real release-specific incompatibilities;
-5. expand only the capabilities justified by real engineering workflows.
+1. keep the action/validation/execution/verification/evidence chain stable;
+2. complete the remaining whole-repository contract closure audit;
+3. complete the B28 smoke-test harness;
+4. execute the smoke suite on a real Abaqus R2018/B28 machine;
+5. classify and fix real release-specific incompatibilities;
+6. expand only the capabilities justified by real engineering workflows.
 
 Potential future areas include:
 
