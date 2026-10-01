@@ -73,3 +73,31 @@ def test_report_preserves_mesh_verification_evidence():
     report = EngineeringReportData.from_analysis(run)
     assert report.mesh["quality"]
     assert report.mesh["convergence"]
+
+
+def test_report_preserves_structured_acceptance_and_fatigue():
+    from abaqus_ai_agent.contracts.fatigue import FatigueResult
+    from abaqus_ai_agent.acceptance import AcceptanceResult
+    from abaqus_ai_agent.evidence.model import Evidence, EvidenceBundle
+    from types import SimpleNamespace
+
+    acceptance = AcceptanceResult(
+        passed=False, criteria=(), failures=("fatigue_verification_failed",),
+        warnings=("fatigue_warning",),
+    )
+    run = SimpleNamespace(
+        id="r2", model_name="M", job_name="J", state=SimpleNamespace(value="results_extracted"),
+        engineering_status="RESULT_INVALID", acceptance_passed=False,
+        metadata={}, metrics=(), provenance=None,
+        evidence=EvidenceBundle((
+            Evidence(kind="acceptance", source="acceptance", value=acceptance),
+            Evidence(kind="fatigue", source="verification", value=FatigueResult(
+                "warning", life_cycles=1000.0, warnings=("fatigue_warning",),
+            )),
+        )),
+    )
+    report = EngineeringReportData.from_analysis(run)
+    assert report.acceptance is acceptance
+    assert report.fatigue.status == "warning"
+    rendered = render_markdown(report)
+    assert "fatigue_verification_failed" in rendered
