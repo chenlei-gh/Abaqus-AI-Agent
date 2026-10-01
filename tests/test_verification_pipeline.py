@@ -136,3 +136,26 @@ def test_verification_runs_without_explicit_acceptance_criteria():
     run = _run(result_values=False, numerical_verification=numerical)
     assert run.acceptance_passed is False
     assert run.state.value == "results_extracted"
+
+
+def test_mesh_quality_and_convergence_gate_acceptance():
+    from abaqus_ai_agent.acceptance import evaluate_result_acceptance
+    from abaqus_ai_agent.contracts.mesh_quality import MeshQualityResult
+    from abaqus_ai_agent.contracts.convergence import MeshConvergenceResult
+
+    quality = MeshQualityResult("warning", warnings=("bad_transition",))
+    convergence = MeshConvergenceResult(
+        "quality_gate_failed", (), 0.001, False,
+        warnings=("mesh_quality_gate_not_passed",),
+        quality_gate_passed=False,
+    )
+    result = evaluate_result_acceptance(
+        "completed",
+        mesh_quality=quality,
+        convergence=convergence,
+        values={},
+        criteria=(),
+    )
+    assert not result.passed
+    assert "mesh_quality_failed" in result.failures
+    assert "mesh_convergence_failed" in result.failures
