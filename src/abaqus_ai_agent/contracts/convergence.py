@@ -14,7 +14,7 @@ class MeshConvergencePoint:
     mesh_size: float
     result_value: float
     qoi_type: str = "CUSTOM"
-    qoi_name: str = ""
+    qoi_name: str = "result_value"
     component: Optional[str] = None
     position: Optional[str] = None
 
