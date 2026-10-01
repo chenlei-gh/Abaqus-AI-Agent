@@ -5,6 +5,7 @@ from abaqus_ai_agent.contracts.solver_selection import select_solver
 from abaqus_ai_agent.contracts.report import EngineeringReportData, ReportFigure
 from abaqus_ai_agent.contracts.postprocess import profile_for_solver_selection
 from abaqus_ai_agent.reporting.renderer import render_html, render_markdown
+from abaqus_ai_agent.planning.output import plan_outputs
 
 def test_static_selects_standard():
     result = select_solver(EngineeringIntent("s", "structural", "static bracket", analysis_type="static"))
@@ -43,3 +44,13 @@ def test_report_is_source_first():
     assert "238.4" in render_markdown(report) and "238.4" in render_html(report)
     assert "AI" not in render_markdown(report)
     assert "stress.png" in render_markdown(report)
+
+
+def test_postprocess_profile_drives_output_plan():
+    selection = select_solver(EngineeringIntent("s", "structural", "static bracket", analysis_type="static"))
+    profile = profile_for_solver_selection(selection)
+    plan = plan_outputs((), postprocess_profile=profile)
+    assert "S" in plan.field_variables
+    assert "U" in plan.field_variables
+    assert "RF" in plan.field_variables
+    assert "RF" in plan.history_variables
