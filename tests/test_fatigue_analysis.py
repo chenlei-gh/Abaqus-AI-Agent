@@ -1,6 +1,6 @@
 from abaqus_ai_agent.fatigue import (
     goodman_corrected_amplitude, rainflow_count,
-    reduce_multiaxial_history, sn_life, stress_range_and_amplitude,
+    reduce_multiaxial_history, sn_life, miner_damage, fatigue_life_blocks, stress_range_and_amplitude,
 )
 
 
@@ -10,8 +10,8 @@ def test_range_and_amplitude():
 
 def test_rainflow_full_and_half_cycles():
     cycles = rainflow_count((0, 10, 0, 10, 0))
-    assert any(count == 1.0 and rng == 10.0 for rng, _, count in cycles)
-    assert sum(count for _, _, count in cycles) == 2.0
+    assert all(rng == 10.0 and count == 0.5 for rng, _, count in cycles)
+    assert sum(count for _, _, count in cycles) == 1.0
 
 
 def test_goodman_positive_mean_boundary():
@@ -37,3 +37,10 @@ def test_multiaxial_measure_is_explicit():
 
 def test_sn_log_interpolation():
     assert sn_life(10.0, ((10.0, 1e6), (20.0, 1e5))) == 1e6
+
+
+def test_miner_damage_and_repeated_spectrum_life():
+    spectrum = ((20.0, 0.0, 1.0),)
+    curve = ((10.0, 1e6), (20.0, 1e5))
+    assert miner_damage(spectrum, curve) == 1e-5
+    assert fatigue_life_blocks(spectrum, curve) == 1e5
