@@ -27,6 +27,8 @@ class MeshConvergencePoint:
             raise ValueError("mesh_size must be finite and > 0")
         if not math.isfinite(self.result_value):
             raise ValueError("result_value must be finite")
+        if qoi_type == "CUSTOM" and not str(self.qoi_name).strip():
+            raise ValueError("CUSTOM mesh convergence QoI requires qoi_name")
 
 
 @dataclass(frozen=True)
@@ -37,8 +39,8 @@ class MeshConvergencePolicy:
     required_consecutive: int = 1
 
     def __post_init__(self):
-        if self.tolerance < 0:
-            raise ValueError("tolerance must be >= 0")
+        if not math.isfinite(self.tolerance) or self.tolerance < 0:
+            raise ValueError("tolerance must be finite and >= 0")
         if self.minimum_points < 2:
             raise ValueError("minimum_points must be >= 2")
         if self.required_consecutive < 1:
@@ -74,7 +76,8 @@ def evaluate_mesh_convergence(points, policy):
     for a, b in zip(window, window[1:]):
         denominator = max(abs(b.result_value), 1e-30)
         change = abs(b.result_value - a.result_value)
-        if policy.relative: change = change / denominator
+        if policy.relative:
+            change = change / denominator
         changes.append(change)
     change = changes[-1]
     converged = all(value <= policy.tolerance for value in changes)
