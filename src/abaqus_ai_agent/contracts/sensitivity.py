@@ -16,7 +16,20 @@ class SensitivityResult:
     values: Dict[str, float]
     relative_changes: Dict[str, float]
     status: str = "completed"
+    execution_status: str = "completed"
+    result_status: str = "available"
+    acceptance_status: str = "not_evaluated"
     diagnostics: Tuple[Dict[str, Any], ...] = ()
+
+    def __post_init__(self):
+        if self.status not in ("completed", "failed"):
+            raise ValueError("status must be completed or failed")
+        if self.execution_status not in ("completed", "failed"):
+            raise ValueError("execution_status must be completed or failed")
+        if self.result_status not in ("available", "unavailable", "error"):
+            raise ValueError("result_status must be available, unavailable, or error")
+        if self.acceptance_status not in ("not_evaluated", "passed", "failed"):
+            raise ValueError("invalid acceptance_status")
 
 
 @dataclass(frozen=True)
@@ -27,7 +40,18 @@ class SensitivityReport:
 
     @property
     def completed(self):
-        return all(c.status == "completed" for c in self.cases)
+        """Return True only when execution and declared results completed.
+
+        Sensitivity intentionally does not evaluate engineering Acceptance, so
+        acceptance_status remains "not_evaluated" unless a caller supplies
+        that separate evidence explicitly.
+        """
+        return all(
+            c.status == "completed"
+            and c.execution_status == "completed"
+            and c.result_status == "available"
+            for c in self.cases
+        )
 
     @property
     def failed_cases(self):
