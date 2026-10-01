@@ -86,6 +86,7 @@ class AnalysisRunner:
 
     def run(self, model_name, job_name, odb_path=None, criteria=(),
             result_values=None, numerical_verification=None, engineering_checks=None,
+            mesh_quality=None, mesh_convergence=None,
             timeout=3600, action_plan=(), environment=None, engineering_intent=None,
             postprocess_profile=None):
         run_id = str(uuid.uuid4())
@@ -246,6 +247,8 @@ class AnalysisRunner:
                 result_status=status.state.value.lower(),
                 numerical=numerical_verification,
                 engineering=engineering_checks,
+                mesh_quality=mesh_quality,
+                convergence=mesh_convergence,
                 values=result_values,
                 criteria=criteria,
             )
@@ -259,6 +262,16 @@ class AnalysisRunner:
                 verification_evidence.append(Evidence(
                     kind="engineering_checks", source="verification",
                     locator=job_name, value=engineering_checks,
+                ))
+            if mesh_quality is not None:
+                verification_evidence.append(Evidence(
+                    kind="mesh_quality", source="verification",
+                    locator=job_name, value=mesh_quality,
+                ))
+            if mesh_convergence is not None:
+                verification_evidence.append(Evidence(
+                    kind="mesh_convergence", source="verification",
+                    locator=job_name, value=mesh_convergence,
                 ))
             status_value = (
                 EngineeringStatus.RESULT_VALID.value
