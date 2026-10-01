@@ -154,3 +154,40 @@ def check_numeric_range(name, values, minimum=None, maximum=None, unit=""):
         unit=unit,
         message="min=%g max=%g count=%d" % (min(nums), max(nums), len(nums)),
     )
+
+
+def check_series_range(name, values, minimum=None, maximum=None, unit=""):
+    """Check a declared numeric series against explicit bounds."""
+    return check_numeric_range(
+        name, values, minimum=minimum, maximum=maximum, unit=unit
+    )
+
+
+def check_time_step_evidence(values, minimum=None, maximum=None, unit="s"):
+    """Check extracted time-step values against caller-declared limits."""
+    return check_numeric_range(
+        "time_step_evidence", values, minimum=minimum, maximum=maximum, unit=unit
+    )
+
+
+def check_thermal_mechanical_consistency(
+    thermal_value, mechanical_value, expected_ratio, tolerance, name="thermal_mechanical_consistency"
+):
+    """Compare two explicitly paired scalar results using a declared ratio.
+
+    This helper does not infer constitutive physics; the caller supplies the
+    expected relationship and tolerance.
+    """
+    if float(mechanical_value) == 0.0:
+        raise ValueError("mechanical value must be non-zero")
+    actual_ratio = float(thermal_value) / float(mechanical_value)
+    error = abs(actual_ratio - float(expected_ratio))
+    return EngineeringCheck(
+        name=name,
+        passed=error <= float(tolerance),
+        actual=actual_ratio,
+        expected=float(expected_ratio),
+        tolerance=float(tolerance),
+        unit="ratio",
+        message="absolute_ratio_error=%g" % error,
+    )
