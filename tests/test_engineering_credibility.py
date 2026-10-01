@@ -5,8 +5,14 @@ from abaqus_ai_agent.contracts.sensitivity import SensitivityCase
 from abaqus_ai_agent.correction import can_retry, select_repairs, can_apply_repair
 from abaqus_ai_agent.contracts.correction import CorrectionPolicy, RepairCandidate
 from abaqus_ai_agent.numerical_verification import verify_series
-from abaqus_ai_agent.contact_diagnostics import evaluate_contact_checks
-from abaqus_ai_agent.contracts.contact import ContactDiagnostic
+from abaqus_ai_agent.contact_diagnostics import (
+    diagnose_contact,
+    evaluate_contact_checks,
+)
+from abaqus_ai_agent.contracts.contact import (
+    ContactDiagnostic,
+    ExpectedContactBehavior,
+)
 from abaqus_ai_agent.contracts.uncertainty import UncertaintyParameter
 
 
@@ -66,6 +72,170 @@ def test_contact_diagnostics():
         ContactDiagnostic("penetration", "pass", value=0.0),
     ))
     assert report.passed
+
+
+def _contact_evidence(cstatus, copen=(0.0,), cpress=(10.0,)):
+    return {
+        "region": "Surface-A-B",
+        "fields": {
+            "CSTATUS": {
+                "status": "available",
+                "values": [{"data": value} for value in cstatus],
+            },
+            "COPEN": {
+                "status": "available",
+                "values": [{"data": value} for value in copen],
+            },
+            "CPRESS": {
+                "status": "available",
+                "values": [{"data": value} for value in cpress],
+            },
+        },
+        "history": {"status": "available"},
+    }
+
+
+def test_contact_diagnostic_requires_declared_expected_behavior():
+    expected = ExpectedContactBehavior(
+        expected_state="contact",
+        expected_regions=("Surface-A-B",),
+        expected_separation=0.1,
+        required_outputs=("CSTATUS", "COPEN", "CPRESS"),
+    )
+    report = diagnose_contact(
+        _contact_evidence((1.0,)),
+        expected,
+    )
+    assert report.passed
+    assert {item.name for item in report.diagnostics} == {
+        "contact_evidence_sufficiency",
+        "expected_contact_state",
+        "unexpected_opening",
+        "unexpected_overclosure",
+        "contact_behavior_consistency",
+    }
+
+
+def test_contact_open_is_failure_only_when_contact_is_required():
+    expected = ExpectedContactBehavior(
+        expected_state="contact",
+        expected_separation=0.0,
+        required_outputs=("CSTATUS", "COPEN"),
+    )
+    report = diagnose_contact(
+        _contact_evidence((0.0,), copen=(0.5,), cpress=(0.0,)),
+        expected,
+    )
+    assert any(item.status == "fail" for item in report.diagnostics)
+    assert any(item.name == "expected_contact_state" for item in report.failed)
+
+
+def test_contact_separation_can_be_expected():
+    expected = ExpectedContactBehavior(
+        contact_required=True,
+        expected_state="open",
+        required_outputs=("CSTATUS", "COPEN"),
+    )
+    report = diagnose_contact(
+        _contact_evidence((0.0,), copen=(0.5,), cpress=(0.0,)),
+        expected,
+    )
+    assert report.diagnostics[1].status == "pass"
+    assert report.diagnostics[2].status == "not_applicable"
+
+
+def test_positive_contact_pressure_is_not_contact_correctness():
+    expected = ExpectedContactBehavior(
+        expected_state="contact",
+        expected_separation=0.1,
+        required_outputs=("CSTATUS", "CPRESS", "COPEN"),
+    )
+    report = diagnose_contact(
+        _contact_evidence((0.0,), copen=(0.5,), cpress=(100.0,)),
+        expected,
+    )
+    assert any(item.name == "expected_contact_state" and item.status == "fail"
+               for item in report.diagnostics)
+
+
+def test_missing_output_is_not_zero_evidence():
+    expected = ExpectedContactBehavior(
+        expected_state="contact",
+        required_outputs=("CSTATUS", "COPEN"),
+    )
+    evidence = _contact_evidence((1.0,))
+    evidence["fields"]["COPEN"] = {
+        "status": "unavailable",
+        "reason": "field_output_missing",
+    }
+    report = diagnose_contact(evidence, expected)
+    assert report.diagnostics[0].status == "insufficient_evidence"
+    assert report.passed is False
+
+
+def test_negative_copen_without_declared_interference_limit_is_not_failure():
+    expected = ExpectedContactBehavior(
+        expected_state="contact",
+        expected_separation=0.1,
+        required_outputs=("CSTATUS", "COPEN"),
+    )
+    report = diagnose_contact(
+        _contact_evidence((1.0,), copen=(-0.02,), cpress=(10.0,)),
+        expected,
+    )
+    diagnostic = next(
+        item for item in report.diagnostics
+        if item.name == "unexpected_overclosure"
+    )
+    assert diagnostic.status == "warning"
+
+
+def test_negative_copen_with_declared_interference_limit_can_fail():
+    expected = ExpectedContactBehavior(
+        expected_state="contact",
+        expected_separation=0.1,
+        allowed_initial_interference=0.01,
+        required_outputs=("CSTATUS", "COPEN"),
+    )
+    report = diagnose_contact(
+        _contact_evidence((1.0,), copen=(-0.02,), cpress=(10.0,)),
+        expected,
+    )
+    diagnostic = next(
+        item for item in report.diagnostics
+        if item.name == "unexpected_overclosure"
+    )
+    assert diagnostic.status == "fail"
+
+
+def test_ambiguous_history_never_becomes_pass():
+    expected = ExpectedContactBehavior(
+        expected_state="contact",
+        required_outputs=("CSTATUS",),
+    )
+    evidence = _contact_evidence((1.0,), copen=(0.0,), cpress=(0.0,))
+    evidence["history"] = {
+        "status": "ambiguous",
+        "reason": "multiple_history_regions",
+    }
+    report = diagnose_contact(evidence, expected)
+    assert report.diagnostics[0].status == "ambiguous"
+
+
+def test_opening_without_problem_specific_limit_is_insufficient():
+    expected = ExpectedContactBehavior(
+        expected_state="contact",
+        required_outputs=("CSTATUS", "COPEN"),
+    )
+    report = diagnose_contact(
+        _contact_evidence((1.0,), copen=(0.2,), cpress=(1.0,)),
+        expected,
+    )
+    diagnostic = next(
+        item for item in report.diagnostics
+        if item.name == "unexpected_opening"
+    )
+    assert diagnostic.status == "insufficient_evidence"
 
 
 def test_uncertainty_bounds():

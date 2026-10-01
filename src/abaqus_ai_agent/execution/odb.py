@@ -250,7 +250,15 @@ def extract_contact_evidence(executor, path, step, fields=("CPRESS", "COPEN", "C
             executor, path, step, field, frame=frame, position=position, region=region)
     history = extract_contact_history(
         executor, path, step, region=history_region, variables=history_variables)
-    return {"step": step, "frame": frame, "fields": field_results, "history": history}
+    return {
+        "step": step,
+        "frame": frame,
+        "region": region,
+        "position": position,
+        "history_region": history_region,
+        "fields": field_results,
+        "history": history,
+    }
 
 def extract_energy_history(executor, path, step, region, variables=(
     "ALLIE", "ALLKE", "ALLWK", "ALLAE", "ALLPD", "ALLCD", "ALLFD", "ALLSD"
