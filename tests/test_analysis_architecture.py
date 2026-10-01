@@ -2,7 +2,9 @@ from abaqus_ai_agent.contracts.model_snapshot import ModelSnapshot
 from abaqus_ai_agent.state_diff import diff_snapshots
 from abaqus_ai_agent.contracts.version import AbaqusRuntimeInfo
 from abaqus_ai_agent.workflow import AnalysisWorkflow
-from abaqus_ai_agent.contracts.mesh_quality import MeshQualityResult
+from abaqus_ai_agent.contracts.mesh_quality import MeshQualityPolicy, MeshQualityResult
+from abaqus_ai_agent.contracts.action import AbaqusAction
+from abaqus_ai_agent.actions.script import action_to_script
 from abaqus_ai_agent.execution.errors import classify_execution_error
 
 
@@ -38,3 +40,34 @@ def test_mesh_quality_source_is_explicit():
 def test_execution_error_classification():
     assert classify_execution_error("SyntaxError: invalid syntax") == "syntax"
     assert classify_execution_error("Region not found") == "region_invalid"
+
+
+def test_mesh_quality_policy_covers_native_verification():
+    policy = MeshQualityPolicy(
+        max_aspect_ratio=5.0,
+        max_angular_deviation=20.0,
+        max_geometric_deviation_factor=0.1,
+        analysis_checks=True,
+    )
+    assert policy.analysis_checks
+    assert policy.max_aspect_ratio == 5.0
+
+
+def test_mesh_quality_script_uses_native_abaqus_verifier():
+    action = AbaqusAction(
+        action_type="mesh_quality",
+        model_name="Model-1",
+        target=None,
+        parameters={
+            "part": "Part-1",
+            "max_aspect_ratio": 5.0,
+            "max_angular_deviation": 20.0,
+            "max_geometric_deviation_factor": 0.1,
+            "analysis_checks": True,
+        },
+    )
+    script = action_to_script(action)
+    assert "verifyMeshQuality" in script
+    assert "ASPECT_RATIO" in script
+    assert "ANALYSIS_CHECKS" in script
+    assert "computed_quality" not in script
