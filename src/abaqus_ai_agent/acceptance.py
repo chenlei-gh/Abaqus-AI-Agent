@@ -61,7 +61,7 @@ def evaluate_criteria(values, criteria):
 
 
 def evaluate_result_acceptance(result_status, numerical=None, engineering=None,
-                               mesh_quality=None, convergence=None, fatigue=None,
+                               mesh_quality=None, convergence=None, fatigue=None, contact_diagnostics=None,
                                values=None, criteria=None):
     """Combine execution/result evidence with deterministic acceptance criteria.
 
@@ -87,6 +87,17 @@ def evaluate_result_acceptance(result_status, numerical=None, engineering=None,
             if fatigue_status == "warning":
                 warnings.append("fatigue_warning")
         warnings.extend(tuple(getattr(fatigue, "warnings", ()) or ()))
+    if contact_diagnostics is not None:
+        contact_statuses = tuple(
+            getattr(d, "status", None)
+            for d in getattr(contact_diagnostics, "diagnostics", ()) or ()
+        )
+        if not contact_statuses:
+            failures.append("contact_diagnostics_insufficient_evidence")
+        elif any(s not in ("pass", "not_applicable") for s in contact_statuses):
+            failures.append("contact_diagnostics_failed")
+        elif any(s == "not_applicable" for s in contact_statuses):
+            warnings.append("contact_diagnostics_not_applicable")
 
     criteria_result = evaluate_criteria(values or {}, criteria or ())
     failures.extend("criterion:%s" % item.name for item in criteria_result.failures)
