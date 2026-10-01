@@ -1,4 +1,3 @@
-import math
 import pytest
 
 from abaqus_ai_agent.contracts.convergence import MeshConvergencePoint, MeshConvergencePolicy, evaluate_mesh_convergence
@@ -12,11 +11,9 @@ def test_mesh_convergence_uses_refinement_direction_and_qoi_change():
     assert result.final_change == pytest.approx((101.4 - 101.0) / 101.4)
 
 
-def test_mesh_convergence_rejects_nonfinite_mesh_data():
-    points = (MeshConvergencePoint(2.0, 1.0), MeshConvergencePoint(1.0, math.nan))
-    result = evaluate_mesh_convergence(points, MeshConvergencePolicy(0.01))
-    assert result.status == "invalid_data"
-    assert not result.converged
+def test_mesh_convergence_rejects_nonfinite_mesh_data_at_contract_boundary():
+    with pytest.raises(ValueError, match="result_value must be finite"):
+        MeshConvergencePoint(1.0, float("nan"))
 
 
 def test_mesh_convergence_can_require_consecutive_stable_refinements():
