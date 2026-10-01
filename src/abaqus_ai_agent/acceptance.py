@@ -62,7 +62,8 @@ def evaluate_criteria(values, criteria):
 
 def evaluate_result_acceptance(result_status, numerical=None, engineering=None,
                                values=None, criteria=None, contact_diagnostics=None,
-                               benchmark_result=None, experimental_validation=None):
+                               benchmark_result=None, experimental_validation=None,
+                               fatigue_result=None):
     """Combine execution/result evidence with deterministic acceptance criteria.
 
     Missing upstream evidence prevents acceptance instead of being treated as a
@@ -93,6 +94,12 @@ def evaluate_result_acceptance(result_status, numerical=None, engineering=None,
     if experimental_validation is not None:
         if not getattr(experimental_validation, "passed", False):
             failures.append("experimental_validation_failed")
+
+    if fatigue_result is not None:
+        if not getattr(fatigue_result, "passed", False):
+            failures.append("fatigue_postprocessing_failed")
+        if getattr(fatigue_result, "damage", 0.0) >= 1.0:
+            failures.append("fatigue_damage_limit_reached")
 
     criteria_result = evaluate_criteria(values or {}, criteria or ())
     failures.extend(
