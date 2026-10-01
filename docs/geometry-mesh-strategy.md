@@ -38,3 +38,11 @@ A partition-required request is never silently downgraded to a seed on the unpar
 
 Mesh convergence points may carry an optional `refinement_target`. A convergence policy can select one critical region, allowing a local refinement study to be evaluated independently from unrelated mesh changes. This does not turn local refinement into convergence evidence by itself: the solver must still produce the result points and the selected quantity must be engineering-relevant.
 
+
+
+## Geometry feature characterization
+
+The characterization layer is deliberately evidence-first. Current extraction provides size, centroid and normal; those fields alone are not sufficient to declare an entity a hole, fillet, thin wall or sharp corner. Therefore the classifier keeps such entities as `unknown` unless an upstream source explicitly supplies a feature kind and confidence. Optional curvature/radius/thickness/gap/aspect-ratio evidence is preserved when available.
+
+This prevents a common failure mode: turning a small edge into an automatic geometry mutation simply because it is small. Engineering relevance may be supplied independently by a critical-region binding, and only then can mesh planning use it as a refinement driver.
+
