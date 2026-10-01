@@ -391,3 +391,34 @@ def test_benchmark_missing_reference_blocks_acceptance_without_solver_failure():
         e.value for e in run.evidence.items if e.kind == "benchmark_result"
     )
     assert benchmark_evidence.failures == ("missing_reference:tip_displacement_error",)
+
+
+def test_experimental_validation_runs_after_result_extraction_and_gates_acceptance():
+    run = _run(
+        experimental_observations=({
+            "result_key": "tip_displacement",
+            "measured": 0.5,
+            "tolerance": 0.01,
+            "unit": "mm",
+            "source": "test-rig",
+        },),
+    )
+    assert run.acceptance_passed is True
+    assert run.state.value == "accepted"
+    validation = next(e.value for e in run.evidence.items if e.kind == "experimental_validation")
+    assert validation.passed is True
+    assert validation.results[0].simulated == pytest.approx(0.5)
+
+
+def test_experimental_validation_failure_blocks_acceptance_without_solver_failure():
+    run = _run(
+        experimental_observations=({
+            "result_key": "tip_displacement",
+            "measured": 0.8,
+            "tolerance": 0.01,
+        },),
+    )
+    assert run.acceptance_passed is False
+    assert run.state.value == "results_extracted"
+    acceptance = next(e.value for e in run.evidence.items if e.kind == "acceptance")
+    assert "experimental_validation_failed" in acceptance.failures
