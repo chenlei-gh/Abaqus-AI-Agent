@@ -2,7 +2,6 @@ from .contracts.correction import CorrectionAttempt, CorrectionPolicy, RepairCan
 
 
 def select_repairs(diagnostic_class, candidates, policy=None):
-    """Return policy-allowed repair candidates without authorizing execution."""
     policy = policy or CorrectionPolicy()
     if diagnostic_class not in policy.allowed_diagnostics:
         return ()
@@ -14,7 +13,6 @@ def select_repairs(diagnostic_class, candidates, policy=None):
 
 
 def can_apply_repair(candidate, confirmed=False):
-    """Gate repair execution; confirmation is mandatory by default."""
     if not isinstance(candidate, RepairCandidate):
         raise TypeError("candidate must be a RepairCandidate")
     return bool(confirmed) if candidate.requires_confirmation else True
@@ -27,38 +25,28 @@ def can_retry(attempt, policy=None):
 
 def record_attempt(attempt, diagnostic_class, repair=None, status="proposed",
                    diagnostics=(), confirmed=False, policy=None):
-    """Create an explicit correction-attempt evidence record."""
     policy = policy or CorrectionPolicy()
     retry_allowed = can_retry(attempt, policy) and confirmed
     return CorrectionAttempt(
-        attempt=int(attempt),
-        diagnostic_class=diagnostic_class,
-        repair=repair,
-        status=status,
-        diagnostics=tuple(diagnostics),
-        confirmed=bool(confirmed),
-        retry_allowed=retry_allowed,
+        attempt=int(attempt), diagnostic_class=diagnostic_class, repair=repair,
+        status=status, diagnostics=tuple(diagnostics),
+        confirmed=bool(confirmed), retry_allowed=retry_allowed,
     )
 
 
 def execute_authorized_correction(
-    executor,
-    runner,
-    candidate,
-    model_name,
-    job_name,
-    attempt=0,
-    confirmed=False,
-    policy=None,
-    runner_kwargs=None,
+    executor, runner, candidate, model_name, job_name, attempt=0,
+    confirmed=False, policy=None, runner_kwargs=None,
 ):
-    """Execute one explicitly confirmed repair, then rerun through AnalysisRunner.
+    """Execute one confirmed repair and require the rerun to pass acceptance.
 
-    This is deliberately one-shot: no autonomous retry loop or new execution
-    framework is introduced. candidate.action must contain an existing Action
-    object under 'action' or a tuple under 'actions'.
+    The repair must be an existing Action and confirmation is explicit. The
+    rerun stays on the normal AnalysisRunner path. Solver/ODB completion alone
+    is not treated as correction success.
     """
     policy = policy or CorrectionPolicy()
+    if not isinstance(candidate, RepairCandidate):
+        raise TypeError("candidate must be a RepairCandidate")
     if candidate.diagnostic_class not in policy.allowed_diagnostics:
         raise ValueError(
             "correction diagnostic is not allowed by policy: %s"
@@ -73,7 +61,7 @@ def execute_authorized_correction(
     action = payload.get("action")
     actions = payload.get("actions")
     if action is not None and actions is not None:
-        raise ValueError("candidate action must use either action or actions")
+        raise ValueError("candidate action must use either 'action' or 'actions'")
     if action is not None:
         actions = (action,)
     actions = tuple(actions or ())
@@ -83,12 +71,8 @@ def execute_authorized_correction(
     from .actions.runner import execute as execute_action
 
     authorized = record_attempt(
-        attempt,
-        candidate.diagnostic_class,
-        candidate.name,
-        status="authorized",
-        confirmed=True,
-        policy=policy,
+        attempt, candidate.diagnostic_class, candidate.name,
+        status="authorized", confirmed=True, policy=policy,
     )
     action_results = []
     try:
@@ -96,44 +80,46 @@ def execute_authorized_correction(
             action_results.append(execute_action(executor, repair_action))
     except Exception as exc:
         failed = record_attempt(
-            attempt,
-            candidate.diagnostic_class,
-            candidate.name,
+            attempt, candidate.diagnostic_class, candidate.name,
             status="failed",
             diagnostics=({"reason": "repair_action_failed", "error": str(exc)},),
-            confirmed=True,
-            policy=policy,
+            confirmed=True, policy=policy,
         )
         return {
-            "attempt": failed,
-            "action_results": tuple(action_results),
-            "run": None,
+            "attempt": failed, "authorized": authorized,
+            "action_results": tuple(action_results), "run": None,
         }
 
-    run = runner.run(
-        model_name,
-        job_name,
-        **dict(runner_kwargs or {}),
-    )
+    try:
+        run = runner.run(model_name, job_name, **dict(runner_kwargs or {}))
+    except Exception as exc:
+        failed = record_attempt(
+            attempt, candidate.diagnostic_class, candidate.name,
+            status="failed",
+            diagnostics=({"reason": "analysis_run_failed", "error": str(exc)},),
+            confirmed=True, policy=policy,
+        )
+        return {
+            "attempt": failed, "authorized": authorized,
+            "action_results": tuple(action_results), "run": None,
+        }
+
     state = getattr(run, "state", None)
     state = getattr(state, "value", state)
-    final_status = (
-        "completed"
-        if state in ("accepted", "results_extracted", "odb_validated", "completed")
-        else "failed"
-    )
+    acceptance = getattr(run, "acceptance_passed", None)
+    if state == "accepted" and acceptance is True:
+        final_status = "completed"
+    elif state == "failed" or acceptance is False:
+        final_status = "failed"
+    else:
+        final_status = "verification_pending"
     final = record_attempt(
-        attempt,
-        candidate.diagnostic_class,
-        candidate.name,
+        attempt, candidate.diagnostic_class, candidate.name,
         status=final_status,
         diagnostics=getattr(run, "diagnostics", ()),
-        confirmed=True,
-        policy=policy,
+        confirmed=True, policy=policy,
     )
     return {
-        "attempt": final,
-        "authorized": authorized,
-        "action_results": tuple(action_results),
-        "run": run,
+        "attempt": final, "authorized": authorized,
+        "action_results": tuple(action_results), "run": run,
     }
