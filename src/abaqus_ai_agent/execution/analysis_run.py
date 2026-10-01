@@ -9,6 +9,7 @@ from ..evidence.result import summarize_odb
 from ..evidence.model import Evidence, EvidenceBundle
 from ..contracts.provenance import AnalysisProvenance
 from ..provenance import stable_hash
+from ..acceptance import evaluate_result_acceptance
 
 
 class AnalysisRunState(str, Enum):
@@ -171,8 +172,11 @@ class AnalysisRunner:
                 ),)
                 result_source = "external_input"
 
-            from ..acceptance import evaluate_criteria
-            accepted = evaluate_criteria(result_values, criteria)
+            accepted = evaluate_result_acceptance(
+                result_status=status.state.value,
+                values=result_values,
+                criteria=criteria,
+            )
             status_value = (
                 EngineeringStatus.RESULT_VALID.value
                 if accepted.passed and result_source == "odb"
