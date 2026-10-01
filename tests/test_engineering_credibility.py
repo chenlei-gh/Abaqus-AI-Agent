@@ -103,7 +103,7 @@ def test_contact_diagnostic_requires_declared_expected_behavior():
         required_outputs=("CSTATUS", "COPEN", "CPRESS"),
     )
     report = diagnose_contact(
-        _contact_evidence((1.0,)),
+        _contact_evidence(("sticking",)),
         expected,
     )
     assert report.passed
@@ -123,7 +123,7 @@ def test_contact_open_is_failure_only_when_contact_is_required():
         required_outputs=("CSTATUS", "COPEN"),
     )
     report = diagnose_contact(
-        _contact_evidence((0.0,), copen=(0.5,), cpress=(0.0,)),
+        _contact_evidence(("open",), copen=(0.5,), cpress=(0.0,)),
         expected,
     )
     assert any(item.status == "fail" for item in report.diagnostics)
@@ -137,7 +137,7 @@ def test_contact_separation_can_be_expected():
         required_outputs=("CSTATUS", "COPEN"),
     )
     report = diagnose_contact(
-        _contact_evidence((0.0,), copen=(0.5,), cpress=(0.0,)),
+        _contact_evidence(("open",), copen=(0.5,), cpress=(0.0,)),
         expected,
     )
     assert report.diagnostics[1].status == "pass"
@@ -151,7 +151,7 @@ def test_positive_contact_pressure_is_not_contact_correctness():
         required_outputs=("CSTATUS", "CPRESS", "COPEN"),
     )
     report = diagnose_contact(
-        _contact_evidence((0.0,), copen=(0.5,), cpress=(100.0,)),
+        _contact_evidence(("open",), copen=(0.5,), cpress=(100.0,)),
         expected,
     )
     assert any(item.name == "expected_contact_state" and item.status == "fail"
@@ -180,7 +180,7 @@ def test_negative_copen_without_declared_interference_limit_is_not_failure():
         required_outputs=("CSTATUS", "COPEN"),
     )
     report = diagnose_contact(
-        _contact_evidence((1.0,), copen=(-0.02,), cpress=(10.0,)),
+        _contact_evidence(("sticking",), copen=(-0.02,), cpress=(10.0,)),
         expected,
     )
     diagnostic = next(
@@ -213,7 +213,7 @@ def test_ambiguous_history_never_becomes_pass():
         expected_state="contact",
         required_outputs=("CSTATUS",),
     )
-    evidence = _contact_evidence((1.0,), copen=(0.0,), cpress=(0.0,))
+    evidence = _contact_evidence(("sticking",), copen=(0.0,), cpress=(0.0,))
     evidence["history"] = {
         "status": "ambiguous",
         "reason": "multiple_history_regions",
