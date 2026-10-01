@@ -6,5 +6,9 @@ from .sensitivity import SensitivityCase, SensitivityResult, SensitivityReport
 from .uncertainty import UncertaintyParameter, UncertaintyScenario, UncertaintyReport
 from .correction import RepairCandidate, CorrectionAttempt, CorrectionPolicy
 from .benchmarks import BenchmarkCase, BenchmarkResult
-from .contact import ContactDiagnostic, ContactDiagnosticReport
+from .contact import (
+    ContactDiagnostic,
+    ContactDiagnosticReport,
+    ExpectedContactBehavior,
+)
 from .numerical import NumericalVerificationResult
