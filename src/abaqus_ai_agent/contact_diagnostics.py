@@ -115,10 +115,8 @@ def contact_evidence_sufficiency(evidence, expected):
         elif field.get("status") != "available":
             missing.append(name)
 
-    history = evidence.get("history", {})
-    if isinstance(history, dict) and history.get("status") == "ambiguous":
-        ambiguous = True
-
+    # History is auxiliary evidence; ambiguous history must not invalidate
+    # sufficient field evidence unless history is explicitly required.
     if ambiguous:
         return ContactDiagnostic(
             "contact_evidence_sufficiency",
@@ -216,6 +214,11 @@ def expected_contact_state(evidence, expected):
 
 def unexpected_opening(evidence, expected):
     """Detect opening only against an explicitly declared separation limit."""
+    if "COPEN" not in _required_output_names(expected):
+        return ContactDiagnostic(
+            "unexpected_opening", "not_applicable",
+            message="COPEN was not required by the declared contact evidence contract",
+        )
     if expected.expected_state != "contact" or not expected.contact_required:
         return ContactDiagnostic(
             "unexpected_opening",
@@ -260,6 +263,11 @@ def unexpected_opening(evidence, expected):
 
 def unexpected_overclosure(evidence, expected):
     """Detect overclosure only against an explicitly declared interference limit."""
+    if "COPEN" not in _required_output_names(expected):
+        return ContactDiagnostic(
+            "unexpected_overclosure", "not_applicable",
+            message="COPEN was not required by the declared contact evidence contract",
+        )
     copen = _numeric_values(_field(evidence, "COPEN"))
     if not copen:
         return ContactDiagnostic(
@@ -308,6 +316,13 @@ def unexpected_overclosure(evidence, expected):
 
 def contact_behavior_consistency(evidence, expected):
     """Check only directly contradictory contact observations."""
+    required = set(_required_output_names(expected))
+    if "CSTATUS" not in required or not ({"CPRESS", "COPEN"} & required):
+        return ContactDiagnostic(
+            "contact_behavior_consistency", "not_applicable",
+            message="insufficient contact variables were requested for a cross-variable consistency check",
+        )
+
     cpress = _numeric_values(_field(evidence, "CPRESS"))
     copen = _numeric_values(_field(evidence, "COPEN"))
     cstatus = _status_values(_field(evidence, "CSTATUS"))
@@ -347,6 +362,22 @@ def contact_behavior_consistency(evidence, expected):
 
 def diagnose_contact(evidence, expected):
     """Run the bounded first-version contact diagnostic set."""
+    if not isinstance(expected, ExpectedContactBehavior):
+        raise TypeError("expected must be ExpectedContactBehavior")
+    if not expected.contact_required:
+        return ContactDiagnosticReport((
+            ContactDiagnostic("contact_evidence_sufficiency", "not_applicable",
+                              message="contact is not required by the declared expectation"),
+            ContactDiagnostic("expected_contact_state", "not_applicable",
+                              message="contact is not required by the declared expectation"),
+            ContactDiagnostic("unexpected_opening", "not_applicable",
+                              message="contact is not required by the declared expectation"),
+            ContactDiagnostic("unexpected_overclosure", "not_applicable",
+                              message="contact is not required by the declared expectation"),
+            ContactDiagnostic("contact_behavior_consistency", "not_applicable",
+                              message="contact is not required by the declared expectation"),
+        ))
+
     sufficiency = contact_evidence_sufficiency(evidence, expected)
     if sufficiency.status in ("insufficient_evidence", "ambiguous"):
         return ContactDiagnosticReport((sufficiency,))
