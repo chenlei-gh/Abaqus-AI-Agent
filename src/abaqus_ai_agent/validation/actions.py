@@ -11,7 +11,7 @@ def validate_action(action):
     if action.action_type in (
         "fixed_bc", "displacement_bc", "symmetry_bc", "pressure_load",
         "concentrated_force", "body_force", "body_heat_flux", "surface_heat_flux", "temperature_bc", "initial_temperature", "initial_stress", "section_assignment", "tie",
-        "local_seed_size", "local_seed_number", "bias_seed_size", "bias_seed_number", "sweep_path", "mesh_controls", "element_type", "contact"
+        "local_seed_size", "local_seed_number", "bias_seed_size", "bias_seed_number", "sweep_path", "mesh_controls", "element_type", "element_strategy", "contact"
     ) and not action.parameters.get("region_expression"):
         raise ValueError("region_expression is required for %s" % action.action_type)
     geometry = action.action_type in ("inspect_geometry", "ignore_entity", "restore_entity", "repair_geometry", "remove_redundant_entities", "inspect_mesh")
@@ -161,8 +161,12 @@ def validate_action(action):
         for key in ("odb_path", "output_path", "variable"):
             if not action.parameters.get(key):
                 raise ValueError("%s is required for export_odb_csv" % key)
-    if action.action_type == "element_type" and not action.parameters.get("elem_code"):
-        raise ValueError("elem_code is required for element_type")
+    if action.action_type in ("element_type", "element_strategy") and not action.parameters.get("elem_code"):
+        raise ValueError("elem_code is required for %s" % action.action_type)
+    if action.action_type == "element_strategy":
+        required = ("family", "dimension", "shape", "order", "formulation", "integration")
+        if not all(action.parameters.get(key) for key in required):
+            raise ValueError("semantic element strategy requires family/dimension/shape/order/formulation/integration")
     if action.expected_state and not all(isinstance(x, dict) and x.get("path")
                                          for x in action.expected_state):
         raise ValueError("expected_state entries require a path")
