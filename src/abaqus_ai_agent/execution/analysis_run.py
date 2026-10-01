@@ -7,6 +7,8 @@ from .jobs import JobController, JobState, JobStatus
 from ..engineering_status import EngineeringStatus
 from ..evidence.result import summarize_odb
 from ..evidence.model import Evidence, EvidenceBundle
+from ..contracts.provenance import AnalysisProvenance
+from ..provenance import stable_hash
 
 
 class AnalysisRunState(str, Enum):
@@ -31,6 +33,7 @@ class AnalysisRun:
     odb_path: Optional[str] = None
     engineering_status: Optional[str] = None
     acceptance_passed: Optional[bool] = None
+    provenance: Optional[AnalysisProvenance] = None
     evidence: EvidenceBundle = field(default_factory=EvidenceBundle)
     diagnostics: Tuple[Dict[str, Any], ...] = ()
     artifacts: Tuple[Any, ...] = ()
@@ -41,7 +44,8 @@ class AnalysisRun:
             id=self.id, model_name=self.model_name, job_name=self.job_name,
             state=state, job_status=self.job_status, odb_path=self.odb_path,
             engineering_status=self.engineering_status,
-            acceptance_passed=self.acceptance_passed, evidence=self.evidence,
+            acceptance_passed=self.acceptance_passed, provenance=self.provenance,
+            evidence=self.evidence,
             diagnostics=self.diagnostics, artifacts=self.artifacts,
             metadata=dict(self.metadata))
         values.update(changes)
@@ -80,8 +84,10 @@ class AnalysisRunner:
 
     def run(self, model_name, job_name, odb_path=None, criteria=(),
             result_values=None, timeout=3600):
-        run = AnalysisRun(str(uuid.uuid4()), model_name, job_name,
-                          AnalysisRunState.PREFLIGHTED)
+        run_id = str(uuid.uuid4())
+        run = AnalysisRun(run_id, model_name, job_name, AnalysisRunState.PREFLIGHTED,
+                          provenance=AnalysisProvenance(run_id=run_id, model_name=model_name,
+                          job_name=job_name, executor=self.executor.__class__.__name__))
         jobs = JobController(self.executor)
         try:
             snapshot = self.executor.snapshot() if hasattr(self.executor, "snapshot") else None
@@ -98,6 +104,7 @@ class AnalysisRunner:
 
             status = jobs.submit(job_name, wait=True, timeout=timeout)
             artifacts = _collect_artifacts(self.executor, job_name)
+            run = run.with_state(provenance=_provenance_with_artifacts(run.provenance, artifacts))
             if status.state != JobState.COMPLETED:
                 engineering = (
                     EngineeringStatus.SOLVER_FAILED
@@ -193,6 +200,22 @@ class AnalysisRunner:
                 engineering_status=EngineeringStatus.EXECUTION_FAILED.value,
                 artifacts=artifacts,
                 diagnostics=({"error": str(exc), "solver_artifacts": diagnostics},))
+
+
+def _provenance_with_artifacts(provenance, artifacts):
+    if provenance is None:
+        return None
+    manifest = tuple((getattr(a, "suffix", ""), getattr(a, "path", ""),
+                      bool(getattr(a, "exists", False)), getattr(a, "size", None),
+                      getattr(a, "modified_time", None)) for a in artifacts or ())
+    return AnalysisProvenance(
+        run_id=provenance.run_id, model_name=provenance.model_name,
+        job_name=provenance.job_name, model_hash=provenance.model_hash,
+        input_hash=provenance.input_hash, output_hash=provenance.output_hash,
+        artifact_manifest_hash=stable_hash(manifest),
+        abaqus_version=provenance.abaqus_version, python_version=provenance.python_version,
+        executor=provenance.executor, action_plan=provenance.action_plan,
+        environment=provenance.environment, metadata=dict(provenance.metadata))
 
 
 def _collect_diagnostics(executor, job_name):
