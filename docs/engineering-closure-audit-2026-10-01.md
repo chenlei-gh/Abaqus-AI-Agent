@@ -152,8 +152,8 @@ Remaining engineering credibility work is now outside the P1 execution tranche: 
 - STEP/STL.
 - Tosca/topology/shape optimization.
 - Full standalone fatigue solver.
-- Calibration and experimental validation.
-- Full UQ framework.
+- Model calibration / parameter identification remains deferred.
+- Full probabilistic UQ framework remains deferred.
 
 ## Reference observations
 
@@ -200,3 +200,17 @@ This remains deliberately below calibration/experimental validation and probabil
 ### P2-2 deterministic experimental validation
 
 A bounded experimental-validation contract/evaluator is now present for measured-vs-simulated scalar quantities. It records measured value, simulated value, absolute/relative error, declared tolerance, measurement uncertainty, unit, and source provenance. Validation is intentionally **not calibration**: it never adjusts model parameters and measurement uncertainty never silently relaxes the declared acceptance tolerance. Zero-valued measurements use absolute tolerance because relative error is undefined.
+
+
+## P2-2 integration closure
+
+Experimental validation is now connected to the existing result path rather than remaining a standalone post-processing helper:
+
+- `AnalysisRunner` accepts explicit measured-observation mappings keyed to extracted result values.
+- Simulated values come only from the ODB/result extraction path (or are explicitly marked external when caller-injected results are used).
+- The existing experimental-validation evaluator computes absolute/relative error against caller-declared tolerances.
+- Measurement uncertainty remains evidence metadata and never silently relaxes tolerance.
+- A failed experimental-validation report blocks the existing Acceptance gate and is recorded as `experimental_validation` evidence.
+- No parameter calibration, optimization, model identification, or second extraction/execution subsystem was introduced.
+
+This closes the deterministic validation chain while preserving the boundary that validation is not calibration.
