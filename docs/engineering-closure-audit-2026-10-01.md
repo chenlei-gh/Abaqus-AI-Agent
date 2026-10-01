@@ -2,7 +2,7 @@
 
 ## Scope
 
-Audit baseline: P1-5 head `f7fcfc2b77c203aecef2213a06b8694261b61631`, compared with the P1-2 base and the repository's current execution chain.
+Audit baseline: P1-5 head `abd68020e2462994c58d19c4c7f2d3abcd93f679`, with the current P1 capability audit changes on top of that head., compared with the P1-2 base and the repository's current execution chain.
 
 Reference set:
 - Whfkl/Abaqus-Control-MCP
@@ -42,7 +42,7 @@ This audit distinguishes capability presence from execution-chain integration. A
 | Numerical verification | successive change + Richardson/GCI + executable mesh/time-step refinement studies + explicit singularity interpretation | reference workflows provide validation patterns | 🟢 P1 execution and interpretation boundary closed; physical adequacy remains problem-specific |
 | Engineering sanity checks | load/reaction + energy + declared static/dynamic/contact/thermal/coupled families | evidence-oriented hub workflows | 🟢 Catalog boundary closed; thresholds remain problem-specific |
 | Provenance | runtime population + action-plan records + model-snapshot/artifact metadata hashes; content hashes explicitly optional | not a first-class comparable feature in references | 🟢 Honest bounded provenance; content capture remains optional |
-| Sensitivity | contract + AnalysisRunner execution helper + explicit result extraction | reference workflow patterns | 🟢 Bounded experiment runner; acceptance remains intentionally separate |
+| Sensitivity | contract + AnalysisRunner execution helper + explicit result extraction; execution/result/acceptance states are distinct | reference workflow patterns | 🟢 Bounded experiment runner; acceptance remains intentionally separate |
 | Uncertainty | bounded scenario execution through AnalysisRunner + deterministic envelope aggregation | reference workflows vary | 🟡 Executable tolerance-bound propagation; probabilistic/full UQ deferred |
 | Benchmarks | catalog + result-requirement output planning + AnalysisRunner execution + evaluator | reference examples/models | 🟢 Execution/evaluation path closed; external reference values remain explicit inputs |
 | Controlled correction | policy + explicit confirmation + existing Action Runner + AnalysisRunner rerun + Acceptance gate | reference error-recovery patterns | 🟢 One-shot authorized workflow; autonomous repair loops intentionally excluded |
@@ -79,7 +79,7 @@ Intent
 | Node | Current state | Closure finding |
 |---|---|---|
 | Intent | EngineeringIntent | Present |
-| Planning | EngineeringPlan / output planning | Present; unit semantics not enforced |
+| Planning | EngineeringPlan / output planning | Present; declared unit/dimensional semantics validated where represented by the contract |
 | Action | AbaqusAction/builders | Present |
 | Validation | validate_action/validate_plan | Present |
 | Preflight | preflight_action | Present |
@@ -88,9 +88,9 @@ Intent
 | ODB | inspect/summarize/extract | Present |
 | Evidence | EvidenceBundle + result evidence | Present |
 | Numerical verification | verification.py + numerical_verification.py | Present; executable element/time-step refinement with successive-change and Richardson/GCI methods |
-| Engineering checks | load/reaction + energy + adapters | Present, standard catalog still incomplete |
+| Engineering checks | deterministic load/reaction + energy adapters plus declared check-family catalog | Executable evidence adapters are present for the currently implemented checks; family names without adapters remain declarations, not automatic checks |
 | Acceptance | evaluate_result_acceptance + AnalysisRunner | Present and wired by PR #16 |
-| Provenance | AnalysisProvenance + manifest | Present but under-populated |
+| Provenance | runtime metadata + effective action plan + model-snapshot/artifact metadata hashes + deterministic manifest | Bounded traceability populated by AnalysisRunner; model/input/output content hashes remain optional/not captured |
 | Correction/retry | bounded policy + explicitly confirmed Action execution + AnalysisRunner rerun + Acceptance gate | Present as one-shot controlled workflow; autonomous repair loops remain out of scope |
 
 ### No silent pass-through found in the reviewed verification path
@@ -117,7 +117,7 @@ The latter is intentional: verification is itself a gate. Absence of criteria pr
 ### 4. Sensitivity regression
 The PR #16 acceptance changes do not break `execute_sensitivity`. Sensitivity deliberately calls the existing runner without explicit acceptance criteria and extracts declared result values afterward. This is an experiment runner, not an acceptance result.
 
-Remaining improvement: sensitivity should expose solver/ODB validity separately from acceptance status rather than collapsing all non-failed run states into a generic `completed` label.
+Resolved in the current audit tranche: sensitivity now records execution status, result availability/error, and acceptance status separately. `status=completed` requires completed execution plus available declared results; acceptance remains `not_evaluated` unless supplied by the runner.
 
 ### 5. Unit / dimensional consistency
 **Closed for the declared contract boundary.** Engineering intent/result requirements validate declared units and dimensions without introducing automatic conversion. Live solver validation remains release/model dependent.
@@ -126,7 +126,7 @@ Remaining improvement: sensitivity should expose solver/ODB validity separately 
 **Bounded closure confirmed.** `AnalysisRunner` now populates runtime metadata when the executor exposes it, records the effective action plan, preserves caller environment metadata, and records model-snapshot/artifact metadata hashes. The contract deliberately leaves model/input/output content hashes optional because the runner does not claim to capture those bytes. This is a traceability boundary, not a claim of byte-level reproducibility.
 
 ### 7. Engineering sanity checks
-The existing checks are intentionally low-level and threshold-free. The declared standard catalog is now present; it identifies check families without inventing universal engineering thresholds:
+The existing checks are intentionally low-level and threshold-free. The catalog is a declaration of supported engineering-check families; it is not evidence that every named family is automatically extracted from every ODB. The currently executable evidence adapters cover explicit reaction-balance and history-energy checks, while contact checks are handled by the dedicated contact diagnostic chain:
 
 - Static: global equilibrium, displacement sanity, stress/result sanity, energy when applicable.
 - Dynamic: energy balance, kinetic/internal energy evidence, timestep evidence.
@@ -143,7 +143,7 @@ No universal engineering threshold should be invented here; limits remain proble
 4. Time-step and element refinement verification — **closed for executable successive-change and Richardson/GCI paths**; singularity interpretation is explicit-evidence-only.
 5. First narrow authorized correction workflow — **closed as one-shot confirmed Action → AnalysisRunner → Acceptance**.
 
-Remaining engineering credibility work is now outside the P1 execution tranche: broader physical check coverage, calibration/experimental validation, and full probabilistic UQ.
+Remaining engineering credibility work is now outside the P1 execution tranche: broader physical check coverage, calibration/experimental validation, and full probabilistic UQ. The legacy convergence contract is retained as a deterministic evaluation-only compatibility helper; executable mesh/time-step refinement belongs to numerical_verification.py, so there is no second refinement execution path.
 
 ## Deferred
 
@@ -162,3 +162,29 @@ Abaqus-Control-MCP is primarily a live execution/diagnostic bridge: its current 
 CAE-Agent-Hub is broader: it packages MCP servers, Abaqus workflow Skills, subagents, solver workflows, optimization skills, and result viewers.
 
 The current Abaqus-AI-Agent should not copy that breadth indiscriminately. Its differentiating engineering value is the evidence/verification/acceptance chain around a native Abaqus execution boundary.
+
+
+## P1 capability-audit conclusions
+
+### Sensitivity
+Sensitivity is an experiment runner, not an acceptance workflow. Its result contract now distinguishes:
+- execution_status: whether the AnalysisRunner completed;
+- result_status: whether the declared result extractor produced usable values;
+- acceptance_status: whether the underlying run's Acceptance result was passed, failed, or not evaluated;
+- legacy status: completed only when execution completed and declared results are available.
+
+This prevents an ODB/result extraction state from being represented as engineering acceptance.
+
+### Convergence compatibility
+The legacy mesh-convergence contract evaluates already-collected mesh/result pairs only. It does not create or modify Abaqus models and does not execute jobs. The executable refinement workflow is numerical_verification.py, which owns element-size/time-step study execution and successive-change/Richardson/GCI verification. The legacy helper therefore remains a compatibility/evaluation surface rather than a competing execution framework.
+
+### Engineering-check execution boundary
+The repository now distinguishes three levels:
+1. family declaration — STANDARD_ENGINEERING_CHECKS;
+2. deterministic evaluator — EngineeringCheck helpers;
+3. ODB evidence adapter — engineering_evidence.py where evidence-to-check conversion is implemented.
+
+A family name alone is not treated as automatic ODB verification. Problem-specific limits and assumptions remain caller-declared.
+
+### Provenance population boundary
+AnalysisRunner populates runtime version/Python metadata when available, preserves caller environment metadata, records the effective action plan, and records model-snapshot/artifact metadata hashes. content_hash_scope="not_captured" remains explicit when model/input/ODB bytes are not captured. The resulting claim is bounded traceability, not byte-identical reproducibility.
