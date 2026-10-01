@@ -156,7 +156,7 @@ class AnalysisRunner:
                 engineering_status=EngineeringStatus.RESULT_SUSPICIOUS.value,
                 evidence=EvidenceBundle((Evidence(kind="odb_summary", source="odb", locator=path, value=odb),)), artifacts=artifacts)
 
-            if not criteria:
+            if not criteria and numerical_verification is None and engineering_checks is None:
                 return run.with_state(AnalysisRunState.ODB_VALIDATED)
 
             if result_values is None:
