@@ -40,9 +40,9 @@ def labels(values):
         try: out.append(int(element.label))
         except Exception: pass
     return out
-print({"part":part,"criterion":%r,"num_elements":verification.get("numElements"),
+print({"part":%r,"criterion":%r,"num_elements":verification.get("numElements"),
        "average":verification.get("average"),"worst":verification.get("worst"),
        "failed_element_labels":labels(failed),"warning_element_labels":labels(warnings),
        "na_element_labels":labels(na),"status":"fail" if failed else ("warning" if warnings else "pass"),
        "source":"abaqus_native_verify"})
-""" % (model, part, ", ".join(args), criterion)
+""" % (model, part, ", ".join(args), part, criterion)
