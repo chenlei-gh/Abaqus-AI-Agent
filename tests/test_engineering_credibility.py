@@ -335,3 +335,24 @@ def test_correction_attempt_records_confirmation_and_retry_gate():
     )
     assert confirmed.confirmed is True
     assert confirmed.retry_allowed is True
+
+
+def test_contact_mixed_status_is_ambiguous_not_failure():
+    from abaqus_ai_agent.contracts.contact import ExpectedContactBehavior
+    from abaqus_ai_agent.contact_diagnostics import expected_contact_state
+
+    expected = ExpectedContactBehavior(
+        expected_state="contact",
+        required_outputs=("CSTATUS",),
+    )
+    evidence = {
+        "fields": {
+            "CSTATUS": {
+                "status": "available",
+                "values": [{"data": "closed"}, {"data": "open"}],
+            },
+        },
+        "history": {"status": "available"},
+    }
+    diagnostic = expected_contact_state(evidence, expected)
+    assert diagnostic.status == "ambiguous"
