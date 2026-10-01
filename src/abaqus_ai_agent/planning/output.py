@@ -23,8 +23,12 @@ def criteria_from_postprocess_profile(profile):
         criteria.append({
             "name": variable,
             "value_key": "history_%s" % variable,
-            "output_kind": "history",
-            "history_variable": variable,
+            "result": {
+                "output_kind": "history",
+                "history_variable": variable,
+                "step": getattr(profile, "history_step", None),
+                "aggregation": "last",
+            },
             "step": getattr(profile, "history_step", None),
         })
     return tuple(criteria)
