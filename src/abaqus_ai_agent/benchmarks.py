@@ -114,7 +114,8 @@ def evaluate_benchmark(case, observed, acceptance=None, pre_failures=()):
     for criterion in acceptance:
         key = criterion["value_key"]
         if key not in observed:
-            failures.append("missing:%s" % key)
+            if "missing:%s" % key not in failures:
+                failures.append("missing:%s" % key)
             evidence.append({"value_key": key, "status": "missing"})
             continue
         actual = float(observed[key])
