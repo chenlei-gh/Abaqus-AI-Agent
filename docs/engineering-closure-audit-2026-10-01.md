@@ -36,14 +36,14 @@ This audit distinguishes capability presence from execution-chain integration. A
 | CAD Part/Sketch/Extrude creation | not implemented | Abaqus geometry skill | ⏸️ Deferred by scope |
 | Tosca / topology optimization | not implemented | Abaqus optimization skills | ⏸️ Deferred by scope |
 | Shape optimization | not implemented | Abaqus shape optimization skill | ⏸️ Deferred by scope |
-| Full standalone fatigue solver | contract/workflow only | Abaqus fatigue skill | ⏸️ Explicitly not claimed |
+| Fatigue post-processing | explicit S-N + Miner postprocessor over existing stress histories; no solver | Abaqus fatigue skill | 🟢 Deterministic post-processing closed; rainflow/mean-stress corrections remain explicit limits |
 | Geometry grounding | calibrated viewport/image grounding | hub skills + viewport tools | ✅ Differentiating capability |
 | Deterministic result acceptance | acceptance gate | reference projects mostly expose execution/results | ✅ Stronger than reference execution boundary |
 | Numerical verification | successive change + Richardson/GCI + executable mesh/time-step refinement studies + explicit singularity interpretation | reference workflows provide validation patterns | 🟢 P1 execution and interpretation boundary closed; physical adequacy remains problem-specific |
 | Engineering sanity checks | load/reaction + energy + declared static/dynamic/contact/thermal/coupled families | evidence-oriented hub workflows | 🟢 Catalog boundary closed; thresholds remain problem-specific |
 | Provenance | runtime population + action-plan records + model-snapshot/artifact metadata hashes; content hashes explicitly optional | not a first-class comparable feature in references | 🟢 Honest bounded provenance; content capture remains optional |
 | Sensitivity | contract + AnalysisRunner execution helper + explicit result extraction; execution/result/acceptance states are distinct | reference workflow patterns | 🟢 Bounded experiment runner; acceptance remains intentionally separate |
-| Uncertainty | bounded scenario execution through AnalysisRunner + deterministic envelope aggregation | reference workflows vary | 🟡 Executable tolerance-bound propagation; probabilistic/full UQ deferred |
+| Uncertainty | bounded scenario execution + reproducible uniform sampling/statistics through AnalysisRunner | reference workflows vary | 🟢 First bounded probabilistic-UQ path closed; reliability/inference remain deferred |
 | Benchmarks | catalog + result-requirement output planning + AnalysisRunner execution + evaluator | reference examples/models | 🟢 Execution/evaluation path closed; external reference values remain explicit inputs |
 | Controlled correction | policy + explicit confirmation + existing Action Runner + AnalysisRunner rerun + Acceptance gate | reference error-recovery patterns | 🟢 One-shot authorized workflow; autonomous repair loops intentionally excluded |
 | Unit/dimensional consistency | intent planning + ResultRequirement validation + dimensional checks | Declared intent/result units are validated without automatic conversion | 🟢 Main-chain validation closed for declared units |
@@ -139,11 +139,11 @@ No universal engineering threshold should be invented here; limits remain proble
 
 1. Contact diagnostic chain — **closed**.
 2. Benchmark execution through AnalysisRunner — **closed**.
-3. Uncertainty scenario execution through AnalysisRunner — **closed as bounded tolerance propagation**; probabilistic sampling/reliability remains deferred.
+3. Uncertainty scenario execution through AnalysisRunner — **closed for bounded deterministic and first reproducible probabilistic sampling/statistics**; reliability/inference remain deferred.
 4. Time-step and element refinement verification — **closed for executable successive-change and Richardson/GCI paths**; singularity interpretation is explicit-evidence-only.
 5. First narrow authorized correction workflow — **closed as one-shot confirmed Action → AnalysisRunner → Acceptance**.
 
-Remaining engineering credibility work is now outside the P1 execution tranche: broader physical check coverage, calibration/experimental validation, and full probabilistic UQ. The legacy convergence contract is retained as a deterministic evaluation-only compatibility helper; executable mesh/time-step refinement belongs to numerical_verification.py, so there is no second refinement execution path.
+Remaining engineering credibility work is now outside the P1 execution tranche: broader physical check coverage, calibration/parameter identification, and reliability/inference methods. The legacy convergence contract is retained as a deterministic evaluation-only compatibility helper; executable mesh/time-step refinement belongs to numerical_verification.py, so there is no second refinement execution path.
 
 ## Deferred
 
@@ -236,3 +236,19 @@ Probabilistic uncertainty is now available as a bounded extension of the existin
 - The reported quantiles are empirical sample summaries, not claims of a fitted probability distribution.
 
 This is sufficient for a first probabilistic-UQ execution capability without introducing a second execution or verification architecture.
+
+
+## Reference-gap decision update
+
+A current reference check confirms that the reference projects emphasize live execution, model/ODB inspection, reusable workflow skills, optimization workflows, and viewers. Abaqus-Control-MCP exposes arbitrary kernel Python plus job/ODB/viewport controls, while CAE-Agent-Hub routes complete analysis intents to specialized skills including fatigue and optimization. citeturn0search0turn0search2
+
+The audit does **not** justify copying their full typed API surface because this repository already has a native Python escape hatch. The one reference-facing gap with clear engineering value that can be closed without a new architecture is fatigue post-processing over existing stress histories. A deterministic S-N + Miner path is now implemented. It deliberately does not claim a standalone fatigue solver, full rainflow standard compliance, or mean-stress correction.
+
+The following remain intentionally deferred because implementing them now would expand scope rather than close a demonstrated core-chain gap:
+
+- Tosca/topology/shape optimization.
+- CAD authoring.
+- STEP/STL typed export.
+- Reliability methods / FORM/SORM.
+- Bayesian inference / distribution fitting.
+- Full rainflow + mean-stress correction matrix.
