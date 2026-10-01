@@ -48,7 +48,7 @@ class UncertaintyReport:
 
     @property
     def completed(self):
-        return bool(self.scenarios) and all(
+        return bool(self.scenarios) and len(self.outputs) == len(self.scenarios) and all(
             output.get("status") == "completed" for output in self.outputs
         )
 
