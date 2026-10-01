@@ -24,7 +24,7 @@ class AnalysisWorkflow:
         return cls._build("static", (
             "inspect_model", "ground_geometry", "inspect_geometry", "material",
             "section", "step", "boundary_conditions", "loads", "contact",
-            "mesh", "mesh_quality", "output", "job", "artifacts", "odb",
+            "mesh", "mesh_quality", "mesh_convergence", "output", "job", "artifacts", "odb",
             "results", "acceptance", "evidence"))
 
     @classmethod
@@ -32,7 +32,7 @@ class AnalysisWorkflow:
         return cls._build("modal", (
             "inspect_model", "ground_geometry", "inspect_geometry", "material",
             "section", "step", "boundary_conditions", "mesh", "mesh_quality",
-            "output", "job", "artifacts", "odb", "results", "acceptance", "evidence"))
+            "mesh_convergence", "output", "job", "artifacts", "odb", "results", "acceptance", "evidence"))
 
     @classmethod
     def dynamic(cls):
