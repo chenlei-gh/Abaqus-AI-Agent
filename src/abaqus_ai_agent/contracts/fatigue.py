@@ -15,6 +15,9 @@ class FatigueAnalysisIntent:
     method: str = "S_N"
     cycles: Optional[float] = None
     mean_stress_correction: Optional[str] = None
+    ultimate_strength: Optional[float] = None
+    yield_strength: Optional[float] = None
+    walker_gamma: Optional[float] = None
     stress_variable: str = "S11"
     history_step: Optional[str] = None
     history_region: Optional[str] = None
