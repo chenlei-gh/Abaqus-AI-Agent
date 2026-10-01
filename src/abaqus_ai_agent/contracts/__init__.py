@@ -12,3 +12,5 @@ from .contact import (
     ExpectedContactBehavior,
 )
 from .numerical import NumericalVerificationResult
+
+from .numerical import NumericalRefinementCase, NumericalRefinementReport, NumericalVerificationResult
