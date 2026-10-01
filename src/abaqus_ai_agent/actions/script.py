@@ -74,7 +74,7 @@ def action_to_script(action):
             if p.get(key) is not None: args.append("%s=%r" % (arg, p[key]))
         return "from abaqusConstants import *; mdb.models[%s].CoupledTempDisplacementStep(%s)" % (_q(m), ", ".join(args))
     if k == "tabular_amplitude":
-        args = ["name=%s" % _q(p["name"]), "data=%r" % tuple(tuple(x) for x in p["data"]),
+        args = ["name=%s" % _q(p["name"]), "data=%r" % (tuple(tuple(x) for x in p["data"]),),
                 "timeSpan=%s" % p.get("time_span", "STEP")]
         if p.get("smooth") is not None: args.append("smooth=%r" % p["smooth"])
         return "from abaqusConstants import *; mdb.models[%s].TabularAmplitude(%s)" % (_q(m), ", ".join(args))
