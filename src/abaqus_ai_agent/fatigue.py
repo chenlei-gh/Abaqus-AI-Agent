@@ -178,8 +178,12 @@ def evaluate_fatigue_history(values: Sequence[float], intent: FatigueAnalysisInt
     if not intent.material_curve:
         raise ValueError("material_curve is required for S-N fatigue")
     correction = (intent.mean_stress_correction or "NONE").upper()
-    if correction == "GOODMAN" and ultimate_strength is None:
-        raise ValueError("ultimate_strength is required for Goodman correction")
+    if correction in ("GOODMAN", "GERBER", "WALKER") and ultimate_strength is None and intent.ultimate_strength is None:
+        raise ValueError("ultimate_strength is required for the selected correction")
+    if correction == "SODERBERG" and yield_strength is None and intent.yield_strength is None:
+        raise ValueError("yield_strength is required for Soderberg correction")
+    if correction == "WALKER" and walker_gamma is None and intent.walker_gamma is None:
+        raise ValueError("walker_gamma is required for Walker correction")
     result_cycles = []
     damage = 0.0
     for index, (a, b, weight) in enumerate(raw_cycles):
