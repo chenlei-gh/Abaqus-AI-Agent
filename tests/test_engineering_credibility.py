@@ -447,3 +447,60 @@ def test_contact_either_rejects_unmapped_status():
     }
     diagnostic = expected_contact_state(evidence, expected)
     assert diagnostic.status == "ambiguous"
+
+def test_contact_only_cstatus_contract_does_not_require_optional_diagnostics():
+    expected = ExpectedContactBehavior(
+        expected_state="contact",
+        required_outputs=("CSTATUS",),
+    )
+    report = diagnose_contact(
+        _contact_evidence(("sticking",)),
+        expected,
+    )
+    assert report.passed
+    assert all(
+        item.status in ("pass", "not_applicable")
+        for item in report.diagnostics
+    )
+
+
+def test_ambiguous_history_is_not_a_field_evidence_blocker():
+    expected = ExpectedContactBehavior(
+        expected_state="contact",
+        expected_regions=("Surface-A-B",),
+        required_outputs=("CSTATUS",),
+    )
+    evidence = _contact_evidence(("sticking",))
+    evidence["history"] = {
+        "status": "ambiguous",
+        "reason": "multiple_history_regions",
+    }
+    report = diagnose_contact(evidence, expected)
+    assert report.passed
+
+
+def test_contact_not_required_is_neutral_even_when_outputs_are_not_available():
+    expected = ExpectedContactBehavior(
+        contact_required=False,
+        expected_state="either",
+        required_outputs=("CSTATUS", "COPEN"),
+    )
+    report = diagnose_contact({}, expected)
+    assert report.passed
+
+
+def test_quantitative_contact_check_requires_explicit_region_scope():
+    expected = ExpectedContactBehavior(
+        expected_state="contact",
+        expected_separation=0.1,
+        allowed_initial_interference=0.1,
+        required_outputs=("CSTATUS", "COPEN"),
+    )
+    evidence = _contact_evidence(("sticking",), copen=(0.01,))
+    evidence["region"] = None
+    report = diagnose_contact(evidence, expected)
+    assert any(
+        item.name == "unexpected_opening"
+        and item.status == "insufficient_evidence"
+        for item in report.diagnostics
+    )
