@@ -7,6 +7,27 @@
 [![CI](https://github.com/chenlei-gh/Abaqus-AI-Agent/actions/workflows/ci.yml/badge.svg)](https://github.com/chenlei-gh/Abaqus-AI-Agent/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 
+> **Project status:** Architecture and contract closure are substantially complete. Real Abaqus V5 R2018 / B28 validation remains a separate runtime-validation phase.
+
+### Quick navigation
+
+- [Overview](#overview)
+- [What it does](#what-it-does)
+- [Engineering closure](#engineering-closure)
+- [Architecture](#architecture)
+- [Design principles](#design-principles)
+- [Installation](#installation)
+- [Minimal usage](#minimal-usage)
+- [Current capability status](#current-capability-status)
+- [Testing and CI](#testing-and-ci)
+- [Abaqus R2018 / B28 validation](#abaqus-r2018--b28-validation)
+- [Safety and failure boundaries](#safety-and-failure-boundaries)
+- [Project scope](#project-scope)
+- [Roadmap](#roadmap)
+- [Repository structure](#repository-structure)
+
+---
+
 ## Overview
 
 **Abaqus AI Agent** is an engineering-analysis agent for working with existing Abaqus/CAE models and native Abaqus capabilities.
@@ -22,6 +43,8 @@ The core principle is:
 > **An engineering answer is not accepted merely because an Abaqus Python call succeeded. It must be supported by model state, job artifacts, ODB data, result extraction, and explicit acceptance criteria.**
 
 ## What it does
+
+The project is organized around four visible capabilities: **engineering actions**, **live Abaqus execution**, **geometry grounding**, and **engineering credibility / evidence**.
 
 ### Engineering analysis actions
 
@@ -177,6 +200,8 @@ The project provides:
 
 The current closure chain is intentionally explicit:
 
+> **Intent → Outputs → Execution → Results → Verification → Acceptance → Evidence → Report**
+
 ```text
 Engineering Intent
         ↓
@@ -217,8 +242,6 @@ Engineering Report
 The important architectural rule is:
 
 > **Not supplied does not automatically mean failed; explicitly supplied verification failures cannot be silently bypassed.**
-
-
 
 A central design goal is to close the engineering evidence loop:
 
@@ -261,6 +284,8 @@ This prevents a common failure mode in AI-assisted engineering tools:
 ```
 
 Each stage is treated as separate evidence.
+
+---
 
 ## Architecture
 
@@ -339,6 +364,8 @@ The repository separates:
 
 No single component is expected to know everything about the engineering workflow.
 
+---
+
 ## Design principles
 
 ### 1. Native Abaqus first
@@ -397,6 +424,8 @@ Abaqus Python environments are release-dependent. The external package targets m
 
 Exact native API compatibility must be verified against the installed Abaqus release.
 
+---
+
 ## Installation
 
 The external package targets **Python 3.9+**.
@@ -427,6 +456,8 @@ python -m pytest -q
 ```
 
 The normal test suite does not require a licensed Abaqus installation.
+
+---
 
 ## Minimal usage
 
@@ -459,6 +490,8 @@ action = python_action(
 ```
 
 This escape hatch is deliberate: the action layer should not become a bottleneck for legitimate Abaqus APIs.
+
+---
 
 ## Current capability status
 
@@ -496,6 +529,8 @@ This escape hatch is deliberate: the action layer should not become a bottleneck
 | CAD/Part/Sketch/Extrude generation | Intentionally deferred |
 | Tosca / topology optimization automation | Intentionally deferred |
 
+---
+
 ## Testing and CI
 
 GitHub Actions runs the Python test suite on:
@@ -512,6 +547,8 @@ python -m pytest -q
 ```
 
 The repository keeps Abaqus-dependent validation separate from ordinary CI because Abaqus requires a licensed runtime and a release-specific environment.
+
+---
 
 ## Abaqus R2018 / B28 validation
 
@@ -535,6 +572,8 @@ In particular:
 
 > **A successful Python process or exit code is not, by itself, proof that CNEXT, the intended Abaqus command, the solver job, or the expected ODB result succeeded.**
 
+---
+
 ## Safety and failure boundaries
 
 The agent intentionally refuses several unsafe assumptions:
@@ -550,6 +589,8 @@ The agent intentionally refuses several unsafe assumptions:
 - model-specific contact, mesh, and release-specific operations must remain explicit when they cannot be validated generically.
 
 These boundaries are part of the architecture, not optional documentation.
+
+---
 
 ## Project scope
 
@@ -573,6 +614,8 @@ These boundaries are part of the architecture, not optional documentation.
 - CAD authoring as the primary purpose of this repository
 - topology optimization as a substitute for engineering requirements
 
+---
+
 ## Roadmap
 
 The near-term engineering path is:
@@ -595,6 +638,8 @@ Potential future areas include:
 
 New capabilities should preserve the existing action → validation → execution → evidence boundaries.
 
+---
+
 ## Reference projects and ecosystem
 
 The live-execution boundary is informed by public Abaqus automation/MCP projects, including:
@@ -605,6 +650,8 @@ The live-execution boundary is informed by public Abaqus automation/MCP projects
 Those projects demonstrate useful patterns such as live Abaqus bridges, arbitrary Python execution, model inspection, job monitoring, ODB inspection, and viewport interaction.
 
 This repository builds on the general idea of a live Abaqus execution boundary while emphasizing explicit geometry grounding, validation, result requirements, acceptance, and evidence.
+
+---
 
 ## Repository structure
 
@@ -626,6 +673,8 @@ Abaqus-AI-Agent/
 └── README_CN.md              # Chinese documentation
 ```
 
+---
+
 ## Contributing
 
 Contributions are welcome when they preserve the project's engineering boundaries.
@@ -640,6 +689,8 @@ A useful contribution should normally include:
 - no unsupported claim of solver or engineering correctness.
 
 For release-specific Abaqus APIs, prefer documenting the exact Abaqus version tested.
+
+---
 
 ## License
 
