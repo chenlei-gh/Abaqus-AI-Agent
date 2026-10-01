@@ -65,7 +65,7 @@ class AbaqusAIAgent:
                      contact_expected=None, contact_evidence=None, contact_step=None,
                      contact_frame=-1, contact_history_region=None,
                      contact_position=None, contact_region=None,
-                     benchmark=None, benchmark_reference_values=None):
+                     benchmark=None, benchmark_reference_values=None, benchmark_result_overrides=None):
         from .execution.analysis_run import AnalysisRunner
         return AnalysisRunner(self.executor).run(
             model_name, job_name, odb_path=odb_path, criteria=criteria,
@@ -76,7 +76,7 @@ class AbaqusAIAgent:
             contact_step=contact_step, contact_frame=contact_frame,
             contact_history_region=contact_history_region,
             contact_position=contact_position, contact_region=contact_region,
-            benchmark=benchmark, benchmark_reference_values=benchmark_reference_values)
+            benchmark=benchmark, benchmark_reference_values=benchmark_reference_values,\n            benchmark_result_overrides=benchmark_result_overrides)
 
     def submit(self, job_name, wait=False):
         from .execution.jobs import JobController
