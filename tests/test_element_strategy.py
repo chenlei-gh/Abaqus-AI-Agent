@@ -11,7 +11,7 @@ def test_common_3d_hex_strategy_resolves():
 
 
 def test_common_2d_quad_strategy_resolves():
-    strategy = ElementStrategy("continuum", "2d", "quad", "quadratic", "full")
+    strategy = ElementStrategy("continuum", "2d_plane_stress", "quad", "quadratic", "full")
     assert resolve_element_code(strategy) == "CPS8"
 
 
