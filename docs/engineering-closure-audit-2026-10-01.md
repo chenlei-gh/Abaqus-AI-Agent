@@ -240,7 +240,7 @@ This is sufficient for a first probabilistic-UQ execution capability without int
 
 ## Reference-gap decision update
 
-A current reference check confirms that the reference projects emphasize live execution, model/ODB inspection, reusable workflow skills, optimization workflows, and viewers. Abaqus-Control-MCP exposes arbitrary kernel Python plus job/ODB/viewport controls, while CAE-Agent-Hub routes complete analysis intents to specialized skills including fatigue and optimization. citeturn0search0turn0search2
+A current reference check confirms that the reference projects emphasize live execution, model/ODB inspection, reusable workflow skills, optimization workflows, and viewers. Abaqus-Control-MCP exposes arbitrary kernel Python plus job/ODB/viewport controls, while CAE-Agent-Hub routes complete analysis intents to specialized skills including fatigue and optimization.
 
 The audit does **not** justify copying their full typed API surface because this repository already has a native Python escape hatch. The one reference-facing gap with clear engineering value that can be closed without a new architecture is fatigue post-processing over existing stress histories. A deterministic S-N + Miner path is now implemented. It deliberately does not claim a standalone fatigue solver, full rainflow standard compliance, or mean-stress correction.
 
