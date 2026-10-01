@@ -14,6 +14,15 @@ def solid_section(model, name, material): return _action("solid_section", model,
 def section_assignment(model, part, section, region_expression): return _action("section_assignment", model, part=part, section=section, region_expression=region_expression)
 def mesh_controls(model, target, **params): return _action("mesh_controls", model, target, **params)
 def seed_part(model, part, size, deviation_factor=0.1, min_size_factor=0.1): return _action("seed_part", model, part=part, size=size, deviation_factor=deviation_factor, min_size_factor=min_size_factor)
+def bias_seed_size(model, part, region_expression, size, end1, end2, constraint="FREE"):
+    return _action("bias_seed_size", model, region_expression, part=part, region_expression=region_expression,
+                   size=size, end1=end1, end2=end2, constraint=constraint)
+def bias_seed_number(model, part, region_expression, number, end1, end2, constraint="FREE"):
+    return _action("bias_seed_number", model, region_expression, part=part, region_expression=region_expression,
+                   number=number, end1=end1, end2=end2, constraint=constraint)
+def sweep_path(model, part, region_expression, edge_expression, sense="FORWARD"):
+    return _action("sweep_path", model, region_expression, part=part, region_expression=region_expression,
+                   edge_expression=edge_expression, sense=sense)
 def generate_mesh(model, part): return _action("generate_mesh", model, part=part)
 def element_type(model, part, region_expression, elem_code="C3D8R", library="STANDARD"): return _action("element_type", model, part=part, region_expression=region_expression, elem_code=elem_code, library=library)
 
