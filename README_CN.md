@@ -7,6 +7,27 @@
 [![CI](https://github.com/chenlei-gh/Abaqus-AI-Agent/actions/workflows/ci.yml/badge.svg)](https://github.com/chenlei-gh/Abaqus-AI-Agent/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 
+> **项目状态：** 架构与 Contract Closure 已基本收敛；Abaqus V5 R2018 / B28 真机验证作为独立的 Runtime Validation 阶段进行。
+
+### 快速导航
+
+- [项目概述](#项目概述)
+- [项目能做什么](#项目能做什么)
+- [工程闭环](#工程闭环)
+- [架构](#架构)
+- [设计原则](#设计原则)
+- [安装](#安装)
+- [最小使用示例](#最小使用示例)
+- [当前能力状态](#当前能力状态)
+- [测试与 CI](#测试与-ci)
+- [Abaqus V5 R2018 / B28 验证](#abaqus-v5-r2018--b28-验证)
+- [安全与失败边界](#安全与失败边界)
+- [项目范围](#项目范围)
+- [Roadmap](#roadmap)
+- [仓库结构](#仓库结构)
+
+---
+
 ## 项目概述
 
 **Abaqus AI Agent** 是一个面向 Abaqus/CAE 工程分析场景的 AI Agent。
@@ -22,6 +43,8 @@
 > **一次 Abaqus Python 调用成功，并不等于工程分析成功。工程结论必须由模型状态、Job 产物、ODB 数据、结果提取以及明确的验收标准共同支撑。**
 
 ## 项目能做什么
+
+项目主要围绕四类能力组织：**工程 Action、实时 Abaqus 执行、Geometry Grounding、工程可信度与 Evidence**。
 
 ### 工程分析 Action
 
@@ -161,6 +184,8 @@ Action 层并不追求把 Abaqus 全部 API 重新封装一遍。Abaqus 本身�
 
 当前完整工程闭环已经收敛为：
 
+> **Intent → Outputs → Execution → Results → Verification → Acceptance → Evidence → Report**
+
 ```text
 Engineering Intent
         ↓
@@ -202,8 +227,6 @@ Engineering Report
 
 > **没有提供某项验证，不自动等于失败；但一旦显式提供验证结果，其失败就不能被 Acceptance 静默绕过。**
 
-
-
 项目最重要的设计目标之一，是把“工程验收”真正闭环：
 
 ```text
@@ -239,6 +262,8 @@ Evidence
 ```
 
 每一个阶段都必须有相应证据，并且 Contract 不能只停留在定义层：它必须进入实际的 Planning / Execution / Extraction / Verification / Acceptance / Report 链路。
+
+---
 
 ## 架构
 
@@ -315,6 +340,8 @@ ModelSnapshot      Viewport / Image
 
 没有任何一个组件需要独自掌握完整工程流程。
 
+---
+
 ## 设计原则
 
 ### 1. Native Abaqus First
@@ -383,6 +410,8 @@ Abaqus 自带 Python 运行时和原生 API 具有明显的版本依赖。
 
 具体原生 API 是否兼容，必须在目标 Abaqus 版本上实际验证。
 
+---
+
 ## 安装
 
 外部 Python 包目标为 **Python 3.9+**。
@@ -413,6 +442,8 @@ python -m pytest -q
 ```
 
 普通测试不需要安装 Abaqus License。
+
+---
 
 ## 最小使用示例
 
@@ -445,6 +476,8 @@ action = python_action(
 ```
 
 这个 Escape Hatch 是有意保留的：Action 层不应该成为合法 Abaqus API 的人工瓶颈。
+
+---
 
 ## 当前能力状态
 
@@ -482,6 +515,8 @@ action = python_action(
 | CAD / Part / Sketch / Extrude 自动建模 | 当前有意延后 |
 | Tosca / Topology Optimization 自动化 | 当前有意延后 |
 
+---
+
 ## 测试与 CI
 
 GitHub Actions 在以下情况下运行 Python 测试：
@@ -498,6 +533,8 @@ python -m pytest -q
 ```
 
 普通 CI 不依赖 Abaqus License，因此与真实 Abaqus 运行环境相关的测试会独立进行。
+
+---
 
 ## Abaqus V5 R2018 / B28 验证
 
@@ -521,6 +558,8 @@ python -m pytest -q
 
 > **一个 Python 进程正常退出，或者返回 exit code 0，都不能单独证明 CNEXT、目标 Abaqus 命令、Solver Job 或预期 ODB 结果成功。**
 
+---
+
 ## 安全与失败边界
 
 项目有意拒绝以下不安全假设：
@@ -536,6 +575,8 @@ python -m pytest -q
 - Model-specific contact、mesh 以及 release-specific API 在无法泛化验证时必须保持显式。
 
 这些边界属于架构的一部分，而不是可有可无的文档说明。
+
+---
 
 ## 项目范围
 
@@ -558,6 +599,8 @@ python -m pytest -q
 - 没有数值方法实现却宣称完整 Fatigue Solver
 - 把 CAD 建模作为本项目的主要目标
 - 用 Topology Optimization 取代明确的工程需求
+
+---
 
 ## Roadmap
 
@@ -585,6 +628,8 @@ python -m pytest -q
 
 这一基本边界。
 
+---
+
 ## 参考项目与生态
 
 实时执行边界参考了公开的 Abaqus 自动化/MCP 项目，包括：
@@ -603,6 +648,8 @@ python -m pytest -q
 - Evidence
 
 而不是重新实现 Abaqus 本身。
+
+---
 
 ## 仓库结构
 
@@ -624,6 +671,8 @@ Abaqus-AI-Agent/
 └── README_CN.md              # 中文文档
 ```
 
+---
+
 ## 贡献
 
 欢迎符合工程边界的贡献。
@@ -638,6 +687,8 @@ Abaqus-AI-Agent/
 - 不对尚未验证的 Solver 或工程正确性做过度声明。
 
 对于 Release-specific Abaqus API，建议明确记录实际测试过的 Abaqus 版本。
+
+---
 
 ## License
 
