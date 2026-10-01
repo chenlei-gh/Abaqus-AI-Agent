@@ -75,6 +75,11 @@ Remaining non-runtime work is deliberately limited to broader problem-specific e
 The B28 smoke harness must still be executed on an actual Abaqus V5 R2018/B28 installation. Until then, B28 compatibility remains unverified.
 
 
+### Mesh strategy and verification
+
+The mesh action layer now exposes global/local seeding, biased edge seeding, mesh controls, explicit sweep-path assignment, element-type assignment, generation, lightweight custom prechecks, and native Abaqus mesh verification. Native verification delegates analysis-quality checks to Abaqus rather than inventing a solver-equivalent Jacobian standard. Mesh quality and mesh convergence remain separate claims: convergence must be demonstrated against an engineering quantity of interest rather than inferred from element quality alone.
+
+
 ### Fatigue post-processing
 
 Fatigue post-processing is implemented for existing scalar Abaqus stress histories: Rainflow cycle counting with half/full-cycle weights, explicit range/amplitude/mean semantics, Goodman, Gerber, Soderberg and Walker mean-stress corrections, log-log S-N interpolation, and Palmgren-Miner damage. Critical-plane and non-proportional multiaxial fatigue criteria remain outside the implemented scope.
