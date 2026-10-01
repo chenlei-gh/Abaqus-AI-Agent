@@ -30,8 +30,14 @@ from .engineering_evidence import (
     reaction_balance_from_field_evidence,
     energy_ratio_from_history_evidence,
     numeric_field_sanity_from_field_evidence,
+    time_step_from_history_evidence,
+    thermal_mechanical_consistency_from_field_evidence,
 )
-from .uncertainty import execute_uncertainty, aggregate_uncertainty_outputs, build_uncertainty_scenarios
+from .uncertainty import (
+    execute_uncertainty, aggregate_uncertainty_outputs, build_uncertainty_scenarios,
+    sample_uniform_parameters, summarize_probabilistic_outputs,
+    execute_probabilistic_uncertainty,
+)
 from .numerical_verification import execute_refinement_study
 from .correction import execute_authorized_correction
 
