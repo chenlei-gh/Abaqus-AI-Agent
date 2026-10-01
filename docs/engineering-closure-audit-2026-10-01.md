@@ -39,7 +39,7 @@ This audit distinguishes capability presence from execution-chain integration. A
 | Full standalone fatigue solver | contract/workflow only | Abaqus fatigue skill | ⏸️ Explicitly not claimed |
 | Geometry grounding | calibrated viewport/image grounding | hub skills + viewport tools | ✅ Differentiating capability |
 | Deterministic result acceptance | acceptance gate | reference projects mostly expose execution/results | ✅ Stronger than reference execution boundary |
-| Numerical verification | successive change + Richardson/GCI | reference workflows provide validation patterns | 🟡 Partial; time-step/element/singularity dimensions remain |
+| Numerical verification | successive change + Richardson/GCI + executable mesh/time-step refinement studies | reference workflows provide validation patterns | 🟡 Time-step/element execution closed; singularity-aware interpretation remains |
 | Engineering sanity checks | load/reaction + energy | evidence-oriented hub workflows | 🟡 Standard catalog not yet closed |
 | Provenance | contract + artifact manifest hash | not a first-class comparable feature in references | 🟡 Partial population |
 | Sensitivity | contract + execution helper | reference workflow patterns | 🟡 Executable helper, not a full acceptance-bound experiment |
