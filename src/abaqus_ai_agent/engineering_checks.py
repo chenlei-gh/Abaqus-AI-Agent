@@ -69,6 +69,6 @@ def check_declared_load_balance(applied_components, reaction_components,
             zip(applied_components, reaction_components), 1):
         checks.append(check_balance(
             "global_load_balance_RF%d" % i,
-            reaction, applied, tolerance, unit
+            reaction, -float(applied), tolerance, unit
         ))
     return evaluate_checks(tuple(checks))
