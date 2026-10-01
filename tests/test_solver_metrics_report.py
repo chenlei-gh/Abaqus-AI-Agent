@@ -101,3 +101,18 @@ def test_report_preserves_structured_acceptance_and_fatigue():
     assert report.fatigue.status == "warning"
     rendered = render_markdown(report)
     assert "fatigue_verification_failed" in rendered
+
+
+def test_postprocess_profile_requirements_become_effective_result_criteria():
+    from abaqus_ai_agent.planning.output import criteria_from_postprocess_profile
+    from abaqus_ai_agent.contracts.postprocess import PostProcessingProfile
+
+    profile = PostProcessingProfile(
+        name="profile-test",
+        required_results=("max_mises",),
+        history_variables=("RF",),
+    )
+    criteria = criteria_from_postprocess_profile(profile)
+    keys = {item["value_key"] for item in criteria}
+    assert "max_mises" in keys
+    assert "history_RF" in keys
