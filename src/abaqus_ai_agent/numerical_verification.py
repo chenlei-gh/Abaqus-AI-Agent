@@ -3,6 +3,34 @@ import math
 from .contracts.numerical import NumericalVerificationResult
 
 
+def assess_singularity_interpretation(*, identified=False, basis="", local_values=(), global_values=()):
+    """Classify explicit singularity evidence without guessing from mesh trends.
+
+    A singularity is only treated as identified when the caller supplies an
+    explicit basis. The helper never infers a singularity merely because a
+    scalar result fails to converge.
+    """
+    local = tuple(float(v) for v in local_values)
+    global_ = tuple(float(v) for v in global_values)
+    if not identified:
+        return {
+            "status": "not_identified",
+            "interpretation": "global",
+            "basis": "",
+            "local_trend": (),
+            "global_trend": global_,
+        }
+    if not str(basis).strip():
+        raise ValueError("singularity basis is required when identified=True")
+    return {
+        "status": "identified",
+        "interpretation": "singularity_limited",
+        "basis": str(basis),
+        "local_trend": local,
+        "global_trend": global_,
+    }
+
+
 def verify_series(name, values, tolerance):
     """Check successive result changes and return explicit verification method."""
     values = tuple(float(v) for v in values)
