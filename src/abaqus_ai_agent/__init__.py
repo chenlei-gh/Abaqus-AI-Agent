@@ -36,3 +36,5 @@ from .engineering_evidence import reaction_balance_from_field_evidence, energy_r
 
 from .contracts.mesh_strategy import MeshRefinementRequest, GeometryMeshPlan
 from .planning.mesh_strategy import plan_geometry_mesh
+
+from .planning.mesh_strategy import local_seeds_from_geometry_plan, mesh_specification_from_geometry_plan
