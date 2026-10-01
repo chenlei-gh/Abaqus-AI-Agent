@@ -85,7 +85,10 @@ class AnalysisRunner:
 
     def run(self, model_name, job_name, odb_path=None, criteria=(),
             result_values=None, numerical_verification=None, engineering_checks=None,
-            timeout=3600, action_plan=(), environment=None):
+            timeout=3600, action_plan=(), environment=None,
+            contact_expected=None, contact_evidence=None, contact_step=None,
+            contact_frame=-1, contact_history_region=None, contact_position=None,
+            contact_region=None):
         run_id = str(uuid.uuid4())
         runtime = _runtime_provenance(self.executor)
         initial_snapshot = None
@@ -228,12 +231,40 @@ class AnalysisRunner:
                 ),)
                 result_source = "external_input"
 
+            contact_diagnostics = None
+            if contact_expected is not None:
+                from ..execution.odb import extract_contact_evidence
+                from ..contact_diagnostics import diagnose_contact
+                if contact_evidence is None:
+                    steps = tuple(odb.get("steps", ())) if isinstance(odb, dict) else ()
+                    if steps or contact_step is not None:
+                        selected_step = contact_step or steps[-1]
+                        contact_evidence = extract_contact_evidence(
+                            self.executor, path, selected_step,
+                            frame=contact_frame,
+                            history_region=contact_history_region,
+                            position=contact_position,
+                            region=contact_region,
+                        )
+                if contact_evidence is None:
+                    from ..contracts.contact import ContactDiagnostic, ContactDiagnosticReport
+                    contact_diagnostics = ContactDiagnosticReport((
+                        ContactDiagnostic(
+                            "contact_evidence_sufficiency",
+                            "insufficient_evidence",
+                            message="contact expectation declared but no contact evidence could be obtained",
+                        ),
+                    ))
+                else:
+                    contact_diagnostics = diagnose_contact(contact_evidence, contact_expected)
+
             accepted = evaluate_result_acceptance(
                 result_status=status.state.value.lower(),
                 numerical=numerical_verification,
                 engineering=engineering_checks,
                 values=result_values,
                 criteria=criteria,
+                contact_diagnostics=contact_diagnostics,
             )
             verification_evidence = []
             if numerical_verification is not None:
@@ -245,6 +276,16 @@ class AnalysisRunner:
                 verification_evidence.append(Evidence(
                     kind="engineering_checks", source="verification",
                     locator=job_name, value=engineering_checks,
+                ))
+            if contact_evidence is not None:
+                verification_evidence.append(Evidence(
+                    kind="contact_evidence", source="odb",
+                    locator=path, value=contact_evidence,
+                ))
+            if contact_diagnostics is not None:
+                verification_evidence.append(Evidence(
+                    kind="contact_diagnostics", source="verification",
+                    locator=job_name, value=contact_diagnostics,
                 ))
             status_value = (
                 EngineeringStatus.RESULT_VALID.value
