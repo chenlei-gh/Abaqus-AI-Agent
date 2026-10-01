@@ -27,6 +27,5 @@ def test_mesh_convergence_can_require_consecutive_stable_refinements():
 
 def test_mesh_convergence_requires_enough_points_for_consecutive_window():
     points = tuple(MeshConvergencePoint(size, value) for size, value in ((4.0, 100.0), (2.0, 101.0), (1.0, 101.1)))
-    result = evaluate_mesh_convergence(points, MeshConvergencePolicy(0.01, required_consecutive=3))
-    assert not result.converged
-    assert result.status == "insufficient_data"
+    with pytest.raises(ValueError):
+        MeshConvergencePolicy(0.01, required_consecutive=3)
