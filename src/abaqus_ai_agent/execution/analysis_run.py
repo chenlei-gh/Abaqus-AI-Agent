@@ -86,7 +86,7 @@ class AnalysisRunner:
 
     def run(self, model_name, job_name, odb_path=None, criteria=(),
             result_values=None, numerical_verification=None, engineering_checks=None,
-            mesh_quality=None, mesh_convergence=None,
+            mesh_quality=None, mesh_convergence=None, fatigue=None,
             timeout=3600, action_plan=(), environment=None, engineering_intent=None,
             postprocess_profile=None):
         run_id = str(uuid.uuid4())
@@ -220,7 +220,7 @@ class AnalysisRunner:
                 engineering_status=EngineeringStatus.RESULT_SUSPICIOUS.value,
                 evidence=EvidenceBundle((Evidence(kind="odb_summary", source="odb", locator=path, value=odb),)), artifacts=artifacts)
 
-            if not criteria and postprocess_profile is None and numerical_verification is None and engineering_checks is None and mesh_quality is None and mesh_convergence is None:
+            if not criteria and postprocess_profile is None and numerical_verification is None and engineering_checks is None and mesh_quality is None and mesh_convergence is None and fatigue is None:
                 return run.with_state(AnalysisRunState.ODB_VALIDATED)
 
             if result_values is None:
@@ -249,6 +249,7 @@ class AnalysisRunner:
                 engineering=engineering_checks,
                 mesh_quality=mesh_quality,
                 convergence=mesh_convergence,
+                fatigue=fatigue,
                 values=result_values,
                 criteria=criteria,
             )
@@ -272,6 +273,11 @@ class AnalysisRunner:
                 verification_evidence.append(Evidence(
                     kind="mesh_convergence", source="verification",
                     locator=job_name, value=mesh_convergence,
+                ))
+            if fatigue is not None:
+                verification_evidence.append(Evidence(
+                    kind="fatigue", source="verification",
+                    locator=job_name, value=fatigue,
                 ))
             status_value = (
                 EngineeringStatus.RESULT_VALID.value
