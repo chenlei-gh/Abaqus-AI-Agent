@@ -1,5 +1,5 @@
 import pytest
-from abaqus_ai_agent.numerical_verification import verify_series, verify_richardson
+from abaqus_ai_agent.numerical_verification import (\n    verify_series, verify_richardson, assess_singularity_interpretation,\n)
 
 
 def test_verify_series_insufficient_data_is_explicit():
@@ -120,3 +120,30 @@ def test_execute_refinement_study_uses_richardson_for_three_levels():
     )
     assert report.passed
     assert report.verification.observed_order == pytest.approx(2.0)
+
+
+def test_singularity_interpretation_requires_explicit_basis():
+    result = assess_singularity_interpretation(
+        identified=True,
+        basis="explicit geometric corner stress concentration",
+        local_values=(10.0, 15.0, 22.0),
+        global_values=(5.0, 5.1, 5.05),
+    )
+    assert result["status"] == "identified"
+    assert result["interpretation"] == "singularity_limited"
+    assert result["local_trend"] == (10.0, 15.0, 22.0)
+
+
+def test_singularity_is_not_inferred_from_nonconvergence():
+    result = assess_singularity_interpretation(
+        identified=False,
+        local_values=(10.0, 20.0, 40.0),
+        global_values=(5.0, 5.5, 5.2),
+    )
+    assert result["interpretation"] == "global"
+    assert result["status"] == "not_identified"
+
+
+def test_singularity_identification_requires_basis():
+    with pytest.raises(ValueError):
+        assess_singularity_interpretation(identified=True)
