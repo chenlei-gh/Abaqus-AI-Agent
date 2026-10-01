@@ -24,7 +24,7 @@ class ElementStrategy:
             object.__setattr__(self, name, value)
         if self.family not in {"CONTINUUM", "SHELL", "BEAM", "TRUSS"}:
             raise ValueError("unsupported element family")
-        if self.dimension not in {"3D", "2D", "AXISYMMETRIC"}:
+        if self.dimension not in {"3D", "2D_PLANE_STRESS", "2D_PLANE_STRAIN", "AXISYMMETRIC"}:
             raise ValueError("unsupported element dimension")
         if self.shape not in {"HEX", "TET", "WEDGE", "QUAD", "TRI", "LINE"}:
             raise ValueError("unsupported element shape")
@@ -47,11 +47,12 @@ _ELEMENT_CODES = {
     ("CONTINUUM", "3D", "TET", "QUADRATIC", "FULL"): "C3D10",
     ("CONTINUUM", "3D", "WEDGE", "LINEAR", "REDUCED"): "C3D6",
     ("CONTINUUM", "3D", "WEDGE", "QUADRATIC", "FULL"): "C3D15",
-    ("CONTINUUM", "2D", "QUAD", "LINEAR", "REDUCED"): "CPS4R",
+    ("CONTINUUM", "2D_PLANE_STRESS", "QUAD", "LINEAR", "REDUCED"): "CPS4R",
     ("CONTINUUM", "2D", "QUAD", "LINEAR", "FULL"): "CPS4",
     ("CONTINUUM", "2D", "QUAD", "QUADRATIC", "REDUCED"): "CPS8R",
     ("CONTINUUM", "2D", "QUAD", "QUADRATIC", "FULL"): "CPS8",
-    ("CONTINUUM", "2D", "TRI", "LINEAR", "FULL"): "CPS3",
+    ("CONTINUUM", "2D_PLANE_STRESS", "TRI", "LINEAR", "FULL"): "CPS3",
+    ("CONTINUUM", "2D_PLANE_STRAIN", "TRI", "LINEAR", "FULL"): "CPE3",
     ("CONTINUUM", "2D", "TRI", "QUADRATIC", "FULL"): "CPS6",
 }
 
