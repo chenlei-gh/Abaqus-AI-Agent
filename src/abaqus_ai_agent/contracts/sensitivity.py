@@ -27,7 +27,7 @@ class SensitivityReport:
 
     @property
     def completed(self):
-        return all(c.status == "completed" for c in self.cases)
+        return bool(self.cases) and all(c.status == "completed" for c in self.cases)
 
     @property
     def failed_cases(self):
