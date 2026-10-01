@@ -25,3 +25,12 @@ def test_capability_boundary_does_not_promote_engineering_correctness():
     boundary = classify_action(static_step("Model-1"))
     assert boundary.status == CapabilityStatus.SUPPORTED
     assert boundary.engineering_verified is False
+
+
+def test_unknown_action_is_not_promoted_to_supported():
+    from abaqus_ai_agent.contracts.action import AbaqusAction
+
+    action = AbaqusAction("not_a_real_action", "Model-1", None, {})
+    boundary = classify_action(action)
+    assert boundary.status == CapabilityStatus.UNSUPPORTED
+    assert not boundary.executable
