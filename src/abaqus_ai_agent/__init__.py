@@ -45,3 +45,8 @@ from .contracts.experimental_validation import ExperimentalObservation, Experime
 from .experimental_validation import validate_observations, validate_result_values
 
 from .fatigue import evaluate_fatigue_history, rainflow_count, stress_cycle_statistics, sn_cycles_to_failure
+
+from .contracts.calibration import CalibrationObservation, ParameterBound, CalibrationResult
+from .calibration import identify_parameters
+from .contracts.reliability import WeibullFit, ReliabilityResult, EmpiricalReliabilityPoint
+from .reliability import empirical_reliability, fit_weibull_2p, weibull_reliability, weibull_b_life
