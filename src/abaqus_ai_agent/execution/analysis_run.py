@@ -89,7 +89,7 @@ class AnalysisRunner:
             contact_expected=None, contact_evidence=None, contact_step=None,
             contact_frame=-1, contact_history_region=None, contact_position=None,
             contact_region=None, benchmark=None, benchmark_reference_values=None, benchmark_result_overrides=None,
-            experimental_observations=()):
+            experimental_observations=(), fatigue_intent=None, fatigue_ultimate_strength=None):
         run_id = str(uuid.uuid4())
         runtime = _runtime_provenance(self.executor)
         initial_snapshot = None
@@ -241,6 +241,8 @@ class AnalysisRunner:
 
             benchmark_result = None
             benchmark_evidence = ()
+            fatigue_result = None
+            fatigue_evidence = ()
             experimental_validation = None
             experimental_evidence = ()
             if benchmark is not None:
@@ -268,6 +270,35 @@ class AnalysisRunner:
                         source="benchmark",
                         locator=job_name,
                         value=benchmark_result,
+                    ),
+                )
+
+            if fatigue_intent is not None:
+                from ..execution.results import extract_history_series
+                from ..fatigue import evaluate_fatigue_history
+                history, history_locator = extract_history_series(
+                    self.executor, path,
+                    fatigue_intent.history_step,
+                    fatigue_intent.history_region,
+                    fatigue_intent.stress_variable,
+                )
+                fatigue_result = evaluate_fatigue_history(
+                    tuple(value for _, value in history),
+                    fatigue_intent,
+                    ultimate_strength=fatigue_ultimate_strength,
+                )
+                fatigue_evidence = (
+                    Evidence(
+                        kind="fatigue_history",
+                        source="odb",
+                        locator=str(history_locator),
+                        value={"sample_count": len(history), "variable": fatigue_intent.stress_variable},
+                    ),
+                    Evidence(
+                        kind="fatigue_result",
+                        source="fatigue",
+                        locator=job_name,
+                        value=fatigue_result,
                     ),
                 )
 
@@ -319,6 +350,7 @@ class AnalysisRunner:
                 contact_diagnostics=contact_diagnostics,
                 benchmark_result=benchmark_result,
                 experimental_validation=experimental_validation,
+                fatigue_result=fatigue_result,
             )
             verification_evidence = []
             if numerical_verification is not None:
@@ -353,7 +385,7 @@ class AnalysisRunner:
             ), Evidence(
                 kind="acceptance", source="acceptance", locator=job_name,
                 value=accepted
-            ))).extend(tuple(verification_evidence)).extend(tuple(benchmark_evidence)).extend(tuple(experimental_evidence)).extend(result_evidence)
+            ))).extend(tuple(verification_evidence)).extend(tuple(benchmark_evidence)).extend(tuple(experimental_evidence)).extend(tuple(fatigue_evidence)).extend(result_evidence)
             return run.with_state(
                 AnalysisRunState.ACCEPTED if accepted.passed
                 else AnalysisRunState.RESULTS_EXTRACTED,
@@ -365,6 +397,7 @@ class AnalysisRunner:
                     result_values=dict(result_values),
                     result_source=result_source,
                     experimental_validation=experimental_validation,
+                    fatigue_result=fatigue_result,
                 ))
         except Exception as exc:
             artifacts = _collect_artifacts(self.executor, job_name)
