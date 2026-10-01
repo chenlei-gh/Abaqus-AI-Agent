@@ -61,7 +61,8 @@ def evaluate_criteria(values, criteria):
 
 
 def evaluate_result_acceptance(result_status, numerical=None, engineering=None,
-                               values=None, criteria=None, contact_diagnostics=None):
+                               values=None, criteria=None, contact_diagnostics=None,
+                               benchmark_result=None):
     """Combine execution/result evidence with deterministic acceptance criteria.
 
     Missing upstream evidence prevents acceptance instead of being treated as a
@@ -81,6 +82,13 @@ def evaluate_result_acceptance(result_status, numerical=None, engineering=None,
         contact_failures, contact_warnings = contact_acceptance_effect(contact_diagnostics)
         failures.extend(contact_failures)
         warnings.extend(contact_warnings)
+
+    if benchmark_result is not None:
+        if not getattr(benchmark_result, "passed", False):
+            failures.extend(
+                "benchmark:%s" % failure
+                for failure in getattr(benchmark_result, "failures", ())
+            )
 
     criteria_result = evaluate_criteria(values or {}, criteria or ())
     failures.extend(
