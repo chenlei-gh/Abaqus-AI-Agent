@@ -185,9 +185,15 @@ Artifacts + ODB
         ↓
 Result Extraction
         ↓
+Engineering Metrics
+        ↓
+Engineering Checks
+        ↓
 Acceptance Evaluation
         ↓
 Evidence
+        ↓
+Engineering Report
 ```
 
 This prevents a common failure mode in AI-assisted engineering tools:
