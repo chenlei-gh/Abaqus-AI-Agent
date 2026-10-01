@@ -78,8 +78,18 @@ def characterize_geometry(geometry, critical_regions=(), small_feature_ratio=0.7
                         text=region.get("reason", "critical_region"),
                     )
                 )
-            kind = "unknown"
-            confidence = 1.0 if region else 0.0
+            supplied_kind = item.get("feature_kind")
+            kind = supplied_kind if supplied_kind in FEATURE_KINDS else "unknown"
+            supplied_confidence = item.get("feature_confidence")
+            confidence = (
+                float(supplied_confidence)
+                if supplied_confidence is not None and 0.0 <= float(supplied_confidence) <= 1.0
+                else (1.0 if region else 0.0)
+            )
+            for source_key in ("curvature", "radius", "thickness", "gap", "aspect_ratio"):
+                value = item.get(source_key)
+                if value is not None:
+                    evidence.append(GeometryFeatureEvidence(source_key, float(value)))
             features.append(
                 GeometryFeature(
                     feature_kind=kind,
