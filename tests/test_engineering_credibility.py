@@ -59,3 +59,12 @@ def test_contact_diagnostics():
 
 def test_uncertainty_bounds():
     UncertaintyParameter("load", 100.0, 90.0, 110.0, "N")
+
+
+
+def test_load_balance_and_energy_ratio():
+    from abaqus_ai_agent.engineering_checks import check_load_balance, check_energy_ratio
+    assert check_load_balance(100.0, 99.0, 0.02, "N").passed
+    assert check_load_balance(100.0, 90.0, 0.02, "N").passed is False
+    assert check_energy_ratio(1.0, 100.0, 0.02).passed
+    assert check_energy_ratio(5.0, 100.0, 0.02).passed is False
