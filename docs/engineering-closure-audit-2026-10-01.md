@@ -2,7 +2,7 @@
 
 ## Scope
 
-Audit baseline: P1-5 head `abd68020e2462994c58d19c4c7f2d3abcd93f679`, with the current P1 capability audit changes on top of that head., compared with the P1-2 base and the repository's current execution chain.
+Audit baseline: current P1-5 head `3cfe0407f5f48b245ba36c33dd988b0058202a86`, compared with the P1-2 base and the repository's current execution chain.
 
 Reference set:
 - Whfkl/Abaqus-Control-MCP
@@ -36,7 +36,7 @@ This audit distinguishes capability presence from execution-chain integration. A
 | CAD Part/Sketch/Extrude creation | not implemented | Abaqus geometry skill | ⏸️ Deferred by scope |
 | Tosca / topology optimization | not implemented | Abaqus optimization skills | ⏸️ Deferred by scope |
 | Shape optimization | not implemented | Abaqus shape optimization skill | ⏸️ Deferred by scope |
-| Fatigue post-processing | explicit S-N + Miner postprocessor over existing stress histories; no solver | Abaqus fatigue skill | 🟢 Deterministic post-processing closed; rainflow/mean-stress corrections remain explicit limits |
+| Fatigue post-processing | contract/workflow for existing Abaqus stress histories; no fatigue numerical engine | Abaqus fatigue skill | 🟡 Contract/workflow only; cycle counting, S-N/E-N evaluation, damage/life calculation and mean-stress corrections are not implemented |
 | Geometry grounding | calibrated viewport/image grounding | hub skills + viewport tools | ✅ Differentiating capability |
 | Deterministic result acceptance | acceptance gate | reference projects mostly expose execution/results | ✅ Stronger than reference execution boundary |
 | Numerical verification | successive change + Richardson/GCI + executable mesh/time-step refinement studies + explicit singularity interpretation | reference workflows provide validation patterns | 🟢 Execution and interpretation boundary closed; physical adequacy remains problem-specific |
@@ -242,7 +242,7 @@ This is sufficient for a first probabilistic-UQ execution capability without int
 
 A current reference check confirms that the reference projects emphasize live execution, model/ODB inspection, reusable workflow skills, optimization workflows, and viewers. Abaqus-Control-MCP exposes arbitrary kernel Python plus job/ODB/viewport controls, while CAE-Agent-Hub routes complete analysis intents to specialized skills including fatigue and optimization.
 
-The audit does **not** justify copying their full typed API surface because this repository already has a native Python escape hatch. The one reference-facing gap with clear engineering value that can be closed without a new architecture is fatigue post-processing over existing stress histories. A deterministic S-N + Miner path is now implemented. It deliberately does not claim a standalone fatigue solver, full rainflow standard compliance, or mean-stress correction.
+The audit does **not** justify copying their full typed API surface because this repository already has a native Python escape hatch. Fatigue remains intentionally contract/workflow-only around existing Abaqus stress histories. The earlier simplified deterministic S-N/Miner implementation was removed because it did not provide a sufficiently rigorous cycle-counting and stress-semantics contract to justify a solver-like claim.
 
 The following remain intentionally deferred because implementing them now would expand scope rather than close a demonstrated core-chain gap:
 
