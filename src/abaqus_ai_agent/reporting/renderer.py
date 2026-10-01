@@ -25,13 +25,18 @@ def render_markdown(report):
         ("16. Evidence", report.evidence), ("17. Provenance", report.provenance)]
     for heading, value in sections:
         if value in (None, {}, (), [], ""): continue
-        lines += ["## %s" % heading, "", "```json", json.dumps(_plain(value), indent=2, ensure_ascii=False, default=str), "```", ""]
+        lines += ["## %s" % heading, ""]
+        if heading == "9. Figures":
+            for figure in value:
+                lines += ["![%s](%s)" % (figure.caption or figure.kind, figure.path), ""]
+        else:
+            lines += ["```json", json.dumps(_plain(value), indent=2, ensure_ascii=False, default=str), "```", ""]
     lines += ["## 18. Conclusion", "", _conclusion(report), ""]
     return "\n".join(lines)
 
 def render_html(report):
     body = html.escape(render_markdown(report))
-    figures = "".join("<figure><img src=\\\"%s\\\" alt=\\\"%s\\\" style=\\\"max-width:100%%\\\"><figcaption>%s</figcaption></figure>" % (html.escape(f.path, quote=True), html.escape(f.caption or f.kind, quote=True), html.escape(f.caption or f.kind)) for f in report.figures)
+    figures = "".join("<figure><img src=\"%s\" alt=\"%s\" style=\"max-width:100%%\"><figcaption>%s</figcaption></figure>" % (html.escape(f.path, quote=True), html.escape(f.caption or f.kind, quote=True), html.escape(f.caption or f.kind)) for f in report.figures)
     return "<!doctype html><html><head><meta charset='utf-8'><title>%s</title></head><body><pre>%s</pre>%s</body></html>" % (html.escape(report.title), body, figures)
 
 def render_pdf(report, output_path):
