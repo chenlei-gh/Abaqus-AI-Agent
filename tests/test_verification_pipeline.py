@@ -1,3 +1,4 @@
+import pytest
 from unittest.mock import patch
 
 from abaqus_ai_agent.execution.analysis_run import AnalysisRunner
@@ -320,7 +321,7 @@ def test_benchmark_execution_runs_through_analysis_runner_and_acceptance():
         e.value for e in run.evidence.items if e.kind == "benchmark_result"
     )
     assert benchmark_evidence.passed is True
-    assert benchmark_evidence.observed["tip_displacement_error"] == 0.02
+    assert benchmark_evidence.observed["tip_displacement_error"] == pytest.approx(0.02)
     assert any(e.kind == "benchmark_derivation" for e in run.evidence.items)
 
 
