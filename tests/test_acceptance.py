@@ -103,3 +103,24 @@ def test_result_acceptance_contact_only_status_mapping():
         )
         assert result.passed is expected_passed
         assert result.failures == expected_failures
+
+
+
+def test_result_acceptance_benchmark_failure_blocks_without_solver_failure():
+    from abaqus_ai_agent.acceptance import evaluate_result_acceptance
+    from abaqus_ai_agent.contracts.benchmarks import BenchmarkCase, BenchmarkResult
+
+    case = BenchmarkCase("case", "reference")
+    benchmark = BenchmarkResult(
+        case=case,
+        passed=False,
+        failures=("missing_reference:x",),
+    )
+    result = evaluate_result_acceptance(
+        "completed",
+        values={},
+        criteria=(),
+        benchmark_result=benchmark,
+    )
+    assert result.passed is False
+    assert result.failures == ("benchmark:missing_reference:x",)
