@@ -195,3 +195,8 @@ AnalysisRunner populates runtime version/Python metadata when available, preserv
 The first P2 step extends deterministic engineering evidence without introducing universal physics thresholds. The new bounded field-sanity adapter can evaluate scalar/vector field evidence (including temperature, stress, or displacement-derived magnitudes) only when the caller declares explicit minimum/maximum limits. Non-finite values fail closed. This expands executable coverage of the existing static/thermal/coupled check families while keeping problem-specific engineering assumptions outside the library.
 
 This remains deliberately below calibration/experimental validation and probabilistic UQ: it is an evidence-to-check primitive, not a new solver, unit-conversion engine, or autonomous engineering-judgment layer.
+
+
+### P2-2 deterministic experimental validation
+
+A bounded experimental-validation contract/evaluator is now present for measured-vs-simulated scalar quantities. It records measured value, simulated value, absolute/relative error, declared tolerance, measurement uncertainty, unit, and source provenance. Validation is intentionally **not calibration**: it never adjusts model parameters and measurement uncertainty never silently relaxes the declared acceptance tolerance. Zero-valued measurements use absolute tolerance because relative error is undefined.
