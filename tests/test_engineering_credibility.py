@@ -574,3 +574,36 @@ def test_sensitivity_result_extraction_failure_is_not_execution_success():
     assert result.result_status == "error"
     assert result.acceptance_status == "not_evaluated"
     assert not report.completed
+
+
+def test_time_step_evidence_uses_declared_bounds():
+    from abaqus_ai_agent.engineering_checks import check_time_step_evidence
+    assert check_time_step_evidence((0.01, 0.02), maximum=0.05).passed
+    assert not check_time_step_evidence((0.01, 0.2), maximum=0.05).passed
+
+
+def test_thermal_mechanical_consistency_requires_declared_relationship():
+    from abaqus_ai_agent.engineering_checks import check_thermal_mechanical_consistency
+    assert check_thermal_mechanical_consistency(20.0, 10.0, 2.0, 0.01).passed
+    assert not check_thermal_mechanical_consistency(20.0, 10.0, 3.0, 0.01).passed
+
+
+def test_time_step_history_adapter_preserves_explicit_series():
+    from abaqus_ai_agent.engineering_evidence import time_step_from_history_evidence
+    evidence = {
+        "status": "available",
+        "variables": {"DT": {"status": "available", "data": ((0.0, 0.01), (1.0, 0.02))}},
+    }
+    check, summary = time_step_from_history_evidence(evidence, "DT", maximum=0.05)
+    assert check.passed
+    assert summary["maximum"] == 0.02
+
+
+def test_thermal_mechanical_adapter_uses_explicit_fields():
+    from abaqus_ai_agent.engineering_evidence import thermal_mechanical_consistency_from_field_evidence
+    thermal = {"status": "available", "values": [{"data": 20.0}]}
+    mechanical = {"status": "available", "values": [{"data": 10.0}]}
+    check = thermal_mechanical_consistency_from_field_evidence(
+        thermal, mechanical, "data", "data", 2.0, 0.01
+    )
+    assert check.passed
