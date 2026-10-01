@@ -1,5 +1,6 @@
 from dataclasses import dataclass, field
 from typing import Optional, Tuple
+import math
 
 
 _STRESS_VARIABLES = {
@@ -28,10 +29,12 @@ class FatigueAnalysisIntent:
     endurance_unit: str = "cycles"
 
     def __post_init__(self):
+        if not self.name:
+            raise ValueError("name is required")
         if self.method.upper() != "S_N":
             raise ValueError("only S_N fatigue is currently implemented")
-        if self.cycles is not None and self.cycles <= 0:
-            raise ValueError("cycles must be positive")
+        if self.cycles is not None and (not math.isfinite(self.cycles) or self.cycles <= 0):
+            raise ValueError("cycles must be positive and finite")
         variable = self.stress_variable.upper()
         if variable not in _STRESS_VARIABLES:
             raise ValueError("unsupported stress_variable: %s" % self.stress_variable)
@@ -47,13 +50,20 @@ class FatigueAnalysisIntent:
             raise ValueError("unsupported damage_model")
         if self.mean_stress_correction is not None:
             correction = self.mean_stress_correction.upper()
-            if correction not in ("GOODMAN", "NONE"):
-                raise ValueError("only Goodman or NONE mean-stress correction is supported")
+            if correction not in ("NONE", "GOODMAN", "GERBER", "SODERBERG", "WALKER"):
+                raise ValueError("unsupported mean-stress correction")
+        for name, value in (("ultimate_strength", self.ultimate_strength), ("yield_strength", self.yield_strength)):
+            if value is not None and (not math.isfinite(value) or value <= 0):
+                raise ValueError("%s must be positive and finite" % name)
+        if self.walker_gamma is not None and (not math.isfinite(self.walker_gamma) or not 0.0 <= self.walker_gamma <= 1.0):
+            raise ValueError("walker_gamma must be between 0 and 1")
         curve = tuple((float(x), float(y)) for x, y in self.material_curve)
-        if any(x <= 0 or y <= 0 for x, y in curve):
-            raise ValueError("S-N points must contain positive stress and cycle values")
+        if any(not math.isfinite(x) or not math.isfinite(y) or x <= 0 or y <= 0 for x, y in curve):
+            raise ValueError("S-N points must contain finite positive stress and cycle values")
         if curve and len(curve) < 2:
             raise ValueError("material_curve requires at least two points")
+        if any(s2 <= s1 for (s1, _), (s2, _) in zip(curve, curve[1:])):
+            raise ValueError("S-N stress points must be strictly increasing")
 
 
 @dataclass(frozen=True)
