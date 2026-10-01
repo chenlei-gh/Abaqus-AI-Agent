@@ -43,7 +43,7 @@ This audit distinguishes capability presence from execution-chain integration. A
 | Engineering sanity checks | load/reaction + energy + declared static/dynamic/contact/thermal/coupled families | evidence-oriented hub workflows | 🟢 Catalog boundary closed; thresholds remain problem-specific |
 | Provenance | runtime population + action-plan records + model-snapshot/artifact metadata hashes; content hashes explicitly optional | not a first-class comparable feature in references | 🟢 Honest bounded provenance; content capture remains optional |
 | Sensitivity | contract + AnalysisRunner execution helper + explicit result extraction; execution/result/acceptance states are distinct | reference workflow patterns | 🟢 Bounded experiment runner; acceptance remains intentionally separate |
-| Uncertainty | bounded scenario execution + reproducible uniform sampling/statistics through AnalysisRunner | reference workflows vary | 🟢 First bounded probabilistic-UQ path closed; reliability/inference remain deferred |
+| Uncertainty | bounded scenario execution + reproducible uniform sampling/statistics through AnalysisRunner | reference workflows vary | 🟢 First bounded probabilistic-UQ path closed; full distribution/inference remains deferred |
 | Benchmarks | catalog + result-requirement output planning + AnalysisRunner execution + evaluator | reference examples/models | 🟢 Execution/evaluation path closed; external reference values remain explicit inputs |
 | Controlled correction | policy + explicit confirmation + existing Action Runner + AnalysisRunner rerun + Acceptance gate | reference error-recovery patterns | 🟢 One-shot authorized workflow; autonomous repair loops intentionally excluded |
 | Unit/dimensional consistency | intent planning + ResultRequirement validation + dimensional checks | Declared intent/result units are validated without automatic conversion | 🟢 Main-chain validation closed for declared units |
@@ -152,7 +152,8 @@ Remaining engineering credibility work is now outside the P1 execution tranche: 
 - STEP/STL.
 - Tosca/topology/shape optimization.
 - Full standalone fatigue solver.
-- Model calibration / parameter identification remains deferred.
+- Bounded parameter identification/calibration utility is now closed as a post-processing capability; it never mutates an Abaqus model or launches a solver.
+- Reliability analysis is now closed for empirical survival and two-parameter Weibull MLE with right censoring; FORM/SORM and Bayesian reliability remain deferred.
 - Full probabilistic UQ framework remains deferred.
 
 ## Reference observations
@@ -249,8 +250,7 @@ The following remain intentionally deferred because implementing them now would 
 - Tosca/topology/shape optimization.
 - CAD authoring.
 - STEP/STL typed export.
-- Reliability methods / FORM/SORM.
-- Bayesian inference / distribution fitting.
+- Reliability methods beyond the bounded Weibull path: FORM/SORM and Bayesian inference.
 - Broader mean-stress correction matrix (Walker/Gerber/etc.) and critical-plane/non-proportional multiaxial fatigue.
 
 
@@ -261,3 +261,13 @@ The previous CI result exposed four fatigue test defects rather than four produc
 The Goodman implementation is now explicit about the fe-safe measured-signal S-N convention: the ordinary Goodman line is used for nonnegative mean stress, while the compressive extension uses half the original slope. This is distinct from other fe-safe contexts that may deliberately make no allowance for compressive mean-stress benefit; the project therefore does not generalize this convention beyond the declared S-N workflow. fe-safe documents the measured-signal equation and the half-slope compressive extension.
 
 The remaining P1/P2 gaps are scope boundaries rather than missing core-chain functions: real B28 execution validation, model calibration/parameter identification, reliability/inference methods, broader fatigue methodologies, CAD authoring, STEP/STL typed export, and Tosca/topology/shape optimization. No additional typed API breadth is justified merely to match the reference projects because native Python remains the controlled escape hatch.
+
+
+## P2-4 calibration and reliability closure — 2026-10-01
+
+Two remaining non-runtime engineering-credibility gaps are now bounded and explicit:
+
+- **Parameter identification / calibration:** deterministic bounded coordinate pattern search over caller-declared parameters, observations, weights and bounds. It reports convergence and explicitly warns that the search is local; it never changes an Abaqus model or claims a global optimum.
+- **Reliability:** distribution-free empirical survival plus two-parameter Weibull maximum-likelihood fitting with optional right-censored observations, reliability, failure probability, hazard and B-life. A fitted Weibull model is explicitly a model assumption; no automatic goodness-of-fit claim is made.
+
+These additions close the practical post-processing capability gap without creating another Abaqus execution architecture.
