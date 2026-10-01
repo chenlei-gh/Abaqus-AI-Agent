@@ -159,3 +159,38 @@ def test_mesh_quality_and_convergence_gate_acceptance():
     assert not result.passed
     assert "mesh_quality_failed" in result.failures
     assert "mesh_convergence_failed" in result.failures
+
+
+def test_fatigue_verification_is_first_class_acceptance_gate():
+    from abaqus_ai_agent.acceptance import evaluate_result_acceptance
+    from abaqus_ai_agent.contracts.fatigue import FatigueResult
+
+    fatigue = FatigueResult(
+        "warning", life_cycles=1.0e5,
+        warnings=("missing_material_curve_evidence",),
+    )
+    result = evaluate_result_acceptance(
+        "completed", fatigue=fatigue, values={}, criteria=(),
+    )
+    assert not result.passed
+    assert "fatigue_verification_failed" in result.failures
+    assert "fatigue_warning" in result.warnings
+
+
+def test_singularity_warning_is_distinct_from_mesh_nonconvergence():
+    from abaqus_ai_agent.contracts.convergence import (
+        MeshConvergencePoint, MeshConvergencePolicy, evaluate_mesh_convergence,
+    )
+
+    points = (
+        MeshConvergencePoint(4.0, 100.0, quantity="max_mises"),
+        MeshConvergencePoint(2.0, 100.5, quantity="max_mises", singularity_suspected=True),
+        MeshConvergencePoint(1.0, 100.4, quantity="max_mises", singularity_suspected=True),
+    )
+    result = evaluate_mesh_convergence(
+        points, MeshConvergencePolicy(tolerance=0.01),
+    )
+    assert result.converged
+    assert result.status == "converged_with_singularity_warning"
+    assert result.singularity_suspected
+    assert "stress_singularity_suspected" in result.warnings
