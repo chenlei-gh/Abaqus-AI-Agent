@@ -43,6 +43,13 @@ class AnalysisWorkflow:
             "results", "acceptance", "evidence"))
 
     @classmethod
+    def fatigue(cls):
+        return cls._build("fatigue", (
+            "inspect_model", "verify_stress_output", "verify_stress_history",
+            "material_fatigue_curve", "cycle_counting", "damage_accumulation",
+            "life_result", "acceptance", "evidence"))
+
+    @classmethod
     def thermal(cls):
         return cls._build("thermal", (
             "inspect_model", "ground_geometry", "inspect_geometry", "material",
@@ -70,7 +77,10 @@ class AnalysisWorkflow:
             "dynamic": cls.dynamic,
             "explicit": cls.dynamic,
             "dynamic-explicit": cls.dynamic,
+            "dynamic-implicit": cls.dynamic,
+            "implicit-dynamic": cls.dynamic,
             "thermal": cls.thermal,
+            "fatigue": cls.fatigue,
             "heat-transfer": cls.thermal,
             "coupled": cls.coupled,
             "coupled-thermal-stress": cls.coupled,

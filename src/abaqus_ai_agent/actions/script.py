@@ -1,6 +1,18 @@
 def _q(value):
     return repr(value)
 
+def _amplitude(value, defaults):
+    value = value or defaults
+    if value in ("RAMP", "STEP", "DEFAULT"):
+        return value
+    return _q(value)
+
+def _step_amplitude(value, default):
+    value = value or default
+    if value not in ("RAMP", "STEP"):
+        raise ValueError("step amplitude must be RAMP or STEP")
+    return value
+
 def action_to_script(action):
     p, m, k = action.parameters, action.model_name, action.action_type
     if k == "python":
@@ -22,19 +34,89 @@ def action_to_script(action):
     if k == "section_assignment":
         return "mdb.models[%s].parts[%s].SectionAssignment(region=%s, sectionName=%s)" % (_q(m), _q(p["part"]), p["region_expression"], _q(p["section"]))
     if k == "static_step":
-        return "mdb.models[%s].StaticStep(name=%s, previous=%s, nlgeom=%s)" % (_q(m), _q(p["name"]), _q(p.get("previous", "Initial")), p.get("nlgeom", False))
+        args = ["name=%s" % _q(p["name"]), "previous=%s" % _q(p.get("previous", "Initial")),
+                "nlgeom=%s" % p.get("nlgeom", False), "timePeriod=%r" % p.get("time_period", 1.0),
+                "stabilizationMethod=%s" % p.get("stabilization_method", "NONE"),
+                "timeIncrementationMethod=%s" % p.get("time_incrementation_method", "AUTOMATIC"),
+                "maxNumInc=%d" % int(p.get("max_num_inc", 100)),
+                "amplitude=%s" % _step_amplitude(p.get("amplitude"), "RAMP")]
+        for key, arg in (("stabilization_magnitude", "stabilizationMagnitude"),
+                         ("initial_inc", "initialInc"), ("min_inc", "minInc"), ("max_inc", "maxInc")):
+            if p.get(key) is not None: args.append("%s=%r" % (arg, p[key]))
+        return "from abaqusConstants import *; mdb.models[%s].StaticStep(%s)" % (_q(m), ", ".join(args))
     if k == "dynamic_explicit_step":
-        return "mdb.models[%s].ExplicitDynamicsStep(name=%s, previous=%s, timePeriod=%r)" % (_q(m), _q(p["name"]), _q(p.get("previous", "Initial")), p["time_period"])
+        args = ["name=%s" % _q(p["name"]), "previous=%s" % _q(p.get("previous", "Initial")),
+                "timePeriod=%r" % p["time_period"], "nlgeom=%s" % p.get("nlgeom", True),
+                "improvedDtMethod=%s" % p.get("improved_dt_method", True)]
+        if p.get("max_increment") is not None: args.append("maxIncrement=%r" % p["max_increment"])
+        return "from abaqusConstants import *; mdb.models[%s].ExplicitDynamicsStep(%s)" % (_q(m), ", ".join(args))
+    if k == "implicit_dynamic_step":
+        args = ["name=%s" % _q(p["name"]), "previous=%s" % _q(p.get("previous", "Initial")),
+                "timePeriod=%r" % p.get("time_period", 1.0), "nlgeom=%s" % p.get("nlgeom", False),
+                "timeIncrementationMethod=%s" % p.get("time_incrementation_method", "AUTOMATIC"),
+                "maxNumInc=%d" % int(p.get("max_num_inc", 100)),
+                "solutionTechnique=%s" % p.get("solution_technique", "FULL_NEWTON"),
+                "reformKernel=%d" % int(p.get("reform_kernel", 8)),
+                "amplitude=%s" % _step_amplitude(p.get("amplitude"), "STEP")]
+        for key, arg in (("initial_inc", "initialInc"), ("min_inc", "minInc"), ("max_inc", "maxInc")):
+            if p.get(key) is not None: args.append("%s=%r" % (arg, p[key]))
+        return "from abaqusConstants import *; mdb.models[%s].ImplicitDynamicsStep(%s)" % (_q(m), ", ".join(args))
     if k == "frequency_step":
         return "mdb.models[%s].FrequencyStep(name=%s, previous=%s, numEigen=%d)" % (_q(m), _q(p["name"]), _q(p.get("previous", "Initial")), int(p["num_eigen"]))
     if k == "heat_transfer_step":
-        return "from abaqusConstants import *; mdb.models[%s].HeatTransferStep(name=%s, previous=%s, response=%s, timePeriod=%r)" % (_q(m), _q(p["name"]), _q(p.get("previous", "Initial")), p.get("response", "TRANSIENT"), p.get("time_period", 1.0))
+        args = ["name=%s" % _q(p["name"]), "previous=%s" % _q(p.get("previous", "Initial")),
+                "response=%s" % p.get("response", "TRANSIENT"), "timePeriod=%r" % p.get("time_period", 1.0),
+                "timeIncrementationMethod=%s" % p.get("time_incrementation_method", "AUTOMATIC"),
+                "maxNumInc=%d" % int(p.get("max_num_inc", 100)), "amplitude=%s" % _amplitude(p.get("amplitude"), "RAMP")]
+        for key, arg in (("initial_inc", "initialInc"), ("min_inc", "minInc"), ("max_inc", "maxInc")):
+            if p.get(key) is not None: args.append("%s=%r" % (arg, p[key]))
+        return "from abaqusConstants import *; mdb.models[%s].HeatTransferStep(%s)" % (_q(m), ", ".join(args))
     if k == "coupled_temp_displacement_step":
-        return "from abaqusConstants import *; mdb.models[%s].CoupledTempDisplacementStep(name=%s, previous=%s, response=%s, timePeriod=%r, nlgeom=%s)" % (_q(m), _q(p["name"]), _q(p.get("previous", "Initial")), p.get("response", "TRANSIENT"), p.get("time_period", 1.0), p.get("nlgeom", False))
-    if k in ("fixed_bc", "displacement_bc", "symmetry_bc", "temperature_bc"):
+        args = ["name=%s" % _q(p["name"]), "previous=%s" % _q(p.get("previous", "Initial")),
+                "response=%s" % p.get("response", "TRANSIENT"), "timePeriod=%r" % p.get("time_period", 1.0),
+                "nlgeom=%s" % p.get("nlgeom", False), "timeIncrementationMethod=%s" % p.get("time_incrementation_method", "AUTOMATIC"),
+                "maxNumInc=%d" % int(p.get("max_num_inc", 100)), "amplitude=%s" % _amplitude(p.get("amplitude"), "RAMP")]
+        for key, arg in (("initial_inc", "initialInc"), ("min_inc", "minInc"), ("max_inc", "maxInc")):
+            if p.get(key) is not None: args.append("%s=%r" % (arg, p[key]))
+        return "from abaqusConstants import *; mdb.models[%s].CoupledTempDisplacementStep(%s)" % (_q(m), ", ".join(args))
+    if k == "tabular_amplitude":
+        args = ["name=%s" % _q(p["name"]), "data=%r" % (tuple(tuple(x) for x in p["data"]),),
+                "timeSpan=%s" % p.get("time_span", "STEP")]
+        if p.get("smooth") is not None: args.append("smooth=%r" % p["smooth"])
+        return "from abaqusConstants import *; mdb.models[%s].TabularAmplitude(%s)" % (_q(m), ", ".join(args))
+    if k == "smooth_step_amplitude":
+        return "from abaqusConstants import *; mdb.models[%s].SmoothStepAmplitude(name=%s, data=%r, timeSpan=%s)" % (_q(m), _q(p["name"]), tuple(tuple(x) for x in p["data"]), p.get("time_span", "STEP"))
+    if k == "periodic_amplitude":
+        return "from abaqusConstants import *; mdb.models[%s].PeriodicAmplitude(name=%s, frequency=%r, start=%r, a_0=%r, data=%r, timeSpan=%s)" % (_q(m), _q(p["name"]), p["frequency"], p["start"], p["a0"], tuple(tuple(x) for x in p["data"]), p.get("time_span", "STEP"))
+    if k == "equally_spaced_amplitude":
+        args = ["name=%s" % _q(p["name"]), "fixedInterval=%r" % p["fixed_interval"],
+                "data=%r" % (tuple(p["data"]),), "begin=%r" % p.get("begin", 0.0),
+                "timeSpan=%s" % p.get("time_span", "STEP")]
+        if p.get("smooth") is not None: args.append("smooth=%r" % p["smooth"])
+        return "from abaqusConstants import *; mdb.models[%s].EquallySpacedAmplitude(%s)" % (_q(m), ", ".join(args))
+    if k in ("fixed_bc", "displacement_bc", "symmetry_bc", "temperature_bc", "initial_temperature", "initial_stress"):
         return _bc_script(action)
+    if k == "gravity":
+        args = ["name=%s" % _q(p["name"]), "createStepName=%s" % _q(p.get("step", "Step-1")),
+                "distributionType=UNIFORM", "comp1=%r" % p.get("comp1", 0.0),
+                "comp2=%r" % p.get("comp2", 0.0), "comp3=%r" % p.get("comp3", 0.0)]
+        if p.get("region_expression"): args.append("region=%s" % p["region_expression"])
+        if p.get("amplitude"): args.append("amplitude=%s" % _q(p["amplitude"]))
+        return "from abaqusConstants import *; mdb.models[%s].Gravity(%s)" % (_q(m), ", ".join(args))
     if k in ("pressure_load", "concentrated_force", "body_force", "body_heat_flux", "surface_heat_flux"):
         return _load_script(action)
+    if k == "assembly_inspect":
+        return _assembly_inspection_script(m)
+    if k == "instance_translate":
+        return "a=mdb.models[%s].rootAssembly; a.instances[%s].translate(vector=%r)" % (_q(m), _q(p["instance"]), tuple(p["vector"]))
+    if k == "instance_rotate":
+        return "a=mdb.models[%s].rootAssembly; a.instances[%s].rotateAboutAxis(axisPoint=%r, axisDirection=%r, angle=%r)" % (_q(m), _q(p["instance"]), tuple(p["axis_point"]), tuple(p["axis_direction"]), p["angle"])
+    if k == "instance_linear_pattern":
+        return "a=mdb.models[%s].rootAssembly; a.LinearInstancePattern(instanceList=%r, number1=%d, spacing1=%r, number2=%d, spacing2=%r, direction1=%r, direction2=%r)" % (_q(m), tuple(p["instances"]), int(p["number1"]), p["spacing1"], int(p.get("number2", 1)), p.get("spacing2", 0.0), tuple(p.get("direction1", (1.0,0.0,0.0))), tuple(p.get("direction2", (0.0,1.0,0.0))))
+    if k == "export_inp":
+        return _export_inp_script(m, p)
+    if k == "export_odb_csv":
+        return _export_odb_csv_script(p)
     if k == "field_output":
         request = p.get("request", "F-Output-1")
         variables = tuple(p.get("variables", ("S", "U", "RF")))
@@ -96,7 +178,13 @@ def _bc_script(action):
     if action.action_type == "fixed_bc":
         return "model=mdb.models[%s]; region=%s; model.EncastreBC(name=%s, createStepName=%s, region=region)" % (_q(m), region, _q(name), _q(step))
     if action.action_type == "temperature_bc":
-        return "model=mdb.models[%s]; region=%s; model.TemperatureBC(name=%s, createStepName=%s, region=region, magnitude=%r)" % (_q(m), region, _q(name), _q(step), p["magnitude"])
+        amp = ", amplitude=%s" % _q(p["amplitude"]) if p.get("amplitude") else ""
+        return "model=mdb.models[%s]; region=%s; model.TemperatureBC(name=%s, createStepName=%s, region=region, magnitude=%r%s)" % (_q(m), region, _q(name), _q(step), p["magnitude"], amp)
+    if action.action_type == "initial_temperature":
+        amp = ", amplitude=%s" % _q(p["amplitude"]) if p.get("amplitude") else ""
+        return "from abaqusConstants import *; model=mdb.models[%s]; region=%s; model.Temperature(name=%s, createStepName=%s, region=region, distributionType=UNIFORM, magnitudes=(%r,)%s)" % (_q(m), region, _q(name), _q("Initial"), p["magnitude"], amp)
+    if action.action_type == "initial_stress":
+        return "from abaqusConstants import *; model=mdb.models[%s]; region=%s; model.Stress(name=%s, region=region, distributionType=UNIFORM, sigma11=%r, sigma22=%r, sigma33=%r, sigma12=%r, sigma13=%r, sigma23=%r)" % (_q(m), region, _q(name), p.get("sigma11",0.0), p.get("sigma22",0.0), p.get("sigma33",0.0), p.get("sigma12",0.0), p.get("sigma13",0.0), p.get("sigma23",0.0))
     if action.action_type == "symmetry_bc":
         method = {"X":"XsymmBC", "Y":"YsymmBC", "Z":"ZsymmBC"}.get(str(p.get("plane", "X")).upper())
         if not method: raise ValueError("symmetry plane must be X, Y or Z")
@@ -108,14 +196,21 @@ def _load_script(action):
     p, m = action.parameters, action.model_name
     region, name, step = p["region_expression"], p["name"], p.get("step", "Step-1")
     if action.action_type == "pressure_load":
-        return "mdb.models[%s].Pressure(name=%s, createStepName=%s, region=%s, magnitude=%r)" % (_q(m), _q(name), _q(step), region, p["magnitude"])
+        amp = ", amplitude=%s" % _q(p["amplitude"]) if p.get("amplitude") else ""
+        return "mdb.models[%s].Pressure(name=%s, createStepName=%s, region=%s, magnitude=%r%s)" % (_q(m), _q(name), _q(step), region, p["magnitude"], amp)
     if action.action_type == "body_heat_flux":
         return "mdb.models[%s].BodyHeatFlux(name=%s, createStepName=%s, region=%s, magnitude=%r)" % (_q(m), _q(name), _q(step), region, p["magnitude"])
     if action.action_type == "surface_heat_flux":
         return "mdb.models[%s].SurfaceHeatFlux(name=%s, createStepName=%s, region=%s, magnitude=%r)" % (_q(m), _q(name), _q(step), region, p["magnitude"])
     if action.action_type == "body_force":
-        return "mdb.models[%s].BodyForce(name=%s, createStepName=%s, region=%s, comp1=%r, comp2=%r, comp3=%r)" % (_q(m), _q(name), _q(step), region, p.get("comp1",0), p.get("comp2",0), p.get("comp3",0))
-    return "mdb.models[%s].ConcentratedForce(name=%s, createStepName=%s, region=%s, cf1=%r,cf2=%r,cf3=%r)" % (_q(m), _q(name), _q(step), region, p.get("cf1",0), p.get("cf2",0), p.get("cf3",0))
+        amp = ", amplitude=%s" % _q(p["amplitude"]) if p.get("amplitude") else ""
+        return "mdb.models[%s].BodyForce(name=%s, createStepName=%s, region=%s, comp1=%r, comp2=%r, comp3=%r%s)" % (_q(m), _q(name), _q(step), region, p.get("comp1",0), p.get("comp2",0), p.get("comp3",0), amp)
+    if action.action_type == "concentrated_force":
+        amp = ", amplitude=%s" % _q(p["amplitude"]) if p.get("amplitude") else ""
+        return "mdb.models[%s].ConcentratedForce(name=%s, createStepName=%s, region=%s, cf1=%r,cf2=%r,cf3=%r%s)" % (_q(m), _q(name), _q(step), region, p.get("cf1",0), p.get("cf2",0), p.get("cf3",0), amp)
+    if action.action_type == "body_heat_flux":
+        return "mdb.models[%s].BodyHeatFlux(name=%s, createStepName=%s, region=%s, magnitude=%r)" % (_q(m), _q(name), _q(step), region, p["magnitude"])
+    return "mdb.models[%s].SurfaceHeatFlux(name=%s, createStepName=%s, region=%s, magnitude=%r)" % (_q(m), _q(name), _q(step), region, p["magnitude"])
 
 
 def _geometry_inspection_script(model, p):
@@ -292,3 +387,68 @@ result['evidence']=['part:%s'%part, 'elements:%d'%len(elements)]
 print(result)
 """ % (model, part, part, max_ar, max_ar, min_angle, min_angle,
        max_angle, max_angle, max_skew, max_skew, min_jac)
+
+
+def _assembly_inspection_script(model):
+    return """a=mdb.models[%r].rootAssembly
+result={'instances':[],'instance_count':len(a.instances)}
+for name, inst in a.instances.items():
+    item={'name':name,'partName':getattr(inst,'partName',None)}
+    try: item['translation']=tuple(inst.getTranslation())
+    except Exception: item['translation']=None
+    try: item['rotation']=tuple(inst.getRotation())
+    except Exception: item['rotation']=None
+    result['instances'].append(item)
+print(result)
+""" % model
+
+
+def _export_inp_script(model, p):
+    job = p["job_name"]
+    output_path = p.get("output_path")
+    if not output_path:
+        return "from abaqusConstants import *; mdb.jobs[%s].writeInput(consistencyChecking=ON)" % _q(job)
+    return """import os, shutil
+from abaqusConstants import ON
+job=mdb.jobs[%r]
+target=os.path.abspath(%r)
+directory=os.path.dirname(target)
+if directory and not os.path.isdir(directory): os.makedirs(directory)
+job.writeInput(consistencyChecking=ON)
+generated=os.path.abspath(job.name + '.inp')
+if generated != target:
+    shutil.copyfile(generated, target)
+print({'output_path':target,'exists':os.path.isfile(target)})
+""" % (job, output_path)
+
+
+def _export_odb_csv_script(p):
+    return """import csv, os
+from odbAccess import openOdb
+odb=openOdb(path=%r, readOnly=True)
+stepName=%r if %r else list(odb.steps.keys())[-1]
+step=odb.steps[stepName]
+frame=step.frames[%d]
+field=frame.fieldOutputs[%r]
+target=os.path.abspath(%r)
+directory=os.path.dirname(target)
+if directory and not os.path.isdir(directory): os.makedirs(directory)
+values=[]
+for v in field.values:
+    if %r and str(v.position) != %r: continue
+    values.append(v)
+with open(target, 'wb') as fh:
+    writer=csv.writer(fh)
+    writer.writerow(['step','frame','frameValue','instance','nodeLabel','elementLabel','integrationPoint','values'])
+    for v in values:
+        data=getattr(v, 'data', ())
+        if not isinstance(data, (tuple,list)): data=(data,)
+        if %r is not None: data=(data[int(%r)],)
+        writer.writerow([stepName, %d, frame.frameValue, getattr(getattr(v,'instance',None),'name',''),
+                         getattr(v,'nodeLabel',''), getattr(v,'elementLabel',''),
+                         getattr(v,'integrationPoint',''), repr(tuple(data))])
+odb.close()
+print({'output_path':target,'rows':len(values),'variable':%r,'step':stepName,'frame':%d})
+""" % (p["odb_path"], p.get("step"), p.get("step"), int(p.get("frame",-1)), p.get("variable","U"),
+       p["output_path"], p.get("position"), p.get("position"), p.get("component"), p.get("component"),
+       int(p.get("frame",-1)), p.get("variable","U"), int(p.get("frame",-1)))

@@ -8,6 +8,7 @@ from .contracts.version import AbaqusRuntimeInfo
 from .contracts.viewport import ViewportState
 from .contracts.session import SessionHealth
 from .contracts.results import ResultRequirement, ResultExtraction
+from .contracts.fatigue import FatigueAnalysisIntent, FatigueWorkflow
 from .contracts.convergence import MeshConvergencePoint, MeshConvergencePolicy, MeshConvergenceResult
 from .execution.analysis_run import AnalysisRun, AnalysisRunState, AnalysisRunner
 from .execution.artifacts import JobArtifact, JobArtifacts
