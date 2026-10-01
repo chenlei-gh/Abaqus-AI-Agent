@@ -59,10 +59,13 @@ class AbaqusAIAgent:
         from .planning.output import plan_outputs
         return plan_outputs(criteria, outputs)
 
-    def analysis_run(self, model_name, job_name, odb_path=None, criteria=(), result_values=None):
+    def analysis_run(self, model_name, job_name, odb_path=None, criteria=(), result_values=None,
+                     numerical_verification=None, engineering_checks=None):
         from .execution.analysis_run import AnalysisRunner
-        return AnalysisRunner(self.executor).run(model_name, job_name, odb_path=odb_path,
-                                                criteria=criteria, result_values=result_values)
+        return AnalysisRunner(self.executor).run(
+            model_name, job_name, odb_path=odb_path, criteria=criteria,
+            result_values=result_values, numerical_verification=numerical_verification,
+            engineering_checks=engineering_checks)
 
     def submit(self, job_name, wait=False):
         from .execution.jobs import JobController
