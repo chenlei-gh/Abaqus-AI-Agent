@@ -36,7 +36,7 @@ This audit distinguishes capability presence from execution-chain integration. A
 | CAD Part/Sketch/Extrude creation | not implemented | Abaqus geometry skill | ⏸️ Deferred by scope |
 | Tosca / topology optimization | not implemented | Abaqus optimization skills | ⏸️ Deferred by scope |
 | Shape optimization | not implemented | Abaqus shape optimization skill | ⏸️ Deferred by scope |
-| Fatigue post-processing | contract/workflow for existing Abaqus stress histories; no fatigue numerical engine | Abaqus fatigue skill | 🟡 Contract/workflow only; cycle counting, S-N/E-N evaluation, damage/life calculation and mean-stress corrections are not implemented |
+| Fatigue: deterministic scalar stress-history post-processing (Rainflow + half/full cycles + range/amplitude/mean + Goodman + S-N + Miner); critical-plane/non-proportional multiaxial criteria remain out of scope
 | Geometry grounding | calibrated viewport/image grounding | hub skills + viewport tools | ✅ Differentiating capability |
 | Deterministic result acceptance | acceptance gate | reference projects mostly expose execution/results | ✅ Stronger than reference execution boundary |
 | Numerical verification | successive change + Richardson/GCI + executable mesh/time-step refinement studies + explicit singularity interpretation | reference workflows provide validation patterns | 🟢 Execution and interpretation boundary closed; physical adequacy remains problem-specific |
@@ -242,7 +242,7 @@ This is sufficient for a first probabilistic-UQ execution capability without int
 
 A current reference check confirms that the reference projects emphasize live execution, model/ODB inspection, reusable workflow skills, optimization workflows, and viewers. Abaqus-Control-MCP exposes arbitrary kernel Python plus job/ODB/viewport controls, while CAE-Agent-Hub routes complete analysis intents to specialized skills including fatigue and optimization.
 
-The audit does **not** justify copying their full typed API surface because this repository already has a native Python escape hatch. Fatigue remains intentionally contract/workflow-only around existing Abaqus stress histories. The earlier simplified deterministic S-N/Miner implementation was removed because it did not provide a sufficiently rigorous cycle-counting and stress-semantics contract to justify a solver-like claim.
+The audit does **not** justify copying their full typed API surface because this repository already has a native Python escape hatch. Fatigue: deterministic scalar stress-history post-processing (Rainflow + half/full cycles + range/amplitude/mean + Goodman + S-N + Miner); critical-plane/non-proportional multiaxial criteria remain out of scope
 
 The following remain intentionally deferred because implementing them now would expand scope rather than close a demonstrated core-chain gap:
 
