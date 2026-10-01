@@ -1,4 +1,4 @@
-from abaqus_ai_agent.numerical_verification import verify_series, verify_richardson
+import pytest\nfrom abaqus_ai_agent.numerical_verification import verify_series, verify_richardson
 
 
 def test_verify_series_insufficient_data_is_explicit():
@@ -44,3 +44,78 @@ def test_verify_richardson_rejects_invalid_ratio():
         pass
     else:
         raise AssertionError("refinement ratio must be > 1")
+
+
+def test_execute_refinement_study_uses_analysis_runner_and_existing_results():
+    from abaqus_ai_agent.contracts.numerical import NumericalRefinementCase
+    from abaqus_ai_agent.numerical_verification import execute_refinement_study
+
+    class Run:
+        state = type("S", (), {"value": "accepted"})()
+        id = "run-1"
+        acceptance_passed = True
+        evidence = ()
+        provenance = None
+        diagnostics = ()
+        metadata = {"result_values": {"tip": 1.01}}
+
+    class Runner:
+        calls = []
+        def run(self, *args, **kwargs):
+            self.calls.append((args, kwargs))
+            return Run()
+
+    cases = (
+        NumericalRefinementCase("coarse", 4.0, action_plan=({"action_type": "python"},)),
+        NumericalRefinementCase("medium", 2.0, action_plan=({"action_type": "python"},)),
+        NumericalRefinementCase("fine", 1.0, action_plan=({"action_type": "python"},)),
+    )
+    runner = Runner()
+    report = execute_refinement_study(
+        object(), runner, "mesh", "element_size", "Model", "Job",
+        cases, criteria=({"value_key": "tip"},), tolerance=0.01, value_key="tip",
+    )
+    assert report.passed
+    assert report.dimension == "element_size"
+    assert len(runner.calls) == 3
+    assert runner.calls[0][1]["action_plan"] == ({"action_type": "python"},)
+
+
+def test_execute_refinement_study_fails_closed_without_application_plan():
+    from abaqus_ai_agent.contracts.numerical import NumericalRefinementCase
+    from abaqus_ai_agent.numerical_verification import execute_refinement_study
+
+    report = execute_refinement_study(
+        object(), object(), "time", "time_step", "Model", "Job",
+        (NumericalRefinementCase("dt1", 0.1),),
+        criteria=({"value_key": "u"},), tolerance=0.01, value_key="u",
+    )
+    assert not report.passed
+    assert report.failed_cases[0]["diagnostics"][0]["reason"] == "refinement_action_plan_required"
+
+
+def test_execute_refinement_study_uses_richardson_for_three_levels():
+    from abaqus_ai_agent.contracts.numerical import NumericalRefinementCase
+    from abaqus_ai_agent.numerical_verification import execute_refinement_study
+
+    class Runner:
+        def run(self, *args, **kwargs):
+            value = {"coarse": 1.25, "medium": 1.0625, "fine": 1.015625}[args[1].split("_")[-1]]
+            return type("Run", (), {
+                "state": type("S", (), {"value": "accepted"})(),
+                "id": args[1], "acceptance_passed": True, "evidence": (),
+                "provenance": None, "diagnostics": (),
+                "metadata": {"result_values": {"tip": value}},
+            })()
+
+    cases = tuple(
+        NumericalRefinementCase(name, value, action_plan=({"action_type": "python"},))
+        for name, value in (("coarse", 4.0), ("medium", 2.0), ("fine", 1.0))
+    )
+    report = execute_refinement_study(
+        object(), Runner(), "mesh", "element_size", "Model", "Job",
+        cases, criteria=({"value_key": "tip"},), tolerance=0.10,
+        method="richardson_gci", refinement_ratio=2.0, value_key="tip",
+    )
+    assert report.passed
+    assert report.verification.observed_order == pytest.approx(2.0)
