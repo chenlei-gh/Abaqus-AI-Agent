@@ -157,6 +157,24 @@ def classify_b28_markers(markers):
     )
 
 
+def execute_b28_smoke(executor, job_name="AIAgent_B28Smoke", odb_path=None,
+                      timeout=3600):
+    """Execute the smoke script through an existing AbaqusExecutor.
+
+    The executor remains responsible for transport/runtime invocation. This
+    helper only builds the probe, normalizes the executor response, and parses
+    its explicit markers. A zero process exit code without markers is not
+    considered success.
+    """
+    script = build_b28_smoke_script(job_name=job_name, odb_path=odb_path)
+    raw = executor.execute(script, timeout=timeout)
+    if isinstance(raw, dict):
+        output = raw.get("stdout") or raw.get("output") or raw.get("message") or ""
+    else:
+        output = raw or ""
+    return parse_b28_output(output)
+
+
 def parse_b28_output(output):
     import json
     markers = []
