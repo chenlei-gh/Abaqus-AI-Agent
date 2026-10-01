@@ -55,3 +55,41 @@ def test_energy_ratio_requires_both_history_series():
         pass
     else:
         raise AssertionError("incomplete history evidence must fail")
+
+
+def test_numeric_field_sanity_adapter_uses_declared_bounds():
+    from abaqus_ai_agent.engineering_evidence import numeric_field_sanity_from_field_evidence
+
+    evidence = {
+        "status": "available",
+        "values": [
+            {"data": (20.0,), "mises": 80.0},
+            {"data": (30.0,), "mises": 90.0},
+        ],
+    }
+    check, summary = numeric_field_sanity_from_field_evidence(
+        evidence, minimum=0.0, maximum=100.0, name="temperature_sanity", unit="C"
+    )
+    assert check.passed
+    assert summary["maximum"] == 90.0
+    assert check.name == "temperature_sanity"
+
+
+def test_numeric_field_sanity_rejects_non_finite_values():
+    from abaqus_ai_agent.engineering_evidence import numeric_field_sanity_from_field_evidence
+
+    evidence = {"status": "available", "values": [{"data": (float("nan"),)}]}
+    check, _ = numeric_field_sanity_from_field_evidence(
+        evidence, minimum=0.0, maximum=100.0
+    )
+    assert check.passed is False
+
+
+def test_numeric_field_sanity_requires_explicit_bounds():
+    from abaqus_ai_agent.engineering_evidence import numeric_field_sanity_from_field_evidence
+    import pytest
+
+    with pytest.raises(ValueError):
+        numeric_field_sanity_from_field_evidence(
+            {"status": "available", "values": [{"data": (1.0,)}]}
+        )
