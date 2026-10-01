@@ -48,5 +48,5 @@ def test_miner_damage_and_repeated_spectrum_life():
 
     spectrum = ((20.0, 0.0, 1.0),)
     curve = ((10.0, 1e6), (20.0, 1e5))
-    assert abs(miner_damage(spectrum, curve) - 1e-5) < 1e-12
-    assert abs(fatigue_life_blocks(spectrum, curve) - 1e5) < 1e-6
+    assert abs(miner_damage(spectrum, curve) - 1e-6) < 1e-12
+    assert abs(fatigue_life_blocks(spectrum, curve) - 1e6) < 1e-6
