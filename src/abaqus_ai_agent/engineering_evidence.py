@@ -9,6 +9,8 @@ from .engineering_checks import (
     check_energy_ratio,
     sum_reaction_components,
     check_numeric_range,
+    check_time_step_evidence,
+    check_thermal_mechanical_consistency,
 )
 
 
@@ -101,3 +103,52 @@ def numeric_field_sanity_from_field_evidence(
     return check_numeric_range(
         name, numbers, minimum=minimum, maximum=maximum, unit=unit
     ), {"count": len(numbers), "minimum": min(numbers), "maximum": max(numbers)}
+
+
+def time_step_from_history_evidence(
+    history_evidence, variable, minimum=None, maximum=None, unit="s"
+):
+    """Evaluate an explicitly declared time-step history variable."""
+    evidence = _require_available(history_evidence, "history")
+    variables = evidence.get("variables") or {}
+    data = variables.get(variable)
+    if isinstance(data, dict):
+        if data.get("status") != "available":
+            raise ValueError("history variable unavailable: %s" % variable)
+        data = data.get("data")
+    if not data:
+        raise ValueError("missing history variable: %s" % variable)
+    try:
+        values = tuple(float(pair[1]) for pair in data)
+    except (IndexError, TypeError, ValueError):
+        raise ValueError("history variable data must contain (time, value) pairs")
+    return check_time_step_evidence(values, minimum=minimum, maximum=maximum, unit=unit), {
+        "count": len(values), "minimum": min(values), "maximum": max(values)
+    }
+
+
+def thermal_mechanical_consistency_from_field_evidence(
+    thermal_evidence, mechanical_evidence, thermal_key, mechanical_key,
+    expected_ratio, tolerance, name="thermal_mechanical_consistency"
+):
+    """Compare two caller-selected scalar field envelopes with an explicit ratio."""
+    thermal = _require_available(thermal_evidence, "thermal field")
+    mechanical = _require_available(mechanical_evidence, "mechanical field")
+
+    def _first_scalar(evidence, key):
+        values = evidence.get("values") or ()
+        for item in values:
+            if isinstance(item, dict) and isinstance(item.get(key), (int, float)):
+                return float(item[key])
+            data = item.get("data") if isinstance(item, dict) else item
+            if isinstance(data, (int, float)):
+                return float(data)
+        raise ValueError("field evidence contains no scalar value for %s" % key)
+
+    return check_thermal_mechanical_consistency(
+        _first_scalar(thermal, thermal_key),
+        _first_scalar(mechanical, mechanical_key),
+        expected_ratio,
+        tolerance,
+        name=name,
+    )
