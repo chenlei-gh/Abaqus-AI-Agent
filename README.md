@@ -75,17 +75,28 @@ The current action layer covers:
   - rotation
   - linear pattern
 - mesh intent:
-  - seeding
+  - global/local seeding
+  - biased seeding by size or number
+  - mesh controls
+  - explicit sweep-path assignment
+  - semantic element-strategy mapping for the supported continuum subset
+  - legacy native element-type assignment
   - mesh generation
-  - element-type intent
+  - native Abaqus mesh-quality verification
 - interaction intent:
   - tie
   - contact
 - job creation and submission
 - INP export
 - ODB field CSV export
-- mesh-convergence evaluation
-- deterministic fatigue post-processing for existing Abaqus stress histories: Rainflow cycle counting, explicit range/amplitude/mean semantics, half/full-cycle weighting, Goodman correction, log-log S-N interpolation, and Palmgren-Miner damage
+- mesh-convergence evaluation with explicit engineering QoI metadata
+- deterministic fatigue post-processing for existing Abaqus scalar stress histories:
+  - Rainflow cycle counting
+  - half/full-cycle weighting
+  - explicit range/amplitude/mean semantics
+  - Goodman, Gerber, Soderberg and Walker mean-stress correction
+  - log-log S-N interpolation
+  - Palmgren-Miner damage
 - bounded probabilistic uncertainty execution with reproducible sampling/statistics
 - deterministic experimental validation against explicit measured observations
 
@@ -141,10 +152,12 @@ The repository also includes deterministic engineering-credibility primitives:
 - RF, energy and contact ODB evidence extraction;
 - evidence-to-engineering-check adapters;
 - successive-change and Richardson/GCI numerical verification;
+- engineering QoI-aware mesh convergence;
 - a declarative benchmark catalog;
 - sensitivity and uncertainty contracts;
 - provenance and artifact-manifest hashing;
-- bounded correction policies with explicit repair authorization.
+- bounded correction policies with explicit repair authorization;
+- native mesh-verification evidence preserving raw failed/warning element labels.
 
 These primitives are evidence mechanisms, not claims of physical correctness by themselves. Real benchmark execution and release-specific validation remain dependent on a licensed Abaqus runtime.
 
@@ -240,336 +253,33 @@ User / Engineering Requirements
              ┌──────┴──────┐
              ▼             ▼
             Job         Model State
-             │
-             ▼
-       Artifacts / Diagnostics
-             │
-             ▼
-            ODB
-             │
-             ▼
+             │             │
+             ▼             ▼
+       Artifacts /     State Diff
+       Diagnostics         │
+             │             │
+             └──────┬──────┘
+                    ▼
+                   ODB
+                    │
+                    ▼
       Result Requirements
-             │
-             ▼
+                    │
+                    ▼
       Field / History / Frame
           Extraction
-             │
-             ▼
+                    │
+                    ▼
          Acceptance
-             │
-             ▼
-           Evidence
+                    │
+                    ▼
+                Evidence
 ```
 
-### Architectural boundaries
+## Engineering closure status
 
-The repository separates:
+The project has closed the non-runtime foundations for bounded uncertainty execution, numerical refinement verification, explicitly authorized one-shot correction, engineering evidence checks, mesh strategy/verification, mesh convergence QoIs, calibration, reliability, and scalar fatigue post-processing.
 
-| Layer | Responsibility |
-|---|---|
-| Contracts | Stable representations of engineering intent, model state, results, runtime information, and evidence |
-| Actions | Small, explicit native-Abaqus operations |
-| Builders | User-facing construction of actions |
-| Validation | Parameter and semantic validation before execution |
-| Preflight | Checks against the current model/runtime state |
-| Script generation | Conversion of actions into Abaqus Python |
-| Execution | Bridge, in-process, or batch execution |
-| Inspection | Model/session/job/ODB observation |
-| Results | Deterministic extraction of field/history/frame values |
-| Acceptance | Requirement-specific engineering checks |
-| Evidence | Machine-readable trace of what was executed and what was observed |
+The remaining explicitly deferred areas are broader problem-specific methods such as FORM/SORM, Bayesian inference, critical-plane/non-proportional multiaxial fatigue, adaptive remeshing, and future release-specific validation. These are not silently represented as implemented capabilities.
 
-No single component is expected to know everything about the engineering workflow.
-
-## Design principles
-
-### 1. Native Abaqus first
-
-The agent operates through Abaqus's native model and analysis interfaces wherever possible.
-
-It does not create a parallel finite-element representation that can silently diverge from Abaqus.
-
-### 2. Explicit actions
-
-Actions are small and inspectable.
-
-An action can be:
-
-- validated,
-- previewed,
-- executed,
-- compared with expected model state,
-- associated with evidence.
-
-### 3. Evidence before claims
-
-The agent should distinguish:
-
-- API invocation evidence
-- model-state evidence
-- job execution evidence
-- solver artifact evidence
-- ODB evidence
-- result evidence
-- acceptance evidence
-
-These are not interchangeable.
-
-### 4. Geometry must be grounded
-
-Visual references must be mapped to actual Abaqus regions through explicit evidence.
-
-The project does not silently assume that an index, name, or ordering is a stable visual identity.
-
-### 5. No fake solver capabilities
-
-A capability is not considered implemented merely because an API-shaped class exists.
-
-For example, the current fatigue capability is a **deterministic post-processing engine for existing scalar Abaqus stress histories**. It explicitly covers Rainflow counting, half/full-cycle weighting, stress range/amplitude/mean semantics, Goodman correction, log-log S-N interpolation, and Palmgren-Miner damage. It does **not** claim critical-plane or non-proportional multiaxial fatigue criteria.
-
-### 6. Release-aware compatibility
-
-Abaqus Python environments are release-dependent. The external package targets modern Python, while generated Abaqus-side scripts intentionally avoid unnecessary modern Python-only syntax.
-
-Exact native API compatibility must be verified against the installed Abaqus release.
-
-## Installation
-
-The external package targets **Python 3.9+**.
-
-Clone the repository:
-
-```bash
-git clone https://github.com/chenlei-gh/Abaqus-AI-Agent.git
-cd Abaqus-AI-Agent
-```
-
-Install the package:
-
-```bash
-python -m pip install -e .
-```
-
-Install test dependencies:
-
-```bash
-python -m pip install -e ".[test]"
-```
-
-Run the test suite:
-
-```bash
-python -m pytest -q
-```
-
-The normal test suite does not require a licensed Abaqus installation.
-
-## Minimal usage
-
-A typical workflow is conceptually:
-
-```python
-from abaqus_ai_agent.actions import static_step
-from abaqus_ai_agent.actions.runner import preview
-
-action = static_step(
-    "Model-1",
-    time_period=1.0,
-    max_num_inc=100,
-)
-
-print(preview(action))
-```
-
-The generated script is an explicit Abaqus-native operation. It can be validated before being sent to a live Abaqus execution boundary.
-
-For operations not yet represented by a typed builder:
-
-```python
-from abaqus_ai_agent.actions import python_action
-
-action = python_action(
-    "Model-1",
-    "print(list(mdb.models.keys()))",
-)
-```
-
-This escape hatch is deliberate: the action layer should not become a bottleneck for legitimate Abaqus APIs.
-
-## Current capability status
-
-| Area | Status |
-|---|---|
-| Core action contracts | Implemented |
-| Materials / sections | Implemented |
-| Static analysis | Implemented |
-| Explicit dynamics | Implemented |
-| Implicit dynamics | Implemented |
-| Heat transfer | Implemented |
-| Coupled temperature-displacement | Implemented |
-| Amplitudes | Implemented |
-| Gravity | Implemented |
-| Initial temperature / stress | Implemented |
-| Assembly instance operations | Implemented |
-| INP export | Implemented |
-| ODB CSV export | Implemented |
-| Result extraction | Implemented |
-| Mesh convergence | Implemented |
-| Geometry grounding | Implemented for calibrated viewport/projection paths |
-| Fatigue | Contract/workflow for existing stress histories |
-| Arbitrary native Abaqus API access | Implemented through Python escape hatch |
-| Full automatic arbitrary-photo geometry registration | Not claimed |
-| Full standalone fatigue solver | Not implemented |
-| CAD/Part/Sketch/Extrude generation | Intentionally deferred |
-| Tosca / topology optimization automation | Intentionally deferred |
-
-## Testing and CI
-
-GitHub Actions runs the Python test suite on:
-
-- pushes to `main`
-- pushes to `feature/**`
-- pull requests
-
-The CI environment uses Python 3.11 and runs:
-
-```bash
-python -m pip install -e ".[test]"
-python -m pytest -q
-```
-
-The repository keeps Abaqus-dependent validation separate from ordinary CI because Abaqus requires a licensed runtime and a release-specific environment.
-
-## Abaqus R2018 / B28 validation
-
-The project is designed to be validated against real Abaqus installations rather than declaring compatibility from API names alone.
-
-For **Abaqus V5 R2018 / B28**, the validation sequence is:
-
-1. generated-script smoke tests;
-2. model creation / inspection;
-3. `writeInput` verification;
-4. small solver job;
-5. job artifact inspection;
-6. ODB opening;
-7. result extraction;
-8. CSV/evidence generation;
-9. failure classification.
-
-Compatibility should only be called **verified** after the relevant workflow has actually executed on B28.
-
-In particular:
-
-> **A successful Python process or exit code is not, by itself, proof that CNEXT, the intended Abaqus command, the solver job, or the expected ODB result succeeded.**
-
-## Safety and failure boundaries
-
-The agent intentionally refuses several unsafe assumptions:
-
-- an ungrounded image coordinate is not an executable region;
-- an Abaqus Python call returning normally is not solver-success evidence;
-- a completed job is not automatically engineering acceptance;
-- an ODB existing is not proof that the required result is correct;
-- an API-compatible-looking parameter is not automatically release-compatible;
-- model-specific contact, mesh, and release-specific operations must remain explicit when they cannot be validated generically.
-
-These boundaries are part of the architecture, not optional documentation.
-
-## Project scope
-
-### In scope
-
-- AI-assisted engineering-analysis workflows around Abaqus/CAE
-- model inspection and state grounding
-- native Abaqus actions
-- validation and preflight
-- job execution and diagnostics
-- ODB/result extraction
-- acceptance and evidence
-- controlled extension through native Abaqus Python
-
-### Deliberately out of scope for the current core
-
-- replacing Abaqus's solver
-- pretending to support every Abaqus API through typed wrappers
-- unrestricted autonomous geometry mutation from images
-- claiming a full fatigue solver without implementing the underlying numerical methods
-- CAD authoring as the primary purpose of this repository
-- topology optimization as a substitute for engineering requirements
-
-## Roadmap
-
-The near-term engineering path is:
-
-1. keep the action/validation/evidence chain stable;
-2. complete the B28 smoke-test harness;
-3. execute the smoke suite on a real Abaqus R2018/B28 machine;
-4. classify and fix real release-specific incompatibilities;
-5. expand only the capabilities justified by real engineering workflows.
-
-Potential future areas include:
-
-- richer geometry grounding
-- more result extraction patterns
-- broader native Abaqus action coverage
-- stronger job diagnostics
-- more complete fatigue post-processing
-- additional release-specific adapters
-
-New capabilities should preserve the existing action → validation → execution → evidence boundaries.
-
-## Reference projects and ecosystem
-
-The live-execution boundary is informed by public Abaqus automation/MCP projects, including:
-
-- [Abaqus-Control-MCP](https://github.com/forxyo/abaqus-control-mcp)
-- [CAE-Agent-Hub](https://github.com/chenlei-gh/CAE-Agent-Hub)
-
-Those projects demonstrate useful patterns such as live Abaqus bridges, arbitrary Python execution, model inspection, job monitoring, ODB inspection, and viewport interaction.
-
-This repository builds on the general idea of a live Abaqus execution boundary while emphasizing explicit geometry grounding, validation, result requirements, acceptance, and evidence.
-
-## Repository structure
-
-```text
-Abaqus-AI-Agent/
-├── src/
-│   └── abaqus_ai_agent/
-│       ├── actions/          # Explicit Abaqus operations and script generation
-│       ├── adapters/         # Live Abaqus/model adapters
-│       ├── contracts/        # Engineering, model, result and runtime contracts
-│       ├── execution/        # Executors, jobs, artifacts and batch execution
-│       ├── validation/       # Validation and preflight
-│       └── workflow/         # Analysis workflow definitions
-├── tests/                    # Unit and contract tests
-├── .github/workflows/        # CI
-├── pyproject.toml
-├── LICENSE
-├── README.md                 # English documentation
-└── README_CN.md              # Chinese documentation
-```
-
-## Contributing
-
-Contributions are welcome when they preserve the project's engineering boundaries.
-
-A useful contribution should normally include:
-
-- a clear capability or defect description;
-- explicit validation behavior;
-- tests for deterministic logic;
-- release-specific assumptions where applicable;
-- evidence requirements for live Abaqus behavior;
-- no unsupported claim of solver or engineering correctness.
-
-For release-specific Abaqus APIs, prefer documenting the exact Abaqus version tested.
-
-## License
-
-Apache-2.0.
-
-The repository's original license is preserved. Third-party integrations, documentation, and dependencies should retain their respective attribution and license requirements.
-
----
-
-**Documentation:** [English](README.md) · [中文](README_CN.md)
+A licensed Abaqus V5 R2018/B28 installation is still required for final real-machine compatibility validation.
