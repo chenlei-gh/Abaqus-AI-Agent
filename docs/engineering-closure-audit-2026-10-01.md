@@ -214,3 +214,25 @@ Experimental validation is now connected to the existing result path rather than
 - No parameter calibration, optimization, model identification, or second extraction/execution subsystem was introduced.
 
 This closes the deterministic validation chain while preserving the boundary that validation is not calibration.
+
+
+## P2-1 / P2-3 closure update
+
+The declared engineering-check catalog now has deterministic executable helpers for the remaining bounded gaps:
+
+- Dynamic time-step evidence can be evaluated from an explicit history variable against caller-declared minimum/maximum limits.
+- Coupled thermal-mechanical consistency can be evaluated only when the caller supplies the paired result fields, expected ratio, and tolerance.
+- Existing reaction balance, energy ratio, contact diagnostics, and generic numeric field sanity remain unchanged.
+- No universal material/physics thresholds are inferred.
+
+Probabilistic uncertainty is now available as a bounded extension of the existing uncertainty execution path:
+
+- Uniform sampling is explicit and reproducible through a caller-provided seed.
+- Parameter bounds come from the existing `UncertaintyParameter` contract.
+- Sampled parameter values are not silently applied; an explicit `action_plan_factory` must map each sample to existing Abaqus actions.
+- Every sample still executes through `AnalysisRunner`.
+- Statistics are deterministic sample statistics (count, mean, population standard deviation, min/max, interpolated quantiles).
+- No distribution fitting, reliability index, confidence interval, Bayesian inference, or optimizer was added.
+- The reported quantiles are empirical sample summaries, not claims of a fitted probability distribution.
+
+This is sufficient for a first probabilistic-UQ execution capability without introducing a second execution or verification architecture.
