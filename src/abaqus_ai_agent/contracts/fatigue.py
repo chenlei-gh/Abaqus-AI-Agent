@@ -54,24 +54,3 @@ class FatigueWorkflow:
     def solver_scope(self):
         return "postprocess_existing_abaqus_results"
 
-
-@dataclass(frozen=True)
-class FatigueResult:
-    """Deterministic post-processing result for an existing stress history."""
-    name: str
-    cycles_evaluated: float
-    damage: float
-    predicted_life_cycles: Optional[float]
-    method: str = "S_N"
-    damage_model: str = "PALMGREN_MINER"
-    status: str = "completed"
-    source: str = ""
-    unit: str = ""
-
-    def __post_init__(self):
-        if self.cycles_evaluated < 0:
-            raise ValueError("cycles_evaluated must be non-negative")
-        if self.damage < 0:
-            raise ValueError("damage must be non-negative")
-        if self.status not in ("completed", "failed"):
-            raise ValueError("status must be completed or failed")
