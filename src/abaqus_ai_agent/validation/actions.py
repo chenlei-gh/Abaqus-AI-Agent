@@ -11,7 +11,7 @@ def validate_action(action):
     if action.action_type in (
         "fixed_bc", "displacement_bc", "symmetry_bc", "pressure_load",
         "concentrated_force", "body_force", "body_heat_flux", "surface_heat_flux", "temperature_bc", "initial_temperature", "initial_stress", "section_assignment", "tie",
-        "local_seed_size", "local_seed_number", "mesh_controls", "element_type", "contact"
+        "local_seed_size", "local_seed_number", "bias_seed_size", "bias_seed_number", "sweep_path", "mesh_controls", "element_type", "contact"
     ) and not action.parameters.get("region_expression"):
         raise ValueError("region_expression is required for %s" % action.action_type)
     geometry = action.action_type in ("inspect_geometry", "ignore_entity", "restore_entity", "repair_geometry", "remove_redundant_entities", "inspect_mesh")
@@ -24,7 +24,7 @@ def validate_action(action):
             for key in ("min_edge_length", "min_face_size"):
                 if action.parameters.get(key) is not None and action.parameters[key] <= 0:
                     raise ValueError("%s must be positive" % key)
-    mesh = action.action_type in ("seed_part", "local_seed_size", "local_seed_number", "mesh_controls", "element_type", "generate_mesh", "inspect_mesh")
+    mesh = action.action_type in ("seed_part", "local_seed_size", "local_seed_number", "bias_seed_size", "bias_seed_number", "sweep_path", "mesh_controls", "element_type", "generate_mesh", "inspect_mesh", "verify_mesh_quality")
     if mesh:
         part = action.parameters.get("part")
         if not part:
