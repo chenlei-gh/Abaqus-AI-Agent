@@ -251,3 +251,39 @@ def extract_contact_evidence(executor, path, step, fields=("CPRESS", "COPEN", "C
     history = extract_contact_history(
         executor, path, step, region=history_region, variables=history_variables)
     return {"step": step, "frame": frame, "fields": field_results, "history": history}
+
+def extract_reaction_history(executor, path, step, region, variables=("RF1", "RF2", "RF3")):
+    """Extract nodal reaction-force history outputs without inferring equilibrium."""
+    return extract_history(executor, path, step, region, variables)
+
+
+def extract_reaction_field(executor, path, step, frame=-1, region=None,
+                           component=None, position=None):
+    """Extract RF field evidence from an ODB frame."""
+    return extract_field(
+        executor, path, step, "RF", component=component,
+        position=position, region=region, frame=frame
+    )
+
+
+def extract_reaction_evidence(executor, path, step, history_region=None,
+                              history_variables=("RF1", "RF2", "RF3"),
+                              frame=-1, region=None, component=None,
+                              position=None):
+    """Collect reaction field/history evidence without judging correctness."""
+    field = extract_reaction_field(
+        executor, path, step, frame=frame, region=region,
+        component=component, position=position
+    )
+    history = None
+    if history_region is not None:
+        history = extract_reaction_history(
+            executor, path, step, history_region, history_variables
+        )
+    return {
+        "step": step,
+        "frame": frame,
+        "field": field,
+        "history": history,
+    }
+

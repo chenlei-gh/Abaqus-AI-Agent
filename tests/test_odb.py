@@ -32,3 +32,23 @@ def test_extract_contact_history_keeps_missing_variable_distinct_from_zero():
     assert result["variables"]["CPRESS"]["status"] == "available"
     assert result["variables"]["CPRESS"]["data"][-1][1] == 0.0
     assert result["variables"]["COPEN"]["status"] == "unavailable"
+def test_extract_reaction_evidence_uses_rf_field_and_history():
+    from abaqus_ai_agent.execution.odb import extract_reaction_evidence
+
+    class FakeExecutor:
+        def __init__(self):
+            self.calls = []
+        def execute(self, code):
+            self.calls.append(code)
+            return {"status": "available"}
+
+    executor = FakeExecutor()
+    result = extract_reaction_evidence(
+        executor, "job.odb", "Step-1",
+        history_region="Node PART-1-1.1",
+        component="RF1",
+    )
+    assert result["step"] == "Step-1"
+    assert len(executor.calls) == 2
+    assert "'RF'" in executor.calls[0]
+    assert "historyRegions" in executor.calls[1]
