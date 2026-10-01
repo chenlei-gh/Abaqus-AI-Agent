@@ -1,4 +1,5 @@
 from typing import Tuple
+import math
 
 
 def weighted_score(distance: float, visual: float, topology: float,
@@ -9,4 +10,4 @@ def weighted_score(distance: float, visual: float, topology: float,
         raise ValueError("scores must be in [0, 1]")
     if abs(sum(weights) - 1.0) > 1e-9:
         raise ValueError("weights must sum to 1")
-    return sum(value * weight for value, weight in zip(values, weights))
+    return math.fsum(value * weight for value, weight in zip(values, weights))
