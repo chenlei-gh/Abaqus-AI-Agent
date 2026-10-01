@@ -106,3 +106,43 @@ def test_rainflow_repeated_plateaus_do_not_create_zero_cycles():
     cycles = rainflow_count([0, 5, 5, 0, 0, -5, -5, 0])
     assert all(a != b for a, b, _ in cycles)
     assert all(weight in (0.5, 1.0) for _, _, weight in cycles)
+
+
+def test_goodman_compressive_mean_stress_is_mathematically_supported():
+    from abaqus_ai_agent.fatigue import goodman_corrected_amplitude
+    assert goodman_corrected_amplitude(10, -50, 100) == pytest.approx(20.0)
+
+
+def test_goodman_rejects_mean_stress_at_or_above_uts():
+    from abaqus_ai_agent.fatigue import goodman_corrected_amplitude
+    with pytest.raises(ValueError):
+        goodman_corrected_amplitude(10, 100, 100)
+    with pytest.raises(ValueError):
+        goodman_corrected_amplitude(10, 120, 100)
+
+
+def test_sn_rejects_non_monotonic_stress_axis():
+    with pytest.raises(ValueError):
+        sn_cycles_to_failure(15, ((10, 1e6), (10, 1e5), (20, 1e4)))
+
+
+def test_sn_requires_declared_material_curve():
+    intent = FatigueAnalysisIntent(
+        name="missing curve",
+        stress_variable="S11",
+        stress_semantics="scalar_component",
+        material_curve=(),
+    )
+    with pytest.raises(ValueError):
+        evaluate_fatigue_history([0, 10, 0], intent)
+
+
+def test_zero_range_history_is_rejected_as_insufficient_fatigue_signal():
+    intent = FatigueAnalysisIntent(
+        name="constant",
+        stress_variable="S11",
+        stress_semantics="scalar_component",
+        material_curve=((1, 1e6), (10, 1e3)),
+    )
+    with pytest.raises(ValueError):
+        evaluate_fatigue_history([5, 5, 5], intent)
