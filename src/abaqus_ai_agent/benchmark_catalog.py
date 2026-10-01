@@ -1,8 +1,8 @@
 """Small declarative engineering benchmark catalog.
 
-The catalog defines what a benchmark must prove; it does not execute Abaqus.
-Observed values must come from a real model/ODB workflow before a benchmark
-result can be considered engineering evidence.
+The catalog defines benchmark expectations and deterministic ODB extraction
+defaults. Model-specific target regions and independent reference values must
+still be supplied explicitly before a run is accepted as benchmark evidence.
 """
 
 from .contracts.benchmarks import BenchmarkCase
@@ -18,8 +18,14 @@ def standard_benchmarks():
             ),
             expected_actions=("material", "section", "static_step", "load", "boundary_condition"),
             acceptance=(
-                {"value_key": "displacement_relative_error", "operator": "<=", "limit": 0.02},
-                {"value_key": "reaction_balance_error", "operator": "<=", "limit": 0.01},
+                {"value_key": "displacement_relative_error", "observed_value_key": "axial_displacement",
+                 "metric": "relative_error", "operator": "<=", "limit": 0.02,
+                 "result": {"field": "U", "invariant": "MAGNITUDE", "aggregation": "max",
+                            "step": "Step-1"}},
+                {"value_key": "reaction_balance_error", "observed_value_key": "reaction_resultant",
+                 "metric": "relative_error", "operator": "<=", "limit": 0.01,
+                 "result": {"field": "RF", "invariant": "MAGNITUDE", "aggregation": "max",
+                            "step": "Step-1"}},
             ),
         ),
         BenchmarkCase(
@@ -30,8 +36,14 @@ def standard_benchmarks():
             ),
             expected_actions=("material", "section", "static_step", "load", "boundary_condition"),
             acceptance=(
-                {"value_key": "tip_displacement_relative_error", "operator": "<=", "limit": 0.05},
-                {"value_key": "reaction_balance_error", "operator": "<=", "limit": 0.01},
+                {"value_key": "tip_displacement_relative_error", "observed_value_key": "tip_displacement",
+                 "metric": "relative_error", "operator": "<=", "limit": 0.05,
+                 "result": {"field": "U", "invariant": "MAGNITUDE", "aggregation": "max",
+                            "step": "Step-1"}},
+                {"value_key": "reaction_balance_error", "observed_value_key": "reaction_resultant",
+                 "metric": "relative_error", "operator": "<=", "limit": 0.01,
+                 "result": {"field": "RF", "invariant": "MAGNITUDE", "aggregation": "max",
+                            "step": "Step-1"}},
             ),
         ),
         BenchmarkCase(
@@ -42,7 +54,10 @@ def standard_benchmarks():
             ),
             expected_actions=("material", "section", "static_step", "gravity", "boundary_condition"),
             acceptance=(
-                {"value_key": "reaction_balance_error", "operator": "<=", "limit": 0.01},
+                {"value_key": "reaction_balance_error", "observed_value_key": "reaction_resultant",
+                 "metric": "relative_error", "operator": "<=", "limit": 0.01,
+                 "result": {"field": "RF", "invariant": "MAGNITUDE", "aggregation": "max",
+                            "step": "Step-1"}},
             ),
         ),
     )
