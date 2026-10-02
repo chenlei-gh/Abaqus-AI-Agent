@@ -5,6 +5,11 @@
 [English Documentation / 英文文档](README.md)
 
 [![CI](https://github.com/chenlei-gh/Abaqus-AI-Agent/actions/workflows/ci.yml/badge.svg)](https://github.com/chenlei-gh/Abaqus-AI-Agent/actions/workflows/ci.yml)
+[![Python](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12-blue.svg)](https://www.python.org/)
+[![Abaqus](https://img.shields.io/badge/Abaqus-2025%20Validated-brightgreen.svg)](https://www.3ds.com/products-services/simulia/products/abaqus/)
+[![Tests](https://img.shields.io/badge/tests-374%20passed-success.svg)](tests/)
+[![Golden Matrix](https://img.shields.io/badge/golden%20matrix-13%2F13%20passed-success.svg)](machine_validation/)
+[![Release Gate](https://img.shields.io/badge/release%20gate-RC--1%20frozen-orange.svg)](#)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 
 > **项目状态：** 架构与 Contract Closure 已基本收敛；**Abaqus 2025 真机 13 项 Golden Case 验证阶梯已全部端到端通过。** 所有实机求解验证均基于可穿透审计的真实机产物证据。
@@ -32,10 +37,10 @@
 
 ```mermaid
 flowchart LR
-    U["工程意图"] --> AI["AI<br/>理解 · 推理 · 规划 · 解释"]
+    U["工程意图"] --> AI["AI: 理解 · 推理 · 规划 · 解释"]
     AI --> B{"能力边界"}
     B -->|SUPPORTED| A["Typed Action"]
-    B -->|EXECUTABLE| X["原生 Python<br/>Escape Hatch"]
+    B -->|EXECUTABLE| X["原生 Python Escape Hatch"]
     B -->|ASSISTED / BLOCKED| P["辅助方案 / 阻塞说明"]
     A --> V["Validation + Preflight"]
     V --> E["Abaqus 执行"]
@@ -71,11 +76,11 @@ flowchart TB
 flowchart LR
     D["发现能力缺口"] --> T{"已有 Typed Contract？"}
     T -->|是| S["SUPPORTED"]
-    T -->|否| P{"原生 Abaqus API<br/>可以执行？"}
-    P -->|是| X["EXECUTABLE<br/>（未验证）"]
+    T -->|否| P{"原生 Abaqus API 能否执行？"}
+    P -->|是| X["EXECUTABLE（未验证）"]
     P -->|否| A["ASSISTED / BLOCKED"]
     X --> H["重复出现的工程需求"]
-    H --> C["Contract + Validation<br/>结果语义 + Tests"]
+    H --> C["Contract, Validation, 结果语义, Tests"]
     C --> S
 ```
 
@@ -687,18 +692,18 @@ python -m pytest -q
 | **P1 Implicit Dynamic** | 斜坡载荷瞬态动力学悬臂梁 | 多时间帧动态响应、动能/内能比、动载荷放大系数 | ✅ PASS |
 | **P1 Steady Thermal** | 3D 杆体一维稳态热传导 | 解析温度分布、热流守恒、加严门禁真实 FAIL | ✅ PASS |
 | **P1 General Contact** | 块体压紧与库仑摩擦滑移 | 法向接触压力、切向摩擦力 (μ=0.25 误差 0.08%)、接触诊断 | ✅ PASS |
-| **刚体动力学 Golden** | 铰接刚体物理摆大角度重力摆动 ($L=600\text{ mm}, \theta_0=10^\circ$) | 振动周期 ($T_{\text{corr}}=1.2713\text{ s}$, 误差 0.08%)、最大角速度 (误差 0.27%)、机械能守恒 | ✅ PASS |
-| **MBD-2 Revolute Golden** | 原生 `CONN3D2` Hinge 连接器双刚体双摆重力摆动 | 铰接点平动漂移 $\le 10^{-3}\text{ mm}$ ($9.78\times 10^{-6}\text{ mm}$)、独立相对转动 ($\Delta\theta = 6.96^\circ$)、基频振动周期 ($T_1=1.2843\text{ s}$，误差 0.54%)、机械能守恒 (耗散 2.13%) | ✅ PASS |
-| **FMBD-4 刚柔耦合 Golden** | 刚体曲柄 + C3D8R 弹性实体连杆在重力下的耦合动力学时程 | 铰接点平动漂移 $\le 10^{-3}\text{ mm}$ ($3.13\times 10^{-10}\text{ mm}$)、动态 Mises 应力物理合理 ($0.0435\text{ MPa}$)、弹性应变能动态占比 (99.9%)、全系统机械能守恒 (耗散仅 0.56%) | ✅ PASS |
-| **FMBD-5 闭环曲柄滑块 Golden** | 完整闭环机构：地面固定支座 + 刚体曲柄 + C3D8R 弹性连杆（双端运动学耦合）+ 刚体滑块沿水平 Translator 导轨，100% 声明式机构图编译 | 肘部/腕部铰接点漂移 $\le 10^{-3}\text{ mm}$ ($1.49\times 10^{-8}\text{ mm}$)、滑块导轨横向漂移 $\le 10^{-2}\text{ mm}$ ($3.21\times 10^{-20}\text{ mm}$)、闭环几何残差 $\le 5\%$ ($1.91\times 10^{-7}$)、动态 Mises 应力 ($0.288\text{ MPa}$)、内部能构成（弹性应变能占比 $99.61\%$）、算法数值阻尼耗散受控（$\le 50\%$，实际 $40.47\%$） | ✅ PASS |
-| **P1 Explicit Dynamic** | 斜坡阶跃冲击载荷瞬态显式动力学悬臂梁（Abaqus/Explicit） | 稳定时间增量满足 CFL 条件 $\Delta t \le L_e/c_d$ ($0.352\ \mu\text{s}$)、全模型能量严格守恒 ($|ETOTAL|/E_{\text{ref}} \le 2\%$，实际 $0.00028\%$)、C3D8R 单元沙漏能严格受控 ($ALLAE/ALLIE \le 5\%$，实际 $3.64\%$)、动载荷放大系数 (DAF = 1.753)、加严负向门禁真实 FAIL | ✅ PASS |
-| **P2 Real ODB Fatigue** | 真实 ODB 多时间帧应力场提取、雨流循环计数与 Palmgren-Miner 累积损伤评估 | 全场危险点自动扫描（单元 613，积分点 1，峰值 Mises $493.40\text{ MPa}$）、Signed von Mises 应力时程降维、ASTM E1049-85 雨流计数 (6.0 循环)、Goodman 拉应力均值修正、结构钢 S-N 曲线寿命评估、累积损伤 $D = 9.1869\times 10^{-6} \le 1.0$、容许重复块数 $1.0885\times 10^5$、加严负向门禁真实 FAIL ($D \le 10^{-15}$) | ✅ PASS |
+| **刚体动力学 Golden** | 铰接刚体物理摆大角度重力摆动 (L = 600 mm, θ₀ = 10°) | 振动周期 (T_corr = 1.2713 s, 误差 0.08%)、最大角速度 (误差 0.27%)、机械能守恒 | ✅ PASS |
+| **MBD-2 Revolute Golden** | 原生 `CONN3D2` Hinge 连接器双刚体双摆重力摆动 | 铰接点平动漂移 ≤ 1e-3 mm (9.78e-6 mm)、独立相对转动 (Δθ = 6.96°)、基频振动周期 (T₁ = 1.2843 s，误差 0.54%)、机械能守恒 (耗散 2.13%) | ✅ PASS |
+| **FMBD-4 刚柔耦合 Golden** | 刚体曲柄 + C3D8R 弹性实体连杆在重力下的耦合动力学时程 | 铰接点平动漂移 ≤ 1e-3 mm (3.13e-10 mm)、动态 Mises 应力物理合理 (0.0435 MPa)、弹性应变能动态占比 (99.9%)、全系统机械能守恒 (耗散仅 0.56%) | ✅ PASS |
+| **FMBD-5 闭环曲柄滑块 Golden** | 完整闭环机构：地面固定支座 + 刚体曲柄 + C3D8R 弹性连杆（双端运动学耦合）+ 刚体滑块沿水平 Translator 导轨，100% 声明式机构图编译 | 肘部/腕部铰接点漂移 ≤ 1e-3 mm (1.49e-8 mm)、滑块导轨横向漂移 ≤ 1e-2 mm (3.21e-20 mm)、闭环几何残差 ≤ 5% (1.91e-7)、动态 Mises 应力 (0.288 MPa)、内部能构成（弹性应变能占比 99.61%）、算法数值阻尼耗散受控（≤ 50%，实际 40.47%） | ✅ PASS |
+| **P1 Explicit Dynamic** | 斜坡阶跃冲击载荷瞬态显式动力学悬臂梁（Abaqus/Explicit） | 稳定时间增量满足 CFL 条件 Δt ≤ Lₑ/c_d (0.352 μs)、全模型能量严格守恒 (|ETOTAL| / E_ref ≤ 2%，实际 0.00028%)、C3D8R 单元沙漏能严格受控 (ALLAE/ALLIE ≤ 5%，实际 3.64%)、动载荷放大系数 (DAF = 1.753)、加严负向门禁真实 FAIL | ✅ PASS |
+| **P2 Real ODB Fatigue** | 真实 ODB 多时间帧应力场提取、雨流循环计数与 Palmgren-Miner 累积损伤评估 | 全场危险点自动扫描（单元 613，积分点 1，峰值 Mises 493.40 MPa）、Signed von Mises 应力时程降维、ASTM E1049-85 雨流计数 (6.0 循环)、Goodman 拉应力均值修正、结构钢 S-N 曲线寿命评估、累积损伤 D = 9.1869e-6 ≤ 1.0、容许重复块数 1.0885e5、加严负向门禁真实 FAIL (D ≤ 1e-15) | ✅ PASS |
 
 > **柔性多体动力学 (FMBD) 工程边界与能量物理严谨说明**：
 > - **MBD-1 与 MBD-2** 验证了离散刚体动力学与多刚体运动学铰接，采用 Reference Point、`RigidBody` 约束及原生 `CONN3D2` HINGE 连接器；
 > - **FMBD-4** 验证了开链刚柔耦合，证明连续介质有限元网格（C3D8R）能够通过原生 Kinematic Coupling 与离散连接器完成双向动力学传递；
 > - **FMBD-5** 进一步验证了由声明式 `MechanismGraph` 全栈自动编译生成的**闭环刚柔耦合机构系统**；
-> - **物理与能量机制严密界定**：在 FMBD-5 闭环曲柄滑块运动中，系统的宏观机械能以刚性曲柄与滑块的动能为主导（$ALLKE_{\text{peak}} \approx 708.8\text{ mJ}$），C3D8R 柔性连杆处于小变形弹性响应状态（$ALLSE_{\text{peak}} \approx 0.011\text{ mJ}$）。内部能中可恢复弹性应变能占比为 $99.61\%$，不存在塑性或数值伪能异常。在求解策略层面，为抑制理想连接器与多铰接点产生的高频振荡并保证非线性大位移循环运动 100% 收敛，模型采用 HHT 积分器的中等数值耗散模式（`MODERATE_DISSIPATION`, $\alpha = -0.41421$, `nohaf=True`），算法累计耗散外部重力做功的 $40.47\%$，此为受控的**算法数值阻尼耗散**，而非物理材料阻尼或摩擦耗散。因此，FMBD-5 确立的是**闭环刚柔耦合与声明式机构图编译器工程基准**，而非大变形强柔性多体动力学基准。
+> - **物理与能量机制严密界定**：在 FMBD-5 闭环曲柄滑块运动中，系统的宏观机械能以刚性曲柄与滑块的动能为主导（ALLKE_peak ≈ 708.8 mJ），C3D8R 柔性连杆处于小变形弹性响应状态（ALLSE_peak ≈ 0.011 mJ）。内部能中可恢复弹性应变能占比为 99.61%，不存在塑性或数值伪能异常。在求解策略层面，为抑制理想连接器与多铰接点产生的高频振荡并保证非线性大位移循环运动 100% 收敛，模型采用 HHT 积分器的中等数值耗散模式（`MODERATE_DISSIPATION`, α = -0.41421, `nohaf=True`），算法累计耗散外部重力做功的 40.47%，此为受控的**算法数值阻尼耗散**，而非物理材料阻尼或摩擦耗散。因此，FMBD-5 确立的是**闭环刚柔耦合与声明式机构图编译器工程基准**，而非大变形强柔性多体动力学基准。
 
 ### 统一 Golden 验证矩阵与证据目录
 

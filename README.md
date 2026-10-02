@@ -5,6 +5,11 @@
 [中文文档 / Chinese](README_CN.md)
 
 [![CI](https://github.com/chenlei-gh/Abaqus-AI-Agent/actions/workflows/ci.yml/badge.svg)](https://github.com/chenlei-gh/Abaqus-AI-Agent/actions/workflows/ci.yml)
+[![Python](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12-blue.svg)](https://www.python.org/)
+[![Abaqus](https://img.shields.io/badge/Abaqus-2025%20Validated-brightgreen.svg)](https://www.3ds.com/products-services/simulia/products/abaqus/)
+[![Tests](https://img.shields.io/badge/tests-374%20passed-success.svg)](tests/)
+[![Golden Matrix](https://img.shields.io/badge/golden%20matrix-13%2F13%20passed-success.svg)](machine_validation/)
+[![Release Gate](https://img.shields.io/badge/release%20gate-RC--1%20frozen-orange.svg)](#)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 
 > **Project status:** Architecture and contract closure are substantially complete. **Abaqus 2025 machine validation has passed end-to-end across the 13-case Golden Ladder.** All live solver verification is grounded in audited machine artifacts.
@@ -32,10 +37,10 @@
 
 ```mermaid
 flowchart LR
-    U["Engineering Intent"] --> AI["AI<br/>Reason · Plan · Explain"]
+    U["Engineering Intent"] --> AI["AI: Reason · Plan · Explain"]
     AI --> B{"Capability Boundary"}
     B -->|SUPPORTED| A["Typed Action"]
-    B -->|EXECUTABLE| X["Native Python<br/>Escape Hatch"]
+    B -->|EXECUTABLE| X["Native Python Escape Hatch"]
     B -->|ASSISTED / BLOCKED| P["Proposal / Blocker"]
     A --> V["Validation + Preflight"]
     V --> E["Abaqus Execution"]
@@ -71,11 +76,11 @@ This distinction is the project's central protection against **"the code ran, th
 flowchart LR
     D["Capability Gap"] --> T{"Typed contract exists?"}
     T -->|Yes| S["SUPPORTED"]
-    T -->|No| P{"Native Abaqus API<br/>can execute it?"}
-    P -->|Yes| X["EXECUTABLE<br/>(unverified)"]
+    T -->|No| P{"Can native Abaqus API execute it?"}
+    P -->|Yes| X["EXECUTABLE (unverified)"]
     P -->|No| A["ASSISTED / BLOCKED"]
     X --> H["Repeated engineering need"]
-    H --> C["Contract + Validation<br/>Result semantics + Tests"]
+    H --> C["Contract, Validation, Results, Tests"]
     C --> S
 ```
 
@@ -697,18 +702,18 @@ The following golden engineering cases have all completed and passed real-machin
 | **P1 Implicit Dynamic** | Ramped load transient dynamic cantilever | Multi-frame dynamic response, ALLKE/ALLIE ratio, dynamic amplification | ✅ PASS |
 | **P1 Steady Thermal** | 1D steady conduction across 3D solid bar | Analytical temperature profile, heat flux conservation, strict gate FAIL | ✅ PASS |
 | **P1 General Contact** | Two-body contact with Coulomb friction sliding | Normal contact pressure, penalty tangential friction mu = 0.25, contact diagnostics | ✅ PASS |
-| **Rigid-body Dynamics Golden** | Rigid body physical pendulum under gravity ($L=600\text{ mm}, \theta_0=10^\circ$) | Period ($T_{\text{corr}}=1.2713\text{ s}$, 0.08% error), max angular velocity (0.27% error), energy conservation | ✅ PASS |
-| **MBD-2 Revolute Golden** | Two-body double pendulum with native `CONN3D2` Hinge connector under gravity | Joint drift $\le 10^{-3}\text{ mm}$ ($9.78\times 10^{-6}\text{ mm}$), independent articulation ($\Delta\theta = 6.96^\circ$), fundamental period ($T_1=1.2843\text{ s}$, 0.54% error), energy conservation (2.13% loss) | ✅ PASS |
-| **FMBD-4 Coupled Rigid-Flexible** | Coupled rigid crank + C3D8R flexible solid link linked via native `CONN3D2` Hinge and Kinematic Coupling under gravity | Joint drift $\le 10^{-3}\text{ mm}$ ($3.13\times 10^{-10}\text{ mm}$), dynamic Mises stress sanity ($0.0435\text{ MPa}$), active strain energy ratio (99.9%), energy conservation (0.56% dissipation) | ✅ PASS |
-| **FMBD-5 Closed-Loop Crank-Slider** | Full closed-loop mechanism: ground pivot + rigid crank + C3D8R elastic rod (dual kinematic couplings) + rigid slider along TRANSLATOR guide, 100% compiled via `MechanismGraph` under gravity | Joint drift $\le 10^{-3}\text{ mm}$ ($1.49\times 10^{-8}\text{ mm}$), slider transverse drift $\le 10^{-2}\text{ mm}$ ($3.21\times 10^{-20}\text{ mm}$), loop closure error $\le 5\%$ ($1.91\times 10^{-7}$), dynamic Mises stress ($0.288\text{ MPa}$), internal energy composition ($ALLSE/ALLIE = 99.61\%$), algorithmic numerical dissipation bounded ($\le 50\%$, actual $40.47\%$) | ✅ PASS |
-| **P1 Explicit Dynamic** | Ramped step load transient dynamic cantilever beam (Abaqus/Explicit) | Stable time increment bounded by CFL condition $\Delta t \le L_e/c_d$ ($0.352\ \mu\text{s}$), total energy conservation ($|ETOTAL|/E_{\text{ref}} \le 2\%$, actual $0.00028\%$), C3D8R artificial hourglass control ($ALLAE/ALLIE \le 5\%$, actual $3.64\%$), dynamic amplification factor (DAF = 1.753), strict negative gate FAIL | ✅ PASS |
-| **P2 Real ODB Fatigue** | Live ODB multi-frame stress field post-processing, rainflow cycle counting, and Palmgren-Miner cumulative damage | Global hotspot scanning (Element 613, IP 1, Peak Mises $493.40\text{ MPa}$), Signed von Mises stress history reduction, ASTM E1049-85 rainflow counting (6.0 cycles), Goodman tensile mean-stress correction, structural steel S-N curve life evaluation, cumulative damage $D = 9.1869\times 10^{-6} \le 1.0$, life blocks $1.0885\times 10^5$, strict negative gate FAIL ($D \le 10^{-15}$) | ✅ PASS |
+| **Rigid-body Dynamics Golden** | Rigid body physical pendulum under gravity (L = 600 mm, θ₀ = 10°) | Period (T_corr = 1.2713 s, 0.08% error), max angular velocity (0.27% error), energy conservation | ✅ PASS |
+| **MBD-2 Revolute Golden** | Two-body double pendulum with native `CONN3D2` Hinge connector under gravity | Joint drift ≤ 1e-3 mm (9.78e-6 mm), independent articulation (Δθ = 6.96°), fundamental period (T₁ = 1.2843 s, 0.54% error), energy conservation (2.13% loss) | ✅ PASS |
+| **FMBD-4 Coupled Rigid-Flexible** | Coupled rigid crank + C3D8R flexible solid link linked via native `CONN3D2` Hinge and Kinematic Coupling under gravity | Joint drift ≤ 1e-3 mm (3.13e-10 mm), dynamic Mises stress sanity (0.0435 MPa), active strain energy ratio (99.9%), energy conservation (0.56% dissipation) | ✅ PASS |
+| **FMBD-5 Closed-Loop Crank-Slider** | Full closed-loop mechanism: ground pivot + rigid crank + C3D8R elastic rod (dual kinematic couplings) + rigid slider along TRANSLATOR guide, 100% compiled via `MechanismGraph` under gravity | Joint drift ≤ 1e-3 mm (1.49e-8 mm), slider transverse drift ≤ 1e-2 mm (3.21e-20 mm), loop closure error ≤ 5% (1.91e-7), dynamic Mises stress (0.288 MPa), internal energy composition (ALLSE/ALLIE = 99.61%), algorithmic numerical dissipation bounded (≤ 50%, actual 40.47%) | ✅ PASS |
+| **P1 Explicit Dynamic** | Ramped step load transient dynamic cantilever beam (Abaqus/Explicit) | Stable time increment bounded by CFL condition Δt ≤ Lₑ/c_d (0.352 μs), total energy conservation (|ETOTAL| / E_ref ≤ 2%, actual 0.00028%), C3D8R artificial hourglass control (ALLAE/ALLIE ≤ 5%, actual 3.64%), dynamic amplification factor (DAF = 1.753), strict negative gate FAIL | ✅ PASS |
+| **P2 Real ODB Fatigue** | Live ODB multi-frame stress field post-processing, rainflow cycle counting, and Palmgren-Miner cumulative damage | Global hotspot scanning (Element 613, IP 1, Peak Mises 493.40 MPa), Signed von Mises stress history reduction, ASTM E1049-85 rainflow counting (6.0 cycles), Goodman tensile mean-stress correction, structural steel S-N curve life evaluation, cumulative damage D = 9.1869e-6 ≤ 1.0, life blocks 1.0885e5, strict negative gate FAIL (D ≤ 1e-15) | ✅ PASS |
 
 > **Note on flexible multi-body dynamics (FMBD) engineering boundaries**:
 > - **MBD-1 & MBD-2** validate discrete rigid dynamics and multi-body joint kinematics using Reference Points, `RigidBody` constraints, and native `CONN3D2` HINGE connectors.
 > - **FMBD-4** validates open-chain rigid-flexible coupling, where continuous 3D finite-element meshes (C3D8R) interface with discrete connectors via native Abaqus Kinematic Coupling.
 > - **FMBD-5** validates a full closed-loop rigid-flexible kinematic chain compiled entirely from declarative `MechanismGraph`.
-> - **Physical & Energy Mechanics Clarification**: In FMBD-5, macroscopic rigid-body motion dominates system kinetic energy ($ALLKE_{\text{peak}} \approx 708.8\text{ mJ}$), while the flexible rod undergoes small elastic deformation ($ALLSE_{\text{peak}} \approx 0.011\text{ mJ}$). The internal energy is $99.61\%$ recoverable elastic strain energy. The $40.47\%$ energy dissipation is algorithmic numerical damping introduced by the Hilber-Hughes-Taylor (HHT) integrator under `MODERATE_DISSIPATION` ($\alpha = -0.41421$) to suppress high-frequency connector chatter and guarantee nonlinear convergence, rather than physical material damping or friction loss. FMBD-5 serves as a **closed-loop rigid-flexible coupling and declarative compiler integration benchmark**, not a large-strain flexible dynamics benchmark.
+> - **Physical & Energy Mechanics Clarification**: In FMBD-5, macroscopic rigid-body motion dominates system kinetic energy (ALLKE_peak ≈ 708.8 mJ), while the flexible rod undergoes small elastic deformation (ALLSE_peak ≈ 0.011 mJ). The internal energy is 99.61% recoverable elastic strain energy. The 40.47% energy dissipation is algorithmic numerical damping introduced by the Hilber-Hughes-Taylor (HHT) integrator under `MODERATE_DISSIPATION` (α = -0.41421) to suppress high-frequency connector chatter and guarantee nonlinear convergence, rather than physical material damping or friction loss. FMBD-5 serves as a **closed-loop rigid-flexible coupling and declarative compiler integration benchmark**, not a large-strain flexible dynamics benchmark.
 
 ### Unified Golden Validation Matrix & Evidence Catalog
 
