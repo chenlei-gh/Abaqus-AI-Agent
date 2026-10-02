@@ -7,9 +7,11 @@ thresholds. Callers must provide the engineering assumptions explicitly.
 from .engineering_checks import (
     check_coulomb_friction_ratio,
     check_declared_load_balance,
+    check_double_pendulum_kinematics,
     check_energy_ratio,
     check_mechanical_energy_conservation,
     check_pendulum_kinematics,
+    check_revolute_joint_kinematics,
     check_thermal_flux_balance,
     sum_reaction_components,
     sum_scalar_flux,
@@ -137,4 +139,31 @@ def mechanical_energy_conservation_from_evidence(
         initial_energy=initial_energy,
         tolerance=tolerance,
         unit=unit,
+    )
+
+
+def revolute_joint_kinematics_from_evidence(
+    joint_drift_max, joint_drift_tolerance=1e-3,
+    relative_rotation_max=None, min_relative_rotation=0.01,
+    unit_length="mm", unit_angle="rad",
+):
+    """Convert connector kinematic measurements into a revolute joint verification report."""
+    return check_revolute_joint_kinematics(
+        joint_drift_max=joint_drift_max,
+        joint_drift_tolerance=joint_drift_tolerance,
+        relative_rotation_max=relative_rotation_max,
+        min_relative_rotation=min_relative_rotation,
+        unit_length=unit_length,
+        unit_angle=unit_angle,
+    )
+
+
+def double_pendulum_kinematics_from_evidence(
+    actual_period, expected_period, period_tolerance=0.05
+):
+    """Convert double pendulum oscillation measurements into a verification report."""
+    return check_double_pendulum_kinematics(
+        actual_period=actual_period,
+        expected_period=expected_period,
+        period_tolerance=period_tolerance,
     )

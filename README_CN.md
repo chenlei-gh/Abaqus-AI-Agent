@@ -572,7 +572,9 @@ action = python_action(
 | Amplitudes | 已实现 |
 | Gravity | 已实现 |
 | Reference Points / 刚体约束 (Rigid Body) | 已实现 |
-| 刚体动力学（RP + RigidBody 物理摆） | Abaqus 2025 Golden E2E 验证已通过；多刚体 Connector / Joint 族待验证 |
+| 连接器单元 / 截面 (CONN3D2 / Hinge) | 已实现 |
+| 刚体动力学（RP + RigidBody 物理摆） | Abaqus 2025 Golden E2E 验证已通过 |
+| 多体动力学（双刚体 Hinge 连接器 / 双摆系统） | Abaqus 2025 Golden E2E 验证已通过；高阶运动副待扩展 |
 | Initial Temperature / Stress | 已实现 |
 | Assembly Instance Operations | 已实现 |
 | INP Export | 已实现 |
@@ -654,8 +656,9 @@ python -m pytest -q
 | **P1 Steady Thermal** | 3D 杆体一维稳态热传导 | 解析温度分布、热流守恒、加严门禁真实 FAIL | ✅ PASS |
 | **P1 General Contact** | 块体压紧与库仑摩擦滑移 | 法向接触压力、切向摩擦力 (μ=0.25 误差 0.08%)、接触诊断 | ✅ PASS |
 | **刚体动力学 Golden** | 铰接刚体物理摆大角度重力摆动 ($L=600\text{ mm}, \theta_0=10^\circ$) | 振动周期 ($T_{\text{corr}}=1.2713\text{ s}$, 误差 0.08%)、最大角速度 (误差 0.27%)、机械能守恒 | ✅ PASS |
+| **MBD-2 Revolute Golden** | 原生 `CONN3D2` Hinge 连接器双刚体双摆重力摆动 | 铰接点平动漂移 $\le 10^{-3}\text{ mm}$ ($9.78\times 10^{-6}\text{ mm}$)、独立相对转动 ($\Delta\theta = 6.96^\circ$)、基频振动周期 ($T_1=1.2843\text{ s}$，误差 0.54%)、机械能守恒 (耗散 2.13%) | ✅ PASS |
 
-> **刚体动力学与多体动力学边界说明**：当前刚体动力学 Golden E2E（MBD-1）完成验证的是基于 Reference Point 与原生 `RigidBody` 约束的重力驱动单刚体动力学基准。真正的多体动力学（包含体间连接器如 `CONN3D2`、Revolute/Cartesian/Slot 铰接单元族以及多连杆机构）从 MBD-2 开始规划与验证，目前尚未纳入真机 Golden E2E 闭环，不提前宣称支持。
+> **多体动力学边界说明**：MBD-1 验证了基于 Reference Point 与原生 `RigidBody` 约束的单体刚体动力学；MBD-2 进一步闭环了基于原生 `CONN3D2` 铰接连接器（Hinge Connector Element + 局部坐标系定向）的双刚体多体动力学系统。更复杂的机构系统（如 Cartesian/Slot 运动副、衬套以及闭环运动链）规划在后续扩展中。
 
 ## Abaqus V5 R2018 / B28 验证
 

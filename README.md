@@ -584,7 +584,9 @@ This escape hatch is deliberate: the action layer should not become a bottleneck
 | Amplitudes | Implemented |
 | Gravity | Implemented |
 | Reference points / Rigid bodies | Implemented |
-| Rigid-body dynamics (RP + RigidBody physical pendulum) | Golden E2E Validated (Abaqus 2025); multi-body connector/joint families pending |
+| Connector elements / Sections (CONN3D2 / Hinge) | Implemented |
+| Rigid-body dynamics (RP + RigidBody physical pendulum) | Golden E2E Validated (Abaqus 2025) |
+| Multi-body dynamics (Two-body revolute connector / double pendulum) | Golden E2E Validated (Abaqus 2025); higher-order kinematic pairs pending |
 | Initial temperature / stress | Implemented |
 | Assembly instance operations | Implemented |
 | INP export | Implemented |
@@ -662,8 +664,9 @@ The following golden engineering cases have all completed and passed real-machin
 | **P1 Steady Thermal** | 1D steady conduction across 3D solid bar | Analytical temperature profile, heat flux conservation, strict gate FAIL | ✅ PASS |
 | **P1 General Contact** | Two-body contact with Coulomb friction sliding | Normal contact pressure, penalty tangential friction mu = 0.25, contact diagnostics | ✅ PASS |
 | **Rigid-body Dynamics Golden** | Rigid body physical pendulum under gravity ($L=600\text{ mm}, \theta_0=10^\circ$) | Period ($T_{\text{corr}}=1.2713\text{ s}$, 0.08% error), max angular velocity (0.27% error), energy conservation | ✅ PASS |
+| **MBD-2 Revolute Golden** | Two-body double pendulum with native `CONN3D2` Hinge connector under gravity | Joint drift $\le 10^{-3}\text{ mm}$ ($9.78\times 10^{-6}\text{ mm}$), independent articulation ($\Delta\theta = 6.96^\circ$), fundamental period ($T_1=1.2843\text{ s}$, 0.54% error), energy conservation (2.13% loss) | ✅ PASS |
 
-> **Note on rigid-body vs. multi-body dynamics scope**: The Rigid-body Dynamics Golden E2E (MBD-1) establishes real-machine validation for single-body rigid dynamics using Reference Points and native `RigidBody` constraints under gravity. True multi-body dynamics requiring inter-body connections (such as native `CONN3D2` connector element families, Revolute/Cartesian/Slot joints, and multi-link mechanisms) start from MBD-2 and are not yet claimed as verified on real Abaqus runtimes.
+> **Note on multi-body dynamics scope**: MBD-1 establishes single-body rigid dynamics via Reference Points and native `RigidBody` constraints. MBD-2 establishes two-body articulated multi-body dynamics connected by native `CONN3D2` revolute/hinge connector elements with local coordinate orientation. More complex multi-body mechanisms (such as Cartesian/Slot joints, bushings, and closed-loop kinematic chains) remain planned for subsequent extensions.
 
 ## Abaqus R2018 / B28 validation
 

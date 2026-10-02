@@ -274,6 +274,42 @@ def _wire_connector_script(m, p):
     else:
         raise ValueError("point2_name or point2_expression required for wire_connector")
 
+    orientation = p.get("orientation")
+    orient_code = ""
+    if orientation is not None:
+        if isinstance(orientation, bool) and orientation:
+            orient_code = (
+                "\n_csys = list(a.datums.values())[0] if a.datums else a.DatumCsysByDefault(CARTESIAN)\n"
+                "a.ConnectorOrientation(region=a.sets[%s], localCsys1=_csys)"
+            ) % _q(wire_set_name)
+        elif isinstance(orientation, int):
+            orient_code = (
+                "\n_csys = a.datums[%d]\n"
+                "a.ConnectorOrientation(region=a.sets[%s], localCsys1=_csys)"
+            ) % (orientation, _q(wire_set_name))
+        elif isinstance(orientation, str):
+            orient_code = (
+                "\ndef _resolve_csys(assy, tgt):\n"
+                "    if isinstance(tgt, str):\n"
+                "        if hasattr(assy, 'features') and tgt in assy.features and hasattr(assy.features[tgt], 'id'):\n"
+                "            fid = assy.features[tgt].id\n"
+                "            if fid in assy.datums:\n"
+                "                return assy.datums[fid]\n"
+                "        for k, v in assy.datums.items():\n"
+                "            if str(k) == tgt or getattr(v, 'name', None) == tgt:\n"
+                "                return v\n"
+                "        try:\n"
+                "            res = eval(tgt, globals(), {'a': assy, 'assy': assy, 'm': mdb.models[%s]})\n"
+                "            if not isinstance(res, str):\n"
+                "                return res\n"
+                "        except Exception:\n"
+                "            pass\n"
+                "    return tgt\n"
+                "_csys = _resolve_csys(a, %s)\n"
+                "if _csys is not None and not isinstance(_csys, str):\n"
+                "    a.ConnectorOrientation(region=a.sets[%s], localCsys1=_csys)"
+            ) % (_q(m), _q(orientation), _q(wire_set_name))
+
     return (
         "from abaqusConstants import *\n"
         "a = mdb.models[%s].rootAssembly\n"
@@ -294,7 +330,7 @@ def _wire_connector_script(m, p):
         "if not _edges:\n"
         "    raise RuntimeError('Failed to locate wire edges for feature: ' + %s)\n"
         "a.Set(name=%s, edges=a.edges.findAt((_edges[0].pointOn[0],)))\n"
-        "a.SectionAssignment(region=a.sets[%s], sectionName=%s)"
+        "a.SectionAssignment(region=a.sets[%s], sectionName=%s)%s"
     ) % (
         _q(m),
         p1_code,
@@ -305,6 +341,7 @@ def _wire_connector_script(m, p):
         _q(wire_set_name),
         _q(wire_set_name),
         _q(sec_name),
+        orient_code,
     )
 
 def _bc_script(action):

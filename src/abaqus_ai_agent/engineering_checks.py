@@ -235,3 +235,57 @@ def check_mechanical_energy_conservation(energy_loss, initial_energy, tolerance=
         message="energy_fluctuation_ratio=%g (loss=%g %s, ref_energy=%g %s)" % (ratio, loss, unit, e0, unit),
     )
     return evaluate_checks((check,))
+
+
+def check_revolute_joint_kinematics(joint_drift_max, joint_drift_tolerance=1e-3,
+                                    relative_rotation_max=None, min_relative_rotation=0.01,
+                                    unit_length="mm", unit_angle="rad"):
+    """Check revolute connector kinematic continuity (zero translational drift) and articulation."""
+    drift_act = float(joint_drift_max)
+    drift_tol = float(joint_drift_tolerance)
+    drift_passed = drift_act <= drift_tol
+    check_drift = EngineeringCheck(
+        name="revolute_joint_drift",
+        passed=drift_passed,
+        actual=drift_act,
+        expected=0.0,
+        tolerance=drift_tol,
+        unit=unit_length,
+        message="max_joint_drift=%g %s (tolerance=%g %s)" % (drift_act, unit_length, drift_tol, unit_length),
+    )
+    checks = [check_drift]
+
+    if relative_rotation_max is not None:
+        rel_act = float(relative_rotation_max)
+        min_rel = float(min_relative_rotation)
+        rel_passed = rel_act >= min_rel
+        check_rel = EngineeringCheck(
+            name="revolute_relative_articulation",
+            passed=rel_passed,
+            actual=rel_act,
+            expected=min_rel,
+            tolerance=0.0,
+            unit=unit_angle,
+            message="max_relative_rotation=%g %s (min_required=%g %s)" % (rel_act, unit_angle, min_rel, unit_angle),
+        )
+        checks.append(check_rel)
+
+    return evaluate_checks(tuple(checks))
+
+
+def check_double_pendulum_kinematics(actual_period, expected_period, period_tolerance=0.05):
+    """Check double pendulum fundamental period against analytical Lagrangian small-angle theory."""
+    t_act = float(actual_period)
+    t_exp = float(expected_period)
+    t_err = abs(t_act - t_exp) / t_exp
+    t_passed = t_err <= period_tolerance
+    check_t = EngineeringCheck(
+        name="double_pendulum_fundamental_period",
+        passed=t_passed,
+        actual=t_act,
+        expected=t_exp,
+        tolerance=float(period_tolerance),
+        unit="s",
+        message="actual_period=%g s, expected_period=%g s (relative_error=%g)" % (t_act, t_exp, t_err),
+    )
+    return evaluate_checks((check_t,))

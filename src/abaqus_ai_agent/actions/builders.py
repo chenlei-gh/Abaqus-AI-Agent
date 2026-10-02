@@ -183,9 +183,12 @@ def wire_connector(
     point2_expression=None,
     wire_feature_name=None,
     wire_set_name=None,
+    orientation=None,
     **kwargs,
 ):
     params = {"name": name, "section_name": section_name}
+    if orientation is not None:
+        params["orientation"] = orientation
     p1_name = point1_name or (point1 if isinstance(point1, str) else None)
     p2_name = point2_name or (point2 if isinstance(point2, str) else None)
     if p1_name:
