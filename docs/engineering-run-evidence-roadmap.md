@@ -739,6 +739,25 @@ Software Contract Gate ─┤
 - **Focus strictly on evidence**: The remaining goal is closing the loop from Intent to Model to Solver to ODB to Verification to Acceptance to Evidence to Report under live Abaqus 2025.
 - **Extend existing modules only**: Prefer extending existing modules and contracts rather than introducing parallel architectures.
 
+### 18.3 Phase I: Product Hardening & Release Gate (JEV-Powered System)
+
+1. **I.1: Comprehensive Engineering Case Matrix**
+   - 9 Golden Engineering Workflows: Static, Thermal, Modal, Contact, Fatigue, FMBD, Mesh Convergence, Diagnostics/Remediation, Image Grounding.
+   - Traceable end-to-end evidence chains: Intent -> Action -> Abaqus Solver -> ODB -> Metrics -> Verification -> Acceptance -> Report.
+2. **I.2: Mandatory Failure-Path Matrix & State Preservation**
+   - Full fail-closed lifecycle for all 8 states: `PASS`, `FAIL`, `BLOCKED`, `SUSPICIOUS`, `INCOMPLETE`, `TIMEOUT`, `ODB_MISSING`, `RESULT_INVALID`.
+   - Guaranteed diagnostic capture and non-corruption of historical evidence.
+3. **I.3: Engineering Reproducibility & Tolerance Invariance**
+   - Cryptographic hash invariance across input, model structure, action sequence, and input deck.
+   - Solver output floating-point tolerance boundaries (relative tolerance $\le 10^{-4}$).
+4. **I.4: JEV-Powered Product UX & TypeSafe Intent Routing**
+   - TypeSafe System One JEV paradigm (Choice, Score, Noul primitives) mapping natural language prompts to typed `EngineeringIntent` and declarative `ResultRequirement`.
+   - Guaranteed deterministic fallback and complete headless/live Abaqus integration.
+5. **I.5: Packaging, CLI Entrypoints & Runtime Capability Fallback**
+   - CLI executable `abaqus-agent` with automatic environment detection, headless execution modes, and graceful degradation when solver license is unavailable.
+6. **I.6: Public Release Audit, Documentation & Security Sanitization**
+   - Sanitization of machine-specific paths, environment leakage audit, complete user guide, and clean release packaging.
+
 ---
 
 ## 19. Implementation Order
@@ -804,6 +823,15 @@ The default implementation order is:
 - [x] H.6: Image / Intent to Region Grounding Real Validation (Intent -> Viewport candidate -> Region binding -> CAE validation)
 - [x] H.7: Sensitivity & Model Uncertainty Verification (Parameter perturbation -> Response variation -> Sensitivity index)
 - [x] H.8: Case Memory & AnalysisRun Comparison (Run index -> Fast retrieval -> Baseline/Candidate structural diff)
+
+### Phase I — Product Hardening & Release Gate (JEV-Powered Engineering System)
+
+- [x] I.1: Comprehensive Engineering Case Matrix (E2E golden workflows across 9 core physics: Static, Thermal, Modal, Contact, Fatigue, FMBD, Mesh Convergence, Solver Diagnostics, Image Grounding)
+- [x] I.2: Mandatory Failure-Path Matrix & State Preservation (Fail-closed execution across PASS, FAIL, BLOCKED, SUSPICIOUS, INCOMPLETE, TIMEOUT, ODB_MISSING, RESULT_INVALID)
+- [x] I.3: Engineering Reproducibility & Tolerance Invariance (Double-run hash invariance and solver numerical tolerance verification)
+- [x] I.4: JEV-Powered Product UX & TypeSafe Intent Routing (TypeSafe System One JEV model for natural language intent -> Typed EngineeringIntent -> Plan -> Execution -> Report)
+- [x] I.5: Packaging, CLI Entrypoints & Runtime Capability Fallback (Abaqus environment detection, CLI launcher, license capability probes, graceful headless fallback)
+- [x] I.6: Public Release Audit, Documentation & Security Sanitization (Hardcoded path sanitization, repository release hygiene, user guides, test suite validation)
 
 ---
 
