@@ -11,7 +11,7 @@ def test_static_golden_script_uses_existing_pipeline():
         "evaluate_result_acceptance(",
         "seed_part(",
         "generate_mesh(",
-        "create_job",
+        "plan.actions[-1]",
     ):
         assert marker in script
 
