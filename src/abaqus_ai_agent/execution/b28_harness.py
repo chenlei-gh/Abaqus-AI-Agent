@@ -80,8 +80,6 @@ try:
     instance = assembly.Instance(name="Block-1", part=part, dependent=ON)
 
     model.StaticStep(name="Step-1", previous="Initial")
-    if "F-Output-1" in model.fieldOutputRequests:
-        model.fieldOutputRequests["F-Output-1"].setValues(variables=("S", "U", "RF"))
 
     region = regionToolset.Region(faces=instance.faces.findAt(((0.0, 0.5, 0.5),)))
     model.EncastreBC(name="BC-1", createStepName="Initial", region=region)
@@ -103,7 +101,22 @@ try:
     job.waitForCompletion()
 
     status = getattr(job, "status", None)
-    marker("job_completed", status=str(status))
+    completion_source = "job_status"
+    if str(status) != "COMPLETED":
+        sta_path = JOB + ".sta"
+        log_path = JOB + ".log"
+        sta_ok = False
+        log_ok = False
+        if os.path.exists(sta_path):
+            with open(sta_path, "r") as handle:
+                sta_ok = "THE ANALYSIS HAS COMPLETED SUCCESSFULLY" in handle.read()
+        if os.path.exists(log_path):
+            with open(log_path, "r") as handle:
+                log_ok = ("Abaqus JOB " + JOB + " COMPLETED") in handle.read()
+        if sta_ok and log_ok:
+            status = "COMPLETED"
+            completion_source = "solver_artifacts"
+    marker("job_completed", status=str(status), completion_source=completion_source)
     if str(status) != "COMPLETED":
         marker("error", error_class="solver_job", error_message=str(status))
         raise RuntimeError("Abaqus job did not complete: " + str(status))
