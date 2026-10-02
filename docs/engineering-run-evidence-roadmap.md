@@ -2,7 +2,7 @@
 
 **Status:** Baseline for implementation and audit  
 **Version:** 2026-10-02  
-**Scope:** Abaqus-AI-Agent engineering architecture, evidence chain, remaining implementation, and real-machine validation
+**Scope:** Abaqus-AI-Agent engineering architecture, foundational contracts, evidence chain, remaining implementation, and real-machine validation
 
 ---
 
@@ -113,7 +113,194 @@ The following ideas are approved for absorption **only when mapped into the exis
 
 ---
 
-## 4. P0 — Complete the Engineering Run
+## 4. Foundational Engineering Contract Closure
+
+The current code-level audit confirms that the project already has sufficient Abaqus API coverage for the next real-machine phase. The remaining foundational work is **contract strengthening, not broad feature expansion**.
+
+The foundational semantic chain should be:
+
+```
+Engineering Model
+│
+├── UnitSystem
+├── Material Definition
+├── Geometry / Region Reference
+├── Analysis Step
+├── Boundary Conditions / Loads
+├── Mesh Specification / Quality
+└── Result Requirement
+        ↓
+Workflow → Action → Abaqus → ODB → Metric → Verification → Acceptance
+```
+
+### 4.1 Region — P0
+
+The repository already contains:
+
+- `GeometryCandidate`
+- `GroundingResult`
+- `GeometrySelection`
+- `RegionBinding`
+- viewport/geometry grounding
+- native Set/Surface materialization
+
+**Do not create a second geometry subsystem.**
+
+The remaining problem is that many foundational Actions still accept raw `region_expression` strings. The target is:
+
+```
+GeometrySelection / RegionBinding
+        ↓
+Unified Region Resolver
+        ↓
+native Abaqus region expression
+        ↓
+BC / Load / Section / Mesh / Contact / Output
+```
+
+Requirements:
+
+- region identity must be stable and inspectable
+- entity type must be explicit
+- named Set/Surface and temporary geometry selections must remain distinguishable
+- grounding source/evidence should be retained where applicable
+- empty/nonexistent regions must fail closed
+- existing `region_expression` remains a compatibility/internal representation during migration
+
+**Do not break existing valid Action APIs merely to rename fields.**
+
+### 4.2 BC / Load Preflight — P0
+
+The current preflight layer already validates basic model/action prerequisites. Strengthen it to cover engineering consistency before execution.
+
+BC checks should include where applicable:
+
+- region exists and is non-empty
+- entity/region type is compatible with the requested BC
+- DOFs are valid for the selected procedure/entity
+- duplicate or obviously conflicting constraints
+- obvious rigid-body-motion risk
+- step exists and is applicable
+- amplitude reference is valid
+- unit/dimension consistency
+
+Load checks should include where applicable:
+
+- region exists and is non-empty
+- load type is compatible with the target entity
+- magnitude/direction is structurally valid
+- unit/dimension consistency
+- step validity
+- amplitude validity
+- obvious BC/load conflict
+- required geometric grounding evidence
+
+The validator should remain deterministic and evidence-oriented. It must not pretend to perform full physical correctness proof.
+
+### 4.3 Mesh Contract and Quality — P0
+
+The code already has mesh actions, mesh inspection, mesh-quality contracts, and mesh convergence. **Do not expand mesh API coverage merely for feature count.**
+
+Strengthen the existing contract so mesh intent can express, where applicable:
+
+- global seed
+- local refinement
+- element family/formulation/order/integration
+- mesh controls
+- local transition intent
+- quality thresholds
+- convergence target
+
+Quality must distinguish:
+
+- native-supported checks
+- element/procedure-specific checks
+- analysis-only or derived checks
+- unsupported/unverified checks
+
+Real-machine evidence must establish which quality metrics are actually available for the selected Abaqus version and element type.
+
+Target:
+
+```
+mesh action
+→ actual Abaqus mesh
+→ quality extraction
+→ quality status
+→ Evidence
+→ Acceptance
+```
+
+### 4.4 Unit System — P1
+
+The existing UnitSystem implementation is retained; do not create another unit framework.
+
+The remaining task is to propagate quantity/unit semantics consistently through foundational Actions:
+
+```
+Intent
+→ Material
+→ Geometry/Region where dimensional
+→ BC
+→ Load
+→ Step/time
+→ Mesh
+→ ResultRequirement
+→ Metric
+→ Acceptance
+→ Report
+```
+
+Avoid silent loss of unit semantics through bare numeric values where engineering meaning depends on units.
+
+Where full Quantity objects would cause excessive compatibility churn, retain numeric Action fields but validate them against an explicit model/run UnitSystem and record the unit semantics in the run/evidence layer.
+
+### 4.5 Material Definition — P1
+
+The current code already covers the principal material Actions needed by the existing workflows, including elastic, density, plastic and thermal properties.
+
+Do not add a large material database or broad material API family now.
+
+Instead, progressively unify the semantic representation into a material definition containing, where applicable:
+
+- material identity
+- provenance/source
+- UnitSystem
+- elastic properties
+- density
+- plasticity
+- thermal properties
+- temperature dependence
+- validity/assumptions
+
+Existing low-level Actions may remain the Abaqus materialization mechanism.
+
+### 4.6 Analysis Step Contract — P1
+
+The repository already supports Static, Explicit Dynamic, Implicit Dynamic, Frequency, Heat Transfer and Coupled Temperature-Displacement procedures.
+
+Do not add Step types merely to increase coverage.
+
+Unify the engineering semantics around:
+
+```
+AnalysisStep
+├── procedure
+├── previous
+├── time
+├── nonlinear settings
+├── increment/control settings
+├── stabilization
+├── amplitude
+├── output profile
+└── solver-specific settings
+```
+
+Existing procedure-specific Actions remain the implementation adapters.
+
+---
+
+## 5. P0 — Complete the Engineering Run
 
 ### P0.1 AnalysisRun completeness
 
@@ -173,9 +360,9 @@ report
 
 ---
 
-## 5. P0 — Declarative Result Requirements
+## 6. P0 — Declarative Result Requirements
 
-The existing `EngineeringMetric` layer is correct and should be extended rather than replaced.
+The existing `ResultRequirement` / `EngineeringMetric` layer is correct and should be extended rather than replaced.
 
 Target semantic chain:
 
@@ -222,7 +409,7 @@ The key objective is to make the system understand **what engineering result is 
 
 ---
 
-## 6. P0 — Acceptance as an Evidence Gate
+## 7. P0 — Acceptance as an Evidence Gate
 
 The existing deterministic acceptance layer should remain the single acceptance system.
 
@@ -253,7 +440,7 @@ Important rules:
 
 ---
 
-## 7. P1 — AnalysisRun Diff
+## 8. P1 — AnalysisRun Diff
 
 Extend the existing `state_diff.py` direction into a run-level diff.
 
@@ -288,20 +475,9 @@ Compare, where available:
 
 The diff should report deterministic before/after values and deltas. It should not invent engineering significance.
 
-Example:
-
-```
-Mesh: 2.0 mm → 1.5 mm
-Load: 10 kN → 12 kN
-Max Mises: 183 MPa → 211 MPa
-Displacement: 0.42 mm → 0.51 mm
-GCI: 1.8% → 0.9%
-Acceptance: PASS → PASS
-```
-
 ---
 
-## 8. P1 — Solver Diagnostics
+## 9. P1 — Solver Diagnostics
 
 Build a deterministic diagnostic pattern library around real Abaqus artifacts:
 
@@ -331,7 +507,7 @@ If correction is later automated, it must pass through the existing controlled-c
 
 ---
 
-## 9. P1 — Runtime Error Normalization
+## 10. P1 — Runtime Error Normalization
 
 Strengthen the existing execution layer using lessons from Abaqus-Control-MCP and abaqus-mcp:
 
@@ -359,7 +535,7 @@ MCP/TCP/file IPC may be adapters. They are not the engineering core.
 
 ---
 
-## 10. P2 — Case Memory / Run Index
+## 11. P2 — Case Memory / Run Index
 
 Only after AnalysisRun is stable.
 
@@ -387,11 +563,11 @@ Do not create a separate Capsule/Case/Memory persistence model unless a concrete
 
 ---
 
-## 11. Peripheral Capabilities Requiring Real-Machine Closure
+## 12. Peripheral Capabilities Requiring Real-Machine Closure
 
 These capabilities must be separated into deterministic tests and live Abaqus validation.
 
-### 11.1 Engineering Report
+### 12.1 Engineering Report
 
 L0 deterministic:
 
@@ -423,7 +599,7 @@ Real Abaqus
 
 The report must be traceable to actual solver artifacts.
 
-### 11.2 Image → Engineering Intent / Region
+### 12.2 Image → Engineering Intent / Region
 
 Separate:
 
@@ -445,7 +621,7 @@ viewport image
 → ODB
 ```
 
-### 11.3 Mesh Quality
+### 12.3 Mesh Quality
 
 Real-machine validation required for:
 
@@ -457,7 +633,7 @@ mesh action
 → acceptance
 ```
 
-### 11.4 Geometry-to-Mesh Strategy
+### 12.4 Geometry-to-Mesh Strategy
 
 Real-machine validation required for:
 
@@ -471,7 +647,7 @@ geometry
 
 ---
 
-## 12. Complete Real-Machine Validation Matrix
+## 13. Complete Real-Machine Validation Matrix
 
 ### Already substantially covered by the Golden Ladder
 
@@ -504,24 +680,31 @@ geometry
 ### Still requiring explicit real-machine closure
 
 #### P0
+
 - native mesh-quality verification
 - geometry-to-mesh strategy execution
 - real ODB → Evidence → Engineering Report
 - image/viewport → region → BC/load → solver → evidence
 - complete AnalysisRun/Evidence persistence through a real run
+- representative BC/Load preflight behavior against real Abaqus model state
+- Region resolution/materialization across BC/Load/Section/Mesh/Contact workflows
 
 #### P1
+
 - controlled solver-failure diagnostics
 - runtime error normalization under real Abaqus failures
 - AnalysisRun baseline/candidate diff on real solver runs
+- representative unit semantics through real Action → Abaqus → ODB workflows
+- material/step semantic contracts across representative procedures
 
 #### P2
+
 - Case Memory / Run Index over real runs
 - repeated-run retrieval and comparison
 
 ---
 
-## 13. Failure-Path Validation Is Mandatory
+## 14. Failure-Path Validation Is Mandatory
 
 Do not validate only successful runs.
 
@@ -550,12 +733,15 @@ Representative tests:
 8. Contact evidence is insufficient.
 9. Runtime times out.
 10. Artifact collection is incomplete.
+11. Required region is missing or empty.
+12. BC/load preflight detects a deterministic conflict.
+13. Required unit/dimension semantics are invalid or unavailable.
 
 Every failure path must produce a structured status and supporting evidence.
 
 ---
 
-## 14. Verification / Validation Boundary
+## 15. Verification / Validation Boundary
 
 The project provides computational verification and evidence management.
 
@@ -579,7 +765,7 @@ Physical validation requires experiment/application-specific evidence and remain
 
 ---
 
-## 15. V&V / Scientific Credibility Principles
+## 16. V&V / Scientific Credibility Principles
 
 The implementation should remain consistent with established computational mechanics V&V principles:
 
@@ -594,7 +780,7 @@ Richardson extrapolation / GCI should remain a verification mechanism, not be pr
 
 ---
 
-## 16. What Must NOT Be Added
+## 17. What Must NOT Be Added
 
 Unless a concrete requirement proves otherwise, do not add:
 
@@ -605,6 +791,9 @@ Unless a concrete requirement proves otherwise, do not add:
 - a second Acceptance layer
 - a second Executor
 - a second Agent orchestrator
+- a second Geometry/Region subsystem
+- a second Unit framework
+- a parallel Material/Step semantic architecture
 - MCP as the core architecture
 - unrestricted automatic model repair
 - a giant copied skill library
@@ -615,39 +804,60 @@ Prefer extending existing modules and contracts.
 
 ---
 
-## 17. Implementation Order
+## 18. Implementation Order
 
 The default implementation order is:
 
-### Phase A — Architecture closure
+### Phase A — Foundational contract closure
+
+- [ ] Unify Region resolution without breaking existing Action compatibility
+- [ ] Strengthen BC/Load deterministic preflight
+- [ ] Close native mesh-quality evidence boundaries
+- [ ] Preserve existing Geometry grounding and RegionBinding architecture
+- [ ] Avoid new parallel foundational subsystems
+
+### Phase B — Engineering Run / Evidence closure
+
 - [ ] Complete AnalysisRun as canonical Engineering Run
 - [ ] Complete provenance/content-hash semantics
 - [ ] Unify evidence/artifacts/metrics/verification/acceptance/report references
 
-### Phase B — Result semantics
+### Phase C — Result semantics
+
 - [ ] Complete declarative ResultRequirement
 - [ ] Ensure output planning is driven by result requirements
 - [ ] Normalize EngineeringMetric
 - [ ] Ensure metrics are traceable to ODB evidence
 
-### Phase C — Acceptance
+### Phase D — Acceptance
+
 - [ ] Ensure missing evidence blocks acceptance
 - [ ] Ensure all verification gates are deterministic
 - [ ] Preserve PASS/WARNING/FAIL/BLOCKED distinctions
 
-### Phase D — Engineering comparison/diagnosis
+### Phase E — Engineering comparison/diagnosis
+
 - [ ] AnalysisRun Diff
 - [ ] Solver diagnostic pattern library
 - [ ] Runtime error normalization
 
-### Phase E — Real-machine peripheral closure
+### Phase F — Unit / Material / Step semantic strengthening
+
+- [ ] Propagate UnitSystem through foundational Actions
+- [ ] Strengthen MaterialDefinition without creating a second material architecture
+- [ ] Strengthen AnalysisStep without creating a second step architecture
+
+### Phase G — Real-machine peripheral closure
+
 - [ ] Mesh quality
 - [ ] Geometry-to-mesh strategy
 - [ ] Real ODB-to-report
 - [ ] Image-to-region-to-BC/load
 - [ ] Failure-path matrix
+- [ ] representative Region/BC/Load real-machine validation
 
-### Phase F — Productization
+### Phase H — Productization
+
 - [ ] Case Memory / Run Index
 - [ ] polished engineering report
 - [ ] run comparison UX
@@ -655,7 +865,7 @@ The default implementation order is:
 
 ---
 
-## 18. Change-Control Checklist
+## 19. Change-Control Checklist
 
 Before modifying the engineering core, answer all of these:
 
@@ -677,7 +887,7 @@ If the last two questions are problematic, stop and redesign before coding.
 
 ---
 
-## 19. Definition of Done for the Current Phase
+## 20. Definition of Done for the Current Phase
 
 The current phase is complete when:
 
@@ -691,14 +901,18 @@ The current phase is complete when:
 8. Mesh quality and geometry-to-mesh strategy are verified on the real machine.
 9. Image/viewport grounding can be traced to actual Abaqus regions in live validation.
 10. Failure paths are tested, not only successful paths.
-11. No duplicate Capsule/Contract/Lens/Acceptance/Executor architecture has been introduced.
-12. The project can clearly distinguish computational verification from physical validation.
+11. Region resolution is consistently usable across the foundational BC/Load/Section/Mesh/Contact workflows.
+12. BC/Load preflight catches deterministic structural inconsistencies before execution.
+13. Unit semantics are preserved across representative foundational Actions.
+14. Material and AnalysisStep semantics are coherent without duplicate architectures.
+15. No duplicate Capsule/Contract/Lens/Acceptance/Executor/Geometry/Unit architecture has been introduced.
+16. The project can clearly distinguish computational verification from physical validation.
 
 At that point, the project should shift from feature expansion to systematic real-machine regression, usability, documentation, and productization.
 
 ---
 
-## 20. External Reference Basis
+## 21. External Reference Basis
 
 The architecture was cross-checked against:
 
@@ -714,8 +928,8 @@ These references are design inputs, not instructions to copy their architecture 
 
 ---
 
-## 21. One-Line Architectural Rule
+## 22. One-Line Architectural Rule
 
-> **Do not add another subsystem when an existing AnalysisRun, ResultRequirement, Evidence, Verification, Acceptance, Provenance, or Reporting component can own the requirement.**
+> **Do not add another subsystem when an existing AnalysisRun, ResultRequirement, Evidence, Verification, Acceptance, Provenance, Reporting, Geometry/Region, or Unit component can own the requirement.**
 
 This rule should be used during future code reviews to prevent architectural drift.
