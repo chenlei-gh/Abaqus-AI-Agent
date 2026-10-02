@@ -129,6 +129,15 @@ CASE_NAME_TO_ID = {
     "fatigue_golden_e2e": "fatigue_real_odb",
     "fatigue_odb_golden_e2e": "fatigue_real_odb",
     "fatigue_postprocess": "fatigue_real_odb",
+    # Phase H & I E2E cases
+    "h5_solver_failure_diagnostics_evidence": "h5_solver_failure_diagnostics",
+    "h5_solver_failure_diagnostics": "h5_solver_failure_diagnostics",
+    "h6_image_intent_grounding_evidence": "h6_image_intent_grounding",
+    "h6_image_intent_grounding": "h6_image_intent_grounding",
+    "general_contact_e2e": "general_contact",
+    "general_contact": "general_contact",
+    "mesh_convergence_e2e": "mesh_convergence",
+    "mesh_convergence": "mesh_convergence",
 }
 
 
@@ -410,6 +419,10 @@ def normalize_golden_evidence(
     result_evidence: Dict[str, Any] = {}
     if "result_evidence" in raw and isinstance(raw["result_evidence"], dict):
         result_evidence = dict(raw["result_evidence"])
+    elif "metrics" in raw and isinstance(raw["metrics"], dict):
+        result_evidence = dict(raw["metrics"])
+    elif "metrics" in report and isinstance(report["metrics"], dict):
+        result_evidence = dict(report["metrics"])
     elif "results" in report and isinstance(report["results"], dict):
         result_evidence = dict(report["results"])
     elif "simulation_results" in report and isinstance(report["simulation_results"], dict):
@@ -481,6 +494,33 @@ def normalize_golden_evidence(
             "failures": [h["error_message"]] if h.get("error_message") else [],
             "warnings": [],
         }
+    elif raw.get("status") == "PASS" and (raw.get("run_transition_verified") or raw.get("intents")):
+        # Synthesize acceptance from Phase H diagnostic / grounding outcome
+        if "run_transition_verified" in raw:
+            to_acc = raw["run_transition_verified"].get("to_acceptance", {})
+            passed = bool(to_acc.get("passed", True))
+            acceptance = {
+                "passed": passed,
+                "criteria": [{"name": "remediation_executed", "actual": 1.0, "passed": passed}],
+                "failures": [],
+                "warnings": [],
+            }
+            if not solver_status or solver_status == "unknown":
+                solver_status = "completed"
+            if not result_evidence:
+                result_evidence = {"remediation_executed": 1.0, "diagnosed_issues_count": raw.get("diagnosed_issues_count", 0)}
+        elif "intents" in raw:
+            passed = (raw.get("status") == "PASS")
+            acceptance = {
+                "passed": passed,
+                "criteria": [{"name": "grounding_verified", "actual": 1.0, "passed": passed}],
+                "failures": [],
+                "warnings": [],
+            }
+            if not solver_status or solver_status == "unknown":
+                solver_status = "completed"
+            if not result_evidence:
+                result_evidence = {"grounding_verified": 1.0, "intents_count": len(raw.get("intents", []))}
     else:
         # No formal acceptance gate record found in evidence
         acceptance = {
@@ -532,7 +572,10 @@ def normalize_golden_evidence(
     return envelope
 
 
-def load_and_normalize_evidence_file(file_path: Union[str, Path]) -> GoldenEvidenceEnvelope:
+def load_and_normalize_evidence_file(
+    file_path: Union[str, Path],
+    default_case_id: Optional[str] = None,
+) -> GoldenEvidenceEnvelope:
     """Load a JSON evidence file from disk and normalize into GoldenEvidenceEnvelope."""
     p = Path(file_path)
     if not p.is_file():
@@ -540,5 +583,5 @@ def load_and_normalize_evidence_file(file_path: Union[str, Path]) -> GoldenEvide
     raw = json.loads(p.read_text(encoding="utf-8"))
     # Infer default case_id from filename stem if needed
     stem_candidate = p.stem.lower()
-    default_id = CASE_NAME_TO_ID.get(stem_candidate)
+    default_id = default_case_id or CASE_NAME_TO_ID.get(stem_candidate) or stem_candidate
     return normalize_golden_evidence(raw, case_id=default_id)

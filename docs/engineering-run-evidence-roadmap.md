@@ -843,6 +843,23 @@ The default implementation order is:
 - [x] I.6R: Repository-Wide Security, Hygiene & Path Leakage Audit (Scan entire git tracked tree for private paths, API keys, credentials, and untracked binaries)
 - [x] CI Gate: Automated CI Workflow Matrix & Verification (GitHub Actions workflow covering pytest, packaging smoke, and release hygiene audit)
 
+### Phase I.R.1 — Evidence Authenticity & Live Abaqus Process Closure (The Real Machine Gate)
+
+This phase establishes the strict dual-gate separation required for production release:
+1. **CI Gate (Software Contracts & Headless Invariance)**:
+   - Platform: Cross-platform (Ubuntu, Windows, macOS) in GitHub Actions.
+   - Scope: Pure Python unit tests, Golden Evidence envelope structural parsing, TypeSafe JEV ambiguity rejection, CLI packaging smoke test, Git-tree hygiene & path sanitizer.
+   - Rule: Deterministic, hermetic, zero external Abaqus solver license dependency. Fails closed on any contract violation.
+2. **Real Machine Gate (Live Abaqus 2025 Process & Solver Closure)**:
+   - Platform: Windows host with authentic Abaqus 2025 CAE / Standard / Explicit solver installation.
+   - Scope: Live Abaqus noGUI/Batch execution, real OS subprocess lifecycle & failure injection, true dual-run A/B solver execution & physical ODB numerical invariance (tolerance <= 1e-4), live canonical physics solving.
+   - Rule: Zero hardcoded analytical approximations (e.g. $FL^3/3EI$ or static constants). Every live run must produce an authentic ODB file, verified timestamp, authentic field output extraction, and complete provenance.
+
+- [x] I.1-Live: True Abaqus Fresh Solver Execution (Reject hard-coded / analytical Python stubs. Drive real Abaqus solver to produce fresh live ODB, fresh solver artifacts, and fresh extracted metrics across representative canonical physics)
+- [x] I.2-Live: Real OS Subprocess Boundary & Injected Failure Probes (Spawn real OS subprocesses via subprocess.Popen/run to generate non-zero exit codes, actual TimeoutExpired exceptions, and real workdir missing/corrupt ODB artifacts to verify process-level fail-closed integrity)
+- [x] I.3-Live: True Live Abaqus A/B Dual-Run & Dual-ODB Verification (Eliminate single-run fallback loophole. Require true independent Run B; execute Run A and Run B through live Abaqus to compare physical ODB metrics within relative tolerance <= 1e-4, and verify rejection under physical perturbation)
+- [x] Gate Distinction: Formalize boundary between CI Gate (cross-platform software contracts, headless deterministic tests) and Real Machine Gate (Windows Abaqus 2025 solver execution & ODB verification)
+
 ---
 
 ## 20. Change-Control Checklist

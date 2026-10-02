@@ -2,16 +2,29 @@
 
 from __future__ import annotations
 
+import pytest
 from pathlib import Path
 
-from tools.i3_reproducibility import compare_reproducibility, execute_dual_run_verification
+from tools.i3_reproducibility import (
+    compare_reproducibility,
+    execute_dual_run_verification,
+    execute_live_abaqus_dual_run,
+)
 
 ROOT = Path(__file__).resolve().parent.parent
 
 
-def test_reproducibility_on_static_golden():
+def test_reproducibility_rejects_missing_or_none_run_b():
+    """Assert that self-comparison is forbidden and requires an independent Run B."""
     evidence_path = ROOT / "machine_validation" / "static_golden_e2e.json"
-    manifest = compare_reproducibility(evidence_path, None, relative_tolerance=1e-4)
+    with pytest.raises(ValueError, match="Run B evidence file is strictly required"):
+        compare_reproducibility(evidence_path, None, relative_tolerance=1e-4)
+
+
+def test_reproducibility_on_independent_runs():
+    evidence_a = ROOT / "machine_validation" / "static_golden_e2e.json"
+    evidence_b = ROOT / "machine_validation" / "static_golden_run_b.json"
+    manifest = compare_reproducibility(evidence_a, evidence_b, relative_tolerance=1e-4)
 
     assert manifest["schema_version"] == "reproducibility_evidence_v1"
     assert manifest["case_id"] == "static_cantilever"

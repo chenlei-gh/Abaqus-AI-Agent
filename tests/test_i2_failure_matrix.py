@@ -8,6 +8,7 @@ from tools.i2_failure_matrix import (
     CANONICAL_FAILURE_SPECS,
     evaluate_failure_path_case,
     run_failure_matrix_verification,
+    spawn_and_evaluate_real_process_failure,
 )
 
 
@@ -45,4 +46,30 @@ def test_failure_matrix_verification_runs():
     for p in rt_probes:
         assert p["fail_closed"] is True
         assert p["evidence_preserved"] is True
+        assert p["is_live_subprocess"] is True
+        assert p["real_exit_code"] is not None
         assert p["detected_status"] in ("INCOMPLETE", "TIMEOUT", "ODB_MISSING", "RESULT_INVALID")
+
+
+def test_spawn_and_evaluate_real_process_failure_direct():
+    """Directly assert that authentic OS subprocesses are invoked and intercepted."""
+    p_crash = spawn_and_evaluate_real_process_failure(
+        probe_id="LIVE-CRASH-01",
+        scenario="Live abort with exit 137",
+        probe_type="CRASH",
+    )
+    assert p_crash.is_live_subprocess is True
+    assert p_crash.real_exit_code == 137
+    assert p_crash.detected_status == "INCOMPLETE"
+    assert p_crash.fail_closed is True
+    assert p_crash.evidence_preserved is True
+
+    p_timeout = spawn_and_evaluate_real_process_failure(
+        probe_id="LIVE-TIMEOUT-01",
+        scenario="Live sleep exceeding timeout limit",
+        probe_type="TIMEOUT",
+    )
+    assert p_timeout.is_live_subprocess is True
+    assert p_timeout.detected_status == "TIMEOUT"
+    assert p_timeout.fail_closed is True
+    assert p_timeout.evidence_preserved is True

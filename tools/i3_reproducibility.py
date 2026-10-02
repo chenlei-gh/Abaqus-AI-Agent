@@ -35,6 +35,7 @@ if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
 from abaqus_ai_agent.contracts.intent import EngineeringIntent
+from abaqus_ai_agent.execution.batch import BatchExecutor, resolve_default_launcher
 from abaqus_ai_agent.golden_evidence import load_and_normalize_evidence_file
 
 
@@ -90,6 +91,193 @@ class DualRunResult:
             "acceptance_match": self.acceptance_match,
             "reproducibility_passed": self.reproducibility_passed,
         }
+
+
+def _build_abaqus_beam_script(job_name: str, youngs_modulus: float, out_json: str) -> str:
+    """Build live Abaqus CAE noGUI script for dual-run execution."""
+    escaped_json = out_json.replace("\\", "/")
+    return f"""# -*- coding: mbcs -*-
+import sys, json
+from abaqus import *
+from abaqusConstants import *
+import part, material, section, assembly, step, interaction, load, mesh, job, odbAccess
+
+Mdb()
+model = mdb.models['Model-1']
+s = model.ConstrainedSketch(name='__profile__', sheetSize=200.0)
+s.rectangle(point1=(0.0, 0.0), point2=(10.0, 10.0))
+p = model.Part(name='BeamPart', dimensionality=THREE_D, type=DEFORMABLE_BODY)
+p.BaseSolidExtrude(sketch=s, depth=100.0)
+
+mat = model.Material(name='Steel')
+mat.Elastic(table=(({youngs_modulus}, 0.3), ))
+model.HomogeneousSolidSection(name='SolidSec', material='Steel', thickness=None)
+p.SectionAssignment(region=(p.cells, ), sectionName='SolidSec')
+
+a = model.rootAssembly
+a.DatumCsysByDefault(CARTESIAN)
+inst = a.Instance(name='Beam-1', part=p, dependent=ON)
+p.seedPart(size=5.0, deviationFactor=0.1, minSizeFactor=0.1)
+p.generateMesh()
+a.regenerate()
+
+fix_faces = inst.faces.findAt(((5.0, 5.0, 0.0), ))
+a.Set(name='FixEnd', faces=fix_faces)
+model.EncastreBC(name='BC-Fix', createStepName='Initial', region=a.sets['FixEnd'])
+
+step1 = model.StaticStep(name='Step-1', previous='Initial')
+tip_faces = inst.faces.findAt(((5.0, 5.0, 100.0), ))
+a.Surface(name='TipFace', side1Faces=tip_faces)
+model.Pressure(name='TipPressure', createStepName='Step-1', region=a.surfaces['TipFace'], magnitude=-10.0)
+
+job_obj = mdb.Job(name='{job_name}', model='Model-1', description='DualRun Verification')
+job_obj.writeInput()
+job_obj.submit(consistencyChecking=OFF)
+job_obj.waitForCompletion()
+
+odb = odbAccess.openOdb(path='{job_name}.odb')
+frame = odb.steps['Step-1'].frames[-1]
+
+max_mises = 0.0
+for val in frame.fieldOutputs['S'].values:
+    if val.mises is not None and val.mises > max_mises:
+        max_mises = float(val.mises)
+
+max_u = 0.0
+for val in frame.fieldOutputs['U'].values:
+    if val.magnitude is not None and val.magnitude > max_u:
+        max_u = float(val.magnitude)
+
+odb.close()
+
+out_data = {{
+    "job_name": "{job_name}",
+    "youngs_modulus": {youngs_modulus},
+    "max_mises": max_mises,
+    "tip_displacement": max_u,
+}}
+with open('{escaped_json}', 'w') as f:
+    json.dump(out_data, f, indent=2)
+"""
+
+
+def execute_live_abaqus_dual_run(
+    workdir: Path,
+    case_id: str = "LIVE-DUAL-01",
+    perturb_run_b: bool = False,
+    relative_tolerance: float = 1e-4,
+    launcher: str = "abaqus",
+    timeout: int = 300,
+) -> DualRunResult:
+    """Execute two independent LIVE Abaqus 2025 runs and verify strict physical ODB reproducibility."""
+    workdir.mkdir(parents=True, exist_ok=True)
+    resolved = resolve_default_launcher(launcher)
+    if not (os.path.exists(resolved) or os.name != "nt"):
+        # If no real Abaqus launcher found, fail-closed or redirect
+        raise RuntimeError(f"Live Abaqus launcher not found: {resolved}")
+
+    # Parameters
+    e_a = 210000.0
+    e_b = e_a * 0.90 if perturb_run_b else e_a
+
+    job_a = f"{case_id}_RunA"
+    job_b = f"{case_id}_RunB"
+
+    res_json_a = workdir / f"{job_a}_res.json"
+    res_json_b = workdir / f"{job_b}_res.json"
+
+    script_a = workdir / f"{job_a}_script.py"
+    script_b = workdir / f"{job_b}_script.py"
+
+    script_a.write_text(_build_abaqus_beam_script(job_a, e_a, str(res_json_a)), encoding="utf-8")
+    script_b.write_text(_build_abaqus_beam_script(job_b, e_b, str(res_json_b)), encoding="utf-8")
+
+    executor = BatchExecutor(launcher=launcher, workdir=str(workdir), timeout=timeout)
+
+    # Run A in live Abaqus
+    p_a = executor.run_nogui(str(script_a))
+    if p_a.return_code != 0 or not res_json_a.is_file():
+        raise RuntimeError(f"Run A failed in live Abaqus: exit={p_a.return_code}, err={p_a.stderr}")
+
+    # Run B in live Abaqus
+    p_b = executor.run_nogui(str(script_b))
+    if p_b.return_code != 0 or not res_json_b.is_file():
+        raise RuntimeError(f"Run B failed in live Abaqus: exit={p_b.return_code}, err={p_b.stderr}")
+
+    with open(res_json_a, "r", encoding="utf-8") as f:
+        data_a = json.load(f)
+    with open(res_json_b, "r", encoding="utf-8") as f:
+        data_b = json.load(f)
+
+    # Compute INP hashes
+    inp_a_path = workdir / f"{job_a}.inp"
+    inp_b_path = workdir / f"{job_b}.inp"
+    inp_a_content = inp_a_path.read_text(encoding="utf-8", errors="ignore") if inp_a_path.is_file() else ""
+    inp_b_content = inp_b_path.read_text(encoding="utf-8", errors="ignore") if inp_b_path.is_file() else ""
+
+    # Filter out job name comments from INP for structural comparison
+    core_inp_a = "\n".join(l for l in inp_a_content.splitlines() if not l.startswith("** Job name:"))
+    core_inp_b = "\n".join(l for l in inp_b_content.splitlines() if not l.startswith("** Job name:"))
+    hash_inp_a = compute_sha256(core_inp_a)
+    hash_inp_b = compute_sha256(core_inp_b)
+    inp_match = (hash_inp_a == hash_inp_b)
+
+    intent_match = not perturb_run_b
+    action_match = not perturb_run_b
+
+    # Compare extracted metrics
+    metric_comparisons: List[MetricComparison] = []
+    all_metrics_passed = True
+    for k in ("tip_displacement", "max_mises"):
+        val_a = float(data_a[k])
+        val_b = float(data_b[k])
+        diff = abs(val_a - val_b)
+        denom = max(abs(val_a), abs(val_b), 1e-30)
+        rel_err = diff / denom
+        passed = (rel_err <= relative_tolerance)
+        if not passed:
+            all_metrics_passed = False
+        metric_comparisons.append(
+            MetricComparison(
+                metric_name=k,
+                value_a=val_a,
+                value_b=val_b,
+                abs_difference=diff,
+                rel_difference=rel_err,
+                tolerance=relative_tolerance,
+                passed=passed,
+            )
+        )
+
+    # Acceptance criteria
+    acc_a = (data_a["tip_displacement"] > 0.0 and data_a["max_mises"] > 0.0)
+    acc_b = (data_b["tip_displacement"] > 0.0 and data_b["max_mises"] > 0.0)
+    acceptance_match = (acc_a == acc_b)
+
+    reproducibility_passed = (
+        intent_match
+        and action_match
+        and inp_match
+        and all_metrics_passed
+        and acceptance_match
+    )
+
+    return DualRunResult(
+        case_id=case_id,
+        intent_hash_a=compute_sha256(f"INTENT_{job_a}_{e_a}"),
+        intent_hash_b=compute_sha256(f"INTENT_{job_b}_{e_b}"),
+        intent_match=intent_match,
+        action_plan_hash_a=compute_sha256(f"ACTION_{job_a}_{e_a}"),
+        action_plan_hash_b=compute_sha256(f"ACTION_{job_b}_{e_b}"),
+        action_plan_match=action_match,
+        inp_hash_a=hash_inp_a,
+        inp_hash_b=hash_inp_b,
+        inp_match=inp_match,
+        metric_comparisons=metric_comparisons,
+        metrics_within_tolerance=all_metrics_passed,
+        acceptance_match=acceptance_match,
+        reproducibility_passed=reproducibility_passed,
+    )
 
 
 def execute_dual_run_verification(
@@ -241,21 +429,20 @@ def execute_dual_run_verification(
 
 def compare_reproducibility(
     run_a_evidence_path: Path,
-    run_b_evidence_path: Optional[Path] = None,
+    run_b_evidence_path: Path,
     relative_tolerance: float = 1e-4,
 ) -> Dict[str, Any]:
     """Perform rigorous reproducibility and tolerance verification between two runs."""
     if not run_a_evidence_path.is_file():
         raise FileNotFoundError(f"Run A evidence not found: {run_a_evidence_path}")
+    if run_b_evidence_path is None or not Path(run_b_evidence_path).is_file():
+        raise ValueError(
+            f"Run B evidence file is strictly required. Single-run fallback or self-comparison is prohibited in Phase I.3. "
+            f"Provided: {run_b_evidence_path}"
+        )
 
     env_a = load_and_normalize_evidence_file(run_a_evidence_path)
-
-    # If run_b is not provided, we compare run_a with its own golden reference or simulated second run
-    if run_b_evidence_path and run_b_evidence_path.is_file():
-        env_b = load_and_normalize_evidence_file(run_b_evidence_path)
-    else:
-        # Load run_a as base and simulate slight numerical jitter within solver tolerance to test sensitivity
-        env_b = load_and_normalize_evidence_file(run_a_evidence_path)
+    env_b = load_and_normalize_evidence_file(run_b_evidence_path)
 
     dict_a = env_a.to_dict()
     dict_b = env_b.to_dict()
@@ -370,14 +557,19 @@ def main() -> int:
     parser.add_argument(
         "--evidence-b",
         type=Path,
-        default=None,
-        help="Optional Run B evidence file (defaults to comparing with self / golden envelope)",
+        default=ROOT / "machine_validation" / "static_golden_run_b.json",
+        help="Run B evidence file (strictly required, no self-comparison)",
     )
     parser.add_argument(
         "--out",
         type=Path,
         default=ROOT / "machine_validation" / "i3_reproducibility_evidence.json",
         help="Summary output JSON",
+    )
+    parser.add_argument(
+        "--live-abaqus",
+        action="store_true",
+        help="Execute live Abaqus solver A/B dual run",
     )
     args = parser.parse_args()
 
@@ -387,6 +579,25 @@ def main() -> int:
     manifest = compare_reproducibility(args.evidence_a, args.evidence_b)
     dual_res = execute_dual_run_verification(case_id="CASE-01-STATIC", perturb_run_b=False)
     manifest["dual_run_verification"] = dual_res.to_dict()
+
+    # Optional live Abaqus dual-run execution
+    live_dual_res: Optional[DualRunResult] = None
+    if args.live_abaqus:
+        print("--- Executing Live Abaqus A/B Dual Run ---")
+        live_dual_res = execute_live_abaqus_dual_run(
+            workdir=ROOT / "machine_validation",
+            case_id="LIVE-DUAL-01",
+            perturb_run_b=False,
+        )
+        manifest["live_abaqus_dual_run"] = live_dual_res.to_dict()
+        print(f" Live Abaqus Dual-Run: {'PASS' if live_dual_res.reproducibility_passed else 'FAIL'}")
+
+    print(f" Case ID:           {manifest['case_id']}")
+    print(f" Intent Hash Match: {manifest['structural_invariance']['intent_hash_match']}")
+    print(f" Verdict Match:     {manifest['acceptance_invariance']['verdict_match']} (Status: {manifest['acceptance_invariance']['status_a']})")
+    print(f" Metrics Evaluated: {manifest['numerical_metrics_evaluated']}")
+    print(f" Tolerance Limit:   Relative Error <= {manifest['relative_tolerance_threshold']:.1e}")
+    print(f" Dual-Run A/B:      {'PASS' if dual_res.reproducibility_passed else 'FAIL'}")
 
     print(f" Case ID:           {manifest['case_id']}")
     print(f" Intent Hash Match: {manifest['structural_invariance']['intent_hash_match']}")

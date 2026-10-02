@@ -40,16 +40,21 @@ def test_verify_case_matrix_live():
         assert p["fresh_acceptance_passed"] is True
         assert p["status"] == "PASS"
         assert len(p["intent_fingerprint"]) > 0
+        assert p["is_analytical_stub"] is False
+        assert p["execution_tier"] == "AUTHENTIC_ABAQUS_SOLVER_EVIDENCE"
 
 
 def test_execute_fresh_case_probe_individual():
-    """Verify fresh live solver execution probe executes on demand."""
+    """Verify fresh live solver execution probe executes authentic solver evidence."""
     probe_static = execute_fresh_case_probe("CASE-01")
     assert probe_static.category_id == "CASE-01"
     assert probe_static.fresh_acceptance_passed is True
-    assert "tip_displacement" in probe_static.fresh_metrics
+    assert probe_static.is_analytical_stub is False
+    assert probe_static.execution_tier == "AUTHENTIC_ABAQUS_SOLVER_EVIDENCE"
+    assert any("tip_displacement" in k for k in probe_static.fresh_metrics)
 
     probe_thermal = execute_fresh_case_probe("CASE-02")
     assert probe_thermal.category_id == "CASE-02"
     assert probe_thermal.fresh_acceptance_passed is True
-    assert probe_thermal.fresh_metrics["midpoint_temperature"] == 50.0
+    assert probe_thermal.is_analytical_stub is False
+    assert any("temperature" in k for k in probe_thermal.fresh_metrics)
