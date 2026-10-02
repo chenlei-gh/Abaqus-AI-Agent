@@ -5,6 +5,7 @@ thresholds. Callers must provide the engineering assumptions explicitly.
 """
 
 from .engineering_checks import (
+    check_coulomb_friction_ratio,
     check_declared_load_balance,
     check_energy_ratio,
     check_thermal_flux_balance,
@@ -95,3 +96,16 @@ def thermal_flux_balance_from_field_evidence(
         unit=unit,
     )
     return report, reaction
+
+
+def coulomb_friction_from_reaction_evidence(
+    normal_reaction, friction_reaction, friction_coefficient, tolerance=0.05, unit=""
+):
+    """Convert normal and friction reaction force evidence into a Coulomb friction law report."""
+    return check_coulomb_friction_ratio(
+        normal_force=normal_reaction,
+        friction_force=friction_reaction,
+        friction_coefficient=friction_coefficient,
+        tolerance=tolerance,
+        unit=unit,
+    )

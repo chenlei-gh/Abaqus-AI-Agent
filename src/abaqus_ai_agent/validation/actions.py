@@ -103,8 +103,8 @@ def validate_action(action):
         raise ValueError("master_expression and slave_expression are required for contact")
     if action.action_type == "contact":
         sliding = str(action.parameters.get("sliding", "FINITE")).upper()
-        if sliding not in ("FINITE", "SMALL"):
-            raise ValueError("sliding must be FINITE or SMALL")
+        if sliding not in ("FINITE", "SMALL", "SMALL_SLIDING"):
+            raise ValueError("sliding must be FINITE, SMALL, or SMALL_SLIDING")
     if action.action_type == "contact_property":
         formulation = str(action.parameters.get("tangential_behavior", {}).get("formulation", "PENALTY")).upper()
         if formulation not in ("FRICTIONLESS", "PENALTY", "LAGRANGE", "ROUGH", "EXPONENTIAL_DECAY", "USER_DEFINED"):

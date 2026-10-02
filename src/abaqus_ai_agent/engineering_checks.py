@@ -161,3 +161,26 @@ def check_thermal_flux_balance(total_reaction_flux, reference_flux=5000.0, toler
         message="relative_error=%g (ref_scale=%g)" % (error, ref_scale),
     )
     return evaluate_checks((check,))
+
+
+def check_coulomb_friction_ratio(normal_force, friction_force, friction_coefficient, tolerance=0.05, unit=""):
+    """Check that observed friction force ratio matches Coulomb friction law (|F_tangential| / |F_normal| = mu)."""
+    norm = abs(float(normal_force))
+    fric = abs(float(friction_force))
+    if norm < 1e-9:
+        raise ValueError("normal_force must be non-zero to evaluate friction ratio")
+    actual_mu = fric / norm
+    expected_mu = float(friction_coefficient)
+    ref_scale = max(abs(expected_mu), 1.0)
+    error = abs(actual_mu - expected_mu) / ref_scale
+    passed = error <= tolerance
+    check = EngineeringCheck(
+        name="coulomb_friction_law",
+        passed=passed,
+        actual=actual_mu,
+        expected=expected_mu,
+        tolerance=float(tolerance),
+        unit=unit,
+        message="effective_mu=%g, expected_mu=%g (relative_error=%g)" % (actual_mu, expected_mu, error),
+    )
+    return evaluate_checks((check,))

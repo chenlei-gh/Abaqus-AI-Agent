@@ -223,8 +223,14 @@ def _bc_script(action):
         method = {"X":"XsymmBC", "Y":"YsymmBC", "Z":"ZsymmBC"}.get(str(p.get("plane", "X")).upper())
         if not method: raise ValueError("symmetry plane must be X, Y or Z")
         return "model=mdb.models[%s]; region=%s; model.%s(name=%s, createStepName=%s, region=region)" % (_q(m), region, method, _q(name), _q(step))
-    vals = [p.get(x) for x in ("u1","u2","u3","ur1","ur2","ur3")]
-    return "model=mdb.models[%s]; region=%s; model.DisplacementBC(name=%s, createStepName=%s, region=region, u1=%r,u2=%r,u3=%r,ur1=%r,ur2=%r,ur3=%r)" % (_q(m), region, _q(name), _q(step), *vals)
+    args = []
+    for x in ("u1", "u2", "u3", "ur1", "ur2", "ur3"):
+        val = p.get(x)
+        if val is not None and val != "UNSET":
+            args.append("%s=%r" % (x, val))
+        else:
+            args.append("%s=UNSET" % x)
+    return "from abaqusConstants import *; model=mdb.models[%s]; region=%s; model.DisplacementBC(name=%s, createStepName=%s, region=region, %s)" % (_q(m), region, _q(name), _q(step), ", ".join(args))
 
 def _load_script(action):
     p, m = action.parameters, action.model_name
@@ -312,12 +318,17 @@ def _contact_property_script(model, p):
             args = ["formulation=%s" % formulation]
             if formulation in ("PENALTY", "LAGRANGE"):
                 args.append("table=((%r,),)" % tangential.get("friction", 0.0))
+                fraction = tangential.get("fraction", 0.005)
+                if fraction is not None:
+                    args.append("fraction=%r" % fraction)
             lines.append("prop.TangentialBehavior(%s)" % ", ".join(args))
         else:
             raise ValueError("unsupported contact tangential formulation: %s" % formulation)
     return "; ".join(lines)
 
 def _contact_script(model, p):
+    sliding = str(p.get("sliding", "FINITE")).upper()
+    sliding_const = "SMALL_SLIDING" if sliding in ("SMALL", "SMALL_SLIDING") else "FINITE"
     return ("from abaqusConstants import *\nimport interaction\nmodel=mdb.models[%s]\n"
             "try:\n"
             "    model.SurfaceToSurfaceContactStd(name=%s, createStepName=%s, main=%s, secondary=%s, sliding=%s, interactionProperty=%s)\n"
@@ -326,10 +337,10 @@ def _contact_script(model, p):
             (_q(model),
              _q(p["name"]), _q(p.get("step", "Initial")),
              p["master_expression"], p["slave_expression"],
-             p.get("sliding", "FINITE"), _q(p["property"]),
+             sliding_const, _q(p["property"]),
              _q(p["name"]), _q(p.get("step", "Initial")),
              p["master_expression"], p["slave_expression"],
-             p.get("sliding", "FINITE"), _q(p["property"])))
+             sliding_const, _q(p["property"])))
 
 
 def _mesh_quality_script(model, p):
