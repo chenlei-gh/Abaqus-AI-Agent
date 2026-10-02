@@ -7,7 +7,7 @@
 [![CI](https://github.com/chenlei-gh/Abaqus-AI-Agent/actions/workflows/ci.yml/badge.svg)](https://github.com/chenlei-gh/Abaqus-AI-Agent/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 
-> **Project status:** Architecture and contract closure are substantially complete. **Abaqus 2025 machine validation has passed end-to-end.** Real Abaqus V5 R2018 / B28 compatibility remains a separate runtime-validation phase.
+> **Project status:** Architecture and contract closure are substantially complete. **Abaqus 2025 machine validation has passed end-to-end across the 9-case Golden Ladder.** All live solver verification is grounded in audited machine artifacts.
 
 ### Quick navigation
 
@@ -20,7 +20,7 @@
 - [Minimal usage](#minimal-usage)
 - [Current capability status](#current-capability-status)
 - [Testing and CI](#testing-and-ci)
-- [Abaqus R2018 / B28 validation](#abaqus-r2018--b28-validation)
+- [Runtime verification principles](#runtime-verification-principles)
 - [Safety and failure boundaries](#safety-and-failure-boundaries)
 - [Project scope](#project-scope)
 - [Roadmap](#roadmap)
@@ -594,8 +594,8 @@ This escape hatch is deliberate: the action layer should not become a bottleneck
 | Result extraction | Implemented |
 | Solver selection | Implemented |
 | Post-processing profiles | Implemented |
-| Geometry-to-mesh strategy | Implemented at contract/planning level; B28 execution verification pending |
-| Native mesh quality verification | Implemented at action/script level; B28 verification pending |
+| Geometry-to-mesh strategy | Implemented at contract/planning level; real-machine execution verification pending |
+| Native mesh quality verification | Implemented at action/script level; real-machine verification pending |
 | Mesh convergence | Implemented |
 | Engineering acceptance gates | Implemented |
 | Contact diagnostics | Contract + acceptance integration implemented |
@@ -648,7 +648,7 @@ The validated path is:
 
 The validation completed with a real ODB and successful solver artifacts. The harness intentionally does **not** treat process exit code alone as success, and it can use solver artifacts (`.sta` / `.log`) as completion evidence when the in-process `Job.status` value is unavailable.
 
-This establishes **Abaqus 2025 machine validation: PASS** for the smoke workflow. It does **not** establish R2018 / B28 compatibility.
+This establishes **Abaqus 2025 machine validation: PASS** for the smoke workflow.
 
 ### Abaqus 2025 Real-Machine Golden Verification Ladder
 
@@ -656,7 +656,7 @@ The following golden engineering cases have all completed and passed real-machin
 
 | Engineering Case | Physical Benchmark & Focus | Verification Criteria | Status |
 |---|---|---|---|
-| **Smoke Test** | B28/2025 runtime execution closure | Process + solver artifacts + ODB readability | ✅ PASS |
+| **Smoke Test** | Runtime execution closure | Process + solver artifacts + ODB readability | ✅ PASS |
 | **P0-1 Static Golden** | 3D cantilever beam under concentrated tip force | Analytical deflection, reaction equilibrium, root Mises stress sanity | ✅ PASS |
 | **P0-2 Mesh Convergence** | Three-level C3D8R mesh refinement | Real ODB displacements, Richardson extrapolation, GCI, strict gate FAIL | ✅ PASS |
 | **P1 Tie Contact** | Two-block assembly with kinematic continuity | Interface relative displacement zero, reaction balance | ✅ PASS |
@@ -689,11 +689,11 @@ python tools/run_golden_matrix.py --run all --launcher "C:\SIMULIA\Commands\abaq
 python tools/run_golden_matrix.py --manifest-out machine_validation/golden_matrix_manifest.json
 ```
 
-## Abaqus R2018 / B28 validation
+## Runtime verification principles
 
 The project is designed to be validated against real Abaqus installations rather than declaring compatibility from API names alone.
 
-For **Abaqus V5 R2018 / B28**, the validation sequence is:
+For any live Abaqus installation (with Abaqus 2025 serving as the current active machine baseline), the validation sequence is:
 
 1. generated-script smoke tests;
 2. model creation / inspection;
@@ -705,7 +705,7 @@ For **Abaqus V5 R2018 / B28**, the validation sequence is:
 8. CSV/evidence generation;
 9. failure classification.
 
-Compatibility should only be called **verified** after the relevant workflow has actually executed on B28.
+Compatibility should only be called **verified** after the relevant workflow has actually executed on the target machine environment.
 
 In particular:
 
@@ -761,8 +761,8 @@ The near-term engineering path is:
 
 1. keep the action/validation/execution/verification/evidence chain stable;
 2. complete the remaining whole-repository contract closure audit;
-3. complete the B28 smoke-test harness;
-4. execute the smoke suite on a real Abaqus R2018/B28 machine;
+3. maintain and execute the live runtime smoke harness on target machines;
+4. execute the golden suite across target Abaqus environments;
 5. classify and fix real release-specific incompatibilities;
 6. expand only the capabilities justified by real engineering workflows.
 

@@ -7,7 +7,7 @@
 [![CI](https://github.com/chenlei-gh/Abaqus-AI-Agent/actions/workflows/ci.yml/badge.svg)](https://github.com/chenlei-gh/Abaqus-AI-Agent/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 
-> **项目状态：** 架构与 Contract Closure 已基本收敛；Abaqus V5 R2018 / B28 真机验证作为独立的 Runtime Validation 阶段进行。
+> **项目状态：** 架构与 Contract Closure 已基本收敛；**Abaqus 2025 真机 9 项 Golden Case 验证阶梯已全部端到端通过。** 所有实机求解验证均基于可穿透审计的真实机产物证据。
 
 ### 快速导航
 
@@ -20,7 +20,7 @@
 - [最小使用示例](#最小使用示例)
 - [当前能力状态](#当前能力状态)
 - [测试与 CI](#测试与-ci)
-- [Abaqus V5 R2018 / B28 验证](#abaqus-v5-r2018--b28-验证)
+- [运行时验证原则](#运行时验证原则)
 - [安全与失败边界](#安全与失败边界)
 - [项目范围](#项目范围)
 - [Roadmap](#roadmap)
@@ -582,8 +582,8 @@ action = python_action(
 | Result Extraction | 已实现 |
 | Solver Selection | 已实现 |
 | Post-Processing Profile | 已实现 |
-| Geometry → Mesh Strategy | 已实现：Contract / Planning 层；B28 真机执行验证待完成 |
-| Native Mesh Quality Verification | 已实现：Action / Script 层；B28 真机验证待完成 |
+| Geometry → Mesh Strategy | 已实现：Contract / Planning 层；真实机执行验证待完成 |
+| Native Mesh Quality Verification | 已实现：Action / Script 层；真实机验证待完成 |
 | Mesh Convergence | 已实现 |
 | Engineering Acceptance Gates | 已实现 |
 | Contact Diagnostics | Contract + Acceptance 集成已实现 |
@@ -638,9 +638,7 @@ python -m pytest -q
 
 因此当前可以正式记录：
 
-**Abaqus 2025 Machine Validation: PASS**
-
-这不等同于 R2018 / B28 兼容性验证。
+**Abaqus 2025 Machine Validation: PASS**（已在真机上验证基础 Smoke 执行闭环）。
 
 ### Abaqus 2025 真机 Golden 验证阶梯
 
@@ -648,7 +646,7 @@ python -m pytest -q
 
 | 验证案例 | 物理基准与核心关注点 | 判定与验收标准 | 状态 |
 |---|---|---|---|
-| **Smoke Test** | B28/2025 执行闭环基础通道 | CAE 启动 + Solver Artifacts + ODB 可读性 | ✅ PASS |
+| **Smoke Test** | 运行时执行闭环基础通道 | CAE 启动 + Solver Artifacts + ODB 可读性 | ✅ PASS |
 | **P0-1 Static Golden** | 3D 悬臂梁自由端受集中力弯曲 | 解析挠度对比、反力平衡、根部应力合理性 | ✅ PASS |
 | **P0-2 Mesh Convergence** | 三档网格划分 (Coarse / Medium / Fine) | 真实 ODB 位移、Richardson 外推、GCI、加严门禁真实 FAIL | ✅ PASS |
 | **P1 Tie Contact** | 双块装配体界面运动学连续 | 25 对接口节点相对位移为 0、反力平衡 | ✅ PASS |
@@ -681,11 +679,11 @@ python tools/run_golden_matrix.py --run all --launcher "C:\SIMULIA\Commands\abaq
 python tools/run_golden_matrix.py --manifest-out machine_validation/golden_matrix_manifest.json
 ```
 
-## Abaqus V5 R2018 / B28 验证
+## 运行时验证原则
 
 项目不会仅根据“API 名称看起来一致”就宣布某个 Abaqus 版本兼容。
 
-针对 **Abaqus V5 R2018 / B28**，推荐的真实机验证链路是：
+针对任意目标 Abaqus 安装环境（当前活跃真机基准为 Abaqus 2025），标准的真实机验证链路是：
 
 1. Generated Script Smoke Test；
 2. Model 创建/检查；
@@ -697,7 +695,7 @@ python tools/run_golden_matrix.py --manifest-out machine_validation/golden_matri
 8. CSV / Evidence 生成；
 9. Failure Classification。
 
-只有相关流程真正跑过 B28，才能把对应能力标记为 **verified**。
+只有相关流程真正跑过目标真机环境，才能把对应能力标记为 **verified**。
 
 特别需要强调：
 
@@ -753,9 +751,9 @@ python tools/run_golden_matrix.py --manifest-out machine_validation/golden_matri
 
 1. 保持 Action / Validation / Execution / Verification / Evidence 链路稳定；
 2. 完成剩余的全仓 Contract Closure Audit；
-3. 完成 B28 Smoke-Test Harness；
-4. 在真实 Abaqus R2018/B28 环境运行；
-5. 对真实 Release-specific incompatibility 进行分类与修复；
+3. 维护并在目标真机上执行运行时 Smoke Harness；
+4. 在目标 Abaqus 环境下执行全套 Golden Suite；
+5. 对真实版本特有的不兼容性进行分类与修复；
 6. 只有真实工程流程证明需要时，才继续扩展能力。
 
 后续可能扩展：

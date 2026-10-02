@@ -36,6 +36,8 @@ REQUIRED_ENVELOPE_KEYS = (
 CASE_NAME_TO_ID = {
     # Smoke
     "smoke": "smoke",
+    "runtime_smoke": "smoke",
+    "aiagent_runtimesmoke": "smoke",
     "b28_smoke": "smoke",
     "aiagent_b28smoke": "smoke",
     "b28smoke": "smoke",
@@ -227,8 +229,6 @@ def _detect_release(raw: Dict[str, Any], report: Dict[str, Any], default: Option
     combined = f"{launcher} {stderr} {stdout}"
     if "2025" in combined:
         return "Abaqus 2025"
-    if "B28" in combined or "2018" in combined:
-        return "Abaqus V5 R2018 / B28"
 
     # If launcher is a batch file on disk, check if it invokes a versioned abaqus
     if launcher:
@@ -238,8 +238,6 @@ def _detect_release(raw: Dict[str, Any], report: Dict[str, Any], default: Option
                 content = p.read_text(encoding="utf-8", errors="ignore")
                 if "2025" in content or "abq2025" in content:
                     return "Abaqus 2025"
-                if "2018" in content or "B28" in content or "abq2018" in content:
-                    return "Abaqus V5 R2018 / B28"
             except Exception:
                 pass
 
@@ -310,6 +308,10 @@ def normalize_golden_evidence(
         odb_path = str(report["workflow"]["odb_path"])
     elif "workflow" in raw and "odb_path" in raw["workflow"]:
         odb_path = str(raw["workflow"]["odb_path"])
+    elif "runs" in report and isinstance(report["runs"], list) and len(report["runs"]) > 0:
+        last_run = report["runs"][-1]
+        if isinstance(last_run, dict) and last_run.get("odb_path"):
+            odb_path = str(last_run["odb_path"])
     elif "harness" in raw:
         workdir = raw.get("workdir") or ""
         odb_path = os.path.join(workdir, f"{job}.odb") if workdir else f"{job}.odb"

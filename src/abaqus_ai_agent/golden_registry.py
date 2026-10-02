@@ -38,7 +38,7 @@ class GoldenCaseDefinition:
     strict_criteria: Tuple[GoldenCriterion, ...] = ()
     supported_releases: Tuple[str, ...] = ("Abaqus 2025",)
     verified_releases: Tuple[str, ...] = ("Abaqus 2025",)
-    pending_releases: Tuple[str, ...] = ("Abaqus V5 R2018 / B28",)
+    pending_releases: Tuple[str, ...] = ()
     tags: Tuple[str, ...] = ()
 
 
@@ -46,13 +46,13 @@ def _build_standard_catalog() -> Tuple[GoldenCaseDefinition, ...]:
     return (
         GoldenCaseDefinition(
             case_id="smoke",
-            title="Abaqus Runtime & Solver Artifact Smoke",
+            title="Abaqus Live Runtime & Solver Artifact Smoke",
             category="P0",
             solver="standard",
             physics_type="linear_static",
-            tool_script="tools/b28_smoke.py",
-            default_evidence_json="machine_validation/b28_smoke.json",
-            job_name="AIAgent_B28Smoke",
+            tool_script="tools/runtime_smoke.py",
+            default_evidence_json="machine_validation/runtime_smoke.json",
+            job_name="AIAgent_RuntimeSmoke",
             analytical_reference="Baseline solver execution, .sta/.log closure, ODB creation and field output inspection",
             summary="Validates live Abaqus launcher invocation, batch script execution, solver process completion, and ODB field readability.",
             criteria=(

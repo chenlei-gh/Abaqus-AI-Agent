@@ -23,8 +23,8 @@ class FakeExecutor:
 
     def runtime_info(self):
         return AbaqusRuntimeInfo(
-            version="B28",
-            python_version="2.7",
+            version="2025",
+            python_version="3.10",
             metadata={"runtime_source": "test"},
         )
 
@@ -132,8 +132,8 @@ def test_passing_verification_allows_odb_backed_acceptance():
     assert run.acceptance_passed is True
     assert run.state.value == "accepted"
     assert run.engineering_status == "RESULT_VALID"
-    assert run.provenance.abaqus_version == "B28"
-    assert run.provenance.python_version == "2.7"
+    assert run.provenance.abaqus_version == "2025"
+    assert run.provenance.python_version == "3.10"
     assert run.provenance.executor == "FakeExecutor"
     assert run.provenance.metadata["content_hash_scope"] == "not_captured"
 
