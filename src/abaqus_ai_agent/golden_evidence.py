@@ -252,7 +252,7 @@ def normalize_golden_evidence(
     raw: Dict[str, Any],
     case_id: Optional[str] = None,
     catalog: Optional[GoldenMatrixCatalog] = None,
-    release_default: Optional[str] = "Abaqus 2025",
+    release_default: Optional[str] = None,
 ) -> GoldenEvidenceEnvelope:
     """Normalize raw case evidence dictionary into the standard GoldenEvidenceEnvelope.
 
