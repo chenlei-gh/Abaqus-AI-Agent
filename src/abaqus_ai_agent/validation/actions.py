@@ -10,10 +10,26 @@ def validate_action(action):
         raise ValueError("action_type is required")
     if action.action_type in (
         "fixed_bc", "displacement_bc", "symmetry_bc", "pressure_load",
-        "concentrated_force", "body_force", "body_heat_flux", "surface_heat_flux", "temperature_bc", "initial_temperature", "initial_stress", "section_assignment", "tie",
-        "local_seed_size", "local_seed_number", "mesh_controls", "element_type", "contact"
+        "concentrated_force", "body_force", "body_heat_flux", "surface_heat_flux", "temperature_bc", "initial_temperature", "initial_stress", "section_assignment",
+        "local_seed_size", "local_seed_number", "mesh_controls", "element_type"
     ) and not action.parameters.get("region_expression"):
         raise ValueError("region_expression is required for %s" % action.action_type)
+    if action.action_type == "tie":
+        if not action.parameters.get("name"):
+            raise ValueError("name is required for tie")
+        if not action.parameters.get("master_expression"):
+            raise ValueError("master_expression is required for tie")
+        if not action.parameters.get("slave_expression"):
+            raise ValueError("slave_expression is required for tie")
+    if action.action_type == "contact":
+        if not action.parameters.get("name"):
+            raise ValueError("name is required for contact")
+        if not action.parameters.get("master_expression"):
+            raise ValueError("master_expression is required for contact")
+        if not action.parameters.get("slave_expression"):
+            raise ValueError("slave_expression is required for contact")
+        if not action.parameters.get("property"):
+            raise ValueError("property is required for contact")
     geometry = action.action_type in ("inspect_geometry", "ignore_entity", "restore_entity", "repair_geometry", "remove_redundant_entities", "inspect_mesh")
     if geometry:
         if not action.parameters.get("part"):

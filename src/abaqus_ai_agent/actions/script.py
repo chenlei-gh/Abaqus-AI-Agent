@@ -187,7 +187,14 @@ def action_to_script(action):
     if k == "mesh_quality":
         return _mesh_quality_script(m, p)
     if k == "tie":
-        return "mdb.models[%s].Tie(name=%s, master=%s, slave=%s, positionToleranceMethod=COMPUTED)" % (_q(m), _q(p["name"]), p["master_expression"], p["slave_expression"])
+        return ("from abaqusConstants import *\nimport interaction\n"
+                "try:\n"
+                "    mdb.models[%s].Tie(name=%s, main=%s, secondary=%s, positionToleranceMethod=COMPUTED)\n"
+                "except TypeError:\n"
+                "    mdb.models[%s].Tie(name=%s, master=%s, slave=%s, positionToleranceMethod=COMPUTED)") % (
+                    _q(m), _q(p["name"]), p["master_expression"], p["slave_expression"],
+                    _q(m), _q(p["name"]), p["master_expression"], p["slave_expression"],
+                )
     if k == "contact_property":
         return _contact_property_script(m, p)
     if k == "contact":
@@ -306,10 +313,16 @@ def _contact_property_script(model, p):
     return "; ".join(lines)
 
 def _contact_script(model, p):
-    return ("from abaqusConstants import *; model=mdb.models[%s]; model.SurfaceToSurfaceContactStd("
-            "name=%s, createStepName=%s, main=%s, secondary=%s, "
-            "sliding=%s, interactionProperty=%s)" %
-            (_q(model), _q(p["name"]), _q(p.get("step", "Initial")),
+    return ("from abaqusConstants import *\nimport interaction\nmodel=mdb.models[%s]\n"
+            "try:\n"
+            "    model.SurfaceToSurfaceContactStd(name=%s, createStepName=%s, main=%s, secondary=%s, sliding=%s, interactionProperty=%s)\n"
+            "except TypeError:\n"
+            "    model.SurfaceToSurfaceContactStd(name=%s, createStepName=%s, master=%s, slave=%s, sliding=%s, interactionProperty=%s)" %
+            (_q(model),
+             _q(p["name"]), _q(p.get("step", "Initial")),
+             p["master_expression"], p["slave_expression"],
+             p.get("sliding", "FINITE"), _q(p["property"]),
+             _q(p["name"]), _q(p.get("step", "Initial")),
              p["master_expression"], p["slave_expression"],
              p.get("sliding", "FINITE"), _q(p["property"])))
 

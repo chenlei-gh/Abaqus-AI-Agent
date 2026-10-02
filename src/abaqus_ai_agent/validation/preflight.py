@@ -27,8 +27,19 @@ def preflight_action(action, snapshot=None):
 
     if action.action_type in ("fixed_bc", "displacement_bc", "symmetry_bc",
                               "pressure_load", "concentrated_force",
-                              "body_force", "section_assignment", "tie", "initial_temperature", "initial_stress"):
+                              "body_force", "section_assignment", "initial_temperature", "initial_stress"):
         check("region_expression", bool(action.parameters.get("region_expression")))
+
+    if action.action_type == "tie":
+        check("name", bool(action.parameters.get("name")))
+        check("master_expression", bool(action.parameters.get("master_expression")))
+        check("slave_expression", bool(action.parameters.get("slave_expression")))
+
+    if action.action_type == "contact":
+        check("name", bool(action.parameters.get("name")))
+        check("master_expression", bool(action.parameters.get("master_expression")))
+        check("slave_expression", bool(action.parameters.get("slave_expression")))
+        check("property", bool(action.parameters.get("property")))
 
     if action.action_type in ("instance_translate", "instance_rotate"):
         instances = getattr(snapshot, "instances", ()) if snapshot is not None and not isinstance(snapshot, dict) else ((snapshot or {}).get("instances", ()) if isinstance(snapshot, dict) else ())

@@ -6,7 +6,7 @@ from abaqus_ai_agent.actions import (
     tabular_amplitude, smooth_step_amplitude, periodic_amplitude, equally_spaced_amplitude,
     initial_temperature, initial_stress, gravity,
     assembly_inspect, instance_translate, instance_rotate, instance_linear_pattern,
-    export_inp, export_odb_csv,
+    export_inp, export_odb_csv, tie, contact, contact_property,
 )
 from abaqus_ai_agent.actions.runner import preview
 
@@ -69,3 +69,20 @@ def test_assembly_and_export_scripts():
     assert "LinearInstancePattern" in preview(instance_linear_pattern("M", ("PART-1-1",), 2, 10.0))
     assert "writeInput" in preview(export_inp("M", "Job-1"))
     assert "openOdb" in preview(export_odb_csv("M", "Job-1.odb", "results.csv", variable="S"))
+
+
+def test_tie_and_contact_scripts():
+    tie_code = preview(tie("M", "Tie-1", "a.surfaces['M']", "a.surfaces['S']"))
+    assert "Tie(" in tie_code
+    assert "Tie-1" in tie_code
+    assert "a.surfaces['M']" in tie_code
+    assert "a.surfaces['S']" in tie_code
+
+    prop_code = preview(contact_property("M", "FrictionProp", tangential_behavior={"formulation": "PENALTY", "friction": 0.2}))
+    assert "ContactProperty" in prop_code
+    assert "TangentialBehavior" in prop_code
+
+    contact_code = preview(contact("M", "Cont-1", "a.surfaces['M']", "a.surfaces['S']", property="FrictionProp"))
+    assert "SurfaceToSurfaceContactStd(" in contact_code
+    assert "Cont-1" in contact_code
+    assert "FrictionProp" in contact_code
