@@ -7,7 +7,7 @@
 [![CI](https://github.com/chenlei-gh/Abaqus-AI-Agent/actions/workflows/ci.yml/badge.svg)](https://github.com/chenlei-gh/Abaqus-AI-Agent/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 
-> **Project status:** Architecture and contract closure are substantially complete. **Abaqus 2025 machine validation has passed end-to-end across the 11-case Golden Ladder.** All live solver verification is grounded in audited machine artifacts.
+> **Project status:** Architecture and contract closure are substantially complete. **Abaqus 2025 machine validation has passed end-to-end across the 12-case Golden Ladder.** All live solver verification is grounded in audited machine artifacts.
 
 ### Quick navigation
 
@@ -577,8 +577,8 @@ This escape hatch is deliberate: the action layer should not become a bottleneck
 | Core action contracts | Implemented |
 | Materials / sections | Implemented |
 | Static analysis | Implemented |
-| Explicit dynamics | Implemented |
-| Implicit dynamics | Implemented |
+| Explicit dynamics | Golden E2E Validated (Abaqus 2025) |
+| Implicit dynamics | Golden E2E Validated (Abaqus 2025) |
 | Heat transfer | Implemented |
 | Coupled temperature-displacement | Implemented |
 | Amplitudes | Implemented |
@@ -669,6 +669,7 @@ The following golden engineering cases have all completed and passed real-machin
 | **MBD-2 Revolute Golden** | Two-body double pendulum with native `CONN3D2` Hinge connector under gravity | Joint drift $\le 10^{-3}\text{ mm}$ ($9.78\times 10^{-6}\text{ mm}$), independent articulation ($\Delta\theta = 6.96^\circ$), fundamental period ($T_1=1.2843\text{ s}$, 0.54% error), energy conservation (2.13% loss) | ✅ PASS |
 | **FMBD-4 Coupled Rigid-Flexible** | Coupled rigid crank + C3D8R flexible solid link linked via native `CONN3D2` Hinge and Kinematic Coupling under gravity | Joint drift $\le 10^{-3}\text{ mm}$ ($3.13\times 10^{-10}\text{ mm}$), dynamic Mises stress sanity ($0.0435\text{ MPa}$), active strain energy ratio (99.9%), energy conservation (0.56% dissipation) | ✅ PASS |
 | **FMBD-5 Closed-Loop Crank-Slider** | Full closed-loop mechanism: ground pivot + rigid crank + C3D8R elastic rod (dual kinematic couplings) + rigid slider along TRANSLATOR guide, 100% compiled via `MechanismGraph` under gravity | Joint drift $\le 10^{-3}\text{ mm}$ ($1.49\times 10^{-8}\text{ mm}$), slider transverse drift $\le 10^{-2}\text{ mm}$ ($3.21\times 10^{-20}\text{ mm}$), loop closure error $\le 5\%$ ($1.91\times 10^{-7}$), dynamic Mises stress ($0.288\text{ MPa}$), internal energy composition ($ALLSE/ALLIE = 99.61\%$), algorithmic numerical dissipation bounded ($\le 50\%$, actual $40.47\%$) | ✅ PASS |
+| **P1 Explicit Dynamic** | Ramped step load transient dynamic cantilever beam (Abaqus/Explicit) | Stable time increment bounded by CFL condition $\Delta t \le L_e/c_d$ ($0.352\ \mu\text{s}$), total energy conservation ($|ETOTAL|/E_{\text{ref}} \le 2\%$, actual $0.00028\%$), C3D8R artificial hourglass control ($ALLAE/ALLIE \le 5\%$, actual $3.64\%$), dynamic amplification factor (DAF = 1.753), strict negative gate FAIL | ✅ PASS |
 
 > **Note on flexible multi-body dynamics (FMBD) engineering boundaries**:
 > - **MBD-1 & MBD-2** validate discrete rigid dynamics and multi-body joint kinematics using Reference Points, `RigidBody` constraints, and native `CONN3D2` HINGE connectors.
@@ -678,13 +679,13 @@ The following golden engineering cases have all completed and passed real-machin
 
 ### Unified Golden Validation Matrix & Evidence Catalog
 
-All 11 Golden Cases are governed by a strongly typed registry and a unified 12-key evidence envelope schema:
+All 12 Golden Cases are governed by a strongly typed registry and a unified 12-key evidence envelope schema:
 `case_id, release, runtime, solver, job, odb, solver_status, result_evidence, verification, acceptance, artifacts, provenance`.
 
 A centralized CLI tool (`tools/run_golden_matrix.py`) manages discovery, schema validation, live execution, and manifest generation:
 
 ```bash
-# 1. Inspect status of all 11 Golden Cases
+# 1. Inspect status of all 12 Golden Cases
 python tools/run_golden_matrix.py --list
 
 # 2. Validate all existing evidence JSON files against the unified schema

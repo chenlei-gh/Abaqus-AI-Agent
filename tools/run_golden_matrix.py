@@ -253,7 +253,7 @@ def cmd_run(
         ]
         if case.case_id == "mbd2_double_pendulum":
             cmd.extend(["--json-out", str(evidence_path)])
-        elif case.case_id in ("smoke", "static_cantilever", "mesh_convergence", "tie_contact", "implicit_dynamic", "mbd1_rigid_pendulum", "fmbd4_rigid_flexible", "fmbd5_crank_slider"):
+        elif case.case_id in ("smoke", "static_cantilever", "mesh_convergence", "tie_contact", "implicit_dynamic", "mbd1_rigid_pendulum", "fmbd4_rigid_flexible", "fmbd5_crank_slider", "explicit_dynamic"):
             cmd.extend(["--output", str(evidence_path)])
 
         start_time = datetime.datetime.now(datetime.timezone.utc)
@@ -335,7 +335,14 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     parser.add_argument("--run", nargs="?", const="all", help="Execute Golden Case(s) [case_id|all]")
     parser.add_argument("--dry-run", action="store_true", help="Simulate execution without starting live solver jobs")
     parser.add_argument("--yes", "-y", action="store_true", help="Confirm execution of all Golden Cases without interactive prompt")
-    parser.add_argument("--launcher", default=os.environ.get("ABAQUS_BAT", os.environ.get("ABAQUS_COMMAND", "abaqus")),
+    default_launcher = os.environ.get(
+        "ABAQUS_BAT",
+        os.environ.get(
+            "ABAQUS_COMMAND",
+            r"C:\SIMULIA\Commands\abaqus.bat" if os.path.exists(r"C:\SIMULIA\Commands\abaqus.bat") else "abaqus"
+        )
+    )
+    parser.add_argument("--launcher", default=default_launcher,
                         help="Abaqus launcher command or batch file")
     parser.add_argument("--workdir", default=None, help="Working directory containing machine_validation")
     parser.add_argument("--timeout", type=int, default=3600, help="Per-case timeout in seconds")

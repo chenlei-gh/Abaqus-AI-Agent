@@ -102,6 +102,14 @@ CASE_NAME_TO_ID = {
     "fmbd5_crank_slider_golden_e2e": "fmbd5_crank_slider",
     "fmbd5golden": "fmbd5_crank_slider",
     "fmbd5goldenjob": "fmbd5_crank_slider",
+    # Explicit Dynamic
+    "explicit_dynamic": "explicit_dynamic",
+    "explicit_dynamics": "explicit_dynamic",
+    "explicit_golden": "explicit_dynamic",
+    "explicit_golden_e2e": "explicit_dynamic",
+    "explicitgolden": "explicit_dynamic",
+    "explicitgoldenjob": "explicit_dynamic",
+    "3d_cantilever_explicit": "explicit_dynamic",
 }
 
 

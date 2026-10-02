@@ -24,3 +24,11 @@ machine_validation/
 *.inp
 *.log
 *.env
+*.abq
+*.pac
+*.res
+*.sel
+*.stt
+*.mdl
+*.lck
+*.fil

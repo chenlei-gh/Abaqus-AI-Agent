@@ -32,7 +32,7 @@ from abaqus_ai_agent.validation.preflight import preflight_action
 import tools.run_golden_matrix as runner
 
 
-EXPECTED_ELEVEN_CASES = (
+EXPECTED_GOLDEN_CASES = (
     "smoke",
     "static_cantilever",
     "mesh_convergence",
@@ -44,14 +44,16 @@ EXPECTED_ELEVEN_CASES = (
     "mbd2_double_pendulum",
     "fmbd4_rigid_flexible",
     "fmbd5_crank_slider",
+    "explicit_dynamic",
 )
+EXPECTED_ELEVEN_CASES = EXPECTED_GOLDEN_CASES
 
 
-def test_golden_registry_contains_all_eleven_cases():
+def test_golden_registry_contains_all_cases():
     catalog = standard_golden_catalog
-    assert catalog.count() == 11
+    assert catalog.count() == 12
     registered_ids = catalog.case_ids()
-    for case_id in EXPECTED_ELEVEN_CASES:
+    for case_id in EXPECTED_GOLDEN_CASES:
         assert case_id in registered_ids
         case = catalog.get_case(case_id)
         assert case is not None
@@ -65,6 +67,21 @@ def test_golden_registry_contains_all_eleven_cases():
         assert len(case.criteria) > 0
 
 
+def test_golden_registry_explicit_solver_case():
+    catalog = standard_golden_catalog
+    explicit_cases = catalog.cases_by_solver("explicit")
+    assert len(explicit_cases) == 1
+    case = explicit_cases[0]
+    assert case.case_id == "explicit_dynamic"
+    assert case.category == "P1"
+    assert case.job_name == "ExplicitGoldenJob"
+    criterion_names = {c.name for c in case.criteria}
+    assert "stable_increment_upper_bound" in criterion_names
+    assert "energy_drift_ratio" in criterion_names
+    assert "hourglass_energy_ratio" in criterion_names
+    assert len(case.strict_criteria) > 0
+
+
 def test_golden_registry_category_filtering():
     catalog = standard_golden_catalog
     p0_cases = catalog.cases_by_category("P0")
@@ -74,8 +91,8 @@ def test_golden_registry_category_filtering():
     assert len(p0_cases) == 3
     assert {c.case_id for c in p0_cases} == {"smoke", "static_cantilever", "mesh_convergence"}
 
-    assert len(p1_cases) == 4
-    assert {c.case_id for c in p1_cases} == {"tie_contact", "implicit_dynamic", "steady_thermal", "general_contact"}
+    assert len(p1_cases) == 5
+    assert {c.case_id for c in p1_cases} == {"tie_contact", "implicit_dynamic", "steady_thermal", "general_contact", "explicit_dynamic"}
 
     assert len(mbd_cases) == 2
     assert {c.case_id for c in mbd_cases} == {"mbd1_rigid_pendulum", "mbd2_double_pendulum"}
@@ -232,9 +249,9 @@ def test_runner_cli_list(capsys):
     rc = runner.main(["--list"])
     assert rc == 0
     captured = capsys.readouterr().out
-    for case_id in EXPECTED_ELEVEN_CASES:
+    for case_id in EXPECTED_GOLDEN_CASES:
         assert case_id in captured
-    assert "Total: 11" in captured
+    assert "Total: 12" in captured
 
 
 def test_runner_cli_validate_evidence(capsys):
@@ -251,10 +268,10 @@ def test_runner_cli_manifest_output(tmp_path):
     assert out_file.is_file()
     data = json.loads(out_file.read_text(encoding="utf-8"))
     assert data["manifest_version"] == "1.0"
-    assert data["catalog_case_count"] == 11
-    assert data["summary"]["PASS"] == 11
+    assert data["catalog_case_count"] == 12
+    assert data["summary"]["PASS"] == 12
     assert data["summary"]["FAIL"] == 0
-    assert len(data["cases"]) == 11
+    assert len(data["cases"]) == 12
 
 
 def test_preflight_closure_mbd_and_connector_actions():

@@ -274,6 +274,30 @@ def _build_standard_catalog() -> Tuple[GoldenCaseDefinition, ...]:
             ),
             tags=("fmbd", "closed_loop", "crank_slider", "coupling", "connector", "translator", "mechanism_graph"),
         ),
+        GoldenCaseDefinition(
+            case_id="explicit_dynamic",
+            title="3D Cantilever Beam Explicit Transient Dynamic Golden E2E",
+            category="P1",
+            solver="explicit",
+            physics_type="explicit_dynamic",
+            tool_script="tools/explicit_golden_e2e.py",
+            default_evidence_json="machine_validation/explicit_golden_e2e.json",
+            job_name="ExplicitGoldenJob",
+            analytical_reference="Abaqus/Explicit dynamic wave propagation, stable time increment dt <= Le/cd, total energy conservation (|ETOTAL|/E_ref <= 2%), and C3D8R hourglass energy control (ALLAE/ALLIE <= 5%)",
+            summary="Abaqus/Explicit transient dynamic analysis of a 3D cantilever beam under ramped step load, verifying *DYNAMIC, EXPLICIT, stable time increment, multi-frame ODB history, total energy balance (ALLKE, ALLIE, ALLWK, ALLSE, ALLAE, ETOTAL), and hourglass control.",
+            criteria=(
+                GoldenCriterion("stable_increment_upper_bound", "stable_increment_s", "<=", 2.0e-6, "s", "Explicit stable time increment bounded by CFL condition dt <= Le/cd"),
+                GoldenCriterion("stable_increment_lower_bound", "stable_increment_s", ">=", 1.0e-8, "s", "Stable time increment positive and reasonable"),
+                GoldenCriterion("energy_drift_ratio", "energy_drift_ratio", "<=", 0.02, "", "Explicit total energy drift |ETOTAL| / max(ALLWK, ALLKE) <= 2.0%"),
+                GoldenCriterion("hourglass_energy_ratio", "hourglass_to_internal_energy_ratio", "<=", 0.05, "", "C3D8R artificial hourglass energy ratio ALLAE / ALLIE <= 5.0%"),
+                GoldenCriterion("peak_displacement_bound", "peak_displacement_mm", "<=", 5.0, "mm", "Dynamic tip displacement bounded under step load"),
+                GoldenCriterion("peak_displacement_positive", "peak_displacement_mm", ">=", 0.5, "mm", "Dynamic tip displacement positive"),
+            ),
+            strict_criteria=(
+                GoldenCriterion("hourglass_unphysical_strict", "hourglass_to_internal_energy_ratio", "<=", 1.0e-10, "", "Unphysical strict limit on hourglass ratio to verify deterministic rejection"),
+            ),
+            tags=("explicit", "dynamic", "cfl", "energy_balance", "hourglass"),
+        ),
     )
 
 
