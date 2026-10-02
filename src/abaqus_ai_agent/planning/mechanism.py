@@ -123,6 +123,8 @@ class JointSpec:
     orientation: Optional[Any] = None
     wire_feature_name: Optional[str] = None
     wire_set_name: Optional[str] = None
+    interface_a_name: Optional[str] = None
+    interface_b_name: Optional[str] = None
 
 
 @dataclass(frozen=True)
@@ -342,6 +344,8 @@ class MechanismGraph:
         orientation: Optional[Any] = None,
         wire_feature_name: Optional[str] = None,
         wire_set_name: Optional[str] = None,
+        interface_a_name: Optional[str] = None,
+        interface_b_name: Optional[str] = None,
     ) -> "MechanismGraph":
         """Add a kinematic joint between two bodies or a body and ground."""
         self.joints[name] = JointSpec(
@@ -360,6 +364,8 @@ class MechanismGraph:
             orientation=orientation,
             wire_feature_name=wire_feature_name,
             wire_set_name=wire_set_name,
+            interface_a_name=interface_a_name,
+            interface_b_name=interface_b_name,
         )
         return self
 
@@ -470,9 +476,19 @@ class MechanismGraph:
         )
 
     def _resolve_joint_endpoint(self, joint: JointSpec, is_side_a: bool, ground_rp_map: Dict[str, str]) -> str:
-        """Deterministically resolve connector reference point for joint endpoint A or B."""
+        """Deterministically resolve connector reference point for joint endpoint A or B.
+        
+        Resolution priority:
+          1. Explicit point name (`point_a_name` / `point_b_name`)
+          2. Semantic interface identity (`interface_a_name` / `interface_b_name`)
+          3. Single available interface on flexible body
+          4. Geometric proximity fallback (`joint.location` within 1.0mm tolerance, unambiguous)
+          5. Explicit ValueError if unresolvable or ambiguous
+        """
         body_name = joint.body_a if is_side_a else joint.body_b
         explicit_pt = joint.point_a_name if is_side_a else joint.point_b_name
+        req_iface_name = joint.interface_a_name if is_side_a else joint.interface_b_name
+
         if explicit_pt:
             return explicit_pt
 
@@ -481,35 +497,70 @@ class MechanismGraph:
             return ground_rp_map.get(joint.name, "RP_GROUND")
 
         # Body endpoint resolution
-        if body_name in self.bodies:
-            body = self.bodies[body_name]
-            if body.body_type == BodyType.RIGID.value:
-                # If joint location matches a tie region RP, match it
-                if joint.location and body.tie_regions:
-                    for tr in body.tie_regions:
-                        if joint.name in tr or (joint.point_a_name and joint.point_a_name in tr):
-                            return tr
-                return body.ref_point_name or ("RP_" + body.name.upper())
+        if body_name not in self.bodies:
+            return "RP_" + body_name.upper()
 
-            if body.body_type == BodyType.FLEXIBLE.value:
-                # Match flexible interface belonging to this flexible body
-                candidate_ifaces = [iface for iface in self.interfaces.values() if iface.body_name == body.name]
-                if not candidate_ifaces:
-                    return body.ref_point_name or ("RP_" + body.name.upper())
+        body = self.bodies[body_name]
+        if body.body_type == BodyType.RIGID.value:
+            if req_iface_name:
+                return req_iface_name
+            # If joint location matches a tie region RP, match it
+            if joint.location and body.tie_regions:
+                for tr in body.tie_regions:
+                    if joint.name in tr or (joint.point_a_name and joint.point_a_name in tr):
+                        return tr
+            return body.ref_point_name or ("RP_" + body.name.upper())
 
-                if len(candidate_ifaces) == 1:
-                    return candidate_ifaces[0].ref_point_name
+        if body.body_type == BodyType.FLEXIBLE.value:
+            candidate_ifaces = [iface for iface in self.interfaces.values() if iface.body_name == body.name]
 
-                # Match by spatial location proximity if joint location is defined
-                if joint.location:
-                    best_iface = min(
-                        candidate_ifaces,
-                        key=lambda iface: math.dist(iface.ref_point_coords, joint.location),
-                    )
-                    return best_iface.ref_point_name
+            # 1. Semantic resolution: exact interface name match
+            if req_iface_name:
+                for iface in candidate_ifaces:
+                    if iface.name == req_iface_name or iface.interface_name == req_iface_name:
+                        return iface.ref_point_name
+                raise ValueError(
+                    f"Joint '{joint.name}' specifies interface '{req_iface_name}' for flexible body '{body_name}', "
+                    f"but no matching interface found among {[c.name for c in candidate_ifaces]}."
+                )
 
-                # Fallback to first interface
+            if not candidate_ifaces:
+                if body.ref_point_name:
+                    return body.ref_point_name
+                raise ValueError(
+                    f"Joint '{joint.name}' connects to flexible body '{body_name}', but no flexible interfaces or RP are defined."
+                )
+
+            if len(candidate_ifaces) == 1:
                 return candidate_ifaces[0].ref_point_name
+
+            # 2. Geometric fallback: match by spatial location proximity
+            if joint.location:
+                distances = [
+                    (math.dist(iface.ref_point_coords, joint.location), iface)
+                    for iface in candidate_ifaces
+                ]
+                distances.sort(key=lambda x: x[0])
+                best_dist, best_iface = distances[0]
+                if best_dist <= 1.0:
+                    if len(distances) > 1 and abs(distances[1][0] - best_dist) < 1e-4:
+                        raise ValueError(
+                            f"Ambiguous interfaces for joint '{joint.name}' on flexible body '{body_name}'. "
+                            f"Interfaces '{best_iface.name}' and '{distances[1][1].name}' are equidistant ({best_dist:.4f} mm) "
+                            f"to joint location {joint.location}. Please specify 'interface_{'a' if is_side_a else 'b'}_name'."
+                        )
+                    return best_iface.ref_point_name
+                else:
+                    raise ValueError(
+                        f"No interface found within tolerance (1.0 mm) for joint '{joint.name}' on flexible body '{body_name}'. "
+                        f"Closest interface '{best_iface.name}' is {best_dist:.4f} mm away from joint location {joint.location}. "
+                        f"Please specify 'interface_{'a' if is_side_a else 'b'}_name' explicitly."
+                    )
+
+            raise ValueError(
+                f"Flexible body '{body_name}' has multiple interfaces {[c.name for c in candidate_ifaces]}, "
+                f"but joint '{joint.name}' did not specify 'interface_{'a' if is_side_a else 'b'}_name' or 'location'."
+            )
 
         return "RP_" + body_name.upper()
 
@@ -661,6 +712,18 @@ class MechanismGraph:
                     coordinates=iface.ref_point_coords,
                 ))
                 created_rps.add(iface.ref_point_name)
+
+        # 3.4 Explicit Joint reference points that are not yet created
+        for j in self.joints.values():
+            for pt_name in (j.point_a_name, j.point_b_name):
+                if pt_name and pt_name not in created_rps and pt_name not in ground_rp_map.values():
+                    if pt_name.startswith("RP_") and j.location:
+                        actions.append(reference_point(
+                            model_name,
+                            name=pt_name,
+                            coordinates=j.location,
+                        ))
+                        created_rps.add(pt_name)
 
         # ---------------------------------------------------------------------
         # 4. Assembly-level Kinematic Constraints (RigidBody & Coupling)

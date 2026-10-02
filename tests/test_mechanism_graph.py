@@ -507,3 +507,70 @@ def test_fmbd5_crank_slider_compiler_contract():
         "J_Wrist at location (400,0,0) must automatically resolve to RP_FLEX_WRIST!"
     )
     assert conn_wrist.parameters["point2_name"] == "RP_SLIDER"
+
+
+def test_joint_semantic_interface_resolution_and_error_handling():
+    """Verify semantic interface priority, tolerance bounding, and deterministic error handling."""
+    import pytest
+    from abaqus_ai_agent.planning.mechanism import MechanismGraph, BodyType
+
+    m = MechanismGraph("SemanticResolutionTest")
+    m.add_body("ground", body_type="ground")
+    m.add_body("crank", body_type="rigid", ref_point_name="RP_CRANK", ref_point_coords=(0.0, 0.0, 0.0))
+    m.add_body("flex_rod", body_type="flexible", part_name="FlexPart", mesh_size=5.0)
+
+    m.add_flexible_interface(
+        name="Interface_Alpha",
+        body_name="flex_rod",
+        interface_region="FaceAlpha",
+        ref_point_name="RP_ALPHA",
+        ref_point_coords=(100.0, 0.0, 0.0),
+    )
+    m.add_flexible_interface(
+        name="Interface_Beta",
+        body_name="flex_rod",
+        interface_region="FaceBeta",
+        ref_point_name="RP_BETA",
+        ref_point_coords=(300.0, 0.0, 0.0),
+    )
+
+    # 1. Exact semantic interface match without location
+    m.add_joint(
+        "J_SemanticMatch",
+        joint_type="revolute",
+        body_a="crank",
+        body_b="flex_rod",
+        interface_b_name="Interface_Beta",
+    )
+    actions = m.compile_to_actions("TestModel")
+    wire = next(a for a in actions if a.action_type == "wire_connector" and a.parameters["name"] == "Conn-J_SemanticMatch")
+    assert wire.parameters["point2_name"] == "RP_BETA", "Semantic match failed!"
+
+    # 2. Unknown semantic interface name throws ValueError
+    m_bad = MechanismGraph("BadSemantic")
+    m_bad.add_body("crank", body_type="rigid", ref_point_name="RP_CRANK")
+    m_bad.add_body("flex_rod", body_type="flexible")
+    m_bad.add_flexible_interface("I1", "flex_rod", "Face1", "RP_1", (0.0, 0.0, 0.0))
+    m_bad.add_joint("J_Bad", body_a="crank", body_b="flex_rod", interface_b_name="NonExistentInterface")
+    with pytest.raises(ValueError, match="no matching interface found"):
+        m_bad.compile_to_actions("TestModel")
+
+    # 3. Geometric tolerance exceeded (> 1.0 mm) throws ValueError
+    m_far = MechanismGraph("FarLocation")
+    m_far.add_body("crank", body_type="rigid", ref_point_name="RP_CRANK")
+    m_far.add_body("flex_rod", body_type="flexible")
+    m_far.add_flexible_interface("I1", "flex_rod", "Face1", "RP_1", (0.0, 0.0, 0.0))
+    m_far.add_flexible_interface("I2", "flex_rod", "Face2", "RP_2", (100.0, 0.0, 0.0))
+    m_far.add_joint("J_Far", body_a="crank", body_b="flex_rod", location=(50.0, 0.0, 0.0))
+    with pytest.raises(ValueError, match="No interface found within tolerance"):
+        m_far.compile_to_actions("TestModel")
+
+    # 4. Ambiguous equidistant interfaces throw ValueError
+    m_ambig = MechanismGraph("AmbiguousLocation")
+    m_ambig.add_body("crank", body_type="rigid", ref_point_name="RP_CRANK")
+    m_ambig.add_body("flex_rod", body_type="flexible")
+    m_ambig.add_flexible_interface("I1", "flex_rod", "Face1", "RP_1", (0.0, 0.0, 0.0))
+    m_ambig.add_flexible_interface("I2", "flex_rod", "Face2", "RP_2", (0.0, 0.0, 0.0))
+    m_ambig.add_joint("J_Ambig", body_a="crank", body_b="flex_rod", location=(0.0, 0.0, 0.0))
+    with pytest.raises(ValueError, match="Ambiguous interfaces"):
+        m_ambig.compile_to_actions("TestModel")
