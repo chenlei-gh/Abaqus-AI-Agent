@@ -1,7 +1,9 @@
 """Deterministic fatigue post-processing for scalar Abaqus stress histories."""
 
+import json
+import os
 from math import exp, isfinite, log
-from typing import Iterable, List, Sequence, Tuple
+from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
 
 
 def stress_range_and_amplitude(stress_a: float, stress_b: float) -> Tuple[float, float]:
@@ -128,3 +130,434 @@ def sn_life(alternating_stress: float, material_curve: Sequence[Tuple[float, flo
             ratio = (target - s1) / (s2 - s1)
             return exp(log(n1) + ratio * (log(n2) - log(n1)))
     return curve[-1][1]
+
+
+def compute_scalar_stress(stress_record: dict, measure: str = "signed_mises") -> float:
+    """Compute scalar equivalent stress from multiaxial stress dictionary.
+
+    Supported measures:
+    - 'signed_mises': Signed von Mises based on trace(S) hydrostatic sign or maxPrincipal sign.
+    - 'von_mises' / 'mises': Standard unsigned von Mises stress.
+    - 'max_principal': Maximum principal stress (S1).
+    - 'tresca': Maximum shear stress (Tresca).
+    - 's11', 's22', 's33', 's12', 's13', 's23': Direct tensor component.
+    """
+    if not isinstance(stress_record, dict):
+        raise ValueError("stress_record must be a dictionary")
+    m = measure.lower()
+
+    if m in ("von_mises", "mises"):
+        if "mises" not in stress_record:
+            raise ValueError("von_mises measure requires 'mises' field")
+        val = float(stress_record["mises"])
+        if not isfinite(val):
+            raise ValueError("stress values must be finite")
+        return abs(val)
+
+    if m == "signed_mises":
+        if "mises" not in stress_record:
+            raise ValueError("signed_mises measure requires 'mises' field")
+        mises_val = abs(float(stress_record["mises"]))
+        sign = 1.0
+        if "data" in stress_record and hasattr(stress_record["data"], "__iter__") and len(stress_record["data"]) >= 3:
+            tr = float(stress_record["data"][0]) + float(stress_record["data"][1]) + float(stress_record["data"][2])
+            sign = 1.0 if tr >= 0.0 else -1.0
+        elif "maxPrincipal" in stress_record and stress_record["maxPrincipal"] is not None:
+            sign = 1.0 if float(stress_record["maxPrincipal"]) >= 0.0 else -1.0
+        elif "s11" in stress_record and stress_record["s11"] is not None:
+            sign = 1.0 if float(stress_record["s11"]) >= 0.0 else -1.0
+        return sign * mises_val
+
+    if m == "max_principal":
+        if "maxPrincipal" not in stress_record or stress_record["maxPrincipal"] is None:
+            raise ValueError("max_principal measure requires 'maxPrincipal' field")
+        val = float(stress_record["maxPrincipal"])
+        if not isfinite(val):
+            raise ValueError("stress values must be finite")
+        return val
+
+    if m == "tresca":
+        if "tresca" not in stress_record or stress_record["tresca"] is None:
+            raise ValueError("tresca measure requires 'tresca' field")
+        val = float(stress_record["tresca"])
+        if not isfinite(val):
+            raise ValueError("stress values must be finite")
+        return abs(val)
+
+    # Tensor component check (e.g. s11, s22)
+    comp_map = {"s11": 0, "s22": 1, "s33": 2, "s12": 3, "s13": 4, "s23": 5}
+    if m in comp_map:
+        if m in stress_record and stress_record[m] is not None:
+            return float(stress_record[m])
+        if "data" in stress_record and hasattr(stress_record["data"], "__iter__"):
+            idx = comp_map[m]
+            if len(stress_record["data"]) > idx:
+                return float(stress_record["data"][idx])
+        raise ValueError(f"component '{measure}' not found in stress record")
+
+    raise ValueError(f"unsupported multiaxial fatigue measure: {measure}")
+
+
+def evaluate_cycle_life(
+    alternating_stress: float,
+    material_curve: Sequence[Tuple[float, float]],
+    endurance_limit_infinite: bool = True,
+) -> float:
+    """Evaluate fatigue life cycles with engineering endurance limit handling."""
+    target = float(alternating_stress)
+    if not isfinite(target) or target <= 0.0:
+        return float("inf")
+    if len(material_curve) < 2:
+        raise ValueError("at least two S-N curve points are required")
+    curve = sorted((float(s), float(n)) for s, n in material_curve)
+    if any(s <= 0 or n <= 0 for s, n in curve):
+        raise ValueError("S-N curve values must be positive")
+
+    s_min, n_at_s_min = curve[0]
+    s_max, n_at_s_max = curve[-1]
+
+    # Exact point shortcut to avoid log/exp floating point round-off
+    for s_pt, n_pt in curve:
+        if abs(target - s_pt) <= 1e-9 * max(1.0, abs(s_pt)):
+            return n_pt
+
+    if target < s_min:
+        if endurance_limit_infinite:
+            return float("inf")
+        # Log-log extrapolation below lowest curve point
+        s1, n1 = curve[0]
+        s2, n2 = curve[1]
+        b = (log(s1) - log(s2)) / (log(n1) - log(n2)) if n1 != n2 else 1.0
+        return n1 * ((s1 / target) ** (1.0 / abs(b)))
+
+    if target > s_max:
+        return n_at_s_max
+
+    return sn_life(target, curve)
+
+
+def accumulate_palmgren_miner_damage(
+    cycles: Sequence[Tuple[float, float, float]],
+    material_curve: Sequence[Tuple[float, float]],
+    ultimate_strength: Optional[float] = None,
+    endurance_limit_infinite: bool = True,
+) -> Tuple[float, List[Dict[str, Any]]]:
+    """Calculate Palmgren-Miner cumulative damage and per-cycle details."""
+    total_damage = 0.0
+    detailed_cycles = []
+
+    for stress_range, mean_stress, count in cycles:
+        if count < 0:
+            raise ValueError("cycle count cannot be negative")
+        amplitude = float(stress_range) / 2.0
+        corrected_amp = (
+            goodman_corrected_amplitude(amplitude, mean_stress, ultimate_strength)
+            if ultimate_strength is not None
+            else amplitude
+        )
+
+        if corrected_amp <= 0.0:
+            n_fail = float("inf")
+            cycle_damage = 0.0
+        else:
+            n_fail = evaluate_cycle_life(
+                corrected_amp,
+                material_curve,
+                endurance_limit_infinite=endurance_limit_infinite,
+            )
+            cycle_damage = float(count) / n_fail if isfinite(n_fail) and n_fail > 0 else 0.0
+
+        total_damage += cycle_damage
+        detailed_cycles.append({
+            "stress_range": float(stress_range),
+            "amplitude": float(amplitude),
+            "mean_stress": float(mean_stress),
+            "cycle_count": float(count),
+            "corrected_amplitude": float(corrected_amp),
+            "life_cycles": n_fail,
+            "damage": float(cycle_damage),
+        })
+
+    return total_damage, detailed_cycles
+
+
+def extract_stress_history_from_odb(
+    odb_or_path: Any,
+    step_name: Optional[str] = None,
+    element_label: Optional[int] = None,
+    integration_point: Optional[int] = None,
+    measure: str = "signed_mises",
+    region_instance: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Extract stress time history and detect global hotspot from an open ODB object or path."""
+    opened_here = False
+    odb = odb_or_path
+    if isinstance(odb_or_path, (str, bytes, os.PathLike)):
+        from odbAccess import openOdb
+        odb = openOdb(path=str(odb_or_path), readOnly=True)
+        opened_here = True
+
+    try:
+        steps = odb.steps
+        if not steps:
+            raise ValueError("ODB has no analysis steps")
+        st_name = step_name or list(steps.keys())[-1]
+        if st_name not in steps:
+            raise ValueError(f"Step '{st_name}' not found in ODB steps: {list(steps.keys())}")
+        step = steps[st_name]
+
+        # 1. Hotspot identification if element_label is omitted
+        hot_elem = element_label
+        hot_ip = integration_point
+        hot_inst = region_instance
+        max_mises = -1.0
+
+        if hot_elem is None:
+            for frame in step.frames:
+                if "S" not in frame.fieldOutputs:
+                    continue
+                s_field = frame.fieldOutputs["S"]
+                for val in s_field.values:
+                    vm = getattr(val, "mises", None)
+                    if vm is not None and float(vm) > max_mises:
+                        max_mises = float(vm)
+                        hot_elem = getattr(val, "elementLabel", None)
+                        hot_ip = getattr(val, "integrationPoint", 1)
+                        inst = getattr(val, "instance", None)
+                        hot_inst = getattr(inst, "name", None) if inst else None
+
+        if hot_elem is None:
+            raise ValueError(f"No stress field 'S' found in step '{st_name}' to establish hotspot")
+
+        # 2. Extract multi-frame history for this hotspot
+        history_points = []
+        raw_stresses = []
+        times = []
+
+        for frame in step.frames:
+            t = float(getattr(frame, "frameValue", 0.0))
+            if "S" not in frame.fieldOutputs:
+                continue
+            s_field = frame.fieldOutputs["S"]
+            matched_val = None
+            for val in s_field.values:
+                el = getattr(val, "elementLabel", None)
+                ip = getattr(val, "integrationPoint", 1)
+                inst = getattr(val, "instance", None)
+                inst_name = getattr(inst, "name", None) if inst else None
+                if el == hot_elem:
+                    if hot_ip is not None and ip != hot_ip:
+                        continue
+                    if hot_inst is not None and inst_name != hot_inst:
+                        continue
+                    matched_val = val
+                    break
+
+            if matched_val is not None:
+                record = {
+                    "mises": getattr(matched_val, "mises", None),
+                    "maxPrincipal": getattr(matched_val, "maxPrincipal", None),
+                    "tresca": getattr(matched_val, "tresca", None),
+                    "data": list(matched_val.data) if hasattr(matched_val.data, "__iter__") else [matched_val.data],
+                }
+                scalar_val = compute_scalar_stress(record, measure=measure)
+                times.append(t)
+                raw_stresses.append(scalar_val)
+                history_points.append({
+                    "time": t,
+                    "scalar_stress": scalar_val,
+                    "mises": float(record["mises"]) if record["mises"] is not None else None,
+                    "data": [float(x) for x in record["data"]],
+                })
+
+        return {
+            "step_name": st_name,
+            "hotspot": {
+                "element_label": hot_elem,
+                "integration_point": hot_ip,
+                "instance_name": hot_inst,
+                "peak_mises_detected": max_mises if max_mises >= 0 else None,
+            },
+            "measure": measure,
+            "frame_count": len(history_points),
+            "times": times,
+            "stresses": raw_stresses,
+            "history": history_points,
+        }
+    finally:
+        if opened_here:
+            odb.close()
+
+
+def evaluate_fatigue_from_stress_history(
+    times: Sequence[float],
+    stresses: Sequence[float],
+    material_curve: Sequence[Tuple[float, float]],
+    ultimate_strength: Optional[float] = None,
+    mean_stress_correction: Optional[str] = "GOODMAN",
+    damage_allowable: float = 1.0,
+    hotspot_info: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
+    """Perform deterministic rainflow counting and fatigue damage accumulation on a stress history."""
+    if len(stresses) < 2:
+        raise ValueError("stress history must contain at least 2 points")
+
+    turning = turning_points(stresses)
+    counted_raw = rainflow_count(stresses)
+
+    # Accumulate Miner damage
+    sut = ultimate_strength if (mean_stress_correction and mean_stress_correction.upper() == "GOODMAN") else None
+    total_damage, detailed_cycles = accumulate_palmgren_miner_damage(
+        counted_raw,
+        material_curve=material_curve,
+        ultimate_strength=sut,
+        endurance_limit_infinite=True,
+    )
+
+    life_blocks = (1.0 / total_damage) if total_damage > 0.0 else float("inf")
+    stress_ranges = [c["stress_range"] for c in detailed_cycles]
+    mean_stresses = [c["mean_stress"] for c in detailed_cycles]
+
+    summary = {
+        "total_cycles_count": sum(c["cycle_count"] for c in detailed_cycles),
+        "full_cycles_count": sum(1 for c in detailed_cycles if c["cycle_count"] == 1.0),
+        "half_cycles_count": sum(1 for c in detailed_cycles if c["cycle_count"] == 0.5),
+        "max_stress_range": max(stress_ranges) if stress_ranges else 0.0,
+        "max_stress_amplitude": max(stress_ranges) / 2.0 if stress_ranges else 0.0,
+        "mean_stress_average": sum(mean_stresses) / len(mean_stresses) if mean_stresses else 0.0,
+        "cumulative_damage": total_damage,
+        "life_blocks": life_blocks,
+        "damage_allowable": damage_allowable,
+    }
+
+    # Standard engineering acceptance criteria
+    criteria = {
+        "has_stress_history": len(stresses) >= 2,
+        "rainflow_cycles_counted": len(detailed_cycles) > 0,
+        "damage_within_allowable": total_damage <= damage_allowable,
+        "finite_or_safe_damage": isfinite(total_damage) and total_damage >= 0.0,
+    }
+    passed = all(criteria.values())
+
+    # Strict negative gate for verification: artificially strict damage limit (1e-15)
+    strict_criteria = {
+        **criteria,
+        "strict_damage_threshold": total_damage <= 1.0e-15,
+    }
+    strict_passed = all(strict_criteria.values())
+
+    return {
+        "status": "pass" if passed else "fail",
+        "passed": passed,
+        "hotspot": hotspot_info or {},
+        "cycle_summary": summary,
+        "cycles": detailed_cycles,
+        "acceptance": {
+            "passed": passed,
+            "criteria": criteria,
+        },
+        "strict_gate": {
+            "passed": strict_passed,
+            "expected_fail": not strict_passed,
+            "criteria": strict_criteria,
+        },
+    }
+
+
+def build_odb_fatigue_postprocess_script(
+    odb_path: str,
+    output_json: str,
+    material_curve: Sequence[Tuple[float, float]],
+    ultimate_strength: Optional[float] = 800.0,
+    mean_stress_correction: str = "GOODMAN",
+    measure: str = "signed_mises",
+    step_name: Optional[str] = None,
+    element_label: Optional[int] = None,
+    src_dir: Optional[str] = None,
+) -> str:
+    """Generate self-contained Abaqus Python script for ODB fatigue postprocessing."""
+    src = os.path.abspath(src_dir or os.path.join(os.path.dirname(__file__), ".."))
+    return f'''# Auto-generated by Abaqus AI Agent for ODB Fatigue Postprocessing
+import sys
+import os
+import json
+
+if r"{src}" not in sys.path:
+    sys.path.insert(0, r"{src}")
+
+from abaqus_ai_agent.fatigue import (
+    extract_stress_history_from_odb,
+    evaluate_fatigue_from_stress_history,
+)
+
+odb_path = r"{os.path.abspath(odb_path)}"
+output_json = r"{os.path.abspath(output_json)}"
+material_curve = {list(material_curve)}
+ultimate_strength = {ultimate_strength if ultimate_strength is not None else "None"}
+mean_stress_correction = {repr(mean_stress_correction)}
+measure = {repr(measure)}
+step_name = {repr(step_name)}
+element_label = {repr(element_label)}
+
+# 1. Extract stress history from live ODB
+extracted = extract_stress_history_from_odb(
+    odb_path,
+    step_name=step_name,
+    element_label=element_label,
+    measure=measure,
+)
+
+# 2. Evaluate fatigue damage
+eval_result = evaluate_fatigue_from_stress_history(
+    times=extracted["times"],
+    stresses=extracted["stresses"],
+    material_curve=material_curve,
+    ultimate_strength=ultimate_strength,
+    mean_stress_correction=mean_stress_correction,
+    hotspot_info=extracted["hotspot"],
+)
+
+# 3. Assemble full evidence envelope
+evidence = {{
+    "case_id": "fatigue_real_odb",
+    "status": eval_result["status"],
+    "odb_path": odb_path,
+    "step_name": extracted["step_name"],
+    "measure": measure,
+    "hotspot": extracted["hotspot"],
+    "stress_history": {{
+        "frame_count": extracted["frame_count"],
+        "times": extracted["times"],
+        "stresses": extracted["stresses"],
+    }},
+    "cycle_summary": eval_result["cycle_summary"],
+    "cycles": eval_result["cycles"],
+    "acceptance": eval_result["acceptance"],
+    "strict_gate": eval_result["strict_gate"],
+}}
+
+with open(output_json, "w") as f:
+    json.dump(evidence, f, indent=2)
+
+print("AIAgent_FATIGUE_EVALUATION_COMPLETED")
+print("Hotspot: Element %s IP %s Peak Mises: %s MPa" % (
+    extracted["hotspot"].get("element_label"),
+    extracted["hotspot"].get("integration_point"),
+    extracted["hotspot"].get("peak_mises_detected"),
+))
+print("Rainflow Cycles: %d (Full: %d, Half: %d)" % (
+    eval_result["cycle_summary"]["total_cycles_count"],
+    eval_result["cycle_summary"]["full_cycles_count"],
+    eval_result["cycle_summary"]["half_cycles_count"],
+))
+print("Max Stress Range: %.2f MPa | Avg Mean Stress: %.2f MPa" % (
+    eval_result["cycle_summary"]["max_stress_range"],
+    eval_result["cycle_summary"]["mean_stress_average"],
+))
+print("Cumulative Miner Damage D: %.6e" % eval_result["cycle_summary"]["cumulative_damage"])
+print("Life Blocks to Failure: %.2f" % eval_result["cycle_summary"]["life_blocks"])
+print("Acceptance Passed: %s | Strict Gate Failed (as designed): %s" % (
+    eval_result["acceptance"]["passed"],
+    not eval_result["strict_gate"]["passed"],
+))
+'''

@@ -7,7 +7,7 @@
 [![CI](https://github.com/chenlei-gh/Abaqus-AI-Agent/actions/workflows/ci.yml/badge.svg)](https://github.com/chenlei-gh/Abaqus-AI-Agent/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 
-> **项目状态：** 架构与 Contract Closure 已基本收敛；**Abaqus 2025 真机 12 项 Golden Case 验证阶梯已全部端到端通过。** 所有实机求解验证均基于可穿透审计的真实机产物证据。
+> **项目状态：** 架构与 Contract Closure 已基本收敛；**Abaqus 2025 真机 13 项 Golden Case 验证阶梯已全部端到端通过。** 所有实机求解验证均基于可穿透审计的真实机产物证据。
 
 ### 快速导航
 
@@ -589,11 +589,11 @@ action = python_action(
 | Mesh Convergence | 已实现 |
 | Engineering Acceptance Gates | 已实现 |
 | Contact Diagnostics | Contract + Acceptance 集成已实现 |
-| Fatigue Verification | Contract / Workflow + Acceptance 集成已实现 |
+| Fatigue Verification | Abaqus 2025 Golden E2E 验证已通过（真实 ODB 提取、雨流计数、Goodman 修正、Miner 损伤） |
 | Sensitivity / Uncertainty | Evidence / Report 集成已实现 |
 | Engineering Report | 已实现 |
 | Geometry Grounding | 已实现：当前针对标定 Viewport / Projection 路径 |
-| Fatigue | 已实现：已有应力历史的 Contract / Workflow，并覆盖循环计数、应力范围/幅值、均值应力修正及多分量语义边界 |
+| Fatigue | Abaqus 2025 Golden E2E 验证已通过（直接提取真实 ODB 多时间帧应力张量，Signed Mises 降维、雨流循环计数、Goodman 均值应力修正、S-N 曲线寿命评估与 Palmgren-Miner 累积损伤） |
 | Arbitrary Native Abaqus API | EXECUTABLE：Python Escape Hatch；不等同于工程验证 |
 | 任意外部照片的全自动几何注册 | 当前不宣称 |
 | 完整独立 Fatigue Solver | 未实现 |
@@ -660,6 +660,7 @@ python -m pytest -q
 | **FMBD-4 刚柔耦合 Golden** | 刚体曲柄 + C3D8R 弹性实体连杆在重力下的耦合动力学时程 | 铰接点平动漂移 $\le 10^{-3}\text{ mm}$ ($3.13\times 10^{-10}\text{ mm}$)、动态 Mises 应力物理合理 ($0.0435\text{ MPa}$)、弹性应变能动态占比 (99.9%)、全系统机械能守恒 (耗散仅 0.56%) | ✅ PASS |
 | **FMBD-5 闭环曲柄滑块 Golden** | 完整闭环机构：地面固定支座 + 刚体曲柄 + C3D8R 弹性连杆（双端运动学耦合）+ 刚体滑块沿水平 Translator 导轨，100% 声明式机构图编译 | 肘部/腕部铰接点漂移 $\le 10^{-3}\text{ mm}$ ($1.49\times 10^{-8}\text{ mm}$)、滑块导轨横向漂移 $\le 10^{-2}\text{ mm}$ ($3.21\times 10^{-20}\text{ mm}$)、闭环几何残差 $\le 5\%$ ($1.91\times 10^{-7}$)、动态 Mises 应力 ($0.288\text{ MPa}$)、内部能构成（弹性应变能占比 $99.61\%$）、算法数值阻尼耗散受控（$\le 50\%$，实际 $40.47\%$） | ✅ PASS |
 | **P1 Explicit Dynamic** | 斜坡阶跃冲击载荷瞬态显式动力学悬臂梁（Abaqus/Explicit） | 稳定时间增量满足 CFL 条件 $\Delta t \le L_e/c_d$ ($0.352\ \mu\text{s}$)、全模型能量严格守恒 ($|ETOTAL|/E_{\text{ref}} \le 2\%$，实际 $0.00028\%$)、C3D8R 单元沙漏能严格受控 ($ALLAE/ALLIE \le 5\%$，实际 $3.64\%$)、动载荷放大系数 (DAF = 1.753)、加严负向门禁真实 FAIL | ✅ PASS |
+| **P2 Real ODB Fatigue** | 真实 ODB 多时间帧应力场提取、雨流循环计数与 Palmgren-Miner 累积损伤评估 | 全场危险点自动扫描（单元 613，积分点 1，峰值 Mises $493.40\text{ MPa}$）、Signed von Mises 应力时程降维、ASTM E1049-85 雨流计数 (6.0 循环)、Goodman 拉应力均值修正、结构钢 S-N 曲线寿命评估、累积损伤 $D = 9.1869\times 10^{-6} \le 1.0$、容许重复块数 $1.0885\times 10^5$、加严负向门禁真实 FAIL ($D \le 10^{-15}$) | ✅ PASS |
 
 > **柔性多体动力学 (FMBD) 工程边界与能量物理严谨说明**：
 > - **MBD-1 与 MBD-2** 验证了离散刚体动力学与多刚体运动学铰接，采用 Reference Point、`RigidBody` 约束及原生 `CONN3D2` HINGE 连接器；
@@ -669,13 +670,13 @@ python -m pytest -q
 
 ### 统一 Golden 验证矩阵与证据目录
 
-全仓 12 项真机 Golden Case 已全部收敛至强类型注册表与统一的 12 项证据信封标准模式：
+全仓全部 13 项 Golden Case 统一由强类型 Registry 注册表和 12 键 Evidence 信封 Schema 严格管控：
 `case_id, release, runtime, solver, job, odb, solver_status, result_evidence, verification, acceptance, artifacts, provenance`。
 
-统一 CLI 管理与执行工具 (`tools/run_golden_matrix.py`) 支持状态发现、Schema 校验、真机批量运行与 Manifest 生成：
+统一 CLI 工具（`tools/run_golden_matrix.py`）提供集中化的用例发现、Schema 校验、实机执行与清单生成：
 
 ```bash
-# 1. 查询全部 12 个 Golden Case 的注册与证据状态
+# 1. 查看全部 13 项 Golden Case 的证据状态
 python tools/run_golden_matrix.py --list
 
 # 2. 校验全部现有机器证据 JSON 文件是否符合统一信封 Schema 且通过验收

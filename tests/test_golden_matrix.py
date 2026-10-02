@@ -45,21 +45,22 @@ EXPECTED_GOLDEN_CASES = (
     "fmbd4_rigid_flexible",
     "fmbd5_crank_slider",
     "explicit_dynamic",
+    "fatigue_real_odb",
 )
 EXPECTED_ELEVEN_CASES = EXPECTED_GOLDEN_CASES
 
 
 def test_golden_registry_contains_all_cases():
     catalog = standard_golden_catalog
-    assert catalog.count() == 12
+    assert catalog.count() == 13
     registered_ids = catalog.case_ids()
     for case_id in EXPECTED_GOLDEN_CASES:
         assert case_id in registered_ids
         case = catalog.get_case(case_id)
         assert case is not None
         assert case.title
-        assert case.category in ("P0", "P1", "MBD", "FMBD")
-        assert case.solver in ("standard", "explicit")
+        assert case.category in ("P0", "P1", "P2", "MBD", "FMBD")
+        assert case.solver in ("standard", "explicit", "postprocess")
         assert case.physics_type
         assert case.job_name
         assert case.tool_script.startswith("tools/")
@@ -251,7 +252,7 @@ def test_runner_cli_list(capsys):
     captured = capsys.readouterr().out
     for case_id in EXPECTED_GOLDEN_CASES:
         assert case_id in captured
-    assert "Total: 12" in captured
+    assert "Total: 13" in captured
 
 
 def test_runner_cli_validate_evidence(capsys):
@@ -268,10 +269,10 @@ def test_runner_cli_manifest_output(tmp_path):
     assert out_file.is_file()
     data = json.loads(out_file.read_text(encoding="utf-8"))
     assert data["manifest_version"] == "1.0"
-    assert data["catalog_case_count"] == 12
-    assert data["summary"]["PASS"] == 12
+    assert data["catalog_case_count"] == 13
+    assert data["summary"]["PASS"] == 13
     assert data["summary"]["FAIL"] == 0
-    assert len(data["cases"]) == 12
+    assert len(data["cases"]) == 13
 
 
 def test_preflight_closure_mbd_and_connector_actions():

@@ -253,7 +253,7 @@ def cmd_run(
         ]
         if case.case_id == "mbd2_double_pendulum":
             cmd.extend(["--json-out", str(evidence_path)])
-        elif case.case_id in ("smoke", "static_cantilever", "mesh_convergence", "tie_contact", "implicit_dynamic", "mbd1_rigid_pendulum", "fmbd4_rigid_flexible", "fmbd5_crank_slider", "explicit_dynamic"):
+        elif case.case_id in ("smoke", "static_cantilever", "mesh_convergence", "tie_contact", "implicit_dynamic", "mbd1_rigid_pendulum", "fmbd4_rigid_flexible", "fmbd5_crank_slider", "explicit_dynamic", "fatigue_real_odb"):
             cmd.extend(["--output", str(evidence_path)])
 
         start_time = datetime.datetime.now(datetime.timezone.utc)

@@ -110,6 +110,13 @@ CASE_NAME_TO_ID = {
     "explicitgolden": "explicit_dynamic",
     "explicitgoldenjob": "explicit_dynamic",
     "3d_cantilever_explicit": "explicit_dynamic",
+    # Fatigue ODB Postprocessing
+    "fatigue": "fatigue_real_odb",
+    "fatigue_real_odb": "fatigue_real_odb",
+    "fatigue_odb": "fatigue_real_odb",
+    "fatigue_golden_e2e": "fatigue_real_odb",
+    "fatigue_odb_golden_e2e": "fatigue_real_odb",
+    "fatigue_postprocess": "fatigue_real_odb",
 }
 
 
@@ -288,15 +295,24 @@ def normalize_golden_evidence(
     release = _detect_release(raw, report, default=release_default)
 
     # 2. Runtime
+    raw_rt = raw.get("runtime") if isinstance(raw.get("runtime"), dict) else {}
+    return_code_val = raw_rt.get("return_code") if "return_code" in raw_rt else raw.get("return_code")
+    if return_code_val is None:
+        return_code_val = 0 if (raw_rt.get("process_succeeded") or raw.get("process_succeeded")) else 1
+
+    proc_succeeded_val = raw_rt.get("process_succeeded")
+    if proc_succeeded_val is None:
+        proc_succeeded_val = raw.get("process_succeeded", return_code_val == 0)
+
     runtime: Dict[str, Any] = {
-        "launcher": raw.get("launcher", "abaqus"),
-        "workdir": raw.get("workdir", ""),
-        "script": raw.get("script", ""),
-        "command": raw.get("command", []),
-        "return_code": raw.get("return_code", 0 if raw.get("process_succeeded") else 1),
-        "process_succeeded": bool(raw.get("process_succeeded", raw.get("return_code") == 0)),
-        "stdout": raw.get("stdout", ""),
-        "stderr": raw.get("stderr", ""),
+        "launcher": raw_rt.get("launcher") or raw.get("launcher", "abaqus"),
+        "workdir": raw_rt.get("workdir") or raw.get("workdir", ""),
+        "script": raw_rt.get("script") or raw.get("script", ""),
+        "command": raw_rt.get("command") or raw.get("command", []),
+        "return_code": int(return_code_val),
+        "process_succeeded": bool(proc_succeeded_val),
+        "stdout": raw_rt.get("stdout") or raw.get("stdout", ""),
+        "stderr": raw_rt.get("stderr") or raw.get("stderr", ""),
     }
     if "execution_time_s" in raw:
         runtime["execution_time_s"] = raw["execution_time_s"]

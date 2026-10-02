@@ -298,6 +298,28 @@ def _build_standard_catalog() -> Tuple[GoldenCaseDefinition, ...]:
             ),
             tags=("explicit", "dynamic", "cfl", "energy_balance", "hourglass"),
         ),
+        GoldenCaseDefinition(
+            case_id="fatigue_real_odb",
+            title="Real ODB Stress History Fatigue Damage & Rainflow E2E",
+            category="P2",
+            solver="postprocess",
+            physics_type="fatigue_postprocess",
+            tool_script="tools/fatigue_odb_golden_e2e.py",
+            default_evidence_json="machine_validation/fatigue_odb_golden_e2e.json",
+            job_name="DynamicGoldenJob",
+            analytical_reference="ASTM E1049-85 Rainflow cycle counting, Goodman mean-stress correction, log-log S-N interpolation, and Palmgren-Miner linear cumulative damage",
+            summary="Real Abaqus ODB post-processing establishing automatic hotspot identification, multi-frame stress tensor time history extraction, Signed von Mises reduction, rainflow cycle counting, Goodman mean-stress correction, and Palmgren-Miner cumulative fatigue damage.",
+            criteria=(
+                GoldenCriterion("has_stress_history", "frame_count", ">=", 2, "", "Stress history contains at least 2 time frames"),
+                GoldenCriterion("rainflow_cycles_counted", "total_cycles_count", ">=", 1.0, "", "At least one rainflow cycle event detected"),
+                GoldenCriterion("cumulative_damage_positive", "cumulative_damage", ">=", 0.0, "", "Cumulative Miner damage is non-negative"),
+                GoldenCriterion("cumulative_damage_allowable", "cumulative_damage", "<=", 1.0, "", "Cumulative Miner damage within fatigue allowable D <= 1.0"),
+            ),
+            strict_criteria=(
+                GoldenCriterion("strict_damage_threshold", "cumulative_damage", "<=", 1.0e-15, "", "Strict negative gate limit D <= 1.0e-15"),
+            ),
+            tags=("fatigue", "odb", "rainflow", "goodman", "miner", "postprocess"),
+        ),
     )
 
 
