@@ -806,21 +806,42 @@ This repository builds on the general idea of a live Abaqus execution boundary w
 
 ```text
 Abaqus-AI-Agent/
+├── docs/                     # Engineering specifications, contracts, and roadmap
+├── machine_validation/       # Real-machine execution evidence, ODBs, and JSON manifests
 ├── src/
 │   └── abaqus_ai_agent/
 │       ├── actions/          # Explicit Abaqus operations and script generation
 │       ├── adapters/         # Live Abaqus/model adapters
-│       ├── contracts/        # Engineering, model, result and runtime contracts
-│       ├── execution/        # Executors, jobs, artifacts and batch execution
-│       ├── validation/       # Validation and preflight
+│       ├── contracts/        # Engineering, model, result, and runtime contracts
+│       ├── execution/        # Executors, jobs, artifacts, and batch execution
+│       ├── planning/         # Mechanism graph, topology, and action compilation
+│       ├── validation/       # Validation and preflight checks
 │       └── workflow/         # Analysis workflow definitions
-├── tests/                    # Unit and contract tests
-├── .github/workflows/        # CI
+├── tests/                    # Unit, contract, and anti-fabrication tests
+├── tools/                    # Golden E2E runners, matrix validator, and CLI utilities
+├── .github/workflows/        # CI workflows
 ├── pyproject.toml
 ├── LICENSE
+├── THIRD_PARTY_NOTICES.md
 ├── README.md                 # English documentation
 └── README_CN.md              # Chinese documentation
 ```
+
+---
+
+## Documentation index
+
+All architecture blueprints, engineering contracts, and credibility standards are organized under [`docs/`](docs/):
+
+| Document | Description |
+| :--- | :--- |
+| [Engineering Run & Evidence Closure Roadmap](docs/engineering-run-evidence-roadmap.md) | **Core Baseline:** System architecture, foundational contracts, anti-fabrication gates, solver-specific specifications, and real-machine Golden Ladder milestones. |
+| [AI / Agent Capability Boundary](docs/ai-agent-capability-boundary.md) | Division of responsibility between LLM planning and deterministic engineering engines, along with promotion criteria. |
+| [Engineering Closure Methodology](docs/engineering-closure.md) | Layered verification methodology separating offline contract checking from licensed Abaqus real-machine verification. |
+| [Engineering Closure Audit (2026-10-01)](docs/engineering-closure-audit-2026-10-01.md) | Historical audit baseline, verification trail, and evidence promotion log. |
+| [Engineering Credibility](docs/engineering-credibility.md) | Multi-layered observable evidence chain (Schema → Model → Solver → ODB → Physics). |
+| [Geometry Grounding](docs/geometry-grounding.md) | Deterministic mapping between semantic visual/engineering intent and native Abaqus topology without fragile numeric indices. |
+| [Geometry-Aware Meshing Strategy](docs/geometry-mesh-strategy.md) | Feature-driven mesh sizing, curvature-adaptive seeding, and convergence evaluation. |
 
 ---
 

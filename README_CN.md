@@ -808,21 +808,42 @@ python tools/run_golden_matrix.py --manifest-out machine_validation/golden_matri
 
 ```text
 Abaqus-AI-Agent/
+├── docs/                     # 架构蓝图、工程契约、闭环路线图与规范文档
+├── machine_validation/       # 真机执行证据包、ODB 结果数据库与 JSON Manifest
 ├── src/
 │   └── abaqus_ai_agent/
-│       ├── actions/          # 明确的 Abaqus 操作与脚本生成
+│       ├── actions/          # 明确的 Abaqus 操作与原生脚本生成
 │       ├── adapters/         # Live Abaqus / Model Adapter
 │       ├── contracts/        # 工程、模型、结果、Runtime Contract
 │       ├── execution/        # Executor、Job、Artifact、Batch
-│       ├── validation/       # Validation 与 Preflight
-│       └── workflow/         # Analysis Workflow
-├── tests/                    # Unit / Contract Tests
-├── .github/workflows/        # CI
+│       ├── planning/         # 机构拓扑图、移动度分析与 Action 编译器
+│       ├── validation/       # Validation 与 Preflight 前置门禁
+│       └── workflow/         # Analysis Workflow 分析流
+├── tests/                    # Unit / Contract / Anti-Fabrication Tests
+├── tools/                    # Golden E2E 执行器、矩阵验证器与 CLI 工具
+├── .github/workflows/        # CI 工作流
 ├── pyproject.toml
 ├── LICENSE
+├── THIRD_PARTY_NOTICES.md
 ├── README.md                 # English Documentation
 └── README_CN.md              # 中文文档
 ```
+
+---
+
+## 工程文档体系
+
+项目所有系统蓝图、工程契约与可信度规范统一收拢在 [`docs/`](docs/) 目录下：
+
+| 文档 | 说明 |
+| :--- | :--- |
+| [工程运行与证据闭环路线图](docs/engineering-run-evidence-roadmap.md) | **核心基准：** 系统架构、基础工程契约、反伪造门禁、求解器规范与真机 Golden Ladder 演进路线图。 |
+| [AI / Agent 能力边界](docs/ai-agent-capability-boundary.md) | LLM 规划与确定性工程内核的职责分工，以及能力分级晋升准则。 |
+| [工程闭环方法论](docs/engineering-closure.md) | 离线契约验证与真实 Abaqus 许可环境的分层验证工程方法。 |
+| [工程收口审计基线 (2026-10-01)](docs/engineering-closure-audit-2026-10-01.md) | 历史收口审计基线、证据链追溯与阶段性评审记录。 |
+| [工程可信度标准](docs/engineering-credibility.md) | 独立可观测多层证据链（Schema → Model → Solver → ODB → Physics）。 |
+| [几何语义落地](docs/geometry-grounding.md) | 工程意图与 Abaqus 原生几何拓扑的确定性映射，杜绝脆弱数字索引。 |
+| [几何感知自适应网格策略](docs/geometry-mesh-strategy.md) | 特征自适应布点、曲率与厚度控制及网格收敛性评定标准。 |
 
 ---
 
