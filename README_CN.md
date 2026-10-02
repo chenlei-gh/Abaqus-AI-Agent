@@ -572,7 +572,7 @@ action = python_action(
 | Amplitudes | 已实现 |
 | Gravity | 已实现 |
 | Reference Points / 刚体约束 (Rigid Body) | 已实现 |
-| 多体动力学 (Multi-Body Dynamics) | 已实现 |
+| 刚体多体动力学 (RP + RigidBody 单体铰接) | Abaqus 2025 Golden E2E 验证已通过；Connector / Joint 族待验证 |
 | Initial Temperature / Stress | 已实现 |
 | Assembly Instance Operations | 已实现 |
 | INP Export | 已实现 |
@@ -653,7 +653,9 @@ python -m pytest -q
 | **P1 Implicit Dynamic** | 斜坡载荷瞬态动力学悬臂梁 | 多时间帧动态响应、动能/内能比、动载荷放大系数 | ✅ PASS |
 | **P1 Steady Thermal** | 3D 杆体一维稳态热传导 | 解析温度分布、热流守恒、加严门禁真实 FAIL | ✅ PASS |
 | **P1 General Contact** | 块体压紧与库仑摩擦滑移 | 法向接触压力、切向摩擦力 (μ=0.25 误差 0.08%)、接触诊断 | ✅ PASS |
-| **MBD Golden** | 铰接刚体物理摆大角度重力摆动 | 振动周期 (误差 0.08%)、最大角速度 (误差 0.27%)、机械能守恒 | ✅ PASS |
+| **MBD Golden** | 铰接刚体物理摆大角度重力摆动 ($L=600\text{ mm}, \theta_0=10^\circ$) | 振动周期 ($T_{\text{corr}}=1.2713\text{ s}$, 误差 0.08%)、最大角速度 (误差 0.27%)、机械能守恒 | ✅ PASS |
+
+> **多体动力学边界说明**：当前已完成验证的是基于 Reference Point 与原生 `RigidBody` 约束的重力驱动单刚体物理摆动力学（MBD-1）。Abaqus 原生连接器与铰链单元族（如 `CONN3D2`、Revolute/Cartesian/Slot 连接器等）与多连杆机构属于下一阶段（MBD-2）验证计划，尚未纳入真机 Golden E2E 验证闭环，不提前宣称支持。
 
 ## Abaqus V5 R2018 / B28 验证
 

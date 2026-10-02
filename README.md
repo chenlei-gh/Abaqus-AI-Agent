@@ -584,7 +584,7 @@ This escape hatch is deliberate: the action layer should not become a bottleneck
 | Amplitudes | Implemented |
 | Gravity | Implemented |
 | Reference points / Rigid bodies | Implemented |
-| Multi-body dynamics (MBD) | Implemented |
+| Rigid-body multibody dynamics (single-body hinge via RP + RigidBody) | Golden E2E Validated (Abaqus 2025); Connector/joint families pending |
 | Initial temperature / stress | Implemented |
 | Assembly instance operations | Implemented |
 | INP export | Implemented |
@@ -661,7 +661,9 @@ The following golden engineering cases have all completed and passed real-machin
 | **P1 Implicit Dynamic** | Ramped load transient dynamic cantilever | Multi-frame dynamic response, ALLKE/ALLIE ratio, dynamic amplification | ✅ PASS |
 | **P1 Steady Thermal** | 1D steady conduction across 3D solid bar | Analytical temperature profile, heat flux conservation, strict gate FAIL | ✅ PASS |
 | **P1 General Contact** | Two-body contact with Coulomb friction sliding | Normal contact pressure, penalty tangential friction mu = 0.25, contact diagnostics | ✅ PASS |
-| **MBD Golden** | Rigid body physical pendulum under gravity | Period (0.08% error), max angular velocity (0.27% error), energy conservation | ✅ PASS |
+| **MBD Golden** | Rigid body physical pendulum under gravity ($L=600\text{ mm}, \theta_0=10^\circ$) | Period ($T_{\text{corr}}=1.2713\text{ s}$, 0.08% error), max angular velocity (0.27% error), energy conservation | ✅ PASS |
+
+> **Note on MBD scope & boundaries**: The MBD Golden E2E establishes real-machine validation for rigid-body dynamics using Reference Points and native `RigidBody` constraints under gravity. Native connector/joint element families (e.g. `CONN3D2`, Revolute/Cartesian/Slot connectors) and multi-link mechanisms are currently being planned for subsequent Golden E2E stages (MBD-2) and are not yet claimed as verified on real Abaqus runtimes.
 
 ## Abaqus R2018 / B28 validation
 
