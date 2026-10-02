@@ -127,3 +127,58 @@ def test_normalize_runtime_error():
     d = norm.to_dict()
     assert d["category"] == "license"
     assert d["execution_id"] == "exec-001"
+
+
+def test_analysis_run_roundtrip_serialization():
+    metric = EngineeringMetric(name="mises", value=350.5, unit="MPa")
+    run = AnalysisRun(
+        id="run-123",
+        model_name="BeamModel",
+        job_name="JobBeam",
+        state=AnalysisRunState.COMPLETED,
+        solver="standard",
+        engineering_status="passed",
+        acceptance_passed=True,
+        metrics=(metric,),
+        assumptions=("linear_elastic", "small_strain"),
+        artifacts=("JobBeam.odb", "JobBeam.dat"),
+        inputs=("JobBeam.inp",),
+        outputs={"peak_stress": 350.5},
+        solver_selection="standard_implicit",
+        postprocess_profile="stress_history",
+        provenance=AnalysisProvenance(
+            run_id="run-123",
+            model_name="BeamModel",
+            job_name="JobBeam",
+            model_hash="abc",
+            input_hash="def",
+            output_hash="123",
+        ),
+        report_reference="reports/report-123.md",
+    )
+
+    data = run.to_dict()
+    assert data["id"] == "run-123"
+    assert data["solver_selection"] == "standard_implicit"
+    assert data["postprocess_profile"] == "stress_history"
+    assert data["inputs"] == ["JobBeam.inp"]
+    assert data["outputs"] == {"peak_stress": 350.5}
+    assert data["artifacts"] == ["JobBeam.odb", "JobBeam.dat"]
+
+    restored = AnalysisRun.from_dict(data)
+    assert restored.id == run.id
+    assert restored.model_name == run.model_name
+    assert restored.job_name == run.job_name
+    assert restored.solver == run.solver
+    assert restored.state == AnalysisRunState.COMPLETED
+    assert restored.solver_selection == "standard_implicit"
+    assert restored.postprocess_profile == "stress_history"
+    assert restored.inputs == ("JobBeam.inp",)
+    assert restored.outputs == {"peak_stress": 350.5}
+    assert restored.artifacts == ("JobBeam.odb", "JobBeam.dat")
+    assert restored.assumptions == ("linear_elastic", "small_strain")
+    assert len(restored.metrics) == 1
+    assert restored.metrics[0].name == "mises"
+    assert restored.metrics[0].value == 350.5
+    assert restored.provenance.input_hash == "def"
+    assert restored.report_reference == "reports/report-123.md"
