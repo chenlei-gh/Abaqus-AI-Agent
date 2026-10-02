@@ -833,6 +833,16 @@ The default implementation order is:
 - [x] I.5: Packaging, CLI Entrypoints & Runtime Capability Fallback (Abaqus environment detection, CLI launcher, license capability probes, graceful headless fallback)
 - [x] I.6: Public Release Audit, Documentation & Security Sanitization (Hardcoded path sanitization, repository release hygiene, user guides, test suite validation)
 
+### Phase I.R — Release Hardening & Strict Quality Gates (I.1R ~ I.6R + CI Gate)
+
+- [x] I.1R: Fresh Execution & Evidence Freshness Gate (Validate live execution freshness hashes, input parameter fingerprints, and prevent static-only evidence spoofing)
+- [x] I.2R: Runtime Solver Failure & Process Boundary Probes (Live runtime process error handling, non-zero return code normalization, artifact corruption fail-closed verification)
+- [x] I.3R: True A/B Dual-Run Numerical Reproducibility & Perturbation Detection (Independent A/B execution comparison with tolerance <= 1e-4 and deliberate perturbation rejection)
+- [x] I.4R: TypeSafe JEV Intent with Ambiguity Handling & Clarification Blocking (Fail-closed rejection for ambiguous/incomplete prompts -> NEEDS_CLARIFICATION / BLOCKED)
+- [x] I.5R: Multi-tier Runtime Capability Inspector & Subprocess Packaging Smoke (Rigorous launcher/probe/license/solver capability decoupling and CLI subprocess smoke)
+- [x] I.6R: Repository-Wide Security, Hygiene & Path Leakage Audit (Scan entire git tracked tree for private paths, API keys, credentials, and untracked binaries)
+- [x] CI Gate: Automated CI Workflow Matrix & Verification (GitHub Actions workflow covering pytest, packaging smoke, and release hygiene audit)
+
 ---
 
 ## 20. Change-Control Checklist

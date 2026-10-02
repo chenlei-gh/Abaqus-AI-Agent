@@ -29,10 +29,36 @@ if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
 
+def get_tracked_files() -> List[Path]:
+    """Get all git-tracked files or fallback to repository file tree."""
+    import subprocess
+    try:
+        proc = subprocess.run(
+            ["git", "ls-files"],
+            cwd=str(ROOT),
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+        if proc.returncode == 0 and proc.stdout.strip():
+            return [ROOT / line.strip() for line in proc.stdout.splitlines() if line.strip()]
+    except Exception:
+        pass
+
+    # Fallback to scanning repo directory ignoring vcs/cache
+    ignored_dirs = {".git", ".pytest_cache", "__pycache__", "build", "dist", ".egg-info"}
+    files = []
+    for p in ROOT.rglob("*"):
+        if p.is_file() and not any(part in ignored_dirs for part in p.parts):
+            files.append(p)
+    return files
+
+
 def run_release_audit() -> Dict[str, Any]:
     """Execute complete public release audit."""
     checks: List[Dict[str, Any]] = []
     all_passed = True
+    tracked_files = get_tracked_files()
 
     # Check 1: Required Release Files
     required_files = [
@@ -56,36 +82,61 @@ def run_release_audit() -> Dict[str, Any]:
         "details": {"required": required_files, "missing": missing_files},
     })
 
-    # Check 2: Source Code Path Sanitization (scan src/)
+    # Check 2: Repository-Wide Security & Path Sanitization
     forbidden_patterns = [
-        r"[c-zC-Z]:\\Users\\[a-zA-Z0-9_\.]+",
-        r"[c-zC-Z]:\\Vault",
-        r"sk-[a-zA-Z0-9]{20,}",
-        r"ghp_[a-zA-Z0-9]{20,}",
+        (r"[c-zC-Z]:\\Users\\[a-zA-Z0-9_\.]+", "Windows personal user profile path"),
+        (r"[c-zC-Z]:\\Vault", "Private Vault directory path"),
+        (r"/(?:home|Users)/[a-zA-Z0-9_\.]+", "POSIX user profile path"),
+        (r"sk-[a-zA-Z0-9]{20,}", "OpenAI/API secret key"),
+        (r"ghp_[a-zA-Z0-9]{20,}", "GitHub Personal Access Token"),
+        (r"ts_[a-zA-Z0-9]{20,}", "TypeSafe API Token"),
     ]
+    # Whitelist files that define or test the sanitization patterns themselves or standard candidate commands
+    whitelist_names = {
+        "i6_release_audit.py",
+        "test_i6_release_audit.py",
+        "engineering-run-evidence-roadmap.md",
+        "THIRD_PARTY_NOTICES.md",
+    }
+
     leaks = []
-    for py_file in (ROOT / "src").rglob("*.py"):
-        try:
-            content = py_file.read_text(encoding="utf-8", errors="ignore")
-            for pattern in forbidden_patterns:
-                matches = re.findall(pattern, content)
-                if matches:
-                    rel_p = py_file.relative_to(ROOT)
-                    leaks.append({"file": str(rel_p), "pattern": pattern, "matched_count": len(matches)})
-        except Exception:
-            pass
+    for fpath in tracked_files:
+        if fpath.name in whitelist_names:
+            continue
+        # Scan code, docs, configuration files
+        if fpath.suffix in (".py", ".toml", ".json", ".md", ".yml", ".yaml", ".sh", ".bat"):
+            try:
+                content = fpath.read_text(encoding="utf-8", errors="ignore")
+                for pattern, desc in forbidden_patterns:
+                    matches = re.findall(pattern, content)
+                    if matches:
+                        rel_p = fpath.relative_to(ROOT)
+                        leaks.append({
+                            "file": str(rel_p),
+                            "description": desc,
+                            "matched_count": len(matches),
+                            "sample": matches[0][:30],
+                        })
+            except Exception:
+                pass
 
     path_passed = len(leaks) == 0
     if not path_passed:
         all_passed = False
     checks.append({
         "check_id": "CHK-02",
-        "name": "Source Code Path & Credential Sanitization",
+        "name": "Repository-Wide Path & Credential Sanitization",
         "passed": path_passed,
-        "details": {"leaks_detected": leaks},
+        "details": {"scanned_files_count": len(tracked_files), "leaks_detected": leaks},
     })
 
-    # Check 3: Git Ignore Completeness
+    # Check 3: Tracked Binaries & Git Ignore Hygiene
+    prohibited_extensions = {".odb", ".cae", ".jnl", ".rec", ".rpy", ".lck", ".sta", ".msg", ".dat"}
+    committed_binaries = []
+    for fpath in tracked_files:
+        if fpath.suffix.lower() in prohibited_extensions:
+            committed_binaries.append(str(fpath.relative_to(ROOT)))
+
     gitignore_path = ROOT / ".gitignore"
     gi_patterns = []
     if gitignore_path.is_file():
@@ -93,14 +144,14 @@ def run_release_audit() -> Dict[str, Any]:
 
     required_ignores = ["*.odb", "*.sta", "*.msg", "*.dat", "*.log", "*.rec", "*.rpy"]
     missing_ignores = [ig for ig in required_ignores if not any(ig in p for p in gi_patterns)]
-    gi_passed = len(missing_ignores) == 0
+    gi_passed = (len(missing_ignores) == 0) and (len(committed_binaries) == 0)
     if not gi_passed:
         all_passed = False
     checks.append({
         "check_id": "CHK-03",
-        "name": "Git Ignore Binary & Artifact Coverage",
+        "name": "Git Ignore Binary & Tracked Artifact Coverage",
         "passed": gi_passed,
-        "details": {"missing_rules": missing_ignores},
+        "details": {"missing_rules": missing_ignores, "accidentally_committed_binaries": committed_binaries},
     })
 
     # Check 4: Package Metadata & Entrypoints

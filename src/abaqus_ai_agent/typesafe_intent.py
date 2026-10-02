@@ -27,6 +27,34 @@ from abaqus_ai_agent.contracts.results import ResultRequirement
 from abaqus_ai_agent.contracts.units import UnitSystem
 
 
+class IntentAmbiguityError(ValueError):
+    """Raised when natural language prompt is ambiguous or missing required physics definition."""
+
+    def __init__(self, message: str, missing_requirements: List[str], bundle: JevDecisionBundle):
+        super().__init__(message)
+        self.missing_requirements = missing_requirements
+        self.bundle = bundle
+
+
+@dataclass(frozen=True)
+class IntentRoutingResult:
+    """Complete result of intent routing with fail-closed clarification gating."""
+    status: str  # "ROUTED", "NEEDS_CLARIFICATION", "BLOCKED"
+    intent: Optional[EngineeringIntent]
+    decision_bundle: JevDecisionBundle
+    missing_requirements: List[str] = field(default_factory=list)
+    clarification_prompt: Optional[str] = None
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "status": self.status,
+            "intent": asdict(self.intent) if self.intent else None,
+            "decision_bundle": self.decision_bundle.to_dict(),
+            "missing_requirements": self.missing_requirements,
+            "clarification_prompt": self.clarification_prompt,
+        }
+
+
 @dataclass(frozen=True)
 class ChoiceJudgment:
     """TypeSafe System One Choice primitive result."""
@@ -104,18 +132,92 @@ class JevIntentRouter:
         self.api_key = api_key or os.environ.get("TYPESAFE_API_KEY")
         self.use_live_api = use_live_api and bool(self.api_key)
 
-    def route_prompt_to_intent(self, prompt: str) -> Tuple[EngineeringIntent, JevDecisionBundle]:
-        """Convert natural language requirement into typed EngineeringIntent via JEV judgments."""
+    def route(self, prompt: str) -> IntentRoutingResult:
+        """Route prompt with explicit fail-closed clarification gate for ambiguous requirements."""
         prompt_clean = prompt.strip()
         if not prompt_clean:
             raise ValueError("Engineering intent prompt cannot be empty.")
 
-        # Execute JEV System One Judgments (Live API if configured, else Deterministic Offline Engine)
         decisions = self._evaluate_system_one_judgments(prompt_clean)
+        missing = self._detect_missing_engineering_prerequisites(prompt_clean, decisions)
 
-        # Synthesize declarative EngineeringIntent
+        if missing:
+            clarification_msg = (
+                f"Engineering specification is ambiguous or incomplete. Missing prerequisites: {', '.join(missing)}. "
+                "Please clarify structural dimensions, boundary conditions, applied loads, material properties, "
+                "or acceptance thresholds before submitting simulation execution."
+            )
+            return IntentRoutingResult(
+                status="NEEDS_CLARIFICATION",
+                intent=None,
+                decision_bundle=decisions,
+                missing_requirements=missing,
+                clarification_prompt=clarification_msg,
+            )
+
         intent = self._build_intent_from_decisions(prompt_clean, decisions)
-        return intent, decisions
+        return IntentRoutingResult(
+            status="ROUTED",
+            intent=intent,
+            decision_bundle=decisions,
+            missing_requirements=[],
+            clarification_prompt=None,
+        )
+
+    def route_prompt_to_intent(
+        self, prompt: str, strict: bool = False
+    ) -> Tuple[EngineeringIntent, JevDecisionBundle]:
+        """Convert natural language requirement into typed EngineeringIntent via JEV judgments.
+
+        If strict=True, raises IntentAmbiguityError when requirements are incomplete.
+        """
+        res = self.route(prompt)
+        if res.status != "ROUTED":
+            if strict:
+                raise IntentAmbiguityError(
+                    res.clarification_prompt or "Incomplete engineering intent.",
+                    res.missing_requirements,
+                    res.decision_bundle,
+                )
+            # In non-strict mode for backward-compatibility, synthesize draft intent
+            intent = self._build_intent_from_decisions(prompt.strip(), res.decision_bundle)
+            return intent, res.decision_bundle
+
+        assert res.intent is not None
+        return res.intent, res.decision_bundle
+
+    def _detect_missing_engineering_prerequisites(
+        self, prompt: str, bundle: JevDecisionBundle
+    ) -> List[str]:
+        """Verify whether prompt contains all necessary engineering prerequisites to be well-posed."""
+        missing = []
+        params = bundle.extracted_parameters
+        phys = bundle.physics_choice.value
+
+        # Check geometry dimension
+        if not params.get("dimensions"):
+            missing.append("missing_geometry_dimensions")
+
+        # Check material
+        if not params.get("material"):
+            missing.append("missing_material_specification")
+
+        # Physics-specific constraints and loads
+        if phys in ("linear_static", "contact_frictional", "fatigue_damage"):
+            if not bundle.is_well_constrained_noul.is_yes:
+                missing.append("missing_boundary_constraints")
+            if not params.get("loads"):
+                missing.append("missing_applied_loads")
+
+        if phys in ("steady_thermal",):
+            if not any(w in prompt.lower() for w in ("0c", "100c", "°c", "k", "flux", "热流", "温度")):
+                missing.append("missing_thermal_boundary_conditions")
+
+        # Check acceptance criteria / limits
+        if not bundle.has_acceptance_criteria_noul.is_yes:
+            missing.append("missing_acceptance_criteria_or_limits")
+
+        return missing
 
     def _evaluate_system_one_judgments(self, prompt: str) -> JevDecisionBundle:
         """Evaluate JEV judgments over input prompt."""

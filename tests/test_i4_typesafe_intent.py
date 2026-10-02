@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+import pytest
 
 from abaqus_ai_agent.typesafe_intent import (
     ChoiceJudgment,
@@ -65,3 +66,23 @@ def test_jev_intent_e2e_runner():
     assert manifest["passed_prompts"] == 3
     assert manifest["all_passed"] is True
     assert out_file.is_file()
+
+
+def test_jev_intent_ambiguity_fails_closed():
+    """Ambiguous prompts missing loads/materials/constraints must NOT silently pass."""
+    router = JevIntentRouter()
+    ambiguous_prompt = "帮我分析这个支架强度。"
+    res = router.route(ambiguous_prompt)
+
+    assert res.status == "NEEDS_CLARIFICATION"
+    assert res.intent is None
+    assert len(res.missing_requirements) >= 3
+    assert "missing_geometry_dimensions" in res.missing_requirements
+    assert "missing_material_specification" in res.missing_requirements
+    assert "missing_applied_loads" in res.missing_requirements
+    assert res.clarification_prompt is not None
+
+    # Strict mode must raise explicit IntentAmbiguityError
+    with pytest.raises(Exception) as excinfo:
+        router.route_prompt_to_intent(ambiguous_prompt, strict=True)
+    assert "Missing prerequisites" in str(excinfo.value)

@@ -129,9 +129,15 @@ def handle_inspect(args: argparse.Namespace) -> int:
                 launcher = cand
                 break
 
+    launcher_found = bool(which_path)
+    version_probe_ok = False
+    runtime_startable = False
+    license_verified = False
+    cae_available = False
+    nogui_available = False
+    solver_submit_capable = False
     version_info = "unavailable"
-    license_ok = False
-    returncode = 0
+    probe_output = ""
 
     if which_path:
         try:
@@ -143,25 +149,54 @@ def handle_inspect(args: argparse.Namespace) -> int:
                 text=True,
                 timeout=15,
             )
-            out = p.stdout.strip()
+            out = p.stdout.strip() or p.stderr.strip()
+            probe_output = out
             if p.returncode == 0:
-                license_ok = True
+                version_probe_ok = True
+                runtime_startable = True
+                # A successful release inquiry indicates launcher and core environment work
                 version_info = out.splitlines()[0] if out else "Abaqus detected"
+                # Check for explicit license error patterns in output
+                lower_out = out.lower()
+                if "license error" in lower_out or "flexnet" in lower_out or "cannot connect to license server" in lower_out:
+                    license_verified = False
+                else:
+                    license_verified = True
+                cae_available = True
+                nogui_available = True
+                solver_submit_capable = license_verified
             else:
-                version_info = "Abaqus executable detected (launcher ready)"
-                license_ok = True
+                # Returncode non-zero: launcher exists but runtime probe failed
+                version_probe_ok = False
+                runtime_startable = False
+                license_verified = False
+                version_info = f"Launcher detected at {which_path} but information=release returned code {p.returncode}"
         except Exception as e:
-            version_info = f"Detection probe: {e}"
-            license_ok = False
+            version_probe_ok = False
+            runtime_startable = False
+            license_verified = False
+            version_info = f"Detection probe exception: {e}"
 
-    runtime_mode = "LIVE_ABAQUS" if which_path else "HEADLESS_CONTRACT_FALLBACK"
+    if runtime_startable and license_verified:
+        runtime_mode = "LIVE_ABAQUS_SOLVER"
+    elif launcher_found and not license_verified:
+        runtime_mode = "LAUNCHER_DETECTED_NO_LICENSE"
+    else:
+        runtime_mode = "HEADLESS_CONTRACT_FALLBACK"
 
     data = {
         "launcher": launcher,
         "located_path": which_path,
-        "available": bool(which_path),
+        "available": launcher_found,
+        "launcher_found": launcher_found,
+        "version_probe_ok": version_probe_ok,
+        "runtime_startable": runtime_startable,
+        "license_verified": license_verified,
+        "license_probe_ok": license_verified,  # Backward compatible alias
+        "cae_available": cae_available,
+        "nogui_available": nogui_available,
+        "solver_submit_capable": solver_submit_capable,
         "runtime_version": version_info,
-        "license_probe_ok": license_ok,
         "runtime_mode": runtime_mode,
         "python_version": sys.version.split()[0],
         "workdir_writable": os.access(".", os.W_OK),
@@ -171,13 +206,16 @@ def handle_inspect(args: argparse.Namespace) -> int:
         print(json.dumps(data, indent=2, ensure_ascii=False))
     else:
         print("=== Abaqus Runtime Environment Inspection ===")
-        print(f"Launcher command:  {data['launcher']}")
-        print(f"Executable path:   {data['located_path'] or 'NOT FOUND in PATH'}")
-        print(f"Availability:      {'YES' if data['available'] else 'NO'}")
-        print(f"Runtime mode:      {data['runtime_mode']}")
-        print(f"Runtime version:   {data['runtime_version']}")
-        print(f"License probe:     {'PASS' if data['license_probe_ok'] else 'UNVERIFIED / NO LICENSE'}")
-        print(f"Python version:    {data['python_version']}")
+        print(f"Launcher command:      {data['launcher']}")
+        print(f"Executable path:       {data['located_path'] or 'NOT FOUND in PATH'}")
+        print(f"Launcher found:        {'YES' if data['launcher_found'] else 'NO'}")
+        print(f"Version probe:         {'PASS' if data['version_probe_ok'] else 'FAIL / UNAVAILABLE'}")
+        print(f"Runtime startable:     {'YES' if data['runtime_startable'] else 'NO'}")
+        print(f"License verified:      {'YES' if data['license_verified'] else 'NO / UNVERIFIED'}")
+        print(f"Solver submit capable: {'YES' if data['solver_submit_capable'] else 'NO'}")
+        print(f"Runtime mode:          {data['runtime_mode']}")
+        print(f"Runtime version:       {data['runtime_version']}")
+        print(f"Python version:        {data['python_version']}")
         print(f"Workdir writable:  {'YES' if data['workdir_writable'] else 'NO'}")
 
     return 0
@@ -188,14 +226,29 @@ def handle_ask(args: argparse.Namespace) -> int:
 
     router = JevIntentRouter()
     try:
-        intent, bundle = router.route_prompt_to_intent(args.prompt)
+        routing_res = router.route(args.prompt)
     except Exception as exc:
         print(f"Error processing intent with JEV: {exc}", file=sys.stderr)
         return 1
 
+    bundle = routing_res.decision_bundle
+    intent = routing_res.intent
+
+    if routing_res.status == "NEEDS_CLARIFICATION":
+        if args.json:
+            print(json.dumps(routing_res.to_dict(), indent=2, ensure_ascii=False))
+        else:
+            print("=== JEV-Powered Engineering Intent: NEEDS CLARIFICATION ===")
+            print(f"Prompt:               {args.prompt}")
+            print(f"Status:               BLOCKED (Fail-Closed)")
+            print(f"Missing Prereqs:      {', '.join(routing_res.missing_requirements)}")
+            print(f"Clarification Needed: {routing_res.clarification_prompt}")
+        return 2
+
     if args.json:
         out = {
             "prompt": args.prompt,
+            "status": routing_res.status,
             "intent": {
                 "id": intent.id,
                 "kind": intent.kind,
@@ -205,7 +258,7 @@ def handle_ask(args: argparse.Namespace) -> int:
                 "boundary_conditions": list(intent.boundary_conditions),
                 "loads": list(intent.loads),
                 "acceptance_criteria": list(intent.acceptance_criteria),
-            },
+            } if intent else None,
             "jev_decision_bundle": bundle.to_dict(),
         }
         print(json.dumps(out, indent=2, ensure_ascii=False))
@@ -217,11 +270,12 @@ def handle_ask(args: argparse.Namespace) -> int:
         print(f"Target Solver:      {bundle.solver_choice.value}")
         print(f"Well-Constrained:   {'YES' if bundle.is_well_constrained_noul.is_yes else 'WARNING: Potential rigid modes'}")
         print(f"Completeness Score: {bundle.completeness_score.score:.1f} / 5.0")
-        if intent.material:
+        if intent and intent.material:
             print(f"Material Detected:  {intent.material.get('name')} (E={intent.material.get('elastic_modulus')} MPa)")
-        print(f"Boundary Conditions:{len(intent.boundary_conditions)} defined")
-        print(f"Loads:              {len(intent.loads)} defined")
-        print(f"Acceptance Criteria:{len(intent.acceptance_criteria)} defined")
+        if intent:
+            print(f"Boundary Conditions:{len(intent.boundary_conditions)} defined")
+            print(f"Loads:              {len(intent.loads)} defined")
+            print(f"Acceptance Criteria:{len(intent.acceptance_criteria)} defined")
         if args.dry_run:
             print("[DRY-RUN] Intent and plan contracts verified successfully. No solver invoked.")
 

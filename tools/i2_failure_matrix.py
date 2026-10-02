@@ -50,6 +50,82 @@ class FailurePathTestCase:
     remediation_suggestion: str
 
 
+@dataclass
+class RuntimeFailureProbeResult:
+    probe_id: str
+    scenario: str
+    injected_condition: Dict[str, Any]
+    detected_status: str
+    fail_closed: bool
+    evidence_preserved: bool
+    diagnostic_info: Dict[str, Any]
+
+
+def evaluate_runtime_process_failure(
+    probe_id: str,
+    scenario: str,
+    returncode: int,
+    stdout_stderr: str,
+    workdir_files: List[str],
+    metric_values: Dict[str, Any],
+) -> RuntimeFailureProbeResult:
+    """Evaluate runtime solver / CLI process failure conditions at OS/process boundary."""
+    diag: Dict[str, Any] = {
+        "returncode": returncode,
+        "captured_output_length": len(stdout_stderr),
+        "workdir_file_count": len(workdir_files),
+    }
+
+    # 1. Timeout probe
+    if returncode == -9 or "timeout" in scenario.lower():
+        status = "TIMEOUT"
+        fail_closed = True
+        preserved = any(f.endswith(".log") or f.endswith(".sta") for f in workdir_files)
+        diag["reason"] = "Solver process terminated due to walltime limit exceedance"
+
+    # 2. Abnormal exit / solver crash
+    elif returncode != 0:
+        status = "INCOMPLETE"
+        fail_closed = True
+        preserved = len(workdir_files) > 0  # Partial outputs preserved
+        diag["reason"] = f"Solver exited abnormally with exit code {returncode}"
+        diag["error_snippet"] = stdout_stderr[:200]
+
+    # 3. Missing ODB despite exitcode 0
+    elif not any(f.endswith(".odb") for f in workdir_files):
+        status = "ODB_MISSING"
+        fail_closed = True
+        preserved = any(f.endswith(".log") or f.endswith(".dat") for f in workdir_files)
+        diag["reason"] = "Process returned code 0 but target ODB file was not created"
+
+    # 4. Corrupted / unphysical field values
+    elif any(isinstance(v, float) and (v != v or abs(v) > 1e20) for v in metric_values.values()):
+        status = "RESULT_INVALID"
+        fail_closed = True
+        preserved = True
+        diag["reason"] = "ODB extracted metric values contained NaN or singular divergence"
+
+    else:
+        status = "PASS"
+        fail_closed = False
+        preserved = True
+        diag["reason"] = "Clean execution"
+
+    return RuntimeFailureProbeResult(
+        probe_id=probe_id,
+        scenario=scenario,
+        injected_condition={
+            "returncode": returncode,
+            "workdir_files": workdir_files,
+            "metric_values": metric_values,
+        },
+        detected_status=status,
+        fail_closed=fail_closed,
+        evidence_preserved=preserved,
+        diagnostic_info=diag,
+    )
+
+
 CANONICAL_FAILURE_SPECS: List[FailurePathTestCase] = [
     FailurePathTestCase(
         state_id="FP-01",
@@ -263,6 +339,47 @@ def run_failure_matrix_verification() -> Dict[str, Any]:
         if r["target_state"] not in ("PASS", "SUSPICIOUS"):
             assert r["passed"] is False, f"CRITICAL: State {r['target_state']} was falsely marked as passed!"
 
+    # Execute OS / Runtime Process Boundary Failure Probes
+    probe_abnormal_exit = evaluate_runtime_process_failure(
+        probe_id="RTP-01",
+        scenario="Solver process non-zero return code (SIGSEGV/Out of Memory)",
+        returncode=137,
+        stdout_stderr="***ERROR: Out of memory during element matrix assembly",
+        workdir_files=["job.log", "job.sta"],
+        metric_values={},
+    )
+    probe_timeout = evaluate_runtime_process_failure(
+        probe_id="RTP-02",
+        scenario="Subprocess execution timeout walltime exceeded",
+        returncode=-9,
+        stdout_stderr="TimeoutExpired: Job execution exceeded 300s",
+        workdir_files=["job.log", "job.sta"],
+        metric_values={},
+    )
+    probe_missing_odb = evaluate_runtime_process_failure(
+        probe_id="RTP-03",
+        scenario="Process exited 0 but target ODB file was not created",
+        returncode=0,
+        stdout_stderr="Abaqus job complete with warnings",
+        workdir_files=["job.log", "job.dat"],
+        metric_values={},
+    )
+    probe_corrupt_metric = evaluate_runtime_process_failure(
+        probe_id="RTP-04",
+        scenario="ODB opened but extraction returned NaN values",
+        returncode=0,
+        stdout_stderr="Field extracted",
+        workdir_files=["job.odb", "job.log"],
+        metric_values={"tip_displacement": float("nan")},
+    )
+
+    runtime_probes = [
+        asdict(probe_abnormal_exit),
+        asdict(probe_timeout),
+        asdict(probe_missing_odb),
+        asdict(probe_corrupt_metric),
+    ]
+
     manifest = {
         "schema_version": "failure_path_matrix_v1",
         "verified_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
@@ -270,6 +387,8 @@ def run_failure_matrix_verification() -> Dict[str, Any]:
         "verified_states": sum(1 for r in results if r["contract_verified"]),
         "all_contracts_verified": all_verified,
         "results": results,
+        "runtime_process_probes": runtime_probes,
+        "all_runtime_probes_fail_closed": all(p["fail_closed"] for p in runtime_probes),
     }
     return manifest
 

@@ -17,3 +17,12 @@ def test_public_release_audit_all_passed():
     assert manifest["all_passed"] is True
     for c in manifest["checks"]:
         assert c["passed"] is True
+
+    # Assert repository-wide scan checked over 100 tracked files
+    chk2 = next(c for c in manifest["checks"] if c["check_id"] == "CHK-02")
+    assert chk2["details"]["scanned_files_count"] >= 100
+    assert len(chk2["details"]["leaks_detected"]) == 0
+
+    # Assert no binaries tracked
+    chk3 = next(c for c in manifest["checks"] if c["check_id"] == "CHK-03")
+    assert len(chk3["details"]["accidentally_committed_binaries"]) == 0

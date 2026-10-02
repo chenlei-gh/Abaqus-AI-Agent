@@ -7,9 +7,10 @@ on:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
     strategy:
       matrix:
+        os: [ubuntu-latest, windows-latest]
         python-version: ["3.10", "3.11", "3.12"]
     steps:
       - uses: actions/checkout@v4
@@ -26,3 +27,12 @@ jobs:
           abaqus-ai-agent matrix --list
           abaqus-ai-agent fmbd --case fmbd7 --verify-topology
           abaqus-ai-agent fmbd --case fmbd7 --compile
+          abaqus-agent inspect --json
+          abaqus-agent ask "对100mm悬臂梁端部施加1000N垂直载荷，材料为结构钢，固定根部，校核端部挠度不超过2.5mm。" --dry-run
+      - name: Run Golden Evidence & Release Quality Audits
+        run: |
+          python tools/run_golden_matrix.py --validate-evidence all
+          python tools/i6_release_audit.py
+          python tools/i1_engineering_case_matrix.py
+          python tools/i2_failure_matrix.py
+          python tools/i3_reproducibility.py

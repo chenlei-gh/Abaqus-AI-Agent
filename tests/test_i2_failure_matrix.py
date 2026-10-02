@@ -37,3 +37,12 @@ def test_failure_matrix_verification_runs():
         assert res["contract_verified"] is True
         if res["target_state"] not in ("PASS", "SUSPICIOUS"):
             assert res["passed"] is False
+
+    # Runtime process boundary probes verification
+    rt_probes = manifest.get("runtime_process_probes", [])
+    assert len(rt_probes) == 4
+    assert manifest["all_runtime_probes_fail_closed"] is True
+    for p in rt_probes:
+        assert p["fail_closed"] is True
+        assert p["evidence_preserved"] is True
+        assert p["detected_status"] in ("INCOMPLETE", "TIMEOUT", "ODB_MISSING", "RESULT_INVALID")
