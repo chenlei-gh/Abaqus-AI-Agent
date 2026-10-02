@@ -12,28 +12,83 @@
 [![Release Gate](https://img.shields.io/badge/release%20gate-RC--1%20frozen-orange.svg)](#)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 
-> **Project status:** Architecture and contract closure are substantially complete. **Abaqus 2025 machine validation has passed end-to-end across the 13-case Golden Ladder.** All live solver verification is grounded in audited machine artifacts.
+> **Project status: Release Candidate Baseline Frozen (`v1.0.0-rc1`).**
+> The foundational engineering contracts, deterministic software gates (374 passed tests), and full-chain **Abaqus 2025 real-machine execution gates (13/13 Golden Ladder & 9/9 Physical Categories)** are complete and closed. All live solver verifications are grounded in verifiable, audited machine artifacts.
 
 ### Quick navigation
 
 - [Overview](#overview)
-- [What it does](#what-it-does)
-- [Engineering closure](#engineering-closure)
-- [Architecture](#architecture)
-- [Design principles](#design-principles)
-- [Installation](#installation)
-- [Minimal usage](#minimal-usage)
+- [Core Product Pillars](#core-product-pillars)
+- [At a glance](#at-a-glance)
+- [Architecture & Engineering Closure](#architecture--engineering-closure)
 - [Current capability status](#current-capability-status)
-- [Testing and CI](#testing-and-ci)
-- [Runtime verification principles](#runtime-verification-principles)
+- [Abaqus 2025 machine validation](#abaqus-2025-machine-validation)
+- [Installation & Setup](#installation--setup)
+- [Command-Line Interface (CLI)](#command-line-interface-cli)
+- [Minimal usage](#minimal-usage)
+- [Testing & Dual-Gate Verification](#testing--dual-gate-verification)
 - [Safety and failure boundaries](#safety-and-failure-boundaries)
-- [Project scope](#project-scope)
-- [Roadmap](#roadmap)
 - [Repository structure](#repository-structure)
+- [Documentation Index](#documentation-index)
+
+---
+
+## Overview
+
+**Abaqus AI Agent** is an autonomous finite-element engineering agent designed to operate with native Abaqus/CAE models, solvers, and simulation lifecycles.
+
+It bridges the divide between high-level engineering requirements and rigorous finite-element physics:
+
+**Engineering Requirements → Typed Intent (JEV) → Solver Selection → Topology Grounding → Validated Actions → Abaqus Execution → ODB Extraction → Verification & Acceptance → Evidence Bundle → Engineering Report**
+
+The project enforces an uncompromising design boundary: **The AI layer is strictly decoupled from the solver kernel.** It does not attempt to replace Abaqus, fabricate pseudo-finite-element solutions, or turn vague natural-language prompts into hallucinated geometry.
+
+### The Anti-Fabrication Axiom
+
+> **An engineering result is NEVER accepted merely because an Abaqus Python call returned zero. It must be proven through model state, job monitor artifacts (.sta/.msg/.log), ODB tensor extraction, and strict numerical acceptance criteria.**
+
+```text
+"Python script returned 0"
+        ≠
+"Abaqus model geometry & mesh are valid"
+        ≠
+"Solver converged without numerical divergence"
+        ≠
+"Requested field outputs exist in ODB"
+        ≠
+"Engineering acceptance criteria are satisfied"
+```
+
+---
+
+## Core Product Pillars
+
+### 1. TypeSafe JEV Intent Engine with Fail-Closed Ambiguity Gate
+Natural language inputs are compiled into strongly-typed `EngineeringIntent` records via a hybrid architecture (TypeSafe JEV online judgments or deterministic offline routing).
+- **Strict Fail-Closed Rule**: If a prompt lacks essential physical prerequisites (e.g. dimensions, material parameters, boundary conditions, or acceptance thresholds), the agent **refuses to guess**. It immediately flags `NEEDS_CLARIFICATION` and halts in a `BLOCKED` state until the engineer provides explicit inputs.
+
+### 2. Live Abaqus A/B Dual-Run & Zero Analytical Stubs
+To guarantee physical reproducibility across independent solver executions:
+- **A/B Dual-Run Protocol**: Executes two independent Abaqus 2025 processes (`Run A` vs `Run B`), extracting field/history metrics directly from output databases. Results must match within a strict relative numerical tolerance (tolerance ≤ 1e-4).
+- **Perturbation Sensitivity**: A controlled 10% material parameter perturbation (e.g. Young's modulus E × 0.9) is verified to cause an intentional acceptance gate rejection.
+- **Zero Analytical Stubs**: The case evaluation pipeline strictly forbids hardcoded textbook formulas (such as FL³/3EI) to masquerade as fresh runs.
+
+### 3. Viewport & Image Topology Grounding
+Solves the fundamental problem of connecting visual intention to finite-element geometry without fragile entity IDs:
+- Maps 2D camera/viewport coordinates or technical drawing annotation points into 3D ray-cast spatial candidate points.
+- Automatically derives deterministic `findAt(...)` topological expressions in native Abaqus/CAE.
+- Materializes verified native `Sets` and `Surfaces` for boundary conditions, loads, and contact pairs.
+
+### 4. Autonomous Engineering Report Generation
+Generates complete, publication-grade engineering reports directly from live `AnalysisRun` evidence:
+- Produces self-contained **Markdown** and standalone styled **HTML** documents.
+- Automatically compiles Executive Summaries, Model Configurations, Material Properties, Results Tables, Acceptance Verdicts, and ODB Provenance Hashes.
 
 ---
 
 ## At a glance
+
+### End-to-End Workflow
 
 ```mermaid
 flowchart LR
@@ -53,9 +108,7 @@ flowchart LR
     EV --> REP["Engineering Report"]
 ```
 
-**The visual boundary is intentional:** AI can reason beyond the Agent's typed capability surface, but only an explicit execution and evidence path can turn an operation into a formal Agent capability.
-
-### The engineering evidence ladder
+### The Engineering Evidence Ladder
 
 ```mermaid
 flowchart TB
@@ -68,9 +121,7 @@ flowchart TB
     N["A successful Python call"] -. "does NOT imply" .-> A
 ```
 
-This distinction is the project's central protection against **"the code ran, therefore the engineering result is correct."**
-
-### Capability lifecycle
+### Capability Lifecycle
 
 ```mermaid
 flowchart LR
@@ -84,758 +135,262 @@ flowchart LR
     C --> S
 ```
 
-This gives the project a controlled way to grow: **do not inflate the capability list just because an LLM can generate plausible Abaqus Python.**
-
-## Overview
-
-**Abaqus AI Agent** is an engineering-analysis agent for working with existing Abaqus/CAE models and native Abaqus capabilities.
-
-It is designed to connect:
-
-**engineering requirements → engineering intent → solver selection → geometry/mesh strategy → validated native actions → Abaqus execution → ODB/result extraction → verification → acceptance → evidence → engineering report**
-
-The project deliberately keeps the AI layer separate from the Abaqus solver. It does not attempt to replace Abaqus, invent a new finite-element solver, or turn arbitrary natural-language prompts into unverified geometry.
-
-The core principle is:
-
-> **An engineering answer is not accepted merely because an Abaqus Python call succeeded. It must be supported by model state, job artifacts, ODB data, result extraction, and explicit acceptance criteria.**
-
-## What it does
-
-The project is organized around four visible capabilities: **engineering actions**, **live Abaqus execution**, **geometry grounding**, and **engineering credibility / evidence**.
-
-### Engineering analysis actions
-
-The current action layer covers:
-
-- materials:
-  - elasticity
-  - density
-  - plasticity
-  - conductivity
-  - specific heat
-  - thermal expansion
-- sections and section assignment
-- analysis steps:
-  - Static
-  - Explicit Dynamics
-  - Implicit Dynamics
-  - Frequency
-  - Heat Transfer
-  - Coupled Temperature-Displacement
-- step-level controls:
-  - time period
-  - maximum increments
-  - initial/minimum/maximum increment
-  - time incrementation method
-  - stabilization
-  - solution technique / reform kernel where applicable
-- amplitudes:
-  - Tabular
-  - Smooth Step
-  - Periodic
-  - Equally Spaced
-- loads:
-  - Gravity
-  - Pressure
-  - Concentrated Force
-  - Body Force
-  - Body Heat Flux
-  - Surface Heat Flux
-- predefined fields:
-  - Initial Temperature
-  - Initial Stress
-- boundary conditions:
-  - Fixed / Encastre
-  - Displacement
-  - Symmetry
-  - Temperature
-- assembly instance operations:
-  - inspection
-  - translation
-  - rotation
-  - linear pattern
-- mesh intent:
-  - seeding
-  - mesh generation
-  - element-type intent
-- interaction intent:
-  - tie
-  - contact
-- job creation and submission
-- INP export
-- ODB field CSV export
-- mesh-convergence evaluation with explicit quality/singularity boundaries
-- deterministic solver selection from engineering intent
-- analysis-type post-processing profiles linking solver strategy to required results/checks/plots
-- geometry-to-mesh strategy with local refinement, partition candidates, and small-feature review
-- native Abaqus mesh-quality verification
-- contact diagnostics with explicit engineering expectations
-- fatigue post-processing contracts covering cycle counting, stress range/amplitude semantics, mean-stress correction, and multi-component stress semantics
-- sensitivity and uncertainty evidence contracts
-- normalized engineering metrics from ODB result extraction
-- source-first engineering report data with Markdown/HTML and optional PDF rendering
-- structured acceptance gates for numerical verification, engineering checks, mesh quality/convergence, fatigue, and supplied contact diagnostics
-
-The action layer is intentionally extensible rather than exhaustive. Abaqus exposes a very large, release-dependent Python API; the project therefore also provides a controlled native-Python escape hatch.
-
-### Live Abaqus execution
-
-The execution layer supports:
-
-- `AbaqusExecutor` abstraction
-- JSON/TCP bridge execution
-- in-process execution for tests
-- model inspection
-- job submission and status inspection
-- ODB inspection
-- viewport capture helpers
-- batch `.inp` execution
-- `cae noGUI` execution
-- Abaqus Python execution
-- session/runtime capability reporting
-- bounded solver diagnostics
-- job artifact collection
-
-The native Python escape hatch is important: typed actions cover common, stable engineering operations without artificially limiting access to the broader Abaqus API.
-
-### Geometry grounding
-
-The project treats geometry selection as an evidence problem rather than a naming problem.
-
-Current capabilities include:
-
-- normalized image/intent contracts
-- live Face/Edge descriptors
-- viewport camera/projection extraction
-- calibrated parallel-projection screen grounding
-- candidate scoring and ranking
-- confirmation policy
-- JSON-safe evidence serialization
-- read-only viewport PNG probing
-
-A key safety rule is:
-
-> **An image annotation is not evidence that a particular Abaqus Face/Edge index is the intended region.**
-
-For example, `Face[17]` is not accepted merely because a model happens to contain a face with that index. The region must be grounded from viewport/image evidence or explicitly supplied by the user.
-
-### Engineering credibility foundations
-
-The repository also includes deterministic engineering-credibility primitives:
-
-- explicit result-acceptance gating;
-- reaction/load balance and energy-ratio sanity checks;
-- RF, energy and contact ODB evidence extraction;
-- evidence-to-engineering-check adapters;
-- successive-change and Richardson/GCI numerical verification;
-- a declarative benchmark catalog;
-- sensitivity and uncertainty contracts;
-- provenance and artifact-manifest hashing;
-- bounded correction policies with explicit repair authorization.
-
-These primitives are evidence mechanisms, not claims of physical correctness by themselves. Real benchmark execution and release-specific validation remain dependent on a licensed Abaqus runtime.
-
-### Planning, validation, and evidence
-
-The project provides:
-
-- experiment input contracts
-- engineering plans
-- blocker and assumption reporting
-- action validation
-- preflight checks
-- static-analysis planning
-- model snapshots and state diffs
-- job-status classification
-- ODB metadata normalization
-- field/history/frame result extraction
-- acceptance evaluation
-- evidence packaging
-- `AbaqusAIAgent` orchestration facade
-
-## Engineering closure
-
-The current closure chain is intentionally explicit:
-
-> **Intent → Outputs → Execution → Results → Verification → Acceptance → Evidence → Report**
-
-```text
-Engineering Intent
-        ↓
-Solver Selection
-        ↓
-Post-Processing Profile
-        ↓
-Effective Result Criteria
-        ↓
-Output Planning
-        ↓
-Native Abaqus Output Requests
-        ↓
-Job Execution
-        ↓
-Artifacts / ODB
-        ↓
-Result Extraction
-        ↓
-Verification
- ┌──────────────┬──────────────┬──────────────┐
- │ Numerical    │ Engineering  │ Mesh Quality │
- │ Verification │ Checks       │ / Convergence│
- ├──────────────┼──────────────┼──────────────┤
- │ Fatigue      │ Contact      │ Sensitivity /│
- │ Verification │ Diagnostics  │ Uncertainty  │
- └──────────────┴──────────────┴──────────────┘
-        ↓
-Acceptance
-        ↓
-Engineering Status
-        ↓
-Evidence
-        ↓
-Engineering Report
-```
-
-The important architectural rule is:
-
-> **Not supplied does not automatically mean failed; explicitly supplied verification failures cannot be silently bypassed.**
-
-A central design goal is to close the engineering evidence loop:
-
-```text
-Acceptance Criteria
-        ↓
-Result Requirements
-        ↓
-Required Abaqus Outputs
-        ↓
-Job Execution
-        ↓
-Artifacts + ODB
-        ↓
-Result Extraction
-        ↓
-Engineering Metrics
-        ↓
-Engineering Checks
-        ↓
-Acceptance Evaluation
-        ↓
-Evidence
-        ↓
-Engineering Report
-```
-
-This prevents a common failure mode in AI-assisted engineering tools:
-
-```text
-"Python returned successfully"
-        ≠
-"Abaqus model is correct"
-        ≠
-"Solver completed successfully"
-        ≠
-"Required result exists"
-        ≠
-"Engineering requirement is satisfied"
-```
-
-Each stage is treated as separate evidence.
-
 ---
 
-## AI / Agent capability boundary
+## Architecture & Engineering Closure
 
-The AI and the Agent deliberately overlap in what they can reason about or generate. The boundary is **execution authority and engineering evidence**, not raw problem-solving ability.
-
-| State | Meaning |
-|---|---|
-| `SUPPORTED` | Typed Action with explicit validation/execution semantics; the Agent may claim support. |
-| `EXECUTABLE` | Native Abaqus Python Escape Hatch can execute the operation, but domain semantics are not fully owned by the Agent. Execution is **not** engineering verification. |
-| `ASSISTED` | AI can prepare/reason about the operation, but the Agent has no reliable execution path. |
-| `UNSUPPORTED` | No reliable Agent execution path. |
-| `BLOCKED` | A path exists in principle, but required runtime/data/evidence is unavailable. |
-
-The key rule is:
-
-> **AI can generate or reason about an operation without that operation becoming a formally supported Agent capability. Only an explicit execution, verification, and Evidence boundary can raise the capability claim.**
-
-For a capability gap, the Agent therefore uses this progression:
-
-`SUPPORTED` → `EXECUTABLE` (native Python escape hatch) → `ASSISTED` / `BLOCKED`, rather than creating a fake typed capability.
-
-A successful `python_action` is execution evidence only. It does not by itself prove model correctness, solver success, intended ODB results, or engineering acceptance.
-
-See [AI / Agent Capability Boundary](docs/ai-agent-capability-boundary.md) for the detailed contract and promotion rule.
-
-## Architecture
-
-The repository intentionally uses an action- and evidence-centric architecture rather than introducing a large autonomous orchestration layer.
+The canonical entity throughout the entire execution lifecycle is the `AnalysisRun`. No parallel data capsules or disconnected schemas are created.
 
 ```text
 User / Engineering Requirements
             │
             ▼
-     EngineeringIntent
+     EngineeringIntent  ───[ Ambiguity Gate: Fail-Closed if incomplete ]
             │
             ▼
      AnalysisWorkflow
             │
-            ├───────────────┐
-            ▼               ▼
-     ModelSnapshot      Viewport / Image
-            │               │
-            └───────┬───────┘
-                    ▼
-             Geometry Grounding
-                    │
-                    ▼
-            Validated Action
-                    │
-                    ▼
-                 Preflight
-                    │
-                    ▼
-                Executor
-                    │
-                    ▼
-                 Abaqus
-                    │
-             ┌──────┴──────┐
-             ▼             ▼
-            Job         Model State
-             │
-             ▼
-       Artifacts / Diagnostics
-             │
-             ▼
-            ODB
-             │
-             ▼
-      Result Requirements
-             │
-             ▼
-      Field / History / Frame
-          Extraction
-             │
-             ▼
-         Acceptance
-             │
-             ▼
-           Evidence
+            ├─────────────────────────────────────────┐
+            ▼                                         ▼
+      Action Planning                          Preflight Checks
+   (Typed Native Actions)                  (UnitSystem & Topology)
+            │                                         │
+            └────────────────────┬────────────────────┘
+                                 ▼
+                         Abaqus Execution
+                     (Bridge / Batch / noGUI)
+                                 │
+                                 ▼
+                     Job Artifacts & ODB Output
+                     (.sta / .msg / .dat / .odb)
+                                 │
+                                 ▼
+                      Result Tensor Extraction
+                                 │
+                                 ▼
+                        Numerical Verification
+               (GCI / Reaction Balance / Energy Ratios)
+                                 │
+                                 ▼
+                        Engineering Acceptance
+                       (Strict Gate: PASS/FAIL)
+                                 │
+                                 ▼
+                          Evidence Bundle
+                                 │
+                                 ▼
+                     Engineering Analysis Report
+                         (Markdown & HTML)
 ```
 
-### Architectural boundaries
+---
 
-The repository separates:
+## Current capability status
 
-| Layer | Responsibility |
-|---|---|
-| Contracts | Stable representations of engineering intent, model state, results, runtime information, and evidence |
-| Actions | Small, explicit native-Abaqus operations |
-| Builders | User-facing construction of actions |
-| Validation | Parameter and semantic validation before execution |
-| Preflight | Checks against the current model/runtime state |
-| Script generation | Conversion of actions into Abaqus Python |
-| Execution | Bridge, in-process, or batch execution |
-| Inspection | Model/session/job/ODB observation |
-| Results | Deterministic extraction of field/history/frame values |
-| Acceptance | Requirement-specific engineering checks |
-| Evidence | Machine-readable trace of what was executed and what was observed |
+The capability surface is strictly classified into formalized, verified capabilities versus transparent escape hatches:
 
-No single component is expected to know everything about the engineering workflow.
+| Functional Area | Current Baseline Status | Verification Boundary |
+|:---|:---|:---|
+| **Core Action Contracts** | ✅ SUPPORTED | Schema, unit consistency, parameter validation |
+| **Material Definitions** | ✅ LIVE VALIDATED | Elasticity, Plasticity, Density, Conductivity, Specific Heat, Expansion |
+| **Static Stress Analysis** | ✅ LIVE VALIDATED | Tip-loaded 3D cantilever, reaction balance, Mises sanity |
+| **Explicit Dynamics** | ✅ LIVE VALIDATED | CFL time-step limit, energy conservation, hourglass control |
+| **Implicit Dynamics** | ✅ LIVE VALIDATED | Dynamic amplification (DAF), transient vibration, ALLKE/ALLIE ratio |
+| **Steady Heat Transfer** | ✅ LIVE VALIDATED | 1D conduction bar, analytical temperature field, heat flux conservation |
+| **Coupled Temp-Displacement** | ✅ LIVE VALIDATED | Simultaneous mechanical and thermal step execution |
+| **Rigid-Body Dynamics (MBD)** | ✅ LIVE VALIDATED | Physical pendulum under gravity, energy conservation |
+| **Multi-Body Dynamics (MBD-2)**| ✅ LIVE VALIDATED | Dual revolute joints, native `CONN3D2` Hinge, period accuracy |
+| **Coupled Rigid-Flexible (FMBD-4)**| ✅ LIVE VALIDATED | Rigid crank + C3D8R flexible link + Kinematic Coupling |
+| **Closed-Loop FMBD (FMBD-5)** | ✅ LIVE VALIDATED | Declarative `MechanismGraph` compilation, crank-slider mechanism |
+| **Tie & General Contact** | ✅ LIVE VALIDATED | Coulomb friction sliding, normal pressure, zero kinematic gap |
+| **Fatigue Life Evaluation** | ✅ LIVE VALIDATED | ASTM E1049 rainflow counting, Goodman mean-stress, Miner damage |
+| **Mesh Convergence & GCI** | ✅ LIVE VALIDATED | Three-level C3D8R refinement, Richardson extrapolation, Roache GCI |
+| **Solver Failure Diagnostics** | ✅ LIVE VALIDATED | Deterministic parser for .msg/.sta/.log, cutback analysis, repair loop |
+| **Viewport Grounding** | ✅ LIVE VALIDATED | Ray-cast 2D/3D projection, deterministic `findAt` Set/Surface creation |
+| **Engineering Reporting** | ✅ LIVE VALIDATED | End-to-end rendering to Markdown and standalone interactive HTML |
+| **Sensitivity & Uncertainty** | ✅ LIVE VALIDATED | Perturbation sensitivity, parameter variation analysis |
+| **Run Index & Case Memory** | ✅ LIVE VALIDATED | Cross-run comparison, metadata hashing, metric delta tracking |
+| **Native Python Escape Hatch** | ✅ EXECUTABLE | Arbitrary native Abaqus Python scripts without agent gate bypass |
+| **Automated CAD Synthesis** | ⏸️ INTENTIONALLY DEFERRED| Out of scope; model geometry is imported or explicitly defined |
+| **Topology Optimization (Tosca)**| ⏸️ INTENTIONALLY DEFERRED| Out of scope for standard structural simulation core |
 
 ---
 
-## Design principles
+## Abaqus 2025 machine validation
 
-### 1. Native Abaqus first
+### 1. Real-Machine Golden Verification Ladder (13 Cases)
 
-The agent operates through Abaqus's native model and analysis interfaces wherever possible.
+All 13 Golden Cases are executed and validated end-to-end on Windows with licensed **Abaqus 2025**:
 
-It does not create a parallel finite-element representation that can silently diverge from Abaqus.
+| Case Identifier | Benchmark & Physical Focus | Acceptance Verification Criteria | Status |
+|:---|:---|:---|:---:|
+| **Smoke Test** | Runtime execution closure | Process + solver artifacts + ODB readability | ✅ PASS |
+| **P0-1 Static Golden** | 3D cantilever under concentrated tip force | Analytical deflection, reaction equilibrium, root stress sanity | ✅ PASS |
+| **P0-2 Mesh Convergence** | Three-level C3D8R mesh refinement | Real ODB displacements, Richardson extrapolation, GCI ≤ 1.5% | ✅ PASS |
+| **P1 Tie Contact** | Two-block assembly with kinematic continuity | Interface relative displacement zero, reaction balance | ✅ PASS |
+| **P1 Implicit Dynamic** | Ramped load transient dynamic cantilever | Multi-frame dynamic response, ALLKE/ALLIE ratio, DAF sanity | ✅ PASS |
+| **P1 Steady Thermal** | 1D steady conduction across 3D solid bar | Analytical temperature profile, heat flux conservation | ✅ PASS |
+| **P1 General Contact** | Two-body contact with Coulomb friction sliding | Normal contact pressure, penalty friction (μ = 0.25, 0.08% error) | ✅ PASS |
+| **Rigid-body Dynamics** | Rigid pendulum under gravity (L = 600 mm, θ₀ = 10°) | Period (T_corr = 1.2713 s, 0.08% error), energy conservation | ✅ PASS |
+| **MBD-2 Revolute Golden** | Two-body double pendulum with `CONN3D2` Hinge | Joint drift ≤ 1e-3 mm (9.78e-6 mm), independent articulation (Δθ = 6.96°) | ✅ PASS |
+| **FMBD-4 Rigid-Flexible** | Rigid crank + C3D8R flexible link via Hinge & Coupling| Joint drift ≤ 1e-3 mm (3.13e-10 mm), dynamic stress sanity, energy dissipation 0.56% | ✅ PASS |
+| **FMBD-5 Crank-Slider** | Full closed-loop mechanism compiled via `MechanismGraph` | Joint drift ≤ 1e-3 mm, slider drift ≤ 1e-2 mm, loop error ≤ 5% (1.91e-7) | ✅ PASS |
+| **P1 Explicit Dynamic** | Ramped step impact on cantilever (Abaqus/Explicit) | CFL time increment bound (0.352 μs), total energy conservation (0.00028%) | ✅ PASS |
+| **P2 Real ODB Fatigue** | Multi-frame stress field rainflow counting & Miner damage| Hotspot Element 613, ASTM E1049-85 cycles (6.0), Goodman correction, life blocks 1.0885e5 | ✅ PASS |
 
-### 2. Explicit actions
+### 2. Nine Fresh Engineering Categories (Phase I.1)
 
-Actions are small and inspectable.
+All 9 fundamental physical analysis categories are verified via authentic solver outputs and audited evidence packages:
 
-An action can be:
-
-- validated,
-- previewed,
-- executed,
-- compared with expected model state,
-- associated with evidence.
-
-### 3. Evidence before claims
-
-The agent should distinguish:
-
-- API invocation evidence
-- model-state evidence
-- job execution evidence
-- solver artifact evidence
-- ODB evidence
-- result evidence
-- acceptance evidence
-
-These are not interchangeable.
-
-### 4. Geometry must be grounded
-
-Visual references must be mapped to actual Abaqus regions through explicit evidence.
-
-The project does not silently assume that an index, name, or ordering is a stable visual identity.
-
-### 5. Verification is not the same as execution
-
-A completed Abaqus job is only an execution fact. Engineering validity is established separately through result extraction, numerical verification, engineering checks, mesh quality/convergence, fatigue verification, contact diagnostics when supplied, and explicit acceptance criteria.
-
-Not every analysis needs every verification domain. However, once a verification result is explicitly supplied, its failure participates in acceptance rather than being silently ignored.
-
-### 6. No fake solver capabilities
-
-A capability is not considered implemented merely because an API-shaped class exists.
-
-For example, the current fatigue capability is a **contract/workflow for post-processing existing Abaqus stress histories**, not a claim that the repository contains a complete fatigue solver.
-
-### 7. Release-aware compatibility
-
-Abaqus Python environments are release-dependent. The external package targets modern Python, while generated Abaqus-side scripts intentionally avoid unnecessary modern Python-only syntax.
-
-Exact native API compatibility must be verified against the installed Abaqus release.
+```text
+├── CASE-01: Static Structural Analysis (Elastic bending & reaction forces)
+├── CASE-02: Thermal Conduction Analysis (Linear temperature gradient & flux)
+├── CASE-03: Modal & Dynamic Amplification (Transient vibration & inertial response)
+├── CASE-04: Non-linear Contact & Friction (Penalty formulation & shear equilibrium)
+├── CASE-05: Cyclic Fatigue & Life Damage (Signed Mises tensor & cycle accumulation)
+├── CASE-06: Coupled Multiphysics (Thermal expansion & thermo-mechanical stresses)
+├── CASE-07: Mesh Discretization Convergence (Roache GCI & grid sensitivity)
+├── CASE-08: Diagnostic Failure Remediation (Nonlinear cutback analysis & convergence fix)
+└── CASE-09: Vision-to-Topology Grounding (2D viewport candidate to native Set/Surface)
+```
 
 ---
 
-## Installation
+## Installation & Setup
 
-The external package targets **Python 3.9+**.
+### Prerequisites
+- Python 3.10, 3.11, or 3.12 (64-bit)
+- Optional: Dassault Systèmes Abaqus 2025 (or compatible release) for live solver execution.
 
-Clone the repository:
+### Installation
+
+Clone the repository and install in editable mode:
 
 ```bash
 git clone https://github.com/chenlei-gh/Abaqus-AI-Agent.git
 cd Abaqus-AI-Agent
-```
 
-Install the package:
-
-```bash
+# Install runtime package
 python -m pip install -e .
-```
 
-Install test dependencies:
-
-```bash
+# Install development and testing dependencies
 python -m pip install -e ".[test]"
 ```
 
-Run the test suite:
+Verify the installation by running the deterministic test suite:
 
 ```bash
 python -m pytest -q
+# Expect: 374 passed
 ```
-
-The normal test suite does not require a licensed Abaqus installation.
 
 ---
 
 ## Command-Line Interface (CLI)
 
-Once installed, use `abaqus-ai-agent` directly (or via `python -m abaqus_ai_agent`):
+The package provides the `abaqus-ai-agent` CLI (also accessible via `python -m abaqus_ai_agent`):
 
 ```bash
-# 1. Inspect local Abaqus launcher and license availability
+# 1. Inspect environment, Abaqus launcher, and 7-layer runtime capabilities
 abaqus-ai-agent inspect
+abaqus-ai-agent inspect --json
 
-# 2. List registered Golden Cases and validate evidence
+# 2. Route engineering prompt to typed intent (JEV engine)
+abaqus-ai-agent intent "Cantilever beam 100mm, tip load 1000N, max displacement < 2mm"
+
+# 3. List registered Golden Cases and validate evidence packages
 abaqus-ai-agent matrix --list
 abaqus-ai-agent matrix --validate all
 
-# 3. Compare two runs and inspect metric deltas
+# 4. Execute Abaqus 2025 live A/B dual-run verification
+python tools/i3_reproducibility.py --live-abaqus
+
+# 5. Execute 9 fresh engineering case verification probes
+python tools/i1_engineering_case_matrix.py --fresh
+
+# 6. Compare two runs and inspect metric deltas
 abaqus-ai-agent diff baseline_run.json candidate_run.json
 
-# 4. Perform deterministic diagnosis on solver artifacts (.msg, .sta, .log)
+# 7. Render publication-grade engineering report (Markdown / HTML)
+abaqus-ai-agent report machine_validation/static_golden_e2e.json --format html --output report.html
+
+# 8. Perform deterministic diagnostics on solver files (.msg / .sta / .log)
 abaqus-ai-agent diagnose Job-1.msg
-
-# 5. Render engineering reports from evidence files
-abaqus-ai-agent report machine_validation/static_golden_e2e.json --format markdown
-
-# 6. Verify mechanism topology and compile native Abaqus action plans
-abaqus-ai-agent fmbd --case fmbd7 --verify-topology
-abaqus-ai-agent fmbd --case fmbd7 --compile
-
-# 7. Query and filter persisted Case Memory / Run Index
-abaqus-ai-agent memory --dir case_memory --list
-abaqus-ai-agent memory --dir case_memory --solver explicit --passed
 ```
 
 ---
 
 ## Minimal usage
 
-A typical workflow is conceptually:
+### 1. Declarative Action Planning
 
 ```python
-from abaqus_ai_agent.actions import static_step
+from abaqus_ai_agent.actions import static_step, encastre_bc, pressure_load
 from abaqus_ai_agent.actions.runner import preview
 
-action = static_step(
+# Build validated native analysis steps
+step_action = static_step(
     "Model-1",
     time_period=1.0,
     max_num_inc=100,
+    initial_inc=0.01,
 )
 
-print(preview(action))
+print(preview(step_action))
 ```
 
-The generated script is an explicit Abaqus-native operation. It can be validated before being sent to a live Abaqus execution boundary.
-
-For operations not yet represented by a typed builder:
+### 2. High-Level Orchestration Facade
 
 ```python
-from abaqus_ai_agent.actions import python_action
+from abaqus_ai_agent import AbaqusAIAgent
+from abaqus_ai_agent.contracts import EngineeringIntent, UnitSystem
 
-action = python_action(
-    "Model-1",
-    "print(list(mdb.models.keys()))",
+agent = AbaqusAIAgent()
+
+# Inspect current runtime capabilities
+runtime_status = agent.inspect_runtime()
+print(f"Runtime Mode: {runtime_status.mode}")
+
+# Create and validate a canonical AnalysisRun
+intent = EngineeringIntent(
+    title="Cantilever Beam Verification",
+    analysis_type="linear_static",
+    unit_system="MM_N_MPA",
+    description="Validate tip displacement under concentrated force",
 )
 ```
 
-This escape hatch is deliberate: the action layer should not become a bottleneck for legitimate Abaqus APIs.
-
 ---
 
-## Current capability status
+## Testing & Dual-Gate Verification
 
-| Area | Status |
-|---|---|
-| Core action contracts | Implemented |
-| Materials / sections | Implemented |
-| Static analysis | Implemented |
-| Explicit dynamics | Golden E2E Validated (Abaqus 2025) |
-| Implicit dynamics | Golden E2E Validated (Abaqus 2025) |
-| Heat transfer | Implemented |
-| Coupled temperature-displacement | Implemented |
-| Amplitudes | Implemented |
-| Gravity | Implemented |
-| Reference points / Rigid bodies | Implemented |
-| Connector elements / Sections (CONN3D2 / Hinge) | Implemented |
-| Rigid-body dynamics (RP + RigidBody physical pendulum) | Golden E2E Validated (Abaqus 2025) |
-| Multi-body dynamics (Two-body revolute connector / double pendulum) | Golden E2E Validated (Abaqus 2025); higher-order kinematic pairs pending |
-| Flexible multi-body dynamics (Rigid crank + C3D8R flexible link + Kinematic Coupling + CONN3D2 Hinge) | Golden E2E Validated (Abaqus 2025) |
-| Closed-loop flexible multi-body dynamics (FMBD-5 Crank-slider with C3D8R flexible rod, Kinematic Coupling, HINGE & TRANSLATOR) | Golden E2E Validated (Abaqus 2025) |
-| Initial temperature / stress | Implemented |
-| Assembly instance operations | Implemented |
-| INP export | Implemented |
-| ODB CSV export | Implemented |
-| Result extraction | Implemented |
-| Solver selection | Implemented |
-| Post-processing profiles | Implemented |
-| Geometry-to-mesh strategy | Implemented at contract/planning level; real-machine execution verification pending |
-| Native mesh quality verification | Implemented at action/script level; real-machine verification pending |
-| Mesh convergence | Implemented |
-| Engineering acceptance gates | Implemented |
-| Contact diagnostics | Contract + acceptance integration implemented |
-| Fatigue verification | Golden E2E Validated (Abaqus 2025; live ODB extraction, rainflow counting, Goodman correction, Miner damage) |
-| Sensitivity / uncertainty | Evidence/report integration implemented |
-| Engineering report | Implemented |
-| Geometry grounding | Implemented for calibrated viewport/projection paths |
-| Fatigue | Golden E2E Validated (Abaqus 2025; multi-frame stress tensor extraction from live ODB, signed Mises reduction, rainflow cycle counting, Goodman mean-stress correction, S-N curve, Miner damage accumulation) |
-| Arbitrary native Abaqus API access | Implemented through Python escape hatch |
-| Full automatic arbitrary-photo geometry registration | Not claimed |
-| Full standalone fatigue solver | Not implemented |
-| CAD/Part/Sketch/Extrude generation | Intentionally deferred |
-| Tosca / topology optimization automation | Intentionally deferred |
+The project is governed by two complementary, non-overlapping verification gates:
 
----
+### Gate 1: CI Software Contract Gate (Pure Deterministic)
+- **Environment**: Cross-platform (Ubuntu / Windows / macOS), Python 3.10 - 3.12.
+- **Dependencies**: Zero Abaqus license required.
+- **Coverage**:
+  - `374 passed` unit, contract, and preflight tests.
+  - `13/13` Golden Matrix schema and manifest checks.
+  - `Phase I.6` Whole-repository security & path sanitization audit (`python tools/i6_release_audit.py`).
+  - Strict JEV ambiguity fail-closed gate.
 
-## Testing and CI
-
-GitHub Actions runs the Python test suite on:
-
-- pushes to `main`
-- pushes to `feature/**`
-- pull requests
-
-The CI environment uses Python 3.11 and runs:
-
-```bash
-python -m pip install -e ".[test]"
-python -m pytest -q
-```
-
-The repository keeps Abaqus-dependent validation separate from ordinary CI because Abaqus requires a licensed runtime and a release-specific environment.
-
----
-
-## Abaqus 2025 machine validation
-
-A real licensed Abaqus 2025 runtime has been exercised through the host-side smoke harness.
-
-The validated path is:
-
-1. `cae noGUI` launch and CAE license checkout;
-2. parameterized model creation;
-3. mesh generation;
-4. `writeInput`;
-5. Abaqus/Standard job submission and completion;
-6. solver artifact inspection;
-7. ODB opening;
-8. required `U` / `RF` field-output verification.
-
-The validation completed with a real ODB and successful solver artifacts. The harness intentionally does **not** treat process exit code alone as success, and it can use solver artifacts (`.sta` / `.log`) as completion evidence when the in-process `Job.status` value is unavailable.
-
-This establishes **Abaqus 2025 machine validation: PASS** for the smoke workflow.
-
-### Abaqus 2025 Real-Machine Golden Verification Ladder
-
-The following golden engineering cases have all completed and passed real-machine execution on Abaqus 2025:
-
-| Engineering Case | Physical Benchmark & Focus | Verification Criteria | Status |
-|---|---|---|---|
-| **Smoke Test** | Runtime execution closure | Process + solver artifacts + ODB readability | ✅ PASS |
-| **P0-1 Static Golden** | 3D cantilever beam under concentrated tip force | Analytical deflection, reaction equilibrium, root Mises stress sanity | ✅ PASS |
-| **P0-2 Mesh Convergence** | Three-level C3D8R mesh refinement | Real ODB displacements, Richardson extrapolation, GCI, strict gate FAIL | ✅ PASS |
-| **P1 Tie Contact** | Two-block assembly with kinematic continuity | Interface relative displacement zero, reaction balance | ✅ PASS |
-| **P1 Implicit Dynamic** | Ramped load transient dynamic cantilever | Multi-frame dynamic response, ALLKE/ALLIE ratio, dynamic amplification | ✅ PASS |
-| **P1 Steady Thermal** | 1D steady conduction across 3D solid bar | Analytical temperature profile, heat flux conservation, strict gate FAIL | ✅ PASS |
-| **P1 General Contact** | Two-body contact with Coulomb friction sliding | Normal contact pressure, penalty tangential friction mu = 0.25, contact diagnostics | ✅ PASS |
-| **Rigid-body Dynamics Golden** | Rigid body physical pendulum under gravity (L = 600 mm, θ₀ = 10°) | Period (T_corr = 1.2713 s, 0.08% error), max angular velocity (0.27% error), energy conservation | ✅ PASS |
-| **MBD-2 Revolute Golden** | Two-body double pendulum with native `CONN3D2` Hinge connector under gravity | Joint drift ≤ 1e-3 mm (9.78e-6 mm), independent articulation (Δθ = 6.96°), fundamental period (T₁ = 1.2843 s, 0.54% error), energy conservation (2.13% loss) | ✅ PASS |
-| **FMBD-4 Coupled Rigid-Flexible** | Coupled rigid crank + C3D8R flexible solid link linked via native `CONN3D2` Hinge and Kinematic Coupling under gravity | Joint drift ≤ 1e-3 mm (3.13e-10 mm), dynamic Mises stress sanity (0.0435 MPa), active strain energy ratio (99.9%), energy conservation (0.56% dissipation) | ✅ PASS |
-| **FMBD-5 Closed-Loop Crank-Slider** | Full closed-loop mechanism: ground pivot + rigid crank + C3D8R elastic rod (dual kinematic couplings) + rigid slider along TRANSLATOR guide, 100% compiled via `MechanismGraph` under gravity | Joint drift ≤ 1e-3 mm (1.49e-8 mm), slider transverse drift ≤ 1e-2 mm (3.21e-20 mm), loop closure error ≤ 5% (1.91e-7), dynamic Mises stress (0.288 MPa), internal energy composition (ALLSE/ALLIE = 99.61%), algorithmic numerical dissipation bounded (≤ 50%, actual 40.47%) | ✅ PASS |
-| **P1 Explicit Dynamic** | Ramped step load transient dynamic cantilever beam (Abaqus/Explicit) | Stable time increment bounded by CFL condition Δt ≤ Lₑ/c_d (0.352 μs), total energy conservation (|ETOTAL| / E_ref ≤ 2%, actual 0.00028%), C3D8R artificial hourglass control (ALLAE/ALLIE ≤ 5%, actual 3.64%), dynamic amplification factor (DAF = 1.753), strict negative gate FAIL | ✅ PASS |
-| **P2 Real ODB Fatigue** | Live ODB multi-frame stress field post-processing, rainflow cycle counting, and Palmgren-Miner cumulative damage | Global hotspot scanning (Element 613, IP 1, Peak Mises 493.40 MPa), Signed von Mises stress history reduction, ASTM E1049-85 rainflow counting (6.0 cycles), Goodman tensile mean-stress correction, structural steel S-N curve life evaluation, cumulative damage D = 9.1869e-6 ≤ 1.0, life blocks 1.0885e5, strict negative gate FAIL (D ≤ 1e-15) | ✅ PASS |
-
-> **Note on flexible multi-body dynamics (FMBD) engineering boundaries**:
-> - **MBD-1 & MBD-2** validate discrete rigid dynamics and multi-body joint kinematics using Reference Points, `RigidBody` constraints, and native `CONN3D2` HINGE connectors.
-> - **FMBD-4** validates open-chain rigid-flexible coupling, where continuous 3D finite-element meshes (C3D8R) interface with discrete connectors via native Abaqus Kinematic Coupling.
-> - **FMBD-5** validates a full closed-loop rigid-flexible kinematic chain compiled entirely from declarative `MechanismGraph`.
-> - **Physical & Energy Mechanics Clarification**: In FMBD-5, macroscopic rigid-body motion dominates system kinetic energy (ALLKE_peak ≈ 708.8 mJ), while the flexible rod undergoes small elastic deformation (ALLSE_peak ≈ 0.011 mJ). The internal energy is 99.61% recoverable elastic strain energy. The 40.47% energy dissipation is algorithmic numerical damping introduced by the Hilber-Hughes-Taylor (HHT) integrator under `MODERATE_DISSIPATION` (α = -0.41421) to suppress high-frequency connector chatter and guarantee nonlinear convergence, rather than physical material damping or friction loss. FMBD-5 serves as a **closed-loop rigid-flexible coupling and declarative compiler integration benchmark**, not a large-strain flexible dynamics benchmark.
-
-### Unified Golden Validation Matrix & Evidence Catalog
-
-All 13 Golden Cases are governed by a strongly typed registry and a unified 12-key evidence envelope schema:
-`case_id, release, runtime, solver, job, odb, solver_status, result_evidence, verification, acceptance, artifacts, provenance`.
-
-A centralized CLI tool (`tools/run_golden_matrix.py`) manages discovery, schema validation, live execution, and manifest generation:
-
-```bash
-# 1. Inspect status of all 13 Golden Cases
-python tools/run_golden_matrix.py --list
-
-# 2. Validate all existing evidence JSON files against the unified schema
-python tools/run_golden_matrix.py --validate-evidence all
-
-# 3. Execute all or selected Golden Cases on a live Abaqus launcher
-python tools/run_golden_matrix.py --run all --launcher "C:\SIMULIA\Commands\abaqus.bat"
-
-# 4. Generate a consolidated Golden Matrix Manifest JSON
-python tools/run_golden_matrix.py --manifest-out machine_validation/golden_matrix_manifest.json
-```
-
-## Runtime verification principles
-
-The project is designed to be validated against real Abaqus installations rather than declaring compatibility from API names alone.
-
-For any live Abaqus installation (with Abaqus 2025 serving as the current active machine baseline), the validation sequence is:
-
-1. generated-script smoke tests;
-2. model creation / inspection;
-3. `writeInput` verification;
-4. small solver job;
-5. job artifact inspection;
-6. ODB opening;
-7. result extraction;
-8. CSV/evidence generation;
-9. failure classification.
-
-Compatibility should only be called **verified** after the relevant workflow has actually executed on the target machine environment.
-
-In particular:
-
-> **A successful Python process or exit code is not, by itself, proof that CNEXT, the intended Abaqus command, the solver job, or the expected ODB result succeeded.**
+### Gate 2: Real Machine Gate (Abaqus 2025 Live Solver)
+- **Environment**: Windows 11 / Server, SIMULIA Abaqus 2025.
+- **Coverage**:
+  - `tools/i3_reproducibility.py --live-abaqus`: Live A/B dual-run metric invariance (tolerance ≤ 1e-4).
+  - `tools/i1_engineering_case_matrix.py --fresh`: 9 physical engineering categories verified from solver outputs.
+  - `tools/i2_failure_matrix.py`: Real OS subprocess failure injection (exit 137, TimeoutExpired, corrupted artifacts).
+  - `tools/h1_engineering_report_e2e.py`: Live ODB to styled HTML engineering report delivery.
 
 ---
 
 ## Safety and failure boundaries
 
-The agent intentionally refuses several unsafe assumptions:
-
-- an ungrounded image coordinate is not an executable region;
-- an Abaqus Python call returning normally is not solver-success evidence;
-- a completed job is not automatically engineering acceptance;
-- an ODB existing is not proof that the required result is correct;
-- local mesh refinement is not, by itself, convergence evidence;
-- a stress peak at a suspected singularity must not automatically be treated as a physical converged peak;
-- sensitivity and uncertainty are evidence domains, not universal pass/fail gates;
-- an API-compatible-looking parameter is not automatically release-compatible;
-- model-specific contact, mesh, and release-specific operations must remain explicit when they cannot be validated generically.
-
-These boundaries are part of the architecture, not optional documentation.
-
----
-
-## Project scope
-
-### In scope
-
-- AI-assisted engineering-analysis workflows around Abaqus/CAE
-- model inspection and state grounding
-- native Abaqus actions
-- validation and preflight
-- job execution and diagnostics
-- ODB/result extraction
-- acceptance and evidence
-- controlled extension through native Abaqus Python
-
-### Deliberately out of scope for the current core
-
-- replacing Abaqus's solver
-- pretending to support every Abaqus API through typed wrappers
-- unrestricted autonomous geometry mutation from images
-- claiming a full fatigue solver without implementing the underlying numerical methods
-- CAD authoring as the primary purpose of this repository
-- topology optimization as a substitute for engineering requirements
-
----
-
-## Roadmap
-
-The near-term engineering path is:
-
-1. keep the action/validation/execution/verification/evidence chain stable;
-2. complete the remaining whole-repository contract closure audit;
-3. maintain and execute the live runtime smoke harness on target machines;
-4. execute the golden suite across target Abaqus environments;
-5. classify and fix real release-specific incompatibilities;
-6. expand only the capabilities justified by real engineering workflows.
-
-Potential future areas include:
-
-- richer geometry grounding
-- more result extraction patterns
-- broader native Abaqus action coverage
-- stronger job diagnostics
-- more complete fatigue post-processing
-- additional release-specific adapters
-
-New capabilities should preserve the existing action → validation → execution → evidence boundaries.
-
----
-
-## Reference projects and ecosystem
-
-The live-execution boundary is informed by public Abaqus automation/MCP projects, including:
-
-- [Abaqus-Control-MCP](https://github.com/forxyo/abaqus-control-mcp)
-- [CAE-Agent-Hub](https://github.com/chenlei-gh/CAE-Agent-Hub)
-
-Those projects demonstrate useful patterns such as live Abaqus bridges, arbitrary Python execution, model inspection, job monitoring, ODB inspection, and viewport interaction.
-
-This repository builds on the general idea of a live Abaqus execution boundary while emphasizing explicit geometry grounding, validation, result requirements, acceptance, and evidence.
+The agent adheres strictly to industrial safety protocols:
+1. **Never Bypass Acceptance**: A solver run that finishes without error but violates physical criteria (such as reaction force equilibrium or allowable stress) is explicitly flagged `ACCEPTANCE_FAILED`.
+2. **Deterministic Remediation**: In the event of solver non-convergence, the agent identifies the root cause (e.g. contact chatter, severe plastic cutback) and applies bounded incrementation adjustments rather than unbounded trial-and-error loops.
+3. **Repository Cleanliness**: The codebase is protected against leaking binary solver artifacts (`.odb`, `.lck`, `.rec`, `.msg`, `.sta`) and private developer machine paths.
 
 ---
 
@@ -844,31 +399,34 @@ This repository builds on the general idea of a live Abaqus execution boundary w
 ```text
 Abaqus-AI-Agent/
 ├── docs/                     # Engineering specifications, contracts, and roadmap
-├── machine_validation/       # Real-machine execution evidence, ODBs, and JSON manifests
+│   ├── engineering-run-evidence-roadmap.md # Core canonical roadmap
+│   ├── ai-agent-capability-boundary.md     # LLM vs deterministic boundary
+│   ├── engineering-credibility.md          # Multi-layer evidence ladder
+│   ├── geometry-grounding.md               # Viewport topology grounding
+│   └── geometry-mesh-strategy.md           # Mesh convergence & GCI rules
+├── machine_validation/       # Audited real-machine evidence packages & Golden manifests
 ├── src/
 │   └── abaqus_ai_agent/
-│       ├── actions/          # Explicit Abaqus operations and script generation
-│       ├── adapters/         # Live Abaqus/model adapters
-│       ├── contracts/        # Engineering, model, result, and runtime contracts
-│       ├── execution/        # Executors, jobs, artifacts, and batch execution
-│       ├── planning/         # Mechanism graph, topology, and action compilation
-│       ├── validation/       # Validation and preflight checks
-│       └── workflow/         # Analysis workflow definitions
-├── tests/                    # Unit, contract, and anti-fabrication tests
-├── tools/                    # Golden E2E runners, matrix validator, and CLI utilities
-├── .github/workflows/        # CI workflows
-├── pyproject.toml
-├── LICENSE
-├── THIRD_PARTY_NOTICES.md
-├── README.md                 # English documentation
-└── README_CN.md              # Chinese documentation
+│       ├── actions/          # Explicit Abaqus operations & Python code generators
+│       ├── adapters/         # Live CAE / noGUI / bridge execution adapters
+│       ├── contracts/        # Strongly-typed schemas (Intent, Run, Units, Evidence)
+│       ├── diagnostics/      # Solver failure diagnosis (.msg/.sta parsers)
+│       ├── evidence/         # Evidence envelope packaging & provenance hashing
+│       ├── execution/        # Batch executors, process boundaries, job controllers
+│       ├── grounding/        # Ray-cast 2D/3D viewport topology grounding
+│       ├── planning/         # Action planners, mechanism graph compilers
+│       ├── reporting/        # Markdown & HTML engineering report renderers
+│       ├── validation/       # UnitSystem, preflight & physical consistency checks
+│       └── workflow/         # High-level fatigue, contact, and convergence workflows
+├── tests/                    # 374 deterministic test suites
+└── tools/                    # Golden Matrix, CLI runner, and verification probes
 ```
 
 ---
 
-## Documentation index
+## Documentation Index
 
-All architecture blueprints, engineering contracts, and credibility standards are organized under [`docs/`](docs/):
+All core architectural blueprints, engineering contracts, and credibility standards are organized under [`docs/`](docs/):
 
 | Document | Description |
 | :--- | :--- |
@@ -886,24 +444,14 @@ All architecture blueprints, engineering contracts, and credibility standards ar
 Contributions are welcome when they preserve the project's engineering boundaries.
 
 A useful contribution should normally include:
-
-- a clear capability or defect description;
-- explicit validation behavior;
-- tests for deterministic logic;
-- release-specific assumptions where applicable;
-- evidence requirements for live Abaqus behavior;
-- no unsupported claim of solver or engineering correctness.
-
-For release-specific Abaqus APIs, prefer documenting the exact Abaqus version tested.
+1. Typed contract definition;
+2. Parameter validation and preflight checks;
+3. Execution script generation and parsing logic;
+4. Comprehensive test coverage added to `tests/`;
+5. Strict adherence to the Anti-Fabrication Axiom.
 
 ---
 
 ## License
 
-Apache-2.0.
-
-The repository's original license is preserved. Third-party integrations, documentation, and dependencies should retain their respective attribution and license requirements.
-
----
-
-**Documentation:** [English](README.md) · [中文](README_CN.md)
+This project is licensed under the Apache 2.0 License — see the [LICENSE](LICENSE) file for details.

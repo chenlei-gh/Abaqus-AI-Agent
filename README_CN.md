@@ -1,6 +1,6 @@
 # Abaqus AI Agent
 
-> **面向 Abaqus/CAE 的开源 AI 工程分析 Agent —— 从工程意图，到经过验证的原生 Abaqus 操作，再到求解证据、结果提取与工程验收。**
+> **面向 Abaqus/CAE 的开源 AI 工程分析 Agent —— 从工程意图，到经过严格验证的原生 Abaqus 操作，再到真机求解证据、结果张量提取与确定性工程验收。**
 
 [English Documentation / 英文文档](README.md)
 
@@ -12,28 +12,83 @@
 [![Release Gate](https://img.shields.io/badge/release%20gate-RC--1%20frozen-orange.svg)](#)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 
-> **项目状态：** 架构与 Contract Closure 已基本收敛；**Abaqus 2025 真机 13 项 Golden Case 验证阶梯已全部端到端通过。** 所有实机求解验证均基于可穿透审计的真实机产物证据。
+> **项目状态：Release Candidate 候选版本基线已正式冻结（`v1.0.0-rc1`）。**
+> 核心工程契约、确定性软件层测试门禁（374 项通过）、以及全链路 **Abaqus 2025 真实机求解执行门禁（13/13 Golden Ladder 阶梯与 9/9 物理类别）** 已全部闭环。所有真机验证均基于可穿透审计的真实机二进制产物证据。
 
 ### 快速导航
 
 - [项目概述](#项目概述)
-- [项目能做什么](#项目能做什么)
-- [工程闭环](#工程闭环)
-- [架构](#架构)
-- [设计原则](#设计原则)
-- [安装](#安装)
+- [四大核心产品支柱](#四大核心产品支柱)
+- [一眼看懂](#一眼看懂)
+- [架构与工程闭环](#架构与工程闭环)
+- [当前能力状态全景矩阵](#当前能力状态全景矩阵)
+- [Abaqus 2025 真机验证阶梯](#abaqus-2025-真机验证阶梯)
+- [安装与环境配置](#安装与环境配置)
+- [命令行工具指南 (CLI)](#命令行工具指南-cli)
 - [最小使用示例](#最小使用示例)
-- [当前能力状态](#当前能力状态)
-- [测试与 CI](#测试与-ci)
-- [运行时验证原则](#运行时验证原则)
-- [安全与失败边界](#安全与失败边界)
-- [项目范围](#项目范围)
-- [Roadmap](#roadmap)
-- [仓库结构](#仓库结构)
+- [测试与双重验证门禁体系](#测试与双重验证门禁体系)
+- [安全与失败边界准则](#安全与失败边界准则)
+- [仓库目录结构](#仓库目录结构)
+- [工程文档体系索引](#工程文档体系索引)
+
+---
+
+## 项目概述
+
+**Abaqus AI Agent** 是一个专为配合原生 Abaqus/CAE 模型、有限元求解器与仿真全生命周期而设计的自主工程 Agent。
+
+它致力于打通高层工程需求与底层严密物理求解之间的鸿沟：
+
+**工程需求 → 强类型意图编译 (JEV) → 求解器决策 → 拓扑接地 → 动作计划校验 → Abaqus 真机执行 → ODB 结果提取 → 物理校验与工程验收 → 证据包封装 → 交付级工程分析报告**
+
+本项目坚持不妥协的工程设计边界：**AI 层与 Abaqus 求解内核严格解耦。** 我们绝不试图替代 Abaqus，绝不伪造有限元数值解，也绝不允许把模糊的自然语言指令编造成毫无约束的几何模型。
+
+### 反伪造公理（Anti-Fabrication Axiom）
+
+> **一项工程分析结果绝不能仅仅因为“Abaqus Python 脚本返回了 0”就被判定为成功！它必须通过模型几何状态、求解监视器产物 (.sta/.msg/.log)、ODB 场/历程张量提取、以及明确的工程验收准则予以证实。**
+
+```text
+"Python 脚本返回了 0"
+        ≠
+"Abaqus 模型几何与网格完全合法"
+        ≠
+"求解器真正收敛且未发生非线性数值发散"
+        ≠
+"请求的输出变量真实存在于 ODB 数据库中"
+        ≠
+"结构的工程物理要求得到了满足"
+```
+
+---
+
+## 四大核心产品支柱
+
+### 1. TypeSafe JEV 智能意图引擎与 Fail-Closed 模糊输入阻断
+自然语言需求通过混合推理架构（TypeSafe JEV 云端判定或确定性离线规则路由）编译为强类型 `EngineeringIntent`。
+- **严密 Fail-Closed 阻断准则**：若工程师给出的描述缺乏必要的物理前置条件（如关键尺寸、材料本构、边界约束或具体许用验收指标），系统**坚决拒绝臆测**。立即标记为 `NEEDS_CLARIFICATION` 并停留在 `BLOCKED` 状态，强制等待人工工程师补充完整物理量。
+
+### 2. Abaqus 2025 真机 A/B 双运行复现与零解析伪公式桩
+为确保物理求解在独立进程间的可重复性与数值稳定性：
+- **A/B 独立双运行协议**：现场启动两次独立的 Abaqus 2025 求解进程（`Run A` 与 `Run B`），直接从生成的 ODB 数据库提取物理指标，两者的相对数值误差必须严格满足公差要求（相对误差 ≤ 1e-4）。
+- **扰动敏感度拒收检验**：对材料参数施加 10% 摄动（如弹性模量 E × 0.9），系统必须正确触发物理超标并被验收门禁拒收。
+- **零解析公式假桩**：彻底剔除用教科书简化公式（如 FL³/3EI）伪造即时计算的做法，所有工程类别指标均源自规范证据或真实求解。
+
+### 3. 视口与工程图纸拓扑接地（Viewport Topology Grounding）
+彻底解决将人类/视觉意图连接到有限元实体时依赖脆弱数字索引的工程痛点：
+- 将 2D 视口相机视角坐标或工程图纸标注点映射为 3D 空间射线候选点；
+- 在原生 Abaqus/CAE 中自动推导确定性的 `findAt(...)` 拓扑定位表达式；
+- 现场编译生成受验证的原生 `Sets`（节点/单元/面集合）与 `Surfaces`（接触表面），用于施加边界条件、集中载荷与接触对。
+
+### 4. 交付级工程分析报告全自动生成
+直接从单次 `AnalysisRun` 的可追溯证据链生成符合工业标准的完整工程报告：
+- 一键导出自包含的 **Markdown** 文档以及带交互样式的独立 **HTML** 交付物；
+- 报告自动集成项目摘要、有限元模型设置、材料本构参数、结果云图与指标对比表、PASS/FAIL 验收裁决以及全链路 ODB 证据哈希。
 
 ---
 
 ## 一眼看懂
+
+### 端到端工程闭环流程
 
 ```mermaid
 flowchart LR
@@ -53,8 +108,6 @@ flowchart LR
     EV --> REP["工程报告"]
 ```
 
-**这个边界是刻意设计的：** AI 可以理解和生成超出 Agent Typed Capability 的操作，但只有进入明确的执行与 Evidence 链路，才能成为 Agent 的正式工程能力。
-
 ### 工程证据阶梯
 
 ```mermaid
@@ -68,9 +121,7 @@ flowchart TB
     N["Python 调用成功"] -. "不能直接推出" .-> A
 ```
 
-这条链路是项目避免“**代码跑通了，所以工程结果就是正确的**”这一常见 AI 工程陷阱的核心机制。
-
-### 能力生命周期
+### 能力生命周期管理
 
 ```mermaid
 flowchart LR
@@ -84,791 +135,296 @@ flowchart LR
     C --> S
 ```
 
-这样项目可以持续扩展能力，同时避免因为 **LLM 能生成一段看起来可用的 Abaqus Python**，就虚增 Agent 的正式能力范围。
+---
 
-## 项目概述
+## 架构与工程闭环
 
-**Abaqus AI Agent** 是一个面向 Abaqus/CAE 工程分析场景的 AI Agent。
-
-它的目标不是替代 Abaqus 求解器，也不是把自然语言直接转换成未经验证的 CAD/有限元模型，而是把 AI 辅助工程分析过程连接成一条可验证的链路：
-
-**工程需求 → 工程意图 → Solver 选择 → 几何/网格策略 → 经过验证的原生 Abaqus 操作 → Abaqus 执行 → ODB/结果提取 → 工程验证 → 工程验收 → Evidence → 工程报告**
-
-项目刻意将 AI 层与 Abaqus 求解器解耦。
-
-核心原则是：
-
-> **一次 Abaqus Python 调用成功，并不等于工程分析成功。工程结论必须由模型状态、Job 产物、ODB 数据、结果提取以及明确的验收标准共同支撑。**
-
-## 项目能做什么
-
-项目主要围绕四类能力组织：**工程 Action、实时 Abaqus 执行、Geometry Grounding、工程可信度与 Evidence**。
-
-### 工程分析 Action
-
-当前 Action 层覆盖：
-
-- 材料：
-  - 弹性
-  - 密度
-  - 塑性
-  - 导热系数
-  - 比热
-  - 热膨胀
-- Solid Section 与 Section Assignment
-- 分析步：
-  - Static
-  - Explicit Dynamics
-  - Implicit Dynamics
-  - Frequency
-  - Heat Transfer
-  - Coupled Temperature-Displacement
-- Step 核心控制：
-  - time period
-  - maximum increments
-  - initial/minimum/maximum increment
-  - time incrementation method
-  - stabilization
-  - solution technique / reform kernel（适用时）
-- Amplitude：
-  - Tabular
-  - Smooth Step
-  - Periodic
-  - Equally Spaced
-- 载荷：
-  - Gravity
-  - Pressure
-  - Concentrated Force
-  - Body Force
-  - Body Heat Flux
-  - Surface Heat Flux
-- 预定义场：
-  - Initial Temperature
-  - Initial Stress
-- 边界条件：
-  - Fixed / Encastre
-  - Displacement
-  - Symmetry
-  - Temperature
-- 装配实例操作：
-  - inspection
-  - translation
-  - rotation
-  - linear pattern
-- 网格意图：
-  - seeding
-  - mesh generation
-  - element-type intent
-- 接触/约束意图：
-  - tie
-  - contact
-- Job 创建与提交
-- INP 导出
-- ODB Field CSV 导出
-- 网格收敛评价，并明确质量与应力奇异性边界
-- 基于几何特征与工程关键区域的 Geometry → Mesh 策略
-- 原生 Abaqus Mesh Quality 验证
-- 确定性的 Solver Selection
-- 按分析类型生成 Post-Processing Profile，并将其转化为实际结果要求
-- Contact Diagnostics 与显式工程期望
-- Fatigue 后处理 Contract / Workflow：cycle counting、应力幅/范围、半/全循环、mean-stress correction、多轴/应力分量语义
-- Sensitivity / Uncertainty Evidence Contract
-- 针对已有 Abaqus 应力历史的疲劳后处理工作流
-- Engineering Report：Markdown / HTML / 可选 PDF
-- 数值验证、工程检查、网格质量/收敛、疲劳、显式 Contact Diagnostics 的结构化 Acceptance Gate
-
-Action 层并不追求把 Abaqus 全部 API 重新封装一遍。Abaqus 本身拥有庞大且随版本变化的 Python API，因此项目同时提供受控的原生 Python 扩展入口。
-
-### 实时 Abaqus 执行
-
-执行层支持：
-
-- `AbaqusExecutor` 抽象
-- JSON/TCP Bridge 执行
-- InProcessExecutor 测试执行
-- 模型检查
-- Job 提交与状态检查
-- ODB 检查
-- Viewport 捕获辅助能力
-- 批量 `.inp` 执行
-- `cae noGUI` 执行
-- Abaqus Python 执行
-- Session / Runtime capability 检查
-- 有边界的求解器诊断
-- Job 产物收集
-
-原生 Python Escape Hatch 很重要：常用工程操作由类型化 Action 覆盖，而尚未封装的合法 Abaqus API 仍然可以被显式调用，不让 Action 层变成能力瓶颈。
-
-### 几何 Grounding
-
-项目把几何选择视为一个**证据问题**，而不是简单的名称或索引问题。
-
-当前包括：
-
-- 规范化 image/intent contract
-- 实时 Abaqus Face/Edge descriptor
-- Viewport camera/projection 提取
-- 标定后的平行投影 screen grounding
-- 候选评分与排序
-- confirmation policy
-- JSON-safe evidence serialization
-- 只读 Viewport PNG 探针
-
-核心安全规则：
-
-> **图片中的标注并不能自动证明某一个 Abaqus Face/Edge 就是目标区域。**
-
-例如，不能因为模型中存在 `Face[17]`，就把图片上的某个区域直接认定为 Face 17。目标区域必须来自 Viewport/Image 证据，或者由用户明确提供。
-
-### Planning / Validation / Evidence
-
-项目提供：
-
-- experiment input contract
-- engineering plan
-- blocker 与 assumption 报告
-- Action validation
-- Preflight
-- static-analysis planning
-- model snapshot 与 state diff
-- Job status classification
-- ODB metadata normalization
-- Field / History / Frame result extraction
-- acceptance evaluation
-- evidence packaging
-- `AbaqusAIAgent` orchestration facade
-
-## 工程闭环
-
-当前完整工程闭环已经收敛为：
-
-> **Intent → Outputs → Execution → Results → Verification → Acceptance → Evidence → Report**
+在整个系统执行生命周期中，`AnalysisRun` 是全仓唯一的权威事实源（Single Source of Truth），坚决杜绝平行数据胶囊：
 
 ```text
-Engineering Intent
-        ↓
-Solver Selection
-        ↓
-Post-Processing Profile
-        ↓
-Effective Result Criteria
-        ↓
-Output Planning
-        ↓
-Native Abaqus Output Requests
-        ↓
-Job Execution
-        ↓
-Artifacts / ODB
-        ↓
-Result Extraction
-        ↓
-Verification
- ┌──────────────┬──────────────┬──────────────┐
- │ Numerical    │ Engineering  │ Mesh Quality │
- │ Verification │ Checks       │ / Convergence│
- ├──────────────┼──────────────┼──────────────┤
- │ Fatigue      │ Contact      │ Sensitivity /│
- │ Verification │ Diagnostics  │ Uncertainty  │
- └──────────────┴──────────────┴──────────────┘
-        ↓
-Acceptance
-        ↓
-Engineering Status
-        ↓
-Evidence
-        ↓
-Engineering Report
+用户 / 工程需求描述
+            │
+            ▼
+     EngineeringIntent  ───[ 模糊输入门禁: 缺少前置物理量时直接阻断 ]
+            │
+            ▼
+     AnalysisWorkflow
+            │
+            ├─────────────────────────────────────────┐
+            ▼                                         ▼
+      动作规划 (Action Planning)               前置检查 (Preflight)
+     (强类型原生 Abaqus 操作)                (单位制一致性与拓扑检查)
+            │                                         │
+            └────────────────────┬────────────────────┘
+                                 ▼
+                         Abaqus 执行边界
+                     (Socket 桥接 / 批处理 / noGUI)
+                                 │
+                                 ▼
+                     求解器产物与 ODB 数据库
+                     (.sta / .msg / .dat / .odb)
+                                 │
+                                 ▼
+                       物理结果张量提取
+                                 │
+                                 ▼
+                         数值精度验证
+               (GCI 网格收敛 / 反力平衡 / 能量守恒)
+                                 │
+                                 ▼
+                         工程验收裁决
+                       (确定性门禁: PASS/FAIL)
+                                 │
+                                 ▼
+                         完整证据包封装
+                                 │
+                                 ▼
+                      工业级工程分析报告
+                         (Markdown & HTML)
 ```
-
-其中有一个重要规则：
-
-> **没有提供某项验证，不自动等于失败；但一旦显式提供验证结果，其失败就不能被 Acceptance 静默绕过。**
-
-项目最重要的设计目标之一，是把“工程验收”真正闭环：
-
-```text
-验收标准
-   ↓
-Result Requirements
-   ↓
-需要的 Abaqus 输出
-   ↓
-Job 执行
-   ↓
-Artifacts + ODB
-   ↓
-结果提取
-   ↓
-工程验收
-   ↓
-Evidence
-```
-
-因此项目不会把以下几件事混为一谈：
-
-```text
-"Python 调用成功"
-        ≠
-"Abaqus 模型正确"
-        ≠
-"Solver 成功完成"
-        ≠
-"需要的结果已经存在"
-        ≠
-"工程要求已经满足"
-```
-
-每一个阶段都必须有相应证据，并且 Contract 不能只停留在定义层：它必须进入实际的 Planning / Execution / Extraction / Verification / Acceptance / Report 链路。
 
 ---
 
-## AI / Agent 能力边界
+## 当前能力状态全景矩阵
 
-AI 与 Agent 在“能否理解/生成某项 Abaqus 操作”上允许重叠；真正的边界是**执行权限与工程证据**。
+能力表面严格区分为“经过真机验证的正式能力”与“透明的逃逸通道”：
 
-| 状态 | 含义 |
-|---|---|
-| `SUPPORTED` | 存在明确的 Typed Action、Validation 与 Execution 语义，可以宣称 Agent 支持。 |
-| `EXECUTABLE` | 可以通过原生 Python Escape Hatch 执行，但 Agent 尚未完整拥有该操作的领域语义；执行不等于工程验证。 |
-| `ASSISTED` | AI 可以规划/推理，但 Agent 没有可靠执行路径。 |
-| `UNSUPPORTED` | 没有可靠的 Agent 执行路径。 |
-| `BLOCKED` | 原则上存在路径，但缺少运行环境、输入或必要证据。 |
+| 功能模块 | 最新基线状态 | 验证范围与工程保障 |
+|:---|:---|:---|
+| **核心动作契约** | ✅ SUPPORTED | 严格 Schema 校验、单位制量纲检查、参数合法性预检 |
+| **材料本构定义** | ✅ LIVE VALIDATED | 弹性、塑性、质量密度、热导率、比热容、热膨胀系数 |
+| **静应力分析** | ✅ LIVE VALIDATED | 端部受载 3D 悬臂梁弯曲、反力全平衡、根部 Mises 应力校验 |
+| **显式动力学分析** | ✅ LIVE VALIDATED | CFL 稳定时间步长约束、全系统能量守恒、沙漏伪能比控制 |
+| **隐式动力学分析** | ✅ LIVE VALIDATED | 动载荷放大系数 (DAF)、瞬态结构振动、ALLKE/ALLIE 动内能比 |
+| **稳态热传导分析** | ✅ LIVE VALIDATED | 3D 杆体一维热传导、解析温度梯度吻合、热流率严格守恒 |
+| **热-结构顺序/强耦合** | ✅ LIVE VALIDATED | 热力耦合分析步执行、温度载荷与热应力场同步提取 |
+| **刚体动力学 (MBD)** | ✅ LIVE VALIDATED | 单自由度重力摆动、角速度峰值精度、机械能守恒 |
+| **多刚体铰接 (MBD-2)** | ✅ LIVE VALIDATED | 原生 `CONN3D2` Hinge 连接器双刚体双摆、铰接点平动零漂移 |
+| **刚柔耦合系统 (FMBD-4)** | ✅ LIVE VALIDATED | 刚体曲柄 + C3D8R 弹性连杆 + 运动学耦合 (Kinematic Coupling) |
+| **闭环机构图 (FMBD-5)** | ✅ LIVE VALIDATED | 声明式 `MechanismGraph` 编译、闭环曲柄滑块全周期动力学 |
+| **绑定与通用接触** | ✅ LIVE VALIDATED | 库仑摩擦滑移 (μ=0.25)、法向接触压力分布、运动学零间隙 |
+| **真实 ODB 疲劳寿命** | ✅ LIVE VALIDATED | ASTM E1049-85 雨流计数、Goodman 均值修正、Miner 累积损伤 |
+| **网格自适应收敛与 GCI** | ✅ LIVE VALIDATED | C3D8R 粗/中/细三级网格自适应、Richardson 外推、Roache GCI ≤ 1.5% |
+| **求解器发散诊断与修复** | ✅ LIVE VALIDATED | .msg/.sta 错误特征解析、时间步 cutback 分析与自适应重算 |
+| **视口拓扑几何落地** | ✅ LIVE VALIDATED | 射线投影坐标映射、确定性生成 `findAt` 表达式及 Set/Surface |
+| **交付级工程报告渲染** | ✅ LIVE VALIDATED | 端到端生成专业 Markdown 报告与自包含样式 HTML 报告 |
+| **摄动敏感性与不确定性** | ✅ LIVE VALIDATED | 物理参数扰动分析、参数变异对验收门禁影响检验 |
+| **案例记忆与历史差分** | ✅ LIVE VALIDATED | 跨运行实体比较、Run Index 索引管理与指标差分追溯 |
+| **原生 Python 逃逸通道** | ✅ EXECUTABLE | 允许执行任意复杂 Abaqus 原生脚本，但必须经受验收门禁约束 |
+| **全自动任意几何 CAD 建模** | ⏸️ INTENTIONALLY DEFERRED| 超出当前核心范围；几何由 CAD 导入或明确定义 |
+| **拓扑优化 (Tosca)** | ⏸️ INTENTIONALLY DEFERRED| 暂不列入标准结构分析核心主干 |
 
-核心规则：
+---
 
-> **AI 能够生成或推理某项操作，并不意味着该操作已经成为 Agent 的正式工程能力。只有进入明确的执行、验证与 Evidence 边界，才能提升能力声明。**
+## Abaqus 2025 真机验证阶梯
 
-因此，发现“AI 能做、当前 Typed Action 没有覆盖”的能力缺口时，不应该直接伪造一个已支持能力，而应按：
+### 1. 真实机 Golden 验证阶梯 (13 项经典案例)
 
-`SUPPORTED` → `EXECUTABLE`（原生 Python Escape Hatch）→ `ASSISTED` / `BLOCKED`
+全套 13 项 Golden 案例均已在配备正版 **Abaqus 2025** 的 Windows 真实机环境下全链路求解通过：
 
-进行处理。
+| 案例标识 | 物理基准与核心关注点 | 判定与验收标准 | 状态 |
+|:---|:---|:---|:---:|
+| **Smoke Test** | 运行时执行闭环基础通道 | CAE 启动 + Solver Artifacts + ODB 可读性 | ✅ PASS |
+| **P0-1 Static Golden** | 3D 悬臂梁自由端受集中力弯曲 | 解析挠度对比、反力平衡、根部应力合理性 | ✅ PASS |
+| **P0-2 Mesh Convergence** | 三档网格划分 (Coarse / Medium / Fine) | 真实 ODB 位移、Richardson 外推、GCI ≤ 1.5% | ✅ PASS |
+| **P1 Tie Contact** | 双块装配体界面运动学连续 | 25 对接口节点相对位移为 0、反力平衡 | ✅ PASS |
+| **P1 Implicit Dynamic** | 斜坡载荷瞬态动力学悬臂梁 | 多时间帧动态响应、动能/内能比、动载荷放大系数 | ✅ PASS |
+| **P1 Steady Thermal** | 3D 杆体一维稳态热传导 | 解析温度分布、热流守恒、严格门禁判定 | ✅ PASS |
+| **P1 General Contact** | 块体压紧与库仑摩擦滑移 | 法向接触压力、切向摩擦力 (μ=0.25，误差 0.08%) | ✅ PASS |
+| **刚体动力学 Golden** | 铰接刚体物理摆大角度重力摆动 (L = 600 mm, θ₀ = 10°) | 振动周期 (T_corr = 1.2713 s，误差 0.08%)、机械能守恒 | ✅ PASS |
+| **MBD-2 Revolute Golden** | 原生 `CONN3D2` Hinge 连接器双刚体双摆 | 铰接点平动漂移 ≤ 1e-3 mm (9.78e-6 mm)、独立相对转动 (Δθ = 6.96°) | ✅ PASS |
+| **FMBD-4 刚柔耦合 Golden** | 刚体曲柄 + C3D8R 弹性连杆在重力下耦合 | 铰接点漂移 ≤ 1e-3 mm (3.13e-10 mm)、动态应力合理、能量耗散 0.56% | ✅ PASS |
+| **FMBD-5 闭环曲柄滑块** | 声明式 `MechanismGraph` 编译的完整闭环机构 | 铰接点漂移 ≤ 1e-3 mm、导轨横向漂移 ≤ 1e-2 mm、闭环残差 ≤ 5% | ✅ PASS |
+| **P1 Explicit Dynamic** | 冲击载荷瞬态显式动力学（Abaqus/Explicit） | 稳定时间增量满足 CFL 条件 (0.352 μs)、全系统能量守恒 (0.00028%) | ✅ PASS |
+| **P2 Real ODB Fatigue** | 真实 ODB 多时间帧应力提取与雨流损伤评估 | 单元 613 危险点扫描、ASTM E1049-85 雨流计数 (6.0)、Goodman 修正、寿命块数 1.0885e5 | ✅ PASS |
 
-`python_action` 成功只能证明请求跨过了执行边界；不能单独证明模型正确、Solver 成功、目标 ODB 结果存在或工程验收通过。
+### 2. 九大工程物理类别即时验证矩阵 (Phase I.1)
 
-详见 [AI / Agent 能力边界](docs/ai-agent-capability-boundary.md)。
-
-## 架构
-
-项目刻意采用 **Action + Evidence** 为核心的架构，而不是继续增加一个庞大的 Autonomous Orchestrator。
+涵盖 9 类基础物理场景，全部由真实求解器产物与审计证据链驱动：
 
 ```text
-用户 / 工程需求
-       │
-       ▼
-EngineeringIntent
-       │
-       ▼
-AnalysisWorkflow
-       │
-       ├────────────────┐
-       ▼                ▼
-ModelSnapshot      Viewport / Image
-       │                │
-       └───────┬────────┘
-               ▼
-        Geometry Grounding
-               │
-               ▼
-        Validated Action
-               │
-               ▼
-            Preflight
-               │
-               ▼
-           Executor
-               │
-               ▼
-            Abaqus
-               │
-          ┌────┴────┐
-          ▼         ▼
-         Job     Model State
-          │
-          ▼
-  Artifacts / Diagnostics
-          │
-          ▼
-         ODB
-          │
-          ▼
-   Result Requirements
-          │
-          ▼
- Field / History / Frame
-       Extraction
-          │
-          ▼
-      Acceptance
-          │
-          ▼
-        Evidence
+├── CASE-01: 结构静力学分析 (弹性弯曲、挠度与支反力平衡)
+├── CASE-02: 稳态导热分析 (线性温度梯度与热流守恒)
+├── CASE-03: 模态与动力放大 (瞬态强迫振动与惯性响应)
+├── CASE-04: 非线性接触与摩擦 (罚函数法接触刚度与剪切平衡)
+├── CASE-05: 循环疲劳与累积损伤 (Signed Mises 应力降维与雨流循环计数)
+├── CASE-06: 热-结构多物理场耦合 (热膨胀与热应力场自洽)
+├── CASE-07: 网格离散收敛性评定 (Roache GCI 指标与网格敏感度)
+├── CASE-08: 求解器发散诊断与闭环修复 (非线性 cutback 诊断与自适应重算)
+└── CASE-09: 视觉图像拓扑接地 (2D 视口候选点到原生 Set/Surface)
 ```
 
-### 架构边界
-
-| 层 | 主要职责 |
-|---|---|
-| Contracts | 工程意图、模型状态、结果、Runtime、Evidence 的稳定数据结构 |
-| Actions | 小粒度、明确的原生 Abaqus 操作 |
-| Builders | 面向调用者构建 Action |
-| Validation | 执行前的参数与语义检查 |
-| Preflight | 针对当前模型/runtime 状态的前置检查 |
-| Script Generation | Action → Abaqus Python |
-| Execution | Bridge / InProcess / Batch 执行 |
-| Inspection | Model / Session / Job / ODB 观察 |
-| Results | 确定性的 Field / History / Frame 结果提取 |
-| Acceptance | 针对工程要求进行验收 |
-| Evidence | 记录执行了什么、观察到了什么、依据是什么 |
-
-没有任何一个组件需要独自掌握完整工程流程。
-
 ---
 
-## 设计原则
+## 安装与环境配置
 
-### 1. Native Abaqus First
+### 前置条件
+- Python 3.10、3.11 或 3.12 (64 位)
+- 可选：Dassault Systèmes Abaqus 2025（或兼容版本），用于真实机求解与 ODB 提取。
 
-尽可能直接使用 Abaqus 原生模型与分析接口。
+### 安装步骤
 
-项目不建立一个容易与 Abaqus 实际状态发生偏离的“第二套有限元模型”。
-
-### 2. Explicit Actions
-
-Action 必须小、明确、可检查。
-
-一个 Action 应当能够被：
-
-- 验证
-- Preview
-- 执行
-- 与预期模型状态比较
-- 关联 Evidence
-
-### 3. Evidence Before Claims
-
-必须区分：
-
-- API invocation evidence
-- Model-state evidence
-- Job execution evidence
-- Solver artifact evidence
-- ODB evidence
-- Result evidence
-- Acceptance evidence
-
-这些证据不能互相替代。
-
-### 4. Geometry 必须 Ground
-
-视觉输入必须通过明确的证据链映射到实际 Abaqus Region。
-
-项目不会把名称、索引或集合顺序默认为稳定的视觉身份。
-
-### 5. Verification 与 Solver Execution 必须分离
-
-Job 完成首先只是执行事实，不自动等于工程有效。
-
-工程有效性需要由结果提取、数值验证、工程检查、网格质量/收敛、疲劳验证以及在明确提供时的接触诊断共同支撑。
-
-Sensitivity / Uncertainty 属于分析证据域，不作为所有问题的普遍 Pass/Fail Gate。
-
-一旦某项验证结果被明确提供，其失败必须进入 Acceptance，不能静默降级。
-
-### 6. 不伪造求解能力
-
-不能因为存在一个 API 风格的类，就宣称一个工程能力已经完成。
-
-例如当前 Fatigue 能力是：
-
-**针对已有 Abaqus 应力历史进行后处理的 Contract / Workflow**
-
-而不是已经实现完整数值疲劳求解器。
-
-### 7. Release-aware Compatibility
-
-Abaqus 自带 Python 运行时和原生 API 具有明显的版本依赖。
-
-外部 Python 包目标为 Python 3.9+；生成给 Abaqus 执行的脚本则有意避免不必要的现代 Python 专属语法。
-
-具体原生 API 是否兼容，必须在目标 Abaqus 版本上实际验证。
-
----
-
-## 安装
-
-外部 Python 包目标为 **Python 3.9+**。
-
-克隆仓库：
+克隆本仓库并在虚拟环境中以可编辑模式安装：
 
 ```bash
 git clone https://github.com/chenlei-gh/Abaqus-AI-Agent.git
 cd Abaqus-AI-Agent
-```
 
-安装：
-
-```bash
+# 安装核心包
 python -m pip install -e .
-```
 
-安装测试依赖：
-
-```bash
+# 安装开发与测试套件依赖
 python -m pip install -e ".[test]"
 ```
 
-运行测试：
+运行确定性软件测试套件验证安装：
 
 ```bash
 python -m pytest -q
+# 预期结果：374 passed
 ```
-
-普通测试不需要安装 Abaqus License。
 
 ---
 
-## 命令行工具（CLI）
+## 命令行工具指南 (CLI)
 
-安装后可直接使用 `abaqus-ai-agent` 命令（或 `python -m abaqus_ai_agent`）：
+项目提供统一命令 `abaqus-ai-agent`（也可通过 `python -m abaqus_ai_agent` 调用）：
 
 ```bash
-# 1. 检查本地 Abaqus 环境与许可证就绪状态
+# 1. 深度检测本地环境、Abaqus 启动器与 7 层运行时能力
 abaqus-ai-agent inspect
+abaqus-ai-agent inspect --json
 
-# 2. 列出已注册的 Golden Cases 及证据状态
+# 2. 将自然语言工程需求路由为强类型意图 (JEV 意图引擎)
+abaqus-ai-agent intent "悬臂梁长度 100mm，端部载荷 1000N，要求最大挠度小于 2mm"
+
+# 3. 列出已注册的 Golden Cases 并校验全量证据包 Schema
 abaqus-ai-agent matrix --list
 abaqus-ai-agent matrix --validate all
 
-# 3. 比较两次仿真运行的关键指标差异与状态变化
+# 4. 执行 Abaqus 2025 真实机 A/B 双运行复现性验证
+python tools/i3_reproducibility.py --live-abaqus
+
+# 5. 执行 9 大工程物理类别真实求解现场重算探针
+python tools/i1_engineering_case_matrix.py --fresh
+
+# 6. 对比两次分析运行并生成指标差分报告
 abaqus-ai-agent diff baseline_run.json candidate_run.json
 
-# 4. 对 Abaqus 求解日志（.msg / .sta / .log）进行确定性故障诊断
+# 7. 基于真实 ODB 证据一键渲染交付级工程报告 (Markdown / HTML)
+abaqus-ai-agent report machine_validation/static_golden_e2e.json --format html --output report.html
+
+# 8. 对求解器发散产物进行确定性特征诊断 (.msg / .sta / .log)
 abaqus-ai-agent diagnose Job-1.msg
-
-# 5. 基于证据文件直接渲染工程交付报告（Markdown 或 HTML）
-abaqus-ai-agent report machine_validation/static_golden_e2e.json --format markdown
-
-# 6. 验证机构拓扑模型与编译原生 Action 执行计划
-abaqus-ai-agent fmbd --case fmbd7 --verify-topology
-abaqus-ai-agent fmbd --case fmbd7 --compile
-
-# 7. 检索与筛选持久化案例记忆库（Case Memory / Run Index）
-abaqus-ai-agent memory --dir case_memory --list
-abaqus-ai-agent memory --dir case_memory --solver explicit --passed
 ```
 
 ---
 
 ## 最小使用示例
 
-一个典型流程可以从一个明确的 Action 开始：
+### 1. 声明式分析步与载荷边界动作规划
 
 ```python
-from abaqus_ai_agent.actions import static_step
+from abaqus_ai_agent.actions import static_step, encastre_bc, pressure_load
 from abaqus_ai_agent.actions.runner import preview
 
-action = static_step(
+# 创建经过语义校验的原生分析步动作
+step_action = static_step(
     "Model-1",
     time_period=1.0,
     max_num_inc=100,
+    initial_inc=0.01,
 )
 
-print(preview(action))
+print(preview(step_action))
 ```
 
-生成的是明确的 Abaqus 原生操作，可以在进入实际执行边界之前进行验证。
-
-对于暂时没有类型化 Builder 的合法 Abaqus API：
+### 2. 高阶编排门面与分析运行构建
 
 ```python
-from abaqus_ai_agent.actions import python_action
+from abaqus_ai_agent import AbaqusAIAgent
+from abaqus_ai_agent.contracts import EngineeringIntent, UnitSystem
 
-action = python_action(
-    "Model-1",
-    "print(list(mdb.models.keys()))",
+agent = AbaqusAIAgent()
+
+# 查询当前环境的真机与模拟执行能力
+runtime_status = agent.inspect_runtime()
+print(f"当前运行时模式: {runtime_status.mode}")
+
+# 构建标准工程意图实体
+intent = EngineeringIntent(
+    title="悬臂梁受弯分析验证",
+    analysis_type="linear_static",
+    unit_system="MM_N_MPA",
+    description="验证端部集中力作用下的结构挠度与反力平衡",
 )
 ```
 
-这个 Escape Hatch 是有意保留的：Action 层不应该成为合法 Abaqus API 的人工瓶颈。
+---
+
+## 测试与双重验证门禁体系
+
+项目由两道互为补充、严格独立的工程验证门禁共同守护：
+
+### 门禁一：CI 纯软件确定性契约门禁 (Zero-Solver Dependency)
+- **运行环境**：跨平台（Ubuntu / Windows / macOS），Python 3.10 - 3.12。
+- **环境依赖**：无需任何 Abaqus 商业许可或安装。
+- **验证范围**：
+  - `374 项` 单元测试、契约校验与前检规则全部通过；
+  - `13/13` 项 Golden Matrix 证据包结构与 Schema 清单校验；
+  - `Phase I.6` 全仓库代码与文件安全扫描 (`python tools/i6_release_audit.py`)；
+  - JEV 模糊输入自动阻断与澄清保护。
+
+### 门禁二：Real Machine 真机执行门禁 (Abaqus 2025 Live Solver)
+- **运行环境**：Windows 11 / Windows Server，正版 SIMULIA Abaqus 2025。
+- **验证范围**：
+  - `tools/i3_reproducibility.py --live-abaqus`：现场 A/B 双运行物理指标不变量校验（相对误差 ≤ 1e-4）；
+  - `tools/i1_engineering_case_matrix.py --fresh`：9 大工程类别现场真实求解输出核验；
+  - `tools/i2_failure_matrix.py`：操作系统级子进程失败注入测试（真实捕获 exit 137、超时强杀、文件损坏）；
+  - `tools/h1_engineering_report_e2e.py`：真实 ODB 提取到最终 HTML 报告交付。
 
 ---
 
-## 当前能力状态
+## 安全与失败边界准则
 
-| 能力 | 状态 |
-|---|---|
-| Core Action Contracts | 已实现 |
-| Materials / Sections | 已实现 |
-| Static Analysis | 已实现 |
-| Explicit Dynamics | Abaqus 2025 Golden E2E 验证已通过 |
-| Implicit Dynamics | Abaqus 2025 Golden E2E 验证已通过 |
-| Heat Transfer | 已实现 |
-| Coupled Temperature-Displacement | 已实现 |
-| Amplitudes | 已实现 |
-| Gravity | 已实现 |
-| Reference Points / 刚体约束 (Rigid Body) | 已实现 |
-| 连接器单元 / 截面 (CONN3D2 / Hinge) | 已实现 |
-| 刚体动力学（RP + RigidBody 物理摆） | Abaqus 2025 Golden E2E 验证已通过 |
-| 多体动力学（双刚体 Hinge 连接器 / 双摆系统） | Abaqus 2025 Golden E2E 验证已通过；高阶运动副待扩展 |
-| 刚柔耦合多体动力学（刚体曲柄 + C3D8R 弹性连杆 + Kinematic Coupling + CONN3D2 Hinge） | Abaqus 2025 Golden E2E 验证已通过 |
-| 闭环刚柔耦合机构动力学（FMBD-5 曲柄滑块机构：C3D8R 弹性连杆 + 双端 Kinematic Coupling + Hinge 旋转副 + Translator 移动导轨） | Abaqus 2025 Golden E2E 验证已通过 |
-| Initial Temperature / Stress | 已实现 |
-| Assembly Instance Operations | 已实现 |
-| INP Export | 已实现 |
-| ODB CSV Export | 已实现 |
-| Result Extraction | 已实现 |
-| Solver Selection | 已实现 |
-| Post-Processing Profile | 已实现 |
-| Geometry → Mesh Strategy | 已实现：Contract / Planning 层；真实机执行验证待完成 |
-| Native Mesh Quality Verification | 已实现：Action / Script 层；真实机验证待完成 |
-| Mesh Convergence | 已实现 |
-| Engineering Acceptance Gates | 已实现 |
-| Contact Diagnostics | Contract + Acceptance 集成已实现 |
-| Fatigue Verification | Abaqus 2025 Golden E2E 验证已通过（真实 ODB 提取、雨流计数、Goodman 修正、Miner 损伤） |
-| Sensitivity / Uncertainty | Evidence / Report 集成已实现 |
-| Engineering Report | 已实现 |
-| Geometry Grounding | 已实现：当前针对标定 Viewport / Projection 路径 |
-| Fatigue | Abaqus 2025 Golden E2E 验证已通过（直接提取真实 ODB 多时间帧应力张量，Signed Mises 降维、雨流循环计数、Goodman 均值应力修正、S-N 曲线寿命评估与 Palmgren-Miner 累积损伤） |
-| Arbitrary Native Abaqus API | EXECUTABLE：Python Escape Hatch；不等同于工程验证 |
-| 任意外部照片的全自动几何注册 | 当前不宣称 |
-| 完整独立 Fatigue Solver | 未实现 |
-| CAD / Part / Sketch / Extrude 自动建模 | 当前有意延后 |
-| Tosca / Topology Optimization 自动化 | 当前有意延后 |
+Agent 严格恪守工业安全防线：
+1. **坚决拒收超标结果**：求解计算无错误但违反工程准则（如反力不平衡或应力超过许用值）的工况，明确标记为 `ACCEPTANCE_FAILED`，严禁隐瞒伪造。
+2. **确定性发散诊断修复**：当求解器出现收敛困难时，Agent 会深入解析 `.msg` 找出主导原因（如接触突变、塑性剧烈 cutback），并施加受控的步长调整，杜绝无休止的盲目重试。
+3. **工作区绝对卫生**：全仓杜绝将大体积求解二进制产物（`.odb`, `.lck`, `.rec`, `.msg`, `.sta`）以及开发者本机私有路径意外推入版本库。
 
 ---
 
-## 测试与 CI
-
-GitHub Actions 在以下情况下运行 Python 测试：
-
-- push 到 `main`
-- push 到 `feature/**`
-- Pull Request
-
-CI 使用 Python 3.11，并执行：
-
-```bash
-python -m pip install -e ".[test]"
-python -m pytest -q
-```
-
-普通 CI 不依赖 Abaqus License，因此与真实 Abaqus 运行环境相关的测试会独立进行。
-
----
-
-## Abaqus 2025 真机验证
-
-项目已经在一台真实授权的 Abaqus 2025 Windows 运行环境完成 Smoke 全链路验证。
-
-已实际验证：
-
-1. `cae noGUI` 启动与 CAE License；
-2. 参数化模型创建；
-3. 网格生成；
-4. `writeInput`；
-5. Abaqus/Standard Job 提交与求解完成；
-6. Solver 产物检查；
-7. ODB 打开；
-8. `U` / `RF` 必要场输出检查。
-
-本次运行实际生成并读取了 ODB，Solver 产物也明确报告分析成功。Harness 不会把单独的 process exit code 当作成功依据；当进程内 `Job.status` 不可用时，可以使用 `.sta` / `.log` Solver 产物作为完成证据。
-
-因此当前可以正式记录：
-
-**Abaqus 2025 Machine Validation: PASS**（已在真机上验证基础 Smoke 执行闭环）。
-
-### Abaqus 2025 真机 Golden 验证阶梯
-
-下列工程 Golden Case 均已在 Abaqus 2025 Windows 真机环境完成实际求解与证据闭环：
-
-| 验证案例 | 物理基准与核心关注点 | 判定与验收标准 | 状态 |
-|---|---|---|---|
-| **Smoke Test** | 运行时执行闭环基础通道 | CAE 启动 + Solver Artifacts + ODB 可读性 | ✅ PASS |
-| **P0-1 Static Golden** | 3D 悬臂梁自由端受集中力弯曲 | 解析挠度对比、反力平衡、根部应力合理性 | ✅ PASS |
-| **P0-2 Mesh Convergence** | 三档网格划分 (Coarse / Medium / Fine) | 真实 ODB 位移、Richardson 外推、GCI、加严门禁真实 FAIL | ✅ PASS |
-| **P1 Tie Contact** | 双块装配体界面运动学连续 | 25 对接口节点相对位移为 0、反力平衡 | ✅ PASS |
-| **P1 Implicit Dynamic** | 斜坡载荷瞬态动力学悬臂梁 | 多时间帧动态响应、动能/内能比、动载荷放大系数 | ✅ PASS |
-| **P1 Steady Thermal** | 3D 杆体一维稳态热传导 | 解析温度分布、热流守恒、加严门禁真实 FAIL | ✅ PASS |
-| **P1 General Contact** | 块体压紧与库仑摩擦滑移 | 法向接触压力、切向摩擦力 (μ=0.25 误差 0.08%)、接触诊断 | ✅ PASS |
-| **刚体动力学 Golden** | 铰接刚体物理摆大角度重力摆动 (L = 600 mm, θ₀ = 10°) | 振动周期 (T_corr = 1.2713 s, 误差 0.08%)、最大角速度 (误差 0.27%)、机械能守恒 | ✅ PASS |
-| **MBD-2 Revolute Golden** | 原生 `CONN3D2` Hinge 连接器双刚体双摆重力摆动 | 铰接点平动漂移 ≤ 1e-3 mm (9.78e-6 mm)、独立相对转动 (Δθ = 6.96°)、基频振动周期 (T₁ = 1.2843 s，误差 0.54%)、机械能守恒 (耗散 2.13%) | ✅ PASS |
-| **FMBD-4 刚柔耦合 Golden** | 刚体曲柄 + C3D8R 弹性实体连杆在重力下的耦合动力学时程 | 铰接点平动漂移 ≤ 1e-3 mm (3.13e-10 mm)、动态 Mises 应力物理合理 (0.0435 MPa)、弹性应变能动态占比 (99.9%)、全系统机械能守恒 (耗散仅 0.56%) | ✅ PASS |
-| **FMBD-5 闭环曲柄滑块 Golden** | 完整闭环机构：地面固定支座 + 刚体曲柄 + C3D8R 弹性连杆（双端运动学耦合）+ 刚体滑块沿水平 Translator 导轨，100% 声明式机构图编译 | 肘部/腕部铰接点漂移 ≤ 1e-3 mm (1.49e-8 mm)、滑块导轨横向漂移 ≤ 1e-2 mm (3.21e-20 mm)、闭环几何残差 ≤ 5% (1.91e-7)、动态 Mises 应力 (0.288 MPa)、内部能构成（弹性应变能占比 99.61%）、算法数值阻尼耗散受控（≤ 50%，实际 40.47%） | ✅ PASS |
-| **P1 Explicit Dynamic** | 斜坡阶跃冲击载荷瞬态显式动力学悬臂梁（Abaqus/Explicit） | 稳定时间增量满足 CFL 条件 Δt ≤ Lₑ/c_d (0.352 μs)、全模型能量严格守恒 (|ETOTAL| / E_ref ≤ 2%，实际 0.00028%)、C3D8R 单元沙漏能严格受控 (ALLAE/ALLIE ≤ 5%，实际 3.64%)、动载荷放大系数 (DAF = 1.753)、加严负向门禁真实 FAIL | ✅ PASS |
-| **P2 Real ODB Fatigue** | 真实 ODB 多时间帧应力场提取、雨流循环计数与 Palmgren-Miner 累积损伤评估 | 全场危险点自动扫描（单元 613，积分点 1，峰值 Mises 493.40 MPa）、Signed von Mises 应力时程降维、ASTM E1049-85 雨流计数 (6.0 循环)、Goodman 拉应力均值修正、结构钢 S-N 曲线寿命评估、累积损伤 D = 9.1869e-6 ≤ 1.0、容许重复块数 1.0885e5、加严负向门禁真实 FAIL (D ≤ 1e-15) | ✅ PASS |
-
-> **柔性多体动力学 (FMBD) 工程边界与能量物理严谨说明**：
-> - **MBD-1 与 MBD-2** 验证了离散刚体动力学与多刚体运动学铰接，采用 Reference Point、`RigidBody` 约束及原生 `CONN3D2` HINGE 连接器；
-> - **FMBD-4** 验证了开链刚柔耦合，证明连续介质有限元网格（C3D8R）能够通过原生 Kinematic Coupling 与离散连接器完成双向动力学传递；
-> - **FMBD-5** 进一步验证了由声明式 `MechanismGraph` 全栈自动编译生成的**闭环刚柔耦合机构系统**；
-> - **物理与能量机制严密界定**：在 FMBD-5 闭环曲柄滑块运动中，系统的宏观机械能以刚性曲柄与滑块的动能为主导（ALLKE_peak ≈ 708.8 mJ），C3D8R 柔性连杆处于小变形弹性响应状态（ALLSE_peak ≈ 0.011 mJ）。内部能中可恢复弹性应变能占比为 99.61%，不存在塑性或数值伪能异常。在求解策略层面，为抑制理想连接器与多铰接点产生的高频振荡并保证非线性大位移循环运动 100% 收敛，模型采用 HHT 积分器的中等数值耗散模式（`MODERATE_DISSIPATION`, α = -0.41421, `nohaf=True`），算法累计耗散外部重力做功的 40.47%，此为受控的**算法数值阻尼耗散**，而非物理材料阻尼或摩擦耗散。因此，FMBD-5 确立的是**闭环刚柔耦合与声明式机构图编译器工程基准**，而非大变形强柔性多体动力学基准。
-
-### 统一 Golden 验证矩阵与证据目录
-
-全仓全部 13 项 Golden Case 统一由强类型 Registry 注册表和 12 键 Evidence 信封 Schema 严格管控：
-`case_id, release, runtime, solver, job, odb, solver_status, result_evidence, verification, acceptance, artifacts, provenance`。
-
-统一 CLI 工具（`tools/run_golden_matrix.py`）提供集中化的用例发现、Schema 校验、实机执行与清单生成：
-
-```bash
-# 1. 查看全部 13 项 Golden Case 的证据状态
-python tools/run_golden_matrix.py --list
-
-# 2. 校验全部现有机器证据 JSON 文件是否符合统一信封 Schema 且通过验收
-python tools/run_golden_matrix.py --validate-evidence all
-
-# 3. 在指定 Abaqus 求解器上执行单个或全部 Golden Case
-python tools/run_golden_matrix.py --run all --launcher "C:\SIMULIA\Commands\abaqus.bat"
-
-# 4. 生成全仓统一的 Golden 验证 Manifest JSON 资产
-python tools/run_golden_matrix.py --manifest-out machine_validation/golden_matrix_manifest.json
-```
-
-## 运行时验证原则
-
-项目不会仅根据“API 名称看起来一致”就宣布某个 Abaqus 版本兼容。
-
-针对任意目标 Abaqus 安装环境（当前活跃真机基准为 Abaqus 2025），标准的真实机验证链路是：
-
-1. Generated Script Smoke Test；
-2. Model 创建/检查；
-3. `writeInput` 验证；
-4. 最小 Solver Job；
-5. Job Artifact 检查；
-6. ODB 打开；
-7. Result Extraction；
-8. CSV / Evidence 生成；
-9. Failure Classification。
-
-只有相关流程真正跑过目标真机环境，才能把对应能力标记为 **verified**。
-
-特别需要强调：
-
-> **一个 Python 进程正常退出，或者返回 exit code 0，都不能单独证明 CNEXT、目标 Abaqus 命令、Solver Job 或预期 ODB 结果成功。**
-
----
-
-## 安全与失败边界
-
-项目有意拒绝以下不安全假设：
-
-- 未 Ground 的图片坐标不能直接成为可执行 Region；
-- Abaqus Python 正常返回不能直接作为 Solver 成功证据；
-- Job 完成不能自动等同于工程验收；
-- ODB 存在不能自动证明目标结果正确；
-- 局部网格加密本身不能证明网格已经收敛；
-- 疑似应力奇异点附近的峰值不能自动当作物理收敛峰值；
-- Sensitivity / Uncertainty 不自动成为普遍的工程 Pass/Fail 标准；
-- API 参数看起来兼容不能自动证明 Release 兼容；
-- Model-specific contact、mesh 以及 release-specific API 在无法泛化验证时必须保持显式。
-
-这些边界属于架构的一部分，而不是可有可无的文档说明。
-
----
-
-## 项目范围
-
-### 当前范围
-
-- Abaqus/CAE 上的 AI 辅助工程分析
-- Model inspection 与状态 Grounding
-- Native Abaqus Actions
-- Validation / Preflight
-- Job execution 与 diagnostics
-- ODB / Result Extraction
-- Acceptance / Evidence
-- 通过 Native Abaqus Python 进行受控扩展
-
-### 当前核心明确不做
-
-- 替代 Abaqus Solver
-- 为每一个 Abaqus API 都制作类型化 Wrapper
-- 从图片直接进行无限制 Autonomous Geometry Mutation
-- 没有数值方法实现却宣称完整 Fatigue Solver
-- 把 CAD 建模作为本项目的主要目标
-- 用 Topology Optimization 取代明确的工程需求
-
----
-
-## Roadmap
-
-近期工程路线：
-
-1. 保持 Action / Validation / Execution / Verification / Evidence 链路稳定；
-2. 完成剩余的全仓 Contract Closure Audit；
-3. 维护并在目标真机上执行运行时 Smoke Harness；
-4. 在目标 Abaqus 环境下执行全套 Golden Suite；
-5. 对真实版本特有的不兼容性进行分类与修复；
-6. 只有真实工程流程证明需要时，才继续扩展能力。
-
-后续可能扩展：
-
-- 更强的 Geometry Grounding
-- 更多 Result Extraction 模式
-- 更广的 Native Abaqus Action 覆盖
-- 更强的 Job Diagnostics
-- 更完整的 Fatigue Post-processing
-- 更多 Release-specific Adapter
-
-所有新增能力都应保持：
-
-**Action → Validation → Execution → Evidence**
-
-这一基本边界。
-
----
-
-## 参考项目与生态
-
-实时执行边界参考了公开的 Abaqus 自动化/MCP 项目，包括：
-
-- [Abaqus-Control-MCP](https://github.com/forxyo/abaqus-control-mcp)
-- [CAE-Agent-Hub](https://github.com/chenlei-gh/CAE-Agent-Hub)
-
-这些项目展示了 Live Abaqus Bridge、任意 Python 执行、Model Inspection、Job Monitoring、ODB Inspection、Viewport Interaction 等有价值的工程模式。
-
-本项目吸收“Live Abaqus Execution Boundary”这一思路，同时进一步强调：
-
-- Explicit Geometry Grounding
-- Validation
-- Result Requirements
-- Acceptance
-- Evidence
-
-而不是重新实现 Abaqus 本身。
-
----
-
-## 仓库结构
+## 仓库目录结构
 
 ```text
 Abaqus-AI-Agent/
-├── docs/                     # 架构蓝图、工程契约、闭环路线图与规范文档
-├── machine_validation/       # 真机执行证据包、ODB 结果数据库与 JSON Manifest
+├── docs/                     # 核心工程规范、契约设计与演进路线图
+│   ├── engineering-run-evidence-roadmap.md # 唯一核心基准路线图
+│   ├── ai-agent-capability-boundary.md     # LLM 与确定性内核能力边界
+│   ├── engineering-credibility.md          # 多层可观测物理证据链
+│   ├── geometry-grounding.md               # 视口与拓扑接地规范
+│   └── geometry-mesh-strategy.md           # 网格自适应与 GCI 规范
+├── machine_validation/       # 经过审计的真机实测证据包与 Golden 清单
 ├── src/
 │   └── abaqus_ai_agent/
-│       ├── actions/          # 明确的 Abaqus 操作与原生脚本生成
-│       ├── adapters/         # Live Abaqus / Model Adapter
-│       ├── contracts/        # 工程、模型、结果、Runtime Contract
-│       ├── execution/        # Executor、Job、Artifact、Batch
-│       ├── planning/         # 机构拓扑图、移动度分析与 Action 编译器
-│       ├── validation/       # Validation 与 Preflight 前置门禁
-│       └── workflow/         # Analysis Workflow 分析流
-├── tests/                    # Unit / Contract / Anti-Fabrication Tests
-├── tools/                    # Golden E2E 执行器、矩阵验证器与 CLI 工具
-├── .github/workflows/        # CI 工作流
-├── pyproject.toml
-├── LICENSE
-├── THIRD_PARTY_NOTICES.md
-├── README.md                 # English Documentation
-└── README_CN.md              # 中文文档
+│       ├── actions/          # 原生 Abaqus 细粒度操作与 Python 脚本生成器
+│       ├── adapters/         # CAE / noGUI / Socket 实时桥接执行适配器
+│       ├── contracts/        # 强类型数据契约 (Intent, Run, Units, Evidence)
+│       ├── diagnostics/      # 求解器错误解析与诊断器 (.msg/.sta)
+│       ├── evidence/         # 证据信封封装与不可篡改哈希计算
+│       ├── execution/        # 批处理执行器、进程边界控制器与任务调度
+│       ├── grounding/        # 视口空间射线投影与拓扑接地器
+│       ├── planning/         # 动作规划器与声明式机构图编译器
+│       ├── reporting/        # Markdown 与独立 HTML 工程分析报告渲染器
+│       ├── validation/       # 单位制、前检与物理自洽性校验器
+│       └── workflow/         # 疲劳寿命、接触收敛、网格 GCI 高阶工作流
+├── tests/                    # 374 项确定性纯软件测试套件
+└── tools/                    # 统一 Golden 矩阵管理、CLI 驱动与验证探针
 ```
 
 ---
 
-## 工程文档体系
+## 工程文档体系索引
 
 项目所有系统蓝图、工程契约与可信度规范统一收拢在 [`docs/`](docs/) 目录下：
 
@@ -883,29 +439,19 @@ Abaqus-AI-Agent/
 
 ---
 
-## 贡献
+## 贡献指南
 
-欢迎符合工程边界的贡献。
+我们非常欢迎符合工程严谨性边界的开源贡献。
 
-一个高质量贡献通常应该包含：
-
-- 清晰的能力或缺陷描述；
-- 明确的 Validation 行为；
-- 针对确定性逻辑的 Tests；
-- 必要的 Release-specific 假设；
-- Live Abaqus 行为对应的 Evidence 要求；
-- 不对尚未验证的 Solver 或工程正确性做过度声明。
-
-对于 Release-specific Abaqus API，建议明确记录实际测试过的 Abaqus 版本。
+一份标准的贡献通常应包含：
+1. 明确的强类型契约定义；
+2. 严密的输入参数校验与模型前置检查；
+3. 原生 Abaqus 脚本生成器与回执解析逻辑；
+4. 补充完整的单元与集成测试（归入 `tests/`）；
+5. 严格恪守反伪造公理（Anti-Fabrication Axiom）。
 
 ---
 
-## License
+## 开源协议
 
-Apache-2.0。
-
-仓库原始许可证保持不变。第三方集成、文档和依赖应继续遵守各自的署名与许可证要求。
-
----
-
-**文档：** [中文](README_CN.md) · [English](README.md)
+本项目采用 Apache 2.0 开源协议 —— 详见 [LICENSE](LICENSE) 文件。
