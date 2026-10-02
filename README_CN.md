@@ -615,6 +615,29 @@ python -m pytest -q
 
 ---
 
+## Abaqus 2025 真机验证
+
+项目已经在一台真实授权的 Abaqus 2025 Windows 运行环境完成 Smoke 全链路验证。
+
+已实际验证：
+
+1. `cae noGUI` 启动与 CAE License；
+2. 参数化模型创建；
+3. 网格生成；
+4. `writeInput`；
+5. Abaqus/Standard Job 提交与求解完成；
+6. Solver 产物检查；
+7. ODB 打开；
+8. `U` / `RF` 必要场输出检查。
+
+本次运行实际生成并读取了 ODB，Solver 产物也明确报告分析成功。Harness 不会把单独的 process exit code 当作成功依据；当进程内 `Job.status` 不可用时，可以使用 `.sta` / `.log` Solver 产物作为完成证据。
+
+因此当前可以正式记录：
+
+**Abaqus 2025 Machine Validation: PASS**
+
+这不等同于 R2018 / B28 兼容性验证。
+
 ## Abaqus V5 R2018 / B28 验证
 
 项目不会仅根据“API 名称看起来一致”就宣布某个 Abaqus 版本兼容。
