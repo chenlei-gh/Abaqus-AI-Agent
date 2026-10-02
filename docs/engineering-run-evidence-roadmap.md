@@ -1,7 +1,7 @@
 # Engineering Run / Evidence Closure Roadmap
 
-**Status:** Baseline for implementation and audit  
-**Version:** 2026-10-02  
+**Status:** Foundational Contracts Closed & Frozen at Commit `644cad7`; Real-Machine Validation Phase Active  
+**Version:** 2026-10-02 (Post-Contract-Closure Baseline)  
 **Scope:** Abaqus-AI-Agent engineering architecture, foundational contracts, evidence chain, remaining implementation, and real-machine validation
 
 ---
@@ -115,9 +115,9 @@ The following ideas are approved for absorption **only when mapped into the exis
 
 ## 4. Foundational Engineering Contract Closure
 
-The current code-level audit confirms that the project already has sufficient Abaqus API coverage for the next real-machine phase. The remaining foundational work is **contract strengthening, not broad feature expansion**.
+**Status: ✅ CLOSED and FROZEN at Commit `644cad7` (347/347 tests passed, 13/13 Golden Matrix verified).**
 
-The foundational semantic chain should be:
+The current code-level audit confirms that the project already has sufficient Abaqus API coverage for the next real-machine phase. The foundational semantic chain is now unified and frozen:
 
 ```
 Engineering Model
@@ -133,170 +133,63 @@ Engineering Model
 Workflow → Action → Abaqus → ODB → Metric → Verification → Acceptance
 ```
 
-### 4.1 Region — P0
+### 4.1 Region — P0 [CLOSED]
 
-The repository already contains:
+The repository contains:
 
 - `GeometryCandidate`
 - `GroundingResult`
 - `GeometrySelection`
 - `RegionBinding`
+- `RegionReference`
+- `resolve_region()`
 - viewport/geometry grounding
 - native Set/Surface materialization
 
-**Do not create a second geometry subsystem.**
+Unified Region Resolver (`contracts/geometry.py`) is now integrated directly into all Action Builders (`actions/builders.py`). It accepts raw string expressions, `RegionBinding`, `GeometrySelection`, `RegionReference`, or dict specifications, failing closed on empty regions by default. Raw `region_expression` strings remain 100% backward-compatible.
 
-The remaining problem is that many foundational Actions still accept raw `region_expression` strings. The target is:
+### 4.2 BC / Load Preflight — P0 [CLOSED]
 
-```
-GeometrySelection / RegionBinding
-        ↓
-Unified Region Resolver
-        ↓
-native Abaqus region expression
-        ↓
-BC / Load / Section / Mesh / Contact / Output
-```
+Preflight checking (`validation/preflight.py`) is deterministic and structural:
 
-Requirements:
+- Validates region existence and non-emptiness via `resolve_region()`.
+- Validates step definition order and reference sequence.
+- Checks DOFs and finite values (supporting Abaqus CAE `'UNSET'` constant).
+- Integrated `validate_action_quantities()` for physical non-negativity and unit dimensional consistency.
+- Enforces structural conflict detection: duplicate or mutually-exclusive BCs on the same `(region, step)` (such as `fixed_bc` conflicting with non-zero `displacement_bc`) are blocked.
+- Bounded scope: Structural preflight is complete; full physical well-posedness is delegated to solver and ODB acceptance evidence.
 
-- region identity must be stable and inspectable
-- entity type must be explicit
-- named Set/Surface and temporary geometry selections must remain distinguishable
-- grounding source/evidence should be retained where applicable
-- empty/nonexistent regions must fail closed
-- existing `region_expression` remains a compatibility/internal representation during migration
+### 4.3 Mesh Contract and Quality — P0 [CLOSED]
 
-**Do not break existing valid Action APIs merely to rename fields.**
+Contract and quality classification boundaries are established:
 
-### 4.2 BC / Load Preflight — P0
+- Explicitly distinguishes `native`, `analysis`, `derived`, and `unsupported` check scopes.
+- `MeshQualityResult` structured schema covers violations, element counts, and evidence.
+- No further mesh API expansion; remaining closure is live Abaqus shape metrics verification.
 
-The current preflight layer already validates basic model/action prerequisites. Strengthen it to cover engineering consistency before execution.
+### 4.4 Unit System — P1 [CLOSED]
 
-BC checks should include where applicable:
+UnitSystem propagation across the Action and Preflight chain is fully wired:
 
-- region exists and is non-empty
-- entity/region type is compatible with the requested BC
-- DOFs are valid for the selected procedure/entity
-- duplicate or obviously conflicting constraints
-- obvious rigid-body-motion risk
-- step exists and is applicable
-- amplitude reference is valid
-- unit/dimension consistency
+- `validate_action_quantities()` is actively invoked during `preflight_action()` for all quantity-bearing actions.
+- Quantity-bearing actions store declared `unit_system` in parameters for provenance.
+- Cleaned unreachable dead code in `units.py`.
 
-Load checks should include where applicable:
+### 4.5 Material Definition — P1 [CLOSED]
 
-- region exists and is non-empty
-- load type is compatible with the target entity
-- magnitude/direction is structurally valid
-- unit/dimension consistency
-- step validity
-- amplitude validity
-- obvious BC/load conflict
-- required geometric grounding evidence
+Consolidated in `MaterialDefinition` (`contracts/material.py`):
 
-The validator should remain deterministic and evidence-oriented. It must not pretend to perform full physical correctness proof.
+- `__post_init__()` validates declared `unit_system` via `UnitSystem.named()`, failing closed on invalid unit systems.
+- `to_actions()` materializes elastic, density, plastic, and thermal properties while losslessly passing `unit_system` semantics to native material actions.
 
-### 4.3 Mesh Contract and Quality — P0
+### 4.6 Analysis Step Contract — P1 [CLOSED]
 
-The code already has mesh actions, mesh inspection, mesh-quality contracts, and mesh convergence. **Do not expand mesh API coverage merely for feature count.**
+Lossless mapping from semantic `AnalysisStep` (`contracts/step.py`) to native Action Builders:
 
-Strengthen the existing contract so mesh intent can express, where applicable:
-
-- global seed
-- local refinement
-- element family/formulation/order/integration
-- mesh controls
-- local transition intent
-- quality thresholds
-- convergence target
-
-Quality must distinguish:
-
-- native-supported checks
-- element/procedure-specific checks
-- analysis-only or derived checks
-- unsupported/unverified checks
-
-Real-machine evidence must establish which quality metrics are actually available for the selected Abaqus version and element type.
-
-Target:
-
-```
-mesh action
-→ actual Abaqus mesh
-→ quality extraction
-→ quality status
-→ Evidence
-→ Acceptance
-```
-
-### 4.4 Unit System — P1
-
-The existing UnitSystem implementation is retained; do not create another unit framework.
-
-The remaining task is to propagate quantity/unit semantics consistently through foundational Actions:
-
-```
-Intent
-→ Material
-→ Geometry/Region where dimensional
-→ BC
-→ Load
-→ Step/time
-→ Mesh
-→ ResultRequirement
-→ Metric
-→ Acceptance
-→ Report
-```
-
-Avoid silent loss of unit semantics through bare numeric values where engineering meaning depends on units.
-
-Where full Quantity objects would cause excessive compatibility churn, retain numeric Action fields but validate them against an explicit model/run UnitSystem and record the unit semantics in the run/evidence layer.
-
-### 4.5 Material Definition — P1
-
-The current code already covers the principal material Actions needed by the existing workflows, including elastic, density, plastic and thermal properties.
-
-Do not add a large material database or broad material API family now.
-
-Instead, progressively unify the semantic representation into a material definition containing, where applicable:
-
-- material identity
-- provenance/source
-- UnitSystem
-- elastic properties
-- density
-- plasticity
-- thermal properties
-- temperature dependence
-- validity/assumptions
-
-Existing low-level Actions may remain the Abaqus materialization mechanism.
-
-### 4.6 Analysis Step Contract — P1
-
-The repository already supports Static, Explicit Dynamic, Implicit Dynamic, Frequency, Heat Transfer and Coupled Temperature-Displacement procedures.
-
-Do not add Step types merely to increase coverage.
-
-Unify the engineering semantics around:
-
-```
-AnalysisStep
-├── procedure
-├── previous
-├── time
-├── nonlinear settings
-├── increment/control settings
-├── stabilization
-├── amplitude
-├── output profile
-└── solver-specific settings
-```
-
-Existing procedure-specific Actions remain the implementation adapters.
+- Supports `static`, `implicit_dynamic`, `explicit_dynamic`, `heat_transfer`, `frequency`, and `coupled_temp_displacement`.
+- Explicit step propagates `max_inc` → `max_increment`.
+- Heat transfer propagates `steady_state` and `amplitude`.
+- Action parameters preserve `metadata` without semantic loss.
 
 ---
 
@@ -780,31 +673,75 @@ Richardson extrapolation / GCI should remain a verification mechanism, not be pr
 
 ---
 
-## 17. What Must NOT Be Added
+## 18. Real-Machine Validation Phase Execution Plan (The Lower-Half Gate)
 
-Unless a concrete requirement proves otherwise, do not add:
+The project separates the verification and validation boundary into two gates:
 
-- a second Capsule architecture
-- a second EngineeringRun architecture
-- a second Physics Contract architecture
-- a second ODB Lens architecture
-- a second Acceptance layer
-- a second Executor
-- a second Agent orchestrator
-- a second Geometry/Region subsystem
-- a second Unit framework
-- a parallel Material/Step semantic architecture
-- MCP as the core architecture
-- unrestricted automatic model repair
-- a giant copied skill library
-- broad multi-solver expansion before the existing engineering loop is closed
-- large new Abaqus feature families merely to increase feature count
+```
+                        ┌─ Unit Tests: 347/347 PASSED
+                        │
+                        ├─ Golden Matrix: 13/13 VALID & PASS
+Software Contract Gate ─┤
+(CLOSED at 644cad7)     └─ Structural/Consistency Checks: PASS
+                                 │
+                                 ▼
+                     Real-Machine Validation Gate
+                     (Abaqus 2025 Live Execution)
+                                 │
+                 ┌───────────────┼───────────────┐
+                 ▼               ▼               ▼
+           Model/Region        Solver           ODB
+                 │               │               │
+                 └───────────────┼───────────────┘
+                                 ▼
+                         Engineering Evidence
+                                 │
+                                 ▼
+                             Acceptance
+                                 │
+                                 ▼
+                         Engineering Report
+```
 
-Prefer extending existing modules and contracts.
+### 18.1 Target Real-Machine Validation Tiers
+
+1. **Tier 1: Region & Geometry Grounding in Live Abaqus**
+   - Verify `GeometrySelection → RegionResolver → Set/Surface → Native BC/Load → Solver → ODB`.
+   - Test live presence and non-emptiness across Face, Edge, Node, Element, Set, Surface.
+   - Negative live tests: Empty region, non-existent region, entity-type mismatch must fail closed with structured diagnostics.
+   - Prove: `Resolver expression valid ≠ Abaqus region exists and non-empty`.
+
+2. **Tier 2: BC / Load Engineering Equivalence**
+   - Case A: Fixed end + Concentrated force (verify reaction force RF vs applied CF).
+   - Case B: Fixed end + Pressure load (verify integral pressure vs RF).
+   - Case C: Temperature BC (verify thermal gradient and flux).
+   - Case D: Structural conflict (verify preflight blocks before solver submission).
+   - Case E: Rigid-body under-constrained model (verify solver singularity/warning detection).
+
+3. **Tier 3: UnitSystem Physical Invariance**
+   - Build two identical physical problems:
+     - Model 1: `MM_N_MPA` (E = 210000 MPa, L in mm, F in N).
+     - Model 2: `SI` / `M_N_PA` (E = 2.1e11 Pa, L in m, F in N).
+   - Verify: Non-dimensional results and converted physical quantities (stress, strain, displacement) are numerically equivalent within tolerance.
+   - Prove: UnitSystem is a physical invariance contract, not a cosmetic tag.
+
+4. **Tier 4: MaterialDefinition Full-Chain Verification**
+   - Trace `MaterialDefinition` through `to_actions()` → CAE Material → Section → Part → Solver → ODB.
+   - Verify that Young's modulus, Poisson's ratio, density, yield stress, and conductivity are accurately reflected in the input deck and ODB material records.
+
+5. **Tier 5: AnalysisStep Procedure Verification**
+   - Execute minimal live runs across Static, Explicit Dynamic, Implicit Dynamic, Heat Transfer, and Coupled Temp-Displacement.
+   - Verify that `max_increment`, `steady_state`, `amplitude`, and `metadata` correctly control solver behavior and appear in the generated input deck and ODB.
+
+### 18.2 Architectural Freezing Directive
+
+- **No further API proliferation**: Do not add new material, step, or mesh API endpoints unless justified by an unresolvable real-machine blocker.
+- **Focus strictly on evidence**: The remaining goal is closing the loop from Intent to Model to Solver to ODB to Verification to Acceptance to Evidence to Report under live Abaqus 2025.
+- **Extend existing modules only**: Prefer extending existing modules and contracts rather than introducing parallel architectures.
 
 ---
 
-## 18. Implementation Order
+## 19. Implementation Order
 
 The default implementation order is:
 
@@ -865,7 +802,7 @@ The default implementation order is:
 
 ---
 
-## 19. Change-Control Checklist
+## 20. Change-Control Checklist
 
 Before modifying the engineering core, answer all of these:
 
