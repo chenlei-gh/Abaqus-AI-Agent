@@ -108,6 +108,12 @@ CASE_NAME_TO_ID = {
     "fmbd6_flexible_to_flexible_golden_e2e": "fmbd6_flexible_to_flexible",
     "fmbd6golden": "fmbd6_flexible_to_flexible",
     "fmbd6goldenjob": "fmbd6_flexible_to_flexible",
+    # FMBD-7 Dual-Flexible Closed-Loop
+    "fmbd7_dual_flexible_four_bar": "fmbd7_dual_flexible_four_bar",
+    "fmbd7": "fmbd7_dual_flexible_four_bar",
+    "fmbd7_golden_e2e": "fmbd7_dual_flexible_four_bar",
+    "fmbd7golden": "fmbd7_dual_flexible_four_bar",
+    "fmbd7goldenjob": "fmbd7_dual_flexible_four_bar",
     # Explicit Dynamic
     "explicit_dynamic": "explicit_dynamic",
     "explicit_dynamics": "explicit_dynamic",

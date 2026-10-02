@@ -710,3 +710,262 @@ def test_mechanism_graph_flexible_to_flexible_direct_coupling():
     wire_ff = next(a for a in actions if a.action_type == "wire_connector" and a.parameters["name"] == "Conn-J_Arm1_Arm2")
     assert wire_ff.parameters["point1_name"] == "RP_ARM1_TIP"
     assert wire_ff.parameters["point2_name"] == "RP_ARM2_ROOT"
+
+
+def test_fmbd7_dual_flexible_four_bar_closed_loop_compiler_contract():
+    """FMBD-7: Declarative compiler contract test for a dual-flexible closed-loop 4-bar mechanism.
+
+    Topology:
+      Ground (Dual physical anchors @ A=(0,0,10) and D=(200,0,10))
+        |-- Revolute J_Pivot @ (0,0,10) --> Rigid Crank
+        |-- Revolute J_Anchor @ (200,0,10) <-- Flexible Rocker (Closed Loop Return)
+      Rigid Crank
+        |-- Revolute J_Elbow @ (0,100,10) --> Flexible Coupler
+      Flexible Coupler (C3D8R Elastic Continuum, L=200mm)
+        |-- DIRECT Revolute J_Knee @ (200,100,10) --> Flexible Rocker (Flexible-to-Flexible Direct Joint)
+      Flexible Rocker (C3D8R Elastic Continuum, L=100mm)
+        |-- Revolute J_Anchor @ (200,0,10) --> Ground D (Closes the 4-bar kinematic loop)
+
+    Key topological attributes verified:
+      - num_bodies = 4, num_rigid_bodies = 1, num_flexible_bodies = 2
+      - num_joints = 4, closed_loops_count = 1, is_closed_loop = True
+      - num_interfaces = 4 (2 on Coupler, 2 on Rocker)
+      - num_rigid_rigid_joints = 1 (J_Pivot)
+      - num_rigid_flexible_joints = 2 (J_Elbow, J_Anchor)
+      - num_flexible_flexible_joints = 1 (J_Knee)
+      - 100% compiled to AbaqusActions without any external modeling bypass.
+    """
+    from abaqus_ai_agent.planning.mechanism import MechanismGraph, MechanismAnalysisSpec
+
+    m = MechanismGraph("FMBD7_DualFlexibleClosedLoopFourBar")
+
+    # 1. Ground body with dual physical anchors
+    m.add_body("ground", body_type="ground", ref_point_name="RP_GROUND_A", ref_point_coords=(0.0, 0.0, 10.0))
+
+    # 2. Rigid crank (A=(0,0,10) to B=(0,100,10), length=100mm)
+    m.add_body(
+        "crank",
+        body_type="rigid",
+        ref_point_name="RP_CRANK_A",
+        ref_point_coords=(0.0, 0.0, 10.0),
+        tie_regions=["RP_CRANK_B"],
+    )
+
+    # 3. Flexible Coupler (B=(0,100,10) to C=(200,100,10), length=200mm, Aluminum)
+    m.add_body(
+        "flex_coupler",
+        body_type="flexible",
+        part_name="CouplerPart",
+        instance_name="Coupler-1",
+        youngs_modulus=70000.0,
+        poisson_ratio=0.33,
+        density=2.7e-9,
+        mesh_size=10.0,
+        element_code="C3D8R",
+        part_cells_set="Cells",
+    )
+
+    # 4. Flexible Rocker (C=(200,100,10) to D=(200,0,10), length=100mm, Steel/Alloy)
+    m.add_body(
+        "flex_rocker",
+        body_type="flexible",
+        part_name="RockerPart",
+        instance_name="Rocker-1",
+        youngs_modulus=100000.0,
+        poisson_ratio=0.30,
+        density=4.5e-9,
+        mesh_size=10.0,
+        element_code="C3D8R",
+        part_cells_set="Cells",
+    )
+
+    # 5. Flexible Interfaces (Coupling constraints)
+    # Coupler interfaces: Root at B, Tip at C
+    m.add_flexible_interface(
+        name="IFace_Coupler_B",
+        body_name="flex_coupler",
+        interface_region="CouplerRootFace",
+        ref_point_name="RP_COUPLER_B",
+        ref_point_coords=(0.0, 100.0, 10.0),
+        role="revolute",
+        coupling_type="KINEMATIC",
+    )
+    m.add_flexible_interface(
+        name="IFace_Coupler_C",
+        body_name="flex_coupler",
+        interface_region="CouplerTipFace",
+        ref_point_name="RP_COUPLER_C",
+        ref_point_coords=(200.0, 100.0, 10.0),
+        role="revolute",
+        coupling_type="KINEMATIC",
+    )
+
+    # Rocker interfaces: Top at C, Bottom at D
+    m.add_flexible_interface(
+        name="IFace_Rocker_C",
+        body_name="flex_rocker",
+        interface_region="RockerTopFace",
+        ref_point_name="RP_ROCKER_C",
+        ref_point_coords=(200.0, 100.0, 10.0),
+        role="revolute",
+        coupling_type="KINEMATIC",
+    )
+    m.add_flexible_interface(
+        name="IFace_Rocker_D",
+        body_name="flex_rocker",
+        interface_region="RockerBottomFace",
+        ref_point_name="RP_ROCKER_D",
+        ref_point_coords=(200.0, 0.0, 10.0),
+        role="revolute",
+        coupling_type="KINEMATIC",
+    )
+
+    # 6. Four kinematic joints forming the closed loop
+    # J1: Ground A <-> Crank (Rigid-Rigid)
+    m.add_joint(
+        "J_Pivot",
+        joint_type="revolute",
+        body_a="ground",
+        body_b="crank",
+        location=(0.0, 0.0, 10.0),
+        point_b_name="RP_CRANK_A",
+        orientation="Csys_HingeZ",
+    )
+
+    # J2: Crank <-> Coupler (Rigid-Flexible)
+    m.add_joint(
+        "J_Elbow",
+        joint_type="revolute",
+        body_a="crank",
+        body_b="flex_coupler",
+        location=(0.0, 100.0, 10.0),
+        point_a_name="RP_CRANK_B",
+        interface_b_name="IFace_Coupler_B",
+        orientation="Csys_HingeZ",
+    )
+
+    # J3: Coupler <-> Rocker (DIRECT FLEXIBLE-TO-FLEXIBLE JOINT)
+    m.add_joint(
+        "J_Knee",
+        joint_type="revolute",
+        body_a="flex_coupler",
+        body_b="flex_rocker",
+        location=(200.0, 100.0, 10.0),
+        interface_a_name="IFace_Coupler_C",
+        interface_b_name="IFace_Rocker_C",
+        orientation="Csys_HingeZ",
+    )
+
+    # J4: Rocker <-> Ground D (Flexible-Rigid / Closed-Loop Ground Anchor)
+    m.add_joint(
+        "J_Anchor",
+        joint_type="revolute",
+        body_a="flex_rocker",
+        body_b="ground",
+        location=(200.0, 0.0, 10.0),
+        interface_a_name="IFace_Rocker_D",
+        orientation="Csys_HingeZ",
+    )
+
+    # 7. Gravity load
+    m.add_load("Gravity", target_name="assembly", load_type="gravity", vector=(981.0, -9810.0, 0.0))
+
+    # 8. Topological validation audit
+    report = m.validate_topology()
+    assert report.is_valid is True, f"Topology invalid: {report.errors}"
+    assert report.num_bodies == 4
+    assert report.num_rigid_bodies == 1
+    assert report.num_flexible_bodies == 2
+    assert report.num_joints == 4
+    assert report.num_interfaces == 4
+    assert report.closed_loops_count == 1
+    assert report.is_closed_loop is True
+    assert report.num_rigid_rigid_joints == 1
+    assert report.num_rigid_flexible_joints == 2
+    assert report.num_flexible_flexible_joints == 1
+
+    # 9. Full-stack compilation to Abaqus actions
+    analysis = MechanismAnalysisSpec(
+        step_name="Step-FMBD7",
+        job_name="FMBD7GoldenJob",
+        time_period=0.5,
+        initial_inc=0.005,
+        max_inc=0.01,
+        nlgeom=True,
+        application="MODERATE_DISSIPATION",
+        nohaf=True,
+    )
+    actions = m.compile_to_actions("FMBD7Model", analysis=analysis)
+
+    action_types = [a.action_type for a in actions]
+    assert action_types.count("material_elastic") == 2
+    assert action_types.count("solid_section") == 2
+    assert action_types.count("section_assignment") == 2
+    assert action_types.count("seed_part") == 2
+    assert action_types.count("element_type") == 2
+    assert action_types.count("generate_mesh") == 2
+
+    # Verify reference points created
+    rp_names = [a.parameters["name"] for a in actions if a.action_type == "reference_point"]
+    assert "RP_GROUND_J_Pivot" in rp_names
+    assert "RP_GROUND_J_Anchor" in rp_names
+    assert "RP_CRANK_A" in rp_names
+    assert "RP_CRANK_B" in rp_names
+    assert "RP_COUPLER_B" in rp_names
+    assert "RP_COUPLER_C" in rp_names
+    assert "RP_ROCKER_C" in rp_names
+    assert "RP_ROCKER_D" in rp_names
+
+    # Verify RigidBody constraint on Crank
+    rb_actions = [a for a in actions if a.action_type == "rigid_body"]
+    assert len(rb_actions) == 1
+    assert rb_actions[0].parameters["name"] == "RB-crank"
+    assert "RP_CRANK_A" in rb_actions[0].parameters["ref_point_expression"]
+    assert "RP_CRANK_B" in rb_actions[0].parameters["tie_region"]
+
+    # Verify 4 Coupling constraints on 2 flexible bodies
+    coupling_actions = [a for a in actions if a.action_type == "coupling_constraint"]
+    assert len(coupling_actions) == 4
+    coupling_names = {a.parameters["name"] for a in coupling_actions}
+    assert coupling_names == {"IFace_Coupler_B", "IFace_Coupler_C", "IFace_Rocker_C", "IFace_Rocker_D"}
+
+    # Verify 4 Wire Connectors
+    wire_actions = [a for a in actions if a.action_type == "wire_connector"]
+    assert len(wire_actions) == 4
+    wires_by_name = {a.parameters["name"]: a for a in wire_actions}
+
+    # Verify J_Pivot (Ground A <-> Crank)
+    assert wires_by_name["Conn-J_Pivot"].parameters["point1_name"] == "RP_GROUND_J_Pivot"
+    assert wires_by_name["Conn-J_Pivot"].parameters["point2_name"] == "RP_CRANK_A"
+
+    # Verify J_Elbow (Crank <-> Coupler)
+    assert wires_by_name["Conn-J_Elbow"].parameters["point1_name"] == "RP_CRANK_B"
+    assert wires_by_name["Conn-J_Elbow"].parameters["point2_name"] == "RP_COUPLER_B"
+
+    # Verify J_Knee (DIRECT FLEXIBLE-TO-FLEXIBLE)
+    assert wires_by_name["Conn-J_Knee"].parameters["point1_name"] == "RP_COUPLER_C"
+    assert wires_by_name["Conn-J_Knee"].parameters["point2_name"] == "RP_ROCKER_C"
+
+    # Verify J_Anchor (Rocker <-> Ground D closed loop)
+    assert wires_by_name["Conn-J_Anchor"].parameters["point1_name"] == "RP_ROCKER_D"
+    assert wires_by_name["Conn-J_Anchor"].parameters["point2_name"] == "RP_GROUND_J_Anchor"
+
+    # Verify Step and Job
+    assert "implicit_dynamic_step" in action_types
+    assert "create_job" in action_types
+
+    # Topological Ordering Invariant Checks:
+    idx_first_sec = min(i for i, a in enumerate(actions) if a.action_type in ("solid_section", "section_assignment"))
+    idx_first_mesh = min(i for i, a in enumerate(actions) if a.action_type in ("seed_part", "generate_mesh"))
+    idx_first_rp = min(i for i, a in enumerate(actions) if a.action_type == "reference_point")
+    idx_first_coupling = min(i for i, a in enumerate(actions) if a.action_type == "coupling_constraint")
+    idx_first_wire = min(i for i, a in enumerate(actions) if a.action_type == "wire_connector")
+    idx_step = actions.index(next(a for a in actions if a.action_type == "implicit_dynamic_step"))
+    idx_job = actions.index(next(a for a in actions if a.action_type == "create_job"))
+
+    assert idx_first_sec < idx_first_mesh, "Materials/Sections must precede Meshing"
+    assert idx_first_mesh < idx_first_coupling, "Meshing must precede Continuum Couplings"
+    assert idx_first_rp < idx_first_coupling, "Reference points must precede Couplings"
+    assert idx_first_coupling < idx_first_wire, "Couplings must precede Wire Connectors"
+    assert idx_first_wire < idx_step, "Connector elements must precede Step creation"
+    assert idx_step < idx_job, "Step must precede Job creation"

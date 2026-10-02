@@ -219,6 +219,10 @@ class MechanismTopologyReport:
     def flexible_flexible_joints_count(self) -> int:
         return self.num_flexible_flexible_joints
 
+    @property
+    def is_closed_loop(self) -> bool:
+        return self.closed_loops_count > 0
+
 
 # Constraint DOF reduction per joint type in 3D (Spatial) and 2D (Planar)
 _JOINT_CONSTRAINTS_3D = {
