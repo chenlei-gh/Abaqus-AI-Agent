@@ -37,7 +37,7 @@ class B28HarnessResult:
 
 
 def build_b28_smoke_script(job_name="AIAgent_B28Smoke", odb_path=None):
-    """Build a deterministic Abaqus Python 2.7 smoke script.
+    """Build a deterministic Abaqus Python 2.7-compatible smoke script.
 
     The model is deliberately tiny: one 3D deformable brick, one static step,
     one encastre face, and one concentrated load. The harness is an execution
@@ -49,6 +49,7 @@ from abaqus import *
 from abaqusConstants import *
 import os
 import json
+import regionToolset
 
 JOB = %(job)r
 ODB = %(odb)r
