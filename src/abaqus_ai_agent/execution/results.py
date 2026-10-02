@@ -114,15 +114,18 @@ print(names[-1])
 odb.close()
 """ % path
     raw = executor.execute(code)
-    payload = _payload(raw)
-    if isinstance(payload, dict):
+    if isinstance(raw, str) and raw.strip():
+        return raw.strip().splitlines()[-1].strip()
+    if isinstance(raw, dict):
         for key in ("step", "stdout", "output"):
-            value = payload.get(key)
+            value = raw.get(key)
             if isinstance(value, str) and value.strip():
                 return value.strip().splitlines()[-1].strip()
-    text = str(raw).strip()
-    if text:
-        return text.splitlines()[-1].strip()
+        payload = _payload(raw)
+        if isinstance(payload, dict):
+            value = payload.get("step")
+            if isinstance(value, str) and value.strip():
+                return value.strip().splitlines()[-1].strip()
     raise ValueError("unable to resolve result step")
 
 
