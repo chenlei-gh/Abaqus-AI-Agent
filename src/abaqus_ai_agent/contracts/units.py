@@ -118,6 +118,38 @@ def validate_same_dimension(units):
     values = tuple(str(unit) for unit in units if unit not in (None, ""))
     if not values:
         return None
+    dimensions = tuple(unit_dimension(item) for item in values)
+    if any(item != dimensions[0] for item in dimensions):
+        raise ValueError("inconsistent unit dimensions: %s" % (values,))
+    return dimensions[0]
+
+
+def validate_action_quantities(action_type: str, parameters: dict, unit_system: Optional[str] = None) -> bool:
+    """Validate dimensional consistency and non-negativity of quantities within an action."""
+    params = parameters or {}
+    if action_type == "material_elastic":
+        ym = params.get("youngs_modulus")
+        if ym is not None and float(ym) <= 0:
+            raise ValueError("Young's modulus must be positive in %s" % action_type)
+        if "unit" in params:
+            validate_quantity_unit("stress", params["unit"], unit_system)
+    elif action_type == "material_density":
+        rho = params.get("density")
+        if rho is not None and float(rho) <= 0:
+            raise ValueError("density must be positive in %s" % action_type)
+        if "unit" in params:
+            validate_quantity_unit("mass", params["unit"], unit_system)
+    elif action_type in ("static_step", "implicit_dynamic_step", "explicit_dynamic_step"):
+        tp = params.get("time_period")
+        if tp is not None and float(tp) <= 0:
+            raise ValueError("time_period must be positive in %s" % action_type)
+        if "unit" in params:
+            validate_quantity_unit("time", params["unit"], unit_system)
+    elif action_type in ("concentrated_force", "pressure_load"):
+        if "unit" in params:
+            q = "force" if action_type == "concentrated_force" else "stress"
+            validate_quantity_unit(q, params["unit"], unit_system)
+    return True
     dimensions = tuple(unit_dimension(unit) for unit in values)
     if len(set(dimensions)) != 1:
         raise ValueError("incompatible dimensions: %s" % (", ".join(dimensions)))

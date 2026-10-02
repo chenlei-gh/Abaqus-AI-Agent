@@ -843,9 +843,9 @@ The default implementation order is:
 
 ### Phase F — Unit / Material / Step semantic strengthening
 
-- [ ] Propagate UnitSystem through foundational Actions
-- [ ] Strengthen MaterialDefinition without creating a second material architecture
-- [ ] Strengthen AnalysisStep without creating a second step architecture
+- [x] Propagate UnitSystem through foundational Actions
+- [x] Strengthen MaterialDefinition without creating a second material architecture
+- [x] Strengthen AnalysisStep without creating a second step architecture
 
 ### Phase G — Real-machine peripheral closure
 

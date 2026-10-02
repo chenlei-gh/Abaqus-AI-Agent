@@ -23,7 +23,10 @@ from .contracts.uncertainty import UncertaintyParameter, UncertaintyScenario, Un
 from .contracts.correction import RepairCandidate, CorrectionAttempt, CorrectionPolicy
 from .contracts.benchmarks import BenchmarkCase, BenchmarkResult
 from .contracts.contact import ContactDiagnostic, ContactDiagnosticReport
-from .contracts.numerical import NumericalVerificationResult
+from .contracts.geometry import RegionReference, resolve_region
+from .contracts.material import MaterialDefinition, ElasticProperties, PlasticProperties, ThermalProperties
+from .contracts.step import AnalysisStep
+from .analysis_run_diff import diff_analysis_runs, AnalysisRunDiff
 from .execution.analysis_run import AnalysisRun, AnalysisRunState, AnalysisRunner
 from .execution.artifacts import JobArtifact, JobArtifacts
 from .execution.batch import BatchExecutor, BatchResult

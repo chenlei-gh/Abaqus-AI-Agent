@@ -13,3 +13,10 @@ from .contact import (
 )
 from .numerical import NumericalVerificationResult
 from .geometry import RegionReference, resolve_region
+from .material import (
+    MaterialDefinition,
+    ElasticProperties,
+    PlasticProperties,
+    ThermalProperties,
+)
+from .step import AnalysisStep

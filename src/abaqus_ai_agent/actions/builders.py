@@ -34,6 +34,8 @@ def dynamic_explicit_step(model, name="Step-1", previous="Initial", time_period=
                    time_period=time_period, nlgeom=nlgeom, max_increment=max_increment,
                    improved_dt_method=improved_dt_method)
 
+explicit_dynamic_step = dynamic_explicit_step
+
 def implicit_dynamic_step(model, name="Step-1", previous="Initial", time_period=1.0,
                           nlgeom=False, max_num_inc=100, initial_inc=None,
                           min_inc=None, max_inc=None, solution_technique="FULL_NEWTON",
