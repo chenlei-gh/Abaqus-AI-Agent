@@ -81,9 +81,14 @@ def inspect_case_evidence_status(case: GoldenCaseDefinition, workdir: Path) -> T
         errs = validate_golden_evidence_dict(envelope.to_dict())
         if errs:
             return "INVALID_SCHEMA", path, "; ".join(errs)
-        if envelope.passed:
-            return "PASS", path, None
-        return "FAIL", path, "Acceptance passed is False"
+        if not envelope.passed:
+            return "FAIL", path, "Acceptance passed is False"
+        if envelope.solver_status != "completed":
+            return "INVALID_SCHEMA", path, f"Acceptance passed but solver_status is '{envelope.solver_status}'"
+        process_succeeded = envelope.runtime.get("process_succeeded")
+        if process_succeeded is not True:
+            return "INVALID_SCHEMA", path, "Acceptance passed but runtime.process_succeeded is not True"
+        return "PASS", path, None
     except Exception as exc:
         return "INVALID_SCHEMA", path, str(exc)
 
