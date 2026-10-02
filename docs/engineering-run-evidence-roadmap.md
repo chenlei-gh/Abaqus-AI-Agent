@@ -831,9 +831,9 @@ The default implementation order is:
 
 ### Phase D — Acceptance
 
-- [ ] Ensure missing evidence blocks acceptance
-- [ ] Ensure all verification gates are deterministic
-- [ ] Preserve PASS/WARNING/FAIL/BLOCKED distinctions
+- [x] Ensure missing evidence blocks acceptance
+- [x] Ensure all verification gates are deterministic
+- [x] Preserve PASS/WARNING/FAIL/BLOCKED distinctions
 
 ### Phase E — Engineering comparison/diagnosis
 
