@@ -18,7 +18,17 @@ def criteria_from_postprocess_profile(profile):
     """Convert deterministic post-processing requirements into ODB output criteria."""
     criteria = []
     for key in getattr(profile, "required_results", ()):
-        criteria.append({"name": key, "value_key": key})
+        if key == "buckling_factor":
+            criteria.append({
+                "name": key,
+                "value_key": key,
+                "result": {
+                    "output_kind": "frame_value",
+                    "aggregation": "last",
+                },
+            })
+        else:
+            criteria.append({"name": key, "value_key": key})
     for variable in getattr(profile, "history_variables", ()):
         criteria.append({
             "name": variable,
