@@ -149,6 +149,57 @@ def rigid_body(model, name, ref_point_expression, body_expression=None, tie_regi
     return _action("rigid_body", model, **params)
 
 
+def coupling_constraint(
+    model,
+    name,
+    control_point=None,
+    surface=None,
+    control_point_name=None,
+    surface_name=None,
+    control_point_expression=None,
+    surface_expression=None,
+    coupling_type="KINEMATIC",
+    influence_radius=None,
+    u1=True,
+    u2=True,
+    u3=True,
+    ur1=True,
+    ur2=True,
+    ur3=True,
+    **kwargs,
+):
+    params = {
+        "name": name,
+        "coupling_type": str(coupling_type).upper(),
+        "u1": bool(u1),
+        "u2": bool(u2),
+        "u3": bool(u3),
+        "ur1": bool(ur1),
+        "ur2": bool(ur2),
+        "ur3": bool(ur3),
+    }
+    cp_name = control_point_name or (control_point if isinstance(control_point, str) else None)
+    if cp_name:
+        params["control_point_name"] = cp_name
+    elif control_point_expression:
+        params["control_point_expression"] = control_point_expression
+    elif control_point is not None:
+        params["control_point_expression"] = control_point
+
+    surf_name = surface_name or (surface if isinstance(surface, str) else None)
+    if surf_name:
+        params["surface_name"] = surf_name
+    elif surface_expression:
+        params["surface_expression"] = surface_expression
+    elif surface is not None:
+        params["surface_expression"] = surface
+
+    if influence_radius is not None:
+        params["influence_radius"] = float(influence_radius)
+    params.update(kwargs)
+    return _action("coupling_constraint", model, **params)
+
+
 def connector_section(
     model,
     name,

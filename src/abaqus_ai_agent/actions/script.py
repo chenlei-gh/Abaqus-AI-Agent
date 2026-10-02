@@ -238,7 +238,78 @@ def action_to_script(action):
         return _connector_section_script(m, p)
     if k == "wire_connector":
         return _wire_connector_script(m, p)
+    if k == "coupling_constraint":
+        return _coupling_constraint_script(m, p)
     raise ValueError("unsupported action type: %s" % k)
+
+
+def _coupling_constraint_script(m, p):
+    name = p["name"]
+    ctype = p.get("coupling_type", "KINEMATIC").upper()
+    if ctype in ("DISTRIBUTING", "CONTINUUM"):
+        abaqus_ctype = "CONTINUUM"
+    elif ctype == "STRUCTURAL":
+        abaqus_ctype = "STRUCTURAL"
+    else:
+        abaqus_ctype = "KINEMATIC"
+
+    if p.get("control_point_name"):
+        cp_code = "_resolve_pt_region(a, %s)" % _q(p["control_point_name"])
+    elif p.get("control_point_expression"):
+        cp_code = str(p["control_point_expression"])
+    else:
+        raise ValueError("control_point_name or control_point_expression required for coupling_constraint")
+
+    if p.get("surface_name"):
+        surf_code = "_resolve_surf_region(a, %s)" % _q(p["surface_name"])
+    elif p.get("surface_expression"):
+        surf_code = str(p["surface_expression"])
+    else:
+        raise ValueError("surface_name or surface_expression required for coupling_constraint")
+
+    dofs = []
+    for dof in ("u1", "u2", "u3", "ur1", "ur2", "ur3"):
+        val = "ON" if p.get(dof, True) else "OFF"
+        dofs.append("%s=%s" % (dof, val))
+    dof_args = ", ".join(dofs)
+
+    radius_arg = ""
+    if p.get("influence_radius") is not None:
+        radius_arg = ", influenceRadius=%r" % p["influence_radius"]
+
+    return (
+        "from abaqusConstants import *\nimport regionToolset\n"
+        "model = mdb.models[%s]\n"
+        "a = model.rootAssembly\n"
+        "def _resolve_pt_region(assy, target):\n"
+        "    if isinstance(target, str):\n"
+        "        if target in assy.sets:\n"
+        "            return assy.sets[target]\n"
+        "        if hasattr(assy, 'referencePoints'):\n"
+        "            for k, rp in assy.referencePoints.items():\n"
+        "                if str(k) == target or getattr(rp, 'name', None) == target:\n"
+        "                    return regionToolset.Region(referencePoints=(rp,))\n"
+        "    return target\n"
+        "def _resolve_surf_region(assy, target):\n"
+        "    if isinstance(target, str):\n"
+        "        if hasattr(assy, 'surfaces') and target in assy.surfaces:\n"
+        "            return assy.surfaces[target]\n"
+        "        if target in assy.sets:\n"
+        "            return assy.sets[target]\n"
+        "    return target\n"
+        "_cp = %s\n"
+        "_surf = %s\n"
+        "model.Coupling(name=%s, controlPoint=_cp, surface=_surf, couplingType=%s, %s%s)"
+        % (
+            _q(m),
+            cp_code,
+            surf_code,
+            _q(name),
+            abaqus_ctype,
+            dof_args,
+            radius_arg,
+        )
+    )
 
 
 def _connector_section_script(m, p):

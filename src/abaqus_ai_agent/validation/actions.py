@@ -203,6 +203,20 @@ def validate_action(action):
         has_p2 = bool(action.parameters.get("point2_name") or action.parameters.get("point2_expression"))
         if not has_p2:
             raise ValueError("point2_name or point2_expression is required for wire_connector")
+    if action.action_type == "coupling_constraint":
+        if not action.parameters.get("name"):
+            raise ValueError("name is required for coupling_constraint")
+        has_cp = bool(action.parameters.get("control_point_name") or action.parameters.get("control_point_expression"))
+        if not has_cp:
+            raise ValueError("control_point_name or control_point_expression is required for coupling_constraint")
+        has_surf = bool(action.parameters.get("surface_name") or action.parameters.get("surface_expression"))
+        if not has_surf:
+            raise ValueError("surface_name or surface_expression is required for coupling_constraint")
+        ctype = str(action.parameters.get("coupling_type", "KINEMATIC")).upper()
+        if ctype not in ("KINEMATIC", "DISTRIBUTING", "CONTINUUM", "STRUCTURAL"):
+            raise ValueError("unsupported coupling_type for coupling_constraint: %s" % ctype)
+        if action.parameters.get("influence_radius") is not None and action.parameters["influence_radius"] <= 0:
+            raise ValueError("influence_radius must be positive")
     if action.action_type == "instance_linear_pattern":
         if not action.parameters.get("instances"):
             raise ValueError("instances are required")
