@@ -439,7 +439,7 @@ analysis_spec = MechanismAnalysisSpec(
     max_inc=max_inc,
     nlgeom=True,
     field_variables=('U', 'UR', 'V', 'VR', 'S', 'RF', 'RM'),
-    history_variables=('ALLIE', 'ALLKE', 'ALLWK', 'ALLSE', 'ETOTAL'),
+    history_variables=('ALLIE', 'ALLKE', 'ALLWK', 'ALLSE', 'ETOTAL', 'ALLAE', 'ALLVD'),
 )
 
 # Compile to strictly ordered Actions
@@ -566,13 +566,15 @@ except Exception:
     pass
 
 # 5. Whole-Model Energy History & Algorithmic Numerical Damping
-energy_data = extract_history(executor, run.odb_path, step_name, 'Assembly ASSEMBLY', ('ALLIE', 'ALLKE', 'ALLWK', 'ALLSE', 'ETOTAL'))
+energy_data = extract_history(executor, run.odb_path, step_name, 'Assembly ASSEMBLY', ('ALLIE', 'ALLKE', 'ALLWK', 'ALLSE', 'ETOTAL', 'ALLAE', 'ALLVD'))
 vars_dict = energy_data.get('variables', {})
 allie_series = vars_dict.get('ALLIE', [])
 allke_series = vars_dict.get('ALLKE', [])
 allwk_series = vars_dict.get('ALLWK', [])
 allse_series = vars_dict.get('ALLSE', [])
 etotal_series = vars_dict.get('ETOTAL', [])
+allae_series = vars_dict.get('ALLAE', [])
+allvd_series = vars_dict.get('ALLVD', [])
 
 peak_ke = max([val for _, val in allke_series] or [0.0])
 peak_wk = max([val for _, val in allwk_series] or [0.0])
@@ -580,14 +582,18 @@ peak_se = max([val for _, val in allse_series] or [0.0])
 peak_ie = max([val for _, val in allie_series] or [1.0])
 max_total_energy = max([val for _, val in etotal_series] or [0.0])
 min_total_energy = min([val for _, val in etotal_series] or [0.0])
+max_ae = max([val for _, val in allae_series] or [0.0])
+max_vd = max([val for _, val in allvd_series] or [0.0])
 
 ref_energy = max(peak_wk, peak_ke, 1e-6)
-# In Abaqus/Standard implicit dynamics with MODERATE_DISSIPATION (HHT alpha=-0.41421),
-# the algorithmic numerical damping energy dissipated is -ETOTAL(t) = ALLWK(t) - (ALLKE(t) + ALLIE(t)).
+# In Abaqus/Standard implicit dynamics under MODERATE_DISSIPATION (HHT alpha=-0.41421),
+# with ALLVD=0 and ALLFD=0, Abaqus native ETOTAL(t) strictly equals ALLKE(t) + ALLIE(t) - ALLWK(t).
+# The algorithmic numerical damping energy proxy is -ETOTAL(t) = ALLWK(t) - (ALLKE(t) + ALLIE(t)).
 max_numerical_dissipation = abs(min_total_energy)
 algorithmic_damping_ratio = max_numerical_dissipation / ref_energy
 # Internal energy breakdown: ratio of recoverable elastic strain energy in total internal energy
 elastic_strain_in_ie_ratio = peak_se / max(peak_ie, 1e-6)
+ae_to_se_ratio = max_ae / max(peak_se, 1e-6)
 
 # 6. Formal Dual Acceptance Evaluation
 criteria_nominal = (
@@ -676,12 +682,15 @@ report = {
         'peak_strain_energy_mj': float(peak_se),
         'min_total_energy_mj': float(min_total_energy),
         'max_numerical_dissipation_mj': float(max_numerical_dissipation),
+        'max_artificial_energy_allae_mj': float(max_ae),
+        'max_viscous_dissipation_allvd_mj': float(max_vd),
+        'artificial_to_strain_energy_ratio': float(ae_to_se_ratio),
         'elastic_strain_ratio_in_ie': float(elastic_strain_in_ie_ratio),
         'algorithmic_damping_dissipation_ratio': float(algorithmic_damping_ratio),
         # Backward-compatible keys
         'strain_energy_ratio': float(elastic_strain_in_ie_ratio),
         'energy_dissipation_ratio': float(algorithmic_damping_ratio),
-        'energy_breakdown_note': 'Rigid-body kinematics dominate kinetic energy (~708.8 mJ); flexible rod participates in linear elastic strain energy (~0.011 mJ); internal energy is 99.61%% elastic strain energy without plastic dissipation; algorithmic numerical damping absorbs ~312.1 mJ (40.47%% of peak external work)',
+        'energy_breakdown_note': 'Rigid-body kinematics dominate kinetic energy (~708.8 mJ); flexible rod participates in linear elastic strain energy (~0.011 mJ); internal energy is 99.61%% elastic strain energy without plastic dissipation; C3D8R artificial hourglass energy is negligible (ALLAE=4.34e-5 mJ, ALLAE/ALLSE=0.39%%); viscous dissipation is zero (ALLVD=0.0 mJ); algorithmic numerical damping absorbs ~312.1 mJ (40.47%% of peak external work)',
         'num_frames': len(time_history),
         'total_time_s': float(time_history[-1]) if time_history else 0.0,
     },
