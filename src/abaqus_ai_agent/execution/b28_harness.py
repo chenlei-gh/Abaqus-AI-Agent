@@ -70,10 +70,19 @@ try:
     part.BaseSolidExtrude(sketch=sketch, depth=1.0)
     del model.sketches["__profile__"]
 
+    material = model.Material(name="Material-1")
+    material.Elastic(table=((210000.0, 0.3),))
+    model.HomogeneousSolidSection(name="Section-1", material="Material-1", thickness=None)
+    section_region = regionToolset.Region(cells=part.cells)
+    part.SectionAssignment(region=section_region, sectionName="Section-1")
+
     assembly = model.rootAssembly
     instance = assembly.Instance(name="Block-1", part=part, dependent=ON)
 
     model.StaticStep(name="Step-1", previous="Initial")
+    if "F-Output-1" in model.fieldOutputRequests:
+        model.fieldOutputRequests["F-Output-1"].setValues(variables=("S", "U", "RF"))
+
     region = regionToolset.Region(faces=instance.faces.findAt(((0.0, 0.5, 0.5),)))
     model.EncastreBC(name="BC-1", createStepName="Initial", region=region)
 
