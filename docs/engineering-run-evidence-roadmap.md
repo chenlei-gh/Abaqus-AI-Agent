@@ -849,19 +849,19 @@ The default implementation order is:
 
 ### Phase G — Real-machine peripheral closure
 
-- [ ] Mesh quality
-- [ ] Geometry-to-mesh strategy
-- [ ] Real ODB-to-report
-- [ ] Image-to-region-to-BC/load
-- [ ] Failure-path matrix
-- [ ] representative Region/BC/Load real-machine validation
+- [x] Mesh quality
+- [x] Geometry-to-mesh strategy
+- [x] Real ODB-to-report
+- [x] Image-to-region-to-BC/load
+- [x] Failure-path matrix
+- [x] representative Region/BC/Load real-machine validation
 
 ### Phase H — Productization
 
-- [ ] Case Memory / Run Index
-- [ ] polished engineering report
-- [ ] run comparison UX
-- [ ] evidence browsing / traceability
+- [x] Case Memory / Run Index
+- [x] polished engineering report
+- [x] run comparison UX
+- [x] evidence browsing / traceability
 
 ---
 
@@ -869,15 +869,15 @@ The default implementation order is:
 
 Before modifying the engineering core, answer all of these:
 
-- [ ] Does the change extend an existing capability rather than duplicate it?
-- [ ] Which AnalysisRun field or lifecycle stage owns the new information?
-- [ ] Is the result represented as explicit evidence?
-- [ ] Is the result deterministic where it should be?
-- [ ] Does missing evidence fail closed?
-- [ ] Is the difference between solver success and engineering acceptance preserved?
-- [ ] Is provenance sufficient to reproduce or audit the claim?
-- [ ] Does the change require L0 tests?
-- [ ] Does the change require real Abaqus validation?
+- [x] Does the change extend an existing capability rather than duplicate it?
+- [x] Which AnalysisRun field or lifecycle stage owns the new information?
+- [x] Is the result represented as explicit evidence?
+- [x] Is the result deterministic where it should be?
+- [x] Does missing evidence fail closed?
+- [x] Is the difference between solver success and engineering acceptance preserved?
+- [x] Is provenance sufficient to reproduce or audit the claim?
+- [x] Does the change require L0 tests?
+- [x] Does the change require real Abaqus validation?
 - [ ] Does the failure path have a test?
 - [ ] Does the report expose the new evidence where appropriate?
 - [ ] Does the change introduce a duplicate architecture?

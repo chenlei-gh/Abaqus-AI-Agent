@@ -27,6 +27,7 @@ from .contracts.geometry import RegionReference, resolve_region
 from .contracts.material import MaterialDefinition, ElasticProperties, PlasticProperties, ThermalProperties
 from .contracts.step import AnalysisStep
 from .analysis_run_diff import diff_analysis_runs, AnalysisRunDiff
+from .run_index import RunIndex
 from .execution.analysis_run import AnalysisRun, AnalysisRunState, AnalysisRunner
 from .execution.artifacts import JobArtifact, JobArtifacts
 from .execution.batch import BatchExecutor, BatchResult

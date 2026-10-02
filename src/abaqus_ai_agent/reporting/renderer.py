@@ -39,6 +39,17 @@ def render_html(report):
     figures = "".join("<figure><img src=\"%s\" alt=\"%s\" style=\"max-width:100%%\"><figcaption>%s</figcaption></figure>" % (html.escape(f.path, quote=True), html.escape(f.caption or f.kind, quote=True), html.escape(f.caption or f.kind)) for f in report.figures)
     return "<!doctype html><html><head><meta charset='utf-8'><title>%s</title></head><body><pre>%s</pre>%s</body></html>" % (html.escape(report.title), body, figures)
 
+def render_analysis_report(run, title=None, objective=""):
+    """Render markdown and html deliverables directly from an AnalysisRun."""
+    from ..contracts.report import EngineeringReportData
+
+    report = EngineeringReportData.from_analysis(run, title=title, objective=objective)
+    return {
+        "report_data": report,
+        "markdown": render_markdown(report),
+        "html": render_html(report),
+    }
+
 def render_pdf(report, output_path):
     try:
         from reportlab.lib.pagesizes import A4
