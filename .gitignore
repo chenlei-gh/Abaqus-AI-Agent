@@ -12,6 +12,7 @@ build/
 
 # Local licensed-Abaqus runtime evidence
 machine_validation/
+legacy_job_artifacts/
 *.odb
 *.sta
 *.msg

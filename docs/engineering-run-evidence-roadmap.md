@@ -784,14 +784,13 @@ The default implementation order is:
 - [x] Strengthen MaterialDefinition without creating a second material architecture
 - [x] Strengthen AnalysisStep without creating a second step architecture
 
-### Phase G — Real-machine peripheral closure
+### Phase G — Real-Machine Live Validation Matrix (Executing Tier 1 ~ Tier 5)
 
-- [x] Mesh quality
-- [x] Geometry-to-mesh strategy
-- [x] Real ODB-to-report
-- [x] Image-to-region-to-BC/load
-- [x] Failure-path matrix
-- [x] representative Region/BC/Load real-machine validation
+- [x] Tier 1: Region & Geometry Grounding in Live Abaqus (Face/Edge/Node/Set/Surface live presence & fail-closed)
+- [x] Tier 2: BC / Load Engineering Equivalence (RF vs CF/Pressure balance, Thermal gradient, structural conflict/singularity)
+- [x] Tier 3: UnitSystem Physical Invariance (MM_N_MPA vs SI M_N_PA live numerical equivalence)
+- [x] Tier 4: MaterialDefinition Full-Chain Verification (elastic, plastic, thermal properties in INP and ODB)
+- [x] Tier 5: AnalysisStep Procedure Verification (max_increment, steady_state, amplitude solver control)
 
 ### Phase H — Productization
 
