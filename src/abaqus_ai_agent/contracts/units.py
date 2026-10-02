@@ -14,6 +14,10 @@ UNIT_SYSTEMS = {
         "length": "m", "force": "N", "stress": "Pa", "mass": "kg",
         "time": "s", "temperature": "K", "energy": "J", "frequency": "Hz",
     },
+    "SI_MM": {
+        "length": "mm", "force": "N", "stress": "MPa", "mass": "tonne",
+        "time": "s", "temperature": "K", "energy": "N*mm", "frequency": "Hz",
+    },
 }
 
 UNIT_DIMENSIONS = {

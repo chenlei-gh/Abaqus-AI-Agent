@@ -44,24 +44,34 @@ def criteria_from_postprocess_profile(profile):
     return tuple(criteria)
 
 
-def plan_outputs(criteria=(), outputs=(), postprocess_profile=None):
+def plan_outputs(criteria=(), outputs=(), postprocess_profile=None, requirements=()):
     """Derive the minimum deterministic output-variable plan.
 
-    Explicit user outputs are preserved; criterion-driven variables are added
-    rather than silently replacing them.
+    Direct ResultRequirements or criterion-driven requirements directly drive
+    the field and history output planning. Explicit user outputs are preserved
+    and added rather than silently replacing them.
 
     History outputs are grouped by step and region expression so requirements
     from different analysis steps cannot be silently emitted into one request.
     """
+    merged_requirements = list(requirements or ())
     if postprocess_profile is not None:
         profile_criteria = criteria_from_postprocess_profile(postprocess_profile)
         existing_keys = {c.get("value_key") for c in criteria or () if isinstance(c, dict)}
         criteria = tuple(criteria or ()) + tuple(c for c in profile_criteria if c.get("value_key") not in existing_keys)
-    requirements = requirements_from_criteria(criteria)
-    fields = set(required_field_variables(requirements))
+    if criteria:
+        derived = requirements_from_criteria(criteria)
+        seen_keys = {getattr(r, "value_key", None) for r in merged_requirements}
+        for req in derived:
+            if getattr(req, "value_key", None) not in seen_keys:
+                merged_requirements.append(req)
+                seen_keys.add(getattr(req, "value_key", None))
+
+    requirements_tuple = tuple(merged_requirements)
+    fields = set(required_field_variables(requirements_tuple))
     history_requirements = tuple(
-        r for r in requirements
-        if getattr(r, "output_kind", None) == "history" and r.history_variable
+        r for r in requirements_tuple
+        if getattr(r, "output_kind", None) == "history" and getattr(r, "history_variable", None)
     )
     histories = set(r.history_variable for r in history_requirements)
 
@@ -98,7 +108,7 @@ def plan_outputs(criteria=(), outputs=(), postprocess_profile=None):
 
     return OutputPlan(
         tuple(sorted(fields)), tuple(sorted(histories)), history_step,
-        history_region_expression, requirements, history_requests
+        history_region_expression, requirements_tuple, history_requests
     )
 
 

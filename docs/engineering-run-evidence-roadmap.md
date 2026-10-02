@@ -824,10 +824,10 @@ The default implementation order is:
 
 ### Phase C — Result semantics
 
-- [ ] Complete declarative ResultRequirement
-- [ ] Ensure output planning is driven by result requirements
-- [ ] Normalize EngineeringMetric
-- [ ] Ensure metrics are traceable to ODB evidence
+- [x] Complete declarative ResultRequirement
+- [x] Ensure output planning is driven by result requirements
+- [x] Normalize EngineeringMetric
+- [x] Ensure metrics are traceable to ODB evidence
 
 ### Phase D — Acceptance
 

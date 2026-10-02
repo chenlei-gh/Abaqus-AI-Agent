@@ -23,17 +23,53 @@ class ResultRequirement:
     unit: str = ""
     output_kind: str = "field"
     quantity: Optional[str] = None
+    source: str = "odb"
+    required: bool = True
+    reducer: Optional[str] = None
     metadata: Dict[str, Any] = dataclass_field(default_factory=dict)
 
     def __post_init__(self):
-        if self.aggregation not in ("max", "min", "average", "last"):
-            raise ValueError("unsupported aggregation: %s" % self.aggregation)
+        # Normalize reducer / aggregation alias
+        effective_agg = (self.reducer or self.aggregation or "max").lower()
+        if effective_agg == "mean":
+            effective_agg = "average"
+        if effective_agg not in ("max", "min", "average", "last", "sum", "first"):
+            raise ValueError("unsupported aggregation/reducer: %s" % effective_agg)
+        if effective_agg != self.aggregation:
+            object.__setattr__(self, "aggregation", effective_agg)
+        if self.reducer is None or self.reducer != effective_agg:
+            object.__setattr__(self, "reducer", effective_agg)
+
         if self.output_kind not in ("field", "history", "frame_value"):
             raise ValueError("unsupported output_kind: %s" % self.output_kind)
         if self.output_kind == "field" and not self.field:
             raise ValueError("field is required for field output requirements")
         if self.output_kind == "history" and not self.history_variable:
             raise ValueError("history_variable is required for history output requirements")
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "name": self.name,
+            "value_key": self.value_key,
+            "field": self.field,
+            "component": self.component,
+            "invariant": self.invariant,
+            "aggregation": self.aggregation,
+            "reducer": self.reducer or self.aggregation,
+            "step": self.step,
+            "frame": self.frame,
+            "position": self.position,
+            "region": self.region,
+            "history_region": self.history_region,
+            "history_region_expression": self.history_region_expression,
+            "history_variable": self.history_variable,
+            "unit": self.unit,
+            "output_kind": self.output_kind,
+            "quantity": self.quantity,
+            "source": self.source,
+            "required": self.required,
+            "metadata": dict(self.metadata),
+        }
 
 
 @dataclass(frozen=True)
@@ -102,6 +138,12 @@ def requirement_from_criterion(criterion):
         data.setdefault("name", criterion.get("name", key))
         data.setdefault("value_key", key)
         data.setdefault("unit", criterion.get("unit", ""))
+        data.setdefault("source", criterion.get("source", "odb"))
+        data.setdefault("required", criterion.get("required", True))
+        if "reducer" in criterion and "reducer" not in data:
+            data["reducer"] = criterion["reducer"]
+        if "region" in criterion and "region" not in data:
+            data["region"] = criterion["region"]
         data.setdefault("quantity", _infer_quantity(
             key,
             field=data.get("field"),
@@ -120,7 +162,9 @@ def requirement_from_criterion(criterion):
         return ResultRequirement(
             name=criterion.get("name", key), value_key=key,
             aggregation="last", output_kind="frame_value",
-            step=criterion.get("step"), unit=unit, quantity="frequency")
+            step=criterion.get("step"), unit=unit, quantity="frequency",
+            source=criterion.get("source", "odb"),
+            required=criterion.get("required", True))
 
     alias = _FIELD_ALIASES.get(key)
     if not alias:
@@ -129,7 +173,7 @@ def requirement_from_criterion(criterion):
             "provide criterion.result" % key)
 
     field, invariant = alias
-    aggregation = "min" if key == "min_displacement" else "max"
+    aggregation = criterion.get("reducer") or criterion.get("aggregation") or ("min" if key == "min_displacement" else "max")
     quantity = _infer_quantity(key, field=field, output_kind="field")
     unit = criterion.get("unit", "")
     if unit and quantity:
@@ -139,7 +183,9 @@ def requirement_from_criterion(criterion):
         field=field, invariant=invariant, aggregation=aggregation,
         step=criterion.get("step"), frame=criterion.get("frame", -1),
         position=criterion.get("position"), region=criterion.get("region"),
-        unit=unit, quantity=quantity)
+        unit=unit, quantity=quantity,
+        source=criterion.get("source", "odb"),
+        required=criterion.get("required", True))
 
 
 def requirements_from_criteria(criteria):
