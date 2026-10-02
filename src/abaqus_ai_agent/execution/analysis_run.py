@@ -40,6 +40,19 @@ class AnalysisRun:
     artifacts: Tuple[Any, ...] = ()
     metadata: Dict[str, Any] = field(default_factory=dict)
     metrics: Tuple[Any, ...] = ()
+    intent: Optional[Any] = None
+    assumptions: Tuple[str, ...] = ()
+    solver_selection: Optional[Any] = None
+    postprocess_profile: Optional[Any] = None
+    action_plan: Tuple[Any, ...] = ()
+    model_snapshot: Optional[Any] = None
+    runtime: Optional[Dict[str, Any]] = None
+    solver: str = "standard"
+    inputs: Tuple[Any, ...] = ()
+    outputs: Optional[Dict[str, Any]] = None
+    verification: Optional[Dict[str, Any]] = None
+    acceptance: Optional[Any] = None
+    report_reference: Optional[str] = None
 
     def with_state(self, state, **changes):
         values = dict(
@@ -49,13 +62,77 @@ class AnalysisRun:
             acceptance_passed=self.acceptance_passed, provenance=self.provenance,
             evidence=self.evidence,
             diagnostics=self.diagnostics, artifacts=self.artifacts,
-            metadata=dict(self.metadata), metrics=self.metrics)
+            metadata=dict(self.metadata), metrics=self.metrics,
+            intent=self.intent, assumptions=self.assumptions,
+            solver_selection=self.solver_selection,
+            postprocess_profile=self.postprocess_profile,
+            action_plan=self.action_plan, model_snapshot=self.model_snapshot,
+            runtime=self.runtime, solver=self.solver, inputs=self.inputs,
+            outputs=self.outputs, verification=self.verification,
+            acceptance=self.acceptance, report_reference=self.report_reference,
+        )
         values.update(changes)
         return AnalysisRun(**values)
 
     @property
     def solver_completed(self):
         return self.job_status is not None and self.job_status.state == JobState.COMPLETED
+
+    def get_metric(self, name: str) -> Optional[Any]:
+        """Look up a metric value by name from extracted metrics."""
+        for m in self.metrics:
+            if getattr(m, "name", None) == name or getattr(m, "value_key", None) == name:
+                return getattr(m, "value", None)
+            if isinstance(m, dict) and (m.get("name") == name or m.get("value_key") == name):
+                return m.get("value")
+        return None
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Canonical dictionary representation answering all engineering run questions."""
+        return {
+            "id": self.id,
+            "model_name": self.model_name,
+            "job_name": self.job_name,
+            "state": self.state.value if hasattr(self.state, "value") else str(self.state),
+            "solver": self.solver,
+            "solver_completed": self.solver_completed,
+            "job_status": str(getattr(self.job_status, "state", self.job_status)) if self.job_status else None,
+            "odb_path": self.odb_path,
+            "engineering_status": self.engineering_status,
+            "acceptance_passed": self.acceptance_passed,
+            "intent": getattr(self.intent, "to_dict", lambda: str(self.intent))() if self.intent is not None else None,
+            "assumptions": list(self.assumptions),
+            "solver_selection": str(self.solver_selection) if self.solver_selection else None,
+            "postprocess_profile": str(self.postprocess_profile) if self.postprocess_profile else None,
+            "action_plan_count": len(self.action_plan),
+            "runtime": dict(self.runtime or {}),
+            "metrics": [getattr(m, "to_dict", lambda: str(m))() if hasattr(m, "to_dict") else m for m in self.metrics],
+            "verification": self.verification,
+            "acceptance": getattr(self.acceptance, "to_dict", lambda: str(self.acceptance))() if self.acceptance else None,
+            "diagnostics": list(self.diagnostics),
+            "artifacts_count": len(self.artifacts),
+            "provenance": self.provenance.to_dict() if hasattr(self.provenance, "to_dict") else (self.provenance.__dict__ if self.provenance else None),
+            "report_reference": self.report_reference,
+            "metadata": dict(self.metadata),
+        }
+
+    def to_evidence_package(self) -> Dict[str, Any]:
+        """Produce a unified evidence view for audit and acceptance."""
+        return {
+            "run_id": self.id,
+            "job_name": self.job_name,
+            "solver": self.solver,
+            "solver_status": "completed" if self.solver_completed else "failed",
+            "odb_status": "available" if self.odb_path else "missing",
+            "engineering_status": self.engineering_status,
+            "acceptance_passed": self.acceptance_passed,
+            "metrics": [getattr(m, "to_dict", lambda: str(m))() if hasattr(m, "to_dict") else m for m in self.metrics],
+            "verification": self.verification or {},
+            "acceptance": getattr(self.acceptance, "to_dict", lambda: str(self.acceptance))() if self.acceptance else None,
+            "diagnostics": list(self.diagnostics),
+            "provenance": self.provenance.to_dict() if hasattr(self.provenance, "to_dict") else None,
+            "report_reference": self.report_reference,
+        }
 
 
 def discover_odb(executor, job_name):
@@ -322,11 +399,31 @@ class AnalysisRunner:
                 kind="acceptance", source="acceptance", locator=job_name,
                 value=accepted
             ))).extend(tuple(verification_evidence)).extend(result_evidence)
+            verification_map = {}
+            if numerical_verification is not None:
+                verification_map["numerical"] = getattr(numerical_verification, "to_dict", lambda: str(numerical_verification))()
+            if engineering_checks is not None:
+                verification_map["engineering_checks"] = getattr(engineering_checks, "to_dict", lambda: str(engineering_checks))()
+            if mesh_quality is not None:
+                verification_map["mesh_quality"] = getattr(mesh_quality, "to_dict", lambda: str(mesh_quality))()
+            if mesh_convergence is not None:
+                verification_map["mesh_convergence"] = getattr(mesh_convergence, "to_dict", lambda: str(mesh_convergence))()
+            if fatigue is not None:
+                verification_map["fatigue"] = getattr(fatigue, "to_dict", lambda: str(fatigue))()
+            if contact_diagnostics is not None:
+                verification_map["contact_diagnostics"] = getattr(contact_diagnostics, "to_dict", lambda: str(contact_diagnostics))()
+
             return run.with_state(
                 AnalysisRunState.ACCEPTED if accepted.passed
                 else AnalysisRunState.RESULTS_EXTRACTED,
                 engineering_status=status_value,
                 acceptance_passed=accepted.passed,
+                acceptance=accepted,
+                intent=engineering_intent,
+                solver_selection=locals().get("selection"),
+                postprocess_profile=postprocess_profile,
+                action_plan=tuple(normalized_action_plan),
+                verification=verification_map,
                 evidence=evidence, artifacts=artifacts, metrics=locals().get("run_metrics", ()))
         except Exception as exc:
             artifacts = _collect_artifacts(self.executor, job_name)

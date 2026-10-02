@@ -818,9 +818,9 @@ The default implementation order is:
 
 ### Phase B — Engineering Run / Evidence closure
 
-- [ ] Complete AnalysisRun as canonical Engineering Run
-- [ ] Complete provenance/content-hash semantics
-- [ ] Unify evidence/artifacts/metrics/verification/acceptance/report references
+- [x] Complete AnalysisRun as canonical Engineering Run
+- [x] Complete provenance/content-hash semantics
+- [x] Unify evidence/artifacts/metrics/verification/acceptance/report references
 
 ### Phase C — Result semantics
 
