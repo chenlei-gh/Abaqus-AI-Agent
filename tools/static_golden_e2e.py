@@ -136,7 +136,7 @@ plan = build_static_plan(
     step_name=STEP,
 )
 
-actions = list(plan.actions)
+actions = list(plan.actions[:-1])
 actions.insert(3, section_assignment(
     MODEL, PART, 'BeamSection',
     "mdb.models['StaticGolden'].parts['Beam'].sets['AllCells']",
@@ -175,6 +175,7 @@ tip_rp = model.rootAssembly.referencePoints
 # The four-vertex CLOAD is applied symmetrically; no separate RP is needed.
 print('AIAgent_STATIC_EVIDENCE_SETS_CREATED')
 """),
+    plan.actions[-1],
 ])
 
 for action in actions:
