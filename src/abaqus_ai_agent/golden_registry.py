@@ -226,6 +226,29 @@ def _build_standard_catalog() -> Tuple[GoldenCaseDefinition, ...]:
             ),
             tags=("mbd", "connector", "revolute", "conn3d2", "hinge"),
         ),
+        GoldenCaseDefinition(
+            case_id="fmbd4_rigid_flexible",
+            title="FMBD-4 Coupled Rigid-Flexible Mechanism Dynamics E2E",
+            category="FMBD",
+            solver="standard",
+            physics_type="flexible_multibody_dynamics",
+            tool_script="tools/fmbd4_rigid_flexible_golden_e2e.py",
+            default_evidence_json="machine_validation/fmbd4_rigid_flexible_golden_e2e.json",
+            job_name="FMBD4GoldenJob",
+            analytical_reference="Coupled rigid crank and C3D8R flexible link under gravity, CONN3D2 Hinge drift <= 1e-3 mm, active elastic strain energy participation ALLSE/ALLIE >= 1%, dynamic stress sanity 0.01 <= Mises <= 100 MPa",
+            summary="Coupled rigid-flexible mechanism linked by native CONN3D2 Hinge and Kinematic Coupling constraint verifying joint drift, flexible body stress, and dynamic energy conservation.",
+            criteria=(
+                GoldenCriterion("joint_drift", "max_joint_drift_mm", "<=", 1e-3, "mm", "CONN3D2 Hinge translational drift <= 1e-3 mm"),
+                GoldenCriterion("max_mises_stress_lower", "max_mises_stress_mpa", ">=", 0.01, "MPa", "Dynamic stress sanity lower bound"),
+                GoldenCriterion("max_mises_stress_upper", "max_mises_stress_mpa", "<=", 100.0, "MPa", "Dynamic stress sanity upper bound"),
+                GoldenCriterion("strain_energy_active", "strain_energy_ratio", ">=", 0.01, "", "Flexible body dynamic strain energy participation"),
+                GoldenCriterion("energy_dissipation", "energy_dissipation_ratio", "<=", 0.05, "", "Mechanical energy conservation <= 5% dissipation"),
+            ),
+            strict_criteria=(
+                GoldenCriterion("strict_joint_drift", "max_joint_drift_mm", "<=", 1e-15, "mm", "Strict negative gate limit <= 1e-15 mm"),
+            ),
+            tags=("fmbd", "flexible", "rigid_flexible", "coupling", "connector", "dynamics"),
+        ),
     )
 
 

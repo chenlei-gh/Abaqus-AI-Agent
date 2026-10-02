@@ -587,6 +587,7 @@ This escape hatch is deliberate: the action layer should not become a bottleneck
 | Connector elements / Sections (CONN3D2 / Hinge) | Implemented |
 | Rigid-body dynamics (RP + RigidBody physical pendulum) | Golden E2E Validated (Abaqus 2025) |
 | Multi-body dynamics (Two-body revolute connector / double pendulum) | Golden E2E Validated (Abaqus 2025); higher-order kinematic pairs pending |
+| Flexible multi-body dynamics (Rigid crank + C3D8R flexible link + Kinematic Coupling + CONN3D2 Hinge) | Golden E2E Validated (Abaqus 2025) |
 | Initial temperature / stress | Implemented |
 | Assembly instance operations | Implemented |
 | INP export | Implemented |
@@ -665,18 +666,19 @@ The following golden engineering cases have all completed and passed real-machin
 | **P1 General Contact** | Two-body contact with Coulomb friction sliding | Normal contact pressure, penalty tangential friction mu = 0.25, contact diagnostics | ✅ PASS |
 | **Rigid-body Dynamics Golden** | Rigid body physical pendulum under gravity ($L=600\text{ mm}, \theta_0=10^\circ$) | Period ($T_{\text{corr}}=1.2713\text{ s}$, 0.08% error), max angular velocity (0.27% error), energy conservation | ✅ PASS |
 | **MBD-2 Revolute Golden** | Two-body double pendulum with native `CONN3D2` Hinge connector under gravity | Joint drift $\le 10^{-3}\text{ mm}$ ($9.78\times 10^{-6}\text{ mm}$), independent articulation ($\Delta\theta = 6.96^\circ$), fundamental period ($T_1=1.2843\text{ s}$, 0.54% error), energy conservation (2.13% loss) | ✅ PASS |
+| **FMBD-4 Coupled Rigid-Flexible** | Coupled rigid crank + C3D8R flexible solid link linked via native `CONN3D2` Hinge and Kinematic Coupling under gravity | Joint drift $\le 10^{-3}\text{ mm}$ ($3.13\times 10^{-10}\text{ mm}$), dynamic Mises stress sanity ($0.0435\text{ MPa}$), active strain energy ratio (99.9%), energy conservation (0.56% dissipation) | ✅ PASS |
 
-> **Note on multi-body dynamics scope**: MBD-1 establishes single-body rigid dynamics via Reference Points and native `RigidBody` constraints. MBD-2 establishes two-body articulated multi-body dynamics connected by native `CONN3D2` revolute/hinge connector elements with local coordinate orientation. More complex multi-body mechanisms (such as Cartesian/Slot joints, bushings, and closed-loop kinematic chains) remain planned for subsequent extensions.
+> **Note on multi-body dynamics scope**: MBD-1 establishes single-body rigid dynamics via Reference Points and native `RigidBody` constraints. MBD-2 establishes two-body articulated multi-body dynamics connected by native `CONN3D2` revolute/hinge connector elements with local coordinate orientation. FMBD-4 establishes coupled rigid-flexible mechanism dynamics linking finite element continuum meshes to discrete connectors via native Kinematic Coupling. More complex multi-body mechanisms (such as Cartesian/Slot joints, bushings, and closed-loop kinematic chains) remain planned for subsequent extensions.
 
 ### Unified Golden Validation Matrix & Evidence Catalog
 
-All 9 Golden Cases are governed by a strongly typed registry and a unified 12-key evidence envelope schema:
+All 10 Golden Cases are governed by a strongly typed registry and a unified 12-key evidence envelope schema:
 `case_id, release, runtime, solver, job, odb, solver_status, result_evidence, verification, acceptance, artifacts, provenance`.
 
 A centralized CLI tool (`tools/run_golden_matrix.py`) manages discovery, schema validation, live execution, and manifest generation:
 
 ```bash
-# 1. Inspect status of all 9 Golden Cases
+# 1. Inspect status of all 10 Golden Cases
 python tools/run_golden_matrix.py --list
 
 # 2. Validate all existing evidence JSON files against the unified schema

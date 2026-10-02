@@ -575,6 +575,7 @@ action = python_action(
 | 连接器单元 / 截面 (CONN3D2 / Hinge) | 已实现 |
 | 刚体动力学（RP + RigidBody 物理摆） | Abaqus 2025 Golden E2E 验证已通过 |
 | 多体动力学（双刚体 Hinge 连接器 / 双摆系统） | Abaqus 2025 Golden E2E 验证已通过；高阶运动副待扩展 |
+| 刚柔耦合多体动力学（刚体曲柄 + C3D8R 弹性连杆 + Kinematic Coupling + CONN3D2 Hinge） | Abaqus 2025 Golden E2E 验证已通过 |
 | Initial Temperature / Stress | 已实现 |
 | Assembly Instance Operations | 已实现 |
 | INP Export | 已实现 |
@@ -655,18 +656,19 @@ python -m pytest -q
 | **P1 General Contact** | 块体压紧与库仑摩擦滑移 | 法向接触压力、切向摩擦力 (μ=0.25 误差 0.08%)、接触诊断 | ✅ PASS |
 | **刚体动力学 Golden** | 铰接刚体物理摆大角度重力摆动 ($L=600\text{ mm}, \theta_0=10^\circ$) | 振动周期 ($T_{\text{corr}}=1.2713\text{ s}$, 误差 0.08%)、最大角速度 (误差 0.27%)、机械能守恒 | ✅ PASS |
 | **MBD-2 Revolute Golden** | 原生 `CONN3D2` Hinge 连接器双刚体双摆重力摆动 | 铰接点平动漂移 $\le 10^{-3}\text{ mm}$ ($9.78\times 10^{-6}\text{ mm}$)、独立相对转动 ($\Delta\theta = 6.96^\circ$)、基频振动周期 ($T_1=1.2843\text{ s}$，误差 0.54%)、机械能守恒 (耗散 2.13%) | ✅ PASS |
+| **FMBD-4 刚柔耦合 Golden** | 刚体曲柄 + C3D8R 弹性实体连杆在重力下的耦合动力学时程 | 铰接点平动漂移 $\le 10^{-3}\text{ mm}$ ($3.13\times 10^{-10}\text{ mm}$)、动态 Mises 应力物理合理 ($0.0435\text{ MPa}$)、弹性应变能动态占比 (99.9%)、全系统机械能守恒 (耗散仅 0.56%) | ✅ PASS |
 
-> **多体动力学边界说明**：MBD-1 验证了基于 Reference Point 与原生 `RigidBody` 约束的单体刚体动力学；MBD-2 进一步闭环了基于原生 `CONN3D2` 铰接连接器（Hinge Connector Element + 局部坐标系定向）的双刚体多体动力学系统。更复杂的机构系统（如 Cartesian/Slot 运动副、衬套以及闭环运动链）规划在后续扩展中。
+> **多体动力学边界说明**：MBD-1 验证了基于 Reference Point 与原生 `RigidBody` 约束的单体刚体动力学；MBD-2 进一步闭环了基于原生 `CONN3D2` 铰接连接器（Hinge Connector Element + 局部坐标系定向）的双刚体多体动力学系统；FMBD-4 则首次打通了**连续介质有限元网格与离散连接器之间的动力学耦合传递界面（Kinematic Coupling）**，实现了刚柔耦合非刚体动力学的真实求解闭环。更复杂的机构系统（如 Cartesian/Slot 运动副、衬套以及闭环运动链）规划在后续扩展中。
 
 ### 统一 Golden 验证矩阵与证据目录
 
-全仓 9 项真机 Golden Case 已全部收敛至强类型注册表与统一的 12 项证据信封标准模式：
+全仓 10 项真机 Golden Case 已全部收敛至强类型注册表与统一的 12 项证据信封标准模式：
 `case_id, release, runtime, solver, job, odb, solver_status, result_evidence, verification, acceptance, artifacts, provenance`。
 
 统一 CLI 管理与执行工具 (`tools/run_golden_matrix.py`) 支持状态发现、Schema 校验、真机批量运行与 Manifest 生成：
 
 ```bash
-# 1. 查询全部 9 个 Golden Case 的注册与证据状态
+# 1. 查询全部 10 个 Golden Case 的注册与证据状态
 python tools/run_golden_matrix.py --list
 
 # 2. 校验全部现有机器证据 JSON 文件是否符合统一信封 Schema 且通过验收

@@ -90,6 +90,12 @@ CASE_NAME_TO_ID = {
     "mbd2golden": "mbd2_double_pendulum",
     "mbd2goldenjob": "mbd2_double_pendulum",
     "mbd2": "mbd2_double_pendulum",
+    # FMBD-4
+    "fmbd4_rigid_flexible": "fmbd4_rigid_flexible",
+    "fmbd4": "fmbd4_rigid_flexible",
+    "fmbd4_rigid_flexible_golden_e2e": "fmbd4_rigid_flexible",
+    "fmbd4golden": "fmbd4_rigid_flexible",
+    "fmbd4goldenjob": "fmbd4_rigid_flexible",
 }
 
 

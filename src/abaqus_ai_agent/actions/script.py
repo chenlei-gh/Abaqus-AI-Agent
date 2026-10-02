@@ -273,12 +273,10 @@ def _coupling_constraint_script(m, p):
         dofs.append("%s=%s" % (dof, val))
     dof_args = ", ".join(dofs)
 
-    radius_arg = ""
-    if p.get("influence_radius") is not None:
-        radius_arg = ", influenceRadius=%r" % p["influence_radius"]
+    radius_val = "%r" % p["influence_radius"] if p.get("influence_radius") is not None else "WHOLE_SURFACE"
 
     return (
-        "from abaqusConstants import *\nimport regionToolset\n"
+        "from abaqusConstants import *\nimport interaction\nimport regionToolset\n"
         "model = mdb.models[%s]\n"
         "a = model.rootAssembly\n"
         "def _resolve_pt_region(assy, target):\n"
@@ -299,15 +297,15 @@ def _coupling_constraint_script(m, p):
         "    return target\n"
         "_cp = %s\n"
         "_surf = %s\n"
-        "model.Coupling(name=%s, controlPoint=_cp, surface=_surf, couplingType=%s, %s%s)"
+        "model.Coupling(name=%s, surface=_surf, controlPoint=_cp, influenceRadius=%s, couplingType=%s, %s)"
         % (
             _q(m),
             cp_code,
             surf_code,
             _q(name),
+            radius_val,
             abaqus_ctype,
             dof_args,
-            radius_arg,
         )
     )
 
