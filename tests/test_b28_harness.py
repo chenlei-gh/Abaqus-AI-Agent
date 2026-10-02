@@ -15,6 +15,9 @@ def test_b28_script_uses_python27_compatible_markers_and_apis():
     assert 'f"' not in script
     assert "import regionToolset" in script
     assert "regionToolset.Region" in script
+    assert "fieldOutputRequests" not in script
+    assert "THE ANALYSIS HAS COMPLETED SUCCESSFULLY" in script
+    assert "Abaqus JOB " in script
 
 
 def test_b28_parser_requires_all_evidence():
