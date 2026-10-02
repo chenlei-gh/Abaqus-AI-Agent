@@ -134,3 +134,147 @@ def test_mechanism_graph_topology_validation_errors():
 
     with pytest.raises(ValueError, match="Cannot compile invalid mechanism topology"):
         m.compile_to_actions("Model-Err")
+
+
+def test_mechanism_graph_full_stack_fmbd_compilation():
+    """Verify end-to-end full-stack compilation of an FMBD mechanism into complete Abaqus actions."""
+    from abaqus_ai_agent.planning.mechanism import MechanismAnalysisSpec
+
+    m = MechanismGraph("CrankSliderFMBD")
+    # 1. Ground body
+    m.add_body("ground", body_type="ground", ref_point_coords=(0.0, 0.0, 0.0), ref_point_name="RP_GROUND")
+
+    # 2. Rigid crank with inertia and tie regions
+    m.add_body(
+        "crank",
+        body_type="rigid",
+        part_name="CrankPart",
+        instance_name="Crank-1",
+        ref_point_coords=(0.0, 0.0, 0.0),
+        ref_point_name="RP_CRANK_PIVOT",
+        assembly_cells_set="CrankCells",
+        tie_regions=("RP_CRANK_ELBOW",),
+    )
+
+    # 3. Flexible connecting link with continuum FE properties
+    m.add_body(
+        "flex_rod",
+        body_type="flexible",
+        part_name="FlexRodPart",
+        instance_name="FlexRod-1",
+        youngs_modulus=210000.0,
+        poisson_ratio=0.3,
+        density=7.85e-9,
+        mesh_size=5.0,
+        element_code="C3D8R",
+        element_library="STANDARD",
+        part_cells_set="Cells",
+    )
+
+    # 4. Flexible Interface: Kinematic Coupling on rod top face
+    m.add_flexible_interface(
+        name="Coupling_Elbow_FlexRod",
+        body_name="flex_rod",
+        interface_region="TopEndFace",
+        ref_point_name="RP_FLEX_INTERFACE",
+        ref_point_coords=(100.0, 100.0, 0.0),
+        coupling_type="KINEMATIC",
+    )
+
+    # 5. Joints
+    # Joint 1: Ground to Crank Pivot
+    m.add_joint(
+        "J_Pivot",
+        joint_type="revolute",
+        body_a="ground",
+        body_b="crank",
+        point_a_name="RP_GROUND",
+        point_b_name="RP_CRANK_PIVOT",
+        orientation="Csys_Z",
+    )
+
+    # Joint 2: Crank to FlexRod (Testing automatic point resolution for flexible body!)
+    m.add_joint(
+        "J_Elbow",
+        joint_type="revolute",
+        body_a="crank",
+        body_b="flex_rod",
+        point_a_name="RP_CRANK_ELBOW",
+        # Notice: point_b_name is intentionally omitted to verify automatic interface resolution!
+        point_b_name=None,
+        orientation="Csys_Z",
+    )
+
+    # 6. Gravity load
+    m.add_load("Gravity", target_name="assembly", load_type="gravity", vector=(0.0, -9810.0, 0.0))
+
+    # 7. Analysis Specification
+    analysis = MechanismAnalysisSpec(
+        step_name="DynamicStep",
+        job_name="CrankSliderJob",
+        time_period=0.8,
+        initial_inc=0.005,
+        max_inc=0.01,
+        nlgeom=True,
+    )
+
+    # Topology validation & DOF distinction audit
+    report = m.validate_topology()
+    assert report.is_valid is True
+    assert report.num_bodies == 3
+    assert report.num_rigid_bodies == 1
+    assert report.num_flexible_bodies == 1
+    assert report.has_ground is True
+    assert report.num_joints == 2
+    assert report.num_interfaces == 1
+    assert report.rigid_mobility_dof_spatial == 2  # 2 moving bodies * 6 - 2 revolute * 5 = 12 - 10 = 2
+    assert "Rigid mobility DOFs apply strictly" in report.flexible_continuum_note
+
+    # Compile to Actions
+    actions = m.compile_to_actions("CrankSliderModel", analysis=analysis)
+    action_types = [a.action_type for a in actions]
+
+    # Verify complete pipeline presence
+    expected_types = [
+        "material_elastic",
+        "material_density",
+        "solid_section",
+        "section_assignment",
+        "reference_point",
+        "displacement_bc",
+        "rigid_body",
+        "coupling_constraint",
+        "connector_section",
+        "wire_connector",
+        "implicit_dynamic_step",
+        "field_output",
+        "history_output",
+        "gravity",
+        "seed_part",
+        "element_type",
+        "generate_mesh",
+        "create_job",
+    ]
+    for exp in expected_types:
+        assert exp in action_types, f"Expected action type '{exp}' missing from compiled actions"
+
+    # Verify automatic interface RP resolution for Joint 2
+    conn_elbow = next(a for a in actions if a.action_type == "wire_connector" and a.parameters["name"] == "Conn-J_Elbow")
+    assert conn_elbow.parameters["point1_name"] == "RP_CRANK_ELBOW"
+    assert conn_elbow.parameters["point2_name"] == "RP_FLEX_INTERFACE", (
+        "Compiler failed to resolve flexible body interface RP!"
+    )
+
+    # Verify coupling constraint surface expression formatting
+    coupling_act = next(a for a in actions if a.action_type == "coupling_constraint")
+    assert coupling_act.parameters["control_point_name"] == "RP_FLEX_INTERFACE"
+    assert coupling_act.parameters["surface_expression"] == "a.instances['FlexRod-1'].surfaces['TopEndFace']"
+
+    # Verify Ground BC anchor
+    ground_bc = next(a for a in actions if a.action_type == "displacement_bc" and a.parameters["name"] == "BC-GroundAnchor")
+    assert ground_bc.parameters["u1"] == 0.0
+    assert ground_bc.parameters["ur3"] == 0.0
+
+    # Verify Job Creation
+    job_act = next(a for a in actions if a.action_type == "create_job")
+    assert job_act.parameters["name"] == "CrankSliderJob"

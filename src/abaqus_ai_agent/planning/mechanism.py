@@ -2,10 +2,10 @@
 
 Provides high-level topological abstractions for rigid, flexible, and ground bodies,
 inter-body joints (revolute, prismatic, cylindrical, etc.), flexible-body kinematic/distributing
-coupling interfaces, and actuator/load definitions.
+coupling interfaces, dynamic procedures, and actuator/load definitions.
 
 Enables automated topology validation, Grübler/Kutzbach degrees-of-freedom evaluation,
-and compilation into structured native AbaqusActions.
+and full-stack compilation into structured native AbaqusActions.
 """
 
 from dataclasses import dataclass, field
@@ -21,6 +21,18 @@ from ..actions.builders import (
     coupling_constraint,
     gravity,
     concentrated_force,
+    material_elastic,
+    material_density,
+    solid_section,
+    section_assignment,
+    seed_part,
+    element_type,
+    generate_mesh,
+    implicit_dynamic_step,
+    field_output,
+    history_output,
+    create_job,
+    displacement_bc,
 )
 
 
@@ -52,12 +64,21 @@ class BodySpec:
     ref_point_name: Optional[str] = None
     mass: Optional[float] = None
     rotary_inertia: Optional[Tuple[float, float, float]] = None
+    # Material specification
+    material_name: Optional[str] = None
     youngs_modulus: Optional[float] = None
     poisson_ratio: Optional[float] = None
     density: Optional[float] = None
+    section_name: Optional[str] = None
+    # Meshing specification
     mesh_size: Optional[float] = None
-    element_code: Optional[str] = None
+    element_code: Optional[str] = None  # e.g. "C3D8R"
+    element_library: Optional[str] = "STANDARD"
+    # Geometry sets and tie regions
     geometry_expression: Optional[str] = None
+    part_cells_set: Optional[str] = "Cells"
+    assembly_cells_set: Optional[str] = None
+    tie_regions: Tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -68,6 +89,7 @@ class FlexibleInterfaceSpec:
     interface_region: str
     ref_point_name: str
     ref_point_coords: Tuple[float, float, float]
+    surface_expression: Optional[str] = None
     coupling_type: str = "KINEMATIC"  # "KINEMATIC" or "DISTRIBUTING"
     influence_radius: Optional[float] = None
     u1: bool = True
@@ -94,6 +116,8 @@ class JointSpec:
     translational_type: Optional[str] = None
     behavior_name: Optional[str] = None
     orientation: Optional[Any] = None
+    wire_feature_name: Optional[str] = None
+    wire_set_name: Optional[str] = None
 
 
 @dataclass(frozen=True)
@@ -109,6 +133,22 @@ class MechanismLoadSpec:
 
 
 @dataclass(frozen=True)
+class MechanismAnalysisSpec:
+    """Dynamic analysis procedure and output specification for a mechanism."""
+    step_name: str = "Step-1"
+    job_name: Optional[str] = None
+    time_period: float = 1.0
+    initial_inc: float = 0.01
+    min_inc: float = 1e-6
+    max_inc: float = 0.01
+    max_num_inc: int = 1000
+    nlgeom: bool = True
+    field_variables: Tuple[str, ...] = ("U", "UR", "V", "VR", "S", "RF", "RM")
+    history_variables: Tuple[str, ...] = ("ALLIE", "ALLKE", "ALLWK", "ALLSE", "ETOTAL")
+    field_frequency: int = 1
+
+
+@dataclass(frozen=True)
 class MechanismTopologyReport:
     """Audit report for mechanism topological validity and kinematics."""
     is_valid: bool
@@ -117,12 +157,27 @@ class MechanismTopologyReport:
     num_flexible_bodies: int
     num_joints: int
     num_interfaces: int
-    estimated_dof_spatial: int
-    estimated_dof_planar: int
+    rigid_mobility_dof_spatial: int
+    rigid_mobility_dof_planar: int
     has_ground: bool
     closed_loops_count: int
     warnings: Tuple[str, ...] = ()
     errors: Tuple[str, ...] = ()
+    flexible_continuum_note: str = (
+        "Rigid mobility DOFs apply strictly to the macro-kinematic skeleton. "
+        "Flexible bodies introduce infinite-dimensional continuum displacement fields "
+        "discretized by FE nodal DOFs, which do not alter the macro-kinematic constraint mobility."
+    )
+
+    @property
+    def estimated_dof_spatial(self) -> int:
+        """Backward-compatible alias for rigid_mobility_dof_spatial."""
+        return self.rigid_mobility_dof_spatial
+
+    @property
+    def estimated_dof_planar(self) -> int:
+        """Backward-compatible alias for rigid_mobility_dof_planar."""
+        return self.rigid_mobility_dof_planar
 
 
 # Constraint DOF reduction per joint type in 3D (Spatial) and 2D (Planar)
@@ -150,9 +205,9 @@ _JOINT_CONSTRAINTS_2D = {
 
 
 class MechanismGraph:
-    """Declarative graph representing a complete multibody or flexible mechanism."""
+    """Declarative mechanism topology graph supporting rigid, flexible, and ground bodies."""
 
-    def __init__(self, name: str = "Mechanism"):
+    def __init__(self, name: str = "Mechanism") -> None:
         self.name = name
         self.bodies: Dict[str, BodySpec] = {}
         self.interfaces: Dict[str, FlexibleInterfaceSpec] = {}
@@ -169,31 +224,41 @@ class MechanismGraph:
         ref_point_name: Optional[str] = None,
         mass: Optional[float] = None,
         rotary_inertia: Optional[Tuple[float, float, float]] = None,
+        material_name: Optional[str] = None,
         youngs_modulus: Optional[float] = None,
         poisson_ratio: Optional[float] = None,
         density: Optional[float] = None,
+        section_name: Optional[str] = None,
         mesh_size: Optional[float] = None,
         element_code: Optional[str] = None,
+        element_library: Optional[str] = "STANDARD",
         geometry_expression: Optional[str] = None,
+        part_cells_set: Optional[str] = "Cells",
+        assembly_cells_set: Optional[str] = None,
+        tie_regions: Tuple[str, ...] = (),
     ) -> "MechanismGraph":
-        b_type = str(body_type).lower()
-        if b_type not in (BodyType.RIGID.value, BodyType.FLEXIBLE.value, BodyType.GROUND.value):
-            raise ValueError("Unsupported body_type: %s" % body_type)
+        """Add a body (rigid, flexible, or ground) to the mechanism."""
         self.bodies[name] = BodySpec(
             name=name,
-            body_type=b_type,
+            body_type=body_type.lower(),
             part_name=part_name or name,
             instance_name=instance_name or (name + "-1"),
             ref_point_coords=ref_point_coords,
-            ref_point_name=ref_point_name or ("RP-" + name),
+            ref_point_name=ref_point_name or ("RP_" + name.upper()),
             mass=mass,
             rotary_inertia=rotary_inertia,
+            material_name=material_name,
             youngs_modulus=youngs_modulus,
             poisson_ratio=poisson_ratio,
             density=density,
+            section_name=section_name,
             mesh_size=mesh_size,
             element_code=element_code,
+            element_library=element_library,
             geometry_expression=geometry_expression,
+            part_cells_set=part_cells_set,
+            assembly_cells_set=assembly_cells_set,
+            tie_regions=tuple(tie_regions),
         )
         return self
 
@@ -204,6 +269,7 @@ class MechanismGraph:
         interface_region: str,
         ref_point_name: str,
         ref_point_coords: Tuple[float, float, float],
+        surface_expression: Optional[str] = None,
         coupling_type: str = "KINEMATIC",
         influence_radius: Optional[float] = None,
         u1: bool = True,
@@ -213,13 +279,15 @@ class MechanismGraph:
         ur2: bool = True,
         ur3: bool = True,
     ) -> "MechanismGraph":
+        """Add a kinematic or distributing coupling interface on a flexible body."""
         self.interfaces[name] = FlexibleInterfaceSpec(
             name=name,
             body_name=body_name,
             interface_region=interface_region,
             ref_point_name=ref_point_name,
             ref_point_coords=ref_point_coords,
-            coupling_type=str(coupling_type).upper(),
+            surface_expression=surface_expression,
+            coupling_type=coupling_type.upper(),
             influence_radius=influence_radius,
             u1=u1,
             u2=u2,
@@ -245,11 +313,13 @@ class MechanismGraph:
         translational_type: Optional[str] = None,
         behavior_name: Optional[str] = None,
         orientation: Optional[Any] = None,
+        wire_feature_name: Optional[str] = None,
+        wire_set_name: Optional[str] = None,
     ) -> "MechanismGraph":
-        j_type = str(joint_type).lower()
+        """Add a kinematic joint between two bodies or a body and ground."""
         self.joints[name] = JointSpec(
             name=name,
-            joint_type=j_type,
+            joint_type=joint_type.lower(),
             body_a=body_a,
             body_b=body_b,
             point_a_name=point_a_name,
@@ -261,6 +331,8 @@ class MechanismGraph:
             translational_type=translational_type,
             behavior_name=behavior_name,
             orientation=orientation,
+            wire_feature_name=wire_feature_name,
+            wire_set_name=wire_set_name,
         )
         return self
 
@@ -274,6 +346,7 @@ class MechanismGraph:
         step_name: str = "Step-1",
         amplitude: Optional[str] = None,
     ) -> "MechanismGraph":
+        """Add a load or actuator to the mechanism."""
         self.loads.append(MechanismLoadSpec(
             name=name,
             target_name=target_name,
@@ -327,8 +400,7 @@ class MechanismGraph:
                         % (if_name, iface.body_name, body.body_type)
                     )
 
-        # Grübler / Kutzbach Mobility analysis
-        # Number of moving bodies (excluding ground)
+        # Grübler / Kutzbach Mobility analysis for macro kinematic skeleton
         moving_bodies = [b for b in self.bodies.values() if b.body_type != BodyType.GROUND.value]
         n = len(moving_bodies)
 
@@ -344,7 +416,7 @@ class MechanismGraph:
         dof_3d = (6 * n) - total_c_3d if n > 0 else 0
         dof_2d = (3 * n) - total_c_2d if n > 0 else 0
 
-        # Loop count estimation (Euler formula for graphs: L = E - V + 1)
+        # Loop count estimation (Euler formula for planar/spatial graphs: L = E - V + 1)
         # Vertices = bodies + ground (1)
         v = n + 1
         e = len(self.joints)
@@ -360,30 +432,136 @@ class MechanismGraph:
             num_flexible_bodies=num_flex,
             num_joints=len(self.joints),
             num_interfaces=len(self.interfaces),
-            estimated_dof_spatial=dof_3d,
-            estimated_dof_planar=dof_2d,
+            rigid_mobility_dof_spatial=dof_3d,
+            rigid_mobility_dof_planar=dof_2d,
             has_ground=("ground" in all_body_names or has_ground),
             closed_loops_count=closed_loops,
             warnings=tuple(warnings),
             errors=tuple(errors),
         )
 
-    def compile_to_actions(self, model_name: str, step_name: str = "Step-1") -> List[AbaqusAction]:
-        """Compile high-level mechanism graph into ordered, deterministic AbaqusActions."""
+    def compile_to_actions(
+        self,
+        model_name: str,
+        analysis: Optional[MechanismAnalysisSpec] = None,
+        step_name: str = "Step-1",
+        job_name: Optional[str] = None,
+    ) -> List[AbaqusAction]:
+        """Compile high-level mechanism graph into ordered, deterministic AbaqusActions.
+
+        Generates full engineering simulation pipeline:
+          1. Materials and Solid Sections
+          2. Assembly Reference Points & Ground Anchor BCs
+          3. RigidBody Constraints & Flexible Coupling Constraints
+          4. Connector Sections and Wire Connectors
+          5. Dynamic Analysis Procedure & Sensor Outputs
+          6. Actuation, Gravity, and External Loads
+          7. Finite Element Meshing (Part seeds, Element types, Meshing)
+          8. Simulation Job Creation
+        """
         report = self.validate_topology()
         if not report.is_valid:
             raise ValueError("Cannot compile invalid mechanism topology: %s" % (report.errors,))
 
         actions: List[AbaqusAction] = []
+        eff_step = analysis.step_name if analysis else step_name
+        eff_job = job_name or (analysis.job_name if analysis else None)
 
-        # 1. Reference Points for rigid bodies and flexible interfaces
-        created_rps: Set[str] = set()
+        # ---------------------------------------------------------------------
+        # 1. Materials and Solid Sections
+        # ---------------------------------------------------------------------
+        created_materials: Set[str] = set()
+        created_sections: Set[str] = set()
 
         for b in self.bodies.values():
-            if b.body_type == BodyType.RIGID.value and b.ref_point_coords and b.ref_point_name:
-                actions.append(reference_point(model_name, name=b.ref_point_name, coordinates=b.ref_point_coords))
-                created_rps.add(b.ref_point_name)
+            if b.youngs_modulus is not None:
+                mat_name = b.material_name or ("Mat-" + b.name)
+                if mat_name not in created_materials:
+                    actions.append(material_elastic(
+                        model_name,
+                        mat_name,
+                        youngs_modulus=b.youngs_modulus,
+                        poisson=b.poisson_ratio if b.poisson_ratio is not None else 0.3,
+                    ))
+                    if b.density is not None:
+                        actions.append(material_density(
+                            model_name,
+                            mat_name,
+                            density=b.density,
+                        ))
+                    created_materials.add(mat_name)
 
+                sec_name = b.section_name or ("Sec-Solid-" + mat_name)
+                if sec_name not in created_sections:
+                    actions.append(solid_section(
+                        model_name,
+                        sec_name,
+                        material=mat_name,
+                    ))
+                    created_sections.add(sec_name)
+
+                if b.part_name:
+                    cells_set = b.part_cells_set or "Cells"
+                    reg_expr = "mdb.models[%r].parts[%r].sets[%r]" % (model_name, b.part_name, cells_set)
+                    actions.append(section_assignment(
+                        model_name,
+                        b.part_name,
+                        sec_name,
+                        reg_expr,
+                    ))
+
+        # ---------------------------------------------------------------------
+        # 2. Reference Points and Ground Anchor BCs
+        # ---------------------------------------------------------------------
+        created_rps: Set[str] = set()
+
+        # Resolve ground anchor RP if any joint connects to ground
+        has_ground_joint = any(j.body_a == "ground" or j.body_b == "ground" for j in self.joints.values())
+        if has_ground_joint:
+            ground_rp_name = "RP_GROUND"
+            ground_coords = (0.0, 0.0, 0.0)
+            # Check if ground body is explicitly specified
+            ground_body = next((b for b in self.bodies.values() if b.body_type == BodyType.GROUND.value), None)
+            if ground_body and ground_body.ref_point_name:
+                ground_rp_name = ground_body.ref_point_name
+                ground_coords = ground_body.ref_point_coords or (0.0, 0.0, 0.0)
+            else:
+                # Find first joint connected to ground with a defined location
+                for j in self.joints.values():
+                    if (j.body_a == "ground" or j.body_b == "ground") and j.location:
+                        ground_coords = j.location
+                        break
+
+            if ground_rp_name not in created_rps:
+                actions.append(reference_point(
+                    model_name,
+                    name=ground_rp_name,
+                    coordinates=ground_coords,
+                ))
+                created_rps.add(ground_rp_name)
+
+                # Fix ground RP in all 6 degrees of freedom
+                bc_reg = "mdb.models[%r].rootAssembly.sets[%r]" % (model_name, ground_rp_name)
+                actions.append(displacement_bc(
+                    model_name,
+                    name="BC-GroundAnchor",
+                    region_expression=bc_reg,
+                    step="Initial",
+                    u1=0.0, u2=0.0, u3=0.0, ur1=0.0, ur2=0.0, ur3=0.0,
+                ))
+
+        # Reference points for rigid bodies
+        for b in self.bodies.values():
+            if b.body_type == BodyType.RIGID.value and b.ref_point_coords and b.ref_point_name:
+                if b.ref_point_name not in created_rps:
+                    actions.append(reference_point(
+                        model_name,
+                        name=b.ref_point_name,
+                        coordinates=b.ref_point_coords,
+                    ))
+                    created_rps.add(b.ref_point_name)
+
+        # Reference points for flexible interfaces
         for iface in self.interfaces.values():
             if iface.ref_point_name not in created_rps:
                 actions.append(reference_point(
@@ -393,25 +571,43 @@ class MechanismGraph:
                 ))
                 created_rps.add(iface.ref_point_name)
 
-        # 2. RigidBody Constraints for rigid bodies
+        # ---------------------------------------------------------------------
+        # 3. RigidBody Constraints & Flexible Coupling Constraints
+        # ---------------------------------------------------------------------
+        # Rigid body constraints
         for b in self.bodies.values():
             if b.body_type == BodyType.RIGID.value and b.ref_point_name:
                 ref_expr = "a.sets[%r]" % b.ref_point_name
                 body_expr = b.geometry_expression
+                if not body_expr and b.assembly_cells_set:
+                    body_expr = "a.sets[%r]" % b.assembly_cells_set
+                tie_expr = None
+                if b.tie_regions:
+                    tie_expr = ", ".join("a.sets[%r]" % r for r in b.tie_regions)
+
                 actions.append(rigid_body(
                     model_name,
                     name="RB-" + b.name,
                     ref_point_expression=ref_expr,
                     body_expression=body_expr,
+                    tie_region=tie_expr,
                 ))
 
-        # 3. Flexible Interfaces (Coupling constraints)
+        # Flexible interfaces (Coupling constraints)
         for iface in self.interfaces.values():
+            surf_name = iface.interface_region
+            surf_expr = iface.surface_expression
+            if not surf_expr and iface.body_name in self.bodies:
+                b_flex = self.bodies[iface.body_name]
+                if b_flex.instance_name and "." not in surf_name:
+                    surf_expr = "a.instances[%r].surfaces[%r]" % (b_flex.instance_name, surf_name)
+
             actions.append(coupling_constraint(
                 model_name,
                 name=iface.name,
                 control_point_name=iface.ref_point_name,
-                surface_name=iface.interface_region,
+                surface_name=surf_name if not surf_expr else None,
+                surface_expression=surf_expr,
                 coupling_type=iface.coupling_type,
                 influence_radius=iface.influence_radius,
                 u1=iface.u1,
@@ -422,7 +618,9 @@ class MechanismGraph:
                 ur3=iface.ur3,
             ))
 
+        # ---------------------------------------------------------------------
         # 4. Connector Sections and Wire Connectors for Joints
+        # ---------------------------------------------------------------------
         sec_names: Set[str] = set()
         for j_name, joint in self.joints.items():
             jt = joint.joint_type.lower()
@@ -467,17 +665,35 @@ class MechanismGraph:
                     ))
                 sec_names.add(sec_name)
 
-            # Determine point 1 and point 2 for wire connector
-            # If explicit point names given, use them; otherwise resolve from bodies/interfaces
+            # Resolve Point 1 (Body A side)
             p1 = joint.point_a_name
-            if not p1 and joint.body_a in self.bodies:
-                b_a = self.bodies[joint.body_a]
-                p1 = b_a.ref_point_name
+            if not p1:
+                if joint.body_a == "ground":
+                    p1 = "RP_GROUND"
+                elif joint.body_a in self.bodies:
+                    b_a = self.bodies[joint.body_a]
+                    if b_a.body_type == BodyType.RIGID.value:
+                        p1 = b_a.ref_point_name
+                    elif b_a.body_type == BodyType.FLEXIBLE.value:
+                        # Find matching interface on body A
+                        iface_a = next((iface for iface in self.interfaces.values() if iface.body_name == b_a.name), None)
+                        if iface_a:
+                            p1 = iface_a.ref_point_name
 
+            # Resolve Point 2 (Body B side)
             p2 = joint.point_b_name
-            if not p2 and joint.body_b in self.bodies:
-                b_b = self.bodies[joint.body_b]
-                p2 = b_b.ref_point_name
+            if not p2:
+                if joint.body_b == "ground":
+                    p2 = "RP_GROUND"
+                elif joint.body_b in self.bodies:
+                    b_b = self.bodies[joint.body_b]
+                    if b_b.body_type == BodyType.RIGID.value:
+                        p2 = b_b.ref_point_name
+                    elif b_b.body_type == BodyType.FLEXIBLE.value:
+                        # Find matching interface on body B
+                        iface_b = next((iface for iface in self.interfaces.values() if iface.body_name == b_b.name), None)
+                        if iface_b:
+                            p2 = iface_b.ref_point_name
 
             actions.append(wire_connector(
                 model_name,
@@ -485,11 +701,45 @@ class MechanismGraph:
                 section_name=sec_name,
                 point1_name=p1,
                 point2_name=p2,
+                wire_feature_name=joint.wire_feature_name or ("Wire-" + j_name),
+                wire_set_name=joint.wire_set_name or ("Set-Wire-" + j_name),
                 orientation=joint.orientation or True,
             ))
 
-        # 5. Loads and Gravity
+        # ---------------------------------------------------------------------
+        # 5. Dynamic Analysis Procedure and Sensor Outputs
+        # ---------------------------------------------------------------------
+        if analysis:
+            actions.append(implicit_dynamic_step(
+                model_name,
+                name=analysis.step_name,
+                previous="Initial",
+                time_period=analysis.time_period,
+                max_num_inc=analysis.max_num_inc,
+                initial_inc=analysis.initial_inc,
+                min_inc=analysis.min_inc,
+                max_inc=analysis.max_inc,
+                nlgeom=analysis.nlgeom,
+            ))
+            actions.append(field_output(
+                model_name,
+                variables=analysis.field_variables,
+                request="F-Output-Mechanism",
+                step=analysis.step_name,
+                frequency=analysis.field_frequency,
+            ))
+            actions.append(history_output(
+                model_name,
+                variables=analysis.history_variables,
+                request="H-Output-Mechanism",
+                step=analysis.step_name,
+            ))
+
+        # ---------------------------------------------------------------------
+        # 6. Actuation, Gravity, and External Loads
+        # ---------------------------------------------------------------------
         for load in self.loads:
+            target_step = load.step_name or eff_step
             if load.load_type == "gravity":
                 actions.append(gravity(
                     model_name,
@@ -497,7 +747,7 @@ class MechanismGraph:
                     comp1=load.vector[0],
                     comp2=load.vector[1],
                     comp3=load.vector[2],
-                    step=load.step_name or step_name,
+                    step=target_step,
                     amplitude=load.amplitude,
                 ))
             elif load.load_type == "force" and load.magnitude is not None:
@@ -508,8 +758,35 @@ class MechanismGraph:
                     cf1=load.vector[0] * load.magnitude,
                     cf2=load.vector[1] * load.magnitude,
                     cf3=load.vector[2] * load.magnitude,
-                    step=load.step_name or step_name,
+                    step=target_step,
                     amplitude=load.amplitude,
                 ))
+
+        # ---------------------------------------------------------------------
+        # 7. Finite Element Meshing (Flexible Bodies and Meshable Parts)
+        # ---------------------------------------------------------------------
+        for b in self.bodies.values():
+            if b.mesh_size is not None and b.part_name:
+                actions.append(seed_part(model_name, b.part_name, size=b.mesh_size))
+                if b.element_code:
+                    elem_reg = "mdb.models[%r].parts[%r].sets[%r]" % (model_name, b.part_name, b.part_cells_set or "Cells")
+                    actions.append(element_type(
+                        model_name,
+                        b.part_name,
+                        region_expression=elem_reg,
+                        elem_code=b.element_code,
+                        library=b.element_library or "STANDARD",
+                    ))
+                actions.append(generate_mesh(model_name, b.part_name))
+
+        # ---------------------------------------------------------------------
+        # 8. Simulation Job Creation
+        # ---------------------------------------------------------------------
+        if eff_job:
+            actions.append(create_job(
+                model_name,
+                eff_job,
+                job_type="STANDARD",
+            ))
 
         return actions
