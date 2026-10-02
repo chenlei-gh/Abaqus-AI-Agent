@@ -1,6 +1,10 @@
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 import uuid
+
+
+def _utc_now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
 
 
 @dataclass
@@ -21,11 +25,11 @@ class ExecutionJournal:
 
     def start(self, action):
         record = ActionRecord(str(uuid.uuid4()), action.action_type, "execute",
-                              datetime.utcnow().isoformat() + "Z")
+                              _utc_now_iso())
         self.records.append(record)
         return record
 
     def finish(self, record, status, result=None, error=None):
-        record.finished_at = datetime.utcnow().isoformat() + "Z"
+        record.finished_at = _utc_now_iso()
         record.status, record.result, record.error = status, result, error
         return record
