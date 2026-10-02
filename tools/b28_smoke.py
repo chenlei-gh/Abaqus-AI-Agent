@@ -59,7 +59,19 @@ def main(argv=None):
             timeout=args.timeout,
         )
         process = executor.run_nogui(script_path, timeout=args.timeout)
-        parsed = parse_b28_output((process.stdout or "") + "\n" + (process.stderr or ""))
+        combined_output = (process.stdout or "") + "\n" + (process.stderr or "")
+        parsed = parse_b28_output(combined_output)
+        if not parsed.passed:
+            # Fallback to inspecting abaqus.rpy in workdir if CAE captured stdout
+            for rpy in sorted(Path(workdir).glob("abaqus.rpy*"), key=lambda p: p.stat().st_mtime, reverse=True):
+                try:
+                    content = rpy.read_text(encoding="utf-8", errors="replace")
+                    fallback_parsed = parse_b28_output(content)
+                    if fallback_parsed.passed:
+                        parsed = fallback_parsed
+                        break
+                except Exception:
+                    pass
         evidence.update({
             "command": list(process.command),
             "return_code": process.return_code,

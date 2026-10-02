@@ -668,6 +668,27 @@ The following golden engineering cases have all completed and passed real-machin
 
 > **Note on multi-body dynamics scope**: MBD-1 establishes single-body rigid dynamics via Reference Points and native `RigidBody` constraints. MBD-2 establishes two-body articulated multi-body dynamics connected by native `CONN3D2` revolute/hinge connector elements with local coordinate orientation. More complex multi-body mechanisms (such as Cartesian/Slot joints, bushings, and closed-loop kinematic chains) remain planned for subsequent extensions.
 
+### Unified Golden Validation Matrix & Evidence Catalog
+
+All 9 Golden Cases are governed by a strongly typed registry and a unified 12-key evidence envelope schema:
+`case_id, release, runtime, solver, job, odb, solver_status, result_evidence, verification, acceptance, artifacts, provenance`.
+
+A centralized CLI tool (`tools/run_golden_matrix.py`) manages discovery, schema validation, live execution, and manifest generation:
+
+```bash
+# 1. Inspect status of all 9 Golden Cases
+python tools/run_golden_matrix.py --list
+
+# 2. Validate all existing evidence JSON files against the unified schema
+python tools/run_golden_matrix.py --validate-evidence all
+
+# 3. Execute all or selected Golden Cases on a live Abaqus launcher
+python tools/run_golden_matrix.py --run all --launcher "C:\SIMULIA\Commands\abaqus.bat"
+
+# 4. Generate a consolidated Golden Matrix Manifest JSON
+python tools/run_golden_matrix.py --manifest-out machine_validation/golden_matrix_manifest.json
+```
+
 ## Abaqus R2018 / B28 validation
 
 The project is designed to be validated against real Abaqus installations rather than declaring compatibility from API names alone.

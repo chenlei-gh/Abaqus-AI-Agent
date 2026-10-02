@@ -41,6 +41,26 @@ def preflight_action(action, snapshot=None):
         check("slave_expression", bool(action.parameters.get("slave_expression")))
         check("property", bool(action.parameters.get("property")))
 
+    if action.action_type == "reference_point":
+        check("name", bool(action.parameters.get("name")))
+        coords = action.parameters.get("coordinates")
+        check("coordinates", bool(coords and len(coords) == 3))
+
+    if action.action_type == "rigid_body":
+        check("name", bool(action.parameters.get("name")))
+        check("ref_point_expression", bool(action.parameters.get("ref_point_expression")))
+
+    if action.action_type == "connector_section":
+        check("name", bool(action.parameters.get("name")))
+        check("section_type", bool(action.parameters.get("assembled_type") or action.parameters.get("translational_type") or action.parameters.get("rotational_type")))
+
+    if action.action_type == "wire_connector":
+        check("name", bool(action.parameters.get("name")))
+        check("section_name", bool(action.parameters.get("section_name")))
+        has_p1 = bool(action.parameters.get("point1_name") or action.parameters.get("point1_expression"))
+        has_p2 = bool(action.parameters.get("point2_name") or action.parameters.get("point2_expression"))
+        check("endpoints", bool(has_p1 and has_p2))
+
     if action.action_type in ("instance_translate", "instance_rotate"):
         instances = getattr(snapshot, "instances", ()) if snapshot is not None and not isinstance(snapshot, dict) else ((snapshot or {}).get("instances", ()) if isinstance(snapshot, dict) else ())
         check("instance_exists", action.parameters.get("instance") in instances, action.parameters.get("instance"))

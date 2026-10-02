@@ -202,6 +202,9 @@ def parse_b28_output(output):
     import json
     markers = []
     for line in str(output or "").splitlines():
+        line = line.strip()
+        if line.startswith("#:"):
+            line = line[2:].strip()
         prefix = "AIA_B28_MARKER "
         if line.startswith(prefix):
             try:

@@ -31,7 +31,18 @@ from .workflow import AnalysisWorkflow
 
 __version__ = "0.2.2"
 
-from .benchmark_catalog import standard_benchmarks
+from .golden_registry import (
+    GoldenCriterion,
+    GoldenCaseDefinition,
+    GoldenMatrixCatalog,
+    standard_golden_catalog,
+)
+from .golden_evidence import (
+    GoldenEvidenceEnvelope,
+    normalize_golden_evidence,
+    load_and_normalize_evidence_file,
+    validate_golden_evidence_dict,
+)
 
 from .engineering_evidence import reaction_balance_from_field_evidence, energy_ratio_from_history_evidence
 

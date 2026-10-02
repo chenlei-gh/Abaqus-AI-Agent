@@ -660,6 +660,27 @@ python -m pytest -q
 
 > **多体动力学边界说明**：MBD-1 验证了基于 Reference Point 与原生 `RigidBody` 约束的单体刚体动力学；MBD-2 进一步闭环了基于原生 `CONN3D2` 铰接连接器（Hinge Connector Element + 局部坐标系定向）的双刚体多体动力学系统。更复杂的机构系统（如 Cartesian/Slot 运动副、衬套以及闭环运动链）规划在后续扩展中。
 
+### 统一 Golden 验证矩阵与证据目录
+
+全仓 9 项真机 Golden Case 已全部收敛至强类型注册表与统一的 12 项证据信封标准模式：
+`case_id, release, runtime, solver, job, odb, solver_status, result_evidence, verification, acceptance, artifacts, provenance`。
+
+统一 CLI 管理与执行工具 (`tools/run_golden_matrix.py`) 支持状态发现、Schema 校验、真机批量运行与 Manifest 生成：
+
+```bash
+# 1. 查询全部 9 个 Golden Case 的注册与证据状态
+python tools/run_golden_matrix.py --list
+
+# 2. 校验全部现有机器证据 JSON 文件是否符合统一信封 Schema 且通过验收
+python tools/run_golden_matrix.py --validate-evidence all
+
+# 3. 在指定 Abaqus 求解器上执行单个或全部 Golden Case
+python tools/run_golden_matrix.py --run all --launcher "C:\SIMULIA\Commands\abaqus.bat"
+
+# 4. 生成全仓统一的 Golden 验证 Manifest JSON 资产
+python tools/run_golden_matrix.py --manifest-out machine_validation/golden_matrix_manifest.json
+```
+
 ## Abaqus V5 R2018 / B28 验证
 
 项目不会仅根据“API 名称看起来一致”就宣布某个 Abaqus 版本兼容。
