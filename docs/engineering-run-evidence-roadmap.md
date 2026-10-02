@@ -1,6 +1,6 @@
 # Engineering Run / Evidence Closure Roadmap
 
-**Status:** Foundational Contracts Closed & Frozen at Commit `644cad7`; Real-Machine Validation Phase Active  
+**Status:** Foundational Contracts Closed & Frozen at Commit `644cad7`; Real-Machine Validation (Tier 1~5 Live Gate & Phase H Productization E2E) FULLY CLOSED & VALIDATED ✅  
 **Version:** 2026-10-02 (Post-Contract-Closure Baseline)  
 **Scope:** Abaqus-AI-Agent engineering architecture, foundational contracts, evidence chain, remaining implementation, and real-machine validation
 
@@ -784,7 +784,7 @@ The default implementation order is:
 - [x] Strengthen MaterialDefinition without creating a second material architecture
 - [x] Strengthen AnalysisStep without creating a second step architecture
 
-### Phase G — Real-Machine Live Validation Matrix (Executing Tier 1 ~ Tier 5)
+### Phase G — Real-Machine Live Validation Matrix (Tier 1 ~ Tier 5) [CLOSED & FROZEN]
 
 - [x] Tier 1: Region & Geometry Grounding in Live Abaqus (Face/Edge/Node/Set/Surface live presence & fail-closed)
 - [x] Tier 2: BC / Load Engineering Equivalence (RF vs CF/Pressure balance, Thermal gradient, structural conflict/singularity)
@@ -792,12 +792,18 @@ The default implementation order is:
 - [x] Tier 4: MaterialDefinition Full-Chain Verification (elastic, plastic, thermal properties in INP and ODB)
 - [x] Tier 5: AnalysisStep Procedure Verification (max_increment, steady_state, amplitude solver control)
 
-### Phase H — Productization
+> **Architectural Status**: Foundational Engineering Contract CLOSED ✅; Tier 1~5 Real-Machine Gate CLOSED ✅; Low-level Abaqus API expansion FROZEN 🔒.
 
-- [x] Case Memory / Run Index
-- [x] polished engineering report
-- [x] run comparison UX
-- [x] evidence browsing / traceability
+### Phase H — Productization & End-to-End Engineering Workflow Validation
+
+- [x] H.1: End-to-End Engineering Report Generator (Real ODB + Evidence Envelope -> Structured Engineering Report)
+- [x] H.2: Real ODB Fatigue Postprocessing Workflow (Stress history -> Rainflow counting -> Goodman -> Miner damage -> Acceptance)
+- [x] H.3: Mesh Convergence & GCI Uncertainty Workflow (Coarse/Medium/Fine -> Monotonicity -> Richardson extrapolation -> GCI evidence)
+- [x] H.4: Contact & Interaction Mechanical Continuity Workflow (Tie & General contact -> Kinematic continuity -> ODB evidence)
+- [x] H.5: Controlled Solver Failure Diagnostics & Remediation (Real solver error -> Diagnosis ID -> Root cause -> Remediation plan)
+- [x] H.6: Image / Intent to Region Grounding Real Validation (Intent -> Viewport candidate -> Region binding -> CAE validation)
+- [x] H.7: Sensitivity & Model Uncertainty Verification (Parameter perturbation -> Response variation -> Sensitivity index)
+- [x] H.8: Case Memory & AnalysisRun Comparison (Run index -> Fast retrieval -> Baseline/Candidate structural diff)
 
 ---
 

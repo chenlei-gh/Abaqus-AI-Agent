@@ -131,7 +131,7 @@ try:
     non_existent_caught = False
     try:
         _ = a.sets['NonExistent_Set_999']
-    except (KeyError, Exception) as e:
+    except Exception as e:
         non_existent_caught = True
         report["negative_tests"]["non_existent_set_error"] = str(type(e).__name__)
     report["negative_tests"]["non_existent_set_caught"] = non_existent_caught
