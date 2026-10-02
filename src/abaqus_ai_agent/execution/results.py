@@ -51,12 +51,18 @@ def _frame_value(executor, path, step, frame):
     code = """import json
 from odbAccess import openOdb
 odb=openOdb(path=%r, readOnly=True)
-st=odb.steps[%r]
+step_name=%r
+if not step_name:
+    names=list(odb.steps.keys())
+    if not names:
+        raise ValueError('ODB contains no analysis steps')
+    step_name=names[-1]
+st=odb.steps[step_name]
 fr=st.frames[%r]
-print(json.dumps({'step':%r,'frame_index':%r,'frame_value':getattr(fr,'frameValue',None),
+print(json.dumps({'step':step_name,'frame_index':%r,'frame_value':getattr(fr,'frameValue',None),
        'description':getattr(fr,'description',None)}))
 odb.close()
-""" % (path, step, frame, step, frame)
+""" % (path, step, frame, frame)
     return _payload(executor.execute(code))
 
 
@@ -95,20 +101,45 @@ odb.close()
     return _payload(executor.execute(code))
 
 
+def _resolve_step_requirement(executor, path, step):
+    """Resolve an omitted result step to the last analysis step in the ODB."""
+    if step:
+        return step
+    code = """from odbAccess import openOdb
+odb=openOdb(path=%r, readOnly=True)
+names=list(odb.steps.keys())
+if not names:
+    raise ValueError('ODB contains no analysis steps')
+print(names[-1])
+odb.close()
+""" % path
+    raw = executor.execute(code)
+    payload = _payload(raw)
+    if isinstance(payload, dict):
+        for key in ("step", "stdout", "output"):
+            value = payload.get(key)
+            if isinstance(value, str) and value.strip():
+                return value.strip().splitlines()[-1].strip()
+    text = str(raw).strip()
+    if text:
+        return text.splitlines()[-1].strip()
+    raise ValueError("unable to resolve result step")
+
+
 def extract_requirement(executor, path, requirement):
     from .odb import extract_field
 
+    step = _resolve_step_requirement(executor, path, requirement.step)
+
     if requirement.output_kind == "history":
-        if not requirement.step:
-            raise ValueError("step is required for history result %s" % requirement.value_key)
         payload = _history_output(
-            executor, path, requirement.step, requirement.history_region,
+            executor, path, step, requirement.history_region,
             requirement.history_variable, requirement.aggregation)
         value = payload.get("value")
         if not isinstance(value, (int, float)):
             raise ValueError("history value unavailable for %s" % requirement.value_key)
         locator = {
-            "step": requirement.step,
+            "step": step,
             "history_region": payload.get("region"),
             "history_region_expression": requirement.history_region_expression,
             "history_variable": requirement.history_variable,
@@ -122,22 +153,19 @@ def extract_requirement(executor, path, requirement):
 
     if requirement.output_kind == "frame_value":
         payload = _frame_value(
-            executor, path, requirement.step, requirement.frame)
+            executor, path, step, requirement.frame)
         value = payload.get("frame_value")
         if not isinstance(value, (int, float)):
             raise ValueError("frame value unavailable for %s" % requirement.value_key)
         return ResultExtraction(
             requirement, float(value),
-            locator={"step": requirement.step, "frame": requirement.frame},
+            locator={"step": payload.get("step", step), "frame": requirement.frame},
             evidence=(Evidence(kind="odb_frame_value", source="odb",
-                        locator=str({"step": requirement.step, "frame": requirement.frame}),
+                        locator=str({"step": payload.get("step", step), "frame": requirement.frame}),
                         value=float(value), metadata={"payload": payload}),))
 
-    if not requirement.step:
-        raise ValueError("step is required for field result %s" % requirement.value_key)
-
     payload = _payload(extract_field(
-        executor, path, requirement.step, requirement.field,
+        executor, path, step, requirement.field,
         component=requirement.component, invariant=requirement.invariant,
         position=requirement.position, region=requirement.region,
         frame=requirement.frame))
@@ -163,12 +191,12 @@ def extract_requirement(executor, path, requirement):
 
     if requirement.aggregation == "average":
         value = sum(scalar_values) / float(len(scalar_values))
-        locator = {"step": requirement.step, "frame": requirement.frame}
+        locator = {"step": step, "frame": requirement.frame}
     else:
         value = scalar_values[index]
         item = scalar_items[index]
         locator = {
-            "step": requirement.step,
+            "step": step,
             "frame": requirement.frame,
             "instance": item.get("instance"),
             "node_label": item.get("node_label"),
