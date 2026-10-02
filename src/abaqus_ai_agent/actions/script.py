@@ -120,17 +120,39 @@ def action_to_script(action):
     if k == "field_output":
         request = p.get("request", "F-Output-1")
         variables = tuple(p.get("variables", ("S", "U", "RF")))
-        step = p.get("step", "Initial")
-        return "model=mdb.models[%s]; req=(model.fieldOutputRequests[%s] if %s in model.fieldOutputRequests else None); req=req or model.FieldOutputRequest(name=%s, createStepName=%s, variables=%r); req.setValues(variables=%r)" % (_q(m), _q(request), _q(request), _q(step), variables, variables)
+        step = p.get("step", "Step-1")
+        return (
+            "import step; model=mdb.models[%s]; "
+            "_st=%s; _st=([s for s in model.steps.keys() if s != 'Initial'] or [_st])[0] if _st == 'Initial' else _st; "
+            "req=(model.fieldOutputRequests[%s] if %s in model.fieldOutputRequests else None); "
+            "req=req or model.FieldOutputRequest(name=%s, createStepName=_st, variables=%r); "
+            "req.setValues(variables=%r)"
+            % (_q(m), _q(step), _q(request), _q(request), _q(request), variables, variables)
+        )
     if k == "history_output":
         request = p.get("request", "H-Output-1")
         variables = tuple(p.get("variables", ("ALLIE",)))
         step = p.get("step", "Step-1")
         if not p.get("region_expression"):
-            return "model=mdb.models[%s]; req=(model.historyOutputRequests[%s] if %s in model.historyOutputRequests else None); req=req or model.HistoryOutputRequest(name=%s, createStepName=%s, variables=%r); req.setValues(variables=%r)" % (_q(m), _q(request), _q(request), _q(step), variables, variables)
-        return "model=mdb.models[%s]; model.HistoryOutputRequest(name=%s, createStepName=%s, variables=%r, region=%s)" % (_q(m), _q(request), _q(step), variables, p["region_expression"])
+            return (
+                "import step; model=mdb.models[%s]; "
+                "_st=%s; _st=([s for s in model.steps.keys() if s != 'Initial'] or [_st])[0] if _st == 'Initial' else _st; "
+                "req=(model.historyOutputRequests[%s] if %s in model.historyOutputRequests else None); "
+                "req=req or model.HistoryOutputRequest(name=%s, createStepName=_st, variables=%r); "
+                "req.setValues(variables=%r)"
+                % (_q(m), _q(step), _q(request), _q(request), _q(request), variables, variables)
+            )
+        return (
+            "import step; model=mdb.models[%s]; "
+            "_st=%s; _st=([s for s in model.steps.keys() if s != 'Initial'] or [_st])[0] if _st == 'Initial' else _st; "
+            "model.HistoryOutputRequest(name=%s, createStepName=_st, variables=%r, region=%s)"
+            % (_q(m), _q(step), _q(request), variables, p["region_expression"])
+        )
     if k == "create_job":
-        return "mdb.Job(name=%s, model=%s, type=%s)" % (_q(p["name"]), _q(m), p.get("job_type", "STANDARD"))
+        jt = p.get("job_type", "ANALYSIS")
+        if jt in ("STANDARD", "EXPLICIT", None):
+            jt = "ANALYSIS"
+        return "from abaqusConstants import *; mdb.Job(name=%s, model=%s, type=%s)" % (_q(p["name"]), _q(m), jt)
     if k == "submit_job":
         return "from abaqusConstants import ON; mdb.jobs[%s].submit(consistencyChecking=ON)" % _q(p["name"])
     if k == "seed_part":

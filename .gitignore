@@ -19,3 +19,7 @@ machine_validation/
 *.com
 *.prt
 *.rpy
+*.rpy.*
+*.rec
+*.inp
+*.log

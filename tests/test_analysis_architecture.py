@@ -71,3 +71,19 @@ def test_mesh_quality_script_uses_native_abaqus_verifier():
     assert "ASPECT_RATIO" in script
     assert "ANALYSIS_CHECKS" in script
     assert "computed_quality" not in script
+
+
+def test_output_request_scripts_format_cleanly():
+    from abaqus_ai_agent.actions.builders import field_output, history_output
+
+    fo = field_output("Model-1", variables=("S", "U", "RF"), request="F-Output-1")
+    fo_script = action_to_script(fo)
+    assert "FieldOutputRequest(name='F-Output-1'" in fo_script
+    assert "createStepName=_st" in fo_script
+    assert "('S', 'U', 'RF')" in fo_script
+
+    ho = history_output("Model-1", variables=("ALLIE",), request="H-Output-1", step="Step-1")
+    ho_script = action_to_script(ho)
+    assert "HistoryOutputRequest(name='H-Output-1'" in ho_script
+    assert "createStepName=_st" in ho_script
+    assert "('ALLIE',)" in ho_script

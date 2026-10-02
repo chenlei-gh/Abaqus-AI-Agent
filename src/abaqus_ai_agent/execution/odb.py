@@ -65,7 +65,7 @@ def _extract_code(path, step, field, component=None, invariant=None,
         "'instance':getattr(getattr(v,'instance',None),'name',None),"
         "'position':str(getattr(v,'position',None)),"
         "'coordinates':_coords_for_value(v),"
-        "'data':v.data, 'magnitude':getattr(v,'magnitude',None),"
+        "'data':tuple(v.data) if hasattr(v.data, '__iter__') else v.data, 'magnitude':getattr(v,'magnitude',None),"
         "'mises':getattr(v,'mises',None),"
         "'maxPrincipal':getattr(v,'maxPrincipal',None)})\n"
         "result_meta={'step':%r,'frame_index':%r,"

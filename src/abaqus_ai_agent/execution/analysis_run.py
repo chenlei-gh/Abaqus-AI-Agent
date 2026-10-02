@@ -183,19 +183,25 @@ class AnalysisRunner:
                 provenance=_provenance_with_artifacts(run.provenance, artifacts),
             )
             if status.state != JobState.COMPLETED:
-                engineering = (
-                    EngineeringStatus.SOLVER_FAILED
-                    if status.state in (JobState.ABORTED, JobState.TERMINATED,
-                                         JobState.ERROR, JobState.TIMEOUT)
-                    else EngineeringStatus.EXECUTION_FAILED)
-                return run.with_state(
-                    AnalysisRunState.FAILED,
-                    job_status=status,
-                    engineering_status=engineering.value,
-                    artifacts=artifacts,
-                    diagnostics=({"reason": "job_not_completed",
-                                  "state": status.state.value,
-                                  "solver_artifacts": _collect_diagnostics(self.executor, job_name)},))
+                solver_diagnostics = _collect_diagnostics(self.executor, job_name)
+                sta_tail = solver_diagnostics.get(".sta", {}).get("tail", "")
+                log_tail = solver_diagnostics.get(".log", {}).get("tail", "")
+                if "THE ANALYSIS HAS COMPLETED SUCCESSFULLY" in sta_tail and "COMPLETED" in log_tail:
+                    status = JobStatus(job_name, JobState.COMPLETED, status.raw)
+                else:
+                    engineering = (
+                        EngineeringStatus.SOLVER_FAILED
+                        if status.state in (JobState.ABORTED, JobState.TERMINATED,
+                                             JobState.ERROR, JobState.TIMEOUT)
+                        else EngineeringStatus.EXECUTION_FAILED)
+                    return run.with_state(
+                        AnalysisRunState.FAILED,
+                        job_status=status,
+                        engineering_status=engineering.value,
+                        artifacts=artifacts,
+                        diagnostics=({"reason": "job_not_completed",
+                                      "state": status.state.value,
+                                      "solver_artifacts": solver_diagnostics},))
 
             run = run.with_state(
                 AnalysisRunState.COMPLETED,

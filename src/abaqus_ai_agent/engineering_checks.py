@@ -109,14 +109,23 @@ def check_declared_load_balance(applied_components, reaction_components,
     """
     if len(applied_components) != len(reaction_components):
         raise ValueError("applied/reaction component lengths must match")
+    ref_scale = max([abs(float(x)) for x in applied_components] + [1.0])
     checks = []
     for i, (applied, reaction) in enumerate(
             zip(applied_components, reaction_components), 1):
-        checks.append(check_balance(
-            "global_load_balance_RF%d" % i,
-            reaction,
-            -float(applied),
-            tolerance,
-            unit,
+        expected = -float(applied)
+        actual = float(reaction)
+        if abs(expected) > 1e-9:
+            error = abs(actual - expected) / abs(expected)
+        else:
+            error = abs(actual - expected) / ref_scale
+        checks.append(EngineeringCheck(
+            name="global_load_balance_RF%d" % i,
+            passed=error <= tolerance,
+            actual=actual,
+            expected=expected,
+            tolerance=float(tolerance),
+            unit=unit,
+            message="relative_error=%g" % error,
         ))
     return evaluate_checks(tuple(checks))

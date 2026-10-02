@@ -36,13 +36,13 @@ NU = 0.3
 FORCE = -1000.0
 
 
-def build_static_golden_script():
+def build_static_golden_script(src_dir=None):
+    src_dir = str(src_dir or SRC)
     # Keep the model construction inside an explicit python_action. All
     # subsequent mutations are normal AbaqusAction objects.
     geometry_code = r"""
 from abaqus import mdb
 from abaqusConstants import THREE_D, DEFORMABLE_BODY, ON, OFF, CARTESIAN
-from sketch import ConstrainedSketch
 
 if %r in mdb.models:
     del mdb.models[%r]
@@ -79,15 +79,51 @@ part.Set(name='AllCells', cells=part.cells)
 
 print('AIAgent_STATIC_GEOMETRY_CREATED')
 """ % (
-        MODEL, MODEL, MODEL, L, H, PART, B, INSTANCE, INSTANCE,
-        B / 2.0, H / 2.0, L, B / 2.0, H / 2.0,
-        L, L, B, L, 0.0, H, L, B, H,
-    )
+    MODEL, MODEL, MODEL, L, H, PART, B, INSTANCE, INSTANCE,
+    H / 2.0, B / 2.0, L, H / 2.0, B / 2.0,
+    L, L, H, L, B, L, H, B,
+)
+
+    evidence_sets_code = r"""
+from abaqusConstants import *
+model=mdb.models['StaticGolden']
+part=model.parts['Beam']
+inst=model.rootAssembly.instances['Beam-1']
+model.rootAssembly.regenerate()
+
+# Evidence sets are mesh-based so ODB field extraction receives true node/element sets.
+fixed_nodes = inst.nodes.getByBoundingBox(xMin=-0.01, xMax=0.01)
+if not fixed_nodes:
+    raise RuntimeError('FixedNodes set is empty')
+model.rootAssembly.Set(name='FixedNodes', nodes=fixed_nodes)
+
+tip_nodes = inst.nodes.getByBoundingBox(xMin=99.99, xMax=100.01)
+if not tip_nodes:
+    raise RuntimeError('TipNodes set is empty')
+model.rootAssembly.Set(name='TipNodes', nodes=tip_nodes)
+
+root_elements = part.elements.getByBoundingBox(xMin=-0.01, xMax=10.01)
+if not root_elements:
+    raise RuntimeError('RootElements set is empty')
+part.Set(name='RootElements', elements=root_elements)
+
+tip_rp = model.rootAssembly.referencePoints
+# The four-vertex CLOAD is applied symmetrically; no separate RP is needed.
+print('AIAgent_STATIC_EVIDENCE_SETS_CREATED')
+"""
 
     # This is intentionally assembled from the project's Action builders.
     # The CAE-side script imports them after Abaqus starts.
     return """
+import sys
+_src_dir = %r
+if _src_dir not in sys.path:
+    sys.path.insert(0, _src_dir)
+
+import ast
+import io
 import json
+import os
 from dataclasses import asdict, is_dataclass
 
 from abaqus_ai_agent.actions.builders import (
@@ -103,85 +139,86 @@ from abaqus_ai_agent.contracts.intent import EngineeringIntent
 from abaqus_ai_agent.engineering_evidence import reaction_balance_from_field_evidence
 from abaqus_ai_agent.acceptance import evaluate_result_acceptance
 
-MODEL=%r
-PART=%r
-INSTANCE=%r
-JOB=%r
-STEP=%r
-L=%r
-B=%r
-H=%r
-E=%r
-NU=%r
-FORCE=%r
+model_name=%r
+part_name=%r
+instance_name=%r
+job_name=%r
+step_name=%r
+beam_l=%r
+beam_b=%r
+beam_h=%r
+mat_e=%r
+mat_nu=%r
+applied_force=%r
 
 def _run_code(code):
-    exec(compile(code, '<AIAgent-StaticGolden>', 'exec'), globals(), globals())
+    buf = io.StringIO()
+    old_stdout = sys.stdout
+    sys.stdout = buf
+    try:
+        exec(compile(code, '<AIAgent-StaticGolden>', 'exec'), globals(), globals())
+    finally:
+        sys.stdout = old_stdout
+    out = buf.getvalue().strip()
+    res = globals().get('result')
+    if isinstance(res, dict):
+        return res
+    if out:
+        last_line = out.splitlines()[-1].strip()
+        try:
+            val = ast.literal_eval(last_line)
+            if isinstance(val, dict):
+                return val
+        except Exception:
+            pass
+        return {'status': 'COMPLETED', 'stdout': out, 'output': out}
     return {'status': 'COMPLETED'}
 
-executor = InProcessExecutor(_run_code)
+class CAEInProcessExecutor(InProcessExecutor):
+    def inspect_odb(self, path):
+        from odbAccess import openOdb
+        odb = openOdb(path=path, readOnly=True)
+        res = {
+            'status': 'available',
+            'steps': list(odb.steps.keys()),
+            'instances': list(odb.rootAssembly.instances.keys()),
+            'step_frames': {k: len(v.frames) for k, v in odb.steps.items()},
+        }
+        odb.close()
+        return res
 
-geometry = python_action(MODEL, %r)
+executor = CAEInProcessExecutor(_run_code)
+
+geometry = python_action(model_name, %r)
 execute(executor, geometry)
 
 plan = build_static_plan(
-    MODEL,
-    {'name': 'Steel', 'youngs_modulus': E, 'poisson': NU},
+    model_name,
+    {'name': 'Steel', 'youngs_modulus': mat_e, 'poisson': mat_nu},
     {
         'section': 'BeamSection',
         'fixed': "mdb.models['StaticGolden'].rootAssembly.sets['FixedFace']",
         'load': "mdb.models['StaticGolden'].rootAssembly.sets['TipLoadVertices']",
     },
-    force={'cf2': FORCE / 4.0},
-    job_name=JOB,
-    step_name=STEP,
+    force={'cf2': applied_force / 4.0},
+    job_name=job_name,
+    step_name=step_name,
 )
 
 actions = list(plan.actions[:-1])
 actions.insert(3, section_assignment(
-    MODEL, PART, 'BeamSection',
+    model_name, part_name, 'BeamSection',
     "mdb.models['StaticGolden'].parts['Beam'].sets['AllCells']",
 ))
 actions.extend([
-    seed_part(MODEL, PART, 2.5),
+    seed_part(model_name, part_name, 2.5),
     element_type(
-        MODEL, PART,
-        "mdb.models['StaticGolden'].parts['Beam'].cells",
+        model_name, part_name,
+        "mdb.models['StaticGolden'].parts['Beam'].sets['AllCells']",
         elem_code='C3D8R', library='STANDARD',
     ),
-    generate_mesh(MODEL, PART),
-    python_action(MODEL, r"""
-from abaqusConstants import *
-model=mdb.models['StaticGolden']
-part=model.parts['Beam']
-inst=model.rootAssembly.instances['Beam-1']
-
-# Evidence sets are mesh-based so ODB field extraction receives true node/element sets.
-fixed_nodes=tuple(n for n in inst.nodes if abs(n.coordinates[0]) < 1.0e-9)
-if not fixed_nodes:
-    raise RuntimeError('FixedNodes set is empty')
-model.rootAssembly.Set(name='FixedNodes', nodes=fixed_nodes)
-
-tip_nodes=tuple(n for n in inst.nodes if abs(n.coordinates[0] - 100.0) < 1.0e-9)
-if not tip_nodes:
-    raise RuntimeError('TipNodes set is empty')
-model.rootAssembly.Set(name='TipNodes', nodes=tip_nodes)
-
-node_by_label={n.label:n for n in part.nodes}
-root_elements=[]
-for elem in part.elements:
-    pts=[node_by_label[label].coordinates for label in elem.connectivity]
-    cx=sum(p[0] for p in pts)/float(len(pts))
-    if cx <= 10.0 + 1.0e-9:
-        root_elements.append(elem)
-if not root_elements:
-    raise RuntimeError('RootElements set is empty')
-part.Set(name='RootElements', elements=tuple(root_elements))
-
-tip_rp = model.rootAssembly.referencePoints
-# The four-vertex CLOAD is applied symmetrically; no separate RP is needed.
-print('AIAgent_STATIC_EVIDENCE_SETS_CREATED')
-"""),
+    generate_mesh(model_name, part_name),
+    python_action(model_name, %r),
     plan.actions[-1],
 ])
 
@@ -191,7 +228,7 @@ for action in actions:
 # Native mesh verifier is executed through the existing action path. Its result
 # is recorded, but this Golden Case does not invent a new mesh-quality gate.
 mesh_result = execute(executor, mesh_quality(
-    MODEL, PART,
+    model_name, part_name,
     max_aspect_ratio=5.0,
     max_angular_deviation=20.0,
     max_geometric_deviation_factor=0.1,
@@ -209,9 +246,9 @@ criteria = (
             'field': 'U',
             'invariant': 'MAGNITUDE',
             'aggregation': 'max',
-            'step': STEP,
+            'step': step_name,
             'frame': -1,
-            'region': "odb.rootAssembly.nodeSets['TipLoadVertices']",
+            'region': "odb.rootAssembly.nodeSets['TIPLOADVERTICES']",
         },
     },
     {
@@ -224,9 +261,9 @@ criteria = (
             'field': 'U',
             'invariant': 'MAGNITUDE',
             'aggregation': 'max',
-            'step': STEP,
+            'step': step_name,
             'frame': -1,
-            'region': "odb.rootAssembly.nodeSets['TipLoadVertices']",
+            'region': "odb.rootAssembly.nodeSets['TIPLOADVERTICES']",
         },
     },
     {
@@ -239,16 +276,19 @@ criteria = (
             'field': 'S',
             'invariant': 'MISES',
             'aggregation': 'max',
-            'step': STEP,
+            'step': step_name,
             'frame': -1,
-            'region': "odb.rootAssembly.instances['Beam-1'].elementSets['RootElements']",
+            'region': "odb.rootAssembly.instances['BEAM-1'].elementSets['ROOTELEMENTS']",
         },
     },
 )
 
+odb_expected_path = os.path.abspath(job_name + '.odb')
+
 run = AnalysisRunner(executor).run(
-    model_name=MODEL,
-    job_name=JOB,
+    model_name=model_name,
+    job_name=job_name,
+    odb_path=odb_expected_path,
     criteria=criteria,
     timeout=3600,
     action_plan=tuple(actions),
@@ -268,11 +308,10 @@ if not run.odb_path:
 reaction_field = extract_field(
     executor,
     run.odb_path,
-    STEP,
+    step_name,
     'RF',
-    component='RF2',
     frame=-1,
-    region="odb.rootAssembly.nodeSets['FixedNodes']",
+    region="odb.rootAssembly.nodeSets['FIXEDNODES']",
 )
 
 reaction_report, reaction_summary = reaction_balance_from_field_evidence(
@@ -280,7 +319,7 @@ reaction_report, reaction_summary = reaction_balance_from_field_evidence(
         'status': 'available',
         'values': reaction_field.get('values', []),
     },
-    applied_components=(0.0, FORCE, 0.0),
+    applied_components=(0.0, applied_force, 0.0),
     tolerance=0.01,
     unit='N',
 )
@@ -311,12 +350,12 @@ report = {
         and reaction_report.passed
         and final_acceptance.passed
     ) else 'fail',
-    'model': {'length_mm': L, 'width_mm': B, 'height_mm': H},
-    'material': {'E_MPa': E, 'nu': NU},
-    'load': {'Fy_N': FORCE},
+    'model': {'length_mm': beam_l, 'width_mm': beam_b, 'height_mm': beam_h},
+    'material': {'E_MPa': mat_e, 'nu': mat_nu},
+    'load': {'Fy_N': applied_force},
     'theory': {
-        'tip_displacement_mm': abs(FORCE) * L ** 3 / (3.0 * E * (B * H ** 3 / 12.0)),
-        'root_bending_stress_MPa': abs(FORCE) * L * (H / 2.0) / (B * H ** 3 / 12.0),
+        'tip_displacement_mm': abs(applied_force) * beam_l ** 3 / (3.0 * mat_e * (beam_b * beam_h ** 3 / 12.0)),
+        'root_bending_stress_MPa': abs(applied_force) * beam_l * (beam_h / 2.0) / (beam_b * beam_h ** 3 / 12.0),
     },
     'workflow': {
         'static_plan_actions': len(plan.actions),
@@ -351,13 +390,13 @@ def _default(value):
         return value.value
     if isinstance(value, tuple):
         return list(value)
-    raise TypeError('not JSON serializable: %r' % (type(value),))
+    raise TypeError('not JSON serializable: ' + repr(type(value)))
 
 print('AIAgent_STATIC_GOLDEN_RESULT_BEGIN')
 print(json.dumps(report, default=_default, sort_keys=True))
 print('AIAgent_STATIC_GOLDEN_RESULT_END')
 """ % (
-        MODEL, PART, INSTANCE, JOB, STEP, L, B, H, E, NU, FORCE, geometry_code
+        src_dir, MODEL, PART, INSTANCE, JOB, STEP, L, B, H, E, NU, FORCE, geometry_code, evidence_sets_code
     )
 
 
@@ -367,7 +406,14 @@ def _extract_report(stdout):
     if begin not in stdout or end not in stdout:
         return None
     payload = stdout.split(begin, 1)[1].split(end, 1)[0].strip()
-    return json.loads(payload)
+    clean_lines = []
+    for line in payload.splitlines():
+        line = line.strip()
+        if line.startswith('#:'):
+            line = line[2:].strip()
+        if line:
+            clean_lines.append(line)
+    return json.loads('\n'.join(clean_lines))
 
 
 def main(argv=None):
@@ -397,7 +443,13 @@ def main(argv=None):
             launcher=args.launcher, workdir=workdir, timeout=args.timeout
         )
         process = executor.run_nogui(script_path, timeout=args.timeout)
-        report = _extract_report((process.stdout or '') + '\n' + (process.stderr or ''))
+        output_text = (process.stdout or '') + '\n' + (process.stderr or '')
+        report = _extract_report(output_text)
+        if not report:
+            rpy_path = os.path.join(workdir, 'abaqus.rpy')
+            if os.path.exists(rpy_path):
+                with open(rpy_path, 'r', encoding='utf-8', errors='ignore') as handle:
+                    report = _extract_report(handle.read())
         evidence.update({
             'command': list(process.command),
             'return_code': process.return_code,
