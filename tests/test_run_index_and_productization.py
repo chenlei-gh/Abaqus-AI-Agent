@@ -84,3 +84,66 @@ def test_render_analysis_report_markdown_and_html():
     assert "1.45" in md
     assert "<!doctype html>" in html_out
     assert "Bracket Structural Verification" in html_out
+
+
+def test_run_index_persistence_and_manifest(tmp_path):
+    index = RunIndex()
+
+    run1 = AnalysisRun(
+        id="run-persist-1",
+        model_name="Beam",
+        job_name="JobBeam",
+        state=AnalysisRunState.ACCEPTED,
+        solver="standard",
+        engineering_status="result_valid",
+        acceptance_passed=True,
+        metrics=(EngineeringMetric("peak_mises", 210.5, "MPa"),),
+        assumptions=("linear",),
+        provenance=AnalysisProvenance(run_id="run-persist-1", model_name="Beam", job_name="JobBeam"),
+    )
+
+    run2 = AnalysisRun(
+        id="run-persist-2",
+        model_name="Plate",
+        job_name="JobPlate",
+        state=AnalysisRunState.FAILED,
+        solver="explicit",
+        engineering_status="diverged",
+        acceptance_passed=False,
+        metrics=(EngineeringMetric("energy_ratio", 1.8, "ratio"),),
+        diagnostics=("abnormal energy growth",),
+        provenance=AnalysisProvenance(run_id="run-persist-2", model_name="Plate", job_name="JobPlate"),
+    )
+
+    index.add_run(run1)
+    index.add_run(run2)
+
+    save_dir = tmp_path / "case_memory"
+    saved_count = index.save_to_directory(save_dir)
+    assert saved_count == 2
+    assert (save_dir / "run-persist-1.json").exists()
+    assert (save_dir / "run-persist-2.json").exists()
+    assert (save_dir / "manifest.json").exists()
+
+    manifest = index.export_manifest()
+    assert manifest["total_runs"] == 2
+    assert len(manifest["runs"]) == 2
+
+    # Test restoring from directory into a fresh index
+    restored_index = RunIndex()
+    loaded_count = restored_index.load_from_directory(save_dir)
+    assert loaded_count == 2
+    assert restored_index.get_run("run-persist-1") is not None
+    assert restored_index.get_run("run-persist-2") is not None
+
+    r1 = restored_index.get_run("run-persist-1")
+    assert r1.solver == "standard"
+    assert r1.acceptance_passed is True
+    assert r1.get_metric("peak_mises") == 210.5
+    assert r1.provenance is not None
+    assert r1.provenance.model_name == "Beam"
+
+    r2 = restored_index.get_run("run-persist-2")
+    assert r2.solver == "explicit"
+    assert r2.acceptance_passed is False
+    assert r2.diagnostics == ("abnormal energy growth",)

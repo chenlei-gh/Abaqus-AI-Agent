@@ -134,6 +134,65 @@ class AnalysisRun:
             "report_reference": self.report_reference,
         }
 
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "AnalysisRun":
+        """Reconstruct an AnalysisRun instance from its serialized dictionary representation."""
+        st_val = data.get("state", "created")
+        try:
+            state = AnalysisRunState(st_val)
+        except (ValueError, TypeError):
+            state = AnalysisRunState.CREATED
+
+        raw_metrics = data.get("metrics", [])
+        parsed_metrics = []
+        for m in raw_metrics:
+            if isinstance(m, dict):
+                from ..contracts.metrics import EngineeringMetric
+                parsed_metrics.append(EngineeringMetric(
+                    name=m.get("name", "unknown"),
+                    value=m.get("value", 0.0),
+                    unit=m.get("unit", ""),
+                    source=m.get("source", "odb"),
+                    quantity=m.get("quantity", ""),
+                    metadata=dict(m.get("metadata", {})),
+                ))
+            else:
+                parsed_metrics.append(m)
+
+        raw_prov = data.get("provenance")
+        prov = None
+        if isinstance(raw_prov, dict):
+            from ..contracts.provenance import AnalysisProvenance
+            prov = AnalysisProvenance(
+                run_id=raw_prov.get("run_id", data.get("id", "")),
+                model_name=raw_prov.get("model_name", data.get("model_name", "")),
+                job_name=raw_prov.get("job_name", data.get("job_name", "")),
+                model_hash=raw_prov.get("model_hash"),
+                input_hash=raw_prov.get("input_hash"),
+                output_hash=raw_prov.get("output_hash"),
+                environment=dict(raw_prov.get("environment", {})),
+                metadata=dict(raw_prov.get("metadata", {})),
+            )
+
+        return cls(
+            id=data.get("id", str(uuid.uuid4())),
+            model_name=data.get("model_name", "Model-1"),
+            job_name=data.get("job_name", "Job-1"),
+            state=state,
+            solver=data.get("solver", "standard"),
+            odb_path=data.get("odb_path"),
+            engineering_status=data.get("engineering_status"),
+            acceptance_passed=data.get("acceptance_passed"),
+            assumptions=tuple(data.get("assumptions", ())),
+            runtime=dict(data.get("runtime", {})),
+            metrics=tuple(parsed_metrics),
+            verification=data.get("verification"),
+            provenance=prov,
+            diagnostics=tuple(data.get("diagnostics", ())),
+            metadata=dict(data.get("metadata", {})),
+            report_reference=data.get("report_reference"),
+        )
+
 
 def discover_odb(executor, job_name):
     raw = executor.execute(
