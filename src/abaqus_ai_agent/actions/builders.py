@@ -147,3 +147,58 @@ def rigid_body(model, name, ref_point_expression, body_expression=None, tie_regi
         params["pin_region"] = pin_region
     params.update(kwargs)
     return _action("rigid_body", model, **params)
+
+
+def connector_section(
+    model,
+    name,
+    assembled_type=None,
+    translational_type=None,
+    rotational_type=None,
+    behavior_name=None,
+    **kwargs,
+):
+    params = {"name": name}
+    if assembled_type is not None:
+        params["assembled_type"] = assembled_type
+    if translational_type is not None:
+        params["translational_type"] = translational_type
+    if rotational_type is not None:
+        params["rotational_type"] = rotational_type
+    if behavior_name is not None:
+        params["behavior_name"] = behavior_name
+    params.update(kwargs)
+    return _action("connector_section", model, **params)
+
+
+def wire_connector(
+    model,
+    name,
+    section_name,
+    point1=None,
+    point2=None,
+    point1_name=None,
+    point2_name=None,
+    point1_expression=None,
+    point2_expression=None,
+    wire_feature_name=None,
+    wire_set_name=None,
+    **kwargs,
+):
+    params = {"name": name, "section_name": section_name}
+    p1_name = point1_name or (point1 if isinstance(point1, str) else None)
+    p2_name = point2_name or (point2 if isinstance(point2, str) else None)
+    if p1_name:
+        params["point1_name"] = p1_name
+    elif point1_expression:
+        params["point1_expression"] = point1_expression
+    if p2_name:
+        params["point2_name"] = p2_name
+    elif point2_expression:
+        params["point2_expression"] = point2_expression
+    if wire_feature_name is not None:
+        params["wire_feature_name"] = wire_feature_name
+    if wire_set_name is not None:
+        params["wire_set_name"] = wire_set_name
+    params.update(kwargs)
+    return _action("wire_connector", model, **params)

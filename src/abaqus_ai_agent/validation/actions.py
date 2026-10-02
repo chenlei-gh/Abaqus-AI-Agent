@@ -161,6 +161,46 @@ def validate_action(action):
             raise ValueError("name is required for rigid_body")
         if not action.parameters.get("ref_point_expression"):
             raise ValueError("ref_point_expression is required for rigid_body")
+    if action.action_type == "connector_section":
+        if not action.parameters.get("name"):
+            raise ValueError("name is required for connector_section")
+        asmb = action.parameters.get("assembled_type")
+        trans = action.parameters.get("translational_type")
+        rot = action.parameters.get("rotational_type")
+        if not asmb and not trans and not rot:
+            raise ValueError("connector_section requires assembled_type, translational_type, or rotational_type")
+        valid_asmb = (
+            "BEAM", "BUSHING", "CVJOINT", "CYLINDRICAL", "HINGE", "PLANAR",
+            "RETRACTOR", "SLIPRING", "TRANSLATOR", "UJOINT", "WELD"
+        )
+        if asmb and asmb.upper() not in valid_asmb:
+            raise ValueError("unsupported assembled_type for connector_section: %s" % asmb)
+        valid_trans = (
+            "ACCELEROMETER", "ALIGNTORQUE", "AXIAL", "CARTESIAN", "JOIN",
+            "LINK", "PROJECTION_CARTESIAN", "RADIAL_THRUST", "SLIDER", "SLOT"
+        )
+        if trans and trans.upper() not in valid_trans:
+            raise ValueError("unsupported translational_type for connector_section: %s" % trans)
+        valid_rot = (
+            "ALIGNTORQUE", "BEAM", "CARDAN", "CYLINDRICAL", "EULER",
+            "FLEXION_TORSION", "FLOW_CONVERTER", "HINGE",
+            "PROJECTION_FLEXION_TORSION", "REVOLUTE", "ROTATION",
+            "ROTATION_ACCELEROMETER", "SLIPRING", "UJOINT",
+            "UNCOUPLED_ANGULAR_ACCELEROMETER"
+        )
+        if rot and rot.upper() not in valid_rot:
+            raise ValueError("unsupported rotational_type for connector_section: %s" % rot)
+    if action.action_type == "wire_connector":
+        if not action.parameters.get("name"):
+            raise ValueError("name is required for wire_connector")
+        if not action.parameters.get("section_name"):
+            raise ValueError("section_name is required for wire_connector")
+        has_p1 = bool(action.parameters.get("point1_name") or action.parameters.get("point1_expression"))
+        if not has_p1:
+            raise ValueError("point1_name or point1_expression is required for wire_connector")
+        has_p2 = bool(action.parameters.get("point2_name") or action.parameters.get("point2_expression"))
+        if not has_p2:
+            raise ValueError("point2_name or point2_expression is required for wire_connector")
     if action.action_type == "instance_linear_pattern":
         if not action.parameters.get("instances"):
             raise ValueError("instances are required")

@@ -234,7 +234,78 @@ def action_to_script(action):
             "mdb.models[%s].RigidBody(name=%s, refPointRegion=%s%s%s%s)"
             % (_q(m), _q(name), ref_pt, body_arg, tie_arg, pin_arg)
         )
+    if k == "connector_section":
+        return _connector_section_script(m, p)
+    if k == "wire_connector":
+        return _wire_connector_script(m, p)
     raise ValueError("unsupported action type: %s" % k)
+
+
+def _connector_section_script(m, p):
+    args = ["name=%s" % _q(p["name"])]
+    if p.get("assembled_type"):
+        args.append("assembledType=%s" % p["assembled_type"].upper())
+    if p.get("translational_type"):
+        args.append("translationalType=%s" % p["translational_type"].upper())
+    if p.get("rotational_type"):
+        args.append("rotationalType=%s" % p["rotational_type"].upper())
+    if p.get("behavior_name"):
+        args.append("behaviorName=%s" % _q(p["behavior_name"]))
+    return "from abaqusConstants import *; import section; mdb.models[%s].ConnectorSection(%s)" % (_q(m), ", ".join(args))
+
+
+def _wire_connector_script(m, p):
+    name = p["name"]
+    sec_name = p["section_name"]
+    wire_feat_name = p.get("wire_feature_name") or ("ConnWire-%s" % name)
+    wire_set_name = p.get("wire_set_name") or ("ConnWireSet-%s" % name)
+
+    if p.get("point1_name"):
+        p1_code = "_resolve_pt(a, %s)" % _q(p["point1_name"])
+    elif p.get("point1_expression"):
+        p1_code = str(p["point1_expression"])
+    else:
+        raise ValueError("point1_name or point1_expression required for wire_connector")
+
+    if p.get("point2_name"):
+        p2_code = "_resolve_pt(a, %s)" % _q(p["point2_name"])
+    elif p.get("point2_expression"):
+        p2_code = str(p["point2_expression"])
+    else:
+        raise ValueError("point2_name or point2_expression required for wire_connector")
+
+    return (
+        "from abaqusConstants import *\n"
+        "a = mdb.models[%s].rootAssembly\n"
+        "def _resolve_pt(assy, target):\n"
+        "    if isinstance(target, str):\n"
+        "        if target in assy.sets and assy.sets[target].referencePoints:\n"
+        "            return assy.sets[target].referencePoints[0]\n"
+        "        if hasattr(assy, 'referencePoints'):\n"
+        "            for k in assy.referencePoints.keys():\n"
+        "                if str(k) == target or getattr(assy.referencePoints[k], 'name', None) == target:\n"
+        "                    return assy.referencePoints[k]\n"
+        "    return target\n"
+        "_pt1 = %s\n"
+        "_pt2 = %s\n"
+        "_feat = a.WirePolyLine(points=((_pt1, _pt2),), mergeType=MERGE, meshable=OFF)\n"
+        "a.features.changeKey(fromName=_feat.name, toName=%s)\n"
+        "_edges = [e for e in a.edges if getattr(e, 'featureName', None) == %s]\n"
+        "if not _edges:\n"
+        "    raise RuntimeError('Failed to locate wire edges for feature: ' + %s)\n"
+        "a.Set(name=%s, edges=a.edges.findAt((_edges[0].pointOn[0],)))\n"
+        "a.SectionAssignment(region=a.sets[%s], sectionName=%s)"
+    ) % (
+        _q(m),
+        p1_code,
+        p2_code,
+        _q(wire_feat_name),
+        _q(wire_feat_name),
+        _q(wire_feat_name),
+        _q(wire_set_name),
+        _q(wire_set_name),
+        _q(sec_name),
+    )
 
 def _bc_script(action):
     p, m = action.parameters, action.model_name

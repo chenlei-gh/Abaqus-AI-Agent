@@ -12,6 +12,7 @@ from .builders import (
     field_output, history_output, create_job, submit_job,
     assembly_inspect, instance_translate, instance_rotate, instance_linear_pattern,
     export_inp, export_odb_csv, tie, contact,
+    reference_point, rigid_body, connector_section, wire_connector,
 )
 from .runner import execute, preview
 from .script import action_to_script
