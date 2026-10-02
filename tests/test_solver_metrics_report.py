@@ -53,7 +53,7 @@ def test_postprocess_profile_drives_output_plan():
     assert "S" in plan.field_variables
     assert "U" in plan.field_variables
     assert "RF" in plan.field_variables
-    assert "RF" in plan.history_variables
+    assert "RF" not in plan.history_variables
 
 
 def test_report_preserves_mesh_verification_evidence():
