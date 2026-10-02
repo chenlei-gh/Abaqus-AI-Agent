@@ -363,6 +363,16 @@ def test_anti_evidence_invention_rejects_inconsistent_positive_envelope(tmp_path
     assert "solver_status" in err
 
 
+def test_workdir_isolation_does_not_leak_repo_evidence(tmp_path):
+    """An empty or custom workdir must report NO_EVIDENCE, not leak existing repository files."""
+    empty_dir = tmp_path / "isolated_dir"
+    empty_dir.mkdir()
+    case = standard_golden_catalog.require_case("static_cantilever")
+    status, path, err = runner.inspect_case_evidence_status(case, empty_dir)
+    assert status == "NO_EVIDENCE"
+    assert path is None
+
+
 def test_runner_cli_dry_run(capsys):
     """Verify --dry-run simulates execution without spawning solver processes."""
     rc = runner.main(["--run", "all", "--dry-run"])

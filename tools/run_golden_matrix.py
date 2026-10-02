@@ -39,18 +39,22 @@ from abaqus_ai_agent.golden_evidence import (
 def get_evidence_path(case: GoldenCaseDefinition, workdir: Path) -> Path:
     """Resolve evidence path for a case within given workdir or repo root."""
     rel = Path(case.default_evidence_json)
-    # Check workdir first
-    candidate = workdir / rel.name
-    if candidate.is_file():
-        return candidate
-    candidate = workdir / rel
-    if candidate.is_file():
-        return candidate
-    # Fallback to repo root / machine_validation
-    root_candidate = ROOT / rel
-    if root_candidate.is_file():
-        return root_candidate
-    return candidate
+    # Check workdir candidates:
+    # 1. Direct filename from default_evidence_json (e.g. static_golden_e2e.json)
+    # 2. Subpath from default_evidence_json (e.g. machine_validation/static_golden_e2e.json)
+    # 3. Canonical case_id filename (e.g. static_cantilever.json)
+    for candidate in (workdir / rel.name, workdir / rel, workdir / f"{case.case_id}.json"):
+        if candidate.is_file():
+            return candidate
+
+    # Fallback to repo root / machine_validation only if workdir is repository root
+    if workdir.resolve() == ROOT.resolve():
+        root_candidate = ROOT / rel
+        if root_candidate.is_file():
+            return root_candidate
+    if workdir.name == "machine_validation":
+        return workdir / rel.name
+    return workdir / rel
 
 
 def get_evidence_mtime(path: Optional[Path]) -> str:
@@ -247,6 +251,10 @@ def cmd_run(
             "--workdir", str(workdir),
             "--timeout", str(timeout),
         ]
+        if case.case_id == "mbd2_double_pendulum":
+            cmd.extend(["--json-out", str(evidence_path)])
+        elif case.case_id in ("smoke", "static_cantilever", "mesh_convergence", "tie_contact", "implicit_dynamic", "mbd1_rigid_pendulum"):
+            cmd.extend(["--output", str(evidence_path)])
 
         start_time = datetime.datetime.now(datetime.timezone.utc)
         proc = subprocess.run(cmd, cwd=str(ROOT), capture_output=True, text=True)
