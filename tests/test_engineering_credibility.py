@@ -300,6 +300,7 @@ def test_sensitivity_execution_uses_existing_runner():
         job_name="Job-1",
         baseline_values={"stress": 100.0},
         cases=cases,
+        case_applier=lambda executor, case: None,
         value_extractor=lambda executor, run, case: {"stress": 120.0},
     )
     assert report.completed
