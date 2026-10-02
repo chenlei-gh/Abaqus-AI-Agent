@@ -490,29 +490,39 @@ def handle_report(args: argparse.Namespace) -> int:
         raw = raw_unnormalized
 
     # Synthesize an EngineeringReportData structure from evidence dict
+    case_def = standard_golden_catalog.get_case(raw.get("case_id", ""))
+    default_title = case_def.title if case_def else raw.get("case_id", "Engineering Analysis Report")
+
     title = (
         args.title
         or raw_unnormalized.get("title")
         or raw.get("title")
-        or raw.get("case_id")
-        or "Engineering Analysis Report"
+        or default_title
     )
     objective = (
         raw_unnormalized.get("summary")
         or raw.get("summary")
+        or (f"{case_def.title} - {case_def.physics_type}" if case_def else "")
         or ""
     )
-    metrics = raw.get("metrics", {})
-    results_list = [{"name": k, "value": v} for k, v in metrics.items()]
+    flat_metrics = _extract_flat_metrics(raw)
+    if not flat_metrics and isinstance(raw_unnormalized, dict):
+        flat_metrics = _extract_flat_metrics(raw_unnormalized)
+    results_list = [{"name": k, "value": v} for k, v in flat_metrics.items()]
+
+    acc_obj = raw.get("acceptance") or raw_unnormalized.get("acceptance") or raw_unnormalized.get("report", {}).get("acceptance")
+    checks_obj = raw.get("verification") or raw_unnormalized.get("verification") or raw_unnormalized.get("report", {}).get("engineering_checks")
 
     report = EngineeringReportData(
         title=title,
         objective=objective,
         solver={"solver": raw.get("solver", "standard"), "physics": raw.get("physics_type", "")},
         results=tuple(results_list),
-        acceptance=raw.get("criteria_summary", {}),
-        mechanism=raw.get("mechanism_topology") or raw.get("kinematics"),
-        provenance=raw.get("provenance"),
+        engineering_checks=tuple(checks_obj.items()) if isinstance(checks_obj, dict) else (checks_obj or ()),
+        acceptance=acc_obj,
+        fatigue=raw.get("fatigue") or raw_unnormalized.get("fatigue") or raw_unnormalized.get("report", {}).get("fatigue"),
+        mechanism=raw.get("mechanism_topology") or raw.get("kinematics") or raw_unnormalized.get("mechanism"),
+        provenance=raw.get("provenance") or raw_unnormalized.get("provenance"),
         metadata=raw.get("metadata", {}),
     )
 

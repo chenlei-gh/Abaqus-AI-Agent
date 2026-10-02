@@ -9,6 +9,85 @@ def _plain(value):
     if isinstance(value, (tuple, list)): return [_plain(v) for v in value]
     return value
 
+
+def _format_markdown_table(headers, rows):
+    if not rows:
+        return ""
+    col_widths = [len(str(h)) for h in headers]
+    for row in rows:
+        for i, val in enumerate(row):
+            if i < len(col_widths):
+                col_widths[i] = max(col_widths[i], len(str(val)))
+    header_line = "| " + " | ".join(str(h).ljust(col_widths[i]) for i, h in enumerate(headers)) + " |"
+    separator_line = "|-" + "-|-".join("-" * col_widths[i] for i in range(len(headers))) + "-|"
+    data_lines = [
+        "| " + " | ".join(str(val).ljust(col_widths[i]) for i, val in enumerate(row)) + " |"
+        for row in rows
+    ]
+    return "\n".join([header_line, separator_line] + data_lines)
+
+
+def _render_custom_table_for_section(heading, value):
+    lines = []
+    # 8. Results -> Metrics Table
+    if heading.startswith("8. Results") and isinstance(value, (tuple, list)) and value:
+        rows = []
+        for m in value:
+            name = getattr(m, "name", None) or (m.get("name") if isinstance(m, dict) else str(m))
+            v = getattr(m, "value", None) if hasattr(m, "value") else (m.get("value") if isinstance(m, dict) else "-")
+            u = getattr(m, "unit", "") if hasattr(m, "unit") else (m.get("unit", "") if isinstance(m, dict) else "")
+            src = getattr(m, "source", "odb") if hasattr(m, "source") else (m.get("source", "odb") if isinstance(m, dict) else "odb")
+            rows.append([name, v, u, src])
+        if rows:
+            lines += [_format_markdown_table(["Metric Name", "Value", "Unit", "Source"], rows), ""]
+
+    # 11. Acceptance Criteria -> Criteria Table
+    elif heading.startswith("11. Acceptance") and value is not None:
+        crit_list = None
+        if hasattr(value, "criteria"):
+            crit_list = value.criteria
+        elif isinstance(value, dict) and "criteria" in value:
+            crit_list = value.get("criteria")
+
+        if crit_list and isinstance(crit_list, (list, tuple)):
+            rows = []
+            for c in crit_list:
+                name = getattr(c, "name", None) or (c.get("name") if isinstance(c, dict) else "criterion")
+                target = getattr(c, "target_description", None) or getattr(c, "target", None) or (c.get("target") if isinstance(c, dict) else None)
+                if target is None and isinstance(c, dict) and "limit" in c:
+                    op = c.get("operator", "")
+                    lim = c.get("limit")
+                    target = f"{op} {lim}".strip()
+                if target is None:
+                    target = "-"
+                actual = getattr(c, "actual", None) if hasattr(c, "actual") else (c.get("actual") if isinstance(c, dict) else "-")
+                passed = getattr(c, "passed", None) if hasattr(c, "passed") else (c.get("passed") if isinstance(c, dict) else None)
+                verdict = "PASS" if passed is True else ("FAIL" if passed is False else "N/A")
+                rows.append([name, target, actual, verdict])
+            if rows:
+                lines += [_format_markdown_table(["Criterion Name", "Requirement / Limit", "Actual Value", "Status"], rows), ""]
+        elif crit_list and isinstance(crit_list, dict):
+            rows = []
+            for name, val in crit_list.items():
+                verdict = "PASS" if val is True else ("FAIL" if val is False else str(val))
+                rows.append([name, "Must be True" if isinstance(val, bool) else "-", str(val), verdict])
+            if rows:
+                lines += [_format_markdown_table(["Criterion Name", "Requirement / Limit", "Actual Value", "Status"], rows), ""]
+
+    # 13. Fatigue -> Key Fatigue Metrics Table
+    elif heading.startswith("13. Fatigue") and isinstance(value, dict) and value:
+        rows = [[k, str(v)] for k, v in value.items() if not isinstance(v, (dict, list, tuple))]
+        if rows:
+            lines += [_format_markdown_table(["Fatigue Parameter", "Value"], rows), ""]
+
+    # 15. Mechanism Kinematics & Topology -> Mechanism Summary Table
+    elif heading.startswith("15. Mechanism") and isinstance(value, dict) and value:
+        rows = [[k, str(v)] for k, v in value.items() if not isinstance(v, (dict, list, tuple))]
+        if rows:
+            lines += [_format_markdown_table(["Topological Parameter", "Value"], rows), ""]
+
+    return lines
+
 def render_markdown(report):
     lines = ["# %s" % report.title, ""]
     if report.objective: lines += ["## 1. Executive Summary", "", report.objective, ""]
@@ -31,6 +110,9 @@ def render_markdown(report):
             for figure in value:
                 lines += ["![%s](%s)" % (figure.caption or figure.kind, figure.path), ""]
         else:
+            tbl_lines = _render_custom_table_for_section(heading, value)
+            if tbl_lines:
+                lines += tbl_lines
             lines += ["```json", json.dumps(_plain(value), indent=2, ensure_ascii=False, default=str), "```", ""]
     lines += ["## 19. Conclusion", "", _conclusion(report), ""]
     return "\n".join(lines)
@@ -75,14 +157,24 @@ def render_pdf(report, output_path):
 
 def _conclusion(report):
     acceptance = report.acceptance
-    passed = acceptance if isinstance(acceptance, bool) else getattr(acceptance, "passed", False)
-    warnings = tuple(getattr(acceptance, "warnings", ()) or ()) if acceptance is not None else ()
-    failures = tuple(getattr(acceptance, "failures", ()) or ()) if acceptance is not None else ()
-    if acceptance is not None and passed:
+    if isinstance(acceptance, bool):
+        passed = acceptance
+        warnings = ()
+        failures = ()
+    elif isinstance(acceptance, dict):
+        passed = acceptance.get("passed", False)
+        warnings = tuple(acceptance.get("warnings") or ())
+        failures = tuple(acceptance.get("failures") or ())
+    elif acceptance is not None:
+        passed = getattr(acceptance, "passed", False)
+        warnings = tuple(getattr(acceptance, "warnings", ()) or ())
+        failures = tuple(getattr(acceptance, "failures", ()) or ())
+    else:
+        return "No acceptance verdict is asserted because no structured acceptance result was supplied."
+
+    if passed:
         if warnings:
             return "Acceptance criteria passed based on the structured evidence supplied to this report; warnings remain: %s." % ", ".join(warnings)
         return "Acceptance criteria passed based on the structured evidence supplied to this report."
-    if acceptance is not None:
-        detail = (" Failures: %s." % ", ".join(failures)) if failures else ""
-        return "Acceptance criteria were not fully satisfied by the structured evidence supplied to this report.%s" % detail
-    return "No acceptance verdict is asserted because no structured acceptance result was supplied."
+    detail = (" Failures: %s." % ", ".join(failures)) if failures else ""
+    return "Acceptance criteria were not fully satisfied by the structured evidence supplied to this report.%s" % detail

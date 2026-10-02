@@ -82,6 +82,8 @@ def test_render_analysis_report_markdown_and_html():
     assert "# Bracket Structural Verification" in md
     assert "Validate bracket under 5kN tip load" in md
     assert "1.45" in md
+    assert "| Metric Name" in md
+    assert "| tip_deflection" in md
     assert "<!doctype html>" in html_out
     assert "Bracket Structural Verification" in html_out
 
