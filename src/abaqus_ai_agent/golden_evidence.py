@@ -302,6 +302,8 @@ def normalize_golden_evidence(
     cid = resolve_case_id(raw, default=case_id)
     definition = cat.get_case(cid)
     report = raw.get("report") if isinstance(raw.get("report"), dict) else {}
+    while isinstance(report.get("report"), dict):
+        report = report["report"]
 
     # 1. Release
     release = _detect_release(raw, report, default=release_default)

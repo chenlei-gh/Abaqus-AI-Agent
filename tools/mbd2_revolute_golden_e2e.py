@@ -701,7 +701,10 @@ def main():
         direct_json = workdir / "mbd2_revolute_golden_e2e.json"
         if direct_json.exists():
             try:
-                report = json.loads(direct_json.read_text(encoding="utf-8"))
+                candidate = json.loads(direct_json.read_text(encoding="utf-8"))
+                while isinstance(candidate, dict) and isinstance(candidate.get("report"), dict):
+                    candidate = candidate["report"]
+                report = candidate
             except Exception:
                 pass
 

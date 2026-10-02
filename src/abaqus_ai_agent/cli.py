@@ -157,7 +157,7 @@ def handle_inspect(args: argparse.Namespace) -> int:
 def handle_matrix(args: argparse.Namespace) -> int:
     catalog = standard_golden_catalog
     workdir_arg = Path(args.workdir).resolve()
-    if (workdir_arg / "machine_validation").is_dir():
+    if workdir_arg.name != "machine_validation" and (workdir_arg / "machine_validation").is_dir():
         workdir = workdir_arg / "machine_validation"
     else:
         workdir = workdir_arg
@@ -203,6 +203,8 @@ def handle_matrix(args: argparse.Namespace) -> int:
             workdir / rel.name,
             workdir / rel,
             workdir / f"{c.case_id}.json",
+            workdir_arg / rel.name,
+            workdir_arg / rel,
             workdir / "machine_validation" / rel.name,
         ]
         ev_path = None

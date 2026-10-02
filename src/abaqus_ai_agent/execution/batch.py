@@ -1,7 +1,30 @@
 import os
+import shutil
 import subprocess
 from dataclasses import dataclass
 from typing import Optional, Tuple
+
+
+def resolve_default_launcher(launcher: str = "abaqus") -> str:
+    """Resolve a robust default Abaqus launcher path, especially on Windows."""
+    if os.environ.get("ABAQUS_BAT"):
+        return os.environ["ABAQUS_BAT"]
+    if os.environ.get("ABAQUS_COMMAND"):
+        return os.environ["ABAQUS_COMMAND"]
+
+    if os.name == "nt" and launcher in ("abaqus", "abaqus.bat"):
+        # Check standard SIMULIA paths first
+        candidate = r"C:\SIMULIA\Commands\abaqus.bat"
+        if os.path.exists(candidate):
+            return candidate
+        which_bat = shutil.which("abaqus.bat")
+        if which_bat:
+            return which_bat
+        which_cmd = shutil.which("abaqus")
+        if which_cmd:
+            return which_cmd
+
+    return launcher
 
 
 @dataclass(frozen=True)
@@ -29,8 +52,15 @@ class BatchExecutor:
         self.workdir = workdir
         self.timeout = timeout
 
+    @property
+    def resolved_launcher(self) -> str:
+        return resolve_default_launcher(self.launcher)
+
     def _run(self, args, timeout=None):
-        command = tuple(str(x) for x in args)
+        raw_cmd = [str(x) for x in args]
+        if raw_cmd and raw_cmd[0] == self.launcher:
+            raw_cmd[0] = self.resolved_launcher
+        command = tuple(raw_cmd)
         proc = subprocess.run(
             command, cwd=self.workdir, capture_output=True, text=True,
             timeout=timeout or self.timeout)

@@ -76,8 +76,9 @@ def preflight_action(action, snapshot=None):
         if action.action_type == "displacement_bc":
             comps = [action.parameters.get(k) for k in ("u1", "u2", "u3", "ur1", "ur2", "ur3")]
             specified = [c for c in comps if c is not None]
+            numeric_comps = [c for c in specified if str(c).upper() != "UNSET"]
             check("displacement_components_specified", len(specified) > 0, action.parameters)
-            check("displacement_components_finite", all(_is_finite_number(c) for c in specified), specified)
+            check("displacement_components_finite", all(_is_finite_number(c) for c in numeric_comps), specified)
 
         if action.action_type == "temperature_bc":
             mag = action.parameters.get("magnitude")
