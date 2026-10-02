@@ -837,9 +837,9 @@ The default implementation order is:
 
 ### Phase E — Engineering comparison/diagnosis
 
-- [ ] AnalysisRun Diff
-- [ ] Solver diagnostic pattern library
-- [ ] Runtime error normalization
+- [x] AnalysisRun Diff
+- [x] Solver diagnostic pattern library
+- [x] Runtime error normalization
 
 ### Phase F — Unit / Material / Step semantic strengthening
 

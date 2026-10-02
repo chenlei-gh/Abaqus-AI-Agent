@@ -1,3 +1,39 @@
+import time
+from dataclasses import dataclass, field
+from typing import Any, Dict, Optional
+
+
+@dataclass(frozen=True)
+class NormalizedExecutionError:
+    """Structured, normalized runtime error representation."""
+    execution_id: str
+    category: str
+    message: str
+    source_line: Optional[int] = None
+    code_excerpt: Optional[str] = None
+    stdout: Optional[str] = None
+    stderr: Optional[str] = None
+    traceback: Optional[str] = None
+    abaqus_context: Dict[str, Any] = field(default_factory=dict)
+    recovery_hint: str = ""
+    timestamp: float = field(default_factory=time.time)
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "execution_id": self.execution_id,
+            "category": self.category,
+            "message": self.message,
+            "source_line": self.source_line,
+            "code_excerpt": self.code_excerpt,
+            "stdout": self.stdout,
+            "stderr": self.stderr,
+            "traceback": self.traceback,
+            "abaqus_context": dict(self.abaqus_context),
+            "recovery_hint": self.recovery_hint,
+            "timestamp": self.timestamp,
+        }
+
+
 class AbaqusExecutionError(RuntimeError):
     def __init__(self, message, *, payload=None, category="execution", traceback=None,
                  source_line=None, code_excerpt=None, context=None, recovery_hint=None):
@@ -8,7 +44,7 @@ class AbaqusExecutionError(RuntimeError):
         self.source_line = source_line
         self.code_excerpt = code_excerpt
         self.context = context or {}
-        self.recovery_hint = recovery_hint
+        self.recovery_hint = recovery_hint or get_recovery_hint(category)
 
     def diagnostic(self):
         return {"category": self.category, "message": str(self), "traceback": self.traceback,
@@ -35,6 +71,10 @@ def classify_execution_error(message, payload=None):
 
 
 def recovery_hint(category):
+    return get_recovery_hint(category)
+
+
+def get_recovery_hint(category):
     return {
         "syntax": "Inspect the generated code around the reported source line before retrying.",
         "abaqus_api": "Check the API signature against the detected Abaqus release before retrying.",
@@ -47,3 +87,44 @@ def recovery_hint(category):
         "connection": "Check the local bridge process and connection before retrying.",
         "execution": "Inspect the structured error payload and current model state before retrying.",
     }.get(category, "Inspect the structured error payload and current model state before retrying.")
+
+
+def normalize_runtime_error(
+    error: Any,
+    execution_id: Optional[str] = None,
+    stdout: Optional[str] = None,
+    stderr: Optional[str] = None,
+    context: Optional[Dict[str, Any]] = None,
+) -> NormalizedExecutionError:
+    """Normalize any runtime exception or payload into a deterministic NormalizedExecutionError."""
+    exec_id = execution_id or "exec-unknown"
+    if isinstance(error, AbaqusExecutionError):
+        cat = error.category or classify_execution_error(str(error), error.payload)
+        hint = error.recovery_hint or get_recovery_hint(cat)
+        ctx = dict(error.context or {})
+        if context:
+            ctx.update(context)
+        return NormalizedExecutionError(
+            execution_id=exec_id,
+            category=cat,
+            message=str(error),
+            source_line=error.source_line,
+            code_excerpt=error.code_excerpt,
+            stdout=stdout,
+            stderr=stderr,
+            traceback=error.traceback,
+            abaqus_context=ctx,
+            recovery_hint=hint,
+        )
+    msg = str(error)
+    cat = classify_execution_error(msg)
+    hint = get_recovery_hint(cat)
+    return NormalizedExecutionError(
+        execution_id=exec_id,
+        category=cat,
+        message=msg,
+        stdout=stdout,
+        stderr=stderr,
+        abaqus_context=dict(context or {}),
+        recovery_hint=hint,
+    )
