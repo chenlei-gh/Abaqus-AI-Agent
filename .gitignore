@@ -9,3 +9,13 @@ build/
 .idea/
 .vscode/
 .DS_Store
+
+# Local licensed-Abaqus runtime evidence
+machine_validation/
+*.odb
+*.sta
+*.msg
+*.dat
+*.com
+*.prt
+*.rpy
