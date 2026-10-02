@@ -41,7 +41,7 @@ def build_static_golden_script():
     # subsequent mutations are normal AbaqusAction objects.
     geometry_code = r"""
 from abaqus import mdb
-from abaqusConstants import THREE_D, DEFORMABLE_BODY, ON, OFF
+from abaqusConstants import THREE_D, DEFORMABLE_BODY, ON, OFF, CARTESIAN
 from sketch import ConstrainedSketch
 
 if %r in mdb.models:
@@ -99,6 +99,7 @@ from abaqus_ai_agent.workflow.static import build_static_plan
 from abaqus_ai_agent.execution.client import InProcessExecutor
 from abaqus_ai_agent.execution.analysis_run import AnalysisRunner
 from abaqus_ai_agent.execution.odb import extract_field
+from abaqus_ai_agent.contracts.intent import EngineeringIntent
 from abaqus_ai_agent.engineering_evidence import reaction_balance_from_field_evidence
 from abaqus_ai_agent.acceptance import evaluate_result_acceptance
 
@@ -161,9 +162,15 @@ if not fixed_nodes:
     raise RuntimeError('FixedNodes set is empty')
 model.rootAssembly.Set(name='FixedNodes', nodes=fixed_nodes)
 
+tip_nodes=tuple(n for n in inst.nodes if abs(n.coordinates[0] - 100.0) < 1.0e-9)
+if not tip_nodes:
+    raise RuntimeError('TipNodes set is empty')
+model.rootAssembly.Set(name='TipNodes', nodes=tip_nodes)
+
+node_by_label={n.label:n for n in part.nodes}
 root_elements=[]
 for elem in part.elements:
-    pts=[part.nodes[label-1].coordinates for label in elem.connectivity]
+    pts=[node_by_label[label].coordinates for label in elem.connectivity]
     cx=sum(p[0] for p in pts)/float(len(pts))
     if cx <= 10.0 + 1.0e-9:
         root_elements.append(elem)
@@ -245,11 +252,14 @@ run = AnalysisRunner(executor).run(
     criteria=criteria,
     timeout=3600,
     action_plan=tuple(actions),
-    engineering_intent={
-        'analysis_type': 'static',
-        'nonlinear': False,
-        'loads': ('concentrated_force',),
-    },
+    engineering_intent=EngineeringIntent(
+        id='static-golden',
+        kind='linear_static_cantilever',
+        description='3D cantilever beam under a symmetric tip transverse load',
+        analysis_type='static',
+        loads=('concentrated_force',),
+        metadata={'solver': 'standard'},
+    ),
 )
 
 if not run.odb_path:
