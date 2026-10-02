@@ -204,6 +204,36 @@ def action_to_script(action):
         return _contact_property_script(m, p)
     if k == "contact":
         return _contact_script(m, p)
+    if k == "reference_point":
+        coords = tuple(p["coordinates"])
+        name = p["name"]
+        if p.get("part"):
+            return (
+                "from abaqusConstants import *; p=mdb.models[%s].parts[%s]; "
+                "rp=p.ReferencePoint(point=%r); "
+                "p.Set(name=%s, referencePoints=(p.referencePoints[rp.id],))"
+                % (_q(m), _q(p["part"]), coords, _q(name))
+            )
+        return (
+            "from abaqusConstants import *; a=mdb.models[%s].rootAssembly; "
+            "rp=a.ReferencePoint(point=%r); "
+            "a.Set(name=%s, referencePoints=(a.referencePoints[rp.id],))"
+            % (_q(m), coords, _q(name))
+        )
+    if k == "rigid_body":
+        name = p["name"]
+        ref_pt = p["ref_point_expression"]
+        body = p.get("body_expression")
+        body_arg = (", bodyRegion=%s" % body) if body else ""
+        tie_reg = p.get("tie_region")
+        tie_arg = (", tieRegion=%s" % tie_reg) if tie_reg else ""
+        pin_reg = p.get("pin_region")
+        pin_arg = (", pinRegion=%s" % pin_reg) if pin_reg else ""
+        return (
+            "from abaqusConstants import *\nimport interaction\n"
+            "mdb.models[%s].RigidBody(name=%s, refPointRegion=%s%s%s%s)"
+            % (_q(m), _q(name), ref_pt, body_arg, tie_arg, pin_arg)
+        )
     raise ValueError("unsupported action type: %s" % k)
 
 def _bc_script(action):

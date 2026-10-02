@@ -184,3 +184,54 @@ def check_coulomb_friction_ratio(normal_force, friction_force, friction_coeffici
         message="effective_mu=%g, expected_mu=%g (relative_error=%g)" % (actual_mu, expected_mu, error),
     )
     return evaluate_checks((check,))
+
+
+def check_pendulum_kinematics(actual_period, expected_period, actual_max_omega, expected_max_omega,
+                              period_tolerance=0.03, omega_tolerance=0.05):
+    """Check oscillation period and maximum angular velocity against analytical physical pendulum theory."""
+    t_act = float(actual_period)
+    t_exp = float(expected_period)
+    t_err = abs(t_act - t_exp) / t_exp
+    t_passed = t_err <= period_tolerance
+    check_t = EngineeringCheck(
+        name="pendulum_oscillation_period",
+        passed=t_passed,
+        actual=t_act,
+        expected=t_exp,
+        tolerance=float(period_tolerance),
+        unit="s",
+        message="actual_period=%g s, expected_period=%g s (relative_error=%g)" % (t_act, t_exp, t_err),
+    )
+
+    w_act = float(actual_max_omega)
+    w_exp = float(expected_max_omega)
+    w_err = abs(w_act - w_exp) / w_exp
+    w_passed = w_err <= omega_tolerance
+    check_w = EngineeringCheck(
+        name="pendulum_max_angular_velocity",
+        passed=w_passed,
+        actual=w_act,
+        expected=w_exp,
+        tolerance=float(omega_tolerance),
+        unit="rad/s",
+        message="actual_max_omega=%g rad/s, expected_max_omega=%g rad/s (relative_error=%g)" % (w_act, w_exp, w_err),
+    )
+    return evaluate_checks((check_t, check_w))
+
+
+def check_mechanical_energy_conservation(energy_loss, initial_energy, tolerance=0.03, unit="mJ"):
+    """Check that mechanical energy dissipation/loss remains bounded in undamped free vibration."""
+    loss = abs(float(energy_loss))
+    e0 = max(abs(float(initial_energy)), 1e-6)
+    ratio = loss / e0
+    passed = ratio <= tolerance
+    check = EngineeringCheck(
+        name="mechanical_energy_conservation",
+        passed=passed,
+        actual=ratio,
+        expected=0.0,
+        tolerance=float(tolerance),
+        unit=unit,
+        message="energy_fluctuation_ratio=%g (loss=%g %s, ref_energy=%g %s)" % (ratio, loss, unit, e0, unit),
+    )
+    return evaluate_checks((check,))

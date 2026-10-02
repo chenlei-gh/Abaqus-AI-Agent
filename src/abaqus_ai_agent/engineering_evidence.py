@@ -8,6 +8,8 @@ from .engineering_checks import (
     check_coulomb_friction_ratio,
     check_declared_load_balance,
     check_energy_ratio,
+    check_mechanical_energy_conservation,
+    check_pendulum_kinematics,
     check_thermal_flux_balance,
     sum_reaction_components,
     sum_scalar_flux,
@@ -106,6 +108,33 @@ def coulomb_friction_from_reaction_evidence(
         normal_force=normal_reaction,
         friction_force=friction_reaction,
         friction_coefficient=friction_coefficient,
+        tolerance=tolerance,
+        unit=unit,
+    )
+
+
+def pendulum_kinematics_from_evidence(
+    actual_period, expected_period, actual_max_omega, expected_max_omega,
+    period_tolerance=0.03, omega_tolerance=0.05
+):
+    """Convert oscillation kinematic measurements into a pendulum verification report."""
+    return check_pendulum_kinematics(
+        actual_period=actual_period,
+        expected_period=expected_period,
+        actual_max_omega=actual_max_omega,
+        expected_max_omega=expected_max_omega,
+        period_tolerance=period_tolerance,
+        omega_tolerance=omega_tolerance,
+    )
+
+
+def mechanical_energy_conservation_from_evidence(
+    energy_loss, initial_energy, tolerance=0.03, unit="mJ"
+):
+    """Convert mechanical energy fluctuation measurements into a conservation report."""
+    return check_mechanical_energy_conservation(
+        energy_loss=energy_loss,
+        initial_energy=initial_energy,
         tolerance=tolerance,
         unit=unit,
     )

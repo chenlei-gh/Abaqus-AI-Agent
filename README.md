@@ -583,6 +583,8 @@ This escape hatch is deliberate: the action layer should not become a bottleneck
 | Coupled temperature-displacement | Implemented |
 | Amplitudes | Implemented |
 | Gravity | Implemented |
+| Reference points / Rigid bodies | Implemented |
+| Multi-body dynamics (MBD) | Implemented |
 | Initial temperature / stress | Implemented |
 | Assembly instance operations | Implemented |
 | INP export | Implemented |
@@ -645,6 +647,21 @@ The validated path is:
 The validation completed with a real ODB and successful solver artifacts. The harness intentionally does **not** treat process exit code alone as success, and it can use solver artifacts (`.sta` / `.log`) as completion evidence when the in-process `Job.status` value is unavailable.
 
 This establishes **Abaqus 2025 machine validation: PASS** for the smoke workflow. It does **not** establish R2018 / B28 compatibility.
+
+### Abaqus 2025 Real-Machine Golden Verification Ladder
+
+The following golden engineering cases have all completed and passed real-machine execution on Abaqus 2025:
+
+| Engineering Case | Physical Benchmark & Focus | Verification Criteria | Status |
+|---|---|---|---|
+| **Smoke Test** | B28/2025 runtime execution closure | Process + solver artifacts + ODB readability | ✅ PASS |
+| **P0-1 Static Golden** | 3D cantilever beam under concentrated tip force | Analytical deflection, reaction equilibrium, root Mises stress sanity | ✅ PASS |
+| **P0-2 Mesh Convergence** | Three-level C3D8R mesh refinement | Real ODB displacements, Richardson extrapolation, GCI, strict gate FAIL | ✅ PASS |
+| **P1 Tie Contact** | Two-block assembly with kinematic continuity | Interface relative displacement zero, reaction balance | ✅ PASS |
+| **P1 Implicit Dynamic** | Ramped load transient dynamic cantilever | Multi-frame dynamic response, ALLKE/ALLIE ratio, dynamic amplification | ✅ PASS |
+| **P1 Steady Thermal** | 1D steady conduction across 3D solid bar | Analytical temperature profile, heat flux conservation, strict gate FAIL | ✅ PASS |
+| **P1 General Contact** | Two-body contact with Coulomb friction sliding | Normal contact pressure, penalty tangential friction mu = 0.25, contact diagnostics | ✅ PASS |
+| **MBD Golden** | Rigid body physical pendulum under gravity | Period (0.08% error), max angular velocity (0.27% error), energy conservation | ✅ PASS |
 
 ## Abaqus R2018 / B28 validation
 

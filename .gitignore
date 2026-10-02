@@ -23,3 +23,4 @@ machine_validation/
 *.rec
 *.inp
 *.log
+*.env

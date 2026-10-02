@@ -133,3 +133,17 @@ def inspect_mesh(model, part): return _action("inspect_mesh", model, part=part)
 def mesh_quality(model, part, **params): return _action("mesh_quality", model, part=part, **params)
 def contact_property(model, name, normal_behavior=True, pressure_overclosure="HARD", tangential_behavior=None): return _action("contact_property", model, name=name, normal_behavior=normal_behavior, pressure_overclosure=pressure_overclosure, tangential_behavior=tangential_behavior)
 def contact(model, name, master_expression, slave_expression, property, sliding="FINITE", step="Initial"): return _action("contact", model, name=name, master_expression=master_expression, slave_expression=slave_expression, property=property, sliding=sliding, step=step)
+
+def reference_point(model, name, coordinates, part=None):
+    return _action("reference_point", model, name=name, coordinates=tuple(coordinates), part=part)
+
+def rigid_body(model, name, ref_point_expression, body_expression=None, tie_region=None, pin_region=None, **kwargs):
+    params = {"name": name, "ref_point_expression": ref_point_expression}
+    if body_expression is not None:
+        params["body_expression"] = body_expression
+    if tie_region is not None:
+        params["tie_region"] = tie_region
+    if pin_region is not None:
+        params["pin_region"] = pin_region
+    params.update(kwargs)
+    return _action("rigid_body", model, **params)

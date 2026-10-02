@@ -571,6 +571,8 @@ action = python_action(
 | Coupled Temperature-Displacement | 已实现 |
 | Amplitudes | 已实现 |
 | Gravity | 已实现 |
+| Reference Points / 刚体约束 (Rigid Body) | 已实现 |
+| 多体动力学 (Multi-Body Dynamics) | 已实现 |
 | Initial Temperature / Stress | 已实现 |
 | Assembly Instance Operations | 已实现 |
 | INP Export | 已实现 |
@@ -637,6 +639,21 @@ python -m pytest -q
 **Abaqus 2025 Machine Validation: PASS**
 
 这不等同于 R2018 / B28 兼容性验证。
+
+### Abaqus 2025 真机 Golden 验证阶梯
+
+下列工程 Golden Case 均已在 Abaqus 2025 Windows 真机环境完成实际求解与证据闭环：
+
+| 验证案例 | 物理基准与核心关注点 | 判定与验收标准 | 状态 |
+|---|---|---|---|
+| **Smoke Test** | B28/2025 执行闭环基础通道 | CAE 启动 + Solver Artifacts + ODB 可读性 | ✅ PASS |
+| **P0-1 Static Golden** | 3D 悬臂梁自由端受集中力弯曲 | 解析挠度对比、反力平衡、根部应力合理性 | ✅ PASS |
+| **P0-2 Mesh Convergence** | 三档网格划分 (Coarse / Medium / Fine) | 真实 ODB 位移、Richardson 外推、GCI、加严门禁真实 FAIL | ✅ PASS |
+| **P1 Tie Contact** | 双块装配体界面运动学连续 | 25 对接口节点相对位移为 0、反力平衡 | ✅ PASS |
+| **P1 Implicit Dynamic** | 斜坡载荷瞬态动力学悬臂梁 | 多时间帧动态响应、动能/内能比、动载荷放大系数 | ✅ PASS |
+| **P1 Steady Thermal** | 3D 杆体一维稳态热传导 | 解析温度分布、热流守恒、加严门禁真实 FAIL | ✅ PASS |
+| **P1 General Contact** | 块体压紧与库仑摩擦滑移 | 法向接触压力、切向摩擦力 (μ=0.25 误差 0.08%)、接触诊断 | ✅ PASS |
+| **MBD Golden** | 铰接刚体物理摆大角度重力摆动 | 振动周期 (误差 0.08%)、最大角速度 (误差 0.27%)、机械能守恒 | ✅ PASS |
 
 ## Abaqus V5 R2018 / B28 验证
 

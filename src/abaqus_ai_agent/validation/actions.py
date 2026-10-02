@@ -150,6 +150,17 @@ def validate_action(action):
                 raise ValueError("%s must contain three components" % key)
         if not action.parameters.get("instance"):
             raise ValueError("instance is required")
+    if action.action_type == "reference_point":
+        if not action.parameters.get("name"):
+            raise ValueError("name is required for reference_point")
+        coords = action.parameters.get("coordinates")
+        if not coords or len(coords) != 3:
+            raise ValueError("coordinates must contain three components")
+    if action.action_type == "rigid_body":
+        if not action.parameters.get("name"):
+            raise ValueError("name is required for rigid_body")
+        if not action.parameters.get("ref_point_expression"):
+            raise ValueError("ref_point_expression is required for rigid_body")
     if action.action_type == "instance_linear_pattern":
         if not action.parameters.get("instances"):
             raise ValueError("instances are required")
