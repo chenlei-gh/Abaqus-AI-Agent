@@ -116,3 +116,33 @@ def test_postprocess_profile_requirements_become_effective_result_criteria():
     keys = {item["value_key"] for item in criteria}
     assert "max_mises" in keys
     assert "history_RF" in keys
+
+
+def test_report_preserves_mechanism_kinematics_and_topology_evidence():
+    from abaqus_ai_agent.contracts.report import EngineeringReportData
+    from abaqus_ai_agent.evidence.model import Evidence, EvidenceBundle
+    from types import SimpleNamespace
+
+    run = SimpleNamespace(
+        id="r3",
+        model_name="M_Mechanism",
+        job_name="FMBD7Job",
+        state=SimpleNamespace(value="accepted"),
+        engineering_status="RESULT_VALID",
+        acceptance_passed=True,
+        metadata={"mechanism_type": "dual_flexible_closed_loop_four_bar"},
+        metrics=(),
+        provenance=None,
+        evidence=EvidenceBundle((
+            Evidence(kind="mechanism", source="verification", value={
+                "topology": {"num_bodies": 4, "closed_loops_count": 1, "is_closed_loop": True},
+                "kinematics": {"max_knee_direct_ff_drift_mm": 3.12e-8, "max_closure_error_mm": 3.12e-8},
+            }),
+        )),
+    )
+    report = EngineeringReportData.from_analysis(run)
+    assert report.mechanism is not None
+    assert report.mechanism["topology"]["is_closed_loop"] is True
+    rendered = render_markdown(report)
+    assert "Mechanism Kinematics & Topology" in rendered
+    assert "max_knee_direct_ff_drift_mm" in rendered

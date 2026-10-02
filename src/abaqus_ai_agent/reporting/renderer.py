@@ -21,8 +21,9 @@ def render_markdown(report):
         ("11. Acceptance Criteria", report.acceptance),
         ("12. Sensitivity / Uncertainty", (report.sensitivity, report.uncertainty)),
         ("13. Fatigue", report.fatigue), ("14. Contact Diagnostics", report.contact_diagnostics),
-        ("15. Assumptions / Limitations", (report.assumptions, report.limitations)),
-        ("16. Evidence", report.evidence), ("17. Provenance", report.provenance)]
+        ("15. Mechanism Kinematics & Topology", report.mechanism),
+        ("16. Assumptions / Limitations", (report.assumptions, report.limitations)),
+        ("17. Evidence", report.evidence), ("18. Provenance", report.provenance)]
     for heading, value in sections:
         if value in (None, {}, (), [], ""): continue
         lines += ["## %s" % heading, ""]
@@ -31,7 +32,7 @@ def render_markdown(report):
                 lines += ["![%s](%s)" % (figure.caption or figure.kind, figure.path), ""]
         else:
             lines += ["```json", json.dumps(_plain(value), indent=2, ensure_ascii=False, default=str), "```", ""]
-    lines += ["## 18. Conclusion", "", _conclusion(report), ""]
+    lines += ["## 19. Conclusion", "", _conclusion(report), ""]
     return "\n".join(lines)
 
 def render_html(report):

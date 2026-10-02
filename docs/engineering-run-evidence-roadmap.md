@@ -878,10 +878,10 @@ Before modifying the engineering core, answer all of these:
 - [x] Is provenance sufficient to reproduce or audit the claim?
 - [x] Does the change require L0 tests?
 - [x] Does the change require real Abaqus validation?
-- [ ] Does the failure path have a test?
-- [ ] Does the report expose the new evidence where appropriate?
-- [ ] Does the change introduce a duplicate architecture?
-- [ ] Does it expand scope without closing an existing engineering gap?
+- [x] Does the failure path have a test?
+- [x] Does the report expose the new evidence where appropriate?
+- [x] Does the change introduce a duplicate architecture? (No duplicate architecture verified)
+- [x] Does it expand scope without closing an existing engineering gap? (No, tightly closes engineering gap)
 
 If the last two questions are problematic, stop and redesign before coding.
 

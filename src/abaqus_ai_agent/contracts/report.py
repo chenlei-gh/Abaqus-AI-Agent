@@ -28,6 +28,7 @@ class EngineeringReportData:
     uncertainty: Any = None
     fatigue: Any = None
     contact_diagnostics: Any = None
+    mechanism: Any = None
     assumptions: Tuple[str, ...] = ()
     limitations: Tuple[str, ...] = ()
     evidence: Tuple[Any, ...] = ()
@@ -51,12 +52,14 @@ class EngineeringReportData:
         acceptance_evidence = ()
         fatigue_evidence = ()
         contact_evidence = ()
+        mechanism_evidence = ()
         sensitivity_evidence = ()
         uncertainty_evidence = ()
         if getattr(run, "evidence", None):
             acceptance_evidence = tuple(x for x in run.evidence.items if getattr(x, "kind", None) == "acceptance")
             fatigue_evidence = tuple(x for x in run.evidence.items if getattr(x, "kind", None) == "fatigue")
             contact_evidence = tuple(x for x in run.evidence.items if getattr(x, "kind", None) == "contact_diagnostics")
+            mechanism_evidence = tuple(x for x in run.evidence.items if getattr(x, "kind", None) in ("mechanism", "kinematics", "topology"))
             sensitivity_evidence = tuple(x for x in run.evidence.items if getattr(x, "kind", None) == "sensitivity")
             uncertainty_evidence = tuple(x for x in run.evidence.items if getattr(x, "kind", None) == "uncertainty")
         sections.setdefault("acceptance", acceptance_evidence[-1].value if acceptance_evidence else getattr(run, "acceptance_passed", None))
@@ -64,6 +67,8 @@ class EngineeringReportData:
             sections.setdefault("fatigue", fatigue_evidence[-1].value)
         if contact_evidence:
             sections.setdefault("contact_diagnostics", contact_evidence[-1].value)
+        if mechanism_evidence:
+            sections.setdefault("mechanism", mechanism_evidence[-1].value)
         if sensitivity_evidence:
             sections.setdefault("sensitivity", sensitivity_evidence[-1].value)
         if uncertainty_evidence:
