@@ -7,7 +7,7 @@
 [![CI](https://github.com/chenlei-gh/Abaqus-AI-Agent/actions/workflows/ci.yml/badge.svg)](https://github.com/chenlei-gh/Abaqus-AI-Agent/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 
-> **Project status:** Architecture and contract closure are substantially complete. Real Abaqus V5 R2018 / B28 validation remains a separate runtime-validation phase.
+> **Project status:** Architecture and contract closure are substantially complete. **Abaqus 2025 machine validation has passed end-to-end.** Real Abaqus V5 R2018 / B28 compatibility remains a separate runtime-validation phase.
 
 ### Quick navigation
 
@@ -626,6 +626,25 @@ python -m pytest -q
 The repository keeps Abaqus-dependent validation separate from ordinary CI because Abaqus requires a licensed runtime and a release-specific environment.
 
 ---
+
+## Abaqus 2025 machine validation
+
+A real licensed Abaqus 2025 runtime has been exercised through the host-side smoke harness.
+
+The validated path is:
+
+1. `cae noGUI` launch and CAE license checkout;
+2. parameterized model creation;
+3. mesh generation;
+4. `writeInput`;
+5. Abaqus/Standard job submission and completion;
+6. solver artifact inspection;
+7. ODB opening;
+8. required `U` / `RF` field-output verification.
+
+The validation completed with a real ODB and successful solver artifacts. The harness intentionally does **not** treat process exit code alone as success, and it can use solver artifacts (`.sta` / `.log`) as completion evidence when the in-process `Job.status` value is unavailable.
+
+This establishes **Abaqus 2025 machine validation: PASS** for the smoke workflow. It does **not** establish R2018 / B28 compatibility.
 
 ## Abaqus R2018 / B28 validation
 
