@@ -338,6 +338,31 @@ def test_anti_evidence_invention_strictness():
     assert "criterion_failed" in env_nested.acceptance["failures"]
 
 
+def test_anti_evidence_invention_rejects_inconsistent_positive_envelope(tmp_path):
+    """A positive acceptance cannot stand alone without explicit successful execution."""
+    evidence = {
+        "case_id": "static_cantilever",
+        "release": "Abaqus 2025",
+        "runtime": {"launcher": "abaqus", "return_code": 1, "process_succeeded": False},
+        "solver": "standard",
+        "job": "StaticGoldenJob",
+        "odb": {"path": "StaticGoldenJob.odb", "exists": False},
+        "solver_status": "unknown",
+        "result_evidence": {},
+        "verification": {},
+        "acceptance": {"passed": True, "criteria": []},
+        "artifacts": [],
+        "provenance": {},
+    }
+    path = tmp_path / "static_cantilever.json"
+    path.write_text(json.dumps(evidence), encoding="utf-8")
+    status, _, err = runner.inspect_case_evidence_status(
+        standard_golden_catalog.require_case("static_cantilever"), tmp_path
+    )
+    assert status == "INVALID_SCHEMA"
+    assert "solver_status" in err
+
+
 def test_runner_cli_dry_run(capsys):
     """Verify --dry-run simulates execution without spawning solver processes."""
     rc = runner.main(["--run", "all", "--dry-run"])
