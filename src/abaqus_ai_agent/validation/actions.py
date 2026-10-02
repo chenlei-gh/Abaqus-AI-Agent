@@ -1,6 +1,23 @@
 from ..contracts.action import AbaqusAction
 
 
+VALID_CONNECTOR_ASSEMBLED_TYPES = (
+    "BEAM", "BUSHING", "CVJOINT", "CYLINDRICAL", "HINGE", "PLANAR",
+    "RETRACTOR", "SLIPRING", "TRANSLATOR", "UJOINT", "WELD"
+)
+VALID_CONNECTOR_TRANSLATIONAL_TYPES = (
+    "ACCELEROMETER", "ALIGNTORQUE", "AXIAL", "CARTESIAN", "JOIN",
+    "LINK", "PROJECTION_CARTESIAN", "RADIAL_THRUST", "SLIDER", "SLOT"
+)
+VALID_CONNECTOR_ROTATIONAL_TYPES = (
+    "ALIGNTORQUE", "BEAM", "CARDAN", "CYLINDRICAL", "EULER",
+    "FLEXION_TORSION", "FLOW_CONVERTER", "HINGE",
+    "PROJECTION_FLEXION_TORSION", "REVOLUTE", "ROTATION",
+    "ROTATION_ACCELEROMETER", "SLIPRING", "UJOINT",
+    "UNCOUPLED_ANGULAR_ACCELEROMETER"
+)
+
+
 def validate_action(action):
     if not isinstance(action, AbaqusAction):
         raise TypeError("expected AbaqusAction")
@@ -169,26 +186,11 @@ def validate_action(action):
         rot = action.parameters.get("rotational_type")
         if not asmb and not trans and not rot:
             raise ValueError("connector_section requires assembled_type, translational_type, or rotational_type")
-        valid_asmb = (
-            "BEAM", "BUSHING", "CVJOINT", "CYLINDRICAL", "HINGE", "PLANAR",
-            "RETRACTOR", "SLIPRING", "TRANSLATOR", "UJOINT", "WELD"
-        )
-        if asmb and asmb.upper() not in valid_asmb:
+        if asmb and asmb.upper() not in VALID_CONNECTOR_ASSEMBLED_TYPES:
             raise ValueError("unsupported assembled_type for connector_section: %s" % asmb)
-        valid_trans = (
-            "ACCELEROMETER", "ALIGNTORQUE", "AXIAL", "CARTESIAN", "JOIN",
-            "LINK", "PROJECTION_CARTESIAN", "RADIAL_THRUST", "SLIDER", "SLOT"
-        )
-        if trans and trans.upper() not in valid_trans:
+        if trans and trans.upper() not in VALID_CONNECTOR_TRANSLATIONAL_TYPES:
             raise ValueError("unsupported translational_type for connector_section: %s" % trans)
-        valid_rot = (
-            "ALIGNTORQUE", "BEAM", "CARDAN", "CYLINDRICAL", "EULER",
-            "FLEXION_TORSION", "FLOW_CONVERTER", "HINGE",
-            "PROJECTION_FLEXION_TORSION", "REVOLUTE", "ROTATION",
-            "ROTATION_ACCELEROMETER", "SLIPRING", "UJOINT",
-            "UNCOUPLED_ANGULAR_ACCELEROMETER"
-        )
-        if rot and rot.upper() not in valid_rot:
+        if rot and rot.upper() not in VALID_CONNECTOR_ROTATIONAL_TYPES:
             raise ValueError("unsupported rotational_type for connector_section: %s" % rot)
     if action.action_type == "wire_connector":
         if not action.parameters.get("name"):

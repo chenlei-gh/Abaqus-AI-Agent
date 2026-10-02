@@ -12,6 +12,7 @@ import argparse
 import datetime
 import json
 import os
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -52,6 +53,18 @@ def get_evidence_path(case: GoldenCaseDefinition, workdir: Path) -> Path:
     return candidate
 
 
+def get_evidence_mtime(path: Optional[Path]) -> str:
+    """Format on-disk modification timestamp of evidence file."""
+    if not path or not path.is_file():
+        return "-"
+    try:
+        ts = path.stat().st_mtime
+        dt = datetime.datetime.fromtimestamp(ts, tz=datetime.timezone.utc)
+        return dt.strftime("%Y-%m-%d %H:%M UTC")
+    except Exception:
+        return "-"
+
+
 def inspect_case_evidence_status(case: GoldenCaseDefinition, workdir: Path) -> Tuple[str, Optional[Path], Optional[str]]:
     """Determine the on-disk status of a Golden Case evidence file.
 
@@ -77,23 +90,24 @@ def inspect_case_evidence_status(case: GoldenCaseDefinition, workdir: Path) -> T
 
 def cmd_list(catalog: GoldenMatrixCatalog, workdir: Path) -> int:
     """Print a structured overview of all Golden Cases in the registry."""
-    print("=" * 96)
-    print(f"{'Abaqus 2025 Real-Machine Golden Validation Matrix Catalog':^96}")
-    print("=" * 96)
-    header = f"{'Case ID':<22} {'Cat':<5} {'Solver':<9} {'Status':<14} {'Title'}"
+    print("=" * 104)
+    print(f"{'Abaqus 2025 Real-Machine Golden Validation Matrix Catalog':^104}")
+    print("=" * 104)
+    header = f"{'Case ID':<22} {'Cat':<5} {'Solver':<9} {'Status':<17} {'Evidence Timestamp':<22} {'Title'}"
     print(header)
-    print("-" * 96)
+    print("-" * 104)
 
     cases = catalog.all_cases()
     counts = {"PASS": 0, "FAIL": 0, "NO_EVIDENCE": 0, "INVALID_SCHEMA": 0}
 
     for case in cases:
-        status, _, _ = inspect_case_evidence_status(case, workdir)
+        status, path, _ = inspect_case_evidence_status(case, workdir)
         counts[status] = counts.get(status, 0) + 1
-        status_disp = f"[{status}]"
-        print(f"{case.case_id:<22} {case.category:<5} {case.solver:<9} {status_disp:<14} {case.title}")
+        mtime_str = get_evidence_mtime(path)
+        status_disp = f"[EVIDENCE:{status}]" if status in ("PASS", "FAIL") else f"[{status}]"
+        print(f"{case.case_id:<22} {case.category:<5} {case.solver:<9} {status_disp:<17} {mtime_str:<22} {case.title}")
 
-    print("-" * 96)
+    print("-" * 104)
     print(
         f"Total: {len(cases)} | "
         f"Passed: {counts['PASS']} | "
@@ -101,7 +115,9 @@ def cmd_list(catalog: GoldenMatrixCatalog, workdir: Path) -> int:
         f"No Evidence: {counts['NO_EVIDENCE']} | "
         f"Invalid Schema: {counts['INVALID_SCHEMA']}"
     )
-    print("=" * 96)
+    print("=" * 104)
+    print("Notice: [EVIDENCE:PASS] indicates verified on-disk machine evidence artifacts.")
+    print("        To launch live Abaqus solver runs, use: python tools/run_golden_matrix.py --run [case_id|all]")
     return 0
 
 
@@ -152,10 +168,49 @@ def cmd_run(
     launcher: str,
     workdir: Path,
     timeout: int = 3600,
+    dry_run: bool = False,
+    yes: bool = False,
 ) -> int:
-    """Execute target Golden Case(s) using the live Abaqus launcher."""
+    """Execute target Golden Case(s) using the live Abaqus launcher with guardrails."""
     cases = catalog.all_cases() if target in ("all", "*") else [catalog.require_case(target)]
     workdir.mkdir(parents=True, exist_ok=True)
+
+    # 1. Guardrail: launcher check
+    launcher_ok = bool(shutil.which(launcher) or Path(launcher).is_file())
+    if not launcher_ok and not dry_run:
+        print(f"ERROR: Abaqus launcher not found or not executable: {launcher}")
+        print("       Please provide a valid path via --launcher or set ABAQUS_BAT / ABAQUS_COMMAND.")
+        return 1
+
+    # 2. Guardrail: batch confirmation for 'all'
+    if target in ("all", "*") and not yes and not dry_run:
+        try:
+            if sys.stdin.isatty():
+                confirm = input(
+                    f"SAFETY PROMPT: You are about to sequentially execute all {len(cases)} "
+                    f"live Abaqus solver jobs on launcher '{launcher}'.\nProceed? [y/N]: "
+                )
+                if confirm.strip().lower() not in ("y", "yes"):
+                    print("Live run aborted by user.")
+                    return 1
+            else:
+                print("ERROR: Live batch execution of all 9 Golden Cases requires explicit confirmation.")
+                print("       Pass --yes / -y to confirm live Abaqus solver execution.")
+                return 1
+        except (EOFError, KeyboardInterrupt):
+            print("\nLive run aborted.")
+            return 1
+
+    # 3. Dry run mode
+    if dry_run:
+        print(f"\n[DRY RUN] Simulating execution plan for target: '{target}' (Launcher: {launcher})")
+        print(f"Working Directory: {workdir}")
+        for case in cases:
+            script_path = ROOT / case.tool_script
+            exists_str = "EXISTS" if script_path.is_file() else "MISSING"
+            print(f"  - Case: {case.case_id:<22} Solver: {case.solver:<9} Script: {case.tool_script} [{exists_str}]")
+        print("\nDry run completed: 0 Abaqus solver jobs were started.")
+        return 0
 
     print(f"\n=== Executing Live Golden Matrix Run (Target: {target}, Launcher: {launcher}) ===")
     overall_success = True
@@ -169,6 +224,17 @@ def cmd_run(
 
         print(f"\n>> Launching Case: {case.case_id} ({case.title})")
         print(f"   Script: {case.tool_script}")
+
+        # 4. Guardrail: backup existing evidence before execution
+        evidence_path = get_evidence_path(case, workdir)
+        if evidence_path.is_file():
+            backup_path = evidence_path.with_suffix(".json.bak")
+            try:
+                shutil.copy2(evidence_path, backup_path)
+                print(f"   Preserved prior evidence at: {backup_path.name}")
+            except Exception as e:
+                print(f"   Warning: could not backup prior evidence: {e}")
+
         cmd = [
             sys.executable,
             str(script_path),
@@ -254,6 +320,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     parser.add_argument("--list", action="store_true", help="List all 9 Golden Cases and current status")
     parser.add_argument("--validate-evidence", nargs="?", const="all", help="Validate evidence JSON [case_id|all]")
     parser.add_argument("--run", nargs="?", const="all", help="Execute Golden Case(s) [case_id|all]")
+    parser.add_argument("--dry-run", action="store_true", help="Simulate execution without starting live solver jobs")
+    parser.add_argument("--yes", "-y", action="store_true", help="Confirm execution of all Golden Cases without interactive prompt")
     parser.add_argument("--launcher", default=os.environ.get("ABAQUS_BAT", os.environ.get("ABAQUS_COMMAND", "abaqus")),
                         help="Abaqus launcher command or batch file")
     parser.add_argument("--workdir", default=None, help="Working directory containing machine_validation")
@@ -272,7 +340,15 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         return cmd_validate_evidence(catalog, args.validate_evidence, workdir)
 
     if args.run:
-        rc = cmd_run(catalog, args.run, launcher=args.launcher, workdir=workdir, timeout=args.timeout)
+        rc = cmd_run(
+            catalog,
+            args.run,
+            launcher=args.launcher,
+            workdir=workdir,
+            timeout=args.timeout,
+            dry_run=args.dry_run,
+            yes=args.yes,
+        )
         if args.manifest_out:
             cmd_emit_manifest(catalog, workdir, Path(args.manifest_out).resolve())
         return rc

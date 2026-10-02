@@ -210,19 +210,64 @@ def resolve_case_id(raw: Dict[str, Any], default: Optional[str] = None) -> str:
     raise ValueError("Cannot resolve case_id from raw evidence")
 
 
+def _detect_release(raw: Dict[str, Any], report: Dict[str, Any], default: Optional[str] = None) -> str:
+    """Detect release string from raw evidence, report, or runtime context without blind invention."""
+    if raw.get("release"):
+        return str(raw["release"])
+    if report.get("release"):
+        return str(report["release"])
+    prov = raw.get("provenance") or report.get("provenance") or {}
+    if isinstance(prov, dict) and prov.get("release"):
+        return str(prov["release"])
+
+    # Check launcher path or content
+    launcher = str(raw.get("launcher", ""))
+    stderr = str(raw.get("stderr", "")) + " " + str(report.get("stderr", ""))
+    stdout = str(raw.get("stdout", "")) + " " + str(report.get("stdout", ""))
+    combined = f"{launcher} {stderr} {stdout}"
+    if "2025" in combined:
+        return "Abaqus 2025"
+    if "B28" in combined or "2018" in combined:
+        return "Abaqus V5 R2018 / B28"
+
+    # If launcher is a batch file on disk, check if it invokes a versioned abaqus
+    if launcher:
+        p = Path(launcher)
+        if p.is_file():
+            try:
+                content = p.read_text(encoding="utf-8", errors="ignore")
+                if "2025" in content or "abq2025" in content:
+                    return "Abaqus 2025"
+                if "2018" in content or "B28" in content or "abq2018" in content:
+                    return "Abaqus V5 R2018 / B28"
+            except Exception:
+                pass
+
+    if default:
+        return default
+    return "unspecified"
+
+
 def normalize_golden_evidence(
     raw: Dict[str, Any],
     case_id: Optional[str] = None,
     catalog: Optional[GoldenMatrixCatalog] = None,
-    release_default: str = "Abaqus 2025",
+    release_default: Optional[str] = "Abaqus 2025",
 ) -> GoldenEvidenceEnvelope:
-    """Normalize raw case evidence dictionary into the standard GoldenEvidenceEnvelope."""
+    """Normalize raw case evidence dictionary into the standard GoldenEvidenceEnvelope.
+
+    Applies strict parsing rules to avoid evidence invention:
+    - Release is detected from explicit fields, launcher context, or recorded provenance.
+    - Solver status requires explicit completion flags from workflow, checks, or harness.
+    - Acceptance evaluates nested standard gates without fabricating PASS from top-level status.
+    """
     cat = catalog or standard_golden_catalog
     cid = resolve_case_id(raw, default=case_id)
     definition = cat.get_case(cid)
+    report = raw.get("report") if isinstance(raw.get("report"), dict) else {}
 
     # 1. Release
-    release = str(raw.get("release") or release_default)
+    release = _detect_release(raw, report, default=release_default)
 
     # 2. Runtime
     runtime: Dict[str, Any] = {
@@ -242,7 +287,6 @@ def normalize_golden_evidence(
     solver = str(raw.get("solver") or (definition.solver if definition else "standard"))
 
     # 4. Job Name
-    report = raw.get("report") if isinstance(raw.get("report"), dict) else {}
     job = str(
         raw.get("job")
         or report.get("job_name")
@@ -250,6 +294,8 @@ def normalize_golden_evidence(
     )
     if job == "GoldenJob" and "odb_path" in report.get("solver", {}):
         job = Path(report["solver"]["odb_path"]).stem
+    elif job == "GoldenJob" and "odb_path" in report.get("workflow", {}):
+        job = Path(report["workflow"]["odb_path"]).stem
 
     # 5. ODB Information
     odb_path = ""
@@ -260,6 +306,8 @@ def normalize_golden_evidence(
         odb_path = str(raw["odb_path"])
     elif "solver" in report and "odb_path" in report["solver"]:
         odb_path = str(report["solver"]["odb_path"])
+    elif "workflow" in report and "odb_path" in report["workflow"]:
+        odb_path = str(report["workflow"]["odb_path"])
     elif "workflow" in raw and "odb_path" in raw["workflow"]:
         odb_path = str(raw["workflow"]["odb_path"])
     elif "harness" in raw:
@@ -271,6 +319,8 @@ def normalize_golden_evidence(
         odb_exists = True
     elif "harness" in raw:
         odb_exists = bool(raw.get("harness", {}).get("odb_exists", False))
+    elif "checks" in report and "all_odbs_exist" in report["checks"]:
+        odb_exists = bool(report["checks"]["all_odbs_exist"])
 
     odb: Dict[str, Any] = {
         "path": odb_path,
@@ -282,7 +332,7 @@ def normalize_golden_evidence(
         except OSError:
             pass
 
-    # 6. Solver Status
+    # 6. Solver Status (Requires explicit positive evidence; no invention from status=="pass")
     solver_status = "unknown"
     if "solver_status" in raw:
         solver_status = str(raw["solver_status"])
@@ -290,14 +340,17 @@ def normalize_golden_evidence(
         solver_status = "completed" if report["workflow"]["solver_completed"] else "failed"
     elif "workflow" in raw and "solver_completed" in raw["workflow"]:
         solver_status = "completed" if raw["workflow"]["solver_completed"] else "failed"
-    elif "harness" in raw:
+    elif "all_solvers_completed" in report.get("checks", {}):
+        solver_status = "completed" if report["checks"]["all_solvers_completed"] else "failed"
+    elif "runs" in report and isinstance(report["runs"], list) and len(report["runs"]) > 0:
+        all_comp = all(bool(r.get("solver_completed")) for r in report["runs"] if isinstance(r, dict))
+        solver_status = "completed" if all_comp else "failed"
+    elif "harness" in raw and isinstance(raw["harness"], dict):
         h = raw["harness"]
-        if h.get("job_completed") or raw.get("status") == "pass":
+        if h.get("job_completed") is True:
             solver_status = "completed"
-        elif h.get("error_class") or raw.get("status") == "fail":
+        elif h.get("error_class") or h.get("job_completed") is False:
             solver_status = "failed"
-    elif raw.get("status") == "pass":
-        solver_status = "completed"
 
     # 7. Result Evidence (physics observables)
     result_evidence: Dict[str, Any] = {}
@@ -305,44 +358,83 @@ def normalize_golden_evidence(
         result_evidence = dict(raw["result_evidence"])
     elif "results" in report and isinstance(report["results"], dict):
         result_evidence = dict(report["results"])
+    elif "simulation_results" in report and isinstance(report["simulation_results"], dict):
+        result_evidence = dict(report["simulation_results"])
     elif "simulation_results" in raw and isinstance(raw["simulation_results"], dict):
         result_evidence = dict(raw["simulation_results"])
     elif "forces_and_equilibrium" in report:
         result_evidence["forces_and_equilibrium"] = report["forces_and_equilibrium"]
         if "contact_metrics" in report:
             result_evidence["contact_metrics"] = report["contact_metrics"]
-    elif "harness" in raw:
+    elif "harness" in raw and isinstance(raw["harness"], dict):
         result_evidence = dict(raw["harness"])
 
     # 8. Verification (analytical reference comparison)
     verification: Dict[str, Any] = {}
     if "verification" in raw and isinstance(raw["verification"], dict):
         verification = dict(raw["verification"])
+    elif "verification" in report and isinstance(report["verification"], dict):
+        verification = dict(report["verification"])
+    elif "numerical_verification" in report and isinstance(report["numerical_verification"], dict):
+        verification = dict(report["numerical_verification"])
+        if "mesh_convergence" in report:
+            verification["mesh_convergence"] = report["mesh_convergence"]
     elif "engineering_checks" in report and isinstance(report["engineering_checks"], dict):
         verification = dict(report["engineering_checks"])
     elif "theory" in raw and isinstance(raw["theory"], dict):
         verification = dict(raw["theory"])
-    elif "harness" in raw:
+    elif "theory" in report and isinstance(report["theory"], dict):
+        verification = dict(report["theory"])
+    elif "harness" in raw and isinstance(raw["harness"], dict):
         verification = {"harness_passed": bool(raw["harness"].get("passed", False))}
 
-    # 9. Acceptance (formal engineering gate result)
+    # 9. Acceptance (formal engineering gate result without invention)
+    raw_acc = raw.get("acceptance") or report.get("acceptance")
     acceptance: Dict[str, Any] = {}
-    if "acceptance" in raw and isinstance(raw["acceptance"], dict):
-        acceptance = dict(raw["acceptance"])
-    elif "acceptance" in report and isinstance(report["acceptance"], dict):
-        acceptance = dict(report["acceptance"])
-    else:
-        passed = bool(raw.get("status") == "pass" or raw.get("passed", False))
+    if isinstance(raw_acc, dict):
+        if "standard" in raw_acc and isinstance(raw_acc["standard"], dict):
+            # Nested standard/strict structure (e.g. mesh convergence)
+            std = raw_acc["standard"]
+            acceptance = {
+                "passed": bool(std.get("passed", False)),
+                "criteria": list(std.get("criteria", [])),
+                "failures": list(std.get("failures", [])),
+                "warnings": list(std.get("warnings", [])),
+                "standard": std,
+            }
+            if "strict" in raw_acc:
+                acceptance["strict"] = raw_acc["strict"]
+        else:
+            acceptance = dict(raw_acc)
+            if "passed" not in acceptance:
+                if "criteria" in acceptance and isinstance(acceptance["criteria"], list):
+                    all_crit_passed = len(acceptance["criteria"]) > 0 and all(
+                        bool(c.get("passed", False)) for c in acceptance["criteria"] if isinstance(c, dict)
+                    )
+                    has_failures = bool(acceptance.get("failures"))
+                    acceptance["passed"] = bool(all_crit_passed and not has_failures)
+                else:
+                    acceptance["passed"] = False
+    elif "harness" in raw and isinstance(raw["harness"], dict):
+        h = raw["harness"]
         acceptance = {
-            "passed": passed,
-            "criteria": [],
-            "failures": [],
+            "passed": bool(h.get("passed", False)),
+            "criteria": [
+                {"name": "job_completed", "passed": bool(h.get("job_completed"))},
+                {"name": "odb_exists", "passed": bool(h.get("odb_exists"))},
+                {"name": "required_outputs_present", "passed": bool(h.get("required_outputs_present"))},
+            ],
+            "failures": [h["error_message"]] if h.get("error_message") else [],
             "warnings": [],
         }
-
-    # Ensure acceptance dict has standard passed key
-    if "passed" not in acceptance:
-        acceptance["passed"] = bool(raw.get("status") == "pass")
+    else:
+        # No formal acceptance gate record found in evidence
+        acceptance = {
+            "passed": False,
+            "criteria": [],
+            "failures": ["No formal acceptance gate record found in evidence"],
+            "warnings": [],
+        }
 
     # 10. Artifacts
     artifacts: List[Any] = []

@@ -611,6 +611,8 @@ report = {
         'normal_acceptance_passed': final_acceptance.passed,
         'strict_acceptance_passed': strict_acceptance.passed,
     },
+    'acceptance': final_acceptance,
+    'strict_acceptance': strict_acceptance,
     'provenance': {
         'action_count': len(actions),
         'intent_id': 'mbd2-revolute-golden-e2e',
@@ -710,10 +712,24 @@ def main():
         print("STDERR:\n", result.stderr[-2000:] if result.stderr else "(empty)")
         return 1
 
-    json_out.write_text(json.dumps(report, indent=2), encoding="utf-8")
-    print("MBD-2 Revolute Golden E2E Status:", report.get("status"))
+    evidence = {
+        "status": "pass" if result.succeeded and report and report.get("status") == "pass" else "fail",
+        "case": "mbd2_dual_rigid_body_revolute_connector",
+        "launcher": args.launcher or os.environ.get("ABAQUS_BAT", "C:/SIMULIA/Commands/abaqus.bat"),
+        "workdir": str(workdir),
+        "script": str(script_path),
+        "command": list(result.command) if result.command else [],
+        "return_code": result.return_code,
+        "process_succeeded": result.succeeded,
+        "report": report,
+        "stdout": result.stdout,
+        "stderr": result.stderr,
+    }
+
+    json_out.write_text(json.dumps(evidence, indent=2), encoding="utf-8")
+    print("MBD-2 Revolute Golden E2E Status:", evidence.get("status"))
     print("Evidence written to:", str(json_out))
-    return 0 if report.get("status") == "pass" else 1
+    return 0 if evidence.get("status") == "pass" else 1
 
 
 if __name__ == "__main__":

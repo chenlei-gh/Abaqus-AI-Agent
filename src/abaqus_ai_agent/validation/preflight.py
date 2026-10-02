@@ -1,4 +1,9 @@
 from dataclasses import dataclass
+from .actions import (
+    VALID_CONNECTOR_ASSEMBLED_TYPES,
+    VALID_CONNECTOR_TRANSLATIONAL_TYPES,
+    VALID_CONNECTOR_ROTATIONAL_TYPES,
+)
 
 
 @dataclass(frozen=True)
@@ -52,7 +57,16 @@ def preflight_action(action, snapshot=None):
 
     if action.action_type == "connector_section":
         check("name", bool(action.parameters.get("name")))
-        check("section_type", bool(action.parameters.get("assembled_type") or action.parameters.get("translational_type") or action.parameters.get("rotational_type")))
+        asmb = action.parameters.get("assembled_type")
+        trans = action.parameters.get("translational_type")
+        rot = action.parameters.get("rotational_type")
+        check("section_type", bool(asmb or trans or rot))
+        if asmb:
+            check("assembled_type_valid", str(asmb).upper() in VALID_CONNECTOR_ASSEMBLED_TYPES, asmb)
+        if trans:
+            check("translational_type_valid", str(trans).upper() in VALID_CONNECTOR_TRANSLATIONAL_TYPES, trans)
+        if rot:
+            check("rotational_type_valid", str(rot).upper() in VALID_CONNECTOR_ROTATIONAL_TYPES, rot)
 
     if action.action_type == "wire_connector":
         check("name", bool(action.parameters.get("name")))

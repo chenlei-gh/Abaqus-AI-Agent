@@ -193,6 +193,13 @@ def test_normalize_golden_evidence_from_mock_cases():
         "simulation_results": {"max_joint_drift_mm": 9.78e-6, "period_error_percent": 0.54},
         "workflow": {"solver_completed": True, "odb_path": "MBD2GoldenJob.odb"},
         "verification": {"joint_report_passed": True},
+        "acceptance": {
+            "passed": True,
+            "criteria": [
+                {"name": "revolute_joint_drift_bound", "passed": True},
+            ],
+            "failures": [],
+        },
         "strict_acceptance": {"passed": False},
     }
     env_mbd2 = normalize_golden_evidence(mbd2_raw, case_id="mbd2_double_pendulum")
@@ -294,3 +301,47 @@ def test_preflight_closure_mbd_and_connector_actions():
     assert any(b["name"] == "name" for b in res_bad.blockers)
     assert any(b["name"] == "section_name" for b in res_bad.blockers)
     assert any(b["name"] == "endpoints" for b in res_bad.blockers)
+
+    # 5. connector_section semantic type validation in preflight
+    act_cs_invalid_type = connector_section(model="M", name="BadSec", assembled_type="NONEXISTENT_TYPE")
+    res_inv = preflight_action(act_cs_invalid_type)
+    assert res_inv.passed is False
+    assert any(b["name"] == "assembled_type_valid" for b in res_inv.blockers)
+
+
+def test_anti_evidence_invention_strictness():
+    """Verify normalizer never fabricates solver completion or acceptance from status string alone."""
+    # 1. Bare status: pass without acceptance or workflow
+    bare_raw = {
+        "case_id": "static_cantilever",
+        "status": "pass",
+    }
+    env_bare = normalize_golden_evidence(bare_raw)
+    assert env_bare.passed is False, "Must not invent acceptance.passed=True from status=pass"
+    assert env_bare.solver_status == "unknown", "Must not invent solver_status=completed from status=pass"
+
+    # 2. Nested standard acceptance where standard.passed is False
+    nested_failed = {
+        "case_id": "mesh_convergence",
+        "status": "pass",  # misleading outer status
+        "acceptance": {
+            "standard": {
+                "passed": False,
+                "failures": ["criterion_failed"],
+                "criteria": [{"name": "gci", "passed": False}],
+            },
+            "strict": {"passed": False},
+        },
+    }
+    env_nested = normalize_golden_evidence(nested_failed)
+    assert env_nested.passed is False, "Must extract passed=False from nested standard acceptance"
+    assert "criterion_failed" in env_nested.acceptance["failures"]
+
+
+def test_runner_cli_dry_run(capsys):
+    """Verify --dry-run simulates execution without spawning solver processes."""
+    rc = runner.main(["--run", "all", "--dry-run"])
+    assert rc == 0
+    captured = capsys.readouterr().out
+    assert "[DRY RUN]" in captured
+    assert "Dry run completed: 0 Abaqus solver jobs were started." in captured
