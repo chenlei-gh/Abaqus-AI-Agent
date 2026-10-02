@@ -13,6 +13,7 @@ def test_b28_script_uses_python27_compatible_markers_and_apis():
     assert "job.waitForCompletion()" in script
     assert "openOdb" in script
     assert 'f"' not in script
+    assert "import regionToolset" in script
     assert "regionToolset.Region" in script
 
 
@@ -50,7 +51,6 @@ AIA_B28_MARKER {"marker":"script_completed","passed":false}
     result = parse_b28_output(output)
     assert not result.passed
     assert result.error_class == "solver_job"
-
 
 
 def test_execute_b28_smoke_uses_existing_executor_and_parses_stdout():
