@@ -187,3 +187,57 @@ def test_cli_fmbd_compile(capsys):
     assert "rigid_body" in action_types
     assert "coupling_constraint" in action_types
     assert "wire_connector" in action_types
+
+
+def test_cli_memory_list_and_search(tmp_path, capsys):
+    from abaqus_ai_agent.run_index import RunIndex
+    from abaqus_ai_agent.execution.analysis_run import AnalysisRun, AnalysisRunState
+    from abaqus_ai_agent.contracts.metrics import EngineeringMetric
+
+    index = RunIndex()
+    run1 = AnalysisRun(
+        id="run-cli-1",
+        model_name="ModelA",
+        job_name="JobA",
+        state=AnalysisRunState.ACCEPTED,
+        solver="standard",
+        engineering_status="result_valid",
+        acceptance_passed=True,
+        metrics=(EngineeringMetric("mises", 200.0, "MPa"),),
+    )
+    run2 = AnalysisRun(
+        id="run-cli-2",
+        model_name="ModelB",
+        job_name="JobB",
+        state=AnalysisRunState.FAILED,
+        solver="explicit",
+        engineering_status="diverged",
+        acceptance_passed=False,
+    )
+    index.add_run(run1)
+    index.add_run(run2)
+
+    mem_dir = tmp_path / "runs_dir"
+    index.save_to_directory(mem_dir)
+
+    # 1. Test memory manifest
+    ret = main(["memory", "--dir", str(mem_dir), "--manifest", "--json"])
+    assert ret == 0
+    captured = capsys.readouterr()
+    manifest_data = json.loads(captured.out)
+    assert manifest_data["total_runs"] == 2
+
+    # 2. Test search with filter --solver explicit
+    ret = main(["memory", "--dir", str(mem_dir), "--solver", "explicit", "--json"])
+    assert ret == 0
+    captured = capsys.readouterr()
+    res = json.loads(captured.out)
+    assert res["matched"] == 1
+    assert res["runs"][0]["id"] == "run-cli-2"
+
+    # 3. Test filter --passed
+    ret = main(["memory", "--dir", str(mem_dir), "--passed"])
+    assert ret == 0
+    captured = capsys.readouterr()
+    assert "run-cli-1" in captured.out
+    assert "run-cli-2" not in captured.out

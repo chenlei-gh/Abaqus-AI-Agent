@@ -560,6 +560,10 @@ abaqus-ai-agent report machine_validation/static_golden_e2e.json --format markdo
 # 6. Verify mechanism topology and compile native Abaqus action plans
 abaqus-ai-agent fmbd --case fmbd7 --verify-topology
 abaqus-ai-agent fmbd --case fmbd7 --compile
+
+# 7. Query and filter persisted Case Memory / Run Index
+abaqus-ai-agent memory --dir case_memory --list
+abaqus-ai-agent memory --dir case_memory --solver explicit --passed
 ```
 
 ---

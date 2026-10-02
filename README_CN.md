@@ -548,6 +548,10 @@ abaqus-ai-agent report machine_validation/static_golden_e2e.json --format markdo
 # 6. 验证机构拓扑模型与编译原生 Action 执行计划
 abaqus-ai-agent fmbd --case fmbd7 --verify-topology
 abaqus-ai-agent fmbd --case fmbd7 --compile
+
+# 7. 检索与筛选持久化案例记忆库（Case Memory / Run Index）
+abaqus-ai-agent memory --dir case_memory --list
+abaqus-ai-agent memory --dir case_memory --solver explicit --passed
 ```
 
 ---

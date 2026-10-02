@@ -86,6 +86,17 @@ def _build_parser() -> argparse.ArgumentParser:
     p_fmbd.add_argument("--compile", action="store_true", help="Compile mechanism into native Abaqus action plan.")
     p_fmbd.add_argument("--json", action="store_true", help="Output topology/actions as JSON.")
 
+    # 7. memory
+    p_mem = subparsers.add_parser("memory", help="Inspect, query, and search persisted Case Memory / Run Index.")
+    p_mem.add_argument("--dir", default="case_memory", help="Directory containing persisted runs (default: case_memory)")
+    p_mem.add_argument("--list", action="store_true", help="List all runs stored in directory.")
+    p_mem.add_argument("--manifest", action="store_true", help="Display summary manifest of the case memory.")
+    p_mem.add_argument("--solver", help="Filter runs by solver (e.g. standard, explicit).")
+    p_mem.add_argument("--status", help="Filter runs by engineering status.")
+    p_mem.add_argument("--passed", action="store_true", help="Filter runs where acceptance_passed is True.")
+    p_mem.add_argument("--failed", action="store_true", help="Filter runs where acceptance_passed is False.")
+    p_mem.add_argument("--json", action="store_true", help="Output machine-readable JSON format.")
+
     return parser
 
 
@@ -735,6 +746,54 @@ def handle_fmbd(args: argparse.Namespace) -> int:
     return 0 if report.is_valid else 1
 
 
+def handle_memory(args: argparse.Namespace) -> int:
+    from .run_index import RunIndex
+
+    dir_path = Path(args.dir)
+    index = RunIndex()
+    loaded = index.load_from_directory(dir_path)
+
+    if args.manifest:
+        manifest = index.export_manifest()
+        if args.json:
+            print(json.dumps(manifest, indent=2, ensure_ascii=False))
+        else:
+            print(f"=== Case Memory Manifest ({dir_path}) ===")
+            print(f"Total Runs: {manifest['total_runs']}")
+            for r in manifest["runs"]:
+                pass_str = "PASS" if r.get("acceptance_passed") else ("FAIL" if r.get("acceptance_passed") is False else "UNKNOWN")
+                print(f"[{r.get('id', ''):20s}] {r.get('solver', ''):10s} {r.get('model_name', ''):12s} {pass_str:7s} {r.get('state', '')}")
+        return 0
+
+    passed_filter = None
+    if args.passed:
+        passed_filter = True
+    elif args.failed:
+        passed_filter = False
+
+    runs = index.search_runs(
+        solver=args.solver,
+        engineering_status=args.status,
+        acceptance_passed=passed_filter,
+    )
+
+    if args.json:
+        data = [r.to_dict() if hasattr(r, "to_dict") else dict(r) for r in runs]
+        print(json.dumps({"directory": str(dir_path), "loaded": loaded, "matched": len(data), "runs": data}, indent=2, ensure_ascii=False))
+    else:
+        print(f"=== Case Memory Search ({dir_path}) ===")
+        print(f"Scanned files in dir: {loaded}, Matched runs: {len(runs)}")
+        for r in runs:
+            p_val = getattr(r, "acceptance_passed", None)
+            pass_str = "PASS" if p_val is True else ("FAIL" if p_val is False else "N/A")
+            st_val = getattr(r, "state", "")
+            if hasattr(st_val, "value"):
+                st_val = st_val.value
+            print(f"[{getattr(r, 'id', ''):20s}] Solver: {getattr(r, 'solver', ''):10s} Job: {getattr(r, 'job_name', ''):12s} Status: {getattr(r, 'engineering_status', ''):15s} Acceptance: {pass_str}")
+
+    return 0
+
+
 def main(argv: Optional[Sequence[str]] = None) -> int:
     parser = _build_parser()
     args = parser.parse_args(argv)
@@ -746,6 +805,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         "diagnose": handle_diagnose,
         "report": handle_report,
         "fmbd": handle_fmbd,
+        "memory": handle_memory,
     }
 
     handler = handlers.get(args.subcommand)
