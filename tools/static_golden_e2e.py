@@ -289,7 +289,13 @@ reaction_report, reaction_summary = reaction_balance_from_field_evidence(
 # exists. AnalysisRunner already performed deterministic ODB-backed criteria
 # acceptance; this second call closes the engineering-check gate without adding
 # a new orchestration service.
-result_values = {}\nfor item in run.metrics:\n    metadata = getattr(item, 'metadata', {}) or {}\n    key = metadata.get('value_key')\n    value = getattr(item, 'value', None)\n    if key and isinstance(value, (int, float)):\n        result_values[key] = value
+result_values = {}
+for item in run.metrics:
+    metadata = getattr(item, 'metadata', {}) or {}
+    key = metadata.get('value_key')
+    value = getattr(item, 'value', None)
+    if key and isinstance(value, (int, float)):
+        result_values[key] = value
 
 final_acceptance = evaluate_result_acceptance(
     result_status=run.job_status.state.value.lower() if run.job_status else 'unknown',
