@@ -33,7 +33,8 @@ class AnalysisStep:
         if not self.name:
             raise ValueError("step name is required")
         if self.procedure not in (
-            "static", "implicit_dynamic", "explicit_dynamic", "heat_transfer", "frequency"
+            "static", "implicit_dynamic", "explicit_dynamic", "heat_transfer", "frequency",
+            "coupled_temp_displacement", "coupled_temperature_displacement"
         ):
             raise ValueError("unsupported step procedure: %s" % self.procedure)
         if self.time_period <= 0 and self.procedure != "frequency":
@@ -69,11 +70,13 @@ class AnalysisStep:
             implicit_dynamic_step,
             explicit_dynamic_step,
             heat_transfer_step,
+            coupled_temp_displacement_step,
             frequency_step,
         )
 
+        res_action: AbaqusAction
         if self.procedure == "static":
-            return static_step(
+            res_action = static_step(
                 model=model_name,
                 name=self.name,
                 previous=self.previous,
@@ -88,7 +91,7 @@ class AnalysisStep:
                 amplitude=self.amplitude,
             )
         elif self.procedure == "implicit_dynamic":
-            return implicit_dynamic_step(
+            res_action = implicit_dynamic_step(
                 model=model_name,
                 name=self.name,
                 previous=self.previous,
@@ -105,15 +108,16 @@ class AnalysisStep:
                 half_inc_scale_factor=self.half_inc_scale_factor,
             )
         elif self.procedure == "explicit_dynamic":
-            return explicit_dynamic_step(
+            res_action = explicit_dynamic_step(
                 model=model_name,
                 name=self.name,
                 previous=self.previous,
                 time_period=self.time_period,
                 nlgeom=self.nlgeom,
+                max_increment=self.max_inc,
             )
         elif self.procedure == "heat_transfer":
-            return heat_transfer_step(
+            res_action = heat_transfer_step(
                 model=model_name,
                 name=self.name,
                 previous=self.previous,
@@ -123,12 +127,32 @@ class AnalysisStep:
                 min_inc=self.min_inc,
                 max_inc=self.max_inc,
                 max_num_inc=self.max_num_inc,
+                amplitude=self.amplitude,
+            )
+        elif self.procedure in ("coupled_temp_displacement", "coupled_temperature_displacement"):
+            res_action = coupled_temp_displacement_step(
+                model=model_name,
+                name=self.name,
+                previous=self.previous,
+                response="STEADY_STATE" if self.steady_state else "TRANSIENT",
+                time_period=self.time_period,
+                nlgeom=self.nlgeom,
+                max_num_inc=self.max_num_inc,
+                initial_inc=self.initial_inc,
+                min_inc=self.min_inc,
+                max_inc=self.max_inc,
+                amplitude=self.amplitude,
             )
         elif self.procedure == "frequency":
-            return frequency_step(
+            res_action = frequency_step(
                 model=model_name,
                 name=self.name,
                 previous=self.previous,
                 num_eigen=self.num_eigenvalues or 10,
             )
-        raise ValueError("unsupported procedure for action materialization: %s" % self.procedure)
+        else:
+            raise ValueError("unsupported procedure for action materialization: %s" % self.procedure)
+
+        if self.metadata:
+            res_action.parameters.setdefault("metadata", dict(self.metadata))
+        return res_action

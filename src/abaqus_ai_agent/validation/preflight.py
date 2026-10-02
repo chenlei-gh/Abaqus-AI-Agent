@@ -2,6 +2,7 @@ import math
 from dataclasses import dataclass
 from typing import Sequence, Optional
 from ..contracts.geometry import resolve_region
+from ..contracts.units import validate_action_quantities
 from .actions import (
     VALID_CONNECTOR_ASSEMBLED_TYPES,
     VALID_CONNECTOR_TRANSLATIONAL_TYPES,
@@ -46,6 +47,18 @@ def preflight_action(action, snapshot=None):
         else:
             models = getattr(snapshot, "models", ())
         check("model_exists", action.model_name in models, action.model_name)
+
+    # Unit / dimensional consistency preflight
+    unit_sys = None
+    if snapshot is not None:
+        unit_sys = snapshot.get("unit_system") if isinstance(snapshot, dict) else getattr(snapshot, "unit_system", None)
+    if not unit_sys:
+        unit_sys = action.parameters.get("unit_system")
+    try:
+        validate_action_quantities(action.action_type, action.parameters, unit_system=unit_sys)
+        check("action_quantities_valid", True)
+    except Exception as e:
+        check("action_quantities_valid", False, str(e))
 
     if action.action_type in ("fixed_bc", "displacement_bc", "symmetry_bc",
                               "pressure_load", "concentrated_force",
@@ -257,6 +270,38 @@ def preflight_plan(actions: Sequence, snapshot=None) -> PlanPreflightResult:
             "detail": f"Plan contains {load_count} loads but 0 boundary conditions or kinematic constraints",
         }
         warnings.append(warning_item)
+
+    # Structural conflict detection: duplicate or mutually-exclusive BCs on same (region, step)
+    bc_registry = {}
+    for idx, action in enumerate(actions):
+        if action.action_type in ("fixed_bc", "displacement_bc"):
+            reg = action.parameters.get("region_expression")
+            step = action.parameters.get("step", "Initial")
+            if reg:
+                key = (str(reg), str(step))
+                if key not in bc_registry:
+                    bc_registry[key] = []
+                bc_registry[key].append((idx, action))
+
+    for (reg, step), bc_list in bc_registry.items():
+        if len(bc_list) > 1:
+            has_fixed = any(act.action_type == "fixed_bc" for _, act in bc_list)
+            for idx, act in bc_list:
+                if act.action_type == "displacement_bc" and has_fixed:
+                    non_zero = any(
+                        isinstance(act.parameters.get(k), (int, float)) and act.parameters.get(k) != 0.0
+                        for k in ("u1", "u2", "u3", "ur1", "ur2", "ur3")
+                    )
+                    if non_zero:
+                        item = {
+                            "name": "bc_structural_conflict",
+                            "ok": False,
+                            "detail": f"Conflicting BCs on region '{reg}' at step '{step}': fixed_bc conflicts with non-zero displacement_bc",
+                            "action_index": idx,
+                            "action_type": act.action_type,
+                        }
+                        all_checks.append(item)
+                        all_blockers.append(item)
 
     return PlanPreflightResult(
         passed=len(all_blockers) == 0,

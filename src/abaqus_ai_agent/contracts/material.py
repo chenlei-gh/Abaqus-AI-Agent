@@ -52,6 +52,11 @@ class MaterialDefinition:
             raise ValueError("material name is required")
         if self.density is not None and self.density <= 0:
             raise ValueError("density must be positive")
+        if self.unit_system:
+            try:
+                UnitSystem.named(self.unit_system)
+            except Exception as e:
+                raise ValueError(f"invalid or unsupported unit_system '{self.unit_system}': {e}")
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -97,6 +102,7 @@ class MaterialDefinition:
                     name=self.name,
                     youngs_modulus=self.elastic.youngs_modulus,
                     poisson=self.elastic.poisson_ratio,
+                    unit_system=self.unit_system,
                 )
             )
         if self.density is not None:
@@ -105,32 +111,35 @@ class MaterialDefinition:
                     model=model_name,
                     name=self.name,
                     density=self.density,
+                    unit_system=self.unit_system,
                 )
             )
         if self.plastic is not None:
-            table = self.plastic.hardening_table or ((self.plastic.yield_stress, self.plastic.plastic_strain),)
             actions.append(
                 material_plastic(
                     model=model_name,
                     name=self.name,
-                    table=table,
+                    table=((self.plastic.yield_stress, self.plastic.plastic_strain),)
+                    + tuple(self.plastic.hardening_table),
+                    unit_system=self.unit_system,
                 )
             )
         if self.thermal is not None:
-            if self.thermal.conductivity is not None:
-                actions.append(
-                    material_conductivity(
-                        model=model_name,
-                        name=self.name,
-                        table=((self.thermal.conductivity,),),
-                    )
+            actions.append(
+                material_conductivity(
+                    model=model_name,
+                    name=self.name,
+                    table=((self.thermal.conductivity,),),
+                    unit_system=self.unit_system,
                 )
+            )
             if self.thermal.specific_heat is not None:
                 actions.append(
                     material_specific_heat(
                         model=model_name,
                         name=self.name,
                         table=((self.thermal.specific_heat,),),
+                        unit_system=self.unit_system,
                     )
                 )
             if self.thermal.expansion_coefficient is not None:
@@ -139,6 +148,7 @@ class MaterialDefinition:
                         model=model_name,
                         name=self.name,
                         table=((self.thermal.expansion_coefficient,),),
+                        unit_system=self.unit_system,
                     )
                 )
         return tuple(actions)

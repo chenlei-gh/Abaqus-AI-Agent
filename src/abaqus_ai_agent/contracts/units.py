@@ -150,7 +150,3 @@ def validate_action_quantities(action_type: str, parameters: dict, unit_system: 
             q = "force" if action_type == "concentrated_force" else "stress"
             validate_quantity_unit(q, params["unit"], unit_system)
     return True
-    dimensions = tuple(unit_dimension(unit) for unit in values)
-    if len(set(dimensions)) != 1:
-        raise ValueError("incompatible dimensions: %s" % (", ".join(dimensions)))
-    return dimensions[0]
