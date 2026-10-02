@@ -58,6 +58,12 @@ def action_to_script(action):
                 "solutionTechnique=%s" % p.get("solution_technique", "FULL_NEWTON"),
                 "reformKernel=%d" % int(p.get("reform_kernel", 8)),
                 "amplitude=%s" % _step_amplitude(p.get("amplitude"), "STEP")]
+        if p.get("application"):
+            args.append("application=%s" % p["application"])
+        if p.get("nohaf") is not None:
+            args.append("nohaf=%s" % ("ON" if p["nohaf"] else "OFF"))
+        if p.get("half_inc_scale_factor") is not None:
+            args.append("halfIncScaleFactor=%r" % p["half_inc_scale_factor"])
         for key, arg in (("initial_inc", "initialInc"), ("min_inc", "minInc"), ("max_inc", "maxInc")):
             if p.get(key) is not None: args.append("%s=%r" % (arg, p[key]))
         return "from abaqusConstants import *; mdb.models[%s].ImplicitDynamicsStep(%s)" % (_q(m), ", ".join(args))

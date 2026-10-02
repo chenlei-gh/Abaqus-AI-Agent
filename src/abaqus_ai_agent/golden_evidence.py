@@ -96,6 +96,12 @@ CASE_NAME_TO_ID = {
     "fmbd4_rigid_flexible_golden_e2e": "fmbd4_rigid_flexible",
     "fmbd4golden": "fmbd4_rigid_flexible",
     "fmbd4goldenjob": "fmbd4_rigid_flexible",
+    # FMBD-5
+    "fmbd5_crank_slider": "fmbd5_crank_slider",
+    "fmbd5": "fmbd5_crank_slider",
+    "fmbd5_crank_slider_golden_e2e": "fmbd5_crank_slider",
+    "fmbd5golden": "fmbd5_crank_slider",
+    "fmbd5goldenjob": "fmbd5_crank_slider",
 }
 
 

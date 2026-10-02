@@ -32,7 +32,7 @@ from abaqus_ai_agent.validation.preflight import preflight_action
 import tools.run_golden_matrix as runner
 
 
-EXPECTED_TEN_CASES = (
+EXPECTED_ELEVEN_CASES = (
     "smoke",
     "static_cantilever",
     "mesh_convergence",
@@ -43,14 +43,15 @@ EXPECTED_TEN_CASES = (
     "mbd1_rigid_pendulum",
     "mbd2_double_pendulum",
     "fmbd4_rigid_flexible",
+    "fmbd5_crank_slider",
 )
 
 
-def test_golden_registry_contains_all_ten_cases():
+def test_golden_registry_contains_all_eleven_cases():
     catalog = standard_golden_catalog
-    assert catalog.count() == 10
+    assert catalog.count() == 11
     registered_ids = catalog.case_ids()
-    for case_id in EXPECTED_TEN_CASES:
+    for case_id in EXPECTED_ELEVEN_CASES:
         assert case_id in registered_ids
         case = catalog.get_case(case_id)
         assert case is not None
@@ -231,9 +232,9 @@ def test_runner_cli_list(capsys):
     rc = runner.main(["--list"])
     assert rc == 0
     captured = capsys.readouterr().out
-    for case_id in EXPECTED_TEN_CASES:
+    for case_id in EXPECTED_ELEVEN_CASES:
         assert case_id in captured
-    assert "Total: 10" in captured
+    assert "Total: 11" in captured
 
 
 def test_runner_cli_validate_evidence(capsys):
@@ -250,10 +251,10 @@ def test_runner_cli_manifest_output(tmp_path):
     assert out_file.is_file()
     data = json.loads(out_file.read_text(encoding="utf-8"))
     assert data["manifest_version"] == "1.0"
-    assert data["catalog_case_count"] == 10
-    assert data["summary"]["PASS"] == 10
+    assert data["catalog_case_count"] == 11
+    assert data["summary"]["PASS"] == 11
     assert data["summary"]["FAIL"] == 0
-    assert len(data["cases"]) == 10
+    assert len(data["cases"]) == 11
 
 
 def test_preflight_closure_mbd_and_connector_actions():

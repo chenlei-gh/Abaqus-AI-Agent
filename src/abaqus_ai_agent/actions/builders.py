@@ -37,12 +37,14 @@ def dynamic_explicit_step(model, name="Step-1", previous="Initial", time_period=
 def implicit_dynamic_step(model, name="Step-1", previous="Initial", time_period=1.0,
                           nlgeom=False, max_num_inc=100, initial_inc=None,
                           min_inc=None, max_inc=None, solution_technique="FULL_NEWTON",
-                          reform_kernel=8, amplitude="STEP"):
+                          reform_kernel=8, amplitude="STEP",
+                          application=None, nohaf=None, half_inc_scale_factor=None):
     return _action("implicit_dynamic_step", model, name=name, previous=previous,
                    time_period=time_period, nlgeom=nlgeom, max_num_inc=max_num_inc,
                    initial_inc=initial_inc, min_inc=min_inc, max_inc=max_inc,
                    solution_technique=solution_technique, reform_kernel=reform_kernel,
-                   amplitude=amplitude)
+                   amplitude=amplitude, application=application, nohaf=nohaf,
+                   half_inc_scale_factor=half_inc_scale_factor)
 
 def frequency_step(model, name="Step-1", previous="Initial", num_eigen=10): return _action("frequency_step", model, name=name, previous=previous, num_eigen=num_eigen)
 def heat_transfer_step(model, name="Step-1", previous="Initial", response="TRANSIENT", time_period=1.0,

@@ -135,7 +135,7 @@ class MechanismLoadSpec:
     load_type: str = "gravity"  # "gravity", "force", "torque"
     vector: Tuple[float, float, float] = (0.0, -9810.0, 0.0)
     magnitude: Optional[float] = None
-    step_name: str = "Step-1"
+    step_name: Optional[str] = None
     amplitude: Optional[str] = None
 
 
@@ -150,6 +150,8 @@ class MechanismAnalysisSpec:
     max_inc: float = 0.01
     max_num_inc: int = 1000
     nlgeom: bool = True
+    application: str = "MODERATE_DISSIPATION"
+    nohaf: bool = True
     field_variables: Tuple[str, ...] = ("U", "UR", "V", "VR", "S", "RF", "RM")
     history_variables: Tuple[str, ...] = ("ALLIE", "ALLKE", "ALLWK", "ALLSE", "ETOTAL")
     field_frequency: int = 1
@@ -376,7 +378,7 @@ class MechanismGraph:
         load_type: str = "gravity",
         vector: Tuple[float, float, float] = (0.0, -9810.0, 0.0),
         magnitude: Optional[float] = None,
-        step_name: str = "Step-1",
+        step_name: Optional[str] = None,
         amplitude: Optional[str] = None,
     ) -> "MechanismGraph":
         """Add a load or actuator to the mechanism."""
@@ -787,11 +789,11 @@ class MechanismGraph:
                         assembled_type="HINGE",
                         behavior_name=joint.behavior_name,
                     ))
-                elif jt in ("prismatic", "slider"):
+                elif jt in ("prismatic", "slider", "translator"):
                     actions.append(connector_section(
                         model_name,
                         name=sec_name,
-                        assembled_type="SLIDER",
+                        assembled_type="TRANSLATOR",
                         behavior_name=joint.behavior_name,
                     ))
                 elif jt in ("spherical", "join"):
@@ -847,6 +849,8 @@ class MechanismGraph:
                 min_inc=analysis.min_inc,
                 max_inc=analysis.max_inc,
                 nlgeom=analysis.nlgeom,
+                application=analysis.application,
+                nohaf=analysis.nohaf,
             ))
             actions.append(field_output(
                 model_name,

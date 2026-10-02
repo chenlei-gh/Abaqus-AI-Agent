@@ -588,6 +588,7 @@ This escape hatch is deliberate: the action layer should not become a bottleneck
 | Rigid-body dynamics (RP + RigidBody physical pendulum) | Golden E2E Validated (Abaqus 2025) |
 | Multi-body dynamics (Two-body revolute connector / double pendulum) | Golden E2E Validated (Abaqus 2025); higher-order kinematic pairs pending |
 | Flexible multi-body dynamics (Rigid crank + C3D8R flexible link + Kinematic Coupling + CONN3D2 Hinge) | Golden E2E Validated (Abaqus 2025) |
+| Closed-loop flexible multi-body dynamics (FMBD-5 Crank-slider with C3D8R flexible rod, Kinematic Coupling, HINGE & TRANSLATOR) | Golden E2E Validated (Abaqus 2025) |
 | Initial temperature / stress | Implemented |
 | Assembly instance operations | Implemented |
 | INP export | Implemented |

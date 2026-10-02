@@ -576,6 +576,7 @@ action = python_action(
 | 刚体动力学（RP + RigidBody 物理摆） | Abaqus 2025 Golden E2E 验证已通过 |
 | 多体动力学（双刚体 Hinge 连接器 / 双摆系统） | Abaqus 2025 Golden E2E 验证已通过；高阶运动副待扩展 |
 | 刚柔耦合多体动力学（刚体曲柄 + C3D8R 弹性连杆 + Kinematic Coupling + CONN3D2 Hinge） | Abaqus 2025 Golden E2E 验证已通过 |
+| 闭环刚柔耦合机构动力学（FMBD-5 曲柄滑块机构：C3D8R 弹性连杆 + 双端 Kinematic Coupling + Hinge 旋转副 + Translator 移动导轨） | Abaqus 2025 Golden E2E 验证已通过 |
 | Initial Temperature / Stress | 已实现 |
 | Assembly Instance Operations | 已实现 |
 | INP Export | 已实现 |

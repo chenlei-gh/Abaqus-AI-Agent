@@ -249,6 +249,31 @@ def _build_standard_catalog() -> Tuple[GoldenCaseDefinition, ...]:
             ),
             tags=("fmbd", "flexible", "rigid_flexible", "coupling", "connector", "dynamics"),
         ),
+        GoldenCaseDefinition(
+            case_id="fmbd5_crank_slider",
+            title="FMBD-5 Closed-Loop Rigid-Flexible Crank-Slider Mechanism Dynamics E2E",
+            category="FMBD",
+            solver="standard",
+            physics_type="flexible_multibody_dynamics",
+            tool_script="tools/fmbd5_crank_slider_golden_e2e.py",
+            default_evidence_json="machine_validation/fmbd5_crank_slider_golden_e2e.json",
+            job_name="FMBD5GoldenJob",
+            analytical_reference="Closed-loop rigid crank, C3D8R flexible rod, and rigid slider mechanism compiled purely from MechanismGraph; kinematic loop closure <= 0.05, joint drift <= 1e-3 mm, slider transverse drift <= 1e-2 mm, dynamic stress sanity 0.01 <= Mises <= 150 MPa, active elastic strain energy ALLSE/ALLIE >= 0.5%, moderate numerical dissipation <= 50%",
+            summary="Full-cycle closed-loop crank-slider mechanism consisting of ground pivot, rotating rigid crank, C3D8R elastic rod with dual kinematic couplings, Revolute/Hinge connectors, and horizontal Translator slider guide under gravity, compiled 100% via MechanismGraph.",
+            criteria=(
+                GoldenCriterion("joint_drift", "max_joint_drift_mm", "<=", 1e-3, "mm", "Hinge translational joint drift <= 1e-3 mm"),
+                GoldenCriterion("slider_transverse_drift", "max_slider_y_drift_mm", "<=", 1e-2, "mm", "Slider transverse drift bound <= 1e-2 mm"),
+                GoldenCriterion("loop_closure_error", "max_loop_closure_error", "<=", 0.05, "", "Kinematic loop closure error <= 5%"),
+                GoldenCriterion("max_mises_stress_lower", "max_mises_stress_mpa", ">=", 0.01, "MPa", "Dynamic stress sanity lower bound"),
+                GoldenCriterion("max_mises_stress_upper", "max_mises_stress_mpa", "<=", 150.0, "MPa", "Dynamic stress sanity upper bound"),
+                GoldenCriterion("strain_energy_active", "strain_energy_ratio", ">=", 0.005, "", "Flexible body dynamic strain energy participation"),
+                GoldenCriterion("energy_dissipation", "energy_dissipation_ratio", "<=", 0.50, "", "Mechanical energy dissipation bounded <= 50%"),
+            ),
+            strict_criteria=(
+                GoldenCriterion("strict_joint_drift", "max_joint_drift_mm", "<=", 1e-15, "mm", "Strict negative gate limit <= 1e-15 mm"),
+            ),
+            tags=("fmbd", "closed_loop", "crank_slider", "coupling", "connector", "translator", "mechanism_graph"),
+        ),
     )
 
 
