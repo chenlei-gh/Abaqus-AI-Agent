@@ -96,3 +96,4 @@ class AnalysisWorkflow:
 
 
 from .static import StaticAnalysisPlan, build_static_plan
+from .thermal import ThermalAnalysisPlan, build_thermal_plan

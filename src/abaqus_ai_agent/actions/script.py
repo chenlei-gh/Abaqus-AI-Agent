@@ -18,17 +18,17 @@ def action_to_script(action):
     if k == "python":
         return p["code"]
     if k == "material_elastic":
-        return "model=mdb.models[%s]; mat=model.Material(%s); mat.Elastic(table=((%r,%r),))" % (_q(m), _q(p["name"]), p["youngs_modulus"], p["poisson"])
+        return "model=mdb.models[%s]; mat=model.materials[%s] if %s in model.materials else model.Material(%s); mat.Elastic(table=((%r,%r),))" % (_q(m), _q(p["name"]), _q(p["name"]), _q(p["name"]), p["youngs_modulus"], p["poisson"])
     if k == "material_density":
-        return "mdb.models[%s].materials[%s].Density(table=((%r,),))" % (_q(m), _q(p["name"]), p["density"])
+        return "model=mdb.models[%s]; mat=model.materials[%s] if %s in model.materials else model.Material(%s); mat.Density(table=((%r,),))" % (_q(m), _q(p["name"]), _q(p["name"]), _q(p["name"]), p["density"])
     if k == "material_plastic":
-        return "mdb.models[%s].materials[%s].Plastic(table=%r)" % (_q(m), _q(p["name"]), tuple(tuple(x) for x in p["table"]))
+        return "model=mdb.models[%s]; mat=model.materials[%s] if %s in model.materials else model.Material(%s); mat.Plastic(table=%r)" % (_q(m), _q(p["name"]), _q(p["name"]), _q(p["name"]), tuple(tuple(x) for x in p["table"]))
     if k == "material_conductivity":
-        return "mdb.models[%s].materials[%s].Conductivity(table=%r)" % (_q(m), _q(p["name"]), tuple(tuple(x) for x in p["table"]))
+        return "model=mdb.models[%s]; mat=model.materials[%s] if %s in model.materials else model.Material(%s); mat.Conductivity(table=%r)" % (_q(m), _q(p["name"]), _q(p["name"]), _q(p["name"]), tuple(tuple(x) for x in p["table"]))
     if k == "material_specific_heat":
-        return "mdb.models[%s].materials[%s].SpecificHeat(table=%r)" % (_q(m), _q(p["name"]), tuple(tuple(x) for x in p["table"]))
+        return "model=mdb.models[%s]; mat=model.materials[%s] if %s in model.materials else model.Material(%s); mat.SpecificHeat(table=%r)" % (_q(m), _q(p["name"]), _q(p["name"]), _q(p["name"]), tuple(tuple(x) for x in p["table"]))
     if k == "material_expansion":
-        return "mdb.models[%s].materials[%s].Expansion(table=%r)" % (_q(m), _q(p["name"]), tuple(tuple(x) for x in p["table"]))
+        return "model=mdb.models[%s]; mat=model.materials[%s] if %s in model.materials else model.Material(%s); mat.Expansion(table=%r)" % (_q(m), _q(p["name"]), _q(p["name"]), _q(p["name"]), tuple(tuple(x) for x in p["table"]))
     if k == "solid_section":
         return "mdb.models[%s].HomogeneousSolidSection(name=%s, material=%s, thickness=None)" % (_q(m), _q(p["name"]), _q(p["material"]))
     if k == "section_assignment":

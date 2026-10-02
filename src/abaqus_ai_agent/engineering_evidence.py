@@ -7,7 +7,9 @@ thresholds. Callers must provide the engineering assumptions explicitly.
 from .engineering_checks import (
     check_declared_load_balance,
     check_energy_ratio,
+    check_thermal_flux_balance,
     sum_reaction_components,
+    sum_scalar_flux,
 )
 
 
@@ -73,3 +75,23 @@ def energy_ratio_from_history_evidence(
         numerator_last, denominator_last, tolerance, name=name
     )
     return check, {"numerator": numerator_last, "denominator": denominator_last}
+
+
+def thermal_flux_balance_from_field_evidence(
+    field_evidence, reference_flux=5000.0, tolerance=0.01, unit="mW"
+):
+    """Convert RFL field evidence into an explicit thermal flux balance report."""
+    evidence = _require_available(field_evidence, "reaction heat flux")
+    values = evidence.get("values") or ()
+    if not values:
+        raise ValueError("reaction heat flux evidence contains no values")
+    reaction = sum_scalar_flux(values)
+    if reaction["count"] == 0:
+        raise ValueError("reaction heat flux evidence contains no numeric values")
+    report = check_thermal_flux_balance(
+        reaction["total"],
+        reference_flux=reference_flux,
+        tolerance=tolerance,
+        unit=unit,
+    )
+    return report, reaction

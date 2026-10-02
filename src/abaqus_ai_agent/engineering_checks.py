@@ -129,3 +129,35 @@ def check_declared_load_balance(applied_components, reaction_components,
             message="relative_error=%g" % error,
         ))
     return evaluate_checks(tuple(checks))
+
+
+def sum_scalar_flux(field_values):
+    """Sum scalar RFL (reaction heat flux) values across nodes."""
+    total = 0.0
+    count = 0
+    for item in field_values or ():
+        data = item.get("data") if isinstance(item, dict) else item
+        if isinstance(data, (int, float)):
+            total += float(data)
+            count += 1
+        elif isinstance(data, (tuple, list)) and data and isinstance(data[0], (int, float)):
+            total += float(data[0])
+            count += 1
+    return {"total": total, "count": count}
+
+
+def check_thermal_flux_balance(total_reaction_flux, reference_flux=5000.0, tolerance=0.01, unit="mW"):
+    """Check conservation of thermal energy: sum(RFL) should equal 0 in steady state."""
+    ref_scale = max(abs(float(reference_flux)), 1.0)
+    error = abs(float(total_reaction_flux)) / ref_scale
+    passed = error <= tolerance
+    check = EngineeringCheck(
+        name="thermal_energy_balance_RFL",
+        passed=passed,
+        actual=float(total_reaction_flux),
+        expected=0.0,
+        tolerance=float(tolerance),
+        unit=unit,
+        message="relative_error=%g (ref_scale=%g)" % (error, ref_scale),
+    )
+    return evaluate_checks((check,))
