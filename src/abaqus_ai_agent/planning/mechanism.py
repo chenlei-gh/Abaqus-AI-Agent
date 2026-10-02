@@ -172,6 +172,9 @@ class MechanismTopologyReport:
     joint_constraints_planar: int
     closed_loops_count: int
     has_ground: bool
+    num_rigid_rigid_joints: int = 0
+    num_rigid_flexible_joints: int = 0
+    num_flexible_flexible_joints: int = 0
     warnings: Tuple[str, ...] = ()
     errors: Tuple[str, ...] = ()
     flexible_continuum_note: str = (
@@ -203,6 +206,18 @@ class MechanismTopologyReport:
     @property
     def flexible_interfaces_count(self) -> int:
         return self.num_interfaces
+
+    @property
+    def rigid_rigid_joints_count(self) -> int:
+        return self.num_rigid_rigid_joints
+
+    @property
+    def rigid_flexible_joints_count(self) -> int:
+        return self.num_rigid_flexible_joints
+
+    @property
+    def flexible_flexible_joints_count(self) -> int:
+        return self.num_flexible_flexible_joints
 
 
 # Constraint DOF reduction per joint type in 3D (Spatial) and 2D (Planar)
@@ -460,6 +475,22 @@ class MechanismGraph:
         num_rigid = sum(1 for b in self.bodies.values() if b.body_type == BodyType.RIGID.value)
         num_flex = sum(1 for b in self.bodies.values() if b.body_type == BodyType.FLEXIBLE.value)
 
+        # Categorize joints by connected body elasticity
+        num_rr_joints = 0
+        num_rf_joints = 0
+        num_ff_joints = 0
+        for joint in self.joints.values():
+            body_a_type = self.bodies[joint.body_a].body_type if joint.body_a in self.bodies else ("ground" if joint.body_a == "ground" else "unknown")
+            body_b_type = self.bodies[joint.body_b].body_type if joint.body_b in self.bodies else ("ground" if joint.body_b == "ground" else "unknown")
+            is_a_flex = (body_a_type == BodyType.FLEXIBLE.value)
+            is_b_flex = (body_b_type == BodyType.FLEXIBLE.value)
+            if is_a_flex and is_b_flex:
+                num_ff_joints += 1
+            elif is_a_flex or is_b_flex:
+                num_rf_joints += 1
+            else:
+                num_rr_joints += 1
+
         return MechanismTopologyReport(
             is_valid=(len(errors) == 0),
             num_bodies=len(self.bodies),
@@ -471,8 +502,11 @@ class MechanismGraph:
             mobility_rigid_planar=dof_2d,
             joint_constraints_spatial=total_c_3d,
             joint_constraints_planar=total_c_2d,
-            has_ground=("ground" in all_body_names or has_ground),
             closed_loops_count=closed_loops,
+            has_ground=("ground" in all_body_names or has_ground),
+            num_rigid_rigid_joints=num_rr_joints,
+            num_rigid_flexible_joints=num_rf_joints,
+            num_flexible_flexible_joints=num_ff_joints,
             warnings=tuple(warnings),
             errors=tuple(errors),
         )

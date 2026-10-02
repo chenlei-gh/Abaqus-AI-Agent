@@ -102,6 +102,12 @@ CASE_NAME_TO_ID = {
     "fmbd5_crank_slider_golden_e2e": "fmbd5_crank_slider",
     "fmbd5golden": "fmbd5_crank_slider",
     "fmbd5goldenjob": "fmbd5_crank_slider",
+    # FMBD-6
+    "fmbd6_flexible_to_flexible": "fmbd6_flexible_to_flexible",
+    "fmbd6": "fmbd6_flexible_to_flexible",
+    "fmbd6_flexible_to_flexible_golden_e2e": "fmbd6_flexible_to_flexible",
+    "fmbd6golden": "fmbd6_flexible_to_flexible",
+    "fmbd6goldenjob": "fmbd6_flexible_to_flexible",
     # Explicit Dynamic
     "explicit_dynamic": "explicit_dynamic",
     "explicit_dynamics": "explicit_dynamic",
@@ -323,6 +329,8 @@ def normalize_golden_evidence(
     # 4. Job Name
     job = str(
         raw.get("job")
+        or raw.get("job_name")
+        or report.get("job")
         or report.get("job_name")
         or (definition.job_name if definition else "GoldenJob")
     )

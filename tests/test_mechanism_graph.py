@@ -574,3 +574,139 @@ def test_joint_semantic_interface_resolution_and_error_handling():
     m_ambig.add_joint("J_Ambig", body_a="crank", body_b="flex_rod", location=(0.0, 0.0, 0.0))
     with pytest.raises(ValueError, match="Ambiguous interfaces"):
         m_ambig.compile_to_actions("TestModel")
+
+
+def test_mechanism_graph_flexible_to_flexible_direct_coupling():
+    """Verify FMBD-6 topology and full-stack compilation for direct flexible-to-flexible joint."""
+    from abaqus_ai_agent.planning.mechanism import MechanismAnalysisSpec
+
+    m = MechanismGraph("FlexibleToFlexibleDoublePendulum")
+
+    # 1. Ground body
+    m.add_body("ground", body_type="ground", ref_point_name="RP_GROUND", ref_point_coords=(0.0, 0.0, 0.0))
+
+    # 2. Two C3D8R flexible beam links without any intermediate rigid body
+    m.add_body(
+        name="flex_arm1",
+        body_type="flexible",
+        part_name="Part-Arm1",
+        instance_name="Arm1-1",
+        youngs_modulus=70000.0,
+        poisson_ratio=0.33,
+        density=2.7e-9,
+        mesh_size=5.0,
+        element_code="C3D8R",
+        element_library="STANDARD",
+        part_cells_set="Arm1Cells",
+    )
+    m.add_body(
+        name="flex_arm2",
+        body_type="flexible",
+        part_name="Part-Arm2",
+        instance_name="Arm2-1",
+        youngs_modulus=70000.0,
+        poisson_ratio=0.33,
+        density=2.7e-9,
+        mesh_size=5.0,
+        element_code="C3D8R",
+        element_library="STANDARD",
+        part_cells_set="Arm2Cells",
+    )
+
+    # 3. Flexible Interfaces on both arms
+    # Arm1: Root interface (to ground) and Tip interface (to Arm2)
+    m.add_flexible_interface(
+        name="Coupling_Arm1_Root",
+        body_name="flex_arm1",
+        interface_region="Arm1RootFace",
+        ref_point_name="RP_ARM1_ROOT",
+        ref_point_coords=(0.0, 0.0, 0.0),
+        coupling_type="KINEMATIC",
+    )
+    m.add_flexible_interface(
+        name="Coupling_Arm1_Tip",
+        body_name="flex_arm1",
+        interface_region="Arm1TipFace",
+        ref_point_name="RP_ARM1_TIP",
+        ref_point_coords=(200.0, 0.0, 0.0),
+        coupling_type="KINEMATIC",
+    )
+
+    # Arm2: Root interface (to Arm1) and Tip free end / payload
+    m.add_flexible_interface(
+        name="Coupling_Arm2_Root",
+        body_name="flex_arm2",
+        interface_region="Arm2RootFace",
+        ref_point_name="RP_ARM2_ROOT",
+        ref_point_coords=(200.0, 0.0, 0.0),
+        coupling_type="KINEMATIC",
+    )
+
+    # 4. Kinematic joints
+    # J1: Ground to Arm1 Root (Rigid-Flexible)
+    m.add_joint(
+        name="J_Ground_Arm1",
+        joint_type="revolute",
+        body_a="ground",
+        body_b="flex_arm1",
+        location=(0.0, 0.0, 0.0),
+        interface_b_name="Coupling_Arm1_Root",
+    )
+
+    # J2: Direct Flexible-to-Flexible joint linking Arm1 Tip and Arm2 Root
+    m.add_joint(
+        name="J_Arm1_Arm2",
+        joint_type="revolute",
+        body_a="flex_arm1",
+        body_b="flex_arm2",
+        location=(200.0, 0.0, 0.0),
+        interface_a_name="Coupling_Arm1_Tip",
+        interface_b_name="Coupling_Arm2_Root",
+    )
+
+    # 5. External gravity load
+    m.add_load("Gravity", target_name="assembly", load_type="gravity", vector=(0.0, -9810.0, 0.0))
+
+    # 6. Topological validation audit
+    report = m.validate_topology()
+    assert report.is_valid is True
+    assert report.num_bodies == 3
+    assert report.num_rigid_bodies == 0
+    assert report.num_flexible_bodies == 2
+    assert report.num_joints == 2
+    assert report.num_interfaces == 3
+    assert report.flexible_flexible_joints_count == 1
+    assert report.rigid_flexible_joints_count == 1
+    assert report.rigid_rigid_joints_count == 0
+    assert report.mobility_rigid_spatial == 2
+    assert report.mobility_rigid_planar == 2
+
+    # 7. Compilation to strictly-ordered AbaqusActions
+    analysis = MechanismAnalysisSpec(
+        step_name="Step-Dynamic",
+        job_name="FMBD6Job",
+        time_period=0.5,
+        initial_inc=0.005,
+        max_inc=0.01,
+        nlgeom=True,
+    )
+    actions = m.compile_to_actions("FMBD6Model", analysis=analysis)
+
+    # Verify actions sequence and parameters
+    action_types = [a.action_type for a in actions]
+    assert action_types.count("material_elastic") == 2
+    assert action_types.count("solid_section") == 2
+    assert action_types.count("section_assignment") == 2
+    assert action_types.count("seed_part") == 2
+    assert action_types.count("element_type") == 2
+    assert action_types.count("generate_mesh") == 2
+    assert action_types.count("coupling_constraint") == 3
+    assert action_types.count("connector_section") == 1
+    assert action_types.count("wire_connector") == 2
+    assert "implicit_dynamic_step" in action_types
+    assert "gravity" in action_types
+
+    # Specifically verify the direct flexible-to-flexible connector wire endpoints
+    wire_ff = next(a for a in actions if a.action_type == "wire_connector" and a.parameters["name"] == "Conn-J_Arm1_Arm2")
+    assert wire_ff.parameters["point1_name"] == "RP_ARM1_TIP"
+    assert wire_ff.parameters["point2_name"] == "RP_ARM2_ROOT"
