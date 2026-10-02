@@ -536,6 +536,34 @@ The normal test suite does not require a licensed Abaqus installation.
 
 ---
 
+## Command-Line Interface (CLI)
+
+Once installed, use `abaqus-ai-agent` directly (or via `python -m abaqus_ai_agent`):
+
+```bash
+# 1. Inspect local Abaqus launcher and license availability
+abaqus-ai-agent inspect
+
+# 2. List registered Golden Cases and validate evidence
+abaqus-ai-agent matrix --list
+abaqus-ai-agent matrix --validate all
+
+# 3. Compare two runs and inspect metric deltas
+abaqus-ai-agent diff baseline_run.json candidate_run.json
+
+# 4. Perform deterministic diagnosis on solver artifacts (.msg, .sta, .log)
+abaqus-ai-agent diagnose Job-1.msg
+
+# 5. Render engineering reports from evidence files
+abaqus-ai-agent report machine_validation/static_golden_e2e.json --format markdown
+
+# 6. Verify mechanism topology and compile native Abaqus action plans
+abaqus-ai-agent fmbd --case fmbd7 --verify-topology
+abaqus-ai-agent fmbd --case fmbd7 --compile
+```
+
+---
+
 ## Minimal usage
 
 A typical workflow is conceptually:

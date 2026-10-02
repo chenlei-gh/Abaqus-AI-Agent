@@ -524,6 +524,34 @@ python -m pytest -q
 
 ---
 
+## 命令行工具（CLI）
+
+安装后可直接使用 `abaqus-ai-agent` 命令（或 `python -m abaqus_ai_agent`）：
+
+```bash
+# 1. 检查本地 Abaqus 环境与许可证就绪状态
+abaqus-ai-agent inspect
+
+# 2. 列出已注册的 Golden Cases 及证据状态
+abaqus-ai-agent matrix --list
+abaqus-ai-agent matrix --validate all
+
+# 3. 比较两次仿真运行的关键指标差异与状态变化
+abaqus-ai-agent diff baseline_run.json candidate_run.json
+
+# 4. 对 Abaqus 求解日志（.msg / .sta / .log）进行确定性故障诊断
+abaqus-ai-agent diagnose Job-1.msg
+
+# 5. 基于证据文件直接渲染工程交付报告（Markdown 或 HTML）
+abaqus-ai-agent report machine_validation/static_golden_e2e.json --format markdown
+
+# 6. 验证机构拓扑模型与编译原生 Action 执行计划
+abaqus-ai-agent fmbd --case fmbd7 --verify-topology
+abaqus-ai-agent fmbd --case fmbd7 --compile
+```
+
+---
+
 ## 最小使用示例
 
 一个典型流程可以从一个明确的 Action 开始：

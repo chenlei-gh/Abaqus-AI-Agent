@@ -11,6 +11,9 @@ requires-python = ">=3.9"
 license = {file = "LICENSE"}
 dependencies = []
 
+[project.scripts]
+abaqus-ai-agent = "abaqus_ai_agent.cli:main"
+
 [project.optional-dependencies]
 test = ["pytest>=7"]
 
