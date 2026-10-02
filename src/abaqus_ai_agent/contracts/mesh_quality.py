@@ -72,3 +72,41 @@ class MeshQualityResult:
     @property
     def passed(self):
         return self.status == "pass"
+
+
+ABAQUS_NATIVE_SHAPE_METRICS = (
+    "max_aspect_ratio",
+    "max_skew",
+    "min_jacobian",
+    "min_angle",
+    "max_angle",
+)
+ABAQUS_ANALYSIS_CHECKS = (
+    "max_angular_deviation",
+    "max_geometric_deviation_factor",
+)
+DERIVED_QUALITY_METRICS = (
+    "transition_ratio",
+    "aspect_ratio_mean",
+    "volume_skew",
+)
+
+
+def classify_mesh_quality_metrics(metrics: Dict[str, float]) -> Dict[str, Tuple[str, ...]]:
+    """Classify mesh quality metrics into native, analysis-only, derived, and unsupported."""
+    native, analysis, derived, unsupported = [], [], [], []
+    for k in metrics.keys():
+        if k in ABAQUS_NATIVE_SHAPE_METRICS:
+            native.append(k)
+        elif k in ABAQUS_ANALYSIS_CHECKS:
+            analysis.append(k)
+        elif k in DERIVED_QUALITY_METRICS:
+            derived.append(k)
+        else:
+            unsupported.append(k)
+    return {
+        "native": tuple(sorted(native)),
+        "analysis": tuple(sorted(analysis)),
+        "derived": tuple(sorted(derived)),
+        "unsupported": tuple(sorted(unsupported)),
+    }

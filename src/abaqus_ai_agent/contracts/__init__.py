@@ -12,3 +12,4 @@ from .contact import (
     ExpectedContactBehavior,
 )
 from .numerical import NumericalVerificationResult
+from .geometry import RegionReference, resolve_region

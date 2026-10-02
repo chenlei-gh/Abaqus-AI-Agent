@@ -1,4 +1,7 @@
+import math
 from dataclasses import dataclass
+from typing import Sequence, Optional
+from ..contracts.geometry import resolve_region
 from .actions import (
     VALID_CONNECTOR_ASSEMBLED_TYPES,
     VALID_CONNECTOR_TRANSLATIONAL_TYPES,
@@ -11,6 +14,20 @@ class PreflightResult:
     passed: bool
     checks: tuple
     blockers: tuple = ()
+
+
+@dataclass(frozen=True)
+class PlanPreflightResult:
+    passed: bool
+    checks: tuple
+    blockers: tuple = ()
+    warnings: tuple = ()
+
+
+def _is_finite_number(val):
+    if val is None or not isinstance(val, (int, float)):
+        return False
+    return not (math.isnan(val) or math.isinf(val))
 
 
 def preflight_action(action, snapshot=None):
@@ -33,7 +50,62 @@ def preflight_action(action, snapshot=None):
     if action.action_type in ("fixed_bc", "displacement_bc", "symmetry_bc",
                               "pressure_load", "concentrated_force",
                               "body_force", "section_assignment", "initial_temperature", "initial_stress"):
-        check("region_expression", bool(action.parameters.get("region_expression")))
+        raw_reg = action.parameters.get("region_expression")
+        check("region_expression", bool(raw_reg))
+        if raw_reg:
+            try:
+                reg_ref = resolve_region(raw_reg, fail_closed=False)
+                check("region_valid", not reg_ref.is_empty, raw_reg)
+            except Exception as e:
+                check("region_valid", False, str(e))
+
+    # Boundary conditions preflight
+    if action.action_type in ("fixed_bc", "displacement_bc", "symmetry_bc", "temperature_bc"):
+        step_name = action.parameters.get("step")
+        if snapshot is not None and step_name:
+            steps = snapshot.get("steps", ()) if isinstance(snapshot, dict) else getattr(snapshot, "steps", ())
+            if steps:
+                check("step_exists", step_name in steps or step_name == "Initial", step_name)
+
+        if action.action_type == "fixed_bc":
+            dofs = action.parameters.get("dofs")
+            if dofs is not None:
+                valid_dofs = all(isinstance(d, int) and 1 <= d <= 6 for d in dofs)
+                check("valid_dofs", bool(valid_dofs and len(dofs) > 0), dofs)
+
+        if action.action_type == "displacement_bc":
+            comps = [action.parameters.get(k) for k in ("u1", "u2", "u3", "ur1", "ur2", "ur3")]
+            specified = [c for c in comps if c is not None]
+            check("displacement_components_specified", len(specified) > 0, action.parameters)
+            check("displacement_components_finite", all(_is_finite_number(c) for c in specified), specified)
+
+        if action.action_type == "temperature_bc":
+            mag = action.parameters.get("magnitude")
+            check("temperature_magnitude_finite", _is_finite_number(mag), mag)
+
+    # Loads preflight
+    if action.action_type in ("pressure_load", "concentrated_force", "body_force", "body_heat_flux", "surface_heat_flux"):
+        step_name = action.parameters.get("step")
+        if snapshot is not None and step_name:
+            steps = snapshot.get("steps", ()) if isinstance(snapshot, dict) else getattr(snapshot, "steps", ())
+            if steps:
+                check("step_exists", step_name in steps, step_name)
+
+        if action.action_type in ("pressure_load", "body_heat_flux", "surface_heat_flux"):
+            mag = action.parameters.get("magnitude")
+            check("load_magnitude_finite", _is_finite_number(mag), mag)
+
+        if action.action_type == "concentrated_force":
+            comps = [action.parameters.get(k) for k in ("cf1", "cf2", "cf3")]
+            specified = [c for c in comps if c is not None]
+            check("cf_components_specified", len(specified) > 0, action.parameters)
+            check("cf_components_finite", all(_is_finite_number(c) for c in specified), specified)
+
+        if action.action_type == "body_force":
+            comps = [action.parameters.get(k) for k in ("comp1", "comp2", "comp3")]
+            specified = [c for c in comps if c is not None]
+            check("body_force_components_specified", len(specified) > 0, action.parameters)
+            check("body_force_components_finite", all(_is_finite_number(c) for c in specified), specified)
 
     if action.action_type == "tie":
         check("name", bool(action.parameters.get("name")))
@@ -107,3 +179,87 @@ def preflight_action(action, snapshot=None):
         check("precondition:%s" % path, ok, value)
 
     return PreflightResult(not blockers, tuple(checks), tuple(blockers))
+
+
+def preflight_plan(actions: Sequence, snapshot=None) -> PlanPreflightResult:
+    """Deterministic structural and consistency preflight for an entire Action plan."""
+    all_checks = []
+    all_blockers = []
+    warnings = []
+
+    defined_steps = set()
+    if snapshot is not None:
+        steps = snapshot.get("steps", ()) if isinstance(snapshot, dict) else getattr(snapshot, "steps", ())
+        defined_steps.update(steps)
+    defined_steps.add("Initial")
+
+    bc_count = 0
+    load_count = 0
+    constrained_regions = set()
+
+    for idx, action in enumerate(actions):
+        res = preflight_action(action, snapshot=snapshot)
+        for c in res.checks:
+            item = dict(c)
+            item["action_index"] = idx
+            item["action_type"] = action.action_type
+            all_checks.append(item)
+        for b in res.blockers:
+            item = dict(b)
+            item["action_index"] = idx
+            item["action_type"] = action.action_type
+            all_blockers.append(item)
+
+        # Track steps defined in this plan
+        if action.action_type.endswith("_step"):
+            step_name = action.parameters.get("name")
+            if step_name:
+                defined_steps.add(step_name)
+
+        # Track BCs and Loads
+        if action.action_type in ("fixed_bc", "displacement_bc", "symmetry_bc"):
+            bc_count += 1
+            reg = action.parameters.get("region_expression")
+            if reg:
+                constrained_regions.add(str(reg))
+            step = action.parameters.get("step")
+            if step and step not in defined_steps:
+                item = {
+                    "name": "step_sequence_valid",
+                    "ok": False,
+                    "detail": f"BC references step '{step}' before it is defined in plan",
+                    "action_index": idx,
+                    "action_type": action.action_type,
+                }
+                all_checks.append(item)
+                all_blockers.append(item)
+
+        if action.action_type in ("pressure_load", "concentrated_force", "body_force"):
+            load_count += 1
+            step = action.parameters.get("step")
+            if step and step not in defined_steps:
+                item = {
+                    "name": "step_sequence_valid",
+                    "ok": False,
+                    "detail": f"Load references step '{step}' before it is defined in plan",
+                    "action_index": idx,
+                    "action_type": action.action_type,
+                }
+                all_checks.append(item)
+                all_blockers.append(item)
+
+    # Obvious rigid-body-motion risk check
+    if load_count > 0 and bc_count == 0:
+        warning_item = {
+            "name": "rigid_body_motion_risk",
+            "ok": False,
+            "detail": f"Plan contains {load_count} loads but 0 boundary conditions or kinematic constraints",
+        }
+        warnings.append(warning_item)
+
+    return PlanPreflightResult(
+        passed=len(all_blockers) == 0,
+        checks=tuple(all_checks),
+        blockers=tuple(all_blockers),
+        warnings=tuple(warnings),
+    )

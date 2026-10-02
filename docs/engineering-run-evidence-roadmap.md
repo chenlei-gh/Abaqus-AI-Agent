@@ -810,11 +810,11 @@ The default implementation order is:
 
 ### Phase A — Foundational contract closure
 
-- [ ] Unify Region resolution without breaking existing Action compatibility
-- [ ] Strengthen BC/Load deterministic preflight
-- [ ] Close native mesh-quality evidence boundaries
-- [ ] Preserve existing Geometry grounding and RegionBinding architecture
-- [ ] Avoid new parallel foundational subsystems
+- [x] Unify Region resolution without breaking existing Action compatibility
+- [x] Strengthen BC/Load deterministic preflight
+- [x] Close native mesh-quality evidence boundaries
+- [x] Preserve existing Geometry grounding and RegionBinding architecture
+- [x] Avoid new parallel foundational subsystems
 
 ### Phase B — Engineering Run / Evidence closure
 
