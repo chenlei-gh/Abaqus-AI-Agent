@@ -121,12 +121,13 @@ def extract_history(executor, path, step, region, variables):
         "st=odb.steps[%r]\n"
         "hr=st.historyRegions[%r]\n"
         "wanted=%r\n"
-        "result={}\n"
+        "_vars={}\n"
         "for name in wanted:\n"
-        "    out=hr.historyOutputs.get(name)\n"
-        "    result[name]=list(out.data) if out is not None else None\n"
+        "    out=hr.historyOutputs[name] if name in hr.historyOutputs else None\n"
+        "    _vars[name]=list(out.data) if out is not None else None\n"
         "odb.close()\n"
-        "print({'step':%r,'region':%r,'variables':result})"
+        "result={'status':'available','step':%r,'region':%r,'variables':_vars}\n"
+        "print(result)"
     ) % (path, step, region, tuple(variables), step, region)
     return executor.execute(code)
 

@@ -45,6 +45,8 @@ def energy_ratio_from_history_evidence(
 ):
     """Convert two history-output series into a deterministic energy check."""
     evidence = _require_available(history_evidence, "history")
+    if "variables" not in evidence and isinstance(evidence.get("history"), dict):
+        evidence = evidence["history"]
     variables = evidence.get("variables") or {}
     numerator_data = variables.get(numerator)
     denominator_data = variables.get(denominator)

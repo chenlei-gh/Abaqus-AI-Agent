@@ -76,8 +76,10 @@ def evaluate_result_acceptance(result_status, numerical=None, engineering=None,
         failures.append("numerical_verification_failed")
     if engineering is not None and not getattr(engineering, "passed", False):
         failures.append("engineering_checks_failed")
-    if mesh_quality is not None and getattr(mesh_quality, "status", None) not in ("pass",):
-        failures.append("mesh_quality_failed")
+    if mesh_quality is not None:
+        mq_status = mesh_quality.get("status") if isinstance(mesh_quality, dict) else getattr(mesh_quality, "status", None)
+        if mq_status not in ("pass",):
+            failures.append("mesh_quality_failed")
     if convergence is not None and not getattr(convergence, "converged", False):
         failures.append("mesh_convergence_failed")
     if fatigue is not None:

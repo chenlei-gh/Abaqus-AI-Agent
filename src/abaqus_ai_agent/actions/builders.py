@@ -93,7 +93,10 @@ def gravity(model, name, comp1=0.0, comp2=0.0, comp3=0.0, step="Step-1", region_
 def body_heat_flux(model, name, region_expression, magnitude, step="Step-1"): return _action("body_heat_flux", model, region_expression, name=name, region_expression=region_expression, magnitude=magnitude, step=step)
 def surface_heat_flux(model, name, region_expression, magnitude, step="Step-1"): return _action("surface_heat_flux", model, region_expression, name=name, region_expression=region_expression, magnitude=magnitude, step=step)
 
-def field_output(model, variables=("S", "U", "RF"), request="F-Output-1", step="Initial"): return _action("field_output", model, variables=variables, request=request, step=step)
+def field_output(model, variables=("S", "U", "RF"), request="F-Output-1", step="Initial",
+                 frequency=None, num_intervals=None):
+    return _action("field_output", model, variables=variables, request=request, step=step,
+                   frequency=frequency, num_intervals=num_intervals)
 def history_output(model, variables=("ALLIE", "ALLKE", "ALLSE"), request="H-Output-1", region_expression=None, step="Step-1"): return _action("history_output", model, variables=variables, request=request, region_expression=region_expression, step=step)
 def create_job(model, name, job_type="STANDARD"): return _action("create_job", model, name=name, job_type=job_type)
 def submit_job(model, name): return _action("submit_job", model, name=name)

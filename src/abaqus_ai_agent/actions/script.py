@@ -121,13 +121,18 @@ def action_to_script(action):
         request = p.get("request", "F-Output-1")
         variables = tuple(p.get("variables", ("S", "U", "RF")))
         step = p.get("step", "Step-1")
+        extra = ""
+        if p.get("frequency") is not None:
+            extra += "; req.setValuesInStep(stepName=_st, frequency=%r)" % p["frequency"]
+        if p.get("num_intervals") is not None:
+            extra += "; req.setValuesInStep(stepName=_st, numIntervals=%r)" % p["num_intervals"]
         return (
             "import step; model=mdb.models[%s]; "
             "_st=%s; _st=([s for s in model.steps.keys() if s != 'Initial'] or [_st])[0] if _st == 'Initial' else _st; "
             "req=(model.fieldOutputRequests[%s] if %s in model.fieldOutputRequests else None); "
             "req=req or model.FieldOutputRequest(name=%s, createStepName=_st, variables=%r); "
-            "req.setValues(variables=%r)"
-            % (_q(m), _q(step), _q(request), _q(request), _q(request), variables, variables)
+            "req.setValues(variables=%r)%s"
+            % (_q(m), _q(step), _q(request), _q(request), _q(request), variables, variables, extra)
         )
     if k == "history_output":
         request = p.get("request", "H-Output-1")
