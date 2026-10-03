@@ -1,7 +1,7 @@
 # Engineering Run / Evidence Closure Roadmap
 
-**Status:** Foundational Contracts Closed & Frozen at Commit `644cad7`; Real-Machine Validation (Tier 1~5 Live Gate & Phase H Productization E2E) FULLY CLOSED & VALIDATED ✅; Phase J (Comprehensive Engineering Physics) & Phase K (Material Intelligence & CAMPUS Integration) SPECIFIED & ACTIVE 🚀  
-**Version:** 2026-10-03 (Comprehensive Physics & Material Intelligence Baseline)  
+**Status:** RC 1.0 (`v1.0.0-rc1`) CONDITIONAL PASS Frozen at Commit `deec6a3` ✅; Phase GA (General Availability Evolution Matrix: GA-1, GA-2, GA-3) SPECIFIED & ACTIVE 🚀  
+**Version:** 2026-10-03 (Release Candidate 1.0 Frozen & GA Evolution Baseline)  
 **Scope:** Abaqus-AI-Agent engineering architecture, foundational contracts, evidence chain, real-machine physics benchmarks, and material intelligence grounding
 
 ---
@@ -1088,8 +1088,70 @@ Following the live closure of the 22-case Tier A physics matrix (Phase J) and au
     - **T2: Coupled Thermo-Mechanical Thermal Stress** task with temperature gradient and expansion constraints.
     - **T3: Contact & Tribological Interaction** task evaluating contact pressure, gap closure, and frictional dissipation.
     - **T4: Nonlinear Plastic Hardening & Residual Stress** task evaluating post-yield deformation.
-    - **T5: Transient Dynamic Vibration & Energy Balance** task with kinematic/internal energy checks.
-    - **T6: Autonomous Diagnosis & Self-Healing** task recovering from intentional non-convergence.
+	    - **T5: Transient Dynamic Vibration & Energy Balance** task with kinematic/internal energy checks.
+	    - **T6: Autonomous Diagnosis & Self-Healing** task recovering from intentional non-convergence.
+
+### Phase GA — General Availability Evolution Matrix (GA-1 ~ GA-3)
+
+With the RC 1.0 foundation formally frozen and audited (`v1.0.0-rc1 — CONDITIONAL PASS`), the focus of the General Availability (GA) phase transitions from "proving solver/framework correctness" to "expanding autonomous engineering problem scope and establishing production-grade enterprise reliability". 
+
+GA development strictly focuses on three uncompromised tracks, prioritizing production stability (GA-3) before visual/CAD expansion:
+
+#### Track GA-3: Production Runtime Infrastructure & Enterprise Resilience [P0 HIGHEST PRIORITY]
+*Enterprise Deployment Core: Ensuring multi-job orchestration, license queuing, and non-blocking execution in real-world corporate environments.*
+
+- [ ] **GA-3.1: AnalysisRun Queue & Multi-Job Execution Engine**
+  - [ ] Implement persistent job task queue with asynchronous workers and state machine (`PENDING`, `ACQUIRING_LICENSE`, `RUNNING`, `RETRYING`, `COMPLETED`, `FAILED`, `CANCELLED`).
+  - [ ] Enforce job priority levels and resource throttling to avoid host exhaustion.
+- [ ] **GA-3.2: Dynamic FlexNet License Monitor & Availability Probes**
+  - [ ] Implement active FlexNet / DSLS license token query adapter (`flexlm_probe`, `lmutil lmstat`, `dslsstat`).
+  - [ ] Monitor real-time availability of core tokens (`abaqus`, `standard`, `explicit`, `cae`, `parallel`).
+- [ ] **GA-3.3: License Exhaustion Queue & Exponential Backoff Retry**
+  - [ ] Detect license checkout errors in solver preflight and live runtime logs (e.g. `Abaqus License Manager checked out error -1004`).
+  - [ ] Implement non-destructive suspension with configurable exponential backoff and jitter (`retry_after`, max wait timeout).
+  - [ ] Provide non-blocking queueing so multiple engineering agents can wait cooperatively without job abortion.
+- [ ] **GA-3.4: Multi-Job Workdir Sandbox & Artifact Isolation**
+  - [ ] Enforce strict per-run scratch directory sandboxing with UUID isolation to eliminate lock file collisions (`.lck`) and race conditions.
+  - [ ] Implement structured artifact promotion: only finalized `.odb`, `.sta`, `.msg`, and evidence bundles are promoted to long-term storage; ephemeral files are purged.
+- [ ] **GA-3.5: Crash Recovery & Run Resumption Checkpointing**
+  - [ ] Implement crash-resilient checkpoints across the execution lifecycle (`planned`, `submitted`, `solved`, `extracted`).
+  - [ ] Enable post-mortem recovery: if the agent process terminates mid-execution, auto-reconnect to running Abaqus background jobs upon restart via job lock file inspection.
+
+#### Track GA-1: Arbitrary Complex CAD Topology & Adaptive Meshing [P1 ENGINEERING CORE]
+*Structural Mechanics Expansion: Moving from parametric primitive synthesis to arbitrary industrial geometry ingestion.*
+
+- [ ] **GA-1.1: STEP / IGES Neutral CAD Ingestion & Healing**
+  - [ ] Integrate robust STEP/IGES neutral CAD import adapters with geometry validation preflight.
+  - [ ] Implement automated tolerance repair: detect small edge slivers, sharp vertices, and unstitched surfaces; auto-apply virtual topology merge where safe.
+- [ ] **GA-1.2: Geometric Feature Recognition**
+  - [ ] Implement topological feature identification: detect bolt holes, fillets, chamfers, thin-walled ribs, and symmetry planes.
+  - [ ] Extract feature metadata to guide simulation assumptions (e.g. stress concentration zones vs. nominal loading zones).
+- [ ] **GA-1.3: Autonomous Virtual Topology & Geometry Partitioning**
+  - [ ] Implement rule-based and AI-guided geometric partition algorithms to decompose complex 3D volumes into sweepable/mappable sub-volumes.
+  - [ ] Synthesize native Abaqus partition planes, sketches, and cell cut actions (`Part.PartitionCellByPlane`, `PartitionCellByExtrudeEdge`).
+- [ ] **GA-1.4: Hybrid & Adaptive Mesh Strategy**
+  - [ ] Implement multi-zone mesh strategy: structured hexahedral (C3D8R) in sweepable regions with automatic transition to quadratic tetrahedral (C3D10) in complex fillets.
+  - [ ] Implement curvature-driven and proximity-based local seed refinement at stress concentrations.
+  - [ ] Integrate automatic mesh quality enforcement (aspect ratio, distortion, negative Jacobian) on complex industrial geometry.
+- [ ] **GA-1.5: Complex Assembly & Multi-Body Region Grounding**
+  - [ ] Support multi-part assembly hierarchy resolution for imported CAD assemblies.
+  - [ ] Automate contact pair discovery between adjacent mating faces with automated master-slave assignment and tie constraint generation.
+
+#### Track GA-2: Perspective Camera Calibration & Visual Grounding [P2 PERCEPTION EXTENSION]
+*Physical Context Grounding: Anchoring real-world perspective photos and orthographic 2D drawings into 3D FE models.*
+
+- [ ] **GA-2.1: Perspective Camera Model & Intrinsics/Extrinsics Calibration**
+  - [ ] Implement full pinhole camera model supporting focal length, principal point, and extrinsic rotation/translation matrices ($[R|T]$).
+  - [ ] Support interactive and marker-assisted camera calibration against the 3D CAD coordinate frame.
+- [ ] **GA-2.2: Perspective Raycasting & Depth Disambiguation**
+  - [ ] Extend 2D-to-3D projection from parallel views to true perspective rays originating from the calibrated camera optical center.
+  - [ ] Implement multi-surface ray penetration handling with depth buffer / $Z$-buffer sorting to ensure selection of front-facing visible surfaces.
+- [ ] **GA-2.3: 2D Engineering Drawing Feature & Annotation Parsing**
+  - [ ] Parse standard engineering 2D drawings (orthographic multi-view projections, section views, dimension lines).
+  - [ ] Associate textual callouts (e.g. *"Fixed boundary"*, *"Load 5000N"*, *"Welded seam"*) with underlying 3D topological entities.
+- [ ] **GA-2.4: Deterministic Topological Region Grounding**
+  - [ ] Map identified 2D image/drawing bounding boxes and keypoints to deterministic Abaqus `findAt(...)` coordinates.
+  - [ ] Verify non-empty selection, normal alignment, and synthesize native Set/Surface objects under live Abaqus validation.
 
 ---
 
