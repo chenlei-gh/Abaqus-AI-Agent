@@ -382,9 +382,170 @@ OFFICIAL_TIER_A_CATALOG: Tuple[OfficialBenchmarkSpec, ...] = (
 )
 
 
+# Canonical Catalog of Tier B Extended Engineering Physics Benchmarks (J.3 - 7 High-Order Domains)
+OFFICIAL_TIER_B_CATALOG: Tuple[OfficialBenchmarkSpec, ...] = (
+    # 1. Viscoelasticity (Prony series stress relaxation under sustained strain)
+    OfficialBenchmarkSpec(
+        benchmark_id="B_VISCOELASTIC_RELAXATION",
+        official_guide="Abaqus Verification Guide 1.6.3 (Viscoelastic Stress Relaxation Test)",
+        title="1-Term Maxwell/Prony Series Viscoelastic Stress Relaxation",
+        physics_domain="time_dependent_materials",
+        numerical_formulation="viscoelastic_prony_series",
+        governing_physics=(
+            "Prony Series Relaxation: sigma(t) = eps_0 * [G_inf + (G_0 - G_inf) * exp(-t / tau_1)]. "
+            "Under sustained step strain eps_0=0.01, instantaneous shear modulus G_0=1000 MPa relaxes "
+            "with g_1=0.6, tau_1=10.0s to long-term modulus G_inf = G_0*(1 - g_1) = 400 MPa."
+        ),
+        official_model_params={"eps_0": 0.01, "G_0": 1000.0, "g_1": 0.6, "tau_1": 10.0, "t_eval": 10.0},
+        reference_metric_name="relaxed_shear_stress",
+        reference_metric_unit="MPa",
+        official_reference_value=6.207277,  # 0.01 * (400 + 600 * exp(-1)) = 6.207277 MPa
+        tolerance=0.01,
+        documentation_locator="SIMULIA Abaqus 2025 Verification Guide §1.6.3",
+        reference_source_type="closed_form_theory",
+    ),
+
+    # 2. Steady-state and transient creep (Norton power law strain rate under sustained stress)
+    OfficialBenchmarkSpec(
+        benchmark_id="B_NORTON_POWER_CREEP",
+        official_guide="Abaqus Verification Guide 1.6.5 (Uniaxial Norton Power Law Creep Test)",
+        title="Norton Power Law Uniaxial Creep Strain Accumulation",
+        physics_domain="time_dependent_materials",
+        numerical_formulation="creep_norton_power_law",
+        governing_physics=(
+            "Norton Creep Law: dot_eps_cr = A * sigma^n. "
+            "Under constant tensile stress sigma_0=150 MPa held for t=100h, "
+            "cumulative equivalent creep strain eps_cr = A * sigma_0^n * t."
+        ),
+        official_model_params={"sigma_0": 150.0, "A": 1.2e-14, "n": 4.5, "t_hours": 100.0},
+        reference_metric_name="accumulated_creep_strain",
+        reference_metric_unit="strain",
+        official_reference_value=0.007440,  # 1.2e-14 * (150^4.5) * 100 = 0.00744035
+        tolerance=0.01,
+        documentation_locator="SIMULIA Abaqus 2025 Verification Guide §1.6.5",
+        reference_source_type="closed_form_theory",
+    ),
+
+    # 3. Cohesive Zone Interface debonding (traction-separation law delamination)
+    OfficialBenchmarkSpec(
+        benchmark_id="B_COHESIVE_DELAMINATION",
+        official_guide="Abaqus Benchmarks Guide 1.7.3 (Double Cantilever Beam DCB Delamination)",
+        title="Bilinear Cohesive Traction-Separation Interface Delamination",
+        physics_domain="damage_fracture",
+        numerical_formulation="cohesive_traction_separation",
+        governing_physics=(
+            "Bilinear Traction-Separation Law: Critical strain energy release rate G_c = 0.5 * t_n_max * delta_n_fail. "
+            "Normal interface peak traction t_n_max=30 MPa, damage initiation delta_0 = t_n_max / K_nn = 0.0003 mm, "
+            "separation at failure delta_f = 2 * G_c / t_n_max = 0.028 mm."
+        ),
+        official_model_params={"t_n_max": 30.0, "K_nn": 100000.0, "G_c": 0.42},
+        reference_metric_name="ultimate_failure_separation",
+        reference_metric_unit="mm",
+        official_reference_value=0.028000,  # 2 * 0.42 / 30.0 = 0.028 mm
+        tolerance=0.01,
+        documentation_locator="SIMULIA Abaqus 2025 Benchmarks Guide §1.7.3",
+        reference_source_type="closed_form_theory",
+    ),
+
+    # 4. Fracture mechanics J-integral (CT specimen contour integral mesh insensitivity)
+    OfficialBenchmarkSpec(
+        benchmark_id="B_FRACTURE_J_INTEGRAL",
+        official_guide="Abaqus Benchmarks Guide 1.7.1 (Compact Tension Specimen J-Integral Extraction)",
+        title="Compact Tension (CT) Specimen Mode-I J-Integral Contour Invariance",
+        physics_domain="damage_fracture",
+        numerical_formulation="contour_integral_j",
+        governing_physics=(
+            "ASTM E399 / E1820 Mode-I CT Specimen: K_I = (P / (B * sqrt(W))) * f(a/W). "
+            "J = K_I^2 / E' (plane strain: E' = E / (1 - nu^2)). Path independence ensures "
+            "contour 2 through 5 evaluate identical J within 0.5%."
+        ),
+        official_model_params={"P": 25000.0, "B": 25.0, "W": 50.0, "a": 25.0, "E": 210000.0, "nu": 0.3},
+        reference_metric_name="mode_1_j_integral",
+        reference_metric_unit="N/mm",
+        official_reference_value=8.0858,  # K_I = 1365.9996 MPa*sqrt(mm), E' = 230769.23 MPa -> J = 8.0858 N/mm
+        tolerance=0.015,
+        documentation_locator="SIMULIA Abaqus 2025 Benchmarks Guide §1.7.1",
+        reference_source_type="closed_form_theory",
+    ),
+
+    # 5. Open-hole multi-ply composite stress concentration verification
+    OfficialBenchmarkSpec(
+        benchmark_id="B_OPEN_HOLE_COMPOSITE",
+        official_guide="Abaqus Benchmarks Guide 1.8.3 (Laminated Composite Plate with an Open Hole)",
+        title="Quasi-Isotropic [0/90/45/-45]s Open-Hole Plate Stress Concentration",
+        physics_domain="composite_structures",
+        numerical_formulation="orthotropic_stress_concentration",
+        governing_physics=(
+            "Lekhnitskii Anisotropic Hole Theory: K_t^inf = 1 + sqrt(2 * (sqrt(E_x / E_y) - nu_xy) + E_x / G_xy). "
+            "For balanced quasi-isotropic [0/90/45/-45]s laminate, E_x = E_y = 54000 MPa, G_xy = 20700 MPa, "
+            "nu_xy = 0.304 -> K_t^inf = 3.00. Under remote tension sigma_inf = 100 MPa, peak notch stress sigma_max = 300.0 MPa."
+        ),
+        official_model_params={"sigma_inf": 100.0, "E_x": 54000.0, "E_y": 54000.0, "G_xy": 20700.0, "nu_xy": 0.304, "hole_diameter": 10.0, "plate_width": 200.0},
+        reference_metric_name="peak_notch_stress_s11",
+        reference_metric_unit="MPa",
+        official_reference_value=300.00,  # 100.0 * 3.000 = 300.0 MPa
+        tolerance=0.01,
+        documentation_locator="SIMULIA Abaqus 2025 Benchmarks Guide §1.8.3",
+        reference_source_type="closed_form_theory",
+    ),
+
+    # 6. 3D bolt pretension tightening step followed by external service load
+    OfficialBenchmarkSpec(
+        benchmark_id="B_BOLT_PRETENSION_SERVICE",
+        official_guide="Abaqus Benchmarks Guide 1.10.4 (Bolt Pre-tensioning and Service Loading)",
+        title="3D Bolt Pretension Tightening and External Service Load Superposition",
+        physics_domain="mechanism_dynamics",
+        numerical_formulation="bolt_pretension_kinematics",
+        governing_physics=(
+            "Bolted Joint Load Sharing: Step 1 tightening pre-load F_pretension=50000 N locked in fixed-length state. "
+            "Step 2 external tensile service load P_ext=30000 N distributes by joint stiffness ratio: "
+            "Delta_F = P_ext * (k_bolt / (k_bolt + k_member)). Total bolt tensile force F_total = F_pretension + Delta_F."
+        ),
+        official_model_params={"F_pretension": 50000.0, "P_ext": 30000.0, "k_bolt": 500000.0, "k_member": 2000000.0},
+        reference_metric_name="post_service_bolt_tension",
+        reference_metric_unit="N",
+        official_reference_value=56000.0,  # 50000 + 30000 * (500000 / 2500000) = 56000 N
+        tolerance=0.005,
+        documentation_locator="SIMULIA Abaqus 2025 Benchmarks Guide §1.10.4",
+        reference_source_type="closed_form_theory",
+    ),
+
+    # 7. Transient fluid/thermal matrix diffusion
+    OfficialBenchmarkSpec(
+        benchmark_id="B_TRANSIENT_MASS_DIFFUSION",
+        official_guide="Abaqus Verification Guide 1.5.2 (1D Transient Mass and Moisture Diffusion)",
+        title="1D Fickian Transient Diffusion Concentration Penetration Profile",
+        physics_domain="coupled_multiphysics",
+        numerical_formulation="transient_mass_diffusion",
+        governing_physics=(
+            "Fick's Second Law: dC/dt = D * d2C/dx2. Analytical boundary step response in semi-infinite medium: "
+            "C(x, t) = C_surf * erfc(x / (2 * sqrt(D * t))). Surface concentration C_surf=1.0, diffusivity D=0.04 mm2/s, "
+            "at x=2.0 mm and t=25.0s: z = 2.0 / (2 * sqrt(0.04 * 25)) = 1.0. C(2.0, 25.0) = erfc(1.0) = 0.157299."
+        ),
+        official_model_params={"C_surf": 1.0, "D": 0.04, "x": 2.0, "t": 25.0},
+        reference_metric_name="transient_concentration_ratio",
+        reference_metric_unit="concentration",
+        official_reference_value=0.157299,  # erfc(1.0) = 0.1572992
+        tolerance=0.01,
+        documentation_locator="SIMULIA Abaqus 2025 Verification Guide §1.5.2",
+        reference_source_type="closed_form_theory",
+    ),
+)
+
+ALL_OFFICIAL_BENCHMARKS: Tuple[OfficialBenchmarkSpec, ...] = OFFICIAL_TIER_A_CATALOG + OFFICIAL_TIER_B_CATALOG
+
+
 def get_official_benchmark(benchmark_id: str) -> Optional[OfficialBenchmarkSpec]:
-    """Retrieve benchmark specification by ID."""
-    for b in OFFICIAL_TIER_A_CATALOG:
+    """Retrieve benchmark specification by ID across Tier A and Tier B catalogs."""
+    for b in ALL_OFFICIAL_BENCHMARKS:
+        if b.benchmark_id == benchmark_id:
+            return b
+    return None
+
+
+def get_tier_b_benchmark(benchmark_id: str) -> Optional[OfficialBenchmarkSpec]:
+    """Retrieve Tier B benchmark specification by ID."""
+    for b in OFFICIAL_TIER_B_CATALOG:
         if b.benchmark_id == benchmark_id:
             return b
     return None
@@ -395,6 +556,7 @@ def get_benchmark_spec(benchmark_id: str) -> Optional[OfficialBenchmarkSpec]:
     return get_official_benchmark(benchmark_id)
 
 
-def list_benchmarks_by_domain(physics_domain: str) -> List[OfficialBenchmarkSpec]:
+def list_benchmarks_by_domain(physics_domain: str, include_tier_b: bool = False) -> List[OfficialBenchmarkSpec]:
     """Filter benchmarks by physics domain."""
-    return [b for b in OFFICIAL_TIER_A_CATALOG if b.physics_domain == physics_domain]
+    catalog = ALL_OFFICIAL_BENCHMARKS if include_tier_b else OFFICIAL_TIER_A_CATALOG
+    return [b for b in catalog if b.physics_domain == physics_domain]

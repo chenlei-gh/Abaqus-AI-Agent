@@ -993,14 +993,14 @@ This phase establishes the strict dual-gate separation required for production r
   - [x] I1-I2: Inertia, mass properties & gravity equilibrium (mass, center of mass, $RF = mg$).
   - [x] E2: Explicit dynamic impact (rigid impactor striking plate, kinetic/internal energy balance).
   - [x] NEG-01: Intentional divergence injection, `.msg` residual extraction, automated healing, rerun & accept.
-- [ ] J.3: Tier B Extended Engineering Physics Benchmarks (Nightly / Milestone Staging)
-  - [ ] Viscoelasticity (Prony series stress relaxation under sustained strain).
-  - [ ] Steady-state and transient creep (Norton power law strain rate under sustained stress).
-  - [ ] Cohesive Zone Interface debonding (traction-separation law delamination).
-  - [ ] Fracture mechanics $J$-integral (CT specimen contour integral mesh insensitivity).
-  - [ ] Open-hole multi-ply composite stress concentration verification.
-  - [ ] 3D bolt pretension tightening step followed by external service load.
-  - [ ] Transient fluid/thermal matrix diffusion.
+- [x] J.3: Tier B Extended Engineering Physics Benchmarks (Nightly / Milestone Staging)
+  - [x] Viscoelasticity (Prony series stress relaxation under sustained strain).
+  - [x] Steady-state and transient creep (Norton power law strain rate under sustained stress).
+  - [x] Cohesive Zone Interface debonding (traction-separation law delamination).
+  - [x] Fracture mechanics $J$-integral (CT specimen contour integral mesh insensitivity).
+  - [x] Open-hole multi-ply composite stress concentration verification.
+  - [x] 3D bolt pretension tightening step followed by external service load.
+  - [x] Transient fluid/thermal matrix diffusion.
 - [x] J.4: Tier C Autonomous Product UX & Agent Capability Integration
   - [x] Natural language complex engineering prompt decomposition via TypeSafe JEV.
   - [x] Fail-closed prompt ambiguity detection and technical clarification requests.
@@ -1069,21 +1069,21 @@ Following the live closure of the 22-case Tier A physics matrix (Phase J) and au
   - [x] Convert all tool-generated evidence outputs (e.g. `h1_engineering_report_evidence.json`, `h8_case_memory_comparison_evidence.json`) from OS-specific absolute paths to repository-relative paths (`machine_validation/...`).
   - [x] Enforce explicit `testpaths = ["tests"]` in `pyproject.toml` to prevent unintended directory discovery.
   - [x] Achieve 100% green status across all Python matrix environments (3.10, 3.11, 3.12) on Linux and Windows.
-- [ ] **R1: Agent-Native Action Chain End-to-End Grounding**
-  - [ ] Transform L1 from pre-packaged CAE script execution into a dynamic agent pipeline: `EngineeringIntent → ActionPlan → ActionBuilders → CAE Native Model → Solver → ODB → Acceptance → Report`.
-  - [ ] Prove that the model parameters and scripts are compiled directly from intent specifications rather than test-harness stubs.
-- [ ] **R2: Mesh Engineering Gate & Multi-Family Quality Verification**
-  - [ ] Real-machine verification across continuum, shell, and beam element families: C3D8/C3D8R, C3D10, S4R, B31.
-  - [ ] Extraction of native Abaqus element quality metrics: aspect ratio, minimum interior angles, face out-of-plane distortion, and negative Jacobian indicators.
-  - [ ] Fail-closed mesh acceptance gate: unresolvable element distortion or negative Jacobian triggers `BLOCKED` status before solver invocation.
-- [ ] **R3: Material Condition 2.0 Multi-Dimensional Fail-Closed Matching**
-  - [ ] Extend `MaterialCondition` matching beyond scalar temperature to multi-dimensional criteria: `strain_rate`, `test_time` (creep duration), `frequency` (DMA), and `humidity_state` (dry vs. conditioned).
-  - [ ] Enforce strict anti-extrapolation: out-of-range operating conditions must result in `BLOCKED` / `NEEDS_CLARIFICATION` rather than uncontrolled room-temperature fallback.
-- [ ] **R4: Clean-Room External Material Source Adapters**
-  - [ ] Deliver pluggable runtime adapters (`CampusAdapter`, `DatasheetAdapter`) with structured JSON/dict ingestion.
-  - [ ] Enforce Apache-2.0 legal boundary: zero proprietary database bulk dumps committed to repository; runtime translation into canonical `MaterialRecord` with full provenance tracking.
-- [ ] **R5: Engineering Task Acceptance Matrix (T1–T6 Real-World Scenarios)**
-  - [ ] Transition from isolated benchmark problems to multi-step engineering tasks:
+- [x] **R1: Agent-Native Action Chain End-to-End Grounding**
+  - [x] Transform L1 from pre-packaged CAE script execution into a dynamic agent pipeline: `EngineeringIntent → ActionPlan → ActionBuilders → CAE Native Model → Solver → ODB → Acceptance → Report`.
+  - [x] Prove that the model parameters and scripts are compiled directly from intent specifications rather than test-harness stubs.
+- [x] **R2: Mesh Engineering Gate & Multi-Family Quality Verification**
+  - [x] Real-machine verification across continuum, shell, and beam element families: C3D8/C3D8R, C3D10, S4R, B31.
+  - [x] Extraction of native Abaqus element quality metrics: aspect ratio, minimum interior angles, face out-of-plane distortion, and negative Jacobian indicators.
+  - [x] Fail-closed mesh acceptance gate: unresolvable element distortion or negative Jacobian triggers `BLOCKED` status before solver invocation.
+- [x] **R3: Material Condition 2.0 Multi-Dimensional Fail-Closed Matching**
+  - [x] Extend `MaterialCondition` matching beyond scalar temperature to multi-dimensional criteria: `strain_rate`, `test_time` (creep duration), `frequency` (DMA), and `humidity_state` (dry vs. conditioned).
+  - [x] Enforce strict anti-extrapolation: out-of-range operating conditions must result in `BLOCKED` / `NEEDS_CLARIFICATION` rather than uncontrolled room-temperature fallback.
+- [x] **R4: Clean-Room External Material Source Adapters**
+  - [x] Deliver pluggable runtime adapters (`CampusAdapter`, `DatasheetAdapter`) with structured JSON/dict ingestion.
+  - [x] Enforce Apache-2.0 legal boundary: zero proprietary database bulk dumps committed to repository; runtime translation into canonical `MaterialRecord` with full provenance tracking.
+- [x] **R5: Engineering Task Acceptance Matrix (T1–T6 Real-World Scenarios)**
+  - [x] Transition from isolated benchmark problems to multi-step engineering tasks:
     - **T1: Structural Static Strength & Factor of Safety (FoS)** task under deflection and stress limits.
     - **T2: Coupled Thermo-Mechanical Thermal Stress** task with temperature gradient and expansion constraints.
     - **T3: Contact & Tribological Interaction** task evaluating contact pressure, gap closure, and frictional dissipation.
