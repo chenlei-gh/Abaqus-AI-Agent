@@ -2,7 +2,7 @@
 
 **Status:** 
 - **RC 1.0 Frozen Baseline**: `v1.0.0-rc1` CONDITIONAL PASS Frozen at Commit `deec6a3` (428 tests) ✅
-- **GA Working Baseline**: Commit `2db7f5d`+ ACTIVE (477 tests, Track GA-3 Real-Machine Qualified & Track GA-1.1/GA-1.2/GA-1.3A Ingestion, Health & Topology Normalization Implemented) 🚀
+- **GA Working Baseline**: Commit `20dfee5`+ ACTIVE (484 tests, Track GA-3 Real-Machine Qualified & Track GA-1.1/GA-1.2/GA-1.3A/GA-1.3B Stage 1 Implemented) 🚀
 **Version:** 2026-10-03 (Release Candidate 1.0 Frozen & GA Evolution Baseline)  
 **Scope:** Abaqus-AI-Agent engineering architecture, foundational contracts, evidence chain, real-machine physics benchmarks, and material intelligence grounding
 
@@ -1267,7 +1267,7 @@ Meshability Assessment (GA-1.4) ───[Direct Reuse]───► Existing Mes
   - [x] Complete bidirectional adjacency indices: resolve `edge_to_adjacent_faces`, `vertex_to_incident_edges`, `face_adjacency` via shared edges, boundary edges, and connected components.
   - [x] Idempotent identity rule: deterministic sorting across all entity mappings guarantees identical topological graph identity across repeated ingestions. Zero duplicate CAD kernel dependency (5 tests in `tests/test_topology_normalization.py`).
 - [ ] **GA-1.3B: Functional Feature Recognition (Staged Rollout)**
-  - [ ] Stage 1 Fastener Hole detection: cylindrical/conical faces + axis + closed loops + diameter/depth metrics.
+  - [x] Stage 1 Fastener Hole detection: unified `FeatureCandidate` / `FeatureEvidence` contract, cylindrical/conical faces + axis + closed loops + diameter/depth metrics, through/blind/counterbore/countersink classification, oversized cavity false-positive rejection, and non-manifold block gate (7 tests in `tests/test_feature_recognition.py`).
   - [ ] Stage 2 Fillet recognition: constant-radius cylindrical faces with tangent continuity between two adjacent faces.
   - [ ] Stage 3 Chamfer recognition: planar transitional surfaces with adjacent angle/distance metrics.
   - [ ] Stage 4 Rib and Contact Plane classification: candidate semantic extraction with `ASSISTED` confidence flags.

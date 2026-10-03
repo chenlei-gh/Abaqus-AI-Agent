@@ -65,4 +65,9 @@ from .geometry import (
     CadLoop,
     NormalizedTopology,
     normalize_topology,
+    FeatureCandidate,
+    FeatureEvidence,
+    FeatureType,
+    HoleSubType,
+    detect_fastener_holes,
 )

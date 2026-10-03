@@ -31,6 +31,13 @@ from .topology import (
     NormalizedTopology,
     normalize_topology,
 )
+from .features import (
+    FeatureCandidate,
+    FeatureEvidence,
+    FeatureType,
+    HoleSubType,
+    detect_fastener_holes,
+)
 
 __all__ = [
     "CadBoundingBox",
@@ -56,4 +63,9 @@ __all__ = [
     "inspect_geometry_health",
     "NormalizedTopology",
     "normalize_topology",
+    "FeatureCandidate",
+    "FeatureEvidence",
+    "FeatureType",
+    "HoleSubType",
+    "detect_fastener_holes",
 ]
