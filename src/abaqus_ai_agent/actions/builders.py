@@ -158,9 +158,9 @@ def export_odb_csv(model, odb_path, output_path, step=None, frame=-1, variable="
     return _action("export_odb_csv", model, odb_path=odb_path, output_path=output_path,
                    step=step, frame=frame, variable=variable, component=component, position=position)
 
-def bolt_load(model, name, region_expression, magnitude, step="Step-Preload", bolt_method="APPLY_FORCE", direction_vector=None):
+def bolt_load(model, name, region_expression, magnitude, step="Step-Preload", bolt_method="APPLY_FORCE", direction_vector=None, datum_axis=None):
     expr = _normalize_region_expr(region_expression)
-    return _action("bolt_load", model, expr, name=name, region_expression=expr, magnitude=magnitude, step=step, bolt_method=bolt_method, direction_vector=direction_vector)
+    return _action("bolt_load", model, expr, name=name, region_expression=expr, magnitude=magnitude, step=step, bolt_method=bolt_method, direction_vector=direction_vector, datum_axis=datum_axis)
 
 def bolt_load_set_values(model, name, step="Step-Service", bolt_method="FIX_LENGTH"):
     return _action("bolt_load_set_values", model, name, name=name, step=step, bolt_method=bolt_method)

@@ -1388,8 +1388,15 @@ ODB Tensor Extraction & Equilibrium Verification (RF vs Applied Error = 0.002%) 
     - [x] Implemented spatial analytical field compilation (`SpatialLoadField`): performs fail-closed AST validation (`validate_field_expression`), synthesizes `ExpressionField(...)`, and connects pressure loads via `Pressure(..., distributionType=FIELD, field=...)`.
     - [x] Integrated symmetry boundary conditions (`XsymmBC`, `YsymmBC`, `ZsymmBC`) across explicit boundary specs and grounded semantics (`SYMMETRY_PLANE_X/Y/Z`).
     - [x] Added 6 comprehensive compiler integration tests in `tests/test_agent_compiler.py` (9/9 compiler tests passed; 575 repository-wide regression tests passed).
-  - [ ] **GA-2.6.3: Real Abaqus 2025 Multi-Step Golden Verification**
-    - [ ] Execute real-machine verification: Two-step nonlinear bolt preload followed by external service moment/load.
+  - [x] **GA-2.6.3: Real Abaqus 2025 Multi-Step Golden Verification [CLOSED & QUALIFIED]**
+    - [x] Executed autonomous end-to-end benchmark on live Abaqus 2025: Two-step procedure (`Step-Preload` APPLY_FORCE $5000\text{ N} \to$ `Step-Service` FIX_LENGTH with external tension $2000\text{ N}$ and torque $100000\text{ N}\cdot\text{mm}$ via RP Kinematic Coupling).
+    - [x] Certified 5-layer engineering acceptance criteria:
+      1. Procedure DAG: Initial $\to$ Step-Preload $\to$ Step-Service validated.
+      2. Bolt Pretension: Preload measured $\Sigma RF_z = -4999.9999\text{ N}$ (target $5000\text{ N}$, relative error $1.5 \times 10^{-8}$).
+      3. External Load Equilibrium: Service axial reaction $\Sigma RF_z = -1999.99999\text{ N}$ (target $2000\text{ N}$, error $3.8 \times 10^{-9}$); service reaction torque $\Sigma RM_z = -99999.999\text{ N}\cdot\text{mm}$ (target $100000\text{ N}\cdot\text{mm}$, error $9.2 \times 10^{-9}$); net shear drift $2.3 \times 10^{-13}\text{ N}$.
+      4. Physical Validity: Evaluated via deterministic acceptance engine (`evaluate_result_acceptance`), max Mises $74.72\text{ MPa}$, max displacement $0.0804\text{ mm}$, elements $320$, status `PASS`.
+      5. Evidence & Provenance: Persisted `.inp`, `.odb`, `.sta`, `.msg`, `.dat`, `.log` with SHA-256 cryptographic provenance in `machine_validation/ga263_golden_evidence.json` (Tier `REAL_ABAQUS`).
+    - [x] Full regression test suite passing (579/579 tests, 0 failures). Formally declared Track GA-2.6 **CLOSED & QUALIFIED**.
 
 ---
 

@@ -1,0 +1,157 @@
+{
+  "phase": "GA-2.6.3",
+  "case_id": "GA263_BOLT_PRETENSION_MOMENT_ACCEPTANCE",
+  "status": "QUALIFIED",
+  "evidence_tier": "REAL_ABAQUS",
+  "solver_version": "Abaqus 2025",
+  "timestamp": "2026-10-03T16:46:03.265047+00:00",
+  "prompt": "\u5728\u53cc\u6b65\u5206\u6790\u6d41\u7a0b\u4e2d\uff1aStep 1\uff08\u9884\u7d27\u9636\u6bb5\uff09\u65bd\u52a0 5000 N \u87ba\u6813\u9884\u7d27\u529b\uff08APPLY_FORCE\uff09\uff1bStep 2\uff08\u5de5\u51b5\u9636\u6bb5\uff09\u9501\u5b9a\u87ba\u6813\u957f\u5ea6\uff08FIX_LENGTH\uff09\uff0c\u91ca\u653e\u9876\u9762\u8f74\u5411\u7ea6\u675f\u5e76\u65bd\u52a0 100000 N*mm \u5916\u8f7d\u626d\u77e9\uff08\u901a\u8fc7 RP \u8fd0\u52a8\u8026\u5408\uff09\u4e0e 2000 N \u5916\u8f7d\u62c9\u529b\uff1b\u9a8c\u8bc1\u591a\u6b65\u72b6\u6001\u7ee7\u627f\u3001\u9884\u7d27\u9501\u5b9a\u53ca\u5916\u8f7d\u53cd\u529b\u53cd\u529b\u77e9\u7269\u7406\u5e73\u8861\u3002",
+  "preflight": {
+    "status": "PASS",
+    "checks_count": 76,
+    "blockers_count": 0
+  },
+  "five_layers_verification": {
+    "layer_1_procedure": {
+      "verified": true,
+      "steps_present": [
+        "Step-Preload",
+        "Step-Service"
+      ],
+      "step_dependency": "Step-Service -> Step-Preload"
+    },
+    "layer_2_bolt_pretension": {
+      "verified": true,
+      "preload_method": "APPLY_FORCE",
+      "service_method": "FIX_LENGTH",
+      "target_preload_n": 5000.0,
+      "measured_rf_bottom_n": -4999.999923706055,
+      "measured_rf_top_n": 0.0,
+      "preload_relative_error": 1.52587890625e-08
+    },
+    "layer_3_external_load": {
+      "verified": true,
+      "applied_tension_n": 2000.0,
+      "applied_torque_nmm": 100000.0,
+      "moment_strategy": "RP_COUPLING",
+      "coupling_type": "KINEMATIC",
+      "measured_axial_rf_bottom_n": -1999.9999923706055,
+      "measured_torque_rm_z_nmm": -99999.99908447266
+    },
+    "layer_4_physical_acceptance": {
+      "verified": true,
+      "status": "PASS",
+      "axial_equilibrium_error": 3.814697265625e-09,
+      "torque_equilibrium_error": 9.1552734375e-09,
+      "net_shear_drift_n": 2.2737367544323206e-13,
+      "max_mises_stress_mpa": 74.71707153320312,
+      "max_displacement_mm": 0.08035166561603546,
+      "max_rotation_ur3_rad": 0.0056762308813631535,
+      "mesh_element_count": 320,
+      "mesh_node_count": 525,
+      "mesh_element_type": "C3D8R"
+    },
+    "layer_5_evidence_traceability": {
+      "script_sha256": "556633a49739bd0efa2831b2a5358185dd1bfac9ba43344dc433b6f6c47a70da",
+      "artifacts": {
+        "GA263_Job.inp": {
+          "sha256": "086c5ab1ca0ceead03b3bafabbc5a464e71bda326a6b4da989e7f47f36112bf8",
+          "size_bytes": 45115,
+          "exists": true
+        },
+        "GA263_Job.odb": {
+          "sha256": "cdaa149d5bc365c8772169143ef6d2c82d85c7ea13eab4cb8966a2861d1b8276",
+          "size_bytes": 554992,
+          "exists": true
+        },
+        "GA263_Job.sta": {
+          "sha256": "93c1d78fafcb654f76576ac76cbe0d29a4e32806c45782bf034e1b9489ca87cc",
+          "size_bytes": 511,
+          "exists": true
+        },
+        "GA263_Job.msg": {
+          "sha256": "a61b7db553161c5e7ec53994c612f40c707ff589d685bb726633a928e410b028",
+          "size_bytes": 17978,
+          "exists": true
+        },
+        "GA263_Job.dat": {
+          "sha256": "68a560b6b0940801f4731193e490cd4817ade542df180b10d00e0b0f6189cf00",
+          "size_bytes": 16098,
+          "exists": true
+        },
+        "GA263_Job.log": {
+          "sha256": "0a0661b9b46cc9fe508544fae324afa3e797c30db8fa3f1f8ca1157520bdb7b6",
+          "size_bytes": 665,
+          "exists": true
+        }
+      },
+      "odb_result_path": "ga263_odb_result.json",
+      "acceptance_json_path": "ga263_acceptance.json"
+    }
+  },
+  "acceptance": {
+    "passed": true,
+    "status": "PASS",
+    "failures": [],
+    "warnings": [],
+    "blocked": [],
+    "gates": {
+      "execution": "PASS",
+      "evidence_sufficiency": "PASS",
+      "numerical_verification": "SKIPPED",
+      "engineering_checks": "SKIPPED",
+      "mesh_quality": "SKIPPED",
+      "convergence": "SKIPPED",
+      "fatigue": "SKIPPED",
+      "contact": "SKIPPED",
+      "criteria": "PASS"
+    },
+    "criteria": [
+      {
+        "name": "Preload_Equilibrium_Error",
+        "passed": true,
+        "actual": 1.52587890625e-08,
+        "operator": "<=",
+        "limit": 0.005,
+        "unit": "",
+        "relative_error": 0.9999969482421875
+      },
+      {
+        "name": "Axial_Equilibrium_Error",
+        "passed": true,
+        "actual": 3.814697265625e-09,
+        "operator": "<=",
+        "limit": 0.005,
+        "unit": "",
+        "relative_error": 0.9999992370605469
+      },
+      {
+        "name": "Torque_Equilibrium_Error",
+        "passed": true,
+        "actual": 9.1552734375e-09,
+        "operator": "<=",
+        "limit": 0.005,
+        "unit": "",
+        "relative_error": 0.9999981689453125
+      },
+      {
+        "name": "Max_Mises_Stress",
+        "passed": true,
+        "actual": 74.71707153320312,
+        "operator": ">",
+        "limit": 0.0,
+        "unit": "",
+        "relative_error": 7.471707153320312e+31
+      },
+      {
+        "name": "Max_Displacement",
+        "passed": true,
+        "actual": 0.08035166561603546,
+        "operator": ">",
+        "limit": 0.0,
+        "unit": "",
+        "relative_error": 8.035166561603546e+28
+      }
+    ]
+  }
+}

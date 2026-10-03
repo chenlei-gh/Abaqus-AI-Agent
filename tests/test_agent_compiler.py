@@ -307,7 +307,7 @@ def test_compile_bolt_pretension_two_stage_lifecycle():
     script = plan.cae_script
 
     # DatumAxis created for direction
-    assert "DatumAxisByTwoPoints" in script
+    assert "DatumAxisByTwoPoint" in script
     # Stage 1: BoltLoad with APPLY_FORCE in preload step
     assert "BoltLoad(name='BoltPreload', createStepName='Step-Preload'" in script
     assert "magnitude=5000.0" in script

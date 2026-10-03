@@ -45,6 +45,7 @@ class IntentBoundarySpec:
     values: Dict[str, float] = field(default_factory=dict)
     step: str = "Initial"
     plane: Optional[str] = None
+    step_modifications: Optional[Dict[str, Dict[str, Any]]] = None
 
 
 @dataclass(frozen=True)
@@ -139,6 +140,18 @@ def compile_intent_to_actions(
             f"del mdb.models['{model_name}'].sketches['__profile__']\n"
         )
     actions.append(builders.python_action(model_name, geo_code))
+
+    # 1b. Bolt Partition (if bolt_pretensions exist on primitive shapes)
+    if bolt_pretensions and geometry.shape in ("cantilever_box", "cylinder", "plate"):
+        part_partition_code = f"p = mdb.models['{model_name}'].parts['{part_name}']\n"
+        for b_spec in bolt_pretensions:
+            gr = grounded_regions.get(b_spec.region_expression) if grounded_regions else None
+            cut_z = gr.anchor_point[2] if (gr and gr.anchor_point) else (geometry.length / 2.0)
+            part_partition_code += (
+                f"d_plane_{b_spec.name} = p.DatumPlaneByPrincipalPlane(principalPlane=XYPLANE, offset={cut_z})\n"
+                f"p.PartitionCellByDatumPlane(datumPlane=p.datums[d_plane_{b_spec.name}.id], cells=p.cells)\n"
+            )
+        actions.append(builders.python_action(model_name, part_partition_code))
 
     # 2. Material Definition Actions
     if material.elastic:
@@ -310,237 +323,7 @@ def compile_intent_to_actions(
         defined_steps.append(active_step.name)
         default_step_name = active_step.name
 
-    # 7. Boundary Conditions Actions
-    for bc in bcs:
-        gr = grounded_regions.get(bc.region) if grounded_regions else None
-        bc_step = bc.step if bc.step else "Initial"
-        is_symm = bc.bc_type in ("XSYMM", "YSYMM", "ZSYMM") or bc.bc_type == "SYMMETRY"
-
-        if gr is not None:
-            pts = gr.anchor_points if gr.anchor_points else (gr.anchor_point,)
-            find_at_str = ", ".join(f"(({p[0]}, {p[1]}, {p[2]}),)" for p in pts)
-            if gr.entity_type.lower() == "face":
-                bc_code = (
-                    f"a = mdb.models['{model_name}'].rootAssembly\n"
-                    f"f = a.instances['{inst_name}'].faces\n"
-                    f"target_faces = f.findAt({find_at_str})\n"
-                    f"region = a.Set(faces=target_faces, name='{bc.region}')\n"
-                )
-            else:
-                bc_code = (
-                    f"a = mdb.models['{model_name}'].rootAssembly\n"
-                    f"v = a.instances['{inst_name}'].vertices\n"
-                    f"target_verts = v.findAt({find_at_str})\n"
-                    f"region = a.Set(vertices=target_verts, name='{bc.region}')\n"
-                )
-
-            if is_symm:
-                plane = "X"
-                if bc.bc_type in ("XSYMM", "YSYMM", "ZSYMM"):
-                    plane = bc.bc_type[0]
-                elif bc.plane:
-                    plane = bc.plane.upper()
-                elif bc.values.get("plane"):
-                    plane = str(bc.values["plane"]).upper()
-                elif gr.target_semantic and gr.target_semantic.upper().startswith("SYMMETRY_PLANE_"):
-                    plane = gr.target_semantic.upper().split("_")[-1]
-
-                method_name = {"X": "XsymmBC", "Y": "YsymmBC", "Z": "ZsymmBC"}.get(plane, "XsymmBC")
-                bc_code += f"mdb.models['{model_name}'].{method_name}(name='{bc.name}', createStepName='{bc_step}', region=region)\n"
-                actions.append(builders.python_action(model_name, bc_code))
-                actions.append(builders.symmetry_bc(
-                    model=model_name,
-                    name=bc.name,
-                    region_expression=f"mdb.models['{model_name}'].rootAssembly.sets['{bc.region}']",
-                    step=bc_step,
-                    plane=plane,
-                ))
-            elif bc.bc_type == "ENCASTRE":
-                bc_code += f"mdb.models['{model_name}'].EncastreBC(name='{bc.name}', createStepName='{bc_step}', region=region)\n"
-                actions.append(builders.python_action(model_name, bc_code))
-                actions.append(builders.fixed_bc(
-                    model=model_name,
-                    name=bc.name,
-                    region_expression=f"mdb.models['{model_name}'].rootAssembly.sets['{bc.region}']",
-                    step=bc_step,
-                ))
-            elif bc.bc_type == "PINNED":
-                bc_code += f"mdb.models['{model_name}'].PinnedBC(name='{bc.name}', createStepName='{bc_step}', region=region)\n"
-                actions.append(builders.python_action(model_name, bc_code))
-                actions.append(builders.displacement_bc(
-                    model=model_name,
-                    name=bc.name,
-                    region_expression=f"mdb.models['{model_name}'].rootAssembly.sets['{bc.region}']",
-                    step=bc_step,
-                    u1=0.0, u2=0.0, u3=0.0,
-                ))
-            else:
-                u1 = bc.values.get("u1", 0.0)
-                u2 = bc.values.get("u2", 0.0)
-                u3 = bc.values.get("u3", 0.0)
-                bc_code += (
-                    f"mdb.models['{model_name}'].DisplacementBC(name='{bc.name}', createStepName='{bc_step}', "
-                    f"region=region, u1={u1}, u2={u2}, u3={u3})\n"
-                )
-                actions.append(builders.python_action(model_name, bc_code))
-                actions.append(builders.displacement_bc(
-                    model=model_name,
-                    name=bc.name,
-                    region_expression=f"mdb.models['{model_name}'].rootAssembly.sets['{bc.region}']",
-                    step=bc_step,
-                    u1=u1, u2=u2, u3=u3,
-                ))
-        else:
-            if is_symm:
-                plane = "X"
-                if bc.bc_type in ("XSYMM", "YSYMM", "ZSYMM"):
-                    plane = bc.bc_type[0]
-                elif bc.plane:
-                    plane = bc.plane.upper()
-                elif bc.values.get("plane"):
-                    plane = str(bc.values["plane"]).upper()
-                method_name = {"X": "XsymmBC", "Y": "YsymmBC", "Z": "ZsymmBC"}.get(plane, "XsymmBC")
-                bc_code = (
-                    f"a = mdb.models['{model_name}'].rootAssembly\n"
-                    f"f = a.instances['{inst_name}'].faces\n"
-                    f"symm_faces = f.findAt(((0.0, {geometry.height/2.0}, {geometry.length/2.0}),))\n"
-                    f"region = a.Set(faces=symm_faces, name='{bc.region}')\n"
-                    f"mdb.models['{model_name}'].{method_name}(name='{bc.name}', createStepName='{bc_step}', region=region)\n"
-                )
-                actions.append(builders.python_action(model_name, bc_code))
-                actions.append(builders.symmetry_bc(
-                    model=model_name,
-                    name=bc.name,
-                    region_expression=f"mdb.models['{model_name}'].rootAssembly.sets['{bc.region}']",
-                    step=bc_step,
-                    plane=plane,
-                ))
-            elif bc.bc_type == "ENCASTRE":
-                bc_code = (
-                    f"a = mdb.models['{model_name}'].rootAssembly\n"
-                    f"f = a.instances['{inst_name}'].faces\n"
-                    f"fixed_faces = f.findAt((({geometry.width/2.0}, {geometry.height/2.0}, 0.0),))\n"
-                    f"region = a.Set(faces=fixed_faces, name='{bc.region}')\n"
-                    f"mdb.models['{model_name}'].EncastreBC(name='{bc.name}', createStepName='{bc_step}', region=region)\n"
-                )
-                actions.append(builders.python_action(model_name, bc_code))
-                actions.append(builders.fixed_bc(
-                    model=model_name,
-                    name=bc.name,
-                    region_expression=f"mdb.models['{model_name}'].rootAssembly.sets['{bc.region}']",
-                    step=bc_step,
-                ))
-
-    # 8. Standard Loads Actions
-    for ld in loads:
-        gr = grounded_regions.get(ld.region) if grounded_regions else None
-        target_step = ld.step if ld.step else default_step_name
-        field_arg = f", distributionType=FIELD, field='{ld.field}'" if ld.field else ""
-
-        if gr is not None:
-            pts = gr.anchor_points if gr.anchor_points else (gr.anchor_point,)
-            find_at_str = ", ".join(f"(({p[0]}, {p[1]}, {p[2]}),)" for p in pts)
-            if ld.load_type == "pressure":
-                load_code = (
-                    f"a = mdb.models['{model_name}'].rootAssembly\n"
-                    f"f = a.instances['{inst_name}'].faces\n"
-                    f"target_faces = f.findAt({find_at_str})\n"
-                    f"surf = a.Surface(side1Faces=target_faces, name='{ld.region}_Surf')\n"
-                    f"mdb.models['{model_name}'].Pressure(name='{ld.name}', createStepName='{target_step}', "
-                    f"region=surf, magnitude={ld.magnitude}{field_arg})\n"
-                )
-                actions.append(builders.python_action(model_name, load_code))
-                actions.append(builders.pressure_load(
-                    model=model_name,
-                    name=ld.name,
-                    region_expression=f"mdb.models['{model_name}'].rootAssembly.surfaces['{ld.region}_Surf']",
-                    magnitude=ld.magnitude,
-                    step=target_step,
-                    field=ld.field,
-                ))
-            elif ld.load_type == "concentrated_force":
-                if gr.entity_type.lower() == "face":
-                    p_width = geometry.width if geometry.width > 0 else 100.0
-                    p_height = geometry.height if geometry.height > 20.0 else (geometry.length if geometry.length > 20.0 else 100.0)
-                    p_radius = geometry.radius if geometry.radius is not None else 10.0
-                    face_area = (p_width * p_height) - (math.pi * p_radius**2)
-                    eq_pressure = abs(ld.magnitude) / face_area
-                    load_code = (
-                        f"# Total force {ld.magnitude} N on face converted to equivalent surface pressure: {eq_pressure:.6f} MPa\n"
-                        f"a = mdb.models['{model_name}'].rootAssembly\n"
-                        f"f = a.instances['{inst_name}'].faces\n"
-                        f"target_faces = f.findAt({find_at_str})\n"
-                        f"surf = a.Surface(side1Faces=target_faces, name='{ld.region}_Surf')\n"
-                        f"mdb.models['{model_name}'].Pressure(name='{ld.name}', createStepName='{target_step}', "
-                        f"region=surf, magnitude={eq_pressure}{field_arg})\n"
-                    )
-                    actions.append(builders.python_action(model_name, load_code))
-                    actions.append(builders.pressure_load(
-                        model=model_name,
-                        name=ld.name,
-                        region_expression=f"mdb.models['{model_name}'].rootAssembly.surfaces['{ld.region}_Surf']",
-                        magnitude=eq_pressure,
-                        step=target_step,
-                        field=ld.field,
-                    ))
-                else:
-                    load_code = (
-                        f"a = mdb.models['{model_name}'].rootAssembly\n"
-                        f"v = a.instances['{inst_name}'].vertices\n"
-                        f"target_verts = v.findAt({find_at_str})\n"
-                        f"region = a.Set(vertices=target_verts, name='{ld.region}')\n"
-                        f"mdb.models['{model_name}'].ConcentratedForce(name='{ld.name}', createStepName='{target_step}', "
-                        f"region=region, {ld.direction}={ld.magnitude})\n"
-                    )
-                    actions.append(builders.python_action(model_name, load_code))
-                    cf_args = {ld.direction.lower(): ld.magnitude}
-                    actions.append(builders.concentrated_force(
-                        model=model_name,
-                        name=ld.name,
-                        region_expression=f"mdb.models['{model_name}'].rootAssembly.sets['{ld.region}']",
-                        step=target_step,
-                        **cf_args,
-                    ))
-        else:
-            if ld.load_type == "concentrated_force":
-                load_code = (
-                    f"a = mdb.models['{model_name}'].rootAssembly\n"
-                    f"v = a.instances['{inst_name}'].vertices\n"
-                    f"tip_verts = v.findAt((({geometry.width}, {geometry.height}, {geometry.length}),))\n"
-                    f"region = a.Set(vertices=tip_verts, name='{ld.region}')\n"
-                    f"cf_val = {ld.magnitude}\n"
-                    f"mdb.models['{model_name}'].ConcentratedForce(name='{ld.name}', createStepName='{target_step}', "
-                    f"region=region, {ld.direction}=cf_val)\n"
-                )
-                actions.append(builders.python_action(model_name, load_code))
-                cf_args = {ld.direction.lower(): ld.magnitude}
-                actions.append(builders.concentrated_force(
-                    model=model_name,
-                    name=ld.name,
-                    region_expression=f"mdb.models['{model_name}'].rootAssembly.sets['{ld.region}']",
-                    step=target_step,
-                    **cf_args,
-                ))
-            elif ld.load_type == "pressure":
-                load_code = (
-                    f"a = mdb.models['{model_name}'].rootAssembly\n"
-                    f"f = a.instances['{inst_name}'].faces\n"
-                    f"top_faces = f.findAt((({geometry.width/2.0}, {geometry.height/2.0}, {geometry.length}),))\n"
-                    f"surf = a.Surface(side1Faces=top_faces, name='{ld.region}_Surf')\n"
-                    f"mdb.models['{model_name}'].Pressure(name='{ld.name}', createStepName='{target_step}', "
-                    f"region=surf, magnitude={ld.magnitude}{field_arg})\n"
-                )
-                actions.append(builders.python_action(model_name, load_code))
-                actions.append(builders.pressure_load(
-                    model=model_name,
-                    name=ld.name,
-                    region_expression=f"mdb.models['{model_name}'].rootAssembly.surfaces['{ld.region}_Surf']",
-                    magnitude=ld.magnitude,
-                    step=target_step,
-                    field=ld.field,
-                ))
-
-    # 9. Moment / Torque Actions
+    # 7. Moment / Torque & Coupling Actions (defined before BCs so BCs can attach to RP if coupled)
     if moments:
         for m_spec in moments:
             m_step = m_spec.step if m_spec.step else default_step_name
@@ -600,6 +383,298 @@ def compile_intent_to_actions(
                     strategy=m_spec.strategy.value if hasattr(m_spec.strategy, "value") else str(m_spec.strategy),
                 ))
 
+    # 8. Boundary Conditions Actions
+    for bc in bcs:
+        bc_step = bc.step if bc.step else "Initial"
+        gr = grounded_regions.get(bc.region) if grounded_regions else None
+        plane = bc.plane or (gr.target_semantic.split("_")[-1] if gr and "SYMMETRY_PLANE" in gr.target_semantic else "X")
+
+        if gr is not None:
+            pts = gr.anchor_points if gr.anchor_points else (gr.anchor_point,)
+            find_at_str = ", ".join(f"(({p[0]}, {p[1]}, {p[2]}),)" for p in pts)
+            if bc.bc_type in ("SYMMETRY", "XSYMM", "YSYMM", "ZSYMM"):
+                method_name = {"X": "XsymmBC", "Y": "YsymmBC", "Z": "ZsymmBC"}.get(plane, "XsymmBC")
+                bc_code = (
+                    f"a = mdb.models['{model_name}'].rootAssembly\n"
+                    f"f = a.instances['{inst_name}'].faces\n"
+                    f"symm_faces = f.findAt({find_at_str})\n"
+                    f"region = a.Set(faces=symm_faces, name='{bc.region}')\n"
+                    f"mdb.models['{model_name}'].{method_name}(name='{bc.name}', createStepName='{bc_step}', region=region)\n"
+                )
+                actions.append(builders.python_action(model_name, bc_code))
+                actions.append(builders.symmetry_bc(
+                    model=model_name,
+                    name=bc.name,
+                    region_expression=f"mdb.models['{model_name}'].rootAssembly.sets['{bc.region}']",
+                    step=bc_step,
+                    plane=plane,
+                ))
+            elif bc.bc_type == "ENCASTRE":
+                bc_code = (
+                    f"a = mdb.models['{model_name}'].rootAssembly\n"
+                    f"f = a.instances['{inst_name}'].faces\n"
+                    f"fixed_faces = f.findAt({find_at_str})\n"
+                    f"region = a.Set(faces=fixed_faces, name='{bc.region}')\n"
+                    f"mdb.models['{model_name}'].EncastreBC(name='{bc.name}', createStepName='{bc_step}', region=region)\n"
+                )
+                actions.append(builders.python_action(model_name, bc_code))
+                actions.append(builders.fixed_bc(
+                    model=model_name,
+                    name=bc.name,
+                    region_expression=f"mdb.models['{model_name}'].rootAssembly.sets['{bc.region}']",
+                    step=bc_step,
+                ))
+            elif bc.bc_type == "DISPLACEMENT":
+                # Check if region is an RP set or matches a moment RP coupling
+                rp_coupled_moment = None
+                if moments:
+                    for m_spec in moments:
+                        if m_spec.strategy == MomentTransferStrategy.RP_COUPLING and (m_spec.region_expression == bc.region or bc.region == f"{m_spec.name}_RP_Set"):
+                            rp_coupled_moment = m_spec
+                            break
+
+                u1 = bc.values.get("u1", 0.0)
+                u2 = bc.values.get("u2", 0.0)
+                u3 = bc.values.get("u3", 0.0)
+
+                if rp_coupled_moment:
+                    bc_code = (
+                        f"a = mdb.models['{model_name}'].rootAssembly\n"
+                        f"region = a.sets['{rp_coupled_moment.name}_RP_Set']\n"
+                        f"mdb.models['{model_name}'].DisplacementBC(name='{bc.name}', createStepName='{bc_step}', "
+                        f"region=region, u1={u1}, u2={u2}, u3={u3})\n"
+                    )
+                    actions.append(builders.python_action(model_name, bc_code))
+                    actions.append(builders.displacement_bc(
+                        model=model_name,
+                        name=bc.name,
+                        region_expression=f"mdb.models['{model_name}'].rootAssembly.sets['{rp_coupled_moment.name}_RP_Set']",
+                        step=bc_step,
+                        u1=u1, u2=u2, u3=u3,
+                    ))
+                else:
+                    bc_code = (
+                        f"a = mdb.models['{model_name}'].rootAssembly\n"
+                        f"f = a.instances['{inst_name}'].faces\n"
+                        f"disp_faces = f.findAt({find_at_str})\n"
+                        f"region = a.Set(faces=disp_faces, name='{bc.region}')\n"
+                        f"mdb.models['{model_name}'].DisplacementBC(name='{bc.name}', createStepName='{bc_step}', "
+                        f"region=region, u1={u1}, u2={u2}, u3={u3})\n"
+                    )
+                    actions.append(builders.python_action(model_name, bc_code))
+                    actions.append(builders.displacement_bc(
+                        model=model_name,
+                        name=bc.name,
+                        region_expression=f"mdb.models['{model_name}'].rootAssembly.sets['{bc.region}']",
+                        step=bc_step,
+                        u1=u1, u2=u2, u3=u3,
+                    ))
+        else:
+            # Fallback for primitive geometric models without explicit GroundedRegion mapping
+            if bc.bc_type in ("SYMMETRY", "XSYMM", "YSYMM", "ZSYMM"):
+                method_name = {"X": "XsymmBC", "Y": "YsymmBC", "Z": "ZsymmBC"}.get(plane, "XsymmBC")
+                bc_code = (
+                    f"a = mdb.models['{model_name}'].rootAssembly\n"
+                    f"f = a.instances['{inst_name}'].faces\n"
+                    f"symm_faces = f.findAt(((0.0, {geometry.height/2.0}, {geometry.length/2.0}),))\n"
+                    f"region = a.Set(faces=symm_faces, name='{bc.region}')\n"
+                    f"mdb.models['{model_name}'].{method_name}(name='{bc.name}', createStepName='{bc_step}', region=region)\n"
+                )
+                actions.append(builders.python_action(model_name, bc_code))
+                actions.append(builders.symmetry_bc(
+                    model=model_name,
+                    name=bc.name,
+                    region_expression=f"mdb.models['{model_name}'].rootAssembly.sets['{bc.region}']",
+                    step=bc_step,
+                    plane=plane,
+                ))
+            elif bc.bc_type == "ENCASTRE":
+                bc_code = (
+                    f"a = mdb.models['{model_name}'].rootAssembly\n"
+                    f"f = a.instances['{inst_name}'].faces\n"
+                    f"fixed_faces = f.findAt((({geometry.width/2.0}, {geometry.height/2.0}, 0.0),))\n"
+                    f"region = a.Set(faces=fixed_faces, name='{bc.region}')\n"
+                    f"mdb.models['{model_name}'].EncastreBC(name='{bc.name}', createStepName='{bc_step}', region=region)\n"
+                )
+                actions.append(builders.python_action(model_name, bc_code))
+                actions.append(builders.fixed_bc(
+                    model=model_name,
+                    name=bc.name,
+                    region_expression=f"mdb.models['{model_name}'].rootAssembly.sets['{bc.region}']",
+                    step=bc_step,
+                ))
+            elif bc.bc_type == "DISPLACEMENT":
+                # Check if region is an RP set or matches a moment RP coupling
+                rp_coupled_moment = None
+                if moments:
+                    for m_spec in moments:
+                        if m_spec.strategy == MomentTransferStrategy.RP_COUPLING and (m_spec.region_expression == bc.region or bc.region == f"{m_spec.name}_RP_Set"):
+                            rp_coupled_moment = m_spec
+                            break
+
+                u1 = bc.values.get("u1", 0.0)
+                u2 = bc.values.get("u2", 0.0)
+                u3 = bc.values.get("u3", 0.0)
+
+                if rp_coupled_moment:
+                    bc_code = (
+                        f"a = mdb.models['{model_name}'].rootAssembly\n"
+                        f"region = a.sets['{rp_coupled_moment.name}_RP_Set']\n"
+                        f"mdb.models['{model_name}'].DisplacementBC(name='{bc.name}', createStepName='{bc_step}', "
+                        f"region=region, u1={u1}, u2={u2}, u3={u3})\n"
+                    )
+                    actions.append(builders.python_action(model_name, bc_code))
+                    actions.append(builders.displacement_bc(
+                        model=model_name,
+                        name=bc.name,
+                        region_expression=f"mdb.models['{model_name}'].rootAssembly.sets['{rp_coupled_moment.name}_RP_Set']",
+                        step=bc_step,
+                        u1=u1, u2=u2, u3=u3,
+                    ))
+                else:
+                    z_loc = geometry.length if "TOP" in bc.region.upper() else 0.0
+                    target_faces = f"(({geometry.width/2.0}, {geometry.height/2.0}, {z_loc}),)"
+                    bc_code = (
+                        f"a = mdb.models['{model_name}'].rootAssembly\n"
+                        f"f = a.instances['{inst_name}'].faces\n"
+                        f"disp_faces = f.findAt({target_faces})\n"
+                        f"region = a.Set(faces=disp_faces, name='{bc.region}')\n"
+                        f"mdb.models['{model_name}'].DisplacementBC(name='{bc.name}', createStepName='{bc_step}', "
+                        f"region=region, u1={u1}, u2={u2}, u3={u3})\n"
+                    )
+                    actions.append(builders.python_action(model_name, bc_code))
+                    actions.append(builders.displacement_bc(
+                        model=model_name,
+                        name=bc.name,
+                        region_expression=f"mdb.models['{model_name}'].rootAssembly.sets['{bc.region}']",
+                        step=bc_step,
+                        u1=u1, u2=u2, u3=u3,
+                    ))
+
+        # Multi-Step BC Modifications (e.g. freeing DOF in subsequent service steps)
+        if bc.step_modifications:
+            mod_code = ""
+            for mod_step, mod_vals in bc.step_modifications.items():
+                mod_args = []
+                for k, v in mod_vals.items():
+                    if str(v).upper() == "FREED":
+                        mod_args.append(f"{k}=FREED")
+                    else:
+                        mod_args.append(f"{k}={v}")
+                mod_args_str = ", ".join(mod_args)
+                mod_code += f"mdb.models['{model_name}'].boundaryConditions['{bc.name}'].setValuesInStep(stepName='{mod_step}', {mod_args_str})\n"
+            actions.append(builders.python_action(model_name, mod_code))
+
+    # 9. Standard Loads Actions
+    for ld in loads:
+        gr = grounded_regions.get(ld.region) if grounded_regions else None
+        target_step = ld.step if ld.step else default_step_name
+        field_arg = f", distributionType=FIELD, field='{ld.field}'" if ld.field else ""
+
+        if gr is not None:
+            pts = gr.anchor_points if gr.anchor_points else (gr.anchor_point,)
+            find_at_str = ", ".join(f"(({p[0]}, {p[1]}, {p[2]}),)" for p in pts)
+            if ld.load_type == "pressure":
+                load_code = (
+                    f"a = mdb.models['{model_name}'].rootAssembly\n"
+                    f"f = a.instances['{inst_name}'].faces\n"
+                    f"target_faces = f.findAt({find_at_str})\n"
+                    f"surf = a.Surface(side1Faces=target_faces, name='{ld.region}_Surf')\n"
+                    f"mdb.models['{model_name}'].Pressure(name='{ld.name}', createStepName='{target_step}', "
+                    f"region=surf, magnitude={ld.magnitude}{field_arg})\n"
+                )
+                actions.append(builders.python_action(model_name, load_code))
+                actions.append(builders.pressure_load(
+                    model=model_name,
+                    name=ld.name,
+                    region_expression=f"mdb.models['{model_name}'].rootAssembly.surfaces['{ld.region}_Surf']",
+                    magnitude=ld.magnitude,
+                    step=target_step,
+                    field=ld.field,
+                ))
+            elif ld.load_type == "concentrated_force":
+                if gr.entity_type.lower() == "face":
+                    p_width = geometry.width if geometry.width > 0 else 100.0
+                    p_height = geometry.height if geometry.height > 20.0 else (geometry.length if geometry.length > 20.0 else 100.0)
+                    p_radius = geometry.radius if geometry.radius is not None else 10.0
+                    face_area = (p_width * p_height) - (math.pi * p_radius**2)
+                    eq_pressure = abs(ld.magnitude) / face_area
+                    load_code = (
+                        f"# Total force {ld.magnitude} N on face converted to equivalent surface pressure: {eq_pressure:.6f} MPa\n"
+                        f"a = mdb.models['{model_name}'].rootAssembly\n"
+                        f"f = a.instances['{inst_name}'].faces\n"
+                        f"target_faces = f.findAt({find_at_str})\n"
+                        f"surf = a.Surface(side1Faces=target_faces, name='{ld.region}_Surf')\n"
+                        f"mdb.models['{model_name}'].Pressure(name='{ld.name}', createStepName='{target_step}', "
+                        f"region=surf, magnitude={eq_pressure}{field_arg})\n"
+                    )
+                    actions.append(builders.python_action(model_name, load_code))
+                    actions.append(builders.pressure_load(
+                        model=model_name,
+                        name=ld.name,
+                        region_expression=f"mdb.models['{model_name}'].rootAssembly.surfaces['{ld.region}_Surf']",
+                        magnitude=eq_pressure,
+                        step=target_step,
+                        field=ld.field,
+                    ))
+                else:
+                    load_code = (
+                        f"a = mdb.models['{model_name}'].rootAssembly\n"
+                        f"v = a.instances['{inst_name}'].vertices\n"
+                        f"target_verts = v.findAt({find_at_str})\n"
+                        f"region = a.Set(vertices=target_verts, name='{ld.region}')\n"
+                        f"mdb.models['{model_name}'].ConcentratedForce(name='{ld.name}', createStepName='{target_step}', "
+                        f"region=region, cf3={ld.magnitude}{field_arg})\n"
+                    )
+                    actions.append(builders.python_action(model_name, load_code))
+                    actions.append(builders.concentrated_force(
+                        model=model_name,
+                        name=ld.name,
+                        region_expression=f"mdb.models['{model_name}'].rootAssembly.sets['{ld.region}']",
+                        cf3=ld.magnitude,
+                        step=target_step,
+                    ))
+        else:
+            if ld.load_type == "pressure":
+                z_loc = geometry.length if "TOP" in ld.region.upper() else 0.0
+                target_faces = f"(({geometry.width/2.0}, {geometry.height/2.0}, {z_loc}),)"
+                load_code = (
+                    f"a = mdb.models['{model_name}'].rootAssembly\n"
+                    f"f = a.instances['{inst_name}'].faces\n"
+                    f"target_faces = f.findAt({target_faces})\n"
+                    f"surf = a.Surface(side1Faces=target_faces, name='{ld.region}_Surf')\n"
+                    f"mdb.models['{model_name}'].Pressure(name='{ld.name}', createStepName='{target_step}', "
+                    f"region=surf, magnitude={ld.magnitude}{field_arg})\n"
+                )
+                actions.append(builders.python_action(model_name, load_code))
+                actions.append(builders.pressure_load(
+                    model=model_name,
+                    name=ld.name,
+                    region_expression=f"mdb.models['{model_name}'].rootAssembly.surfaces['{ld.region}_Surf']",
+                    magnitude=ld.magnitude,
+                    step=target_step,
+                    field=ld.field,
+                ))
+            elif ld.load_type == "concentrated_force":
+                load_code = (
+                    f"a = mdb.models['{model_name}'].rootAssembly\n"
+                    f"v = a.instances['{inst_name}'].vertices\n"
+                    f"tip_verts = v.findAt((({geometry.width}, {geometry.height}, {geometry.length}),))\n"
+                    f"region = a.Set(vertices=tip_verts, name='{ld.region}')\n"
+                    f"cf_val = {ld.magnitude}\n"
+                    f"mdb.models['{model_name}'].ConcentratedForce(name='{ld.name}', createStepName='{target_step}', "
+                    f"region=region, {ld.direction}=cf_val)\n"
+                )
+                actions.append(builders.python_action(model_name, load_code))
+                cf_args = {ld.direction.lower(): ld.magnitude}
+                actions.append(builders.concentrated_force(
+                    model=model_name,
+                    name=ld.name,
+                    region_expression=f"mdb.models['{model_name}'].rootAssembly.sets['{ld.region}']",
+                    step=target_step,
+                    **cf_args,
+                ))
+
     # 10. Bolt Pretension Actions
     if bolt_pretensions:
         for b_spec in bolt_pretensions:
@@ -620,7 +695,7 @@ def compile_intent_to_actions(
             if b_spec.direction_vector:
                 v = b_spec.direction_vector
                 bolt_code += (
-                    f"d_axis = a.DatumAxisByTwoPoints(point1=(0.0, 0.0, 0.0), point2=({v[0]}, {v[1]}, {v[2]}))\n"
+                    f"d_axis = a.DatumAxisByTwoPoint(point1=(0.0, 0.0, 0.0), point2=({v[0]}, {v[1]}, {v[2]}))\n"
                     f"axis_obj = a.datums[d_axis.id]\n"
                     f"mdb.models['{model_name}'].BoltLoad(name='{b_spec.name}', createStepName='{b_spec.preload_step}', "
                     f"region=bolt_surf, magnitude={b_spec.preload_magnitude}, datumAxis=axis_obj, boltMethod=APPLY_FORCE)\n"
@@ -638,15 +713,10 @@ def compile_intent_to_actions(
                 magnitude=b_spec.preload_magnitude,
                 step=b_spec.preload_step,
                 bolt_method="APPLY_FORCE",
-                direction_vector=b_spec.direction_vector,
+                datum_axis="axis_obj" if b_spec.direction_vector else None,
             ))
 
             if b_spec.service_step:
-                fix_code = (
-                    f"mdb.models['{model_name}'].loads['{b_spec.name}'].setValuesInStep("
-                    f"stepName='{b_spec.service_step}', boltMethod=FIX_LENGTH)\n"
-                )
-                actions.append(builders.python_action(model_name, fix_code))
                 actions.append(builders.bolt_load_set_values(
                     model=model_name,
                     name=b_spec.name,
@@ -689,7 +759,7 @@ def compile_intent_to_actions(
     script_lines = [
         "from abaqus import *",
         "from abaqusConstants import *",
-        "import mesh",
+        "import part, material, section, assembly, step, interaction, load, mesh, job, regionToolset",
         f"if '{model_name}' not in mdb.models:",
         f"    mdb.Model(name='{model_name}')",
         "",

@@ -464,7 +464,8 @@ def _load_script(action):
         field_arg = ", distributionType=FIELD, field=%s" % _q(p["field"]) if p.get("field") else ""
         return "mdb.models[%s].Pressure(name=%s, createStepName=%s, region=%s, magnitude=%r%s%s)" % (_q(m), _q(name), _q(step), region, p["magnitude"], amp, field_arg)
     if action.action_type == "bolt_load":
-        direction = (", datumAxis=%r" % (tuple(p["direction_vector"]),)) if p.get("direction_vector") else ""
+        datum_axis = p.get("datum_axis") or p.get("datumAxis")
+        direction = f", datumAxis={datum_axis}" if datum_axis else ""
         method = p.get("bolt_method", "APPLY_FORCE")
         return "from abaqusConstants import *; mdb.models[%s].BoltLoad(name=%s, createStepName=%s, region=%s, magnitude=%r, boltMethod=%s%s)" % (
             _q(m), _q(name), _q(step), region, p["magnitude"], method, direction
