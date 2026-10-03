@@ -186,6 +186,25 @@ def test_feature_multi_hole_array_and_stable_ids():
         assert c.status == CapabilityStatus.SUPPORTED
         assert 5.9 <= c.geometry["diameter"] <= 6.1
 
+    # Invariant to input entity permutation (shuffled / reversed STEP entity order)
+    model_permuted = GeometryModel(
+        model_id="M_4_HOLE_FLANGE_PERMUTED",
+        provenance=_make_dummy_provenance(),
+        bounding_box=CadBoundingBox(0.0, 0.0, 0.0, 200.0, 200.0, 20.0),
+        faces=tuple(reversed(faces)),
+        edges=tuple(reversed(edges)),
+    )
+    topo_permuted = normalize_topology(model_permuted)
+    candidates_permuted = detect_fastener_holes(model_permuted, topo_permuted)
+
+    assert len(candidates_permuted) == 4
+    assert [c.feature_id for c in candidates_permuted] == [c.feature_id for c in candidates1]
+    for c_orig, c_perm in zip(candidates1, candidates_permuted):
+        assert c_orig.feature_id == c_perm.feature_id
+        assert c_orig.face_ids == c_perm.face_ids
+        assert c_orig.edge_ids == c_perm.edge_ids
+        assert c_orig.geometry == c_perm.geometry
+
 
 def test_feature_cavity_false_positive_rejection():
     """Verify large cylinder cavity without mounting penetration is NOT misreported as fastener hole."""
