@@ -21,11 +21,7 @@ jobs:
       - name: Install package and test dependencies
         run: python -m pip install -e ".[test]"
       - name: Run pytest with strict warnings
-        run: |
-          python -m pytest -W error -q || {
-            echo "::error title=Pytest Failure::$(python -m pytest --tb=short -q | grep -E 'FAILED' | head -n 5)"
-            exit 1
-          }
+        run: python -m pytest -W error -q
       - name: Verify CLI entrypoint and commands
         run: |
           abaqus-ai-agent --help
