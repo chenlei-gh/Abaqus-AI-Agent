@@ -16,7 +16,7 @@ To eliminate ambiguity across commercial workflows and academic verification, th
 | **Level 1** | `REAL_ABAQUS` | Executed against authentic, licensed Abaqus 2025. Generates disk `.odb`, `.sta`, `.msg`, `.dat` artifacts verified via cryptographic SHA-256 manifests. |
 | **Level 2** | `ANALYTICAL` | Exact closed-form continuum mechanics equations evaluated at machine precision. Zero numerical perturbation factors (`ref * 0.999x` strictly forbidden). |
 | **Level 3** | `THEORETICAL_CONTRACT` | Formal parameter, dimensional, and boundary-condition contracts for high-order FE configurations; delegates FE execution to live solver. |
-| **Level 4** | `OFFLINE_REGRESSION` | Automated unit/integration test suite (428 pytest cases at RC 1.0 Freeze `deec6a3`; expanded to 517 pytest cases in GA Working Baseline) executed without solver license dependencies in CI across Linux/Windows. |
+| **Level 4** | `OFFLINE_REGRESSION` | Automated unit/integration test suite (428 pytest cases at RC 1.0 Freeze `deec6a3`; expanded to 533 at GA-1 Freeze `cb597d6`, and 544 in GA-2 Working Baseline) executed without solver license dependencies in CI across Linux/Windows. |
 | **Level 5** | `FAULT_INJECTION` | Controlled numerical singularities, invalid inputs, or geometric distortions designed to verify non-bypassable fail-closed gates. |
 
 ---
@@ -122,18 +122,22 @@ The following three tracks represent the ongoing evolution beyond `v1.0.0-rc1` d
 │                       GA ROADMAP GAPS & AUDIT STATUS                        │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │ Track GA-3: Production Runtime & Orchestration                              │
-│    - Status: Architecture & offline test suite complete (453/453 passed).   │
-│    - Pending: Real-machine production evidence pack (G3-R1 ~ G3-R6).        │
+│    - Status: REAL_ABAQUS QUALIFIED (G3-R1 ~ G3-R6 6/6 passed).              │
+│      (Canonical evidence: machine_validation/ga3_real_machine_evidence.json)│
 ├─────────────────────────────────────────────────────────────────────────────┤
-| Track GA-1: Arbitrary Complex CAD Topology & Meshing                        │
+│ Track GA-1: Arbitrary Complex CAD Topology & Meshing                        │
 │    - Status: GA-1.1 Ingestion, GA-1.2 Health, GA-1.3A Topology,             │
-│      GA-1.3B Features, and GA-1.4 Real-Machine Mesh Qualified (M1 ~ M4).    │
-│      (55 tests across geometry and qualification test suites).              │
-│    - Rule: OpenCASCADE backend helper only; zero duplicate CAD kernel.      │
+│      GA-1.3B Features, and GA-1.4 Real-Machine Mesh Qualified.              │
+│      FROZEN BASELINE at Commit cb597d6 (M1~M4 + STEP-HOLE + STEP-FILLET).   │
+│      (16 qualification tests in tests/test_ga14_qualification.py).          │
+│    - Rule: Minimal pure-Python B-Rep parser; zero duplicate CAD kernel.     │
 ├─────────────────────────────────────────────────────────────────────────────┤
-│ Track GA-2: Grounding & Perception (GA-2A P1 / GA-2B P2)                    │
-│    - Status: GA-2A perspective viewport grounding elevated to P1;          │
-│      GA-2B multimodal photo/drawing perception retained as P2 HITL.         │
+│ Track GA-2: Semantic Physical Grounding & Deterministic Intent Compilation  │
+│    - Status: GA-2.1 Intent, GA-2.2 Feature Grounding, GA-2.3 Compiler       │
+│      Consumption, and GA-2.4 Real-Machine Golden Case E2E QUALIFIED.        │
+│      Live Abaqus 2025: RF equilibrium error = 0.002% on plate_with_hole.    │
+│    - Pending: GA-2.5 Extended Semantics, GA-2.6 Multi-Step Load Compilation,│
+│      GA-2A Perspective Viewport (P1), GA-2B Multimodal Perception (P2 HITL).│
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -160,8 +164,20 @@ The following three tracks represent the ongoing evolution beyond `v1.0.0-rc1` d
 | **M2** | **Plate + Central Hole Refinement** | `geometry/features.py`, `geometry/meshability.py` | `tools/ga14_real_machine_qualification.py`<br>`tests/test_ga14_qualification.py` | `DONE`: 100x100x10 plate with D=20mm through-hole. GA-1.4 suggested size $0.25D = 5.0\text{ mm}$ (global seed 10.0mm). Live Abaqus meshed C3D10 (188 elems, 1451 nodes); **dynamically back-measured hole perimeter element size 4.450mm vs global 9.878mm (refinement ratio $0.451 < 0.70$ physically verified)**. `mesh_gate.py` $\to$ `PASS`. | `REAL_ABAQUS` | Feature recognition directly drives local mesh refinement; node/connectivity traversal proves physical refinement trend. |
 | **M3** | **Stepped Bar + Fillet Refinement** | `geometry/features.py`, `geometry/meshability.py` | `tools/ga14_real_machine_qualification.py`<br>`tests/test_ga14_qualification.py` | `DONE`: Stepped bar with evidenced fillet $R=6.0\text{ mm}$. GA-1.4 suggested size $0.5R = 3.0\text{ mm}$ (global seed 8.0mm). Live Abaqus meshed C3D10 (82 elems, 576 nodes); **dynamically back-measured fillet span size 3.106mm vs far-field 8.171mm (refinement ratio $0.380 < 0.60$ physically verified)**. `mesh_gate.py` $\to$ `PASS`. | `REAL_ABAQUS` | Evidenced geometric radius safely converted to local refinement; actual element topology measured directly inside CAE session. |
 | **M4** | **Defective Geometry Fail-Closed Gate** | `geometry/health.py`, `geometry/meshability.py` | `tools/ga14_real_machine_qualification.py`<br>`tests/test_ga14_qualification.py` | `DONE`: Non-manifold edge (3 faces on 1 edge). GA-1.4 evaluated `is_meshable=False`, `status=BLOCKED`. Conversion to `GeometryMeshPlan` rejected; zero Abaqus mesh dispatched. | `FAULT_INJECTION` | Safety gate strictly prevents defective geometry from proceeding to mesh generation. |
+| **STEP-HOLE** | **Real STEP File Hole Ingestion & Refinement** | `geometry/cad_ingestion.py`, `geometry/features.py`, `geometry/meshability.py` | `tools/ga14_real_machine_qualification.py`<br>`tests/test_ga14_qualification.py` | `DONE`: Real STEP `plate_with_hole.step`. Pure Python B-Rep parsed cylinder & loops; GA-1.3B recognized $D=20.0\text{ mm}$; GA-1.4 suggested $5.0\text{ mm}$. Live Abaqus meshed C3D10; **actual hole element dynamically back-measured 4.450mm vs global 9.878mm (ratio $0.451 < 0.70$)**. `mesh_gate.py` $\to$ `PASS`. | `REAL_ABAQUS` | Proves full pipeline from raw STEP file to Abaqus mesh back-measurement without artificial `FeatureCandidate` fixture. |
+| **STEP-FILLET** | **Real STEP File Fillet Ingestion & Refinement** | `geometry/cad_ingestion.py`, `geometry/features.py`, `geometry/meshability.py` | `tools/ga14_real_machine_qualification.py`<br>`tests/test_ga14_qualification.py` | `DONE`: Real STEP `stepped_fillet_bar.step`. Pure Python B-Rep parsed cylindrical face & adjacent planar faces; GA-1.3B recognized $R=5.0\text{ mm}$; GA-1.4 suggested $2.5\text{ mm}$. Live Abaqus meshed C3D10; **actual fillet element dynamically back-measured 3.191mm vs far-field 10.481mm (ratio $0.304 < 0.60$)**. `mesh_gate.py` $\to$ `PASS`. | `REAL_ABAQUS` | CAD feature radius ($5.0\text{ mm}$) and actual mesh edge ($3.191\text{ mm}$) strictly decoupled; genuine back-measurement verified. |
 
-*Canonical qualification package recorded in `machine_validation/ga14_real_machine_evidence.json` (4/4 PASSED). Disclaimer: proves closed-loop pipeline for standard benchmark cases; does not claim universal arbitrary CAD qualification.*
+*Canonical qualification package recorded in `machine_validation/ga14_real_machine_evidence.json` (6/6 PASSED, Commit `cb597d6`). Disclaimer: proves closed-loop pipeline for defined benchmark cases; does not claim universal arbitrary CAD qualification.*
+
+---
+
+### 3.2.1 Track GA-2.4 Real-Machine Intent & Grounding Golden Case (Audit Status)
+
+| Benchmark ID | Scenario / Verification Intent | Implementation Reference | Execution Benchmark & Test Suite | Real-Machine Physical Evidence Status | Evidence Level | Capability Boundary & Audit Conclusion |
+| :--- | :--- | :--- | :--- | :--- | :---: | :--- |
+| **GA-2-GOLDEN** | **Natural Language $\to$ STEP B-Rep $\to$ Feature Grounding $\to$ Compiler $\to$ Solver $\to$ Equilibrium** | `grounding/feature_grounding.py`, `planning/compiler.py` | `tools/ga2_e2e_golden_case.py`<br>`tests/test_ga2_e2e_golden.py` | `QUALIFIED`: User prompt (*"将安装孔的圆柱面完全固定，在顶面施加 1000 N 向下集中载荷，计算最大应力和位移"*). Grounding anchored hole face & top planar face into `GroundedRegion`. Compiler synthesized native `findAt` & converted point load to uniform pressure ($P=F/A$). Live Abaqus 2025 solved Job `Job_GA2_Golden_Plate`; 33 Preflight checks passed; applied $-1000.0\text{ N}$, live $\Sigma RF_z = 1000.02\text{ N}$; **equilibrium error $0.002\%$**; max Mises $3.149\text{ MPa}$, max displacement $0.000777\text{ mm}$. | `REAL_ABAQUS` | First complete autonomous closed loop from raw human engineering language through real STEP file to physical equilibrium ODB evidence. |
+
+*Canonical qualification package recorded in `machine_validation/ga2_golden_evidence.json` (QUALIFIED, Commit pending).*
 
 ---
 

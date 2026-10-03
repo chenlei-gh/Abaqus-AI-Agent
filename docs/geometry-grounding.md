@@ -61,3 +61,28 @@ existing MCP bridge.
 The probe is intentionally read-only. Abaqus documentation also shows
 session.printToFile with PNG and a viewport canvas object as a valid kernel-side
 pattern.
+
+---
+
+## Feature & Physical Grounding (Track GA-2 Core)
+
+While Viewport Grounding bridges external 2D imagery to 3D models, **Feature Grounding** (`src/abaqus_ai_agent/grounding/feature_grounding.py`) bridges natural-language engineering intent to CAD topological features:
+
+```text
+Natural Language Intent ("INSTALLATION_HOLE", "TOP_SURFACE")
+       │
+       ▼
+Feature & Physical Grounding Engine
+  ├─ Consumes: GeometryModel, NormalizedTopology, FeatureCandidate
+  ├─ Evaluates: topological matching, surface planarity, normal orientation, axial coordinates
+  └─ Produces: GroundedRegion (Abaqus-neutral pure data contract)
+       │
+       ▼
+Deterministic Compiler
+  └─ Synthesizes native faces.findAt(((x, y, z),)) and applies FEA-equivalent load actions
+```
+
+### Safety & Decoupling Boundaries
+- **Abaqus Neutrality**: `GroundedRegion` contains geometric anchor points `(x, y, z)`, entity IDs, and confidence evidence. It does not generate Abaqus API code or string expressions.
+- **Compiler Boundary**: The compiler (`planning/compiler.py`) is responsible for translating `GroundedRegion` into native Abaqus expressions (`faces.findAt(...)`).
+- **Fail-Closed on Ambiguity**: Underspecified, conflicting, or zero-match semantic targets immediately return `BLOCKED` / `NEEDS_CLARIFICATION` rather than guessing a target face.

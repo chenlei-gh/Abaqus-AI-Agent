@@ -2,7 +2,7 @@
 
 **Status:** 
 - **RC 1.0 Frozen Baseline**: `v1.0.0-rc1` CONDITIONAL PASS Frozen at Commit `deec6a3` (428 tests) ✅
-- **GA Working Baseline**: Commit `c74f1f7`+ ACTIVE (522 tests, Track GA-3 Real-Machine Qualified & Track GA-1.1/GA-1.2/GA-1.3A/GA-1.3B/GA-1.4 Real-Machine Mesh Qualified) 🚀
+- **GA Working Baseline**: Commit `cb597d6`+ ACTIVE (544 tests, Track GA-3 Real-Machine Qualified, Track GA-1.1~GA-1.4 Frozen & Real-Machine Qualified on STEP Benchmarks, Track GA-2.1~GA-2.4 Real-Machine Qualified on E2E Golden Case) 🚀
 **Version:** 2026-10-03 (Release Candidate 1.0 Frozen & GA Evolution Baseline)  
 **Scope:** Abaqus-AI-Agent engineering architecture, foundational contracts, evidence chain, real-machine physics benchmarks, and material intelligence grounding
 
@@ -1129,7 +1129,7 @@ With the RC 1.0 foundation formally frozen and audited (`v1.0.0-rc1 — CONDITIO
        next_action: Optional[str] = None
    ```
 3. **Strict Implementation Sequencing**:
-   $$\text{GA-3 (Runtime Infra - P0)} \longrightarrow \text{GA-1 (Complex CAD - P1)} \longrightarrow \text{GA-2A (Viewport Grounding - P1)} \longrightarrow \text{GA-2B (Vision Perception - P2)}$$
+   $$\text{GA-3 (Runtime Infra - P0)} \longrightarrow \text{GA-1 (CAD Ingestion & Meshability - P1 [FROZEN])} \longrightarrow \text{GA-2 (Physical Grounding & E2E Intent - P1 [ACTIVE])}$$
    *No fourth GA track shall be introduced.*
 
 ```
@@ -1138,14 +1138,14 @@ With the RC 1.0 foundation formally frozen and audited (`v1.0.0-rc1 — CONDITIO
        ┌────────────────────────────┼────────────────────────────┐
        ▼                            ▼                            ▼
    Track GA-3                   Track GA-1                   Track GA-2
-Runtime Infrastructure      Complex CAD & Meshing       Perception & Grounding
- [P0 Core Priority]          [P1 Engineering Core]        [Dual-Tier Splitting]
+Runtime Infrastructure      Complex CAD & Meshing       Physical Grounding & Intent
+ [P0 Core Priority]          [P1 Frozen Baseline]         [P1 Active Engineering]
        │                            │                            │
  ┌─────┼─────┐               ┌──────┼──────┐              ┌──────┴──────┐
  │     │     │               │      │      │              │             │
-Queue Lic. Recovery         CAD Meshability Mesh        GA-2A (P1)    GA-2B (P2)
-       │                            │                 Viewport Ray  Photo/Drawing
-       └────────────────────────────┼─────────────────────────────┘
+Queue Lic. Recovery         STEP Meshability Gate       Feature Grounding  Compiler E2E
+       │                            │                            │
+       └────────────────────────────┼────────────────────────────┘
                                     ↓
                          Canonical AnalysisRun
                                     ↓
@@ -1278,15 +1278,20 @@ Meshability Assessment (GA-1.4) ───[Direct Reuse]───► Existing Mes
   - [x] Local Geometric Risk Screening: Detect sub-scale tiny edges ($L_e < 0.005 L_{\text{char}}$) and micro-sliver faces ($A < 10^{-4} L_{\text{char}}^2$) generating `TINY_FEATURE_DEFORMATION` and `SLIVER_FACE_DISTORTION` warning risks. Detect target mesh size conflicts ($h_{\text{target}} > 2 \times \min(L_e)$) as non-blocking `SCALE_CONFLICT_ELEMENT_SWALLOWING` warnings.
   - [x] Evidenced Feature Scale Hints: Heuristic refinement candidate derivation strictly bounded by proven feature parameters (holes $\sim 0.25D$ without Kt assumptions, fillets $\sim 0.5R$ strictly gated by proven radius, chamfers $\sim 0.5W$, ribs $\sim 0.5T$ with zero partition mandates, contact planes with zero synthetic interaction pairs). Unproven dimensions strictly degrade to `suggested_size=None` and review classification.
   - [x] Zero Duplicate Mesh Gate: Direct bridge to existing `GeometryMeshPlan` (`MeshRefinementRequest`) with explicit separation before post-meshing element shape gates in `src/abaqus_ai_agent/mesh_gate.py` (`evaluate_mesh_quality_gate`). Explicit `limitations` contract stating unverified hex sweep and partition feasibility (10 tests in `tests/test_meshability.py`).
-  - [x] Real-Machine Mesh Qualification Suite (M1 ~ M4): Validated closed-loop pipeline from CAD geometry to GA-1.4 meshability, `GeometryMeshPlan`, live Abaqus 2025 mesh generation, actual element size back-measurement, and `mesh_gate.py` post-mesh evaluation.
+  - [x] Real-Machine Mesh Qualification Suite (M1 ~ M4 + STEP-HOLE + STEP-FILLET) [FROZEN & REAL_ABAQUS QUALIFIED]:
+    - Validated closed-loop pipeline from CAD geometry to GA-1.4 meshability, `GeometryMeshPlan`, live Abaqus 2025 mesh generation, actual element size back-measurement, and `mesh_gate.py` post-mesh evaluation.
     - M1 Plain Block: Global baseline mesh (320 hex elements, C3D8R, 525 nodes; dynamically computed mean size 5.0mm, max AR 1.0, `mesh_gate` PASS).
     - M2 Plate + Hole: GA-1.3B hole recognition $\to$ GA-1.4 suggested size ($0.25D = 5.0\text{ mm}$) $\to$ Abaqus local seeding $\to$ **dynamically back-measured actual hole perimeter element size ($4.450\text{ mm}$ vs global $9.878\text{ mm}$, refinement ratio $0.451 < 0.70$ verified)** $\to$ `mesh_gate` PASS.
     - M3 Plate + Fillet: Evidenced fillet radius ($R=6.0\text{ mm}$) $\to$ suggested size ($0.5R = 3.0\text{ mm}$) $\to$ Abaqus local seeding $\to$ **dynamically back-measured actual fillet span size ($3.106\text{ mm}$ vs far-field $8.171\text{ mm}$, refinement ratio $0.380 < 0.60$ verified)** $\to$ `mesh_gate` PASS.
     - M4 Defective Geometry: Non-manifold defect $\to$ GA-1.4 fail-closed gate (`BLOCKED`, `is_meshable=False`) $\to$ plan conversion blocked $\to$ zero Abaqus mesh dispatched.
+    - STEP-HOLE Real CAD Pipeline: Real STEP file (`plate_with_hole.step`) $\to$ pure Python ingestion $\to$ health audit $\to$ topology normalization $\to$ fastener hole recognition ($D=20.0\text{ mm}$) $\to$ GA-1.4 suggested size ($5.0\text{ mm}$) $\to$ Abaqus 2025 mesh $\to$ **actual hole element back-measurement ($4.450\text{ mm}$ vs global $9.878\text{ mm}$, ratio $0.451$)** $\to$ `mesh_gate` PASS (zero artificial `FeatureCandidate` fixture).
+    - STEP-FILLET Real CAD Pipeline: Real STEP file (`stepped_fillet_bar.step`) $\to$ pure Python ingestion $\to$ health audit $\to$ topology normalization $\to$ fillet recognition ($R=5.0\text{ mm}$) $\to$ GA-1.4 suggested size ($2.5\text{ mm}$) $\to$ Abaqus 2025 mesh $\to$ **actual fillet element back-measurement ($3.191\text{ mm}$ vs far-field $10.481\text{ mm}$, ratio $0.304$)** $\to$ `mesh_gate` PASS (provenance distinction: feature radius $5.0\text{ mm}$ vs. actual mesh edge $3.191\text{ mm}$ explicitly decoupled).
     - Harness 2.0 Hardening: Strict fail-fast enforcement (missing launcher or solver execution error raises immediate failure without silent fallback; explicit `--offline` required for emulated regressions; zero hardcoded mesh metrics).
-    - Audited evidence manifest: `machine_validation/ga14_real_machine_evidence.json` (4/4 passed; disclaimer: proves benchmark case closure, does not claim arbitrary universal CAD qualification; 6 tests in `tests/test_ga14_qualification.py`, 523 repository-wide tests).
+    - Audited evidence manifest: `machine_validation/ga14_real_machine_evidence.json` (6/6 passed; 16 qualification tests in `tests/test_ga14_qualification.py`, 533 repository-wide regression tests).
+    - **Frozen Baseline & Evidence Boundary (Commit `cb597d6`)**: Track GA-1.1 ~ GA-1.4 is formally CLOSED and FROZEN. Boundary disclosure: Qualification covers Minimal STEP B-Rep, Hole/Fillet feature recognition, and defined benchmark geometries; it does not claim universal automated meshing for arbitrary unconstrained industrial CAD.
 
-##### Stage 2 Expansion (GA-1.5 ~ GA-1.7)
+##### Post-GA Future Expansion (GA-1.5 ~ GA-1.7) [DEFERRED - Does not block Track GA-2 Active Line]
+*Note: GA-1.1 ~ GA-1.4 baseline is formally closed and frozen. The following capabilities are reserved for future architectural expansion and are strictly decoupled from the active GA-2 engineering track.*
 - [ ] **GA-1.5: Autonomous Virtual Topology & Cell Partition Strategy**
   - [ ] Implement rule-based and AI-guided volume partitioning to decompose complex 3D bodies into sweepable cells.
   - [ ] Synthesize native Abaqus partition planes, datum sketches, and cell cut actions (`Part.PartitionCellByPlane`, `PartitionCellByExtrudeEdge`).
@@ -1296,6 +1301,69 @@ Meshability Assessment (GA-1.4) ───[Direct Reuse]───► Existing Mes
 - [ ] **GA-1.7: Complex Multi-Part Assembly & Contact Grounding**
   - [ ] Resolve assembly component hierarchy and instance transformations for multi-part CAD models.
   - [ ] Automate proximity-based contact pair discovery between mating surfaces; synthesize native Master-Slave surfaces and Tie constraints.
+
+---
+
+#### Track GA-2: Semantic Physical Grounding & Deterministic Compilation [P1 ENGINEERING CORE]
+*The Deterministic Bridge: Connecting natural-language engineering intent to CAD topological features, deterministic Abaqus actions, live solver execution, and physical reaction equilibrium closure.*
+
+##### Track GA-2.1 ~ GA-2.4 Core Pipeline (Feature Grounding & First Golden Case) [CLOSED & REAL_ABAQUS QUALIFIED]
+```
+Natural Language Prompt
+       │
+       ▼
+EngineeringIntent (GA-2.1)
+       │
+       ▼
+STEP Minimal B-Rep & Feature Candidates (GA-1.1 ~ GA-1.3B)
+       │
+       ▼
+Feature & Physical Grounding (GA-2.2) ──► Pure GroundedRegion (Abaqus-neutral)
+       │
+       ▼
+Deterministic Compiler (GA-2.3) ──► Native faces.findAt() & Equivalent Pressure (P = F / A)
+       │
+       ▼
+Preflight Engine (33 checks / 0 blockers)
+       │
+       ▼
+Abaqus 2025 Live Solver
+       │
+       ▼
+ODB Tensor Extraction & Equilibrium Verification (RF vs Applied Error = 0.002%) (GA-2.4)
+```
+
+- [x] **GA-2.1: Semantic Engineering Intent Schema**
+  - [x] Structured representation of engineering requests without premature solver coupling (`AnalysisIntent`, `GeometryIntent`, `BoundaryConditions`, `Loads`, `Outputs`).
+  - [x] Explicit grounding requirements: marks target regions as requiring topological grounding before solver dispatch.
+- [x] **GA-2.2: Feature & Physical Grounding Engine (`src/abaqus_ai_agent/grounding/feature_grounding.py`)**
+  - [x] Deterministic mapping from high-level semantic targets (`INSTALLATION_HOLE`, `TOP_SURFACE`) to verified geometric entities in `GeometryModel` and `FeatureCandidate`.
+  - [x] Output pure, Abaqus-neutral `GroundedRegion`: includes spatial anchor coordinates `(x, y, z)`, entity IDs, confidence, status, and supporting evidence; strictly forbids generating raw Abaqus API expressions (e.g. `findAt`) in the grounding layer.
+  - [x] Topological disambiguation & selection heuristics:
+    - `INSTALLATION_HOLE`: Matches `FASTENER_HOLE` candidates, filters cylindrical faces, computes axial anchor coordinates.
+    - `TOP_SURFACE`: Evaluates face planarity, normal orientation ($n_z \approx 1$), local height $z_{\max}$, surface area, and non-hole topology.
+  - [x] Fail-closed gating: zero-candidate, ambiguous multiple unranked candidates, or entity type mismatches immediately return `BLOCKED` / `NEEDS_CLARIFICATION` (6 tests in `tests/test_feature_grounding.py`).
+- [x] **GA-2.3: Deterministic Intent Compiler Grounded Region Consumption (`src/abaqus_ai_agent/planning/compiler.py`)**
+  - [x] Upgraded compiler to consume `GroundedRegion` and handle Abaqus-specific region syntax: synthesizes native `faces.findAt(((x, y, z),))` expressions directly.
+  - [x] FEA Load Equivalence: detects concentrated force application on surface regions, automatically converts point force to equivalent distributed surface traction/pressure ($P = F / A$), preventing numerical stress singularities and avoiding Abaqus CAE invalid region errors for concentrated loads on faces.
+  - [x] Complete backward compatibility: seamlessly supports string expressions, `RegionBinding`, and `GroundedRegion` across boundary conditions and mechanical loads (2 tests in `tests/test_agent_compiler.py`).
+- [x] **GA-2.4: First End-to-End Real-Machine Golden Case (`tools/ga2_e2e_golden_case.py`)**
+  - [x] Verified full autonomous chain on real STEP file (`plate_with_hole.step`): Prompt (*"将安装孔的圆柱面完全固定，在顶面施加 1000 N 向下集中载荷，计算最大应力和位移"*).
+  - [x] Executed live under Abaqus 2025:
+    - Preflight audit: 33 checks passed, 0 blockers.
+    - Applied load: $-1000.0\text{ N}$.
+    - Live reaction force sum: $\Sigma RF_z = 1000.02\text{ N}$.
+    - **Equilibrium balance error: $0.002\%$** (far below $0.1\%$ physical tolerance threshold).
+    - Extracted metrics: Max Mises stress $3.149\text{ MPa}$, Max displacement $0.000777\text{ mm}$, 2014 C3D10 elements, 3431 nodes.
+  - [x] Full provenance & evidence envelope: `machine_validation/ga2_golden_evidence.json` marked as `QUALIFIED` with `REAL_ABAQUS` level (4 tests in `tests/test_ga2_e2e_golden.py`, 544 repository-wide regression tests).
+
+##### Stage 2 Intent Expansion & Multimodal Grounding (GA-2.5 ~ GA-2.6 & GA-2A / GA-2B)
+- [ ] **GA-2.5: Extended Feature Semantics Grounding**
+  - [ ] Implement semantic resolvers for `BOTTOM_SURFACE`, `SYMMETRY_PLANE`, `BEARING_SEAT`, `BOLT_FLANGE`, and `SIDE_WALL`.
+  - [ ] Support multi-feature topological group grounding (e.g. *"all 4 bolt holes in the flange"*).
+- [ ] **GA-2.6: Multi-Step & Complex Physical Load Procedure Compilation**
+  - [ ] Support sequence of analysis steps (e.g. Bolt Pretension step followed by External Service Load step).
+  - [ ] Compile moment/torque loads, thermal boundary flux, and pressure distributions with coordinate-dependent fields.
 
 ---
 

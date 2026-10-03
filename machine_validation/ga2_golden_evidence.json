@@ -1,0 +1,48 @@
+{
+  "suite_name": "Phase GA-2 End-to-End Engineering Intent to Abaqus ODB Qualification",
+  "version": "2026-10-03",
+  "status": "QUALIFIED",
+  "execution_mode": "REAL_ABAQUS",
+  "start_time": "2026-10-03T15:28:21.258046+00:00",
+  "end_time": "2026-10-03T15:28:39.955418+00:00",
+  "golden_case": {
+    "case_id": "GA2_GOLDEN_CASE",
+    "passed": true,
+    "prompt": "\u5c06\u5b89\u88c5\u5b54\u7684\u5706\u67f1\u9762\u5b8c\u5168\u56fa\u5b9a\uff0c\u5728\u9876\u9762\u65bd\u52a0 1000 N \u5411\u4e0b\u96c6\u4e2d\u8f7d\u8377\uff0c\u8ba1\u7b97\u6700\u5927\u5e94\u529b\u548c\u4f4d\u79fb\u3002",
+    "cad_source": "plate_with_hole.step",
+    "evidence_tier": "REAL_ABAQUS",
+    "hole_grounding": {
+      "target": "INSTALLATION_HOLE",
+      "status": "RESOLVED",
+      "anchor_point": [
+        60.0,
+        50.0,
+        10.0
+      ],
+      "confidence": 0.95
+    },
+    "top_grounding": {
+      "target": "TOP_SURFACE",
+      "status": "RESOLVED",
+      "anchor_point": [
+        25.0,
+        25.0,
+        20.0
+      ],
+      "confidence": 1.0
+    },
+    "preflight_status": "PASS",
+    "preflight_checks_count": 33,
+    "actions_compiled_count": 14,
+    "applied_force_newtons": 1000.0,
+    "measured_reaction_force_z": 1000.02,
+    "equilibrium_error_percent": 0.002,
+    "equilibrium_satisfied": true,
+    "max_mises_stress_mpa": 3.149,
+    "max_displacement_mm": 0.000777,
+    "mesh_element_count": 2014,
+    "mesh_node_count": 3431,
+    "mesh_element_type": "C3D10",
+    "script_sha256": "7dadd50ccc1d4b9eeb109ffd9318ff472a2e630877aee41c61c3b759a5749177"
+  }
+}
