@@ -15,13 +15,13 @@
 [![Task Matrix](https://img.shields.io/badge/task%20matrix-T1--T6%20passed-brightgreen.svg)](tools/m_engineering_task_matrix.py)
 [![Material Intelligence](https://img.shields.io/badge/material%20intelligence-CAMPUS%20%7C%20ISO%2010350-blue.svg)](src/abaqus_ai_agent/contracts/material_record.py)
 [![Agent Workflows](https://img.shields.io/badge/agent%20workflows-L1--L4%20validated-brightgreen.svg)](#)
-[![Release Gate](https://img.shields.io/badge/release%20gate-RC--1%20frozen-orange.svg)](#)
+[![Release Gate](https://img.shields.io/badge/release%20gate-RC--1%20Conditional%20Pass-orange.svg)](docs/rc1-release-audit.md)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 
-> **项目状态：Release Candidate 候选版本基线已正式冻结（`v1.0.0-rc1`）。**
-> 核心工程契约、确定性软件层测试门禁（**428 项测试全通过，0 warnings**）、全链路 **Abaqus 2025 真实机求解执行门禁（13/13 Golden Ladder 阶梯）**、**Phase J-Reference 理论与契约门禁（22/22 Tier A 全通）**、**Phase J.3 Tier B 扩展高阶工程物理基准（7/7 全通）**、**Phase J-Live Abaqus 2025 真实求解器全量真机门禁（22/22 验证通过）**、**Phase K 工程材料智能层 (Condition 2.0)**、**Phase L 全链路自主工程工作流门禁 (L1–L4)**、**Phase M 复杂工程任务验收矩阵 (T1–T6)** 以及 **全仓库发布安全审计（4/4 全绿）** 已全部严格闭环。
+> **项目状态：Release Candidate 候选版本基线已确立（`v1.0.0-rc1`）—— 审计裁定：有条件通过 (CONDITIONAL PASS)。**
+> 核心工程契约、确定性软件层测试门禁（**428 项测试全通过，0 warnings**）、全链路 **Abaqus 2025 真实机求解执行门禁（13/13 Golden Ladder 阶梯）**、**Phase J-Reference 理论与参数契约门禁（22/22 Tier A 全通）**、**Phase J.3 Tier B 闭式理论物理基准门禁（7/7 全通）**、**Phase J-Live Abaqus 2025 求解器能力真机门禁（22/22 验证通过）**、**Phase K 工程材料智能层 (Condition 2.0)**、**Phase L 全链路工程工作流验证门禁 (L1–L4)**、**Phase M 复杂工程任务验收矩阵 (T1–T6)** 以及 **全仓库发布安全审计（4/4 全绿）** 已完成并归档。
 >
-> 📄 **正式独立审计报告**：详见 [Release Candidate 1.0 独立工程审计报告](docs/rc1-release-audit.md)，查看全量能力评级（DONE / PARTIAL / GAP / RISK）、五级工程证据金字塔与零人工伪造因子的确定性承诺。
+> 📄 **正式独立审计报告**：详见 [Release Candidate 1.0 独立工程审计报告](docs/rc1-release-audit.md)，查看全量能力评级（DONE / PARTIAL / GAP / RISK）、五级工程证据金字塔、零证据混淆原则（严格区分真机求解、解析基准与契约检查）以及转入正式通用版本 (GA) 的必备条件。
 
 ### 快速导航
 
@@ -244,8 +244,9 @@ flowchart LR
 | **隐式动力学分析** | ✅ LIVE VALIDATED | 动载荷放大系数 (DAF)、瞬态结构振动、ALLKE/ALLIE 动内能比 |
 | **稳态热传导分析** | ✅ LIVE VALIDATED | 3D 杆体一维热传导、解析温度梯度吻合、热流率严格守恒 |
 | **热-结构顺序/强耦合** | ✅ LIVE VALIDATED | 热力耦合分析步执行、温度载荷与热应力场同步提取 |
-| **工程材料智能层** | ✅ LIVE VALIDATED | ISO 10350 单点、ISO 11403 曲线，CAMPUS 与 TDS 规范解析 |
-| **官方基准验证矩阵** | ✅ LIVE VALIDATED | 22 项达索官方 Verification & Benchmarks Guide 权威对标 |
+| **意图编译器 (Compiler)** | 🟡 PARTIAL | 参数化箱梁/板/柱意图动态编译支持；复杂任意 CAD 拓扑拆分仍需人工引导 |
+| **工程材料智能层** | ✅ LIVE VALIDATED | ISO 10350 单点、ISO 11403 曲线，CAMPUS 与 TDS 规范解析，工况不匹配自动阻断 |
+| **官方基准求解器矩阵** | ✅ LIVE VALIDATED | 22 项 Tier A 求解器能力实机验证通过；7 项 Tier B 闭式精确理论基准检验 |
 | **刚体动力学 (MBD)** | ✅ LIVE VALIDATED | 单自由度重力摆动、角速度峰值精度、机械能守恒 |
 | **多刚体铰接 (MBD-2)** | ✅ LIVE VALIDATED | 原生 `CONN3D2` Hinge 连接器双刚体双摆、铰接点平动零漂移 |
 | **刚柔耦合系统 (FMBD-4)** | ✅ LIVE VALIDATED | 刚体曲柄 + C3D8R 弹性连杆 + 运动学耦合 (Kinematic Coupling) |
@@ -254,12 +255,12 @@ flowchart LR
 | **真实 ODB 疲劳寿命** | ✅ LIVE VALIDATED | ASTM E1049-85 雨流计数、Goodman 均值修正、Miner 累积损伤 |
 | **网格自适应收敛与 GCI** | ✅ LIVE VALIDATED | C3D8R 粗/中/细三级网格自适应、Richardson 外推、Roache GCI ≤ 1.5% |
 | **求解器发散诊断与修复** | ✅ LIVE VALIDATED | .msg/.sta 错误特征解析、时间步 cutback 分析与自适应重算 |
-| **视口拓扑几何落地** | ✅ LIVE VALIDATED | 射线投影坐标映射、确定性生成 `findAt` 表达式及 Set/Surface |
-| **交付级工程报告渲染** | ✅ LIVE VALIDATED | 端到端生成专业 Markdown 报告与自包含样式 HTML 报告 |
+| **视口拓扑几何落地** | 🟡 PARTIAL | 平行投影射线映射与确定性 `findAt` 落地（透视投影因未标定严格阻断） |
+| **交付级工程报告渲染** | ✅ LIVE VALIDATED | 直接从 ODB 与 AnalysisRun 提取渲染专业 Markdown 与交互式 HTML 报告 |
 | **摄动敏感性与不确定性** | ✅ LIVE VALIDATED | 物理参数扰动分析、参数变异对验收门禁影响检验 |
 | **案例记忆与历史差分** | ✅ LIVE VALIDATED | 跨运行实体比较、Run Index 索引管理与指标差分追溯 |
 | **原生 Python 逃逸通道** | ✅ EXECUTABLE | 允许执行任意复杂 Abaqus 原生脚本，但必须经受验收门禁约束 |
-| **全自动任意几何 CAD 建模** | ⏸️ INTENTIONALLY DEFERRED| 超出当前核心范围；几何由 CAD 导入或明确定义 |
+| **任意 CAD 复杂拓扑拆分** | ⏸️ INTENTIONALLY DEFERRED| 复杂导入 CAD 装配体的特征分割与自适应剖分策略暂需外部引导 |
 | **拓扑优化 (Tosca)** | ⏸️ INTENTIONALLY DEFERRED| 暂不列入标准结构分析核心主干 |
 
 ---

@@ -15,13 +15,13 @@
 [![Task Matrix](https://img.shields.io/badge/task%20matrix-T1--T6%20passed-brightgreen.svg)](tools/m_engineering_task_matrix.py)
 [![Material Intelligence](https://img.shields.io/badge/material%20intelligence-CAMPUS%20%7C%20ISO%2010350-blue.svg)](src/abaqus_ai_agent/contracts/material_record.py)
 [![Agent Workflows](https://img.shields.io/badge/agent%20workflows-L1--L4%20validated-brightgreen.svg)](#)
-[![Release Gate](https://img.shields.io/badge/release%20gate-RC--1%20frozen-orange.svg)](#)
+[![Release Gate](https://img.shields.io/badge/release%20gate-RC--1%20Conditional%20Pass-orange.svg)](docs/rc1-release-audit.md)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 
-> **Project status: Release Candidate Baseline Frozen (`v1.0.0-rc1`).**
-> The foundational engineering contracts, deterministic software gates (**428 passed tests, 0 warnings**), full-chain **Abaqus 2025 real-machine execution gates (13/13 Golden Ladder)**, **Phase J-Reference Gate (22/22 Tier A passed)**, **Phase J.3 Tier B Extended Engineering Physics Gate (7/7 passed)**, **Phase J-Live Real-Machine Gate (22/22 live Abaqus 2025 validated)**, **Phase K Engineering Material Intelligence Layer (Condition 2.0)**, **Phase L Autonomous Agent Engineering Workflow Gates (L1–L4)**, **Phase M Production Engineering Task Matrix (T1–T6)**, and **Public Release Security Audit (4/4 passed)** are complete and closed.
+> **Project status: Release Candidate Baseline Established (`v1.0.0-rc1`) — Audit Verdict: CONDITIONAL PASS.**
+> The foundational engineering contracts, deterministic software gates (**428 passed tests, 0 warnings**), full-chain **Abaqus 2025 real-machine execution gates (13/13 Golden Ladder)**, **Phase J-Reference Theory Gate (22/22 Tier A passed)**, **Phase J.3 Tier B Analytical Physics Gate (7/7 passed)**, **Phase J-Live Solver Capability Gate (22/22 live Abaqus 2025 validated)**, **Phase K Engineering Material Intelligence Layer (Condition 2.0)**, **Phase L Autonomous Agent Engineering Workflow Gates (L1–L4)**, **Phase M Production Engineering Task Matrix (T1–T6)**, and **Public Release Security Audit (4/4 passed)** are complete.
 >
-> 📄 **Official Audit Report**: See [Release Candidate 1.0 Independent Engineering Audit](docs/rc1-release-audit.md) for full status ratings (DONE / PARTIAL / GAP / RISK), 5-level evidence pyramid, and zero-fudge validation guarantees.
+> 📄 **Official Audit Report**: See [Release Candidate 1.0 Independent Engineering Audit](docs/rc1-release-audit.md) for full status ratings (DONE / PARTIAL / GAP / RISK), the audited 5-level evidence pyramid, zero-conflation boundaries (distinguishing live solver runs, analytical baselines, and parameter contracts), and the formal conditions required for General Availability (GA).
 
 ### Quick navigation
 
@@ -244,8 +244,9 @@ The capability surface is strictly classified into formalized, verified capabili
 | **Implicit Dynamics** | ✅ LIVE VALIDATED | Dynamic amplification (DAF), transient vibration, ALLKE/ALLIE ratio |
 | **Steady Heat Transfer** | ✅ LIVE VALIDATED | 1D conduction bar, analytical temperature field, heat flux conservation |
 | **Coupled Temp-Displacement** | ✅ LIVE VALIDATED | Simultaneous mechanical and thermal step execution |
-| **Material Intelligence** | ✅ LIVE VALIDATED | ISO 10350 single-point, ISO 11403 curves, CAMPUS & TDS adapters |
-| **Official Benchmark Suite** | ✅ LIVE VALIDATED | 22 Dassault Verification Guide & Benchmarks Guide Tier A models |
+| **Dynamic Intent Compiler** | 🟡 PARTIAL | Parametric box/plate/cylinder compilation supported; arbitrary CAD partition guided |
+| **Material Intelligence** | ✅ LIVE VALIDATED | ISO 10350 single-point, ISO 11403 curves, CAMPUS & TDS adapters, fail-closed matching |
+| **Official Benchmark Suite** | ✅ LIVE VALIDATED | 22 Tier A solver models executed live on Abaqus 2025; 7 Tier B analytical checks |
 | **Rigid-Body Dynamics (MBD)** | ✅ LIVE VALIDATED | Physical pendulum under gravity, energy conservation |
 | **Multi-Body Dynamics (MBD-2)**| ✅ LIVE VALIDATED | Dual revolute joints, native `CONN3D2` Hinge, period accuracy |
 | **Coupled Rigid-Flexible (FMBD-4)**| ✅ LIVE VALIDATED | Rigid crank + C3D8R flexible link + Kinematic Coupling |
@@ -254,12 +255,12 @@ The capability surface is strictly classified into formalized, verified capabili
 | **Fatigue Life Evaluation** | ✅ LIVE VALIDATED | ASTM E1049 rainflow counting, Goodman mean-stress, Miner damage |
 | **Mesh Convergence & GCI** | ✅ LIVE VALIDATED | Three-level C3D8R refinement, Richardson extrapolation, Roache GCI |
 | **Solver Failure Diagnostics** | ✅ LIVE VALIDATED | Deterministic parser for .msg/.sta/.log, cutback analysis, repair loop |
-| **Viewport Grounding** | ✅ LIVE VALIDATED | Ray-cast 2D/3D projection, deterministic `findAt` Set/Surface creation |
-| **Engineering Reporting** | ✅ LIVE VALIDATED | End-to-end rendering to Markdown and standalone interactive HTML |
+| **Viewport Grounding** | 🟡 PARTIAL | Parallel projection raycasting & deterministic `findAt` (perspective fails closed) |
+| **Engineering Reporting** | ✅ LIVE VALIDATED | End-to-end rendering to Markdown and standalone interactive HTML directly from ODB |
 | **Sensitivity & Uncertainty** | ✅ LIVE VALIDATED | Perturbation sensitivity, parameter variation analysis |
 | **Run Index & Case Memory** | ✅ LIVE VALIDATED | Cross-run comparison, metadata hashing, metric delta tracking |
 | **Native Python Escape Hatch** | ✅ EXECUTABLE | Arbitrary native Abaqus Python scripts without agent gate bypass |
-| **Automated CAD Synthesis** | ⏸️ INTENTIONALLY DEFERRED| Out of scope; model geometry is imported or explicitly defined |
+| **Arbitrary CAD Decomposition**| ⏸️ INTENTIONALLY DEFERRED| Complex imported CAD topology decomposition requires user-guided partitioning |
 | **Topology Optimization (Tosca)**| ⏸️ INTENTIONALLY DEFERRED| Out of scope for standard structural simulation core |
 
 ---
