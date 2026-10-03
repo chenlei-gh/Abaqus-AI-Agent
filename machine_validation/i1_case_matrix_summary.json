@@ -1,6 +1,6 @@
 {
   "schema_version": "engineering_case_matrix_v1",
-  "verified_at": "2026-10-03T06:34:50.419794+00:00",
+  "verified_at": "2026-10-03T06:43:23.641335+00:00",
   "total_categories": 9,
   "passed_categories": 9,
   "all_passed": true,
@@ -2054,7 +2054,7 @@
     {
       "category_id": "CASE-01",
       "physics_name": "Linear Static Stress & Deflection",
-      "fresh_executed_at": "2026-10-03T06:34:50.417221+00:00",
+      "fresh_executed_at": "2026-10-03T06:43:23.638405+00:00",
       "intent_fingerprint": "efee1b4b371f9ed2",
       "fresh_metrics": {
         "tip_displacement_lower": 2.06864285469055,
@@ -2071,7 +2071,7 @@
     {
       "category_id": "CASE-02",
       "physics_name": "Thermal Conduction & Heat Flux",
-      "fresh_executed_at": "2026-10-03T06:34:50.417574+00:00",
+      "fresh_executed_at": "2026-10-03T06:43:23.638843+00:00",
       "intent_fingerprint": "df8d3d84db8b7709",
       "fresh_metrics": {
         "max_temp_error_C": 7.105427357601002e-15,
@@ -2091,7 +2091,7 @@
     {
       "category_id": "CASE-03",
       "physics_name": "Transient Dynamics & Modal Vibration",
-      "fresh_executed_at": "2026-10-03T06:34:50.418153+00:00",
+      "fresh_executed_at": "2026-10-03T06:43:23.639296+00:00",
       "intent_fingerprint": "1962c253a811c1a3",
       "fresh_metrics": {
         "peak_displacement_bound": 2.15278363227844,
@@ -2107,7 +2107,7 @@
     {
       "category_id": "CASE-04",
       "physics_name": "Contact Mechanics & Frictional Interaction",
-      "fresh_executed_at": "2026-10-03T06:34:50.418497+00:00",
+      "fresh_executed_at": "2026-10-03T06:43:23.639664+00:00",
       "intent_fingerprint": "5995872992dedae2",
       "fresh_metrics": {
         "contact_pressure_positive": 196.88801574707,
@@ -2126,7 +2126,7 @@
     {
       "category_id": "CASE-05",
       "physics_name": "ASTM E1049 Rainflow Fatigue Life & Damage",
-      "fresh_executed_at": "2026-10-03T06:34:50.418808+00:00",
+      "fresh_executed_at": "2026-10-03T06:43:23.639981+00:00",
       "intent_fingerprint": "05f810951e1ae93c",
       "fresh_metrics": {
         "frame_count": 24.0
@@ -2140,7 +2140,7 @@
     {
       "category_id": "CASE-06",
       "physics_name": "Rigid-Flexible Multibody Mechanism Dynamics",
-      "fresh_executed_at": "2026-10-03T06:34:50.419038+00:00",
+      "fresh_executed_at": "2026-10-03T06:43:23.640302+00:00",
       "intent_fingerprint": "0c1642f41b8ad7f6",
       "fresh_metrics": {
         "energy_dissipation_ratio": 0.0055582571796292555,
@@ -2166,7 +2166,7 @@
     {
       "category_id": "CASE-07",
       "physics_name": "3-Level Mesh Refinement & Roache GCI",
-      "fresh_executed_at": "2026-10-03T06:34:50.419271+00:00",
+      "fresh_executed_at": "2026-10-03T06:43:23.640576+00:00",
       "intent_fingerprint": "f4049d5afc1d0dd1",
       "fresh_metrics": {
         "tip_displacement_sanity": 1.98531663417816
@@ -2180,7 +2180,7 @@
     {
       "category_id": "CASE-08",
       "physics_name": "Controlled Solver Diagnostics & Remediation",
-      "fresh_executed_at": "2026-10-03T06:34:50.419513+00:00",
+      "fresh_executed_at": "2026-10-03T06:43:23.640878+00:00",
       "intent_fingerprint": "5c1a8efe3f117c7d",
       "fresh_metrics": {
         "remediation_executed": 1.0,
@@ -2195,7 +2195,7 @@
     {
       "category_id": "CASE-09",
       "physics_name": "Image / Intent Viewport Geometry Grounding",
-      "fresh_executed_at": "2026-10-03T06:34:50.419649+00:00",
+      "fresh_executed_at": "2026-10-03T06:43:23.641060+00:00",
       "intent_fingerprint": "6fc6fa69bc6ba467",
       "fresh_metrics": {
         "grounding_verified": 1.0,
