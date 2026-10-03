@@ -22,15 +22,27 @@ class AcceptanceResult:
     status: str = "PASS"  # PASS, WARNING, FAIL, BLOCKED
     blocked: tuple = ()
     gates: Dict[str, Any] = field(default_factory=dict)
+    gate_justifications: Dict[str, str] = field(default_factory=dict)
+    missing_required_metrics: tuple = ()
+    missing_required_gates: tuple = ()
+    result_validity: str = "VALID"  # VALID, RESULT_INVALID, SOLVER_FAILED, CRITERIA_FAILED
+    audit_summary: str = ""
+    odb_status: str = "valid"
 
     def to_dict(self) -> Dict[str, Any]:
         return {
             "passed": self.passed,
             "status": self.status,
+            "result_validity": self.result_validity,
+            "audit_summary": self.audit_summary,
+            "odb_status": self.odb_status,
             "failures": list(self.failures),
             "warnings": list(self.warnings),
             "blocked": list(self.blocked),
+            "missing_required_metrics": list(self.missing_required_metrics),
+            "missing_required_gates": list(self.missing_required_gates),
             "gates": dict(self.gates),
+            "gate_justifications": dict(self.gate_justifications),
             "criteria": [
                 {
                     "name": c.name,
@@ -124,16 +136,51 @@ def evaluate_criteria(values, criteria, required_keys: Optional[Sequence[str]] =
 def evaluate_result_acceptance(result_status, numerical=None, engineering=None,
                                mesh_quality=None, convergence=None, fatigue=None, contact_diagnostics=None,
                                values=None, criteria=None, required_metrics=None, evidence=None,
-                               require_evidence=False):
+                               require_evidence=False,
+                               required_gates=None, physics_domain=None, result_requirements=None,
+                               odb_status=None, gate_justifications=None, procedure_verification=None,
+                               thermal_balance=None):
     """Combine execution/result evidence with deterministic acceptance criteria.
 
-    Missing upstream evidence blocks acceptance instead of being treated as a
-    pass. Optional verification domains are gates only when supplied.
+    - ResultRequirement & Physics Domain profile drive mandatory gates & required metrics.
+    - Mandatory gates can NEVER be silently SKIPPED (missing mandatory gate -> BLOCKED / RESULT_INVALID).
+    - Non-mandatory gates may be SKIPPED with an explicit engineering justification.
+    - Missing required outputs block acceptance and mark result_validity as RESULT_INVALID.
+    - Produces a tamper-proof audit_summary: Solver PASS/FAIL | ODB PASS/FAIL | Required Result PASS/FAIL | Engineering Acceptance PASS/FAIL.
     """
+    from .contracts.results import get_physics_result_profile
+
     failures = []
     warnings = []
     blocked = []
     gates = {}
+    missing_required_gates = []
+    missing_required_metrics = []
+
+    effective_required_gates = set(required_gates or ())
+    effective_required_metrics = list(required_metrics or ())
+    effective_justifications = dict(gate_justifications or {})
+
+    # If physics_domain is specified, incorporate canonical domain profile
+    if physics_domain:
+        prof = get_physics_result_profile(physics_domain)
+        effective_required_gates.update(prof.required_gates)
+        for rm in prof.required_metrics:
+            if rm not in effective_required_metrics:
+                effective_required_metrics.append(rm)
+        for g_k, g_v in prof.gate_justifications.items():
+            effective_justifications.setdefault(g_k, g_v)
+
+    # If result_requirements are supplied, extract required output identifiers
+    if result_requirements:
+        for r in result_requirements:
+            req_name = getattr(r, "name", None) or (r.get("name") if isinstance(r, dict) else None)
+            req_key = getattr(r, "value_key", None) or (r.get("value_key") if isinstance(r, dict) else None)
+            is_req = getattr(r, "required", True) if hasattr(r, "required") else (r.get("required", True) if isinstance(r, dict) else True)
+            if is_req:
+                m_ident = req_name or req_key
+                if m_ident and m_ident not in effective_required_metrics:
+                    effective_required_metrics.append(m_ident)
 
     # Gate 1: Execution Gate
     if result_status != "completed":
@@ -143,7 +190,27 @@ def evaluate_result_acceptance(result_status, numerical=None, engineering=None,
     else:
         gates["execution"] = "PASS"
 
-    # Gate 2: Evidence Sufficiency Gate
+    # Gate 2: ODB Status Gate
+    effective_odb_status = "valid" if (odb_status is None and result_status == "completed") else str(odb_status or "unavailable")
+    if odb_status is not None:
+        if str(odb_status).lower() in ("valid", "completed", "available"):
+            gates["odb"] = "PASS"
+        else:
+            failures.append("odb_status:%s" % odb_status)
+            blocked.append("odb_status:%s" % odb_status)
+            gates["odb"] = "FAIL"
+    elif "odb" in effective_required_gates:
+        if result_status == "completed":
+            gates["odb"] = "PASS"
+        else:
+            gates["odb"] = "BLOCKED"
+            failures.append("missing_required_odb")
+            blocked.append("missing_required_odb")
+            missing_required_gates.append("odb")
+    else:
+        gates["odb"] = "PASS" if result_status == "completed" else "NOT_SPECIFIED"
+
+    # Gate 3: Evidence Sufficiency Gate
     if require_evidence and not evidence:
         failures.append("missing_required_evidence")
         blocked.append("missing_required_evidence")
@@ -153,27 +220,37 @@ def evaluate_result_acceptance(result_status, numerical=None, engineering=None,
     else:
         gates["evidence_sufficiency"] = "NOT_SPECIFIED"
 
-    # Gate 3: Numerical Verification Gate
+    # Gate 4: Numerical Verification Gate
     if numerical is not None:
         if getattr(numerical, "passed", False):
             gates["numerical_verification"] = "PASS"
         else:
             failures.append("numerical_verification_failed")
             gates["numerical_verification"] = "FAIL"
+    elif "numerical_verification" in effective_required_gates:
+        gates["numerical_verification"] = "BLOCKED"
+        failures.append("missing_mandatory_gate:numerical_verification")
+        blocked.append("missing_mandatory_gate:numerical_verification")
+        missing_required_gates.append("numerical_verification")
     else:
         gates["numerical_verification"] = "SKIPPED"
 
-    # Gate 4: Engineering Checks Gate
+    # Gate 5: Engineering Checks Gate
     if engineering is not None:
         if getattr(engineering, "passed", False):
             gates["engineering_checks"] = "PASS"
         else:
             failures.append("engineering_checks_failed")
             gates["engineering_checks"] = "FAIL"
+    elif "engineering_checks" in effective_required_gates:
+        gates["engineering_checks"] = "BLOCKED"
+        failures.append("missing_mandatory_gate:engineering_checks")
+        blocked.append("missing_mandatory_gate:engineering_checks")
+        missing_required_gates.append("engineering_checks")
     else:
         gates["engineering_checks"] = "SKIPPED"
 
-    # Gate 5: Mesh Quality Gate
+    # Gate 6: Mesh Quality Gate
     if mesh_quality is not None:
         mq_status = mesh_quality.get("status") if isinstance(mesh_quality, dict) else getattr(mesh_quality, "status", None)
         if mq_status in ("pass",):
@@ -181,20 +258,30 @@ def evaluate_result_acceptance(result_status, numerical=None, engineering=None,
         else:
             failures.append("mesh_quality_failed")
             gates["mesh_quality"] = "FAIL"
+    elif "mesh_quality" in effective_required_gates:
+        gates["mesh_quality"] = "BLOCKED"
+        failures.append("missing_mandatory_gate:mesh_quality")
+        blocked.append("missing_mandatory_gate:mesh_quality")
+        missing_required_gates.append("mesh_quality")
     else:
         gates["mesh_quality"] = "SKIPPED"
 
-    # Gate 6: Convergence Gate
+    # Gate 7: Convergence Gate
     if convergence is not None:
         if getattr(convergence, "converged", False):
             gates["convergence"] = "PASS"
         else:
             failures.append("mesh_convergence_failed")
             gates["convergence"] = "FAIL"
+    elif "convergence" in effective_required_gates:
+        gates["convergence"] = "BLOCKED"
+        failures.append("missing_mandatory_gate:convergence")
+        blocked.append("missing_mandatory_gate:convergence")
+        missing_required_gates.append("convergence")
     else:
         gates["convergence"] = "SKIPPED"
 
-    # Gate 7: Fatigue Gate
+    # Gate 8: Fatigue Gate
     if fatigue is not None:
         fatigue_status = getattr(fatigue, "status", None)
         if fatigue_status == "pass":
@@ -205,10 +292,15 @@ def evaluate_result_acceptance(result_status, numerical=None, engineering=None,
             if fatigue_status == "warning":
                 warnings.append("fatigue_warning")
         warnings.extend(tuple(getattr(fatigue, "warnings", ()) or ()))
+    elif "fatigue" in effective_required_gates:
+        gates["fatigue"] = "BLOCKED"
+        failures.append("missing_mandatory_gate:fatigue")
+        blocked.append("missing_mandatory_gate:fatigue")
+        missing_required_gates.append("fatigue")
     else:
         gates["fatigue"] = "SKIPPED"
 
-    # Gate 8: Contact Diagnostics Gate
+    # Gate 9: Contact Diagnostics Gate
     if contact_diagnostics is not None:
         contact_statuses = tuple(
             getattr(d, "status", None)
@@ -226,16 +318,71 @@ def evaluate_result_acceptance(result_status, numerical=None, engineering=None,
             gates["contact"] = "WARNING"
         else:
             gates["contact"] = "PASS"
+    elif "contact" in effective_required_gates:
+        gates["contact"] = "BLOCKED"
+        failures.append("missing_mandatory_gate:contact")
+        blocked.append("missing_mandatory_gate:contact")
+        missing_required_gates.append("contact")
     else:
         gates["contact"] = "SKIPPED"
 
-    # Gate 9: Criteria Gate
-    criteria_result = evaluate_criteria(values or {}, criteria or (), required_keys=required_metrics)
+    # Gate 10: Procedure Verification Gate (Multi-step DAG)
+    if procedure_verification is not None:
+        proc_ok = getattr(procedure_verification, "verified", False) or getattr(procedure_verification, "passed", False) or (procedure_verification is True)
+        if proc_ok:
+            gates["procedure"] = "PASS"
+        else:
+            failures.append("procedure_verification_failed")
+            gates["procedure"] = "FAIL"
+    elif "procedure" in effective_required_gates:
+        gates["procedure"] = "BLOCKED"
+        failures.append("missing_mandatory_gate:procedure")
+        blocked.append("missing_mandatory_gate:procedure")
+        missing_required_gates.append("procedure")
+    else:
+        gates["procedure"] = "SKIPPED"
+
+    # Gate 11: Thermal Balance Gate
+    if thermal_balance is not None:
+        therm_ok = getattr(thermal_balance, "passed", False) or (thermal_balance is True)
+        if therm_ok:
+            gates["thermal_balance"] = "PASS"
+        else:
+            failures.append("thermal_balance_failed")
+            gates["thermal_balance"] = "FAIL"
+    elif "thermal_balance" in effective_required_gates:
+        gates["thermal_balance"] = "BLOCKED"
+        failures.append("missing_mandatory_gate:thermal_balance")
+        blocked.append("missing_mandatory_gate:thermal_balance")
+        missing_required_gates.append("thermal_balance")
+    else:
+        gates["thermal_balance"] = "SKIPPED"
+
+    # Required Metrics Evaluation against Values Map
+    values_map = values or {}
+    for rm in effective_required_metrics:
+        if rm not in values_map:
+            missing_required_metrics.append(rm)
+            blocked.append("missing_required_metric:%s" % rm)
+
+    if missing_required_metrics:
+        gates["required_results"] = "BLOCKED"
+    elif effective_required_metrics:
+        gates["required_results"] = "PASS"
+    else:
+        gates["required_results"] = "NOT_SPECIFIED"
+
+    # Gate 12: Criteria Gate
+    criteria_result = evaluate_criteria(values_map, criteria or (), required_keys=effective_required_metrics)
     failures.extend(
         "criterion:%s" % item.name for item in criteria_result.criteria if not item.passed
     )
     warnings.extend(criteria_result.warnings)
-    blocked.extend(criteria_result.blocked)
+    # Deduplicate blocked entries from criteria_result that were already added
+    for b in criteria_result.blocked:
+        if b not in blocked:
+            blocked.append(b)
+
     if criteria_result.blocked:
         gates["criteria"] = "BLOCKED"
     elif any(not item.passed for item in criteria_result.criteria):
@@ -248,7 +395,19 @@ def evaluate_result_acceptance(result_status, numerical=None, engineering=None,
     if not criteria and values is None:
         warnings.append("no_explicit_acceptance_criteria")
 
-    # Final deterministic status synthesis
+    # Status & Result Validity Synthesis
+    if missing_required_metrics or missing_required_gates:
+        result_validity = "RESULT_INVALID"
+    elif blocked:
+        if result_status == "completed":
+            result_validity = "RESULT_INVALID"
+        else:
+            result_validity = "SOLVER_FAILED"
+    elif failures:
+        result_validity = "CRITERIA_FAILED"
+    else:
+        result_validity = "VALID"
+
     if blocked:
         status = "BLOCKED"
         passed = False
@@ -262,6 +421,13 @@ def evaluate_result_acceptance(result_status, numerical=None, engineering=None,
         status = "PASS"
         passed = True
 
+    # Deterministic Audit Summary Line
+    s_part = "PASS" if result_status == "completed" else "FAIL"
+    o_part = gates.get("odb", "PASS" if s_part == "PASS" else "FAIL")
+    r_part = "FAIL" if (missing_required_metrics or gates.get("required_results") == "BLOCKED") else "PASS"
+    e_part = "PASS" if passed else "FAIL"
+    audit_summary = f"Solver: {s_part} | ODB: {o_part} | Required Result: {r_part} | Engineering Acceptance: {e_part}"
+
     return AcceptanceResult(
         passed=passed,
         criteria=criteria_result.criteria,
@@ -270,4 +436,10 @@ def evaluate_result_acceptance(result_status, numerical=None, engineering=None,
         status=status,
         blocked=tuple(blocked),
         gates=gates,
+        gate_justifications=effective_justifications,
+        missing_required_metrics=tuple(missing_required_metrics),
+        missing_required_gates=tuple(missing_required_gates),
+        result_validity=result_validity,
+        audit_summary=audit_summary,
+        odb_status=effective_odb_status,
     )

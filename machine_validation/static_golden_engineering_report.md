@@ -117,6 +117,31 @@ Verify the structural deflection and peak von Mises stress of a 100mm x 10mm x 1
 
 ## 11. Acceptance Criteria
 
+### Verification Integrity & Audit Summary
+
+| Verification Dimension      | Actual State / Output          | Gate Verdict |
+|-----------------------------|--------------------------------|--------------|
+| Solver Execution            | completed                      | PASS         |
+| ODB Storage Artifact        | valid                          | PASS         |
+| Required Physical Outputs   | All Required Metrics Extracted | PASS         |
+| Engineering Result Validity | VALID                          | PASS         |
+
+### Verification Gates Detailed Audit
+
+| Gate Name              | Status        | Engineering Justification / Note    |
+|------------------------|---------------|-------------------------------------|
+| contact                | SKIPPED       | Omitted / Not requested             |
+| convergence            | SKIPPED       | Omitted / Not requested             |
+| criteria               | PASS          | Verified against physics contract   |
+| engineering_checks     | PASS          | Verified against physics contract   |
+| evidence_sufficiency   | NOT_SPECIFIED | Gate verification blocked or failed |
+| execution              | PASS          | Verified against physics contract   |
+| fatigue                | SKIPPED       | Omitted / Not requested             |
+| mesh_quality           | SKIPPED       | Omitted / Not requested             |
+| numerical_verification | SKIPPED       | Omitted / Not requested             |
+
+### Deterministic Criteria Evaluation
+
 | Criterion Name         | Requirement / Limit | Actual Value     | Status |
 |------------------------|---------------------|------------------|--------|
 | tip_displacement_lower | -                   | 2.06864285469055 | PASS   |
@@ -169,7 +194,13 @@ Verify the structural deflection and peak von Mises stress of a 100mm x 10mm x 1
     "fatigue": "SKIPPED",
     "mesh_quality": "SKIPPED",
     "numerical_verification": "SKIPPED"
-  }
+  },
+  "gate_justifications": {},
+  "missing_required_metrics": [],
+  "missing_required_gates": [],
+  "result_validity": "VALID",
+  "audit_summary": "",
+  "odb_status": "valid"
 }
 ```
 
@@ -244,7 +275,13 @@ Verify the structural deflection and peak von Mises stress of a 100mm x 10mm x 1
         "fatigue": "SKIPPED",
         "mesh_quality": "SKIPPED",
         "numerical_verification": "SKIPPED"
-      }
+      },
+      "gate_justifications": {},
+      "missing_required_metrics": [],
+      "missing_required_gates": [],
+      "result_validity": "VALID",
+      "audit_summary": "",
+      "odb_status": "valid"
     },
     "unit": "",
     "metadata": {}

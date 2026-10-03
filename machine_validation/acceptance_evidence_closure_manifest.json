@@ -1,0 +1,204 @@
+{
+  "schema_version": "acceptance_evidence_closure_v1",
+  "evidence_tier": "MIXED_PHYSICS_AND_REAL_ODB",
+  "verified_at": "2026-10-03T17:10:42.824471+00:00",
+  "all_domains_fail_closed": true,
+  "domains_verified_count": 5,
+  "probes": {
+    "static": {
+      "domain": "static",
+      "profile": {
+        "domain": "static",
+        "required_fields": [
+          "U",
+          "S",
+          "RF"
+        ],
+        "required_metrics": [
+          "max_displacement",
+          "max_mises",
+          "reaction_force"
+        ],
+        "required_gates": [
+          "execution",
+          "odb",
+          "criteria"
+        ],
+        "gate_justifications": {
+          "contact": "Single continuum structure; contact diagnostics gate not applicable.",
+          "fatigue": "Monotonic static loading; fatigue life gate not requested.",
+          "mesh_convergence": "Single mesh analysis baseline; adaptive convergence not requested."
+        },
+        "step_requirements": {}
+      },
+      "baseline_pass": true,
+      "missing_metric_blocked": true,
+      "result_validity": "RESULT_INVALID",
+      "missing_metrics": [
+        "max_displacement"
+      ],
+      "audit_summary": "Solver: PASS | ODB: PASS | Required Result: FAIL | Engineering Acceptance: FAIL",
+      "fail_closed": true
+    },
+    "thermal": {
+      "domain": "thermal",
+      "profile": {
+        "domain": "thermal",
+        "required_fields": [
+          "NT11",
+          "HFL",
+          "RFL"
+        ],
+        "required_metrics": [
+          "max_temperature",
+          "heat_flux",
+          "reaction_flux"
+        ],
+        "required_gates": [
+          "execution",
+          "odb",
+          "criteria"
+        ],
+        "gate_justifications": {
+          "contact": "Pure thermal conduction model; mechanical contact diagnostics not applicable.",
+          "fatigue": "Steady thermal field; mechanical fatigue gate not requested."
+        },
+        "step_requirements": {}
+      },
+      "baseline_pass": true,
+      "missing_metric_blocked": true,
+      "result_validity": "RESULT_INVALID",
+      "missing_metrics": [
+        "max_temperature"
+      ],
+      "audit_summary": "Solver: PASS | ODB: PASS | Required Result: FAIL | Engineering Acceptance: FAIL",
+      "fail_closed": true
+    },
+    "contact": {
+      "domain": "contact",
+      "profile": {
+        "domain": "contact",
+        "required_fields": [
+          "CPRESS",
+          "CSHEAR",
+          "CSTATUS",
+          "RF"
+        ],
+        "required_metrics": [
+          "contact_pressure",
+          "frictional_shear",
+          "reaction_force"
+        ],
+        "required_gates": [
+          "execution",
+          "odb",
+          "contact",
+          "criteria"
+        ],
+        "gate_justifications": {
+          "fatigue": "Static contact equilibrium; fatigue life gate not requested."
+        },
+        "step_requirements": {}
+      },
+      "baseline_pass": true,
+      "missing_mandatory_gate_blocked": true,
+      "missing_metric_blocked": true,
+      "missing_gate_ids": [
+        "contact"
+      ],
+      "missing_metric_ids": [
+        "contact_pressure"
+      ],
+      "audit_summary_missing_gate": "Solver: PASS | ODB: PASS | Required Result: PASS | Engineering Acceptance: FAIL",
+      "fail_closed": true
+    },
+    "modal": {
+      "domain": "modal",
+      "profile": {
+        "domain": "modal",
+        "required_fields": [
+          "frequency",
+          "eigenvalue"
+        ],
+        "required_metrics": [
+          "frequency"
+        ],
+        "required_gates": [
+          "execution",
+          "odb",
+          "criteria"
+        ],
+        "gate_justifications": {
+          "contact": "Linear eigenvalue extraction; contact diagnostics not applicable.",
+          "fatigue": "Frequency domain eigenmodes; time-domain fatigue not requested."
+        },
+        "step_requirements": {}
+      },
+      "baseline_pass": true,
+      "missing_metric_blocked": true,
+      "result_validity": "RESULT_INVALID",
+      "missing_metrics": [
+        "frequency"
+      ],
+      "audit_summary": "Solver: PASS | ODB: PASS | Required Result: FAIL | Engineering Acceptance: FAIL",
+      "fail_closed": true
+    },
+    "multi_step": {
+      "domain": "multi_step",
+      "profile": {
+        "domain": "multi_step",
+        "required_fields": [
+          "U",
+          "S",
+          "RF",
+          "RM"
+        ],
+        "required_metrics": [
+          "preload_force",
+          "axial_reaction",
+          "torque_reaction"
+        ],
+        "required_gates": [
+          "execution",
+          "odb",
+          "procedure",
+          "criteria"
+        ],
+        "gate_justifications": {
+          "fatigue": "Multi-step static preloading & service state; fatigue not requested.",
+          "contact": "Tied or continuous bolt model; contact diagnostics not requested."
+        },
+        "step_requirements": {
+          "Step-Preload": [
+            "preload_force"
+          ],
+          "Step-Service": [
+            "axial_reaction",
+            "torque_reaction"
+          ]
+        }
+      },
+      "baseline_pass": true,
+      "missing_metric_blocked": true,
+      "result_validity": "RESULT_INVALID",
+      "missing_metrics": [
+        "torque_reaction"
+      ],
+      "audit_summary": "Solver: PASS | ODB: PASS | Required Result: FAIL | Engineering Acceptance: FAIL",
+      "fail_closed": true
+    },
+    "real_odb_missing_output": {
+      "case": "REAL_ODB_MISSING_OUTPUT",
+      "odb_exists": true,
+      "solver_completed": true,
+      "acceptance_passed": false,
+      "acceptance_status": "BLOCKED",
+      "result_validity": "RESULT_INVALID",
+      "audit_summary_line": "Solver: PASS | ODB: PASS | Required Result: FAIL | Engineering Acceptance: FAIL",
+      "report_has_audit_summary": true,
+      "report_has_rejected_verdict": true,
+      "report_has_missing_metric_listed": true,
+      "fail_closed": true
+    }
+  }
+}

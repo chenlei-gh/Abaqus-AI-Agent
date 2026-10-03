@@ -196,3 +196,128 @@ def required_field_variables(requirements):
     return tuple(sorted(set(
         r.field for r in requirements
         if r.output_kind == "field" and r.field)))
+
+
+@dataclass(frozen=True)
+class PhysicsResultProfile:
+    """Declared engineering result and gate profile for an engineering physics domain."""
+    domain: str
+    required_fields: Tuple[str, ...]
+    required_metrics: Tuple[str, ...]
+    required_gates: Tuple[str, ...]
+    gate_justifications: Dict[str, str] = dataclass_field(default_factory=dict)
+    step_requirements: Dict[str, Tuple[str, ...]] = dataclass_field(default_factory=dict)
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "domain": self.domain,
+            "required_fields": list(self.required_fields),
+            "required_metrics": list(self.required_metrics),
+            "required_gates": list(self.required_gates),
+            "gate_justifications": dict(self.gate_justifications),
+            "step_requirements": {k: list(v) for k, v in self.step_requirements.items()},
+        }
+
+
+def get_physics_result_profile(domain: str, **custom_overrides) -> PhysicsResultProfile:
+    """Resolve the canonical result requirement and gate profile for a physics domain."""
+    d = (domain or "static").lower().strip()
+
+    if d in ("static", "structural_static", "static_general"):
+        prof = PhysicsResultProfile(
+            domain="static",
+            required_fields=("U", "S", "RF"),
+            required_metrics=("max_displacement", "max_mises", "reaction_force"),
+            required_gates=("execution", "odb", "criteria"),
+            gate_justifications={
+                "contact": "Single continuum structure; contact diagnostics gate not applicable.",
+                "fatigue": "Monotonic static loading; fatigue life gate not requested.",
+                "mesh_convergence": "Single mesh analysis baseline; adaptive convergence not requested.",
+            },
+        )
+    elif d in ("thermal", "heat_transfer", "thermal_steady"):
+        prof = PhysicsResultProfile(
+            domain="thermal",
+            required_fields=("NT11", "HFL", "RFL"),
+            required_metrics=("max_temperature", "heat_flux", "reaction_flux"),
+            required_gates=("execution", "odb", "criteria"),
+            gate_justifications={
+                "contact": "Pure thermal conduction model; mechanical contact diagnostics not applicable.",
+                "fatigue": "Steady thermal field; mechanical fatigue gate not requested.",
+            },
+        )
+    elif d in ("contact", "frictional_contact", "contact_interaction"):
+        prof = PhysicsResultProfile(
+            domain="contact",
+            required_fields=("CPRESS", "CSHEAR", "CSTATUS", "RF"),
+            required_metrics=("contact_pressure", "frictional_shear", "reaction_force"),
+            required_gates=("execution", "odb", "contact", "criteria"),
+            gate_justifications={
+                "fatigue": "Static contact equilibrium; fatigue life gate not requested.",
+            },
+        )
+    elif d in ("modal", "frequency", "eigenvalue"):
+        prof = PhysicsResultProfile(
+            domain="modal",
+            required_fields=("frequency", "eigenvalue"),
+            required_metrics=("frequency",),
+            required_gates=("execution", "odb", "criteria"),
+            gate_justifications={
+                "contact": "Linear eigenvalue extraction; contact diagnostics not applicable.",
+                "fatigue": "Frequency domain eigenmodes; time-domain fatigue not requested.",
+            },
+        )
+    elif d in ("fatigue", "cyclic_fatigue"):
+        prof = PhysicsResultProfile(
+            domain="fatigue",
+            required_fields=("S", "E", "fatigue_life"),
+            required_metrics=("fatigue_life", "damage"),
+            required_gates=("execution", "odb", "fatigue", "criteria"),
+            gate_justifications={
+                "contact": "Fatigue coupon model; contact interaction not applicable.",
+            },
+        )
+    elif d in ("multi_step", "bolt_service", "bolt_pretension"):
+        prof = PhysicsResultProfile(
+            domain="multi_step",
+            required_fields=("U", "S", "RF", "RM"),
+            required_metrics=("preload_force", "axial_reaction", "torque_reaction"),
+            required_gates=("execution", "odb", "procedure", "criteria"),
+            step_requirements={
+                "Step-Preload": ("preload_force",),
+                "Step-Service": ("axial_reaction", "torque_reaction"),
+            },
+            gate_justifications={
+                "fatigue": "Multi-step static preloading & service state; fatigue not requested.",
+                "contact": "Tied or continuous bolt model; contact diagnostics not requested.",
+            },
+        )
+    else:
+        prof = PhysicsResultProfile(
+            domain=d,
+            required_fields=("U", "S"),
+            required_metrics=("max_displacement", "max_mises"),
+            required_gates=("execution", "odb", "criteria"),
+            gate_justifications={
+                "contact": "Generic domain; contact gate not requested.",
+                "fatigue": "Generic domain; fatigue gate not requested.",
+            },
+        )
+
+    if custom_overrides:
+        fields = custom_overrides.get("required_fields", prof.required_fields)
+        metrics = custom_overrides.get("required_metrics", prof.required_metrics)
+        gates = custom_overrides.get("required_gates", prof.required_gates)
+        justs = dict(prof.gate_justifications)
+        justs.update(custom_overrides.get("gate_justifications", {}))
+        step_reqs = dict(prof.step_requirements)
+        step_reqs.update(custom_overrides.get("step_requirements", {}))
+        return PhysicsResultProfile(
+            domain=d,
+            required_fields=tuple(fields),
+            required_metrics=tuple(metrics),
+            required_gates=tuple(gates),
+            gate_justifications=justs,
+            step_requirements=step_reqs,
+        )
+    return prof
