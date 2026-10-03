@@ -5,6 +5,7 @@ from .model import (
     CadEdge,
     CadFace,
     CadFormat,
+    CadLoop,
     CadProvenance,
     CadShell,
     CadSolid,
@@ -26,12 +27,17 @@ from .health import (
     HealthSeverity,
     inspect_geometry_health,
 )
+from .topology import (
+    NormalizedTopology,
+    normalize_topology,
+)
 
 __all__ = [
     "CadBoundingBox",
     "CadEdge",
     "CadFace",
     "CadFormat",
+    "CadLoop",
     "CadProvenance",
     "CadShell",
     "CadSolid",
@@ -48,4 +54,6 @@ __all__ = [
     "HealthIssueKind",
     "HealthSeverity",
     "inspect_geometry_health",
+    "NormalizedTopology",
+    "normalize_topology",
 ]

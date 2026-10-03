@@ -2,7 +2,7 @@
 
 **Status:** 
 - **RC 1.0 Frozen Baseline**: `v1.0.0-rc1` CONDITIONAL PASS Frozen at Commit `deec6a3` (428 tests) ✅
-- **GA Working Baseline**: Commit `d5657c4`+ ACTIVE (472 tests, Track GA-3 Real-Machine Qualified & Track GA-1.1/GA-1.2 Ingestion & Health Gate Implemented) 🚀
+- **GA Working Baseline**: Commit `2db7f5d`+ ACTIVE (477 tests, Track GA-3 Real-Machine Qualified & Track GA-1.1/GA-1.2/GA-1.3A Ingestion, Health & Topology Normalization Implemented) 🚀
 **Version:** 2026-10-03 (Release Candidate 1.0 Frozen & GA Evolution Baseline)  
 **Scope:** Abaqus-AI-Agent engineering architecture, foundational contracts, evidence chain, real-machine physics benchmarks, and material intelligence grounding
 
@@ -1261,10 +1261,16 @@ Meshability Assessment (GA-1.4) ───[Direct Reuse]───► Existing Mes
   - [x] Analysis-intent compatibility: explicitly differentiate intentional shell/surface models (`SUPPORTED` under shell intent) from invalid solid volume voids (`BLOCKED` under solid intent) without assuming open shell is an unconditional defect.
   - [x] Strict Fail-Closed Rule: Map health diagnostic results directly into the 4-state capability contract (`SUPPORTED`, `ASSISTED`, `BLOCKED`, `UNSUPPORTED`).
   - [x] Strict non-destructive contract: pure detection and auditing; zero auto-healing, zero auto-stitching, zero secondary CAD kernel invention (8 tests in `tests/test_geometry_health.py`).
-- [ ] **GA-1.3: Topology Normalization & Functional Feature Recognition**
-  - [ ] Normalize raw CAD topological entities into a deterministic `TopologyGraph` with persistent, canonical geometric identifiers.
-  - [ ] Detect standard industrial functional engineering features: fastener holes, fillets, chamfers, thin-walled ribs, draft angles, symmetry planes, and planar contact surfaces.
-  - [ ] Generate structured `FeatureCandidate` representations to feed downstream boundary conditions and local mesh sizing without hardcoding.
+- [x] **GA-1.3A: Canonical Topology Normalization**
+  - [x] Canonical B-Rep hierarchy normalization: map `Solid -> Shell -> Face (outer/inner loops) -> Edge -> Vertex` into deterministic `NormalizedTopology`.
+  - [x] Full boundary loop modeling: introduce `CadLoop` differentiating outer boundary loops from inner void/hole loops with oriented edge sequences.
+  - [x] Complete bidirectional adjacency indices: resolve `edge_to_adjacent_faces`, `vertex_to_incident_edges`, `face_adjacency` via shared edges, boundary edges, and connected components.
+  - [x] Idempotent identity rule: deterministic sorting across all entity mappings guarantees identical topological graph identity across repeated ingestions. Zero duplicate CAD kernel dependency (5 tests in `tests/test_topology_normalization.py`).
+- [ ] **GA-1.3B: Functional Feature Recognition (Staged Rollout)**
+  - [ ] Stage 1 Fastener Hole detection: cylindrical/conical faces + axis + closed loops + diameter/depth metrics.
+  - [ ] Stage 2 Fillet recognition: constant-radius cylindrical faces with tangent continuity between two adjacent faces.
+  - [ ] Stage 3 Chamfer recognition: planar transitional surfaces with adjacent angle/distance metrics.
+  - [ ] Stage 4 Rib and Contact Plane classification: candidate semantic extraction with `ASSISTED` confidence flags.
 - [ ] **GA-1.4: Meshability Assessment & Direct Mesh Gate Reuse**
   - [ ] Evaluate pre-partitioning topology: classify bodies as structured-mappable, sweepable, or complex free-form.
   - [ ] Predict partition effectiveness: evaluate whether sub-volume decomposition will permit hex meshing or if tetrahedral strategy is optimal.

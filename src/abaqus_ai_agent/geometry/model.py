@@ -100,11 +100,27 @@ class CadEdge:
 
 
 @dataclass(frozen=True)
+class CadLoop:
+    """Closed loop of oriented edges defining a face outer or inner boundary."""
+    id: str
+    is_outer: bool = True
+    edge_ids: Tuple[str, ...] = ()
+    edge_orientations: Tuple[bool, ...] = ()
+
+    def __post_init__(self):
+        if not self.id:
+            raise ValueError("CadLoop id cannot be empty")
+
+
+@dataclass(frozen=True)
 class CadFace:
     """Topological boundary face bounding shells and solids."""
     id: str
     surface_type: str = "UNKNOWN"
     edge_ids: Tuple[str, ...] = ()
+    outer_loop: Optional[CadLoop] = None
+    inner_loops: Tuple[CadLoop, ...] = ()
+    orientation: bool = True
     area: Optional[float] = None
     normal: Optional[Tuple[float, float, float]] = None
     is_planar: bool = False
@@ -116,6 +132,12 @@ class CadFace:
             raise ValueError("CadFace area cannot be negative")
         if self.normal is not None and len(self.normal) != 3:
             raise ValueError("CadFace normal must be a 3-element vector")
+        # Backwards compatibility: collect edge_ids from loops if not explicitly passed
+        if not self.edge_ids and (self.outer_loop or self.inner_loops):
+            collected = list(self.outer_loop.edge_ids) if self.outer_loop else []
+            for iloop in self.inner_loops:
+                collected.extend(iloop.edge_ids)
+            object.__setattr__(self, "edge_ids", tuple(collected))
 
 
 @dataclass(frozen=True)

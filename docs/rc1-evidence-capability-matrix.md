@@ -16,7 +16,7 @@ To eliminate ambiguity across commercial workflows and academic verification, th
 | **Level 1** | `REAL_ABAQUS` | Executed against authentic, licensed Abaqus 2025. Generates disk `.odb`, `.sta`, `.msg`, `.dat` artifacts verified via cryptographic SHA-256 manifests. |
 | **Level 2** | `ANALYTICAL` | Exact closed-form continuum mechanics equations evaluated at machine precision. Zero numerical perturbation factors (`ref * 0.999x` strictly forbidden). |
 | **Level 3** | `THEORETICAL_CONTRACT` | Formal parameter, dimensional, and boundary-condition contracts for high-order FE configurations; delegates FE execution to live solver. |
-| **Level 4** | `OFFLINE_REGRESSION` | Automated unit/integration test suite (428 pytest cases at RC 1.0 Freeze `deec6a3`; expanded to 472 pytest cases in GA Working Baseline) executed without solver license dependencies in CI across Linux/Windows. |
+| **Level 4** | `OFFLINE_REGRESSION` | Automated unit/integration test suite (428 pytest cases at RC 1.0 Freeze `deec6a3`; expanded to 477 pytest cases in GA Working Baseline) executed without solver license dependencies in CI across Linux/Windows. |
 | **Level 5** | `FAULT_INJECTION` | Controlled numerical singularities, invalid inputs, or geometric distortions designed to verify non-bypassable fail-closed gates. |
 
 ---
