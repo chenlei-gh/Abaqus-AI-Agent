@@ -1,6 +1,6 @@
 {
   "schema_version": "release_audit_v1",
-  "verified_at": "2026-10-03T06:56:41.265748+00:00",
+  "verified_at": "2026-10-03T07:05:42.874304+00:00",
   "total_checks": 4,
   "passed_checks": 4,
   "all_passed": true,
@@ -24,7 +24,7 @@
       "name": "Repository-Wide Path & Credential Sanitization",
       "passed": true,
       "details": {
-        "scanned_files_count": 299,
+        "scanned_files_count": 302,
         "leaks_detected": []
       }
     },
