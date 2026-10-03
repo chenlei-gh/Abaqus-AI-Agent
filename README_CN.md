@@ -7,7 +7,7 @@
 [![CI](https://github.com/chenlei-gh/Abaqus-AI-Agent/actions/workflows/ci.yml/badge.svg)](https://github.com/chenlei-gh/Abaqus-AI-Agent/actions/workflows/ci.yml)
 [![Python](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12-blue.svg)](https://www.python.org/)
 [![Abaqus](https://img.shields.io/badge/Abaqus-2025%20Validated-brightgreen.svg)](https://www.3ds.com/products-services/simulia/products/abaqus/)
-[![Tests](https://img.shields.io/badge/tests-428%20passed-success.svg)](tests/)
+[![Tests](https://img.shields.io/badge/tests-443%20passed-success.svg)](tests/)
 [![Golden Matrix](https://img.shields.io/badge/golden%20matrix-13%2F13%20passed-success.svg)](machine_validation/)
 [![Official Benchmarks](https://img.shields.io/badge/tier%20a%20benchmarks-22%2F22%20passed-success.svg)](tools/j_comprehensive_physics_matrix.py)
 [![Tier B Benchmarks](https://img.shields.io/badge/tier%20b%20benchmarks-7%2F7%20passed-success.svg)](tools/j3_tier_b_extended_physics.py)
@@ -15,11 +15,12 @@
 [![Task Matrix](https://img.shields.io/badge/task%20matrix-T1--T6%20passed-brightgreen.svg)](tools/m_engineering_task_matrix.py)
 [![Material Intelligence](https://img.shields.io/badge/material%20intelligence-CAMPUS%20%7C%20ISO%2010350-blue.svg)](src/abaqus_ai_agent/contracts/material_record.py)
 [![Agent Workflows](https://img.shields.io/badge/agent%20workflows-L1--L4%20validated-brightgreen.svg)](#)
+[![Runtime Infra](https://img.shields.io/badge/GA--3%20%E8%BF%90%E8%A1%8C%E5%9F%BA%E7%A1%80%E8%AE%BE%E6%96%BD-%E5%B7%B2%E5%B0%B1%E7%BB%AA-brightgreen.svg)](src/abaqus_ai_agent/execution/queue.py)
 [![Release Gate](https://img.shields.io/badge/release%20gate-RC--1%20Conditional%20Pass-orange.svg)](docs/rc1-release-audit.md)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 
-> **项目状态：Release Candidate 候选版本基线已确立（`v1.0.0-rc1`）—— 审计裁定：有条件通过 (CONDITIONAL PASS)。**
-> 核心工程契约、确定性软件层测试门禁（**428 项测试全通过，0 warnings**）、全链路 **Abaqus 2025 真实机求解执行门禁（13/13 Golden Ladder 阶梯）**、**Phase J-Reference 理论与参数契约门禁（22/22 Tier A 全通）**、**Phase J.3 Tier B 闭式理论物理基准门禁（7/7 全通）**、**Phase J-Live Abaqus 2025 求解器能力真机门禁（22/22 验证通过）**、**Phase K 工程材料智能层 (Condition 2.0)**、**Phase L 全链路工程工作流验证门禁 (L1–L4)**、**Phase M 复杂工程任务验收矩阵 (T1–T6)** 以及 **全仓库发布安全审计（4/4 全绿）** 已完成并归档。
+> **项目状态：Release Candidate 候选版本基线已确立（`v1.0.0-rc1`）—— 审计裁定：有条件通过 (CONDITIONAL PASS)；Track GA-3 企业运行基础设施已就绪。**
+> 核心工程契约、确定性软件层测试门禁（**443 项测试全通过，0 warnings**）、全链路 **Abaqus 2025 真实机求解执行门禁（13/13 Golden Ladder 阶梯）**、**Phase J-Reference 理论与参数契约门禁（22/22 Tier A 全通）**、**Phase J.3 Tier B 闭式理论物理基准门禁（7/7 全通）**、**Phase J-Live Abaqus 2025 求解器能力真机门禁（22/22 验证通过）**、**Phase K 工程材料智能层 (Condition 2.0)**、**Phase L 全链路工程工作流验证门禁 (L1–L4)**、**Phase M 复杂工程任务验收矩阵 (T1–T6)**、**Track GA-3 企业级生产运行基础设施（多作业调度队列、抽象许可提供商、UUID 沙箱与运行级自愈）** 以及 **全仓库发布安全审计（4/4 全绿）** 已完成并归档。
 >
 > 📄 **正式独立审计报告**：详见 [Release Candidate 1.0 独立工程审计报告](docs/rc1-release-audit.md)，查看全量能力评级（DONE / PARTIAL / GAP / RISK）、五级工程证据金字塔、零证据混淆原则（严格区分真机求解、解析基准与契约检查）以及转入正式通用版本 (GA) 的必备条件。
 
@@ -116,7 +117,7 @@
                │ Level 3: 复杂非线性参数契约   │  (Tier A 9 项高阶有限元算例规范)
                │ (量纲相容性与边界无量纲检验)  │  离线保障建模参数在复杂物理空间的合法性。
                ├───────────────────────────────┤
-               │ Level 4: 单元与契约回归套件   │  (CI 流水线 428 项自动化测试)
+               │ Level 4: 单元与契约回归套件   │  (CI 流水线 443 项自动化测试)
                │ (跨平台、跨 Python 版本确定性)│  零求解器商业许可依赖的纯软件回归底座。
                ├───────────────────────────────┤
                │ Level 5: 故障注入与自愈修复   │  (NEG-01, L3, T6 求解发散受控修复)
@@ -127,7 +128,7 @@
 - **Level 1（真实求解器执行层）**：直接拉起 Abaqus/CAE 2025 真实进程，从二进制 `.odb` 提取场/历程输出，计算所有中间文件的 SHA-256 完整哈希（记录于 `machine_validation/j_live_abaqus_evidence.json`）。
 - **Level 2（经典理论解析解）**：基于经典弹性力学、圣维南扭转、欧拉失稳、麦克斯韦/开尔文-沃伊特黏弹性等精确公式，零人工扰动因子。
 - **Level 3（有限元规范契约）**：保证几何大变形 NLGEOM、Riks 弧长法后屈曲、累积损伤退化等高阶算例在无求解器环境下的设置自洽性。
-- **Level 4（软件确定性回归）**：覆盖 428 项快速回归测试，支持 Ubuntu/Windows/macOS 与 Python 3.10-3.12，CI 流水线全程绿灯。
+- **Level 4（软件确定性回归）**：覆盖 443 项快速回归测试，支持 Ubuntu/Windows/macOS 与 Python 3.10-3.12，CI 流水线全程绿灯。
 - **Level 5（发散诊断与自愈闭环）**：真实解析 `.msg` / `.sta`，定位未收敛原因并自动完成受控参数修复与再计算。
 
 ---
@@ -477,7 +478,7 @@ python -m pip install -e ".[test]"
 
 ```bash
 python -m pytest -q
-# 预期结果：428 passed, 0 warnings
+# 预期结果：443 passed, 0 warnings
 ```
 
 ---
@@ -573,12 +574,13 @@ intent = EngineeringIntent(
 - **运行环境**：跨平台（Ubuntu / Windows / macOS），Python 3.10 - 3.12。
 - **环境依赖**：无需任何 Abaqus 商业许可或安装。
 - **验证范围**：
-  - `428 项` 单元测试、契约校验与前检规则全部通过（0 warnings）；
+  - `443 项` 单元测试、契约校验与前检规则全部通过（0 warnings）；
   - `13/13` 项 Golden Matrix 证据包结构与 Schema 清单校验；
   - `22/22` 达索官方 Tier A 物理基准验证矩阵（`python tools/j_comprehensive_physics_matrix.py`）；
   - `7/7` 官方 Tier B 扩展高阶工程物理基准（`python tools/j3_tier_b_extended_physics.py`）；
   - `22/22` Abaqus 2025 真实求解器全量真机门禁（`python tools/j_live_abaqus_matrix.py --all`）；
   - `T1–T6` 生产级复杂工程任务验收矩阵（`python tools/m_engineering_task_matrix.py`）；
+  - `GA-3` 生产级运行基础设施（`LicenseProvider` 抽象、`RunSandbox` 沙箱隔离、`AnalysisRunQueue` 调度队列与 `RunRecovery` 自愈恢复）；
   - `Phase I.6` 全仓库代码与文件安全扫描 (`python tools/i6_release_audit.py`)；
   - JEV 模糊输入自动阻断与澄清保护。
 
@@ -625,7 +627,7 @@ Abaqus-AI-Agent/
 │       ├── reporting/        # Markdown 与独立 HTML 工程分析报告渲染器
 │       ├── validation/       # 单位制、前检与物理自洽性校验器
 │       └── workflow/         # 疲劳寿命、接触收敛、网格 GCI 高阶工作流
-├── tests/                    # 428 项确定性纯软件测试套件
+├── tests/                    # 443 项确定性纯软件测试套件
 ├── tools/                    # 统一 Golden 矩阵管理、CLI 驱动与验证探针
 ```
 

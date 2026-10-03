@@ -32,3 +32,4 @@ from .material_resolver import (
     MaterialResolutionResult,
 )
 from .step import AnalysisStep
+from .capability import CapabilityStatus, CapabilityResult

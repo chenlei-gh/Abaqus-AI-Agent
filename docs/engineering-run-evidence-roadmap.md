@@ -1157,11 +1157,11 @@ Queue Lic. Recovery         CAD Meshability Mesh        GA-2A (P1)    GA-2B (P2)
 #### Track GA-3: Production Runtime Infrastructure & Enterprise Resilience [P0 HIGHEST PRIORITY]
 *Enterprise Deployment Core: Ensuring multi-job orchestration, abstract license provider management, and non-blocking execution in real-world corporate environments.*
 
-- [ ] **GA-3.1: AnalysisRun Task Queue & Multi-Job Execution Engine**
-  - [ ] Implement persistent job task queue with asynchronous workers and explicit lifecycle state machine (`PENDING`, `ACQUIRING_LICENSE`, `RUNNING`, `RETRYING`, `COMPLETED`, `FAILED`, `CANCELLED`).
-  - [ ] Enforce job priority queues, concurrency limits, and host CPU/memory throttling.
-- [ ] **GA-3.2: Abstract License Provider Architecture (Vendor-Agnostic)**
-  - [ ] Define canonical, abstract `LicenseProvider` interface:
+- [x] **GA-3.1: AnalysisRun Task Queue & Multi-Job Execution Engine**
+  - [x] Implement persistent job task queue with asynchronous workers and explicit lifecycle state machine (`PENDING`, `ACQUIRING_LICENSE`, `RUNNING`, `RETRYING`, `COMPLETED`, `FAILED`, `CANCELLED`).
+  - [x] Enforce job priority queues, concurrency limits, and host CPU/memory throttling.
+- [x] **GA-3.2: Abstract License Provider Architecture (Vendor-Agnostic)**
+  - [x] Define canonical, abstract `LicenseProvider` interface:
     ```python
     class LicenseProvider(ABC):
         def available_tokens(self, feature: str) -> int: ...
@@ -1169,18 +1169,18 @@ Queue Lic. Recovery         CAD Meshability Mesh        GA-2A (P1)    GA-2B (P2)
         def release(self, handle: LicenseHandle) -> None: ...
         def health(self) -> LicenseHealthStatus: ...
     ```
-  - [ ] Deliver pluggable driver adapters: `FlexNetAdapter` and `DSLSAdapter` as concrete driver implementations, avoiding hardcoded reliance on specific CLI commands (`lmutil`, `dslsstat`).
-  - [ ] Support dynamic token tracking across essential SIMULIA features (`abaqus`, `standard`, `explicit`, `cae`, `parallel`).
-- [ ] **GA-3.3: License Exhaustion Queue & Exponential Backoff Retry**
-  - [ ] Detect license checkout errors in solver preflight and live runtime logs (e.g. `License Manager error -1004` / `No license available`).
-  - [ ] Implement non-destructive task suspension with configurable exponential backoff and randomized jitter (`retry_after`, `max_wait_timeout`).
-  - [ ] Provide non-blocking queueing so multiple engineering agents wait cooperatively without aborting or losing state.
-- [ ] **GA-3.4: Multi-Job Workdir Sandbox & Artifact Isolation**
-  - [ ] Enforce strict per-run scratch directory sandboxing with UUID isolation to eliminate lock file collisions (`.lck`) and race conditions.
-  - [ ] Implement structured artifact promotion: only finalized `.odb`, `.sta`, `.msg`, and evidence bundles are promoted to long-term storage; ephemeral files are purged.
-- [ ] **GA-3.5: Run-Level Recovery & Resumption Checkpointing**
-  - [ ] Implement crash-resilient checkpoints across lifecycle states: `PLANNED`, `SUBMITTED`, `RUNNING`, `SOLVED`, `EXTRACTED`, `ACCEPTED`.
-  - [ ] Enable post-mortem run recovery: on process crash or restart, inspect workspace artifacts (`.lck`, `.odb`, `.sta`, `.msg`) to evaluate state:
+  - [x] Deliver pluggable driver adapters: `FlexNetAdapter` and `DSLSAdapter` as concrete driver implementations, avoiding hardcoded reliance on specific CLI commands (`lmutil`, `dslsstat`).
+  - [x] Support dynamic token tracking across essential SIMULIA features (`abaqus`, `standard`, `explicit`, `cae`, `parallel`).
+- [x] **GA-3.3: License Exhaustion Queue & Exponential Backoff Retry**
+  - [x] Detect license checkout errors in solver preflight and live runtime logs (e.g. `License Manager error -1004` / `No license available`).
+  - [x] Implement non-destructive task suspension with configurable exponential backoff and randomized jitter (`retry_after`, `max_wait_timeout`).
+  - [x] Provide non-blocking queueing so multiple engineering agents wait cooperatively without aborting or losing state.
+- [x] **GA-3.4: Multi-Job Workdir Sandbox & Artifact Isolation**
+  - [x] Enforce strict per-run scratch directory sandboxing with UUID isolation to eliminate lock file collisions (`.lck`) and race conditions.
+  - [x] Implement structured artifact promotion: only finalized `.odb`, `.sta`, `.msg`, and evidence bundles are promoted to long-term storage; ephemeral files are purged.
+- [x] **GA-3.5: Run-Level Recovery & Resumption Checkpointing**
+  - [x] Implement crash-resilient checkpoints across lifecycle states: `PLANNED`, `SUBMITTED`, `RUNNING`, `SOLVED`, `EXTRACTED`, `ACCEPTED`.
+  - [x] Enable post-mortem run recovery: on process crash or restart, inspect workspace artifacts (`.lck`, `.odb`, `.sta`, `.msg`) to evaluate state:
     - `RECOVERABLE_RECONNECT`: Background Abaqus solver is still running or finished cleanly; reconnect and extract metrics without re-solving.
     - `NON_RECOVERABLE_RESUBMIT`: Abrupt solver termination or corrupted database; clean up workspace and requeue task cleanly.
     - `CLEANUP_FAILED`: Fatal unresolvable state; record diagnostic evidence and mark run failed closed.

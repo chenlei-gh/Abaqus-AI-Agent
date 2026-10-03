@@ -7,7 +7,7 @@
 [![CI](https://github.com/chenlei-gh/Abaqus-AI-Agent/actions/workflows/ci.yml/badge.svg)](https://github.com/chenlei-gh/Abaqus-AI-Agent/actions/workflows/ci.yml)
 [![Python](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12-blue.svg)](https://www.python.org/)
 [![Abaqus](https://img.shields.io/badge/Abaqus-2025%20Validated-brightgreen.svg)](https://www.3ds.com/products-services/simulia/products/abaqus/)
-[![Tests](https://img.shields.io/badge/tests-428%20passed-success.svg)](tests/)
+[![Tests](https://img.shields.io/badge/tests-443%20passed-success.svg)](tests/)
 [![Golden Matrix](https://img.shields.io/badge/golden%20matrix-13%2F13%20passed-success.svg)](machine_validation/)
 [![Official Benchmarks](https://img.shields.io/badge/tier%20a%20benchmarks-22%2F22%20passed-success.svg)](tools/j_comprehensive_physics_matrix.py)
 [![Tier B Benchmarks](https://img.shields.io/badge/tier%20b%20benchmarks-7%2F7%20passed-success.svg)](tools/j3_tier_b_extended_physics.py)
@@ -15,11 +15,12 @@
 [![Task Matrix](https://img.shields.io/badge/task%20matrix-T1--T6%20passed-brightgreen.svg)](tools/m_engineering_task_matrix.py)
 [![Material Intelligence](https://img.shields.io/badge/material%20intelligence-CAMPUS%20%7C%20ISO%2010350-blue.svg)](src/abaqus_ai_agent/contracts/material_record.py)
 [![Agent Workflows](https://img.shields.io/badge/agent%20workflows-L1--L4%20validated-brightgreen.svg)](#)
+[![Runtime Infra](https://img.shields.io/badge/GA--3%20Runtime%20Infra-Operational-brightgreen.svg)](src/abaqus_ai_agent/execution/queue.py)
 [![Release Gate](https://img.shields.io/badge/release%20gate-RC--1%20Conditional%20Pass-orange.svg)](docs/rc1-release-audit.md)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 
-> **Project status: Release Candidate Baseline Established (`v1.0.0-rc1`) — Audit Verdict: CONDITIONAL PASS.**
-> The foundational engineering contracts, deterministic software gates (**428 passed tests, 0 warnings**), full-chain **Abaqus 2025 real-machine execution gates (13/13 Golden Ladder)**, **Phase J-Reference Theory Gate (22/22 Tier A passed)**, **Phase J.3 Tier B Analytical Physics Gate (7/7 passed)**, **Phase J-Live Solver Capability Gate (22/22 live Abaqus 2025 validated)**, **Phase K Engineering Material Intelligence Layer (Condition 2.0)**, **Phase L Autonomous Agent Engineering Workflow Gates (L1–L4)**, **Phase M Production Engineering Task Matrix (T1–T6)**, and **Public Release Security Audit (4/4 passed)** are complete.
+> **Project status: Release Candidate Baseline Established (`v1.0.0-rc1`) — Audit Verdict: CONDITIONAL PASS; Track GA-3 Enterprise Runtime Deployed.**
+> The foundational engineering contracts, deterministic software gates (**443 passed tests, 0 warnings**), full-chain **Abaqus 2025 real-machine execution gates (13/13 Golden Ladder)**, **Phase J-Reference Theory Gate (22/22 Tier A passed)**, **Phase J.3 Tier B Analytical Physics Gate (7/7 passed)**, **Phase J-Live Solver Capability Gate (22/22 live Abaqus 2025 validated)**, **Phase K Engineering Material Intelligence Layer (Condition 2.0)**, **Phase L Autonomous Agent Engineering Workflow Gates (L1–L4)**, **Phase M Production Engineering Task Matrix (T1–T6)**, **Track GA-3 Production Runtime Infrastructure (Multi-Job Queue, Abstract License Provider, Scratch Sandbox & Run-Level Recovery)**, and **Public Release Security Audit (4/4 passed)** are complete.
 >
 > 📄 **Official Audit Report**: See [Release Candidate 1.0 Independent Engineering Audit](docs/rc1-release-audit.md) for full status ratings (DONE / PARTIAL / GAP / RISK), the audited 5-level evidence pyramid, zero-conflation boundaries (distinguishing live solver runs, analytical baselines, and parameter contracts), and the formal conditions required for General Availability (GA).
 
@@ -116,7 +117,7 @@ To eliminate ambiguity across commercial workflows and academic verification, th
                │ Level 3: Parameter Contracts  │  (Tier A 9 complex FE benchmark specs)
                │ (Dimensional & Setup Checks)  │  Validates setup integrity in offline mode.
                ├───────────────────────────────┤
-               │ Level 4: Unit Regression Mock │  (428 pytest cases on CI runner)
+               │ Level 4: Unit Regression Mock │  (443 pytest cases on CI runner)
                │ (Cross-Platform Determinism)  │  Zero-license regression protection across OS/Python.
                ├───────────────────────────────┤
                │ Level 5: Fault & Remediation  │  (NEG-01, L3, T6 Divergence Healing)
@@ -127,7 +128,7 @@ To eliminate ambiguity across commercial workflows and academic verification, th
 - **Level 1 (Live Real-Machine)**: Executes real Abaqus/CAE 2025 processes, extracting fieldOutputs/historyOutputs from `.odb` with complete cryptographic SHA-256 hashing (`machine_validation/j_live_abaqus_evidence.json`).
 - **Level 2 (Closed-Form Analytical)**: Grounded in classic continuum mechanics (Euler buckling, Saint-Venant torsion, Maxwell/Kelvin-Voigt viscoelasticity) with zero fudge factors.
 - **Level 3 (Specification Contracts)**: Guarantees complex nonlinear setups (NLGEOM, Riks post-buckling, damage degradation) possess valid parameter spaces prior to execution.
-- **Level 4 (Deterministic Unit Suite)**: 428 automated tests running across Linux/Windows under Python 3.10, 3.11, and 3.12 without requiring commercial licenses.
+- **Level 4 (Deterministic Unit Suite)**: 443 automated tests running across Linux/Windows under Python 3.10, 3.11, and 3.12 without requiring commercial licenses.
 - **Level 5 (Solver Doctor Remediation)**: Deterministic cutback mitigation, stabilizing contact chatter and matrix singularities into converged runs.
 
 ---
@@ -477,7 +478,7 @@ Verify the installation by running the deterministic test suite:
 
 ```bash
 python -m pytest -q
-# Expect: 428 passed, 0 warnings
+# Expect: 443 passed, 0 warnings
 ```
 
 ---
@@ -573,12 +574,13 @@ The project is governed by two complementary, non-overlapping verification gates
 - **Environment**: Cross-platform (Ubuntu / Windows / macOS), Python 3.10 - 3.12.
 - **Dependencies**: Zero Abaqus license required.
 - **Coverage**:
-  - `428 passed` unit, contract, and preflight tests (0 warnings).
+  - `443 passed` unit, contract, and preflight tests (0 warnings).
   - `13/13` Golden Matrix schema and manifest checks.
   - `22/22` Official Tier A Abaqus Benchmarks Matrix (`python tools/j_comprehensive_physics_matrix.py`).
   - `7/7` Official Tier B Extended Engineering Physics Benchmarks (`python tools/j3_tier_b_extended_physics.py`).
   - `22/22` Live Abaqus 2025 Benchmarks Matrix (`python tools/j_live_abaqus_matrix.py --all`).
   - `T1–T6` Production Engineering Task Matrix (`python tools/m_engineering_task_matrix.py`).
+  - `GA-3` Production Runtime Infrastructure (`LicenseProvider`, `RunSandbox`, `AnalysisRunQueue`, `RunRecovery`).
   - `Phase I.6` Whole-repository security & path sanitization audit (`python tools/i6_release_audit.py`).
   - Strict JEV ambiguity fail-closed gate.
 
@@ -625,7 +627,7 @@ Abaqus-AI-Agent/
 │       ├── reporting/        # Markdown & HTML engineering report renderers
 │       ├── validation/       # UnitSystem, preflight & physical consistency checks
 │       └── workflow/         # High-level fatigue, contact, and convergence workflows
-├── tests/                    # 428 deterministic test suites
+├── tests/                    # 443 deterministic test suites
 ├── tools/                    # Golden Matrix, CLI runner, and verification probes
 ```
 
