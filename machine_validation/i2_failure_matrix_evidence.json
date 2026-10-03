@@ -1,0 +1,326 @@
+{
+  "schema_version": "failure_path_matrix_v1",
+  "verified_at": "2026-10-03T04:23:52.525696+00:00",
+  "total_states": 8,
+  "verified_states": 8,
+  "all_contracts_verified": true,
+  "results": [
+    {
+      "state_id": "FP-01",
+      "target_state": "PASS",
+      "description": "Nominal clean run with all engineering criteria and verification gates passing.",
+      "derived_status": "PASS",
+      "passed": true,
+      "expected_status": "PASS",
+      "expected_passed": true,
+      "contract_verified": true,
+      "gates": {
+        "execution": "PASS",
+        "evidence_sufficiency": "PASS",
+        "numerical_verification": "SKIPPED",
+        "engineering_checks": "SKIPPED",
+        "mesh_quality": "SKIPPED",
+        "convergence": "SKIPPED",
+        "fatigue": "SKIPPED",
+        "contact": "SKIPPED",
+        "criteria": "PASS"
+      },
+      "failures": [],
+      "remediation_suggestion": "None. Analysis meets all engineering acceptance criteria."
+    },
+    {
+      "state_id": "FP-02",
+      "target_state": "FAIL",
+      "description": "Solver completed successfully, but root stress exceeds yield limit.",
+      "derived_status": "FAIL",
+      "passed": false,
+      "expected_status": "FAIL",
+      "expected_passed": false,
+      "contract_verified": true,
+      "gates": {
+        "execution": "PASS",
+        "evidence_sufficiency": "PASS",
+        "numerical_verification": "SKIPPED",
+        "engineering_checks": "SKIPPED",
+        "mesh_quality": "SKIPPED",
+        "convergence": "SKIPPED",
+        "fatigue": "SKIPPED",
+        "contact": "SKIPPED",
+        "criteria": "FAIL"
+      },
+      "failures": [
+        "criterion:disp_upper",
+        "criterion:stress_upper"
+      ],
+      "remediation_suggestion": "Increase section thickness or switch to higher yield strength alloy."
+    },
+    {
+      "state_id": "FP-03",
+      "target_state": "BLOCKED",
+      "description": "Required engineering evidence is missing or essential metric is omitted.",
+      "derived_status": "BLOCKED",
+      "passed": false,
+      "expected_status": "BLOCKED",
+      "expected_passed": false,
+      "contract_verified": true,
+      "gates": {
+        "execution": "PASS",
+        "evidence_sufficiency": "BLOCKED",
+        "numerical_verification": "SKIPPED",
+        "engineering_checks": "SKIPPED",
+        "mesh_quality": "SKIPPED",
+        "convergence": "SKIPPED",
+        "fatigue": "SKIPPED",
+        "contact": "SKIPPED",
+        "criteria": "BLOCKED"
+      },
+      "failures": [
+        "missing_required_evidence"
+      ],
+      "remediation_suggestion": "Ensure post-processing output requests extract the required metric keys."
+    },
+    {
+      "state_id": "FP-04",
+      "target_state": "SUSPICIOUS",
+      "description": "Energy balance warning or high kinetic-to-internal energy ratio in quasi-static step.",
+      "derived_status": "SUSPICIOUS",
+      "passed": true,
+      "expected_status": "SUSPICIOUS",
+      "expected_passed": true,
+      "contract_verified": true,
+      "gates": {
+        "execution": "PASS",
+        "evidence_sufficiency": "PASS",
+        "numerical_verification": "SKIPPED",
+        "engineering_checks": "SKIPPED",
+        "mesh_quality": "SKIPPED",
+        "convergence": "SKIPPED",
+        "fatigue": "SKIPPED",
+        "contact": "SKIPPED",
+        "criteria": "PASS"
+      },
+      "failures": [],
+      "remediation_suggestion": "Increase step time or apply smooth step amplitude to dampen kinetic inertia."
+    },
+    {
+      "state_id": "FP-05",
+      "target_state": "INCOMPLETE",
+      "description": "Solver aborted mid-increment due to cutback limit or non-convergence.",
+      "derived_status": "INCOMPLETE",
+      "passed": false,
+      "expected_status": "INCOMPLETE",
+      "expected_passed": false,
+      "contract_verified": true,
+      "gates": {
+        "execution": "FAIL",
+        "evidence_sufficiency": "NOT_SPECIFIED",
+        "numerical_verification": "SKIPPED",
+        "engineering_checks": "SKIPPED",
+        "mesh_quality": "SKIPPED",
+        "convergence": "SKIPPED",
+        "fatigue": "SKIPPED",
+        "contact": "SKIPPED",
+        "criteria": "SKIPPED"
+      },
+      "failures": [
+        "solver_status:aborted"
+      ],
+      "remediation_suggestion": "Check .msg file for severe cutbacks, contact penetration, or plastic instability."
+    },
+    {
+      "state_id": "FP-06",
+      "target_state": "TIMEOUT",
+      "description": "Job execution exceeded the configured walltime timeout threshold.",
+      "derived_status": "TIMEOUT",
+      "passed": false,
+      "expected_status": "TIMEOUT",
+      "expected_passed": false,
+      "contract_verified": true,
+      "gates": {
+        "execution": "FAIL",
+        "evidence_sufficiency": "BLOCKED",
+        "numerical_verification": "SKIPPED",
+        "engineering_checks": "SKIPPED",
+        "mesh_quality": "SKIPPED",
+        "convergence": "SKIPPED",
+        "fatigue": "SKIPPED",
+        "contact": "SKIPPED",
+        "criteria": "SKIPPED"
+      },
+      "failures": [
+        "solver_status:timeout",
+        "missing_required_evidence"
+      ],
+      "remediation_suggestion": "Optimize mesh density, enable parallel threads, or increase timeout limit."
+    },
+    {
+      "state_id": "FP-07",
+      "target_state": "ODB_MISSING",
+      "description": "Process completed with code 0 but expected .odb file is missing from workdir.",
+      "derived_status": "ODB_MISSING",
+      "passed": false,
+      "expected_status": "ODB_MISSING",
+      "expected_passed": false,
+      "contract_verified": true,
+      "gates": {
+        "execution": "PASS",
+        "evidence_sufficiency": "BLOCKED",
+        "numerical_verification": "SKIPPED",
+        "engineering_checks": "SKIPPED",
+        "mesh_quality": "SKIPPED",
+        "convergence": "SKIPPED",
+        "fatigue": "SKIPPED",
+        "contact": "SKIPPED",
+        "criteria": "SKIPPED"
+      },
+      "failures": [
+        "missing_required_evidence"
+      ],
+      "remediation_suggestion": "Inspect Abaqus launcher command line and working directory write permissions."
+    },
+    {
+      "state_id": "FP-08",
+      "target_state": "RESULT_INVALID",
+      "description": "ODB opened but primary field output (e.g. S or U) is absent or corrupt.",
+      "derived_status": "RESULT_INVALID",
+      "passed": false,
+      "expected_status": "RESULT_INVALID",
+      "expected_passed": false,
+      "contract_verified": true,
+      "gates": {
+        "execution": "PASS",
+        "evidence_sufficiency": "PASS",
+        "numerical_verification": "SKIPPED",
+        "engineering_checks": "SKIPPED",
+        "mesh_quality": "SKIPPED",
+        "convergence": "SKIPPED",
+        "fatigue": "SKIPPED",
+        "contact": "SKIPPED",
+        "criteria": "FAIL"
+      },
+      "failures": [
+        "criterion:disp_upper"
+      ],
+      "remediation_suggestion": "Check Step Field Output Requests (*OUTPUT, FIELD) in input deck."
+    }
+  ],
+  "runtime_process_probes": [
+    {
+      "probe_id": "RTP-01",
+      "scenario": "Live OS subprocess non-zero exit code (SIGSEGV/Out of Memory exit 137)",
+      "injected_condition": {
+        "returncode": 137,
+        "workdir_files": [
+          "job.log",
+          "job.sta"
+        ],
+        "metric_values": {}
+      },
+      "detected_status": "INCOMPLETE",
+      "fail_closed": true,
+      "evidence_preserved": true,
+      "diagnostic_info": {
+        "returncode": 137,
+        "captured_output_length": 54,
+        "workdir_file_count": 2,
+        "reason": "Solver exited abnormally with exit code 137",
+        "error_snippet": "***ERROR: Out of memory / memory fault in solver core\n",
+        "actual_workdir_files": [
+          "job.log",
+          "job.sta"
+        ]
+      },
+      "is_live_subprocess": true,
+      "real_pid": 137,
+      "real_exit_code": 137
+    },
+    {
+      "probe_id": "RTP-02",
+      "scenario": "Live OS subprocess timeout with TimeoutExpired signal termination",
+      "injected_condition": {
+        "returncode": -9,
+        "workdir_files": [
+          "job.log",
+          "job.sta"
+        ],
+        "metric_values": {}
+      },
+      "detected_status": "TIMEOUT",
+      "fail_closed": true,
+      "evidence_preserved": true,
+      "diagnostic_info": {
+        "returncode": -9,
+        "captured_output_length": 57,
+        "workdir_file_count": 2,
+        "reason": "Solver process terminated due to walltime limit exceedance",
+        "actual_workdir_files": [
+          "job.log",
+          "job.sta"
+        ]
+      },
+      "is_live_subprocess": true,
+      "real_pid": 15396,
+      "real_exit_code": -9
+    },
+    {
+      "probe_id": "RTP-03",
+      "scenario": "Live OS subprocess completed code 0 but target ODB file was not created",
+      "injected_condition": {
+        "returncode": 0,
+        "workdir_files": [
+          "job.dat",
+          "job.log"
+        ],
+        "metric_values": {}
+      },
+      "detected_status": "ODB_MISSING",
+      "fail_closed": true,
+      "evidence_preserved": true,
+      "diagnostic_info": {
+        "returncode": 0,
+        "captured_output_length": 0,
+        "workdir_file_count": 2,
+        "reason": "Process returned code 0 but target ODB file was not created",
+        "actual_workdir_files": [
+          "job.dat",
+          "job.log"
+        ]
+      },
+      "is_live_subprocess": true,
+      "real_pid": 0,
+      "real_exit_code": 0
+    },
+    {
+      "probe_id": "RTP-04",
+      "scenario": "Live OS subprocess completed but ODB metrics contain NaN / unphysical divergence",
+      "injected_condition": {
+        "returncode": 0,
+        "workdir_files": [
+          "job.log",
+          "job.odb"
+        ],
+        "metric_values": {
+          "tip_displacement": NaN,
+          "root_stress": 1e+30
+        }
+      },
+      "detected_status": "RESULT_INVALID",
+      "fail_closed": true,
+      "evidence_preserved": true,
+      "diagnostic_info": {
+        "returncode": 0,
+        "captured_output_length": 0,
+        "workdir_file_count": 2,
+        "reason": "ODB extracted metric values contained NaN or singular divergence",
+        "actual_workdir_files": [
+          "job.log",
+          "job.odb"
+        ]
+      },
+      "is_live_subprocess": true,
+      "real_pid": 0,
+      "real_exit_code": 0
+    }
+  ],
+  "all_runtime_probes_fail_closed": true
+}

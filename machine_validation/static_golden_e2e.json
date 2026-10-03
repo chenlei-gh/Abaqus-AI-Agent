@@ -1,0 +1,635 @@
+{
+  "case": "3d_cantilever_static",
+  "command": [
+    "C:\\SIMULIA\\Commands\\abaqus.bat",
+    "cae",
+    "noGUI=D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\machine_validation\\static_golden_e2e_script.py"
+  ],
+  "launcher": "abaqus",
+  "process_succeeded": true,
+  "report": {
+    "acceptance": {
+      "blocked": [],
+      "criteria": [
+        {
+          "actual": 2.06864285469055,
+          "limit": 1.6,
+          "name": "tip_displacement_lower",
+          "operator": ">=",
+          "passed": true,
+          "relative_error": 0.292901784181594,
+          "unit": "mm"
+        },
+        {
+          "actual": 2.06864285469055,
+          "limit": 2.2,
+          "name": "tip_displacement_upper",
+          "operator": "<=",
+          "passed": true,
+          "relative_error": 0.0597077933224774,
+          "unit": "mm"
+        },
+        {
+          "actual": 471.214080810547,
+          "limit": 1200.0,
+          "name": "root_mises_sanity",
+          "operator": "<=",
+          "passed": true,
+          "relative_error": 0.607321599324544,
+          "unit": "MPa"
+        }
+      ],
+      "failures": [],
+      "gates": {
+        "contact": "SKIPPED",
+        "convergence": "SKIPPED",
+        "criteria": "PASS",
+        "engineering_checks": "PASS",
+        "evidence_sufficiency": "NOT_SPECIFIED",
+        "execution": "PASS",
+        "fatigue": "SKIPPED",
+        "mesh_quality": "SKIPPED",
+        "numerical_verification": "SKIPPED"
+      },
+      "passed": true,
+      "status": "PASS",
+      "warnings": []
+    },
+    "engineering_checks": {
+      "mesh_result": {
+        "element_count": 640,
+        "evidence": [
+          "native_verify:ASPECT_RATIO",
+          "native_verify:ANGULAR_DEVIATION",
+          "native_verify:GEOM_DEVIATION_FACTOR",
+          "native_verify:ANALYSIS_CHECKS"
+        ],
+        "failed_element_count": 0,
+        "metrics": {
+          "max_angular_deviation": 0.0,
+          "max_aspect_ratio": 1.0,
+          "max_geometric_deviation_factor": 0.0
+        },
+        "node_count": 1025,
+        "part": "Beam",
+        "source": "native_abaqus_verifyMeshQuality",
+        "status": "pass",
+        "violations": [],
+        "warning_element_count": 0,
+        "warnings": []
+      },
+      "reaction_report": {
+        "checks": [
+          {
+            "actual": 1.33809407998342e-10,
+            "evidence": [],
+            "expected": -0.0,
+            "message": "relative_error=1.33809e-13",
+            "name": "global_load_balance_RF1",
+            "passed": true,
+            "tolerance": 0.01,
+            "unit": "N"
+          },
+          {
+            "actual": 1000.00003,
+            "evidence": [],
+            "expected": 1000.0,
+            "message": "relative_error=3e-08",
+            "name": "global_load_balance_RF2",
+            "passed": true,
+            "tolerance": 0.01,
+            "unit": "N"
+          },
+          {
+            "actual": -7.73070496506989e-11,
+            "evidence": [],
+            "expected": -0.0,
+            "message": "relative_error=7.7307e-14",
+            "name": "global_load_balance_RF3",
+            "passed": true,
+            "tolerance": 0.01,
+            "unit": "N"
+          }
+        ],
+        "warnings": []
+      },
+      "reaction_summary": {
+        "components": [
+          1.33809407998342e-10,
+          1000.00003,
+          -7.73070496506989e-11
+        ],
+        "count": 25
+      }
+    },
+    "load": {
+      "Fy_N": -1000.0
+    },
+    "material": {
+      "E_MPa": 210000.0,
+      "nu": 0.3
+    },
+    "model": {
+      "height_mm": 10.0,
+      "length_mm": 100.0,
+      "width_mm": 10.0
+    },
+    "provenance": {
+      "abaqus_version": "unknown",
+      "action_plan": [
+        {
+          "action_type": "material_elastic",
+          "model_name": "StaticGolden",
+          "parameters": {
+            "name": "Steel",
+            "poisson": 0.3,
+            "youngs_modulus": 210000.0
+          },
+          "target": null
+        },
+        {
+          "action_type": "static_step",
+          "model_name": "StaticGolden",
+          "parameters": {
+            "amplitude": "RAMP",
+            "initial_inc": null,
+            "max_inc": null,
+            "max_num_inc": 100,
+            "min_inc": null,
+            "name": "Step-1",
+            "nlgeom": false,
+            "previous": "Initial",
+            "stabilization_magnitude": null,
+            "stabilization_method": "NONE",
+            "time_incrementation_method": "AUTOMATIC",
+            "time_period": 1.0
+          },
+          "target": null
+        },
+        {
+          "action_type": "solid_section",
+          "model_name": "StaticGolden",
+          "parameters": {
+            "material": "Steel",
+            "name": "BeamSection"
+          },
+          "target": null
+        },
+        {
+          "action_type": "section_assignment",
+          "model_name": "StaticGolden",
+          "parameters": {
+            "part": "Beam",
+            "region_expression": "mdb.models['StaticGolden'].parts['Beam'].sets['AllCells']",
+            "section": "BeamSection"
+          },
+          "target": null
+        },
+        {
+          "action_type": "fixed_bc",
+          "model_name": "StaticGolden",
+          "parameters": {
+            "name": "AI-Fixed",
+            "region_expression": "mdb.models['StaticGolden'].rootAssembly.sets['FixedFace']",
+            "step": "Initial"
+          },
+          "target": "mdb.models['StaticGolden'].rootAssembly.sets['FixedFace']"
+        },
+        {
+          "action_type": "concentrated_force",
+          "model_name": "StaticGolden",
+          "parameters": {
+            "amplitude": null,
+            "cf1": 0.0,
+            "cf2": -250.0,
+            "cf3": 0.0,
+            "name": "AI-Force",
+            "region_expression": "mdb.models['StaticGolden'].rootAssembly.sets['TipLoadVertices']",
+            "step": "Step-1"
+          },
+          "target": "mdb.models['StaticGolden'].rootAssembly.sets['TipLoadVertices']"
+        },
+        {
+          "action_type": "field_output",
+          "model_name": "StaticGolden",
+          "parameters": {
+            "frequency": null,
+            "num_intervals": null,
+            "request": "F-Output-1",
+            "step": "Initial",
+            "variables": [
+              "S",
+              "U",
+              "RF"
+            ]
+          },
+          "target": null
+        },
+        {
+          "action_type": "seed_part",
+          "model_name": "StaticGolden",
+          "parameters": {
+            "deviation_factor": 0.1,
+            "min_size_factor": 0.1,
+            "part": "Beam",
+            "size": 2.5
+          },
+          "target": null
+        },
+        {
+          "action_type": "element_type",
+          "model_name": "StaticGolden",
+          "parameters": {
+            "elem_code": "C3D8R",
+            "library": "STANDARD",
+            "part": "Beam",
+            "region_expression": "mdb.models['StaticGolden'].parts['Beam'].sets['AllCells']"
+          },
+          "target": null
+        },
+        {
+          "action_type": "generate_mesh",
+          "model_name": "StaticGolden",
+          "parameters": {
+            "part": "Beam"
+          },
+          "target": null
+        },
+        {
+          "action_type": "python",
+          "model_name": "StaticGolden",
+          "parameters": {
+            "code": "\nfrom abaqusConstants import *\nmodel=mdb.models['StaticGolden']\npart=model.parts['Beam']\ninst=model.rootAssembly.instances['Beam-1']\nmodel.rootAssembly.regenerate()\n\n# Evidence sets are mesh-based so ODB field extraction receives true node/element sets.\nfixed_nodes = inst.nodes.getByBoundingBox(xMin=-0.01, xMax=0.01)\nif not fixed_nodes:\n    raise RuntimeError('FixedNodes set is empty')\nmodel.rootAssembly.Set(name='FixedNodes', nodes=fixed_nodes)\n\ntip_nodes = inst.nodes.getByBoundingBox(xMin=99.99, xMax=100.01)\nif not tip_nodes:\n    raise RuntimeError('TipNodes set is empty')\nmodel.rootAssembly.Set(name='TipNodes', nodes=tip_nodes)\n\nroot_elements = part.elements.getByBoundingBox(xMin=-0.01, xMax=10.01)\nif not root_elements:\n    raise RuntimeError('RootElements set is empty')\npart.Set(name='RootElements', elements=root_elements)\n\ntip_rp = model.rootAssembly.referencePoints\n# The four-vertex CLOAD is applied symmetrically; no separate RP is needed.\nprint('AIAgent_STATIC_EVIDENCE_SETS_CREATED')\n"
+          },
+          "target": null
+        },
+        {
+          "action_type": "create_job",
+          "model_name": "StaticGolden",
+          "parameters": {
+            "job_type": "STANDARD",
+            "name": "StaticGoldenJob"
+          },
+          "target": null
+        }
+      ],
+      "action_plan_hash": null,
+      "artifact_manifest_hash": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "environment": {},
+      "executor": "CAEInProcessExecutor",
+      "input_hash": null,
+      "intent_hash": null,
+      "job_name": "StaticGoldenJob",
+      "metadata": {
+        "action_plan_scope": "caller",
+        "content_hash_scope": "not_captured",
+        "model_snapshot_hash": "89c682f5821b952d029db6e4bc87973373b3c148480e3ce935f72e434d21d269"
+      },
+      "model_hash": null,
+      "model_name": "StaticGolden",
+      "output_hash": null,
+      "python_version": "3.10.5 (main, Jul 27 2024, 04:26:12) [MSC v.1934 64 bit (AMD64)]",
+      "run_id": "1b0d7283-c9d6-43d6-a3c8-83830b6db339"
+    },
+    "results": {
+      "evidence": {
+        "items": [
+          {
+            "kind": "odb_summary",
+            "locator": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\StaticGoldenJob.odb",
+            "metadata": {},
+            "source": "odb",
+            "unit": "",
+            "value": {
+              "instances": [
+                "BEAM-1"
+              ],
+              "status": "available",
+              "step_count": 1,
+              "step_frames": {
+                "Step-1": 2
+              },
+              "steps": [
+                "Step-1"
+              ]
+            }
+          },
+          {
+            "kind": "acceptance",
+            "locator": "StaticGoldenJob",
+            "metadata": {},
+            "source": "acceptance",
+            "unit": "",
+            "value": {
+              "blocked": [],
+              "criteria": [
+                {
+                  "actual": 2.06864285469055,
+                  "limit": 1.6,
+                  "name": "tip_displacement_lower",
+                  "operator": ">=",
+                  "passed": true,
+                  "relative_error": 0.292901784181594,
+                  "unit": "mm"
+                },
+                {
+                  "actual": 2.06864285469055,
+                  "limit": 2.2,
+                  "name": "tip_displacement_upper",
+                  "operator": "<=",
+                  "passed": true,
+                  "relative_error": 0.0597077933224774,
+                  "unit": "mm"
+                },
+                {
+                  "actual": 471.214080810547,
+                  "limit": 1200.0,
+                  "name": "root_mises_sanity",
+                  "operator": "<=",
+                  "passed": true,
+                  "relative_error": 0.607321599324544,
+                  "unit": "MPa"
+                }
+              ],
+              "failures": [],
+              "gates": {
+                "contact": "SKIPPED",
+                "convergence": "SKIPPED",
+                "criteria": "PASS",
+                "engineering_checks": "SKIPPED",
+                "evidence_sufficiency": "NOT_SPECIFIED",
+                "execution": "PASS",
+                "fatigue": "SKIPPED",
+                "mesh_quality": "SKIPPED",
+                "numerical_verification": "SKIPPED"
+              },
+              "passed": true,
+              "status": "PASS",
+              "warnings": []
+            }
+          },
+          {
+            "kind": "odb_result",
+            "locator": "{'step': 'Step-1', 'frame': -1, 'instance': 'BEAM-1', 'node_label': 1, 'element_label': None, 'coordinates': (100.0, 10.0, 10.0), 'position': 'NODAL'}",
+            "metadata": {
+              "aggregation": "max",
+              "component": null,
+              "field": "U",
+              "invariant": "MAGNITUDE",
+              "value_key": "max_displacement"
+            },
+            "source": "odb",
+            "unit": "mm",
+            "value": 2.06864285469055
+          },
+          {
+            "kind": "odb_result",
+            "locator": "{'step': 'Step-1', 'frame': -1, 'instance': 'BEAM-1', 'node_label': 1, 'element_label': None, 'coordinates': (100.0, 10.0, 10.0), 'position': 'NODAL'}",
+            "metadata": {
+              "aggregation": "max",
+              "component": null,
+              "field": "U",
+              "invariant": "MAGNITUDE",
+              "value_key": "max_displacement_upper"
+            },
+            "source": "odb",
+            "unit": "mm",
+            "value": 2.06864285469055
+          },
+          {
+            "kind": "odb_result",
+            "locator": "{'step': 'Step-1', 'frame': -1, 'instance': 'BEAM-1', 'node_label': None, 'element_label': 613, 'coordinates': None, 'position': 'INTEGRATION_POINT'}",
+            "metadata": {
+              "aggregation": "max",
+              "component": null,
+              "field": "S",
+              "invariant": "MISES",
+              "value_key": "root_mises"
+            },
+            "source": "odb",
+            "unit": "MPa",
+            "value": 471.214080810547
+          }
+        ]
+      },
+      "metrics": [
+        {
+          "component": "MAGNITUDE",
+          "evidence": [
+            {
+              "kind": "odb_result",
+              "locator": "{'step': 'Step-1', 'frame': -1, 'instance': 'BEAM-1', 'node_label': 1, 'element_label': None, 'coordinates': (100.0, 10.0, 10.0), 'position': 'NODAL'}",
+              "metadata": {
+                "aggregation": "max",
+                "component": null,
+                "field": "U",
+                "invariant": "MAGNITUDE",
+                "value_key": "max_displacement"
+              },
+              "source": "odb",
+              "unit": "mm",
+              "value": 2.06864285469055
+            }
+          ],
+          "frame": -1,
+          "location": {
+            "coordinates": [
+              100.0,
+              10.0,
+              10.0
+            ],
+            "element_label": null,
+            "frame": -1,
+            "instance": "BEAM-1",
+            "node_label": 1,
+            "position": "NODAL",
+            "step": "Step-1"
+          },
+          "metadata": {
+            "aggregation": "max",
+            "field": "U",
+            "history_variable": null,
+            "output_kind": "field",
+            "reducer": "max",
+            "value_key": "max_displacement"
+          },
+          "name": "tip_displacement_lower",
+          "quantity": "displacement",
+          "region": "odb.rootAssembly.nodeSets['TIPLOADVERTICES']",
+          "required": true,
+          "source": "odb",
+          "step": "Step-1",
+          "unit": "mm",
+          "value": 2.06864285469055
+        },
+        {
+          "component": "MAGNITUDE",
+          "evidence": [
+            {
+              "kind": "odb_result",
+              "locator": "{'step': 'Step-1', 'frame': -1, 'instance': 'BEAM-1', 'node_label': 1, 'element_label': None, 'coordinates': (100.0, 10.0, 10.0), 'position': 'NODAL'}",
+              "metadata": {
+                "aggregation": "max",
+                "component": null,
+                "field": "U",
+                "invariant": "MAGNITUDE",
+                "value_key": "max_displacement_upper"
+              },
+              "source": "odb",
+              "unit": "mm",
+              "value": 2.06864285469055
+            }
+          ],
+          "frame": -1,
+          "location": {
+            "coordinates": [
+              100.0,
+              10.0,
+              10.0
+            ],
+            "element_label": null,
+            "frame": -1,
+            "instance": "BEAM-1",
+            "node_label": 1,
+            "position": "NODAL",
+            "step": "Step-1"
+          },
+          "metadata": {
+            "aggregation": "max",
+            "field": "U",
+            "history_variable": null,
+            "output_kind": "field",
+            "reducer": "max",
+            "value_key": "max_displacement_upper"
+          },
+          "name": "tip_displacement_upper",
+          "quantity": "displacement",
+          "region": "odb.rootAssembly.nodeSets['TIPLOADVERTICES']",
+          "required": true,
+          "source": "odb",
+          "step": "Step-1",
+          "unit": "mm",
+          "value": 2.06864285469055
+        },
+        {
+          "component": "MISES",
+          "evidence": [
+            {
+              "kind": "odb_result",
+              "locator": "{'step': 'Step-1', 'frame': -1, 'instance': 'BEAM-1', 'node_label': None, 'element_label': 613, 'coordinates': None, 'position': 'INTEGRATION_POINT'}",
+              "metadata": {
+                "aggregation": "max",
+                "component": null,
+                "field": "S",
+                "invariant": "MISES",
+                "value_key": "root_mises"
+              },
+              "source": "odb",
+              "unit": "MPa",
+              "value": 471.214080810547
+            }
+          ],
+          "frame": -1,
+          "location": {
+            "coordinates": null,
+            "element_label": 613,
+            "frame": -1,
+            "instance": "BEAM-1",
+            "node_label": null,
+            "position": "INTEGRATION_POINT",
+            "step": "Step-1"
+          },
+          "metadata": {
+            "aggregation": "max",
+            "field": "S",
+            "history_variable": null,
+            "output_kind": "field",
+            "reducer": "max",
+            "value_key": "root_mises"
+          },
+          "name": "root_mises_sanity",
+          "quantity": "stress",
+          "region": "odb.rootAssembly.instances['BEAM-1'].elementSets['ROOTELEMENTS']",
+          "required": true,
+          "source": "odb",
+          "step": "Step-1",
+          "unit": "MPa",
+          "value": 471.214080810547
+        }
+      ]
+    },
+    "solver": {
+      "artifacts": [],
+      "diagnostics": [],
+      "job_status": {
+        "diagnostics": [],
+        "name": "StaticGoldenJob",
+        "raw": {
+          "amplitudes": [],
+          "boundary_conditions": [
+            "AI-Fixed"
+          ],
+          "instances": [
+            "Beam-1"
+          ],
+          "interactions": [],
+          "jobs": [
+            "StaticGoldenJob"
+          ],
+          "loads": [
+            "AI-Force"
+          ],
+          "materials": [
+            "Steel"
+          ],
+          "metadata": {
+            "job_count": 1,
+            "job_status": {
+              "StaticGoldenJob": "None"
+            },
+            "model_count": 2
+          },
+          "models": [
+            "Model-1",
+            "StaticGolden"
+          ],
+          "output_requests": [
+            "F-Output-1"
+          ],
+          "parts": [
+            "Beam"
+          ],
+          "predefined_fields": [],
+          "sections": [
+            "BeamSection"
+          ],
+          "steps": [
+            "Initial",
+            "Initial",
+            "Step-1"
+          ]
+        },
+        "state": "COMPLETED"
+      },
+      "odb_path": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\StaticGoldenJob.odb"
+    },
+    "status": "pass",
+    "theory": {
+      "root_bending_stress_MPa": 600.0,
+      "tip_displacement_mm": 1.9047619047619
+    },
+    "workflow": {
+      "action_count": 12,
+      "engineering_status_before_rf_gate": "RESULT_VALID",
+      "solver_completed": true,
+      "state": "accepted",
+      "static_plan_actions": 7
+    }
+  },
+  "return_code": 0,
+  "script": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\machine_validation\\static_golden_e2e_script.py",
+  "status": "pass",
+  "stderr": "Abaqus License Manager checked out the following license:\n\"cae\" from Flexnet server DESKTOP-9EAL2I4\n<9998 out of 9999 licenses remain available>.\n",
+  "stdout": "",
+  "workdir": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent"
+}

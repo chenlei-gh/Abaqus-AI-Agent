@@ -1,0 +1,503 @@
+{
+  "status": "pass",
+  "launcher": "C:\\SIMULIA\\Commands\\abaqus.bat",
+  "workdir": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\machine_validation",
+  "script": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\machine_validation\\explicit_golden_e2e_script.py",
+  "case": "cantilever_transient_explicit_dynamic",
+  "command": [
+    "C:\\SIMULIA\\Commands\\abaqus.bat",
+    "cae",
+    "noGUI=D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\machine_validation\\explicit_golden_e2e_script.py"
+  ],
+  "return_code": 0,
+  "process_succeeded": true,
+  "report": {
+    "acceptance": {
+      "blocked": [],
+      "criteria": [
+        {
+          "actual": 3.52147e-07,
+          "limit": 2e-06,
+          "name": "stable_increment_upper_bound",
+          "operator": "<=",
+          "passed": true,
+          "relative_error": 0.8239265,
+          "unit": "s"
+        },
+        {
+          "actual": 3.52147e-07,
+          "limit": 1e-08,
+          "name": "stable_increment_lower_bound",
+          "operator": ">=",
+          "passed": true,
+          "relative_error": 34.2147,
+          "unit": "s"
+        },
+        {
+          "actual": 2.76717335868773e-06,
+          "limit": 0.02,
+          "name": "energy_drift_ratio",
+          "operator": "<=",
+          "passed": true,
+          "relative_error": 0.999861641332066,
+          "unit": ""
+        },
+        {
+          "actual": 0.0364356892013378,
+          "limit": 0.05,
+          "name": "hourglass_energy_ratio",
+          "operator": "<=",
+          "passed": true,
+          "relative_error": 0.271286215973243,
+          "unit": ""
+        },
+        {
+          "actual": 3.34008741378784,
+          "limit": 5.0,
+          "name": "peak_displacement_bound",
+          "operator": "<=",
+          "passed": true,
+          "relative_error": 0.331982517242432,
+          "unit": "mm"
+        },
+        {
+          "actual": 3.34008741378784,
+          "limit": 0.5,
+          "name": "peak_displacement_positive",
+          "operator": ">=",
+          "passed": true,
+          "relative_error": 5.68017482757568,
+          "unit": "mm"
+        }
+      ],
+      "failures": [],
+      "gates": {
+        "contact": "SKIPPED",
+        "convergence": "SKIPPED",
+        "criteria": "PASS",
+        "engineering_checks": "SKIPPED",
+        "evidence_sufficiency": "NOT_SPECIFIED",
+        "execution": "PASS",
+        "fatigue": "SKIPPED",
+        "mesh_quality": "PASS",
+        "numerical_verification": "SKIPPED"
+      },
+      "passed": true,
+      "status": "PASS",
+      "warnings": []
+    },
+    "case_id": "explicit_dynamic",
+    "dynamic_metrics": {
+      "dynamic_amplification_ratio": 1.75354589223862,
+      "end_displacement_mm": 1.23055303096771,
+      "initial_displacement_mm": 0.0,
+      "peak_displacement_mm": 3.34008741378784
+    },
+    "energy_verification": {
+      "energy_conservation_note": "Total energy is conserved under explicit central difference integration (|ETOTAL| / max(ALLWK, ALLKE) <= 2.0%); artificial hourglass energy is effectively controlled (ALLAE / ALLIE <= 5.0%)",
+      "energy_drift_ratio": 2.76717335868773e-06,
+      "hourglass_to_internal_energy_ratio": 0.0364356892013378,
+      "max_abs_total_energy_etotal_mj": 0.00834841001778841,
+      "peak_hourglass_energy_mj": 109.891799926758,
+      "peak_internal_energy_mj": 3016.04833984375,
+      "peak_kinetic_energy_mj": 547.260314941406,
+      "peak_viscous_dissipation_mj": 0.221119552850723,
+      "peak_work_mj": 3016.94506835938
+    },
+    "engineering_checks": {
+      "mesh_quality": {
+        "element_count": 640,
+        "evidence": [
+          "native_verify:ASPECT_RATIO",
+          "native_verify:ANGULAR_DEVIATION",
+          "native_verify:GEOM_DEVIATION_FACTOR",
+          "native_verify:ANALYSIS_CHECKS"
+        ],
+        "failed_element_count": 0,
+        "metrics": {
+          "max_angular_deviation": 0.0,
+          "max_aspect_ratio": 1.0,
+          "max_geometric_deviation_factor": 0.0
+        },
+        "node_count": 1025,
+        "part": "Beam",
+        "source": "native_abaqus_verifyMeshQuality",
+        "status": "pass",
+        "violations": [],
+        "warning_element_count": 0,
+        "warnings": []
+      },
+      "stable_time_increment_s": 3.52147e-07
+    },
+    "explicit_parameters": {
+      "amplitude": "TipLoadAmp",
+      "nlgeom": true,
+      "stable_increment_s": 3.52147e-07,
+      "time_period_s": 0.005,
+      "total_frames": 21
+    },
+    "job": "ExplicitGoldenJob",
+    "load": {
+      "Fy_N": -1000.0
+    },
+    "material": {
+      "E_MPa": 210000.0,
+      "density_tonne_mm3": 7.85e-09,
+      "nu": 0.3
+    },
+    "model": {
+      "height_mm": 10.0,
+      "length_mm": 100.0,
+      "width_mm": 10.0
+    },
+    "provenance": {
+      "abaqus_version": "unknown",
+      "action_plan": [
+        {
+          "action_type": "material_elastic",
+          "model_name": "ExplicitGolden",
+          "parameters": {
+            "name": "Steel",
+            "poisson": 0.3,
+            "youngs_modulus": 210000.0
+          },
+          "target": null
+        },
+        {
+          "action_type": "material_density",
+          "model_name": "ExplicitGolden",
+          "parameters": {
+            "density": 7.85e-09,
+            "name": "Steel"
+          },
+          "target": null
+        },
+        {
+          "action_type": "solid_section",
+          "model_name": "ExplicitGolden",
+          "parameters": {
+            "material": "Steel",
+            "name": "SolidSection"
+          },
+          "target": null
+        },
+        {
+          "action_type": "section_assignment",
+          "model_name": "ExplicitGolden",
+          "parameters": {
+            "part": "Beam",
+            "region_expression": "mdb.models['ExplicitGolden'].parts['Beam'].sets['AllCells']",
+            "section": "SolidSection"
+          },
+          "target": null
+        },
+        {
+          "action_type": "fixed_bc",
+          "model_name": "ExplicitGolden",
+          "parameters": {
+            "name": "FixedBC",
+            "region_expression": "mdb.models['ExplicitGolden'].rootAssembly.sets['FixedFace']",
+            "step": "Initial"
+          },
+          "target": "mdb.models['ExplicitGolden'].rootAssembly.sets['FixedFace']"
+        },
+        {
+          "action_type": "tabular_amplitude",
+          "model_name": "ExplicitGolden",
+          "parameters": {
+            "data": [
+              [
+                0.0,
+                0.0
+              ],
+              [
+                0.0005,
+                1.0
+              ],
+              [
+                0.005,
+                1.0
+              ]
+            ],
+            "name": "TipLoadAmp",
+            "smooth": null,
+            "time_span": "STEP"
+          },
+          "target": null
+        },
+        {
+          "action_type": "dynamic_explicit_step",
+          "model_name": "ExplicitGolden",
+          "parameters": {
+            "improved_dt_method": true,
+            "max_increment": null,
+            "name": "Step-1",
+            "nlgeom": true,
+            "previous": "Initial",
+            "time_period": 0.005
+          },
+          "target": null
+        },
+        {
+          "action_type": "field_output",
+          "model_name": "ExplicitGolden",
+          "parameters": {
+            "frequency": null,
+            "num_intervals": 20,
+            "request": "F-Output-1",
+            "step": "Step-1",
+            "variables": [
+              "S",
+              "U",
+              "RF"
+            ]
+          },
+          "target": null
+        },
+        {
+          "action_type": "history_output",
+          "model_name": "ExplicitGolden",
+          "parameters": {
+            "region_expression": null,
+            "request": "H-Output-1",
+            "step": "Step-1",
+            "variables": [
+              "ALLIE",
+              "ALLKE",
+              "ALLWK",
+              "ALLSE",
+              "ALLAE",
+              "ALLVD",
+              "ALLFD",
+              "ETOTAL"
+            ]
+          },
+          "target": null
+        },
+        {
+          "action_type": "concentrated_force",
+          "model_name": "ExplicitGolden",
+          "parameters": {
+            "amplitude": "TipLoadAmp",
+            "cf1": 0.0,
+            "cf2": -250.0,
+            "cf3": 0.0,
+            "name": "TipLoad",
+            "region_expression": "mdb.models['ExplicitGolden'].rootAssembly.sets['TipLoadVertices']",
+            "step": "Step-1"
+          },
+          "target": "mdb.models['ExplicitGolden'].rootAssembly.sets['TipLoadVertices']"
+        },
+        {
+          "action_type": "seed_part",
+          "model_name": "ExplicitGolden",
+          "parameters": {
+            "deviation_factor": 0.1,
+            "min_size_factor": 0.1,
+            "part": "Beam",
+            "size": 2.5
+          },
+          "target": null
+        },
+        {
+          "action_type": "element_type",
+          "model_name": "ExplicitGolden",
+          "parameters": {
+            "elem_code": "C3D8R",
+            "library": "EXPLICIT",
+            "part": "Beam",
+            "region_expression": "mdb.models['ExplicitGolden'].parts['Beam'].sets['AllCells']"
+          },
+          "target": null
+        },
+        {
+          "action_type": "generate_mesh",
+          "model_name": "ExplicitGolden",
+          "parameters": {
+            "part": "Beam"
+          },
+          "target": null
+        },
+        {
+          "action_type": "python",
+          "model_name": "ExplicitGolden",
+          "parameters": {
+            "code": "\nfrom abaqusConstants import *\nmodel = mdb.models['ExplicitGolden']\npart = model.parts['Beam']\ninst = model.rootAssembly.instances['Beam-1']\nmodel.rootAssembly.regenerate()\n\nfixed_nodes = inst.nodes.getByBoundingBox(xMin=-0.01, xMax=0.01)\nif not fixed_nodes:\n    raise RuntimeError('FixedNodes set is empty')\nmodel.rootAssembly.Set(name='FixedNodes', nodes=fixed_nodes)\n\ntip_nodes = inst.nodes.getByBoundingBox(xMin=99.99, xMax=100.01)\nif not tip_nodes:\n    raise RuntimeError('TipNodes set is empty')\nmodel.rootAssembly.Set(name='TipNodes', nodes=tip_nodes)\n\nroot_elements = part.elements.getByBoundingBox(xMin=-0.01, xMax=10.01)\nif not root_elements:\n    raise RuntimeError('RootElements set is empty')\npart.Set(name='RootElements', elements=root_elements)\n\nprint('AIAgent_EXPLICIT_EVIDENCE_SETS_CREATED')\n"
+          },
+          "target": null
+        },
+        {
+          "action_type": "create_job",
+          "model_name": "ExplicitGolden",
+          "parameters": {
+            "job_type": "EXPLICIT",
+            "name": "ExplicitGoldenJob"
+          },
+          "target": null
+        }
+      ],
+      "action_plan_hash": null,
+      "artifact_manifest_hash": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "environment": {},
+      "executor": "CAEInProcessExecutor",
+      "input_hash": null,
+      "intent_hash": null,
+      "job_name": "ExplicitGoldenJob",
+      "metadata": {
+        "action_plan_scope": "caller",
+        "content_hash_scope": "not_captured",
+        "model_snapshot_hash": "51daa2c4060c58eabab9384b3f227c69e788dd6eea2b6bc2fcd32336c5b7e3a4"
+      },
+      "model_hash": null,
+      "model_name": "ExplicitGolden",
+      "output_hash": null,
+      "python_version": "3.10.5 (main, Jul 27 2024, 04:26:12) [MSC v.1934 64 bit (AMD64)]",
+      "run_id": "20111b16-4b81-4c0e-96de-c43682b3d331"
+    },
+    "release": "Abaqus 2025",
+    "solver": {
+      "artifacts": [],
+      "diagnostics": [],
+      "job_status": {
+        "diagnostics": [],
+        "name": "ExplicitGoldenJob",
+        "raw": {
+          "amplitudes": [
+            "TipLoadAmp"
+          ],
+          "boundary_conditions": [
+            "FixedBC"
+          ],
+          "instances": [
+            "Beam-1"
+          ],
+          "interactions": [],
+          "jobs": [
+            "ExplicitGoldenJob"
+          ],
+          "loads": [
+            "TipLoad"
+          ],
+          "materials": [
+            "Steel"
+          ],
+          "metadata": {
+            "job_count": 1,
+            "job_status": {
+              "ExplicitGoldenJob": "None"
+            },
+            "model_count": 2
+          },
+          "models": [
+            "ExplicitGolden",
+            "Model-1"
+          ],
+          "output_requests": [
+            "F-Output-1"
+          ],
+          "parts": [
+            "Beam"
+          ],
+          "predefined_fields": [],
+          "sections": [
+            "SolidSection"
+          ],
+          "steps": [
+            "Initial",
+            "Step-1",
+            "Initial"
+          ]
+        },
+        "state": "COMPLETED"
+      },
+      "odb_path": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\machine_validation\\ExplicitGoldenJob.odb"
+    },
+    "status": "pass",
+    "strict_gate_verification": {
+      "expected_fail": true,
+      "failures": [
+        "criterion:hourglass_unphysical_strict"
+      ],
+      "passed": false
+    },
+    "theory": {
+      "estimated_dilatational_wave_speed_mm_s": 5172194.15303485,
+      "static_tip_displacement_mm": 1.9047619047619
+    },
+    "time_history_sample": [
+      {
+        "frame_index": 0,
+        "time": 0.0,
+        "tip_u2_mean": 0.0,
+        "tip_u_magnitude_max": 0.0
+      },
+      {
+        "frame_index": 2,
+        "time": 0.000500274647492915,
+        "tip_u2_mean": -1.58173099040985,
+        "tip_u_magnitude_max": 1.59393763542175
+      },
+      {
+        "frame_index": 4,
+        "time": 0.00100033660419285,
+        "tip_u2_mean": -3.1591220664978,
+        "tip_u_magnitude_max": 3.17880344390869
+      },
+      {
+        "frame_index": 6,
+        "time": 0.00150004646275192,
+        "tip_u2_mean": -0.597152743339539,
+        "tip_u_magnitude_max": 0.610954642295837
+      },
+      {
+        "frame_index": 8,
+        "time": 0.00200009299442172,
+        "tip_u2_mean": -3.2720020866394,
+        "tip_u_magnitude_max": 3.29506969451904
+      },
+      {
+        "frame_index": 10,
+        "time": 0.00250034173950553,
+        "tip_u2_mean": -1.38682350635529,
+        "tip_u_magnitude_max": 1.4048935174942
+      },
+      {
+        "frame_index": 12,
+        "time": 0.00300023844465613,
+        "tip_u2_mean": -1.86597178459167,
+        "tip_u_magnitude_max": 1.88632953166962
+      },
+      {
+        "frame_index": 14,
+        "time": 0.00350013514980674,
+        "tip_u2_mean": -2.92803979873657,
+        "tip_u_magnitude_max": 2.95219969749451
+      },
+      {
+        "frame_index": 16,
+        "time": 0.00400003185495734,
+        "tip_u2_mean": -0.71255362033844,
+        "tip_u_magnitude_max": 0.730940878391266
+      },
+      {
+        "frame_index": 18,
+        "time": 0.00450028060004115,
+        "tip_u2_mean": -3.31360697746277,
+        "tip_u_magnitude_max": 3.34008741378784
+      },
+      {
+        "frame_index": 20,
+        "time": 0.00499999988824129,
+        "tip_u2_mean": -1.21015973091125,
+        "tip_u_magnitude_max": 1.23055303096771
+      }
+    ],
+    "workflow": {
+      "action_count": 15,
+      "solver_completed": true,
+      "state": "accepted"
+    }
+  },
+  "stdout": "",
+  "stderr": "Abaqus License Manager checked out the following license:\n\"cae\" from Flexnet server DESKTOP-9EAL2I4\n<9998 out of 9999 licenses remain available>.\n"
+}

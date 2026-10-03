@@ -1,0 +1,51 @@
+{
+  "tier": "Tier 3: UnitSystem Physical Invariance",
+  "model_mm_n_mpa": {
+    "unit_system": "MM_N_MPA",
+    "length_mm": 100.0,
+    "width_mm": 10.0,
+    "height_mm": 10.0,
+    "modulus_mpa": 210000.0,
+    "load_n": -1000.0,
+    "max_mises_mpa": 17.32050895690918,
+    "max_displacement_mm": 175.16238403320312,
+    "max_strain": 0.00012380952830426395
+  },
+  "model_si_m_n_pa": {
+    "unit_system": "SI",
+    "length_m": 0.1,
+    "width_m": 0.01,
+    "height_m": 0.01,
+    "modulus_pa": 210000000000.0,
+    "load_n": -1000.0,
+    "max_mises_pa": 17320508.0,
+    "max_displacement_m": 0.1751624047756195,
+    "max_strain": 0.00012380952830426395
+  },
+  "comparison": {
+    "mises_mm_mpa": 17.32050895690918,
+    "mises_si_converted_mpa": 17.320508,
+    "stress_rel_error": 5.524717442374213e-08,
+    "stress_invariance_passed": true,
+    "u_mm": 175.16238403320312,
+    "u_si_converted_mm": 175.1624047756195,
+    "displacement_rel_error": 1.184182123138041e-07,
+    "displacement_invariance_passed": true,
+    "strain_mm": 0.00012380952830426395,
+    "strain_si": 0.00012380952830426395,
+    "strain_rel_error": 0.0,
+    "strain_invariance_passed": true
+  },
+  "passed": true,
+  "diagnostics": [],
+  "provenance": {
+    "launcher": "abaqus",
+    "workdir": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\machine_validation",
+    "return_code": 0,
+    "solver": "Abaqus/Standard 2025",
+    "dual_models_run": [
+      "Tier3_MM_Job",
+      "Tier3_SI_Job"
+    ]
+  }
+}

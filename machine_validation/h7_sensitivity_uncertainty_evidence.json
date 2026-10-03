@@ -1,0 +1,56 @@
+{
+  "status": "PASS",
+  "case": "H.7_sensitivity_uncertainty_verification",
+  "baseline": {
+    "tip_displacement": 2.06864,
+    "root_mises": 471.214
+  },
+  "sensitivity": {
+    "ranking": [
+      [
+        "root_mises",
+        0.19999999999999998
+      ],
+      [
+        "tip_displacement",
+        0.19999999999999996
+      ]
+    ],
+    "cases_count": 4,
+    "e_perturbation_stress_invariance_verified": true,
+    "load_perturbation_linearity_verified": true
+  },
+  "uncertainty": {
+    "method": "tolerance_bounds",
+    "parameters": [
+      {
+        "name": "YoungsModulus",
+        "nominal": 210000.0,
+        "lower": 189000.0,
+        "upper": 231000.0,
+        "unit": "MPa"
+      },
+      {
+        "name": "TipLoad",
+        "nominal": -1000.0,
+        "lower": -1200.0,
+        "upper": -800.0,
+        "unit": "N"
+      }
+    ],
+    "bounds": {
+      "tip_displacement": {
+        "min": 1.5044654545454543,
+        "nominal": 2.06864,
+        "max": 2.758186666666666,
+        "unit": "mm"
+      },
+      "root_mises": {
+        "min": 376.9712,
+        "nominal": 471.214,
+        "max": 565.4567999999999,
+        "unit": "MPa"
+      }
+    }
+  }
+}

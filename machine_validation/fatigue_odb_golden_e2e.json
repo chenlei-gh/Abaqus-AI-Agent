@@ -1,0 +1,111 @@
+{
+  "status": "pass",
+  "case_id": "fatigue_real_odb",
+  "title": "Real ODB Stress History Fatigue Damage & Rainflow E2E",
+  "category": "P2",
+  "physics_type": "fatigue_postprocess",
+  "solver": "postprocess",
+  "release": "Abaqus 2025",
+  "job": "DynamicGoldenJob",
+  "process_succeeded": true,
+  "return_code": 0,
+  "launcher": "C:\\SIMULIA\\Commands\\abaqus.bat",
+  "workdir": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent",
+  "odb": {
+    "path": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\machine_validation\\DynamicGoldenJob.odb",
+    "exists": true,
+    "size_bytes": 1414876
+  },
+  "solver_status": "completed",
+  "runtime": {
+    "launcher": "C:\\SIMULIA\\Commands\\abaqus.bat",
+    "workdir": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent",
+    "process_succeeded": true,
+    "return_code": 0,
+    "execution_time_s": 0.607328,
+    "stdout": "AIAgent_FATIGUE_EVALUATION_COMPLETED\nHotspot: Element 613 IP 1 Peak Mises: 493.40106201171875 MPa\nRainflow Cycles: 6 (Full: 3, Half: 6)\nMax Stress Range: 493.40 MPa | Avg Mean Stress: 446.32 MPa\nCumulative Miner Damage D: 9.186881e-06\nLife Blocks to Failure: 108850.88\nAcceptance Passed: True | Strict Gate Failed (as designed): True\n",
+    "stderr": ""
+  },
+  "result_evidence": {
+    "hotspot": {
+      "element_label": 613,
+      "integration_point": 1,
+      "instance_name": "BEAM-1",
+      "peak_mises_detected": 493.40106201171875
+    },
+    "stress_measure": "signed_mises",
+    "frame_count": 24,
+    "cycle_summary": {
+      "total_cycles_count": 6.0,
+      "full_cycles_count": 3,
+      "half_cycles_count": 6,
+      "max_stress_range": 493.40106201171875,
+      "max_stress_amplitude": 246.70053100585938,
+      "mean_stress_average": 446.3175777859158,
+      "cumulative_damage": 9.186880530865213e-06,
+      "life_blocks": 108850.87670839895,
+      "damage_allowable": 1.0
+    }
+  },
+  "verification": {
+    "rainflow_events_count": 9,
+    "max_stress_range": 493.40106201171875,
+    "max_stress_amplitude": 246.70053100585938,
+    "mean_stress_average": 446.3175777859158,
+    "cumulative_damage": 9.186880530865213e-06,
+    "life_blocks": 108850.87670839895
+  },
+  "acceptance": {
+    "passed": true,
+    "criteria": {
+      "has_stress_history": true,
+      "rainflow_cycles_counted": true,
+      "damage_within_allowable": true,
+      "finite_or_safe_damage": true
+    }
+  },
+  "strict_gate_verification": {
+    "passed": false,
+    "expected_fail": true,
+    "criteria": {
+      "has_stress_history": true,
+      "rainflow_cycles_counted": true,
+      "damage_within_allowable": true,
+      "finite_or_safe_damage": true,
+      "strict_damage_threshold": false
+    }
+  },
+  "provenance": {
+    "odb_source": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\machine_validation\\DynamicGoldenJob.odb",
+    "material_curve": [
+      [
+        100.0,
+        10000000.0
+      ],
+      [
+        150.0,
+        2000000.0
+      ],
+      [
+        200.0,
+        1000000.0
+      ],
+      [
+        300.0,
+        100000.0
+      ],
+      [
+        450.0,
+        20000.0
+      ],
+      [
+        600.0,
+        5000.0
+      ]
+    ],
+    "ultimate_strength_mpa": 800.0,
+    "mean_stress_correction": "GOODMAN",
+    "damage_model": "PALMGREN_MINER",
+    "timestamp": "2026-10-02T16:05:28.018458+00:00"
+  }
+}

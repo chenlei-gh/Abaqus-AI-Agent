@@ -1,0 +1,261 @@
+{
+  "schema_version": "jev_intent_routing_v1",
+  "verified_at": "2026-10-03T04:25:35.425820+00:00",
+  "total_prompts": 3,
+  "passed_prompts": 3,
+  "all_passed": true,
+  "results": [
+    {
+      "case_id": "CASE-STATIC-01",
+      "prompt": "对100mm悬臂梁端部施加1000N垂直载荷，材料为结构钢，固定根部，校核端部挠度不超过2.5mm和最大Mises应力不超过600MPa。",
+      "passed": true,
+      "intent_id": "INTENT-LINEAR_STATIC",
+      "physics_choice": "linear_static",
+      "physics_confidence": 0.792,
+      "unit_system": "MM_N_MPA",
+      "is_well_constrained": true,
+      "completeness_score": 5.0,
+      "extracted_material": {
+        "name": "Structural_Steel",
+        "elastic_modulus": 210000.0,
+        "poisson_ratio": 0.3,
+        "unit": "MPa"
+      },
+      "boundary_conditions_count": 1,
+      "loads_count": 2,
+      "acceptance_criteria_count": 2,
+      "bundle": {
+        "source_model": "jev-offline-engine-v1",
+        "physics_choice": {
+          "value": "linear_static",
+          "confidence": 0.792,
+          "distribution": {
+            "linear_static": 0.7916666666666666,
+            "steady_thermal": 0.041666666666666664,
+            "transient_dynamic": 0.041666666666666664,
+            "modal_frequency": 0.041666666666666664,
+            "contact_frictional": 0.041666666666666664,
+            "fatigue_damage": 0.041666666666666664
+          }
+        },
+        "unit_system_choice": {
+          "value": "MM_N_MPA",
+          "confidence": 0.826,
+          "distribution": {
+            "MM_N_MPA": 0.8260869565217391,
+            "SI": 0.08695652173913045,
+            "IN_LBF_PSI": 0.08695652173913045
+          }
+        },
+        "solver_choice": {
+          "value": "abaqus_standard",
+          "confidence": 0.96,
+          "distribution": {
+            "abaqus_standard": 0.96,
+            "abaqus_explicit": 0.04
+          }
+        },
+        "is_well_constrained_noul": {
+          "probability": 0.95,
+          "is_yes": true
+        },
+        "has_acceptance_criteria_noul": {
+          "probability": 0.95,
+          "is_yes": true
+        },
+        "completeness_score": {
+          "score": 5.0,
+          "levels": {}
+        },
+        "extracted_parameters": {
+          "dimensions": [
+            {
+              "value": 100.0,
+              "unit": "mm"
+            },
+            {
+              "value": 2.5,
+              "unit": "mm"
+            },
+            {
+              "value": 600.0,
+              "unit": "M"
+            }
+          ],
+          "loads": [
+            {
+              "magnitude": 1000.0,
+              "unit": "N"
+            },
+            {
+              "magnitude": 600.0,
+              "unit": "MPA"
+            }
+          ],
+          "material": {
+            "name": "Structural_Steel",
+            "elastic_modulus": 210000.0,
+            "poisson_ratio": 0.3,
+            "unit": "MPa"
+          },
+          "acceptance_criteria": [
+            {
+              "metric": "tip_displacement",
+              "operator": "<=",
+              "limit": 2.5,
+              "unit": "mm"
+            },
+            {
+              "metric": "max_mises",
+              "operator": "<=",
+              "limit": 600.0,
+              "unit": "MPa"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "CASE-THERMAL-02",
+      "prompt": "A 1D steady-state heat conduction bar with hot end at 100C and cold end at 0C. Check midpoint temperature at 50C and heat flux balance.",
+      "passed": true,
+      "intent_id": "INTENT-STEADY_THERMAL",
+      "physics_choice": "steady_thermal",
+      "physics_confidence": 0.783,
+      "unit_system": "MM_N_MPA",
+      "is_well_constrained": false,
+      "completeness_score": 3.0,
+      "extracted_material": null,
+      "boundary_conditions_count": 0,
+      "loads_count": 0,
+      "acceptance_criteria_count": 1,
+      "bundle": {
+        "source_model": "jev-offline-engine-v1",
+        "physics_choice": {
+          "value": "steady_thermal",
+          "confidence": 0.783,
+          "distribution": {
+            "linear_static": 0.043478260869565216,
+            "steady_thermal": 0.7826086956521738,
+            "transient_dynamic": 0.043478260869565216,
+            "modal_frequency": 0.043478260869565216,
+            "contact_frictional": 0.043478260869565216,
+            "fatigue_damage": 0.043478260869565216
+          }
+        },
+        "unit_system_choice": {
+          "value": "MM_N_MPA",
+          "confidence": 0.818,
+          "distribution": {
+            "MM_N_MPA": 0.8181818181818181,
+            "SI": 0.09090909090909091,
+            "IN_LBF_PSI": 0.09090909090909091
+          }
+        },
+        "solver_choice": {
+          "value": "abaqus_standard",
+          "confidence": 0.96,
+          "distribution": {
+            "abaqus_standard": 0.96,
+            "abaqus_explicit": 0.04
+          }
+        },
+        "is_well_constrained_noul": {
+          "probability": 0.2,
+          "is_yes": false
+        },
+        "has_acceptance_criteria_noul": {
+          "probability": 0.95,
+          "is_yes": true
+        },
+        "completeness_score": {
+          "score": 3.0,
+          "levels": {}
+        },
+        "extracted_parameters": {
+          "acceptance_criteria": [
+            {
+              "metric": "midpoint_temperature",
+              "operator": "==",
+              "limit": 50.0,
+              "unit": "C"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "CASE-CONTACT-03",
+      "prompt": "Two elastic blocks in contact under normal compressive pressure of 10 MPa and tangential sliding friction with friction coefficient 0.25.",
+      "passed": true,
+      "intent_id": "INTENT-CONTACT_FRICTIONAL",
+      "physics_choice": "contact_frictional",
+      "physics_confidence": 0.783,
+      "unit_system": "MM_N_MPA",
+      "is_well_constrained": false,
+      "completeness_score": 3.0,
+      "extracted_material": null,
+      "boundary_conditions_count": 0,
+      "loads_count": 1,
+      "acceptance_criteria_count": 0,
+      "bundle": {
+        "source_model": "jev-offline-engine-v1",
+        "physics_choice": {
+          "value": "contact_frictional",
+          "confidence": 0.783,
+          "distribution": {
+            "linear_static": 0.043478260869565216,
+            "steady_thermal": 0.043478260869565216,
+            "transient_dynamic": 0.043478260869565216,
+            "modal_frequency": 0.043478260869565216,
+            "contact_frictional": 0.7826086956521738,
+            "fatigue_damage": 0.043478260869565216
+          }
+        },
+        "unit_system_choice": {
+          "value": "MM_N_MPA",
+          "confidence": 0.826,
+          "distribution": {
+            "MM_N_MPA": 0.8260869565217391,
+            "SI": 0.08695652173913045,
+            "IN_LBF_PSI": 0.08695652173913045
+          }
+        },
+        "solver_choice": {
+          "value": "abaqus_standard",
+          "confidence": 0.96,
+          "distribution": {
+            "abaqus_standard": 0.96,
+            "abaqus_explicit": 0.04
+          }
+        },
+        "is_well_constrained_noul": {
+          "probability": 0.2,
+          "is_yes": false
+        },
+        "has_acceptance_criteria_noul": {
+          "probability": 0.35,
+          "is_yes": false
+        },
+        "completeness_score": {
+          "score": 3.0,
+          "levels": {}
+        },
+        "extracted_parameters": {
+          "dimensions": [
+            {
+              "value": 10.0,
+              "unit": "M"
+            }
+          ],
+          "loads": [
+            {
+              "magnitude": 10.0,
+              "unit": "MPA"
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

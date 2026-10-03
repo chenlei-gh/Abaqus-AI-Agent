@@ -1,0 +1,96 @@
+{
+  "schema_version": "reproducibility_evidence_v1",
+  "verified_at": "2026-10-03T04:23:55.945036+00:00",
+  "case_id": "static_cantilever",
+  "run_a_source": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\machine_validation\\static_golden_e2e.json",
+  "run_b_source": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\machine_validation\\static_golden_run_b.json",
+  "relative_tolerance_threshold": 0.0001,
+  "structural_invariance": {
+    "job_match": true,
+    "solver_match": true,
+    "release_match": false,
+    "intent_hash_a": "3d1704b16309a69360bfe3b30446fa6da44b4cdfed92cddff1c9cd7d5be242de",
+    "intent_hash_b": "3d1704b16309a69360bfe3b30446fa6da44b4cdfed92cddff1c9cd7d5be242de",
+    "intent_hash_match": true
+  },
+  "acceptance_invariance": {
+    "status_a": "PASS",
+    "status_b": "PASS",
+    "passed_a": true,
+    "passed_b": true,
+    "verdict_match": true
+  },
+  "numerical_metrics_evaluated": 3,
+  "metrics_comparisons": [
+    {
+      "metric_name": "root_mises_sanity",
+      "value_a": 471.214080810547,
+      "value_b": 471.214080810547,
+      "abs_difference": 0.0,
+      "rel_difference": 0.0,
+      "tolerance": 0.0001,
+      "passed": true
+    },
+    {
+      "metric_name": "tip_displacement_lower",
+      "value_a": 2.06864285469055,
+      "value_b": 2.06864285469055,
+      "abs_difference": 0.0,
+      "rel_difference": 0.0,
+      "tolerance": 0.0001,
+      "passed": true
+    },
+    {
+      "metric_name": "tip_displacement_upper",
+      "value_a": 2.06864285469055,
+      "value_b": 2.06864285469055,
+      "abs_difference": 0.0,
+      "rel_difference": 0.0,
+      "tolerance": 0.0001,
+      "passed": true
+    }
+  ],
+  "all_metrics_within_tolerance": true,
+  "reproducibility_verified": true,
+  "dual_run_verification": {
+    "case_id": "CASE-01-STATIC",
+    "intent_hashes": {
+      "run_a": "4809bef42e4d049218948bdbc12d86f57d574ecc0d2d5200325f7fc16e4b1b28",
+      "run_b": "4809bef42e4d049218948bdbc12d86f57d574ecc0d2d5200325f7fc16e4b1b28",
+      "match": true
+    },
+    "action_plan_hashes": {
+      "run_a": "e5979a1654455616002223a1d61bebf9988cfe0ceb679644c57c95d8ddc50710",
+      "run_b": "e5979a1654455616002223a1d61bebf9988cfe0ceb679644c57c95d8ddc50710",
+      "match": true
+    },
+    "inp_hashes": {
+      "run_a": "bc4f0b48922abf1ae1f76b482cc57f660528d68ad1de7f941a90fe2182ab154c",
+      "run_b": "bc4f0b48922abf1ae1f76b482cc57f660528d68ad1de7f941a90fe2182ab154c",
+      "match": true
+    },
+    "metric_comparisons": [
+      {
+        "metric_name": "tip_displacement",
+        "value_a": 1.9047619047619047,
+        "value_b": 1.9047619047619047,
+        "abs_difference": 0.0,
+        "rel_difference": 0.0,
+        "tolerance": 0.0001,
+        "passed": true
+      },
+      {
+        "metric_name": "max_mises",
+        "value_a": 600.0,
+        "value_b": 600.0,
+        "abs_difference": 0.0,
+        "rel_difference": 0.0,
+        "tolerance": 0.0001,
+        "passed": true
+      }
+    ],
+    "metrics_within_tolerance": true,
+    "acceptance_match": true,
+    "reproducibility_passed": true
+  }
+}

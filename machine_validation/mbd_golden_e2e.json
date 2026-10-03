@@ -1,0 +1,538 @@
+{
+  "status": "pass",
+  "launcher": "C:\\SIMULIA\\Commands\\abaqus.bat",
+  "workdir": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\machine_validation",
+  "script": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\machine_validation\\machine_validation\\mbd_golden_e2e_script.py",
+  "case": "rigid_body_physical_pendulum_mbd",
+  "command": [
+    "C:\\SIMULIA\\Commands\\abaqus.bat",
+    "cae",
+    "noGUI=D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\machine_validation\\machine_validation\\mbd_golden_e2e_script.py"
+  ],
+  "return_code": 0,
+  "process_succeeded": true,
+  "report": {
+    "acceptance": {
+      "blocked": [],
+      "criteria": [
+        {
+          "actual": 1.27233125069737,
+          "limit": 1.30948022590477,
+          "name": "pendulum_oscillation_period_check",
+          "operator": "<=",
+          "passed": true,
+          "relative_error": 0.0283692525266889,
+          "unit": "s"
+        },
+        {
+          "actual": 0.860786378383636,
+          "limit": 0.906273958359155,
+          "name": "pendulum_max_omega_check",
+          "operator": "<=",
+          "passed": true,
+          "relative_error": 0.0501918647843263,
+          "unit": "rad/s"
+        },
+        {
+          "actual": 0.0240666820712176,
+          "limit": 0.03,
+          "name": "energy_loss_bound",
+          "operator": "<=",
+          "passed": true,
+          "relative_error": 0.197777264292745,
+          "unit": ""
+        }
+      ],
+      "failures": [],
+      "gates": {
+        "contact": "SKIPPED",
+        "convergence": "SKIPPED",
+        "criteria": "PASS",
+        "engineering_checks": "SKIPPED",
+        "evidence_sufficiency": "NOT_SPECIFIED",
+        "execution": "PASS",
+        "fatigue": "SKIPPED",
+        "mesh_quality": "SKIPPED",
+        "numerical_verification": "SKIPPED"
+      },
+      "passed": true,
+      "status": "PASS",
+      "warnings": []
+    },
+    "energy_verification": {
+      "loss_ratio": 0.0240666820712176,
+      "max_ke_mJ": 82.2078552246094,
+      "report": {
+        "checks": [
+          {
+            "actual": 0.0240666820712176,
+            "evidence": [],
+            "expected": 0.0,
+            "message": "energy_fluctuation_ratio=0.0240667 (loss=2.02726 mJ, ref_energy=84.2351 mJ)",
+            "name": "mechanical_energy_conservation",
+            "passed": true,
+            "tolerance": 0.03,
+            "unit": "mJ"
+          }
+        ],
+        "warnings": []
+      },
+      "theoretical_pe_mJ": 84.2351149554753
+    },
+    "kinematics_verification": {
+      "report": {
+        "checks": [
+          {
+            "actual": 1.27233125069737,
+            "evidence": [],
+            "expected": 1.27134002515026,
+            "message": "actual_period=1.27233 s, expected_period=1.27134 s (relative_error=0.00077967)",
+            "name": "pendulum_oscillation_period",
+            "passed": true,
+            "tolerance": 0.03,
+            "unit": "s"
+          },
+          {
+            "actual": 0.860786378383636,
+            "evidence": [],
+            "expected": 0.863118055580148,
+            "message": "actual_max_omega=0.860786 rad/s, expected_max_omega=0.863118 rad/s (relative_error=0.00270146)",
+            "name": "pendulum_max_angular_velocity",
+            "passed": true,
+            "tolerance": 0.05,
+            "unit": "rad/s"
+          }
+        ],
+        "warnings": []
+      }
+    },
+    "material": {
+      "density_tonne_mm3": 7.85e-09,
+      "inertia_I0_kg_mm2": 226142.8,
+      "mass_kg": 1.884
+    },
+    "model": {
+      "depth_mm": 20.0,
+      "initial_tilt_deg": 10.0,
+      "length_mm": 600.0,
+      "width_mm": 20.0
+    },
+    "provenance": {
+      "abaqus_version": "unknown",
+      "action_plan": [
+        {
+          "action_type": "material_elastic",
+          "model_name": "MBDGolden",
+          "parameters": {
+            "name": "Steel",
+            "poisson": 0.3,
+            "youngs_modulus": 210000.0
+          },
+          "target": null
+        },
+        {
+          "action_type": "material_density",
+          "model_name": "MBDGolden",
+          "parameters": {
+            "density": 7.85e-09,
+            "name": "Steel"
+          },
+          "target": null
+        },
+        {
+          "action_type": "solid_section",
+          "model_name": "MBDGolden",
+          "parameters": {
+            "material": "Steel",
+            "name": "SolidSection"
+          },
+          "target": null
+        },
+        {
+          "action_type": "section_assignment",
+          "model_name": "MBDGolden",
+          "parameters": {
+            "part": "PendulumArm",
+            "region_expression": "mdb.models['MBDGolden'].parts['PendulumArm'].sets['AllCells']",
+            "section": "SolidSection"
+          },
+          "target": null
+        },
+        {
+          "action_type": "reference_point",
+          "model_name": "MBDGolden",
+          "parameters": {
+            "coordinates": [
+              0.0,
+              0.0,
+              10.0
+            ],
+            "name": "RP_Pivot",
+            "part": null
+          },
+          "target": null
+        },
+        {
+          "action_type": "rigid_body",
+          "model_name": "MBDGolden",
+          "parameters": {
+            "body_expression": "mdb.models['MBDGolden'].rootAssembly.sets['AllArmCells']",
+            "name": "RigidBody-1",
+            "ref_point_expression": "mdb.models['MBDGolden'].rootAssembly.sets['RP_Pivot']"
+          },
+          "target": null
+        },
+        {
+          "action_type": "displacement_bc",
+          "model_name": "MBDGolden",
+          "parameters": {
+            "name": "HingeBC",
+            "region_expression": "mdb.models['MBDGolden'].rootAssembly.sets['RP_Pivot']",
+            "step": "Initial",
+            "u1": 0.0,
+            "u2": 0.0,
+            "u3": 0.0,
+            "ur1": 0.0,
+            "ur2": 0.0,
+            "ur3": "UNSET"
+          },
+          "target": "mdb.models['MBDGolden'].rootAssembly.sets['RP_Pivot']"
+        },
+        {
+          "action_type": "implicit_dynamic_step",
+          "model_name": "MBDGolden",
+          "parameters": {
+            "amplitude": "STEP",
+            "application": null,
+            "half_inc_scale_factor": null,
+            "initial_inc": 0.005,
+            "max_inc": 0.01,
+            "max_num_inc": 500,
+            "min_inc": 1e-06,
+            "name": "Step-1",
+            "nlgeom": true,
+            "nohaf": null,
+            "previous": "Initial",
+            "reform_kernel": 8,
+            "solution_technique": "FULL_NEWTON",
+            "time_period": 2.0
+          },
+          "target": null
+        },
+        {
+          "action_type": "gravity",
+          "model_name": "MBDGolden",
+          "parameters": {
+            "amplitude": null,
+            "comp1": 0.0,
+            "comp2": -9810.0,
+            "comp3": 0.0,
+            "name": "Gravity",
+            "region_expression": null,
+            "step": "Step-1"
+          },
+          "target": null
+        },
+        {
+          "action_type": "field_output",
+          "model_name": "MBDGolden",
+          "parameters": {
+            "frequency": 1,
+            "num_intervals": null,
+            "request": "F-Output-1",
+            "step": "Step-1",
+            "variables": [
+              "U",
+              "UR",
+              "V",
+              "VR",
+              "RF",
+              "RM"
+            ]
+          },
+          "target": null
+        },
+        {
+          "action_type": "history_output",
+          "model_name": "MBDGolden",
+          "parameters": {
+            "region_expression": null,
+            "request": "H-Output-1",
+            "step": "Step-1",
+            "variables": [
+              "ALLIE",
+              "ALLKE",
+              "ALLWK",
+              "ALLSE",
+              "ETOTAL"
+            ]
+          },
+          "target": null
+        },
+        {
+          "action_type": "seed_part",
+          "model_name": "MBDGolden",
+          "parameters": {
+            "deviation_factor": 0.1,
+            "min_size_factor": 0.1,
+            "part": "PendulumArm",
+            "size": 20.0
+          },
+          "target": null
+        },
+        {
+          "action_type": "element_type",
+          "model_name": "MBDGolden",
+          "parameters": {
+            "elem_code": "C3D8R",
+            "library": "STANDARD",
+            "part": "PendulumArm",
+            "region_expression": "mdb.models['MBDGolden'].parts['PendulumArm'].sets['AllCells']"
+          },
+          "target": null
+        },
+        {
+          "action_type": "generate_mesh",
+          "model_name": "MBDGolden",
+          "parameters": {
+            "part": "PendulumArm"
+          },
+          "target": null
+        },
+        {
+          "action_type": "create_job",
+          "model_name": "MBDGolden",
+          "parameters": {
+            "job_type": "STANDARD",
+            "name": "MBDGoldenJob"
+          },
+          "target": null
+        }
+      ],
+      "action_plan_hash": null,
+      "artifact_manifest_hash": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "environment": {},
+      "executor": "CAEInProcessExecutor",
+      "input_hash": null,
+      "intent_hash": null,
+      "job_name": "MBDGoldenJob",
+      "metadata": {
+        "action_plan_scope": "caller",
+        "content_hash_scope": "not_captured",
+        "model_snapshot_hash": "99837c549f03e4b29fa7fa0ded897753ffc99ca73312b5c8f81f3626bf7f70ef"
+      },
+      "model_hash": null,
+      "model_name": "MBDGolden",
+      "output_hash": null,
+      "python_version": "3.10.5 (main, Jul 27 2024, 04:26:12) [MSC v.1934 64 bit (AMD64)]",
+      "run_id": "fe60df8f-fa74-472e-9f0e-143361587bf0"
+    },
+    "simulation_results": {
+      "max_omega_error_percent": 0.270145802354263,
+      "measured_max_omega_rad_s": 0.860786378383636,
+      "measured_period_s": 1.27233125069737,
+      "period_error_percent": 0.0779669897510452,
+      "total_frames": 204,
+      "zero_crossings_count": 3
+    },
+    "solver": {
+      "artifacts": [],
+      "diagnostics": [],
+      "job_status": {
+        "diagnostics": [],
+        "name": "MBDGoldenJob",
+        "raw": {
+          "amplitudes": [],
+          "boundary_conditions": [
+            "HingeBC"
+          ],
+          "instances": [
+            "PendulumArm-1"
+          ],
+          "interactions": [],
+          "jobs": [
+            "MBDGoldenJob"
+          ],
+          "loads": [
+            "Gravity"
+          ],
+          "materials": [
+            "Steel"
+          ],
+          "metadata": {
+            "job_count": 1,
+            "job_status": {
+              "MBDGoldenJob": "None"
+            },
+            "model_count": 2
+          },
+          "models": [
+            "MBDGolden",
+            "Model-1"
+          ],
+          "output_requests": [
+            "F-Output-1"
+          ],
+          "parts": [
+            "PendulumArm"
+          ],
+          "predefined_fields": [],
+          "sections": [
+            "SolidSection"
+          ],
+          "steps": [
+            "Initial",
+            "Step-1",
+            "Initial"
+          ]
+        },
+        "state": "COMPLETED"
+      },
+      "odb_path": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\machine_validation\\MBDGoldenJob.odb"
+    },
+    "status": "pass",
+    "strict_gate_verification": {
+      "expected_fail": true,
+      "failures": [
+        "criterion:strict_period_gate"
+      ],
+      "passed": false
+    },
+    "theory": {
+      "corrected_period_s": 1.27134002515026,
+      "initial_potential_energy_mJ": 84.2351149554753,
+      "linear_period_s": 1.26892417260424,
+      "max_omega_rad_s": 0.863118055580148
+    },
+    "time_history_sample": [
+      {
+        "frame_index": 0,
+        "omega_rad_s": 0.0,
+        "theta_deg": 10.0,
+        "theta_rad": 0.174532925199433,
+        "time": 0.0,
+        "tip_u1": 0.0,
+        "tip_u2": 0.0,
+        "ur3_rad": 0.0,
+        "vr3_rad_s": 0.0
+      },
+      {
+        "frame_index": 20,
+        "omega_rad_s": 0.665331125259399,
+        "theta_deg": 6.44910715137104,
+        "theta_rad": 0.112558153605337,
+        "time": 0.178828120231628,
+        "tip_u1": -36.8143646240234,
+        "tip_u2": -5.16076059341431,
+        "ur3_rad": -0.0636650547385216,
+        "vr3_rad_s": -0.665331125259399
+      },
+      {
+        "frame_index": 40,
+        "omega_rad_s": 0.821841955184937,
+        "theta_deg": -2.5994601202144,
+        "theta_rad": -0.045369137872029,
+        "time": 0.378828138113022,
+        "tip_u1": -131.362796020508,
+        "tip_u2": -7.65531606674194,
+        "ur3_rad": -0.225795954465866,
+        "vr3_rad_s": -0.821841955184937
+      },
+      {
+        "frame_index": 60,
+        "omega_rad_s": 0.23958221077919,
+        "theta_deg": -9.0596319772036,
+        "theta_rad": -0.158120407021167,
+        "time": 0.578828096389771,
+        "tip_u1": -198.41907043457,
+        "tip_u2": -0.0797741889953613,
+        "ur3_rad": -0.341412454843521,
+        "vr3_rad_s": -0.23958221077919
+      },
+      {
+        "frame_index": 80,
+        "omega_rad_s": 0.555293798446655,
+        "theta_deg": -7.13565885285066,
+        "theta_rad": -0.124540741281326,
+        "time": 0.778828144073486,
+        "tip_u1": -178.554666137695,
+        "tip_u2": -3.14489889144897,
+        "ur3_rad": -0.306994020938873,
+        "vr3_rad_s": 0.555293798446655
+      },
+      {
+        "frame_index": 100,
+        "omega_rad_s": 0.850642323493958,
+        "theta_deg": 1.42397288849568,
+        "theta_rad": 0.0248530153633837,
+        "time": 0.978828132152557,
+        "tip_u1": -89.2908096313477,
+        "tip_u2": -8.44018840789795,
+        "ur3_rad": -0.153727173805237,
+        "vr3_rad_s": 0.850642323493958
+      },
+      {
+        "frame_index": 120,
+        "omega_rad_s": 0.380567938089371,
+        "theta_deg": 8.90803205797634,
+        "theta_rad": 0.155474489284894,
+        "time": 1.17882812023163,
+        "tip_u1": -11.2861026763916,
+        "tip_u2": -1.83661456108093,
+        "ur3_rad": -0.0195799320936203,
+        "vr3_rad_s": 0.380567938089371
+      },
+      {
+        "frame_index": 140,
+        "omega_rad_s": 0.428664237260818,
+        "theta_deg": 8.61384550684336,
+        "theta_rad": 0.150339965352536,
+        "time": 1.37882816791534,
+        "tip_u1": -14.3325084686279,
+        "tip_u2": -2.29357852935791,
+        "ur3_rad": -0.024854714050889,
+        "vr3_rad_s": -0.428664237260818
+      },
+      {
+        "frame_index": 160,
+        "omega_rad_s": 0.852185130119324,
+        "theta_deg": 0.824263437144,
+        "theta_rad": 0.0143861108819681,
+        "time": 1.57882809638977,
+        "tip_u1": -95.5652740478516,
+        "tip_u2": -8.51554040908814,
+        "ur3_rad": -0.16447189450264,
+        "vr3_rad_s": -0.852185130119324
+      },
+      {
+        "frame_index": 180,
+        "omega_rad_s": 0.508443236351013,
+        "theta_deg": -7.4576384528773,
+        "theta_rad": -0.130160345426045,
+        "time": 1.77882814407349,
+        "tip_u1": -181.886700439453,
+        "tip_u2": -2.67953423857689,
+        "ur3_rad": -0.312754929065704,
+        "vr3_rad_s": -0.508443236351013
+      },
+      {
+        "frame_index": 200,
+        "omega_rad_s": 0.289609104394913,
+        "theta_deg": -8.78772367480837,
+        "theta_rad": -0.153374711880862,
+        "time": 1.97882807254791,
+        "tip_u1": -195.618743896484,
+        "tip_u2": -0.554337930679321,
+        "ur3_rad": -0.336549043655396,
+        "vr3_rad_s": 0.289609104394913
+      }
+    ],
+    "workflow": {
+      "action_count": 15,
+      "solver_completed": true,
+      "state": "accepted"
+    }
+  },
+  "stdout": "",
+  "stderr": "Abaqus License Manager checked out the following license:\n\"cae\" from Flexnet server DESKTOP-9EAL2I4\n<9998 out of 9999 licenses remain available>.\n"
+}

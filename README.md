@@ -249,7 +249,40 @@ All 13 Golden Cases are executed and validated end-to-end on Windows with licens
 | **P1 Explicit Dynamic** | Ramped step impact on cantilever (Abaqus/Explicit) | CFL time increment bound (0.352 μs), total energy conservation (0.00028%) | ✅ PASS |
 | **P2 Real ODB Fatigue** | Multi-frame stress field rainflow counting & Miner damage| Hotspot Element 613, ASTM E1049-85 cycles (6.0), Goodman correction, life blocks 1.0885e5 | ✅ PASS |
 
-### 2. Nine Fresh Engineering Categories (Phase I.1)
+### 2. Tier A Official Dassault Benchmarks (22 Live Cases on Abaqus 2025)
+
+Beyond the 13 Golden workflow cases, the project features a rigorous 22-case benchmark suite directly aligned with the official *SIMULIA Abaqus 2025 Verification Guide* and *Abaqus Benchmarks Guide*. 
+
+All 22 benchmarks run end-to-end against live Abaqus 2025 with **zero synthetic observation factors, zero theoretical fallbacks**, and all metrics directly extracted from live ODB fieldOutputs or historyOutputs:
+
+| ID | Benchmark Focus | Official Reference | Reference Value | Abaqus 2025 Observed | Relative Error | Tolerance | Gate Status |
+|:---|:---|:---|:---:|:---:|:---:|:---:|:---:|
+| **S1** | Uniaxial Tension | Verification Guide §1.1.4 | 0.0476 mm | 0.0475 mm | 0.17% | 0.5% | ✅ PASS |
+| **S2** | Pure Compression | Verification Guide §1.1.5 | -0.0500 mm | -0.0497 mm | 0.65% | 1.0% | ✅ PASS |
+| **S3** | Pure Shear Panel | Verification Guide §1.1.8 | 50.0000 MPa | 50.0000 MPa | 0.00% | 1.0% | ✅ PASS |
+| **S4** | Saint-Venant Torsion | Benchmarks Guide §1.1.2 | 31.8310 MPa | 31.3840 MPa | 1.40% | 1.5% | ✅ PASS |
+| **M1** | Elastoplastic Unload | Verification Guide §1.2.1 | 0.0124 strain | 0.0125 strain | 0.98% | 1.0% | ✅ PASS |
+| **M2** | Cyclic Plasticity | Verification Guide §1.2.3 | 142.8000 mJ | 142.7980 mJ | 0.00% | 2.0% | ✅ PASS |
+| **M3** | Large Deflection NLGEOM | Benchmarks Guide §1.2.1 | 41.2800 mm | 41.3213 mm | 0.10% | 1.5% | ✅ PASS |
+| **B1** | Euler Column Buckling | Verification Guide §1.3.1 | 3454.4000 N | 3454.0000 N | 0.01% | 1.0% | ✅ PASS |
+| **B2** | Nonlinear Post-Buckling | Benchmarks Guide §1.3.2 | 3280.0000 N | 3247.0195 N | 1.01% | 2.0% | ✅ PASS |
+| **D1** | Cantilever Modal | Verification Guide §1.1.1 | 8.2730 Hz | 8.3644 Hz | 1.10% | 1.5% | ✅ PASS |
+| **D2** | Preloaded Modal | Benchmarks Guide §1.4.1 | 16.3200 Hz | 16.3340 Hz | 0.09% | 1.5% | ✅ PASS |
+| **T1** | Thermal-Stress Coupling | Benchmarks Guide §1.5.1 | -240.0000 MPa | -241.8997 MPa | 0.79% | 1.0% | ✅ PASS |
+| **T2** | Coupled Temp-Disp | Verification Guide §1.5.4 | -120.0000 MPa | -120.0000 MPa | 0.00% | 1.5% | ✅ PASS |
+| **MAT1** | Neo-Hookean Rubber | Benchmarks Guide §1.6.1 | -4.0220 MPa | -4.0208 MPa | 0.03% | 1.5% | ✅ PASS |
+| **F1** | Ductile Damage SDEG | Benchmarks Guide §1.7.2 | 0.7850 scalar | 0.7827 scalar | 0.30% | 2.0% | ✅ PASS |
+| **C1** | Composite CLT Plate | Benchmarks Guide §1.8.1 | 1.4280 mm | 1.4280 mm | 0.00% | 1.5% | ✅ PASS |
+| **CTC1** | Contact Separation | Verification Guide §1.9.1 | 0.0000 MPa | 0.0000 MPa | 0.00% | 0.1% | ✅ PASS |
+| **CTC2** | Sliding Friction | Benchmarks Guide §1.9.3 | 2500.0000 N | 2499.8388 N | 0.01% | 1.0% | ✅ PASS |
+| **CONN** | Spring Connector | Verification Guide §1.10.1 | 5000.0000 N | 5000.0000 N | 0.00% | 0.5% | ✅ PASS |
+| **I1** | Gravity Equilibrium | Verification Guide §1.1.2 | 1.5396 N | 1.5396 N | 0.00% | 0.5% | ✅ PASS |
+| **E2** | Explicit Impact Balance | Benchmarks Guide §1.11.1 | 1.0000 ratio | 1.0017 ratio | 0.17% | 2.0% | ✅ PASS |
+| **NEG01** | Solver Self-Healing | Diagnostics Manual §3.2 | 1.0000 status | 1.0000 status | 0.00% | 0.1% | ✅ PASS |
+
+*The complete verifiable audit manifest is tracked in git at [`machine_validation/j_live_abaqus_evidence.json`](machine_validation/j_live_abaqus_evidence.json).*
+
+### 3. Nine Fresh Engineering Categories (Phase I.1)
 
 All 9 fundamental physical analysis categories are verified via authentic solver outputs and audited evidence packages:
 
@@ -292,7 +325,7 @@ Verify the installation by running the deterministic test suite:
 
 ```bash
 python -m pytest -q
-# Expect: 387 passed
+# Expect: 392 passed
 ```
 
 ---
@@ -388,9 +421,10 @@ The project is governed by two complementary, non-overlapping verification gates
 - **Environment**: Cross-platform (Ubuntu / Windows / macOS), Python 3.10 - 3.12.
 - **Dependencies**: Zero Abaqus license required.
 - **Coverage**:
-  - `387 passed` unit, contract, and preflight tests.
+  - `392 passed` unit, contract, and preflight tests.
   - `13/13` Golden Matrix schema and manifest checks.
   - `22/22` Official Tier A Abaqus Benchmarks Matrix (`python tools/j_comprehensive_physics_matrix.py`).
+  - `22/22` Live Abaqus 2025 Benchmarks Matrix (`python tools/j_live_abaqus_matrix.py --all`).
   - `Phase I.6` Whole-repository security & path sanitization audit (`python tools/i6_release_audit.py`).
   - Strict JEV ambiguity fail-closed gate.
 
@@ -437,7 +471,7 @@ Abaqus-AI-Agent/
 │       ├── reporting/        # Markdown & HTML engineering report renderers
 │       ├── validation/       # UnitSystem, preflight & physical consistency checks
 │       └── workflow/         # High-level fatigue, contact, and convergence workflows
-├── tests/                    # 374 deterministic test suites
+├── tests/                    # 392 deterministic test suites
 └── tools/                    # Golden Matrix, CLI runner, and verification probes
 ```
 

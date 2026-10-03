@@ -1,0 +1,340 @@
+{
+  "case": "3d_cantilever_mesh_convergence",
+  "command": [
+    "C:\\SIMULIA\\Commands\\abaqus.bat",
+    "cae",
+    "noGUI=D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\machine_validation\\mesh_convergence_e2e_script.py"
+  ],
+  "launcher": "abaqus",
+  "process_succeeded": true,
+  "report": {
+    "acceptance": {
+      "standard": {
+        "blocked": [],
+        "criteria": [
+          {
+            "actual": 1.98531663417816,
+            "limit": 1.0,
+            "name": "tip_displacement_sanity",
+            "operator": ">=",
+            "passed": true,
+            "relative_error": 0.98531663417816,
+            "unit": "mm"
+          }
+        ],
+        "failures": [],
+        "gates": {
+          "contact": "SKIPPED",
+          "convergence": "PASS",
+          "criteria": "PASS",
+          "engineering_checks": "PASS",
+          "evidence_sufficiency": "NOT_SPECIFIED",
+          "execution": "PASS",
+          "fatigue": "SKIPPED",
+          "mesh_quality": "PASS",
+          "numerical_verification": "PASS"
+        },
+        "passed": true,
+        "status": "PASS",
+        "warnings": []
+      },
+      "strict": {
+        "blocked": [],
+        "criteria": [
+          {
+            "actual": 1.98531663417816,
+            "limit": 1.0,
+            "name": "tip_displacement_sanity",
+            "operator": ">=",
+            "passed": true,
+            "relative_error": 0.98531663417816,
+            "unit": "mm"
+          }
+        ],
+        "failures": [
+          "numerical_verification_failed",
+          "mesh_convergence_failed"
+        ],
+        "gates": {
+          "contact": "SKIPPED",
+          "convergence": "FAIL",
+          "criteria": "PASS",
+          "engineering_checks": "PASS",
+          "evidence_sufficiency": "NOT_SPECIFIED",
+          "execution": "PASS",
+          "fatigue": "SKIPPED",
+          "mesh_quality": "PASS",
+          "numerical_verification": "FAIL"
+        },
+        "passed": false,
+        "status": "FAIL",
+        "warnings": []
+      }
+    },
+    "checks": {
+      "all_odbs_exist": true,
+      "all_solvers_completed": true,
+      "element_count_increases": true,
+      "richardson_uses_real_results": true,
+      "strict_gate_fails_as_expected": true
+    },
+    "load": {
+      "Fy_N": -1000.0
+    },
+    "material": {
+      "E_MPa": 210000.0,
+      "nu": 0.3
+    },
+    "mesh_convergence": {
+      "converged": true,
+      "evidence": [
+        "convergence_points:3",
+        "source:MeshConv_Coarse.odb",
+        "quantity:tip_displacement",
+        "source:MeshConv_Medium.odb",
+        "quantity:tip_displacement",
+        "source:MeshConv_Fine.odb",
+        "quantity:tip_displacement"
+      ],
+      "final_change": 0.0402806218209449,
+      "points": [
+        {
+          "mesh_size": 5.0,
+          "quality_status": "pass",
+          "quantity": "tip_displacement",
+          "refinement_target": null,
+          "result_value": 2.57699179649353,
+          "singularity_suspected": false,
+          "source": "MeshConv_Coarse.odb"
+        },
+        {
+          "mesh_size": 2.5,
+          "quality_status": "pass",
+          "quantity": "tip_displacement",
+          "refinement_target": null,
+          "result_value": 2.06864285469055,
+          "singularity_suspected": false,
+          "source": "MeshConv_Medium.odb"
+        },
+        {
+          "mesh_size": 1.25,
+          "quality_status": "pass",
+          "quantity": "tip_displacement",
+          "refinement_target": null,
+          "result_value": 1.98531663417816,
+          "singularity_suspected": false,
+          "source": "MeshConv_Fine.odb"
+        }
+      ],
+      "quality_gate_passed": true,
+      "singularity_suspected": false,
+      "status": "converged",
+      "warnings": []
+    },
+    "model": {
+      "height_mm": 10.0,
+      "length_mm": 100.0,
+      "width_mm": 10.0
+    },
+    "numerical_verification": {
+      "error": 0.0102856431143688,
+      "extrapolated_value": 1.96898042748362,
+      "gci": 0.0102856431143688,
+      "message": "observed_order=2.60898 gci=0.0102856",
+      "method": "richardson_gci",
+      "name": "tip_displacement",
+      "observed_order": 2.60897668504883,
+      "points": [
+        2.57699179649353,
+        2.06864285469055,
+        1.98531663417816
+      ],
+      "status": "converged",
+      "tolerance": 0.1
+    },
+    "runs": [
+      {
+        "case": "coarse",
+        "element_count": 80,
+        "job_name": "MeshConv_Coarse",
+        "mesh_quality_passed": true,
+        "node_count": 189,
+        "odb_element_count": 80,
+        "odb_file_size": 237816,
+        "odb_node_count": 189,
+        "odb_path": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\MeshConv_Coarse.odb",
+        "reaction_report": {
+          "checks": [
+            {
+              "actual": -6.54836185276508e-11,
+              "evidence": [],
+              "expected": -0.0,
+              "message": "relative_error=6.54836e-14",
+              "name": "global_load_balance_RF1",
+              "passed": true,
+              "tolerance": 0.01,
+              "unit": "N"
+            },
+            {
+              "actual": 999.999987,
+              "evidence": [],
+              "expected": 1000.0,
+              "message": "relative_error=1.3e-08",
+              "name": "global_load_balance_RF2",
+              "passed": true,
+              "tolerance": 0.01,
+              "unit": "N"
+            },
+            {
+              "actual": -2.52441623160848e-10,
+              "evidence": [],
+              "expected": -0.0,
+              "message": "relative_error=2.52442e-13",
+              "name": "global_load_balance_RF3",
+              "passed": true,
+              "tolerance": 0.01,
+              "unit": "N"
+            }
+          ],
+          "warnings": []
+        },
+        "reaction_summary": {
+          "components": [
+            -6.54836185276508e-11,
+            999.999987,
+            -2.52441623160848e-10
+          ],
+          "count": 9
+        },
+        "seed_size": 5.0,
+        "solver_completed": true,
+        "tip_displacement_mm": 2.57699179649353
+      },
+      {
+        "case": "medium",
+        "element_count": 640,
+        "job_name": "MeshConv_Medium",
+        "mesh_quality_passed": true,
+        "node_count": 1025,
+        "odb_element_count": 640,
+        "odb_file_size": 350360,
+        "odb_node_count": 1025,
+        "odb_path": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\MeshConv_Medium.odb",
+        "reaction_report": {
+          "checks": [
+            {
+              "actual": 1.33809407998342e-10,
+              "evidence": [],
+              "expected": -0.0,
+              "message": "relative_error=1.33809e-13",
+              "name": "global_load_balance_RF1",
+              "passed": true,
+              "tolerance": 0.01,
+              "unit": "N"
+            },
+            {
+              "actual": 1000.00003,
+              "evidence": [],
+              "expected": 1000.0,
+              "message": "relative_error=3e-08",
+              "name": "global_load_balance_RF2",
+              "passed": true,
+              "tolerance": 0.01,
+              "unit": "N"
+            },
+            {
+              "actual": -7.73070496506989e-11,
+              "evidence": [],
+              "expected": -0.0,
+              "message": "relative_error=7.7307e-14",
+              "name": "global_load_balance_RF3",
+              "passed": true,
+              "tolerance": 0.01,
+              "unit": "N"
+            }
+          ],
+          "warnings": []
+        },
+        "reaction_summary": {
+          "components": [
+            1.33809407998342e-10,
+            1000.00003,
+            -7.73070496506989e-11
+          ],
+          "count": 25
+        },
+        "seed_size": 2.5,
+        "solver_completed": true,
+        "tip_displacement_mm": 2.06864285469055
+      },
+      {
+        "case": "fine",
+        "element_count": 5120,
+        "job_name": "MeshConv_Fine",
+        "mesh_quality_passed": true,
+        "node_count": 6561,
+        "odb_element_count": 5120,
+        "odb_file_size": 1165080,
+        "odb_node_count": 6561,
+        "odb_path": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\MeshConv_Fine.odb",
+        "reaction_report": {
+          "checks": [
+            {
+              "actual": -3.87103682442103e-11,
+              "evidence": [],
+              "expected": -0.0,
+              "message": "relative_error=3.87104e-14",
+              "name": "global_load_balance_RF1",
+              "passed": true,
+              "tolerance": 0.01,
+              "unit": "N"
+            },
+            {
+              "actual": 999.999986,
+              "evidence": [],
+              "expected": 1000.0,
+              "message": "relative_error=1.4e-08",
+              "name": "global_load_balance_RF2",
+              "passed": true,
+              "tolerance": 0.01,
+              "unit": "N"
+            },
+            {
+              "actual": 8.53503934195032e-11,
+              "evidence": [],
+              "expected": -0.0,
+              "message": "relative_error=8.53504e-14",
+              "name": "global_load_balance_RF3",
+              "passed": true,
+              "tolerance": 0.01,
+              "unit": "N"
+            }
+          ],
+          "warnings": []
+        },
+        "reaction_summary": {
+          "components": [
+            -3.87103682442103e-11,
+            999.999986,
+            8.53503934195032e-11
+          ],
+          "count": 81
+        },
+        "seed_size": 1.25,
+        "solver_completed": true,
+        "tip_displacement_mm": 1.98531663417816
+      }
+    ],
+    "status": "pass",
+    "theory": {
+      "root_bending_stress_MPa": 600.0,
+      "tip_displacement_mm": 1.9047619047619
+    }
+  },
+  "return_code": 0,
+  "script": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\machine_validation\\mesh_convergence_e2e_script.py",
+  "status": "pass",
+  "stderr": "Abaqus License Manager checked out the following license:\n\"cae\" from Flexnet server DESKTOP-9EAL2I4\n<9998 out of 9999 licenses remain available>.\n",
+  "stdout": "",
+  "workdir": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent"
+}

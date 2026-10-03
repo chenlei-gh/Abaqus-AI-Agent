@@ -1,0 +1,356 @@
+{
+  "acceptance": {
+    "blocked": [],
+    "criteria": [
+      {
+        "actual": 1.4901161193847656e-08,
+        "limit": 0.001,
+        "name": "joint_drift",
+        "operator": "<=",
+        "passed": true,
+        "relative_error": 0.9999850988388062,
+        "unit": "mm"
+      },
+      {
+        "actual": 3.212729109477612e-20,
+        "limit": 0.01,
+        "name": "slider_transverse_drift",
+        "operator": "<=",
+        "passed": true,
+        "relative_error": 1.0,
+        "unit": "mm"
+      },
+      {
+        "actual": 1.9112135021259747e-07,
+        "limit": 0.05,
+        "name": "loop_closure_error",
+        "operator": "<=",
+        "passed": true,
+        "relative_error": 0.9999961775729957,
+        "unit": ""
+      },
+      {
+        "actual": 0.28797391057014465,
+        "limit": 0.01,
+        "name": "max_mises_stress_lower",
+        "operator": ">=",
+        "passed": true,
+        "relative_error": 27.797391057014465,
+        "unit": "MPa"
+      },
+      {
+        "actual": 0.28797391057014465,
+        "limit": 150.0,
+        "name": "max_mises_stress_upper",
+        "operator": "<=",
+        "passed": true,
+        "relative_error": 0.9980801739295324,
+        "unit": "MPa"
+      },
+      {
+        "actual": 0.9961108644455413,
+        "limit": 0.005,
+        "name": "strain_energy_active",
+        "operator": ">=",
+        "passed": true,
+        "relative_error": 198.22217288910826,
+        "unit": ""
+      },
+      {
+        "actual": 0.40470114390093476,
+        "limit": 0.5,
+        "name": "energy_dissipation",
+        "operator": "<=",
+        "passed": true,
+        "relative_error": 0.1905977121981305,
+        "unit": ""
+      }
+    ],
+    "failures": [],
+    "gates": {
+      "contact": "SKIPPED",
+      "convergence": "SKIPPED",
+      "criteria": "PASS",
+      "engineering_checks": "SKIPPED",
+      "evidence_sufficiency": "NOT_SPECIFIED",
+      "execution": "PASS",
+      "fatigue": "SKIPPED",
+      "mesh_quality": "SKIPPED",
+      "numerical_verification": "SKIPPED"
+    },
+    "passed": true,
+    "status": "PASS",
+    "warnings": []
+  },
+  "artifacts": [
+    {
+      "kind": "odb",
+      "path": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\machine_validation\\FMBD5GoldenJob.odb"
+    },
+    {
+      "kind": "script",
+      "path": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\machine_validation\\FMBD5GoldenJob_fmbd5_script.py"
+    }
+  ],
+  "case_id": "fmbd5_crank_slider",
+  "job_name": "FMBD5GoldenJob",
+  "launcher": "C:\\SIMULIA\\Commands\\abaqus.bat",
+  "process_succeeded": true,
+  "provenance": {
+    "action_count": 45,
+    "compiler": "MechanismGraph",
+    "intent_id": "fmbd5-crank-slider-golden-e2e",
+    "release": "Abaqus 2025",
+    "solver_strategy": {
+      "application": "MODERATE_DISSIPATION",
+      "nlgeom": true,
+      "nohaf": true,
+      "time_period": 1.0
+    }
+  },
+  "release": "Abaqus 2025",
+  "report": {
+    "acceptance": {
+      "blocked": [],
+      "criteria": [
+        {
+          "actual": 1.4901161193847656e-08,
+          "limit": 0.001,
+          "name": "joint_drift",
+          "operator": "<=",
+          "passed": true,
+          "relative_error": 0.9999850988388062,
+          "unit": "mm"
+        },
+        {
+          "actual": 3.212729109477612e-20,
+          "limit": 0.01,
+          "name": "slider_transverse_drift",
+          "operator": "<=",
+          "passed": true,
+          "relative_error": 1.0,
+          "unit": "mm"
+        },
+        {
+          "actual": 1.9112135021259747e-07,
+          "limit": 0.05,
+          "name": "loop_closure_error",
+          "operator": "<=",
+          "passed": true,
+          "relative_error": 0.9999961775729957,
+          "unit": ""
+        },
+        {
+          "actual": 0.28797391057014465,
+          "limit": 0.01,
+          "name": "max_mises_stress_lower",
+          "operator": ">=",
+          "passed": true,
+          "relative_error": 27.797391057014465,
+          "unit": "MPa"
+        },
+        {
+          "actual": 0.28797391057014465,
+          "limit": 150.0,
+          "name": "max_mises_stress_upper",
+          "operator": "<=",
+          "passed": true,
+          "relative_error": 0.9980801739295324,
+          "unit": "MPa"
+        },
+        {
+          "actual": 0.9961108644455413,
+          "limit": 0.005,
+          "name": "strain_energy_active",
+          "operator": ">=",
+          "passed": true,
+          "relative_error": 198.22217288910826,
+          "unit": ""
+        },
+        {
+          "actual": 0.40470114390093476,
+          "limit": 0.5,
+          "name": "energy_dissipation",
+          "operator": "<=",
+          "passed": true,
+          "relative_error": 0.1905977121981305,
+          "unit": ""
+        }
+      ],
+      "failures": [],
+      "gates": {
+        "contact": "SKIPPED",
+        "convergence": "SKIPPED",
+        "criteria": "PASS",
+        "engineering_checks": "SKIPPED",
+        "evidence_sufficiency": "NOT_SPECIFIED",
+        "execution": "PASS",
+        "fatigue": "SKIPPED",
+        "mesh_quality": "SKIPPED",
+        "numerical_verification": "SKIPPED"
+      },
+      "passed": true,
+      "status": "PASS",
+      "warnings": []
+    },
+    "case_id": "fmbd5_crank_slider",
+    "job_name": "FMBD5GoldenJob",
+    "material": {
+      "density_tonne_mm3": 7.85e-09,
+      "poisson": 0.3,
+      "youngs_modulus_mpa": 210000.0
+    },
+    "model": {
+      "compiler": "MechanismGraph.compile_to_actions()",
+      "connectors": "CONN3D2 HINGE & TRANSLATOR",
+      "coupling": "KINEMATIC COUPLING",
+      "crank_length_mm": 100.0,
+      "depth_mm": 20.0,
+      "initial_crank_deg": 15.0,
+      "rod_length_mm": 300.0,
+      "slider_initial_x_mm": 395.47404244018753,
+      "width_mm": 20.0
+    },
+    "odb_path": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\machine_validation\\FMBD5GoldenJob.odb",
+    "procedure": "implicit_dynamic",
+    "provenance": {
+      "action_count": 45,
+      "compiler": "MechanismGraph",
+      "intent_id": "fmbd5-crank-slider-golden-e2e",
+      "release": "Abaqus 2025",
+      "solver_strategy": {
+        "application": "MODERATE_DISSIPATION",
+        "nlgeom": true,
+        "nohaf": true,
+        "time_period": 1.0
+      }
+    },
+    "release": "Abaqus 2025",
+    "simulation_results": {
+      "algorithmic_damping_dissipation_ratio": 0.40470114390093476,
+      "artificial_to_strain_energy_ratio": 0.003904334714571759,
+      "elastic_strain_ratio_in_ie": 0.9961108644455413,
+      "energy_breakdown_note": "Rigid-body kinematics dominate kinetic energy (~708.8 mJ); flexible rod participates in linear elastic strain energy (~0.011 mJ); internal energy is 99.61% elastic strain energy without plastic dissipation; C3D8R artificial hourglass energy is negligible (ALLAE=4.34e-5 mJ, ALLAE/ALLSE=0.39%); viscous dissipation is zero (ALLVD=0.0 mJ); algorithmic numerical damping absorbs ~312.1 mJ (40.47% of peak external work)",
+      "energy_dissipation_ratio": 0.40470114390093476,
+      "max_artificial_energy_allae_mj": 4.339141378295608e-05,
+      "max_joint_drift_mm": 1.4901161193847656e-08,
+      "max_loop_closure_error": 1.9112135021259747e-07,
+      "max_mises_stress_mpa": 0.28797391057014465,
+      "max_numerical_dissipation_mj": 312.1167907714844,
+      "max_slider_y_drift_mm": 3.212729109477612e-20,
+      "max_viscous_dissipation_allvd_mj": 0.0,
+      "min_total_energy_mj": -312.1167907714844,
+      "num_frames": 115,
+      "peak_external_work_mj": 771.2278442382812,
+      "peak_internal_energy_mj": 0.011157042346894741,
+      "peak_kinetic_energy_mj": 708.7698364257812,
+      "peak_strain_energy_mj": 0.011113651096820831,
+      "strain_energy_ratio": 0.9961108644455413,
+      "total_time_s": 1.0
+    },
+    "solver": "standard",
+    "solver_strategy": {
+      "application": "MODERATE_DISSIPATION",
+      "damping_rationale": "Moderate numerical dissipation (HHT alpha=-0.41421, nohaf=True) suppresses connector high-frequency chatter without perturbing low-frequency macroscopic mechanism kinematics",
+      "half_inc_scale_factor": 10000.0,
+      "initial_inc_s": 0.005,
+      "max_inc_s": 0.01,
+      "nlgeom": true,
+      "nohaf": true,
+      "procedure": "implicit_dynamic",
+      "time_period_s": 1.0
+    },
+    "status": "pass",
+    "strict_acceptance": {
+      "blocked": [],
+      "criteria": [
+        {
+          "actual": 1.4901161193847656e-08,
+          "limit": 1e-15,
+          "name": "joint_drift_impossible",
+          "operator": "<=",
+          "passed": false,
+          "relative_error": 14901160.193847654,
+          "unit": "mm"
+        }
+      ],
+      "failures": [
+        "criterion:joint_drift_impossible"
+      ],
+      "gates": {
+        "contact": "SKIPPED",
+        "convergence": "SKIPPED",
+        "criteria": "FAIL",
+        "engineering_checks": "SKIPPED",
+        "evidence_sufficiency": "NOT_SPECIFIED",
+        "execution": "PASS",
+        "fatigue": "SKIPPED",
+        "mesh_quality": "SKIPPED",
+        "numerical_verification": "SKIPPED"
+      },
+      "passed": false,
+      "status": "FAIL",
+      "warnings": []
+    },
+    "title": "FMBD-5 Closed-Loop Rigid-Flexible Crank-Slider Mechanism Dynamics E2E",
+    "verification": {
+      "algorithmic_dissipation_bounded": true,
+      "energy_conservation_passed": true,
+      "internal_energy_composition_passed": true,
+      "joint_drift_passed": true,
+      "loop_closure_passed": true,
+      "normal_acceptance_passed": true,
+      "slider_guide_passed": true,
+      "strain_energy_passed": true,
+      "stress_sanity_passed": true,
+      "strict_acceptance_passed": false
+    },
+    "workflow": {
+      "compiler_used": true,
+      "job_status": "JobStatus(name='FMBD5GoldenJob', state=<JobState.COMPLETED: 'COMPLETED'>, raw={'models': ['FMBD5Golden', 'Model-1'], 'parts': ['CrankPart', 'FlexRodPart', 'SliderPart'], 'instances': ['Crank-1', 'FlexRod-1', 'Slider-1'], 'materials': ['Mat-crank', 'Mat-flex_rod', 'Mat-slider'], 'sections': ['Sec-Joint-PRISMATIC', 'Sec-Joint-REVOLUTE', 'Sec-Solid-Mat-crank', 'Sec-Solid-Mat-flex_rod', 'Sec-Solid-Mat-slider'], 'steps': ['Initial', 'FMBD5Step', 'Initial'], 'boundary_conditions': ['BC-Ground-RP_GROUND_J_Pivot', 'BC-Ground-RP_GROUND_J_SliderGuide'], 'loads': ['Gravity'], 'amplitudes': [], 'predefined_fields': [], 'interactions': [], 'output_requests': ['F-Output-1', 'F-Output-Mechanism'], 'jobs': ['FMBD5GoldenJob'], 'metadata': {'model_count': 2, 'job_count': 1, 'job_status': {'FMBD5GoldenJob': 'None'}}}, diagnostics=())",
+      "odb_path": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\machine_validation\\FMBD5GoldenJob.odb",
+      "solver_completed": true
+    }
+  },
+  "return_code": 0,
+  "script": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\machine_validation\\FMBD5GoldenJob_fmbd5_script.py",
+  "simulation_results": {
+    "algorithmic_damping_dissipation_ratio": 0.40470114390093476,
+    "artificial_to_strain_energy_ratio": 0.003904334714571759,
+    "elastic_strain_ratio_in_ie": 0.9961108644455413,
+    "energy_breakdown_note": "Rigid-body kinematics dominate kinetic energy (~708.8 mJ); flexible rod participates in linear elastic strain energy (~0.011 mJ); internal energy is 99.61% elastic strain energy without plastic dissipation; C3D8R artificial hourglass energy is negligible (ALLAE=4.34e-5 mJ, ALLAE/ALLSE=0.39%); viscous dissipation is zero (ALLVD=0.0 mJ); algorithmic numerical damping absorbs ~312.1 mJ (40.47% of peak external work)",
+    "energy_dissipation_ratio": 0.40470114390093476,
+    "max_artificial_energy_allae_mj": 4.339141378295608e-05,
+    "max_joint_drift_mm": 1.4901161193847656e-08,
+    "max_loop_closure_error": 1.9112135021259747e-07,
+    "max_mises_stress_mpa": 0.28797391057014465,
+    "max_numerical_dissipation_mj": 312.1167907714844,
+    "max_slider_y_drift_mm": 3.212729109477612e-20,
+    "max_viscous_dissipation_allvd_mj": 0.0,
+    "min_total_energy_mj": -312.1167907714844,
+    "num_frames": 115,
+    "peak_external_work_mj": 771.2278442382812,
+    "peak_internal_energy_mj": 0.011157042346894741,
+    "peak_kinetic_energy_mj": 708.7698364257812,
+    "peak_strain_energy_mj": 0.011113651096820831,
+    "strain_energy_ratio": 0.9961108644455413,
+    "total_time_s": 1.0
+  },
+  "solver_status": "completed",
+  "status": "pass",
+  "stderr_tail": "Abaqus License Manager checked out the following license:\n\"cae\" from Flexnet server DESKTOP-9EAL2I4\n<9998 out of 9999 licenses remain available>.\n",
+  "stdout_tail": "",
+  "verification": {
+    "algorithmic_dissipation_bounded": true,
+    "energy_conservation_passed": true,
+    "internal_energy_composition_passed": true,
+    "joint_drift_passed": true,
+    "loop_closure_passed": true,
+    "normal_acceptance_passed": true,
+    "slider_guide_passed": true,
+    "strain_energy_passed": true,
+    "stress_sanity_passed": true,
+    "strict_acceptance_passed": false
+  },
+  "workdir": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\machine_validation"
+}

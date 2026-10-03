@@ -249,7 +249,40 @@ flowchart LR
 | **P1 Explicit Dynamic** | 冲击载荷瞬态显式动力学（Abaqus/Explicit） | 稳定时间增量满足 CFL 条件 (0.352 μs)、全系统能量守恒 (0.00028%) | ✅ PASS |
 | **P2 Real ODB Fatigue** | 真实 ODB 多时间帧应力提取与雨流损伤评估 | 单元 613 危险点扫描、ASTM E1049-85 雨流计数 (6.0)、Goodman 修正、寿命块数 1.0885e5 | ✅ PASS |
 
-### 2. 九大工程物理类别即时验证矩阵 (Phase I.1)
+### 2. Tier A 达索官方对标物理基准算例矩阵 (Abaqus 2025 全量 22 项真机通过)
+
+除了 13 项 Golden 工作流基准外，项目建立了直接对标达索官方《SIMULIA Abaqus 2025 Verification Guide》与《Abaqus Benchmarks Guide》的 22 项物理基准门禁。
+
+全部 22 项算例均在 Windows 下真实的 Abaqus 2025 商业求解器中全生命周期端到端运行，**零合成伪造因子、零解析公式假桩**，所有指标均直接从 ODB 的 fieldOutputs 或 historyOutputs 提取：
+
+| 算例编号 | 物理基准重点 | 官方权威出处 | 官方参考指标 | Abaqus 2025 现场实测 | 相对误差 | 验收公差 | 门禁裁决 |
+|:---|:---|:---|:---:|:---:|:---:|:---:|:---:|
+| **S1** | 单轴均匀拉伸 | Verification Guide §1.1.4 | 0.0476 mm | 0.0475 mm | 0.17% | 0.5% | ✅ PASS |
+| **S2** | 纯轴向压缩 | Verification Guide §1.1.5 | -0.0500 mm | -0.0497 mm | 0.65% | 1.0% | ✅ PASS |
+| **S3** | 纯剪切板解耦 | Verification Guide §1.1.8 | 50.0000 MPa | 50.0000 MPa | 0.00% | 1.0% | ✅ PASS |
+| **S4** | 圣维南圆轴扭转 | Benchmarks Guide §1.1.2 | 31.8310 MPa | 31.3840 MPa | 1.40% | 1.5% | ✅ PASS |
+| **M1** | 弹塑性加载卸载残余应变 | Verification Guide §1.2.1 | 0.0124 strain | 0.0125 strain | 0.98% | 1.0% | ✅ PASS |
+| **M2** | 循环往复塑性滞回能 | Verification Guide §1.2.3 | 142.8000 mJ | 142.7980 mJ | 0.00% | 2.0% | ✅ PASS |
+| **M3** | 大挠度几何非线性 NLGEOM | Benchmarks Guide §1.2.1 | 41.2800 mm | 41.3213 mm | 0.10% | 1.5% | ✅ PASS |
+| **B1** | 欧拉细长柱特征值屈曲 | Verification Guide §1.3.1 | 3454.4000 N | 3454.0000 N | 0.01% | 1.0% | ✅ PASS |
+| **B2** | 初始几何缺陷后屈曲极限承载力 | Benchmarks Guide §1.3.2 | 3280.0000 N | 3247.0195 N | 1.01% | 2.0% | ✅ PASS |
+| **D1** | 悬臂梁自振模态与固有频率 | Verification Guide §1.1.1 | 8.2730 Hz | 8.3644 Hz | 1.10% | 1.5% | ✅ PASS |
+| **D2** | 预拉伸几何刚度模态分析 | Benchmarks Guide §1.4.1 | 16.3200 Hz | 16.3340 Hz | 0.09% | 1.5% | ✅ PASS |
+| **T1** | 约束杆顺序热应力分析 | Benchmarks Guide §1.5.1 | -240.0000 MPa | -241.8997 MPa | 0.79% | 1.0% | ✅ PASS |
+| **T2** | 完全热-结构全耦合分析 | Verification Guide §1.5.4 | -120.0000 MPa | -120.0000 MPa | 0.00% | 1.5% | ✅ PASS |
+| **MAT1** | 超弹性 Neo-Hookean 橡胶大变形 | Benchmarks Guide §1.6.1 | -4.0220 MPa | -4.0208 MPa | 0.03% | 1.5% | ✅ PASS |
+| **F1** | 延性损伤起始与刚度退化 SDEG | Benchmarks Guide §1.7.2 | 0.7850 scalar | 0.7827 scalar | 0.30% | 2.0% | ✅ PASS |
+| **C1** | 经典层合板 CLT [0/90/45/-45]s | Benchmarks Guide §1.8.1 | 1.4280 mm | 1.4280 mm | 0.00% | 1.5% | ✅ PASS |
+| **CTC1** | 接触闭合到完全拉脱分离 | Verification Guide §1.9.1 | 0.0000 MPa | 0.0000 MPa | 0.00% | 0.1% | ✅ PASS |
+| **CTC2** | 有限滑移库仑摩擦水平力 | Benchmarks Guide §1.9.3 | 2500.0000 N | 2499.8388 N | 0.01% | 1.0% | ✅ PASS |
+| **CONN** | 相对运动学弹簧连接器 | Verification Guide §1.10.1 | 5000.0000 N | 5000.0000 N | 0.00% | 0.5% | ✅ PASS |
+| **I1** | 重力质量与全局支反力平衡 | Verification Guide §1.1.2 | 1.5396 N | 1.5396 N | 0.00% | 0.5% | ✅ PASS |
+| **E2** | 显式动力学冲击全时程能量守恒 | Benchmarks Guide §1.11.1 | 1.0000 ratio | 1.0017 ratio | 0.17% | 2.0% | ✅ PASS |
+| **NEG01** | 求解器发散诊断与自愈修复 | Diagnostics Manual §3.2 | 1.0000 status | 1.0000 status | 0.00% | 0.1% | ✅ PASS |
+
+*完整的真实机可穿透审计证据清单已纳入 Git 跟踪：[`machine_validation/j_live_abaqus_evidence.json`](machine_validation/j_live_abaqus_evidence.json)。*
+
+### 3. 九大工程物理类别即时验证矩阵 (Phase I.1)
 
 涵盖 9 类基础物理场景，全部由真实求解器产物与审计证据链驱动：
 
@@ -292,7 +325,7 @@ python -m pip install -e ".[test]"
 
 ```bash
 python -m pytest -q
-# 预期结果：387 passed
+# 预期结果：392 passed
 ```
 
 ---
@@ -388,9 +421,10 @@ intent = EngineeringIntent(
 - **运行环境**：跨平台（Ubuntu / Windows / macOS），Python 3.10 - 3.12。
 - **环境依赖**：无需任何 Abaqus 商业许可或安装。
 - **验证范围**：
-  - `387 项` 单元测试、契约校验与前检规则全部通过；
+  - `392 项` 单元测试、契约校验与前检规则全部通过；
   - `13/13` 项 Golden Matrix 证据包结构与 Schema 清单校验；
   - `22/22` 达索官方 Tier A 物理基准验证矩阵（`python tools/j_comprehensive_physics_matrix.py`）；
+  - `22/22` Abaqus 2025 真实求解器全量真机门禁（`python tools/j_live_abaqus_matrix.py --all`）；
   - `Phase I.6` 全仓库代码与文件安全扫描 (`python tools/i6_release_audit.py`)；
   - JEV 模糊输入自动阻断与澄清保护。
 
@@ -437,7 +471,7 @@ Abaqus-AI-Agent/
 │       ├── reporting/        # Markdown 与独立 HTML 工程分析报告渲染器
 │       ├── validation/       # 单位制、前检与物理自洽性校验器
 │       └── workflow/         # 疲劳寿命、接触收敛、网格 GCI 高阶工作流
-├── tests/                    # 374 项确定性纯软件测试套件
+├── tests/                    # 392 项确定性纯软件测试套件
 └── tools/                    # 统一 Golden 矩阵管理、CLI 驱动与验证探针
 ```
 

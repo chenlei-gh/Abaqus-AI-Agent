@@ -1,0 +1,32 @@
+{
+  "tier": "Tier 1: Region & Geometry Grounding",
+  "job_name": "Tier1_RegionGroundingJob",
+  "positive_tests": {
+    "FixFaceSet_exists": true,
+    "FixFaceSet_count": 1,
+    "TopSurf_exists": true,
+    "TopSurf_count": 1,
+    "EdgeSet_count": 1,
+    "NodeSet_count": 9,
+    "ElemSet_count": 5,
+    "odb_extracted": true,
+    "max_mises_mpa": 43.586421966552734,
+    "max_u_mm": 0.12190239131450653
+  },
+  "negative_tests": {
+    "empty_set_detected": true,
+    "non_existent_set_error": "KeyError",
+    "non_existent_set_caught": true,
+    "type_mismatch_error": "TypeError",
+    "type_mismatch_caught": true
+  },
+  "passed": true,
+  "diagnostics": [],
+  "provenance": {
+    "launcher": "abaqus",
+    "workdir": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\machine_validation",
+    "host_fail_closed_verified": true,
+    "return_code": 0,
+    "solver": "Abaqus/Standard 2025"
+  }
+}

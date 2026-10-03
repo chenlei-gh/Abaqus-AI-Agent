@@ -1,0 +1,15 @@
+{
+  "status": "PASS",
+  "case": "H.1_engineering_report_generator",
+  "job_name": "StaticGoldenJob",
+  "run_id": "run_static_golden_001",
+  "markdown_report_path": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\machine_validation\\static_golden_engineering_report.md",
+  "html_report_path": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\machine_validation\\static_golden_engineering_report.html",
+  "markdown_size_bytes": 13032,
+  "html_size_bytes": 17952,
+  "metrics_reported_count": 3,
+  "criteria_reported_count": 3,
+  "acceptance_verdict": "PASS",
+  "provenance_verified": true,
+  "source_first_guarantee": true
+}

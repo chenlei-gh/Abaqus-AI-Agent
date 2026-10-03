@@ -1,0 +1,28 @@
+{
+  "status": "PASS",
+  "case": "H.8_case_memory_and_analysis_run_comparison",
+  "total_indexed_runs": 3,
+  "queries_verified": {
+    "standard_count": 2,
+    "explicit_count": 1,
+    "high_stress_count": 1
+  },
+  "comparison_verified": {
+    "baseline_id": "golden_run_static",
+    "candidate_id": "golden_run_explicit",
+    "solver_changed": true,
+    "metrics_delta": {
+      "tip_displacement": 0.04676000000000036,
+      "max_stress": 10.935999999999979
+    },
+    "assumptions_added": [
+      "explicit_dynamic",
+      "wave_propagation"
+    ],
+    "assumptions_removed": [
+      "linear_static",
+      "small_deformation"
+    ]
+  },
+  "manifest_path": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\machine_validation\\case_memory_manifest.json"
+}

@@ -1,0 +1,478 @@
+{
+  "status": "pass",
+  "launcher": "abaqus",
+  "workdir": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\machine_validation",
+  "script": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\machine_validation\\general_contact_e2e_script.py",
+  "case": "two_body_frictional_contact_sliding",
+  "command": [
+    "C:\\SIMULIA\\Commands\\abaqus.bat",
+    "cae",
+    "noGUI=D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\machine_validation\\general_contact_e2e_script.py"
+  ],
+  "return_code": 0,
+  "process_succeeded": true,
+  "report": {
+    "status": "pass",
+    "case": "two_body_frictional_contact_sliding",
+    "model": {
+      "base": {
+        "length_mm": 50.0,
+        "height_mm": 10.0,
+        "width_mm": 10.0
+      },
+      "slider": {
+        "length_mm": 20.0,
+        "height_mm": 10.0,
+        "width_mm": 10.0
+      }
+    },
+    "material": {
+      "E_MPa": 210000.0,
+      "nu": 0.3
+    },
+    "contact_property": {
+      "normal_behavior": "HARD",
+      "tangential_formulation": "PENALTY",
+      "friction_coefficient": 0.25
+    },
+    "prescribed_displacements": {
+      "compression_uy_mm": -0.02,
+      "sliding_ux_mm": 0.05
+    },
+    "forces_and_equilibrium": {
+      "normal_force_N": 46949.15399699999,
+      "friction_force_N": 11728.054021420003,
+      "effective_friction_mu": 0.2498033089620617,
+      "theoretical_friction_mu": 0.25,
+      "mu_relative_error": 0.0007867641517531609,
+      "equilibrium_y_rel_error": 8.334548525717924e-08,
+      "equilibrium_x_rel_error": 5.07195822098071e-07,
+      "coulomb_law_passed": true
+    },
+    "contact_metrics": {
+      "min_cpress_MPa": 196.88801574707,
+      "max_cpress_MPa": 395.905029296875,
+      "mean_cpress_MPa": 241.07978990342886,
+      "max_copen_mm": -0.000426662707468495,
+      "mean_cshear_MPa": 60.26740883721246,
+      "status_values_sample": [
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    "contact_diagnostics": {
+      "passed": true,
+      "diagnostics": [
+        {
+          "name": "contact_evidence_sufficiency",
+          "status": "pass",
+          "value": null,
+          "limit": null,
+          "unit": "",
+          "message": "required contact evidence is available"
+        },
+        {
+          "name": "expected_contact_state",
+          "status": "pass",
+          "value": null,
+          "limit": null,
+          "unit": "",
+          "message": "observed contact status includes contact and no open status"
+        },
+        {
+          "name": "unexpected_opening",
+          "status": "pass",
+          "value": -0.000426662707468495,
+          "limit": 0.01,
+          "unit": "length",
+          "message": "observed opening is within the explicitly declared limit"
+        },
+        {
+          "name": "unexpected_overclosure",
+          "status": "pass",
+          "value": 0.000992917804978788,
+          "limit": 0.01,
+          "unit": "length",
+          "message": "overclosure is within the explicitly declared interference allowance"
+        }
+      ]
+    },
+    "acceptance": {
+      "passed": true,
+      "criteria": [
+        {
+          "name": "contact_pressure_positive",
+          "passed": true,
+          "actual": 196.88801574707,
+          "operator": ">=",
+          "limit": 1.0,
+          "unit": "MPa",
+          "relative_error": 195.88801574707
+        },
+        {
+          "name": "contact_opening_zero",
+          "passed": true,
+          "actual": -0.000426662707468495,
+          "operator": "<=",
+          "limit": 0.01,
+          "unit": "mm",
+          "relative_error": 1.0426662707468495
+        },
+        {
+          "name": "effective_friction_coefficient_lower",
+          "passed": true,
+          "actual": 0.2498033089620617,
+          "operator": ">=",
+          "limit": 0.2,
+          "unit": "",
+          "relative_error": 0.2490165448103085
+        },
+        {
+          "name": "effective_friction_coefficient_upper",
+          "passed": true,
+          "actual": 0.2498033089620617,
+          "operator": "<=",
+          "limit": 0.3,
+          "unit": "",
+          "relative_error": 0.16732230345979426
+        },
+        {
+          "name": "global_normal_equilibrium_error",
+          "passed": true,
+          "actual": 8.334548525717924e-08,
+          "operator": "<=",
+          "limit": 0.01,
+          "unit": "",
+          "relative_error": 0.9999916654514743
+        },
+        {
+          "name": "global_tangential_equilibrium_error",
+          "passed": true,
+          "actual": 5.07195822098071e-07,
+          "operator": "<=",
+          "limit": 0.01,
+          "unit": "",
+          "relative_error": 0.9999492804177902
+        }
+      ],
+      "failures": [],
+      "warnings": [],
+      "status": "PASS",
+      "blocked": [],
+      "gates": {
+        "execution": "PASS",
+        "evidence_sufficiency": "NOT_SPECIFIED",
+        "numerical_verification": "SKIPPED",
+        "engineering_checks": "PASS",
+        "mesh_quality": "PASS",
+        "convergence": "SKIPPED",
+        "fatigue": "SKIPPED",
+        "contact": "PASS",
+        "criteria": "PASS"
+      }
+    },
+    "strict_acceptance": {
+      "passed": false,
+      "failures": [
+        "criterion:strict_contact_pressure_artificial"
+      ]
+    },
+    "workflow": {
+      "solver_completed": true,
+      "state": "results_extracted",
+      "engineering_status": "RESULT_INVALID"
+    },
+    "solver": {
+      "job_status": {
+        "name": "GeneralContactJob",
+        "state": "COMPLETED",
+        "raw": {
+          "models": [
+            "GeneralContactModel",
+            "Model-1"
+          ],
+          "parts": [
+            "Base",
+            "Slider"
+          ],
+          "instances": [
+            "Base-1",
+            "Slider-1"
+          ],
+          "materials": [
+            "Steel"
+          ],
+          "sections": [
+            "SolidSection"
+          ],
+          "steps": [
+            "Initial",
+            "Step-1",
+            "Initial"
+          ],
+          "boundary_conditions": [
+            "BaseFixedBC",
+            "SliderPrescribedBC"
+          ],
+          "loads": [],
+          "amplitudes": [],
+          "predefined_fields": [],
+          "interactions": [
+            "BlockContact"
+          ],
+          "output_requests": [
+            "F-Output-1"
+          ],
+          "jobs": [
+            "GeneralContactJob"
+          ],
+          "metadata": {
+            "model_count": 2,
+            "job_count": 1,
+            "job_status": {
+              "GeneralContactJob": "None"
+            }
+          }
+        },
+        "diagnostics": []
+      },
+      "odb_path": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\machine_validation\\GeneralContactJob.odb",
+      "artifacts": [],
+      "diagnostics": []
+    },
+    "provenance": {
+      "run_id": "4e852082-fc4f-4064-b6a4-b482986374fa",
+      "model_name": "GeneralContactModel",
+      "job_name": "GeneralContactJob",
+      "model_hash": null,
+      "input_hash": null,
+      "output_hash": null,
+      "artifact_manifest_hash": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "intent_hash": null,
+      "action_plan_hash": null,
+      "abaqus_version": "unknown",
+      "python_version": "3.10.5 (main, Jul 27 2024, 04:26:12) [MSC v.1934 64 bit (AMD64)]",
+      "executor": "CAEInProcessExecutor",
+      "action_plan": [
+        {
+          "action_type": "material_elastic",
+          "model_name": "GeneralContactModel",
+          "target": null,
+          "parameters": {
+            "name": "Steel",
+            "youngs_modulus": 210000.0,
+            "poisson": 0.3
+          }
+        },
+        {
+          "action_type": "solid_section",
+          "model_name": "GeneralContactModel",
+          "target": null,
+          "parameters": {
+            "name": "SolidSection",
+            "material": "Steel"
+          }
+        },
+        {
+          "action_type": "section_assignment",
+          "model_name": "GeneralContactModel",
+          "target": null,
+          "parameters": {
+            "part": "Base",
+            "section": "SolidSection",
+            "region_expression": "mdb.models['GeneralContactModel'].parts['Base'].sets['AllCells']"
+          }
+        },
+        {
+          "action_type": "section_assignment",
+          "model_name": "GeneralContactModel",
+          "target": null,
+          "parameters": {
+            "part": "Slider",
+            "section": "SolidSection",
+            "region_expression": "mdb.models['GeneralContactModel'].parts['Slider'].sets['AllCells']"
+          }
+        },
+        {
+          "action_type": "contact_property",
+          "model_name": "GeneralContactModel",
+          "target": null,
+          "parameters": {
+            "name": "FrictionContactProp",
+            "normal_behavior": true,
+            "pressure_overclosure": "HARD",
+            "tangential_behavior": {
+              "formulation": "PENALTY",
+              "friction": 0.25
+            }
+          }
+        },
+        {
+          "action_type": "contact",
+          "model_name": "GeneralContactModel",
+          "target": null,
+          "parameters": {
+            "name": "BlockContact",
+            "master_expression": "mdb.models['GeneralContactModel'].rootAssembly.surfaces['MasterSurface']",
+            "slave_expression": "mdb.models['GeneralContactModel'].rootAssembly.surfaces['SlaveSurface']",
+            "property": "FrictionContactProp",
+            "sliding": "FINITE",
+            "step": "Initial"
+          }
+        },
+        {
+          "action_type": "displacement_bc",
+          "model_name": "GeneralContactModel",
+          "target": "mdb.models['GeneralContactModel'].rootAssembly.sets['BaseBottomFace']",
+          "parameters": {
+            "name": "BaseFixedBC",
+            "region_expression": "mdb.models['GeneralContactModel'].rootAssembly.sets['BaseBottomFace']",
+            "step": "Initial",
+            "u1": 0.0,
+            "u2": 0.0,
+            "u3": 0.0
+          }
+        },
+        {
+          "action_type": "static_step",
+          "model_name": "GeneralContactModel",
+          "target": null,
+          "parameters": {
+            "name": "Step-1",
+            "previous": "Initial",
+            "nlgeom": true,
+            "time_period": 1.0,
+            "stabilization_method": "NONE",
+            "stabilization_magnitude": null,
+            "time_incrementation_method": "AUTOMATIC",
+            "max_num_inc": 100,
+            "initial_inc": null,
+            "min_inc": null,
+            "max_inc": null,
+            "amplitude": "RAMP"
+          }
+        },
+        {
+          "action_type": "displacement_bc",
+          "model_name": "GeneralContactModel",
+          "target": "mdb.models['GeneralContactModel'].rootAssembly.sets['SliderTopFace']",
+          "parameters": {
+            "name": "SliderPrescribedBC",
+            "region_expression": "mdb.models['GeneralContactModel'].rootAssembly.sets['SliderTopFace']",
+            "step": "Step-1",
+            "u1": 0.05,
+            "u2": -0.02,
+            "u3": 0.0
+          }
+        },
+        {
+          "action_type": "field_output",
+          "model_name": "GeneralContactModel",
+          "target": null,
+          "parameters": {
+            "variables": [
+              "S",
+              "U",
+              "RF",
+              "CSTRESS",
+              "CDISP",
+              "CSTATUS"
+            ],
+            "request": "F-Output-1",
+            "step": "Step-1",
+            "frequency": null,
+            "num_intervals": null
+          }
+        },
+        {
+          "action_type": "seed_part",
+          "model_name": "GeneralContactModel",
+          "target": null,
+          "parameters": {
+            "part": "Base",
+            "size": 2.5,
+            "deviation_factor": 0.1,
+            "min_size_factor": 0.1
+          }
+        },
+        {
+          "action_type": "seed_part",
+          "model_name": "GeneralContactModel",
+          "target": null,
+          "parameters": {
+            "part": "Slider",
+            "size": 2.5,
+            "deviation_factor": 0.1,
+            "min_size_factor": 0.1
+          }
+        },
+        {
+          "action_type": "element_type",
+          "model_name": "GeneralContactModel",
+          "target": null,
+          "parameters": {
+            "part": "Base",
+            "region_expression": "mdb.models['GeneralContactModel'].parts['Base'].sets['AllCells']",
+            "elem_code": "C3D8R",
+            "library": "STANDARD"
+          }
+        },
+        {
+          "action_type": "element_type",
+          "model_name": "GeneralContactModel",
+          "target": null,
+          "parameters": {
+            "part": "Slider",
+            "region_expression": "mdb.models['GeneralContactModel'].parts['Slider'].sets['AllCells']",
+            "elem_code": "C3D8R",
+            "library": "STANDARD"
+          }
+        },
+        {
+          "action_type": "generate_mesh",
+          "model_name": "GeneralContactModel",
+          "target": null,
+          "parameters": {
+            "part": "Base"
+          }
+        },
+        {
+          "action_type": "generate_mesh",
+          "model_name": "GeneralContactModel",
+          "target": null,
+          "parameters": {
+            "part": "Slider"
+          }
+        },
+        {
+          "action_type": "python",
+          "model_name": "GeneralContactModel",
+          "target": null,
+          "parameters": {
+            "code": "\nfrom abaqusConstants import *\nmodel = mdb.models['GeneralContactModel']\np_base = model.parts['Base']\np_slider = model.parts['Slider']\ninst_base = model.rootAssembly.instances['Base-1']\ninst_slider = model.rootAssembly.instances['Slider-1']\nmodel.rootAssembly.regenerate()\n\n# Fixed boundary node set on Base at y = 0\nbase_fixed_nodes = inst_base.nodes.getByBoundingBox(yMin=-0.01, yMax=0.01)\nif not base_fixed_nodes:\n    raise RuntimeError('BaseFixedNodes set is empty')\nmodel.rootAssembly.Set(name='BaseFixedNodes', nodes=base_fixed_nodes)\n\n# Slider top node set at y = 20\nslider_top_nodes = inst_slider.nodes.getByBoundingBox(yMin=19.99, yMax=20.01)\nif not slider_top_nodes:\n    raise RuntimeError('SliderTopNodes set is empty')\nmodel.rootAssembly.Set(name='SliderTopNodes', nodes=slider_top_nodes)\n\n# Contact slave nodes on Slider bottom at y = 10\ncontact_slave_nodes = inst_slider.nodes.getByBoundingBox(\n    xMin=14.99, xMax=35.01, yMin=9.99, yMax=10.01\n)\nif not contact_slave_nodes:\n    raise RuntimeError('ContactSlaveNodes set is empty')\nmodel.rootAssembly.Set(name='ContactSlaveNodes', nodes=contact_slave_nodes)\n\n# Contact master nodes on Base top at y = 10\ncontact_master_nodes = inst_base.nodes.getByBoundingBox(\n    xMin=14.99, xMax=35.01, yMin=9.99, yMax=10.01\n)\nif not contact_master_nodes:\n    raise RuntimeError('ContactMasterNodes set is empty')\nmodel.rootAssembly.Set(name='ContactMasterNodes', nodes=contact_master_nodes)\n\nprint('AIAgent_GENERAL_CONTACT_EVIDENCE_SETS_CREATED')\n"
+          }
+        },
+        {
+          "action_type": "create_job",
+          "model_name": "GeneralContactModel",
+          "target": null,
+          "parameters": {
+            "name": "GeneralContactJob",
+            "job_type": "STANDARD"
+          }
+        }
+      ],
+      "environment": {},
+      "metadata": {
+        "model_snapshot_hash": "0f30dfe4feca1df454f3f5a7302e1fbc70e79460362d1189d896c6a75354ea33",
+        "content_hash_scope": "not_captured",
+        "action_plan_scope": "caller"
+      }
+    }
+  },
+  "stdout": "",
+  "stderr": "Abaqus License Manager checked out the following license:\n\"cae\" from Flexnet server DESKTOP-9EAL2I4\n<9998 out of 9999 licenses remain available>.\n"
+}

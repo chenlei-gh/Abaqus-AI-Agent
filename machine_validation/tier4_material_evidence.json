@@ -1,0 +1,44 @@
+{
+  "tier": "Tier 4: MaterialDefinition Full-Chain Verification",
+  "job_name": "Tier4_MaterialJob",
+  "inp_verification": {
+    "cards": {
+      "MATERIAL": true,
+      "DENSITY": true,
+      "ELASTIC": true,
+      "PLASTIC": true,
+      "CONDUCTIVITY": true,
+      "SPECIFIC_HEAT": true,
+      "EXPANSION": true
+    },
+    "values": {
+      "elastic_e": true,
+      "density_val": true,
+      "yield_val": true,
+      "conductivity_val": true,
+      "expansion_val": true
+    },
+    "all_cards_present": true,
+    "all_values_present": true
+  },
+  "odb_verification": {
+    "odb_opened": true,
+    "materials_in_odb": [
+      "ADVALLOY"
+    ],
+    "mat_in_odb": true,
+    "max_mises_mpa": 353.3846130371094,
+    "max_peeq": 0.0016923185903578997,
+    "plasticity_engaged": true
+  },
+  "passed": true,
+  "diagnostics": [],
+  "host_actions_verified": true,
+  "provenance": {
+    "launcher": "abaqus",
+    "workdir": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\machine_validation",
+    "return_code": 0,
+    "solver": "Abaqus/Standard 2025",
+    "material_name": "AdvAlloy"
+  }
+}

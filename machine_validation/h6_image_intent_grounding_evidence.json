@@ -1,0 +1,69 @@
+{
+  "status": "PASS",
+  "case": "H.6_image_intent_to_region_grounding",
+  "intents": [
+    {
+      "intent_id": "intent_fix_end",
+      "click_point": [
+        0.1,
+        0.5
+      ],
+      "resolved_target": {
+        "instance": "Beam-1",
+        "entity_type": "Face",
+        "entity_key": "Face:0",
+        "index": 0,
+        "point": [
+          0.0,
+          5.0,
+          5.0
+        ],
+        "grounding_score": 0.4,
+        "grounding_evidence": {
+          "distance": 1.0,
+          "visual": 0.0,
+          "topology": 0.0,
+          "camera_depth": 50.0,
+          "facing": 1.0
+        }
+      },
+      "expression": "inst.faces.findAt(((0.0, 5.0, 5.0),))",
+      "cae_matched_faces": 1
+    },
+    {
+      "intent_id": "intent_tip_load",
+      "click_point": [
+        0.9,
+        0.5
+      ],
+      "resolved_target": {
+        "instance": "Beam-1",
+        "entity_type": "Face",
+        "entity_key": "Face:1",
+        "index": 1,
+        "point": [
+          100.0,
+          5.0,
+          5.0
+        ],
+        "grounding_score": 0.4,
+        "grounding_evidence": {
+          "distance": 1.0,
+          "visual": 0.0,
+          "topology": 0.0,
+          "camera_depth": 50.0,
+          "facing": 1.0
+        }
+      },
+      "expression": "inst.faces.findAt(((100.0, 5.0, 5.0),))",
+      "cae_matched_faces": 1
+    }
+  ],
+  "cae_verification": {
+    "fixed_face_count": 1,
+    "tip_face_count": 1,
+    "fixed_set_faces": 1,
+    "tip_set_faces": 1,
+    "status": "PASS"
+  }
+}

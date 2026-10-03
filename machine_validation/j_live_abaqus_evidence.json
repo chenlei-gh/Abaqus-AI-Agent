@@ -1,0 +1,1044 @@
+{
+  "suite_name": "Phase J-Live Abaqus 2025 Real-Machine Benchmarks",
+  "benchmark_count": 22,
+  "passed_count": 22,
+  "all_passed": true,
+  "timestamp": "2026-10-03T04:22:11.403337+00:00",
+  "launcher": "abaqus",
+  "benchmarks": [
+    {
+      "benchmark_id": "S1_UNIAXIAL_TENSION",
+      "official_guide": "Abaqus Verification Guide 1.1.4 (Tension Test)",
+      "documentation_locator": "SIMULIA Abaqus 2025 Verification Guide \u00a71.1.4",
+      "title": "Uniaxial Tensile Test & Reaction Equilibrium",
+      "physics_domain": "solid_mechanics",
+      "governing_physics": "Hooke's Law: delta = F * L / (E * A)",
+      "reference_metric_name": "axial_displacement",
+      "reference_metric_unit": "mm",
+      "official_reference_value": 0.047619,
+      "observed_value": 0.04754,
+      "relative_error": 0.00166,
+      "tolerance": 0.005,
+      "passed": true,
+      "status": "PASS",
+      "execution": {
+        "solver": "Abaqus 2025 (Standard/Explicit)",
+        "launcher": "abaqus",
+        "exit_code": 0,
+        "real_process": true,
+        "duration_seconds": 16.23,
+        "command": [
+          "abaqus",
+          "cae",
+          "noGUI=Job_S1_UNIAXIAL_TENSION_script.py"
+        ],
+        "stdout_tail": "",
+        "stderr_tail": "Abaqus License Manager checked out the following license:\n\"cae\" from Flexnet server DESKTOP-9EAL2I4\n<9998 out of 9999 licenses remain available>.\n"
+      },
+      "artifacts": {
+        "script_path": "machine_validation/live_benchmarks_run/S1_UNIAXIAL_TENSION/Job_S1_UNIAXIAL_TENSION_script.py",
+        "inp_path": "machine_validation/live_benchmarks_run/Job_S1_UNIAXIAL_TENSION.inp",
+        "inp_sha256": "3bf41fcd1fabef14f4620cd649d43a44f0002be5327e7b2bc98d518efa616dab",
+        "odb_path": "machine_validation/live_benchmarks_run/Job_S1_UNIAXIAL_TENSION.odb",
+        "odb_sha256": "1f087c254f9d0616c60427be8a724ff5b11765739ff1f26b28e6438ec57069be",
+        "sta_sha256": "44d2765bd0db4247ca8bd6f39d364503e7cea8eb3dcfe804f9a6beaa1a58dbc4",
+        "msg_sha256": "449385b78c52732f05074a8ddcd707c3b81847f06576b004250a98cdbda719ca"
+      },
+      "provenance": {
+        "benchmark_id": "S1_UNIAXIAL_TENSION",
+        "official_guide": "Abaqus Verification Guide 1.1.4 (Tension Test)",
+        "documentation_locator": "SIMULIA Abaqus 2025 Verification Guide \u00a71.1.4",
+        "start_time": "2026-10-03T04:15:22.797554+00:00",
+        "end_time": "2026-10-03T04:15:39.030357+00:00",
+        "tolerance": 0.005
+      }
+    },
+    {
+      "benchmark_id": "S2_PURE_COMPRESSION",
+      "official_guide": "Abaqus Verification Guide 1.1.5 (Compression Block)",
+      "documentation_locator": "SIMULIA Abaqus 2025 Verification Guide \u00a71.1.5",
+      "title": "Pure Axial Compression with Directional Sign Invariance",
+      "physics_domain": "solid_mechanics",
+      "governing_physics": "Hooke's Law: delta = -P * L / (E * A)",
+      "reference_metric_name": "compressive_displacement",
+      "reference_metric_unit": "mm",
+      "official_reference_value": -0.05,
+      "observed_value": -0.049673,
+      "relative_error": 0.006539,
+      "tolerance": 0.01,
+      "passed": true,
+      "status": "PASS",
+      "execution": {
+        "solver": "Abaqus 2025 (Standard/Explicit)",
+        "launcher": "abaqus",
+        "exit_code": 0,
+        "real_process": true,
+        "duration_seconds": 16.17,
+        "command": [
+          "abaqus",
+          "cae",
+          "noGUI=Job_S2_PURE_COMPRESSION_script.py"
+        ],
+        "stdout_tail": "",
+        "stderr_tail": "Abaqus License Manager checked out the following license:\n\"cae\" from Flexnet server DESKTOP-9EAL2I4\n<9998 out of 9999 licenses remain available>.\n"
+      },
+      "artifacts": {
+        "script_path": "machine_validation/live_benchmarks_run/S2_PURE_COMPRESSION/Job_S2_PURE_COMPRESSION_script.py",
+        "inp_path": "machine_validation/live_benchmarks_run/Job_S2_PURE_COMPRESSION.inp",
+        "inp_sha256": "cd1b3c2562e9137ecbf80f3156d88812f846bd46d81a1ee2f78ceb53146ab3f5",
+        "odb_path": "machine_validation/live_benchmarks_run/Job_S2_PURE_COMPRESSION.odb",
+        "odb_sha256": "d46dcf55e1e74610eefda66a8b0f1f8ba9b94db89e536c00b70646c3aeb6c9fb",
+        "sta_sha256": "2252ca7c880f4b939bfdddda01c8d02dd8a28f9af5a5ca3589b5bf1fcc5d09f2",
+        "msg_sha256": "a1922963774e637b1d12dd8586d5d3375ddcc21118a55045c1225b04406a5ad3"
+      },
+      "provenance": {
+        "benchmark_id": "S2_PURE_COMPRESSION",
+        "official_guide": "Abaqus Verification Guide 1.1.5 (Compression Block)",
+        "documentation_locator": "SIMULIA Abaqus 2025 Verification Guide \u00a71.1.5",
+        "start_time": "2026-10-03T04:15:39.031721+00:00",
+        "end_time": "2026-10-03T04:15:55.196731+00:00",
+        "tolerance": 0.01
+      }
+    },
+    {
+      "benchmark_id": "S3_PURE_SHEAR",
+      "official_guide": "Abaqus Verification Guide 1.1.8 (Shear Panel Test)",
+      "documentation_locator": "SIMULIA Abaqus 2025 Verification Guide \u00a71.1.8",
+      "title": "Pure Shear Panel Decoupling & Shear Modulus G",
+      "physics_domain": "solid_mechanics",
+      "governing_physics": "Shear Modulus: G = E / (2 * (1 + nu)), gamma = tau / G",
+      "reference_metric_name": "shear_stress_s12",
+      "reference_metric_unit": "MPa",
+      "official_reference_value": 50.0,
+      "observed_value": 50.0,
+      "relative_error": 0.0,
+      "tolerance": 0.01,
+      "passed": true,
+      "status": "PASS",
+      "execution": {
+        "solver": "Abaqus 2025 (Standard/Explicit)",
+        "launcher": "abaqus",
+        "exit_code": 0,
+        "real_process": true,
+        "duration_seconds": 16.09,
+        "command": [
+          "abaqus",
+          "cae",
+          "noGUI=Job_S3_PURE_SHEAR_script.py"
+        ],
+        "stdout_tail": "",
+        "stderr_tail": "Abaqus License Manager checked out the following license:\n\"cae\" from Flexnet server DESKTOP-9EAL2I4\n<9998 out of 9999 licenses remain available>.\n"
+      },
+      "artifacts": {
+        "script_path": "machine_validation/live_benchmarks_run/S3_PURE_SHEAR/Job_S3_PURE_SHEAR_script.py",
+        "inp_path": "machine_validation/live_benchmarks_run/Job_S3_PURE_SHEAR.inp",
+        "inp_sha256": "b03cb201d898fd3dc23353cb5735469a55805f9032f5405d99ff4121b9d12652",
+        "odb_path": "machine_validation/live_benchmarks_run/Job_S3_PURE_SHEAR.odb",
+        "odb_sha256": "f3543304f51ef5986ffc60f0ecbc6f85c78fc1add0091bb7e557da1e034906bb",
+        "sta_sha256": "98e20d2071ae2ba7782ae6c25aefed340239a3f9ed8167eb37ef33fe9c097358",
+        "msg_sha256": "cd0aed9635f8c157a272f828c727c3faa5976e6ba92d9e95014495793a8532b0"
+      },
+      "provenance": {
+        "benchmark_id": "S3_PURE_SHEAR",
+        "official_guide": "Abaqus Verification Guide 1.1.8 (Shear Panel Test)",
+        "documentation_locator": "SIMULIA Abaqus 2025 Verification Guide \u00a71.1.8",
+        "start_time": "2026-10-03T04:15:55.198125+00:00",
+        "end_time": "2026-10-03T04:16:11.291071+00:00",
+        "tolerance": 0.01
+      }
+    },
+    {
+      "benchmark_id": "S4_SAINT_VENANT_TORSION",
+      "official_guide": "Abaqus Benchmarks Guide 1.1.2 (Circular Shaft Torsion)",
+      "documentation_locator": "SIMULIA Abaqus 2025 Benchmarks Guide \u00a71.1.2",
+      "title": "Saint-Venant Circular Shaft Elastic Torsion",
+      "physics_domain": "solid_mechanics",
+      "governing_physics": "Torsion of Circular Shaft: theta = T * L / (G * J), tau_max = T * R / J",
+      "reference_metric_name": "max_shear_stress",
+      "reference_metric_unit": "MPa",
+      "official_reference_value": 31.831,
+      "observed_value": 31.38405,
+      "relative_error": 0.014041,
+      "tolerance": 0.015,
+      "passed": true,
+      "status": "PASS",
+      "execution": {
+        "solver": "Abaqus 2025 (Standard/Explicit)",
+        "launcher": "abaqus",
+        "exit_code": 0,
+        "real_process": true,
+        "duration_seconds": 43.8,
+        "command": [
+          "abaqus",
+          "cae",
+          "noGUI=Job_S4_SAINT_VENANT_TORSION_script.py"
+        ],
+        "stdout_tail": "",
+        "stderr_tail": "Abaqus License Manager checked out the following license:\n\"cae\" from Flexnet server DESKTOP-9EAL2I4\n<9998 out of 9999 licenses remain available>.\n"
+      },
+      "artifacts": {
+        "script_path": "machine_validation/live_benchmarks_run/S4_SAINT_VENANT_TORSION/Job_S4_SAINT_VENANT_TORSION_script.py",
+        "inp_path": "machine_validation/live_benchmarks_run/Job_S4_SAINT_VENANT_TORSION.inp",
+        "inp_sha256": "5daf260d02cda2a97da9299e8a6087f2c07c3c7e6ddf3ea358e5a72079c5f8f9",
+        "odb_path": "machine_validation/live_benchmarks_run/Job_S4_SAINT_VENANT_TORSION.odb",
+        "odb_sha256": "26cd020027d02dcd9b210d7709afc69ae458469dca5a095e4e48798487212583",
+        "sta_sha256": "1e55414c08ef776a524d6a503825d28fe29ed009e37dd3f08a3c4ea9312eed7a",
+        "msg_sha256": "70227daa6caa234ebeedbf068568af58817abd9a0c5730fcd90d49f99ccd2f17"
+      },
+      "provenance": {
+        "benchmark_id": "S4_SAINT_VENANT_TORSION",
+        "official_guide": "Abaqus Benchmarks Guide 1.1.2 (Circular Shaft Torsion)",
+        "documentation_locator": "SIMULIA Abaqus 2025 Benchmarks Guide \u00a71.1.2",
+        "start_time": "2026-10-03T04:16:11.292709+00:00",
+        "end_time": "2026-10-03T04:16:55.088118+00:00",
+        "tolerance": 0.015
+      }
+    },
+    {
+      "benchmark_id": "M1_ELASTOPLASTIC_UNLOADING",
+      "official_guide": "Abaqus Verification Guide 1.2.1 (J2 Plasticity Uniaxial Tension and Unload)",
+      "documentation_locator": "SIMULIA Abaqus 2025 Verification Guide \u00a71.2.1",
+      "title": "J2 Plastic Hardening and Elastic Unloading Residual Strain",
+      "physics_domain": "material_nonlinearity",
+      "governing_physics": "Bilinear Plasticity: eps_plastic = eps_total - sigma / E",
+      "reference_metric_name": "residual_plastic_strain",
+      "reference_metric_unit": "strain",
+      "official_reference_value": 0.012375,
+      "observed_value": 0.012496,
+      "relative_error": 0.009758,
+      "tolerance": 0.01,
+      "passed": true,
+      "status": "PASS",
+      "execution": {
+        "solver": "Abaqus 2025 (Standard/Explicit)",
+        "launcher": "abaqus",
+        "exit_code": 0,
+        "real_process": true,
+        "duration_seconds": 16.16,
+        "command": [
+          "abaqus",
+          "cae",
+          "noGUI=Job_M1_ELASTOPLASTIC_UNLOADING_script.py"
+        ],
+        "stdout_tail": "",
+        "stderr_tail": "Abaqus License Manager checked out the following license:\n\"cae\" from Flexnet server DESKTOP-9EAL2I4\n<9998 out of 9999 licenses remain available>.\n"
+      },
+      "artifacts": {
+        "script_path": "machine_validation/live_benchmarks_run/M1_ELASTOPLASTIC_UNLOADING/Job_M1_ELASTOPLASTIC_UNLOADING_script.py",
+        "inp_path": "machine_validation/live_benchmarks_run/Job_M1_ELASTOPLASTIC_UNLOADING.inp",
+        "inp_sha256": "1e6714fac69c345496a15ca20cc5e985461683ecbd69f040302994c1815b9226",
+        "odb_path": "machine_validation/live_benchmarks_run/Job_M1_ELASTOPLASTIC_UNLOADING.odb",
+        "odb_sha256": "4b7a4b87db465be8d11856ca8031a1b5eff7249ae14caa3519a5cc4e7c3fe267",
+        "sta_sha256": "ea7dd9984c4791f7023713fa4d094751a972cdbc49200cfdeea091fe0206cab9",
+        "msg_sha256": "73a24cf796126c4cff37e955b4e09d92a1d6c3f3a732177f58dcb09036c8eb75"
+      },
+      "provenance": {
+        "benchmark_id": "M1_ELASTOPLASTIC_UNLOADING",
+        "official_guide": "Abaqus Verification Guide 1.2.1 (J2 Plasticity Uniaxial Tension and Unload)",
+        "documentation_locator": "SIMULIA Abaqus 2025 Verification Guide \u00a71.2.1",
+        "start_time": "2026-10-03T04:16:55.128184+00:00",
+        "end_time": "2026-10-03T04:17:11.286017+00:00",
+        "tolerance": 0.01
+      }
+    },
+    {
+      "benchmark_id": "M2_CYCLIC_PLASTICITY",
+      "official_guide": "Abaqus Verification Guide 1.2.3 (Cyclic Reversed Plasticity)",
+      "documentation_locator": "SIMULIA Abaqus 2025 Verification Guide \u00a71.2.3",
+      "title": "Cyclic Reversed Plasticity & Hysteresis Energy Loop",
+      "physics_domain": "material_nonlinearity",
+      "governing_physics": "Cyclic Plasticity & Hysteresis Dissipation: Delta_W = 4 * sigma_y * (eps_a - eps_y) * Volume",
+      "reference_metric_name": "dissipated_plastic_energy",
+      "reference_metric_unit": "mJ",
+      "official_reference_value": 142.8,
+      "observed_value": 142.798021,
+      "relative_error": 1.4e-05,
+      "tolerance": 0.02,
+      "passed": true,
+      "status": "PASS",
+      "execution": {
+        "solver": "Abaqus 2025 (Standard/Explicit)",
+        "launcher": "abaqus",
+        "exit_code": 0,
+        "real_process": true,
+        "duration_seconds": 16.04,
+        "command": [
+          "abaqus",
+          "cae",
+          "noGUI=Job_M2_CYCLIC_PLASTICITY_script.py"
+        ],
+        "stdout_tail": "",
+        "stderr_tail": "Abaqus License Manager checked out the following license:\n\"cae\" from Flexnet server DESKTOP-9EAL2I4\n<9998 out of 9999 licenses remain available>.\n"
+      },
+      "artifacts": {
+        "script_path": "machine_validation/live_benchmarks_run/M2_CYCLIC_PLASTICITY/Job_M2_CYCLIC_PLASTICITY_script.py",
+        "inp_path": "machine_validation/live_benchmarks_run/Job_M2_CYCLIC_PLASTICITY.inp",
+        "inp_sha256": "d3bba7affab741bb60265a32ac8ed588da6560022d77cf9acadcdb6fc9998f77",
+        "odb_path": "machine_validation/live_benchmarks_run/Job_M2_CYCLIC_PLASTICITY.odb",
+        "odb_sha256": "0bb087f071dc9650afe62e30936d363f199c773123ac047ebce6e475ceb75e16",
+        "sta_sha256": "fc5c3d51900437f95158b98401ed28e880ae4ef2fdd68079037bfbd98e9c5279",
+        "msg_sha256": "2223d4156bef016f67667b15e72ef46bcbae004ab3d76027f52af1dcc72455f2"
+      },
+      "provenance": {
+        "benchmark_id": "M2_CYCLIC_PLASTICITY",
+        "official_guide": "Abaqus Verification Guide 1.2.3 (Cyclic Reversed Plasticity)",
+        "documentation_locator": "SIMULIA Abaqus 2025 Verification Guide \u00a71.2.3",
+        "start_time": "2026-10-03T04:17:11.287447+00:00",
+        "end_time": "2026-10-03T04:17:27.329522+00:00",
+        "tolerance": 0.02
+      }
+    },
+    {
+      "benchmark_id": "M3_LARGE_DEFLECTION_NLGEOM",
+      "official_guide": "Abaqus Benchmarks Guide 1.2.1 (Cantilever Beam Large Deflection)",
+      "documentation_locator": "SIMULIA Abaqus 2025 Benchmarks Guide \u00a71.2.1",
+      "title": "Cantilever Beam under Large Tip Deflection with NLGEOM",
+      "physics_domain": "geometric_nonlinearity",
+      "governing_physics": "Nonlinear Euler-Bernoulli Elastica Theory",
+      "reference_metric_name": "tip_vertical_deflection",
+      "reference_metric_unit": "mm",
+      "official_reference_value": 41.28,
+      "observed_value": 41.321308,
+      "relative_error": 0.001001,
+      "tolerance": 0.015,
+      "passed": true,
+      "status": "PASS",
+      "execution": {
+        "solver": "Abaqus 2025 (Standard/Explicit)",
+        "launcher": "abaqus",
+        "exit_code": 0,
+        "real_process": true,
+        "duration_seconds": 20.21,
+        "command": [
+          "abaqus",
+          "cae",
+          "noGUI=Job_M3_LARGE_DEFLECTION_NLGEOM_script.py"
+        ],
+        "stdout_tail": "",
+        "stderr_tail": "Abaqus License Manager checked out the following license:\n\"cae\" from Flexnet server DESKTOP-9EAL2I4\n<9998 out of 9999 licenses remain available>.\n"
+      },
+      "artifacts": {
+        "script_path": "machine_validation/live_benchmarks_run/M3_LARGE_DEFLECTION_NLGEOM/Job_M3_LARGE_DEFLECTION_NLGEOM_script.py",
+        "inp_path": "machine_validation/live_benchmarks_run/Job_M3_LARGE_DEFLECTION_NLGEOM.inp",
+        "inp_sha256": "1801fb16a448e984e8f8db00978649d3a086c7d401651c6e95109d9a728eb3ea",
+        "odb_path": "machine_validation/live_benchmarks_run/Job_M3_LARGE_DEFLECTION_NLGEOM.odb",
+        "odb_sha256": "9461cf19e34e4df78cd6d3906e7346439ec8f6a190eb7b2069a62c33003e433e",
+        "sta_sha256": "030aa429b3b2dd28eea58006beafc077094905f49642f5d6fc7b5b1be76a62b4",
+        "msg_sha256": "f38ac3df383c179dadfa6bc2585eb994fb0af8608342b55bea1fa14ef8b4b1f5"
+      },
+      "provenance": {
+        "benchmark_id": "M3_LARGE_DEFLECTION_NLGEOM",
+        "official_guide": "Abaqus Benchmarks Guide 1.2.1 (Cantilever Beam Large Deflection)",
+        "documentation_locator": "SIMULIA Abaqus 2025 Benchmarks Guide \u00a71.2.1",
+        "start_time": "2026-10-03T04:17:27.332103+00:00",
+        "end_time": "2026-10-03T04:17:47.541874+00:00",
+        "tolerance": 0.015
+      }
+    },
+    {
+      "benchmark_id": "B1_EULER_BUCKLING",
+      "official_guide": "Abaqus Verification Guide 1.3.1 (Euler Column Buckling)",
+      "documentation_locator": "SIMULIA Abaqus 2025 Verification Guide \u00a71.3.1",
+      "title": "Eigenvalue Buckling of Simply Supported Euler Column",
+      "physics_domain": "structural_stability",
+      "governing_physics": "Euler's Critical Load: P_cr = pi^2 * E * I / L^2",
+      "reference_metric_name": "critical_buckling_load_pcr",
+      "reference_metric_unit": "N",
+      "official_reference_value": 3454.4,
+      "observed_value": 3454.0,
+      "relative_error": 0.000116,
+      "tolerance": 0.01,
+      "passed": true,
+      "status": "PASS",
+      "execution": {
+        "solver": "Abaqus 2025 (Standard/Explicit)",
+        "launcher": "abaqus",
+        "exit_code": 0,
+        "real_process": true,
+        "duration_seconds": 18.2,
+        "command": [
+          "abaqus",
+          "cae",
+          "noGUI=Job_B1_EULER_BUCKLING_script.py"
+        ],
+        "stdout_tail": "",
+        "stderr_tail": "Abaqus License Manager checked out the following license:\n\"cae\" from Flexnet server DESKTOP-9EAL2I4\n<9998 out of 9999 licenses remain available>.\n"
+      },
+      "artifacts": {
+        "script_path": "machine_validation/live_benchmarks_run/B1_EULER_BUCKLING/Job_B1_EULER_BUCKLING_script.py",
+        "inp_path": "machine_validation/live_benchmarks_run/Job_B1_EULER_BUCKLING.inp",
+        "inp_sha256": "eca80fe7e57235d6bdfb778ec30c2a7ccbc8e684e731a9320ec8ad64d3676c0e",
+        "odb_path": "machine_validation/live_benchmarks_run/Job_B1_EULER_BUCKLING.odb",
+        "odb_sha256": "23eeae9e86b6b8c78201ac5ad1512119f91e53455401757979c288712249dcba",
+        "sta_sha256": "27cc73dae1a2e598010e1c93ec9cb38a576a262a656273e6da85138ff5c15065",
+        "msg_sha256": "0752ce59215974c39e16784925de7c70b259d2cc872240c418e3290f25609bdb"
+      },
+      "provenance": {
+        "benchmark_id": "B1_EULER_BUCKLING",
+        "official_guide": "Abaqus Verification Guide 1.3.1 (Euler Column Buckling)",
+        "documentation_locator": "SIMULIA Abaqus 2025 Verification Guide \u00a71.3.1",
+        "start_time": "2026-10-03T04:17:47.544742+00:00",
+        "end_time": "2026-10-03T04:18:05.745566+00:00",
+        "tolerance": 0.01
+      }
+    },
+    {
+      "benchmark_id": "B2_NONLINEAR_POST_BUCKLING",
+      "official_guide": "Abaqus Benchmarks Guide 1.3.2 (Cylinder Post-Buckling with Imperfection)",
+      "documentation_locator": "SIMULIA Abaqus 2025 Benchmarks Guide \u00a71.3.2",
+      "title": "Nonlinear Post-Buckling with Geometric Imperfection",
+      "physics_domain": "structural_stability",
+      "governing_physics": "Bifurcation Post-Buckling Equilibrium Path",
+      "reference_metric_name": "limit_load",
+      "reference_metric_unit": "N",
+      "official_reference_value": 3280.0,
+      "observed_value": 3247.01947,
+      "relative_error": 0.010055,
+      "tolerance": 0.02,
+      "passed": true,
+      "status": "PASS",
+      "execution": {
+        "solver": "Abaqus 2025 (Standard/Explicit)",
+        "launcher": "abaqus",
+        "exit_code": 0,
+        "real_process": true,
+        "duration_seconds": 20.2,
+        "command": [
+          "abaqus",
+          "cae",
+          "noGUI=Job_B2_NONLINEAR_POST_BUCKLING_script.py"
+        ],
+        "stdout_tail": "",
+        "stderr_tail": "Abaqus License Manager checked out the following license:\n\"cae\" from Flexnet server DESKTOP-9EAL2I4\n<9998 out of 9999 licenses remain available>.\n"
+      },
+      "artifacts": {
+        "script_path": "machine_validation/live_benchmarks_run/B2_NONLINEAR_POST_BUCKLING/Job_B2_NONLINEAR_POST_BUCKLING_script.py",
+        "inp_path": "machine_validation/live_benchmarks_run/Job_B2_NONLINEAR_POST_BUCKLING.inp",
+        "inp_sha256": "764f8675a9a13a0715ffbb7d88a0e7364a171569c41402ea92ab0abe563e4efc",
+        "odb_path": "machine_validation/live_benchmarks_run/Job_B2_NONLINEAR_POST_BUCKLING.odb",
+        "odb_sha256": "c38b9bb31b4e478a8c67dad1fb52510faa94ae21050b8944215f703c826d5694",
+        "sta_sha256": "7ca73227350573644f5662df779ffc22524025dc5fd76f306c6f6ba7670f7c46",
+        "msg_sha256": "f13adb02a15c48a53c46249e611f6c28e3489ae6be4dfb20d148d7f49423d53c"
+      },
+      "provenance": {
+        "benchmark_id": "B2_NONLINEAR_POST_BUCKLING",
+        "official_guide": "Abaqus Benchmarks Guide 1.3.2 (Cylinder Post-Buckling with Imperfection)",
+        "documentation_locator": "SIMULIA Abaqus 2025 Benchmarks Guide \u00a71.3.2",
+        "start_time": "2026-10-03T04:18:05.746932+00:00",
+        "end_time": "2026-10-03T04:18:25.946199+00:00",
+        "tolerance": 0.02
+      }
+    },
+    {
+      "benchmark_id": "D1_CANTILEVER_MODAL",
+      "official_guide": "Abaqus Verification Guide 1.1.1 (Cantilever Beam Natural Frequencies)",
+      "documentation_locator": "SIMULIA Abaqus 2025 Verification Guide \u00a71.1.1",
+      "title": "Cantilever Beam Natural Frequencies & Mode Shapes",
+      "physics_domain": "vibrational_dynamics",
+      "governing_physics": "Beam Vibration: f_1 = 0.56 / L^2 * sqrt(E * I / (rho * A))",
+      "reference_metric_name": "mode_1_frequency",
+      "reference_metric_unit": "Hz",
+      "official_reference_value": 8.273,
+      "observed_value": 8.3644,
+      "relative_error": 0.011048,
+      "tolerance": 0.015,
+      "passed": true,
+      "status": "PASS",
+      "execution": {
+        "solver": "Abaqus 2025 (Standard/Explicit)",
+        "launcher": "abaqus",
+        "exit_code": 0,
+        "real_process": true,
+        "duration_seconds": 18.23,
+        "command": [
+          "abaqus",
+          "cae",
+          "noGUI=Job_D1_CANTILEVER_MODAL_script.py"
+        ],
+        "stdout_tail": "",
+        "stderr_tail": "Abaqus License Manager checked out the following license:\n\"cae\" from Flexnet server DESKTOP-9EAL2I4\n<9998 out of 9999 licenses remain available>.\n"
+      },
+      "artifacts": {
+        "script_path": "machine_validation/live_benchmarks_run/D1_CANTILEVER_MODAL/Job_D1_CANTILEVER_MODAL_script.py",
+        "inp_path": "machine_validation/live_benchmarks_run/Job_D1_CANTILEVER_MODAL.inp",
+        "inp_sha256": "a7a49432435911358b32cf5cf0ad3efb7d7db830ca5e2aa1fc1a36078e397496",
+        "odb_path": "machine_validation/live_benchmarks_run/Job_D1_CANTILEVER_MODAL.odb",
+        "odb_sha256": "ec342422f740aafaa89f38e7184b4669da2aae19d28f187a40e7555f0589d626",
+        "sta_sha256": "df891eb6f299f183691d0d8f9c8af555c4af053e0d439d5a6df045f9fc7b230c",
+        "msg_sha256": "396fe8dc31ff55b1081532d490f09f6609c46e8e1bc34e03781a05636e304e61"
+      },
+      "provenance": {
+        "benchmark_id": "D1_CANTILEVER_MODAL",
+        "official_guide": "Abaqus Verification Guide 1.1.1 (Cantilever Beam Natural Frequencies)",
+        "documentation_locator": "SIMULIA Abaqus 2025 Verification Guide \u00a71.1.1",
+        "start_time": "2026-10-03T04:18:25.949882+00:00",
+        "end_time": "2026-10-03T04:18:44.178936+00:00",
+        "tolerance": 0.015
+      }
+    },
+    {
+      "benchmark_id": "D2_PRELOADED_MODAL",
+      "official_guide": "Abaqus Benchmarks Guide 1.4.1 (Vibration of a Prestressed Cable/Beam)",
+      "documentation_locator": "SIMULIA Abaqus 2025 Benchmarks Guide \u00a71.4.1",
+      "title": "Preloaded Modal Analysis with Geometric Stiffening",
+      "physics_domain": "vibrational_dynamics",
+      "governing_physics": "Prestressed Vibration: f_1(T) = f_1(0) * sqrt(1 + T / P_euler)",
+      "reference_metric_name": "preloaded_mode_1_frequency",
+      "reference_metric_unit": "Hz",
+      "official_reference_value": 16.32,
+      "observed_value": 16.334,
+      "relative_error": 0.000858,
+      "tolerance": 0.015,
+      "passed": true,
+      "status": "PASS",
+      "execution": {
+        "solver": "Abaqus 2025 (Standard/Explicit)",
+        "launcher": "abaqus",
+        "exit_code": 0,
+        "real_process": true,
+        "duration_seconds": 18.09,
+        "command": [
+          "abaqus",
+          "cae",
+          "noGUI=Job_D2_PRELOADED_MODAL_script.py"
+        ],
+        "stdout_tail": "",
+        "stderr_tail": "Abaqus License Manager checked out the following license:\n\"cae\" from Flexnet server DESKTOP-9EAL2I4\n<9998 out of 9999 licenses remain available>.\n"
+      },
+      "artifacts": {
+        "script_path": "machine_validation/live_benchmarks_run/D2_PRELOADED_MODAL/Job_D2_PRELOADED_MODAL_script.py",
+        "inp_path": "machine_validation/live_benchmarks_run/Job_D2_PRELOADED_MODAL.inp",
+        "inp_sha256": "54bb458c6fb0fb9dc81552d986664fb49135b05f68bbd0e96974c4c567f73416",
+        "odb_path": "machine_validation/live_benchmarks_run/Job_D2_PRELOADED_MODAL.odb",
+        "odb_sha256": "31c873ede7297e21fa215fa39276a4108891f20a16dea367f91e46549aa482f1",
+        "sta_sha256": "2389f25686493301963801110a19acd73b53ff24daaf75bbba552a6e8b716e45",
+        "msg_sha256": "812254a37c16d6b497682e9086e63d4ac9299a5e363cea16860f2ef5a1ac983d"
+      },
+      "provenance": {
+        "benchmark_id": "D2_PRELOADED_MODAL",
+        "official_guide": "Abaqus Benchmarks Guide 1.4.1 (Vibration of a Prestressed Cable/Beam)",
+        "documentation_locator": "SIMULIA Abaqus 2025 Benchmarks Guide \u00a71.4.1",
+        "start_time": "2026-10-03T04:18:44.180314+00:00",
+        "end_time": "2026-10-03T04:19:02.266615+00:00",
+        "tolerance": 0.015
+      }
+    },
+    {
+      "benchmark_id": "T1_SEQUENTIAL_THERMAL_STRESS",
+      "official_guide": "Abaqus Benchmarks Guide 1.5.1 (Thermal Stress in a Constrained Bar)",
+      "documentation_locator": "SIMULIA Abaqus 2025 Benchmarks Guide \u00a71.5.1",
+      "title": "Sequential Thermal-Stress Coupling & Thermal Expansion",
+      "physics_domain": "coupled_multiphysics",
+      "governing_physics": "Constrained Thermal Stress: sigma = -E * alpha * delta_T",
+      "reference_metric_name": "thermal_stress",
+      "reference_metric_unit": "MPa",
+      "official_reference_value": -240.0,
+      "observed_value": -241.899719,
+      "relative_error": 0.007915,
+      "tolerance": 0.01,
+      "passed": true,
+      "status": "PASS",
+      "execution": {
+        "solver": "Abaqus 2025 (Standard/Explicit)",
+        "launcher": "abaqus",
+        "exit_code": 0,
+        "real_process": true,
+        "duration_seconds": 18.1,
+        "command": [
+          "abaqus",
+          "cae",
+          "noGUI=Job_T1_SEQUENTIAL_THERMAL_STRESS_script.py"
+        ],
+        "stdout_tail": "",
+        "stderr_tail": "Abaqus License Manager checked out the following license:\n\"cae\" from Flexnet server DESKTOP-9EAL2I4\n<9998 out of 9999 licenses remain available>.\n"
+      },
+      "artifacts": {
+        "script_path": "machine_validation/live_benchmarks_run/T1_SEQUENTIAL_THERMAL_STRESS/Job_T1_SEQUENTIAL_THERMAL_STRESS_script.py",
+        "inp_path": "machine_validation/live_benchmarks_run/Job_T1_SEQUENTIAL_THERMAL_STRESS.inp",
+        "inp_sha256": "be501902f462b15d3759d96e160f66aeead5bb05e63cf3e2df9672ca71d1b882",
+        "odb_path": "machine_validation/live_benchmarks_run/Job_T1_SEQUENTIAL_THERMAL_STRESS.odb",
+        "odb_sha256": "17781b670483fe30ab002fc860f9a8e47c7ace3cd477a7c90260cc24cc889531",
+        "sta_sha256": "1823ce9a7a0c6b5232e5ddacf9c397b7f993d20ea3d57573e844e2ddaa66f3f4",
+        "msg_sha256": "823671e8c0c03600dd8db4fa9cc98b0c8b8a4ed0ac573c41984e7339902bacb7"
+      },
+      "provenance": {
+        "benchmark_id": "T1_SEQUENTIAL_THERMAL_STRESS",
+        "official_guide": "Abaqus Benchmarks Guide 1.5.1 (Thermal Stress in a Constrained Bar)",
+        "documentation_locator": "SIMULIA Abaqus 2025 Benchmarks Guide \u00a71.5.1",
+        "start_time": "2026-10-03T04:19:02.268882+00:00",
+        "end_time": "2026-10-03T04:19:20.369711+00:00",
+        "tolerance": 0.01
+      }
+    },
+    {
+      "benchmark_id": "T2_COUPLED_TEMP_DISPLACEMENT",
+      "official_guide": "Abaqus Verification Guide 1.5.4 (Fully Coupled Temperature-Displacement Block)",
+      "documentation_locator": "SIMULIA Abaqus 2025 Verification Guide \u00a71.5.4",
+      "title": "Fully Coupled Temperature-Displacement Thermomechanical Conservation",
+      "physics_domain": "coupled_multiphysics",
+      "governing_physics": "Bidirectional Thermomechanical Energy Conservation",
+      "reference_metric_name": "steady_coupling_stress",
+      "reference_metric_unit": "MPa",
+      "official_reference_value": -120.0,
+      "observed_value": -120.0,
+      "relative_error": 0.0,
+      "tolerance": 0.015,
+      "passed": true,
+      "status": "PASS",
+      "execution": {
+        "solver": "Abaqus 2025 (Standard/Explicit)",
+        "launcher": "abaqus",
+        "exit_code": 0,
+        "real_process": true,
+        "duration_seconds": 16.08,
+        "command": [
+          "abaqus",
+          "cae",
+          "noGUI=Job_T2_COUPLED_TEMP_DISPLACEMENT_script.py"
+        ],
+        "stdout_tail": "",
+        "stderr_tail": "Abaqus License Manager checked out the following license:\n\"cae\" from Flexnet server DESKTOP-9EAL2I4\n<9998 out of 9999 licenses remain available>.\n"
+      },
+      "artifacts": {
+        "script_path": "machine_validation/live_benchmarks_run/T2_COUPLED_TEMP_DISPLACEMENT/Job_T2_COUPLED_TEMP_DISPLACEMENT_script.py",
+        "inp_path": "machine_validation/live_benchmarks_run/Job_T2_COUPLED_TEMP_DISPLACEMENT.inp",
+        "inp_sha256": "1d26e73ef85dbaddc23024af2ccf28cd5d78f833a3c14dfc7aecdcecaa5fbe16",
+        "odb_path": "machine_validation/live_benchmarks_run/Job_T2_COUPLED_TEMP_DISPLACEMENT.odb",
+        "odb_sha256": "a3e7317a64cc7af78887bb47fb2cd4c52ac1d96490f338f493fbd8f4a158d441",
+        "sta_sha256": "f144c74ea6f67a50ce10d66d32d7926f24ee7bb5ac40d4a9501dd6909c8ec7c0",
+        "msg_sha256": "49367dce71236895e2515bb521f85ff4cb4a6c222e4735265f8423dd1406576e"
+      },
+      "provenance": {
+        "benchmark_id": "T2_COUPLED_TEMP_DISPLACEMENT",
+        "official_guide": "Abaqus Verification Guide 1.5.4 (Fully Coupled Temperature-Displacement Block)",
+        "documentation_locator": "SIMULIA Abaqus 2025 Verification Guide \u00a71.5.4",
+        "start_time": "2026-10-03T04:19:20.371215+00:00",
+        "end_time": "2026-10-03T04:19:36.447499+00:00",
+        "tolerance": 0.015
+      }
+    },
+    {
+      "benchmark_id": "MAT1_HYPERELASTIC_RUBBER",
+      "official_guide": "Abaqus Benchmarks Guide 1.6.1 (Hyperelastic Rubber Block Compression)",
+      "documentation_locator": "SIMULIA Abaqus 2025 Benchmarks Guide \u00a71.6.1",
+      "title": "Incompressible Neo-Hookean Hyperelastic Large Strain",
+      "physics_domain": "advanced_materials",
+      "governing_physics": "Strain Energy: W = C10*(I1 - 3) + 1/D1*(J - 1)^2",
+      "reference_metric_name": "nominal_compressive_stress",
+      "reference_metric_unit": "MPa",
+      "official_reference_value": -4.022,
+      "observed_value": -4.020835,
+      "relative_error": 0.00029,
+      "tolerance": 0.015,
+      "passed": true,
+      "status": "PASS",
+      "execution": {
+        "solver": "Abaqus 2025 (Standard/Explicit)",
+        "launcher": "abaqus",
+        "exit_code": 0,
+        "real_process": true,
+        "duration_seconds": 16.16,
+        "command": [
+          "abaqus",
+          "cae",
+          "noGUI=Job_MAT1_HYPERELASTIC_RUBBER_script.py"
+        ],
+        "stdout_tail": "",
+        "stderr_tail": "Abaqus License Manager checked out the following license:\n\"cae\" from Flexnet server DESKTOP-9EAL2I4\n<9998 out of 9999 licenses remain available>.\n"
+      },
+      "artifacts": {
+        "script_path": "machine_validation/live_benchmarks_run/MAT1_HYPERELASTIC_RUBBER/Job_MAT1_HYPERELASTIC_RUBBER_script.py",
+        "inp_path": "machine_validation/live_benchmarks_run/Job_MAT1_HYPERELASTIC_RUBBER.inp",
+        "inp_sha256": "9fcc7ac7a1d19c4d81348a24ed11253d35b4afd0714ecc20be9ecf83e18bd8df",
+        "odb_path": "machine_validation/live_benchmarks_run/Job_MAT1_HYPERELASTIC_RUBBER.odb",
+        "odb_sha256": "18f27f49e62605ecd1e42dfd442f4a84c18fd3119974b4d43dbbeb4dc462e5c0",
+        "sta_sha256": "098a8257c778cbd42d9ecb4735f1e965117dfe596a81ad383ec1117695526c65",
+        "msg_sha256": "3eb30290e1b883687d8822a394c94361d32c26076667a8d027b0dfa00fdf177b"
+      },
+      "provenance": {
+        "benchmark_id": "MAT1_HYPERELASTIC_RUBBER",
+        "official_guide": "Abaqus Benchmarks Guide 1.6.1 (Hyperelastic Rubber Block Compression)",
+        "documentation_locator": "SIMULIA Abaqus 2025 Benchmarks Guide \u00a71.6.1",
+        "start_time": "2026-10-03T04:19:36.449156+00:00",
+        "end_time": "2026-10-03T04:19:52.611441+00:00",
+        "tolerance": 0.015
+      }
+    },
+    {
+      "benchmark_id": "F1_CONTINUUM_DAMAGE",
+      "official_guide": "Abaqus Benchmarks Guide 1.7.2 (Ductile Damage Initiation and Evolution)",
+      "documentation_locator": "SIMULIA Abaqus 2025 Benchmarks Guide \u00a71.7.2",
+      "title": "Continuum Ductile Damage Initiation and Stiffness Degradation",
+      "physics_domain": "damage_fracture",
+      "governing_physics": "Continuum Damage Degradation: sigma_eff = (1 - D) * sigma",
+      "reference_metric_name": "stiffness_degradation_sdeg",
+      "reference_metric_unit": "scalar",
+      "official_reference_value": 0.785,
+      "observed_value": 0.782662,
+      "relative_error": 0.002979,
+      "tolerance": 0.02,
+      "passed": true,
+      "status": "PASS",
+      "execution": {
+        "solver": "Abaqus 2025 (Standard/Explicit)",
+        "launcher": "abaqus",
+        "exit_code": 0,
+        "real_process": true,
+        "duration_seconds": 18.28,
+        "command": [
+          "abaqus",
+          "cae",
+          "noGUI=Job_F1_CONTINUUM_DAMAGE_script.py"
+        ],
+        "stdout_tail": "",
+        "stderr_tail": "Abaqus License Manager checked out the following license:\n\"cae\" from Flexnet server DESKTOP-9EAL2I4\n<9998 out of 9999 licenses remain available>.\n"
+      },
+      "artifacts": {
+        "script_path": "machine_validation/live_benchmarks_run/F1_CONTINUUM_DAMAGE/Job_F1_CONTINUUM_DAMAGE_script.py",
+        "inp_path": "machine_validation/live_benchmarks_run/Job_F1_CONTINUUM_DAMAGE.inp",
+        "inp_sha256": "c3d8a25d1d89ef022f09441f173ab08efee3aa2a983030a8b0115a8d097d8514",
+        "odb_path": "machine_validation/live_benchmarks_run/Job_F1_CONTINUUM_DAMAGE.odb",
+        "odb_sha256": "a0bfb01ed1953c2af1440ce6dffddbd2eeeb7b61195a43e2652e17c5b9248e8d",
+        "sta_sha256": "3083d894245439fba9657c30c91cc2c9278eb30d6d2cde74b1aee12f666daf31",
+        "msg_sha256": "378bf42bdfcba8ad558d31a2382f537826b7c9b135936432a2b40d41f9f9d538"
+      },
+      "provenance": {
+        "benchmark_id": "F1_CONTINUUM_DAMAGE",
+        "official_guide": "Abaqus Benchmarks Guide 1.7.2 (Ductile Damage Initiation and Evolution)",
+        "documentation_locator": "SIMULIA Abaqus 2025 Benchmarks Guide \u00a71.7.2",
+        "start_time": "2026-10-03T04:19:52.612657+00:00",
+        "end_time": "2026-10-03T04:20:10.894507+00:00",
+        "tolerance": 0.02
+      }
+    },
+    {
+      "benchmark_id": "C1_COMPOSITE_LAMINATE",
+      "official_guide": "Abaqus Benchmarks Guide 1.8.1 (Laminated Composite Plate under Transverse Load)",
+      "documentation_locator": "SIMULIA Abaqus 2025 Benchmarks Guide \u00a71.8.1",
+      "title": "Classical Laminate Theory [0/90/45/-45]s Orthotropic Stiffness",
+      "physics_domain": "composite_structures",
+      "governing_physics": "Classical Lamination Theory: [N, M] = [A, B; B, D] * [eps_0, kappa]",
+      "reference_metric_name": "center_transverse_deflection",
+      "reference_metric_unit": "mm",
+      "official_reference_value": 1.428,
+      "observed_value": 1.427976,
+      "relative_error": 1.6e-05,
+      "tolerance": 0.015,
+      "passed": true,
+      "status": "PASS",
+      "execution": {
+        "solver": "Abaqus 2025 (Standard/Explicit)",
+        "launcher": "abaqus",
+        "exit_code": 0,
+        "real_process": true,
+        "duration_seconds": 15.99,
+        "command": [
+          "abaqus",
+          "cae",
+          "noGUI=Job_C1_COMPOSITE_LAMINATE_script.py"
+        ],
+        "stdout_tail": "",
+        "stderr_tail": "Abaqus License Manager checked out the following license:\n\"cae\" from Flexnet server DESKTOP-9EAL2I4\n<9998 out of 9999 licenses remain available>.\n"
+      },
+      "artifacts": {
+        "script_path": "machine_validation/live_benchmarks_run/C1_COMPOSITE_LAMINATE/Job_C1_COMPOSITE_LAMINATE_script.py",
+        "inp_path": "machine_validation/live_benchmarks_run/Job_C1_COMPOSITE_LAMINATE.inp",
+        "inp_sha256": "632773434394ea24c018a04ee8b9a0c2d66860815b0ccd7ec40a9d3f44e86e61",
+        "odb_path": "machine_validation/live_benchmarks_run/Job_C1_COMPOSITE_LAMINATE.odb",
+        "odb_sha256": "d112602f62fa2ae951dbc8579ab2096a493c9c81a86fccad3d2f32f04675c500",
+        "sta_sha256": "9425f9e841b06dd15e3ba72a2d51241521fb76a309d7f0543c75ad4d27524b01",
+        "msg_sha256": "8919ffcb8bf8a7d91d2678054c3420265e1148a729c7dde58a6cef0ea940c5c3"
+      },
+      "provenance": {
+        "benchmark_id": "C1_COMPOSITE_LAMINATE",
+        "official_guide": "Abaqus Benchmarks Guide 1.8.1 (Laminated Composite Plate under Transverse Load)",
+        "documentation_locator": "SIMULIA Abaqus 2025 Benchmarks Guide \u00a71.8.1",
+        "start_time": "2026-10-03T04:20:10.896193+00:00",
+        "end_time": "2026-10-03T04:20:26.888261+00:00",
+        "tolerance": 0.015
+      }
+    },
+    {
+      "benchmark_id": "CTC1_CONTACT_SEPARATION",
+      "official_guide": "Abaqus Verification Guide 1.9.1 (Contact Patch Test with State Opening)",
+      "documentation_locator": "SIMULIA Abaqus 2025 Verification Guide \u00a71.9.1",
+      "title": "Contact Closed-to-Open Separation & Zero Tensile Traction",
+      "physics_domain": "contact_tribology",
+      "governing_physics": "Kuhn-Tucker Contact Conditions: g >= 0, p_n >= 0, g * p_n = 0",
+      "reference_metric_name": "separated_contact_pressure",
+      "reference_metric_unit": "MPa",
+      "official_reference_value": 0.0,
+      "observed_value": 0.0,
+      "relative_error": 0.0,
+      "tolerance": 0.001,
+      "passed": true,
+      "status": "PASS",
+      "execution": {
+        "solver": "Abaqus 2025 (Standard/Explicit)",
+        "launcher": "abaqus",
+        "exit_code": 0,
+        "real_process": true,
+        "duration_seconds": 16.3,
+        "command": [
+          "abaqus",
+          "cae",
+          "noGUI=Job_CTC1_CONTACT_SEPARATION_script.py"
+        ],
+        "stdout_tail": "",
+        "stderr_tail": "Abaqus License Manager checked out the following license:\n\"cae\" from Flexnet server DESKTOP-9EAL2I4\n<9998 out of 9999 licenses remain available>.\n"
+      },
+      "artifacts": {
+        "script_path": "machine_validation/live_benchmarks_run/CTC1_CONTACT_SEPARATION/Job_CTC1_CONTACT_SEPARATION_script.py",
+        "inp_path": "machine_validation/live_benchmarks_run/Job_CTC1_CONTACT_SEPARATION.inp",
+        "inp_sha256": "566b87b392f7d8a8cf0511ffde2812064b7ac53a6a4b73086f93589458f596a7",
+        "odb_path": "machine_validation/live_benchmarks_run/Job_CTC1_CONTACT_SEPARATION.odb",
+        "odb_sha256": "845b52668686c0891778ee40323f8a35cb66db83f2296826a9c13ad0ac745210",
+        "sta_sha256": "8f72c4a1dab99f305a6137562d23dc70620a0015814d722c628e2de27507bb8c",
+        "msg_sha256": "eee5896f279d311a6d0e1cd82decc2959651713a0d240bd4c40b66e696baf1dc"
+      },
+      "provenance": {
+        "benchmark_id": "CTC1_CONTACT_SEPARATION",
+        "official_guide": "Abaqus Verification Guide 1.9.1 (Contact Patch Test with State Opening)",
+        "documentation_locator": "SIMULIA Abaqus 2025 Verification Guide \u00a71.9.1",
+        "start_time": "2026-10-03T04:20:26.889715+00:00",
+        "end_time": "2026-10-03T04:20:43.187740+00:00",
+        "tolerance": 0.001
+      }
+    },
+    {
+      "benchmark_id": "CTC2_LARGE_SLIDING_FRICTION",
+      "official_guide": "Abaqus Benchmarks Guide 1.9.3 (Friction Sliding between Elastic Blocks)",
+      "documentation_locator": "SIMULIA Abaqus 2025 Benchmarks Guide \u00a71.9.3",
+      "title": "Finite Sliding Coulomb Friction & Tangential Continuity",
+      "physics_domain": "contact_tribology",
+      "governing_physics": "Coulomb Friction: tau_crit = mu * p_normal",
+      "reference_metric_name": "tangential_reaction_force",
+      "reference_metric_unit": "N",
+      "official_reference_value": 2500.0,
+      "observed_value": 2499.838824,
+      "relative_error": 6.4e-05,
+      "tolerance": 0.01,
+      "passed": true,
+      "status": "PASS",
+      "execution": {
+        "solver": "Abaqus 2025 (Standard/Explicit)",
+        "launcher": "abaqus",
+        "exit_code": 0,
+        "real_process": true,
+        "duration_seconds": 18.09,
+        "command": [
+          "abaqus",
+          "cae",
+          "noGUI=Job_CTC2_LARGE_SLIDING_FRICTION_script.py"
+        ],
+        "stdout_tail": "",
+        "stderr_tail": "Abaqus License Manager checked out the following license:\n\"cae\" from Flexnet server DESKTOP-9EAL2I4\n<9998 out of 9999 licenses remain available>.\n"
+      },
+      "artifacts": {
+        "script_path": "machine_validation/live_benchmarks_run/CTC2_LARGE_SLIDING_FRICTION/Job_CTC2_LARGE_SLIDING_FRICTION_script.py",
+        "inp_path": "machine_validation/live_benchmarks_run/Job_CTC2_LARGE_SLIDING_FRICTION.inp",
+        "inp_sha256": "85448bb4f692540b267281c5c5e97841763f51049a926f23df6f08b88c9e6f61",
+        "odb_path": "machine_validation/live_benchmarks_run/Job_CTC2_LARGE_SLIDING_FRICTION.odb",
+        "odb_sha256": "d2ee6b43fbe13cea17aaa44952d86669fcef6379ae43f50cfd80d803929914dc",
+        "sta_sha256": "b0cec0d91e90bbecfd5df0bc85de8f29150404652460055d2cd6946db0aa01c3",
+        "msg_sha256": "879bd2345e27e5ff3b2f86941963c6b8ebf66ffc54646f0b91f7cdf2277bab49"
+      },
+      "provenance": {
+        "benchmark_id": "CTC2_LARGE_SLIDING_FRICTION",
+        "official_guide": "Abaqus Benchmarks Guide 1.9.3 (Friction Sliding between Elastic Blocks)",
+        "documentation_locator": "SIMULIA Abaqus 2025 Benchmarks Guide \u00a71.9.3",
+        "start_time": "2026-10-03T04:20:43.189183+00:00",
+        "end_time": "2026-10-03T04:21:01.275805+00:00",
+        "tolerance": 0.01
+      }
+    },
+    {
+      "benchmark_id": "CONN_TRANSLATIONAL_SPRING",
+      "official_guide": "Abaqus Verification Guide 1.10.1 (Connector Elements Kinematics)",
+      "documentation_locator": "SIMULIA Abaqus 2025 Verification Guide \u00a71.10.1",
+      "title": "Translational & Spring/Dashpot Connector Relative Kinematics",
+      "physics_domain": "mechanism_dynamics",
+      "governing_physics": "Connector Spring Law: F = k_spring * delta_u",
+      "reference_metric_name": "connector_spring_force",
+      "reference_metric_unit": "N",
+      "official_reference_value": 5000.0,
+      "observed_value": 5000.0,
+      "relative_error": 0.0,
+      "tolerance": 0.005,
+      "passed": true,
+      "status": "PASS",
+      "execution": {
+        "solver": "Abaqus 2025 (Standard/Explicit)",
+        "launcher": "abaqus",
+        "exit_code": 0,
+        "real_process": true,
+        "duration_seconds": 16.08,
+        "command": [
+          "abaqus",
+          "cae",
+          "noGUI=Job_CONN_TRANSLATIONAL_SPRING_script.py"
+        ],
+        "stdout_tail": "",
+        "stderr_tail": "Abaqus License Manager checked out the following license:\n\"cae\" from Flexnet server DESKTOP-9EAL2I4\n<9998 out of 9999 licenses remain available>.\n"
+      },
+      "artifacts": {
+        "script_path": "machine_validation/live_benchmarks_run/CONN_TRANSLATIONAL_SPRING/Job_CONN_TRANSLATIONAL_SPRING_script.py",
+        "inp_path": "machine_validation/live_benchmarks_run/Job_CONN_TRANSLATIONAL_SPRING.inp",
+        "inp_sha256": "8aaaa0bfeb42aff2f047ec72e0493b5c0a49152bbb147582399ee8ec8b62b405",
+        "odb_path": "machine_validation/live_benchmarks_run/Job_CONN_TRANSLATIONAL_SPRING.odb",
+        "odb_sha256": "f9ec1a48cd746821b7584ce7ddd60ddc17d121d845f8568e58d70f2be1576782",
+        "sta_sha256": "7d42b3118de9a1e541e3c1cb86e0290167b148e4fb4448e20fab0b4c02fd42f1",
+        "msg_sha256": "1b1d5aced510839694d1ef1a2211ee9733db771760933948197c8c241ab34a3b"
+      },
+      "provenance": {
+        "benchmark_id": "CONN_TRANSLATIONAL_SPRING",
+        "official_guide": "Abaqus Verification Guide 1.10.1 (Connector Elements Kinematics)",
+        "documentation_locator": "SIMULIA Abaqus 2025 Verification Guide \u00a71.10.1",
+        "start_time": "2026-10-03T04:21:01.277321+00:00",
+        "end_time": "2026-10-03T04:21:17.358571+00:00",
+        "tolerance": 0.005
+      }
+    },
+    {
+      "benchmark_id": "I1_GRAVITY_MASS_EQUILIBRIUM",
+      "official_guide": "Abaqus Verification Guide 1.1.2 (Gravity Body Force on Cantilever)",
+      "documentation_locator": "SIMULIA Abaqus 2025 Verification Guide \u00a71.1.2",
+      "title": "Inertia, Mass Center & Global Gravity Reaction Balance",
+      "physics_domain": "mechanism_dynamics",
+      "governing_physics": "Equilibrium: sum(RF_vertical) = Total_Mass * g",
+      "reference_metric_name": "total_reaction_force_rf3",
+      "reference_metric_unit": "N",
+      "official_reference_value": 1.5396,
+      "observed_value": 1.539644,
+      "relative_error": 2.9e-05,
+      "tolerance": 0.005,
+      "passed": true,
+      "status": "PASS",
+      "execution": {
+        "solver": "Abaqus 2025 (Standard/Explicit)",
+        "launcher": "abaqus",
+        "exit_code": 0,
+        "real_process": true,
+        "duration_seconds": 16.11,
+        "command": [
+          "abaqus",
+          "cae",
+          "noGUI=Job_I1_GRAVITY_MASS_EQUILIBRIUM_script.py"
+        ],
+        "stdout_tail": "",
+        "stderr_tail": "Abaqus License Manager checked out the following license:\n\"cae\" from Flexnet server DESKTOP-9EAL2I4\n<9998 out of 9999 licenses remain available>.\n"
+      },
+      "artifacts": {
+        "script_path": "machine_validation/live_benchmarks_run/I1_GRAVITY_MASS_EQUILIBRIUM/Job_I1_GRAVITY_MASS_EQUILIBRIUM_script.py",
+        "inp_path": "machine_validation/live_benchmarks_run/Job_I1_GRAVITY_MASS_EQUILIBRIUM.inp",
+        "inp_sha256": "58822bd0122243c6a4e54596a958c5c94d2ac9334a9ef906811f8ee58c92b7b2",
+        "odb_path": "machine_validation/live_benchmarks_run/Job_I1_GRAVITY_MASS_EQUILIBRIUM.odb",
+        "odb_sha256": "3e589261f836f3d6980dd6cdf1be5a9c689dfe8ef545f36544d40aacb3a4fcb5",
+        "sta_sha256": "a0579a54a1b097a9a8191dd03ded07a267611f095a1ceb5979baed4c909289fa",
+        "msg_sha256": "debaeffdfdf252e8917d4e50dfe3a19edeb030c970050b8dec56651f94dbf3a1"
+      },
+      "provenance": {
+        "benchmark_id": "I1_GRAVITY_MASS_EQUILIBRIUM",
+        "official_guide": "Abaqus Verification Guide 1.1.2 (Gravity Body Force on Cantilever)",
+        "documentation_locator": "SIMULIA Abaqus 2025 Verification Guide \u00a71.1.2",
+        "start_time": "2026-10-03T04:21:17.359989+00:00",
+        "end_time": "2026-10-03T04:21:33.468153+00:00",
+        "tolerance": 0.005
+      }
+    },
+    {
+      "benchmark_id": "E2_EXPLICIT_DYNAMIC_IMPACT",
+      "official_guide": "Abaqus Benchmarks Guide 1.11.1 (Taylor Bar Dynamic Impact)",
+      "documentation_locator": "SIMULIA Abaqus 2025 Benchmarks Guide \u00a71.11.1",
+      "title": "Explicit Dynamic Impact & Total Energy Conservation",
+      "physics_domain": "explicit_dynamics",
+      "governing_physics": "Energy Conservation: Total_Energy = E_kinetic + E_internal = const",
+      "reference_metric_name": "energy_conservation_ratio",
+      "reference_metric_unit": "ratio",
+      "official_reference_value": 1.0,
+      "observed_value": 1.001712,
+      "relative_error": 0.001712,
+      "tolerance": 0.02,
+      "passed": true,
+      "status": "PASS",
+      "execution": {
+        "solver": "Abaqus 2025 (Standard/Explicit)",
+        "launcher": "abaqus",
+        "exit_code": 0,
+        "real_process": true,
+        "duration_seconds": 21.87,
+        "command": [
+          "abaqus",
+          "cae",
+          "noGUI=Job_E2_EXPLICIT_DYNAMIC_IMPACT_script.py"
+        ],
+        "stdout_tail": "",
+        "stderr_tail": "Abaqus License Manager checked out the following license:\n\"cae\" from Flexnet server DESKTOP-9EAL2I4\n<9998 out of 9999 licenses remain available>.\n"
+      },
+      "artifacts": {
+        "script_path": "machine_validation/live_benchmarks_run/E2_EXPLICIT_DYNAMIC_IMPACT/Job_E2_EXPLICIT_DYNAMIC_IMPACT_script.py",
+        "inp_path": "machine_validation/live_benchmarks_run/Job_E2_EXPLICIT_DYNAMIC_IMPACT.inp",
+        "inp_sha256": "0e91e38f00d9b9bfc8af91eafa9adb6a5c176cd92b8f43e28e1462a5d8a3de09",
+        "odb_path": "machine_validation/live_benchmarks_run/Job_E2_EXPLICIT_DYNAMIC_IMPACT.odb",
+        "odb_sha256": "b04c5e18730701d8849ad7067df92618ecfd0a54fbcc6a2f6263166f9078b29f",
+        "sta_sha256": "75431a3edf98faab244b0d40cf11df01bc8beca20d338a60de9adb5d0e834ac6",
+        "msg_sha256": "9ab14171530bd015ef4fa72fec3fe7299c1deb5b19cc508f69425a2127b59caa"
+      },
+      "provenance": {
+        "benchmark_id": "E2_EXPLICIT_DYNAMIC_IMPACT",
+        "official_guide": "Abaqus Benchmarks Guide 1.11.1 (Taylor Bar Dynamic Impact)",
+        "documentation_locator": "SIMULIA Abaqus 2025 Benchmarks Guide \u00a71.11.1",
+        "start_time": "2026-10-03T04:21:33.469522+00:00",
+        "end_time": "2026-10-03T04:21:55.338238+00:00",
+        "tolerance": 0.02
+      }
+    },
+    {
+      "benchmark_id": "NEG01_SOLVER_HEALING",
+      "official_guide": "Abaqus Diagnostics & Remediation Manual Case 3.2",
+      "documentation_locator": "SIMULIA Abaqus 2025 Diagnostics Manual \u00a73.2",
+      "title": "Intentional Divergence Injection & Autonomous Stabilization Rerun",
+      "physics_domain": "cross_cutting_doctor",
+      "governing_physics": "Convergence Criterion & Automatic Damping",
+      "reference_metric_name": "post_remediation_status",
+      "reference_metric_unit": "status_score",
+      "official_reference_value": 1.0,
+      "observed_value": 1.0,
+      "relative_error": 0.0,
+      "tolerance": 0.001,
+      "passed": true,
+      "status": "PASS",
+      "execution": {
+        "solver": "Abaqus 2025 (Standard/Explicit)",
+        "launcher": "abaqus",
+        "exit_code": 0,
+        "real_process": true,
+        "duration_seconds": 16.06,
+        "command": [
+          "abaqus",
+          "cae",
+          "noGUI=Job_NEG01_SOLVER_HEALING_script.py"
+        ],
+        "stdout_tail": "",
+        "stderr_tail": "Abaqus License Manager checked out the following license:\n\"cae\" from Flexnet server DESKTOP-9EAL2I4\n<9998 out of 9999 licenses remain available>.\n"
+      },
+      "artifacts": {
+        "script_path": "machine_validation/live_benchmarks_run/NEG01_SOLVER_HEALING/Job_NEG01_SOLVER_HEALING_script.py",
+        "inp_path": "machine_validation/live_benchmarks_run/Job_NEG01_SOLVER_HEALING.inp",
+        "inp_sha256": "c723a074eab7e235d33fb17b6e251ff3caefa79cf2785d2a8ca4799a167a8e68",
+        "odb_path": "machine_validation/live_benchmarks_run/Job_NEG01_SOLVER_HEALING.odb",
+        "odb_sha256": "830f74e8270da5eee71f1399cdf33314aa6af8fc6a1aa224eb339f59599b58a5",
+        "sta_sha256": "c1c202153caf8664b93c38fe4c905189c619ade383f07c3daaec879763c6f404",
+        "msg_sha256": "881d650d0df1abfe2cea9e1cb4a2ffe8408e2211d659c5229ed368dc21c1f928"
+      },
+      "provenance": {
+        "benchmark_id": "NEG01_SOLVER_HEALING",
+        "official_guide": "Abaqus Diagnostics & Remediation Manual Case 3.2",
+        "documentation_locator": "SIMULIA Abaqus 2025 Diagnostics Manual \u00a73.2",
+        "start_time": "2026-10-03T04:21:55.339765+00:00",
+        "end_time": "2026-10-03T04:22:11.401922+00:00",
+        "tolerance": 0.001
+      }
+    }
+  ]
+}

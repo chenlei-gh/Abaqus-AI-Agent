@@ -1,0 +1,741 @@
+{
+  "status": "pass",
+  "launcher": "C:\\SIMULIA\\Commands\\abaqus.bat",
+  "workdir": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\machine_validation",
+  "script": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\machine_validation\\thermal_golden_e2e_script.py",
+  "case": "1d_steady_state_heat_conduction",
+  "command": [
+    "C:\\SIMULIA\\Commands\\abaqus.bat",
+    "cae",
+    "noGUI=D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\machine_validation\\thermal_golden_e2e_script.py"
+  ],
+  "return_code": 0,
+  "process_succeeded": true,
+  "report": {
+    "status": "pass",
+    "model": {
+      "length_mm": 100.0,
+      "width_mm": 10.0,
+      "height_mm": 10.0
+    },
+    "material": {
+      "conductivity_mW_mm_K": 50.0
+    },
+    "temperatures": {
+      "T_hot_C": 100.0,
+      "T_cold_C": 0.0
+    },
+    "theory": {
+      "Q_rate_total_mW": 5000.0,
+      "temperature_gradient_C_per_mm": -1.0,
+      "T_mid_exact_C": 50.0
+    },
+    "workflow": {
+      "thermal_plan_actions": 7,
+      "action_count": 12,
+      "solver_completed": true,
+      "state": "accepted",
+      "engineering_status": "RESULT_VALID"
+    },
+    "solver": {
+      "job_status": {
+        "name": "ThermalGoldenJob",
+        "state": "COMPLETED",
+        "raw": {
+          "models": [
+            "Model-1",
+            "ThermalGolden"
+          ],
+          "parts": [
+            "Bar"
+          ],
+          "instances": [
+            "Bar-1"
+          ],
+          "materials": [
+            "SteelThermal"
+          ],
+          "sections": [
+            "ThermalSection"
+          ],
+          "steps": [
+            "Initial",
+            "Initial",
+            "Step-1"
+          ],
+          "boundary_conditions": [
+            "ColdEndBC",
+            "HotEndBC"
+          ],
+          "loads": [],
+          "amplitudes": [],
+          "predefined_fields": [],
+          "interactions": [],
+          "output_requests": [
+            "F-Output-1"
+          ],
+          "jobs": [
+            "ThermalGoldenJob"
+          ],
+          "metadata": {
+            "model_count": 2,
+            "job_count": 1,
+            "job_status": {
+              "ThermalGoldenJob": "None"
+            }
+          }
+        },
+        "diagnostics": []
+      },
+      "odb_path": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\machine_validation\\ThermalGoldenJob.odb",
+      "artifacts": [],
+      "diagnostics": []
+    },
+    "results": {
+      "metrics": [
+        {
+          "name": "mid_temperature_lower",
+          "value": 50.0,
+          "unit": "C",
+          "quantity": null,
+          "location": {
+            "step": "Step-1",
+            "frame": -1
+          },
+          "step": "Step-1",
+          "frame": -1,
+          "component": null,
+          "source": "odb",
+          "evidence": [
+            {
+              "kind": "odb_result",
+              "source": "odb",
+              "locator": "{'step': 'Step-1', 'frame': -1}",
+              "value": 50.0,
+              "unit": "C",
+              "metadata": {
+                "value_key": "mid_temp_lower",
+                "field": "NT",
+                "component": null,
+                "invariant": null,
+                "aggregation": "average"
+              }
+            }
+          ],
+          "region": "odb.rootAssembly.nodeSets['MIDNODES']",
+          "required": true,
+          "metadata": {
+            "value_key": "mid_temp_lower",
+            "aggregation": "average",
+            "reducer": "average",
+            "output_kind": "field",
+            "field": "NT",
+            "history_variable": null
+          }
+        },
+        {
+          "name": "mid_temperature_upper",
+          "value": 50.0,
+          "unit": "C",
+          "quantity": null,
+          "location": {
+            "step": "Step-1",
+            "frame": -1
+          },
+          "step": "Step-1",
+          "frame": -1,
+          "component": null,
+          "source": "odb",
+          "evidence": [
+            {
+              "kind": "odb_result",
+              "source": "odb",
+              "locator": "{'step': 'Step-1', 'frame': -1}",
+              "value": 50.0,
+              "unit": "C",
+              "metadata": {
+                "value_key": "mid_temp_upper",
+                "field": "NT",
+                "component": null,
+                "invariant": null,
+                "aggregation": "average"
+              }
+            }
+          ],
+          "region": "odb.rootAssembly.nodeSets['MIDNODES']",
+          "required": true,
+          "metadata": {
+            "value_key": "mid_temp_upper",
+            "aggregation": "average",
+            "reducer": "average",
+            "output_kind": "field",
+            "field": "NT",
+            "history_variable": null
+          }
+        },
+        {
+          "name": "hot_boundary_temp",
+          "value": 100.0,
+          "unit": "C",
+          "quantity": null,
+          "location": {
+            "step": "Step-1",
+            "frame": -1
+          },
+          "step": "Step-1",
+          "frame": -1,
+          "component": null,
+          "source": "odb",
+          "evidence": [
+            {
+              "kind": "odb_result",
+              "source": "odb",
+              "locator": "{'step': 'Step-1', 'frame': -1}",
+              "value": 100.0,
+              "unit": "C",
+              "metadata": {
+                "value_key": "hot_temp",
+                "field": "NT",
+                "component": null,
+                "invariant": null,
+                "aggregation": "average"
+              }
+            }
+          ],
+          "region": "odb.rootAssembly.nodeSets['HOTNODES']",
+          "required": true,
+          "metadata": {
+            "value_key": "hot_temp",
+            "aggregation": "average",
+            "reducer": "average",
+            "output_kind": "field",
+            "field": "NT",
+            "history_variable": null
+          }
+        },
+        {
+          "name": "cold_boundary_temp",
+          "value": 2.000000047484455e-34,
+          "unit": "C",
+          "quantity": null,
+          "location": {
+            "step": "Step-1",
+            "frame": -1
+          },
+          "step": "Step-1",
+          "frame": -1,
+          "component": null,
+          "source": "odb",
+          "evidence": [
+            {
+              "kind": "odb_result",
+              "source": "odb",
+              "locator": "{'step': 'Step-1', 'frame': -1}",
+              "value": 2.000000047484455e-34,
+              "unit": "C",
+              "metadata": {
+                "value_key": "cold_temp",
+                "field": "NT",
+                "component": null,
+                "invariant": null,
+                "aggregation": "average"
+              }
+            }
+          ],
+          "region": "odb.rootAssembly.nodeSets['COLDNODES']",
+          "required": true,
+          "metadata": {
+            "value_key": "cold_temp",
+            "aggregation": "average",
+            "reducer": "average",
+            "output_kind": "field",
+            "field": "NT",
+            "history_variable": null
+          }
+        }
+      ],
+      "evidence": {
+        "items": [
+          {
+            "kind": "odb_summary",
+            "source": "odb",
+            "locator": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\machine_validation\\ThermalGoldenJob.odb",
+            "value": {
+              "status": "available",
+              "step_count": 1,
+              "steps": [
+                "Step-1"
+              ],
+              "instances": [
+                "BAR-1"
+              ],
+              "step_frames": {
+                "Step-1": 2
+              }
+            },
+            "unit": "",
+            "metadata": {}
+          },
+          {
+            "kind": "acceptance",
+            "source": "acceptance",
+            "locator": "ThermalGoldenJob",
+            "value": {
+              "passed": true,
+              "criteria": [
+                {
+                  "name": "mid_temperature_lower",
+                  "passed": true,
+                  "actual": 50.0,
+                  "operator": ">=",
+                  "limit": 49.5,
+                  "unit": "C",
+                  "relative_error": 0.010101010101010102
+                },
+                {
+                  "name": "mid_temperature_upper",
+                  "passed": true,
+                  "actual": 50.0,
+                  "operator": "<=",
+                  "limit": 50.5,
+                  "unit": "C",
+                  "relative_error": 0.009900990099009901
+                },
+                {
+                  "name": "hot_boundary_temp",
+                  "passed": true,
+                  "actual": 100.0,
+                  "operator": ">=",
+                  "limit": 99.5,
+                  "unit": "C",
+                  "relative_error": 0.005025125628140704
+                },
+                {
+                  "name": "cold_boundary_temp",
+                  "passed": true,
+                  "actual": 2.000000047484455e-34,
+                  "operator": "<=",
+                  "limit": 0.5,
+                  "unit": "C",
+                  "relative_error": 1.0
+                }
+              ],
+              "failures": [],
+              "warnings": [],
+              "status": "PASS",
+              "blocked": [],
+              "gates": {
+                "execution": "PASS",
+                "evidence_sufficiency": "NOT_SPECIFIED",
+                "numerical_verification": "SKIPPED",
+                "engineering_checks": "SKIPPED",
+                "mesh_quality": "SKIPPED",
+                "convergence": "SKIPPED",
+                "fatigue": "SKIPPED",
+                "contact": "SKIPPED",
+                "criteria": "PASS"
+              }
+            },
+            "unit": "",
+            "metadata": {}
+          },
+          {
+            "kind": "odb_result",
+            "source": "odb",
+            "locator": "{'step': 'Step-1', 'frame': -1}",
+            "value": 50.0,
+            "unit": "C",
+            "metadata": {
+              "value_key": "mid_temp_lower",
+              "field": "NT",
+              "component": null,
+              "invariant": null,
+              "aggregation": "average"
+            }
+          },
+          {
+            "kind": "odb_result",
+            "source": "odb",
+            "locator": "{'step': 'Step-1', 'frame': -1}",
+            "value": 50.0,
+            "unit": "C",
+            "metadata": {
+              "value_key": "mid_temp_upper",
+              "field": "NT",
+              "component": null,
+              "invariant": null,
+              "aggregation": "average"
+            }
+          },
+          {
+            "kind": "odb_result",
+            "source": "odb",
+            "locator": "{'step': 'Step-1', 'frame': -1}",
+            "value": 100.0,
+            "unit": "C",
+            "metadata": {
+              "value_key": "hot_temp",
+              "field": "NT",
+              "component": null,
+              "invariant": null,
+              "aggregation": "average"
+            }
+          },
+          {
+            "kind": "odb_result",
+            "source": "odb",
+            "locator": "{'step': 'Step-1', 'frame': -1}",
+            "value": 2.000000047484455e-34,
+            "unit": "C",
+            "metadata": {
+              "value_key": "cold_temp",
+              "field": "NT",
+              "component": null,
+              "invariant": null,
+              "aggregation": "average"
+            }
+          }
+        ]
+      },
+      "max_temp_error_C": 7.105427357601002e-15,
+      "mean_temp_error_C": 3.4660621256590254e-16,
+      "profile_samples": [
+        {
+          "x": 100.0,
+          "T_actual": 7.81250018548616e-35,
+          "T_exact": 0.0,
+          "error": 7.81250018548616e-35
+        },
+        {
+          "x": 100.0,
+          "T_actual": 1.56250003709723e-34,
+          "T_exact": 0.0,
+          "error": 1.56250003709723e-34
+        },
+        {
+          "x": 100.0,
+          "T_actual": 1.56250003709723e-34,
+          "T_exact": 0.0,
+          "error": 1.56250003709723e-34
+        },
+        {
+          "x": 100.0,
+          "T_actual": 1.56250003709723e-34,
+          "T_exact": 0.0,
+          "error": 1.56250003709723e-34
+        },
+        {
+          "x": 100.0,
+          "T_actual": 7.81250018548616e-35,
+          "T_exact": 0.0,
+          "error": 7.81250018548616e-35
+        },
+        {
+          "x": 100.0,
+          "T_actual": 1.56250003709723e-34,
+          "T_exact": 0.0,
+          "error": 1.56250003709723e-34
+        },
+        {
+          "x": 100.0,
+          "T_actual": 3.12500007419446e-34,
+          "T_exact": 0.0,
+          "error": 3.12500007419446e-34
+        },
+        {
+          "x": 100.0,
+          "T_actual": 3.12500007419446e-34,
+          "T_exact": 0.0,
+          "error": 3.12500007419446e-34
+        },
+        {
+          "x": 100.0,
+          "T_actual": 3.12500007419446e-34,
+          "T_exact": 0.0,
+          "error": 3.12500007419446e-34
+        },
+        {
+          "x": 100.0,
+          "T_actual": 1.56250003709723e-34,
+          "T_exact": 0.0,
+          "error": 1.56250003709723e-34
+        }
+      ]
+    },
+    "thermal_balance": {
+      "hot_nodes_RFL_sum_mW": 5000.0,
+      "cold_nodes_RFL_sum_mW": -5000.0,
+      "net_reaction_flux_mW": 0.0,
+      "theoretical_flux_mW": 5000.0,
+      "flux_balance_passed": true
+    },
+    "engineering_checks": {
+      "thermal_balance_report": {
+        "checks": [
+          {
+            "name": "thermal_energy_balance_RFL",
+            "passed": true,
+            "actual": 0.0,
+            "expected": 0.0,
+            "tolerance": 0.01,
+            "unit": "mW",
+            "message": "relative_error=0 (ref_scale=5000)",
+            "evidence": []
+          }
+        ],
+        "warnings": []
+      },
+      "mesh_result": {
+        "part": "Bar",
+        "node_count": 1025,
+        "element_count": 640,
+        "metrics": {
+          "max_aspect_ratio": 1.0,
+          "max_angular_deviation": 0.0,
+          "max_geometric_deviation_factor": 0.0
+        },
+        "violations": [],
+        "warnings": [],
+        "evidence": [
+          "native_verify:ASPECT_RATIO",
+          "native_verify:ANGULAR_DEVIATION",
+          "native_verify:GEOM_DEVIATION_FACTOR",
+          "native_verify:ANALYSIS_CHECKS"
+        ],
+        "status": "pass",
+        "source": "native_abaqus_verifyMeshQuality",
+        "failed_element_count": 0,
+        "warning_element_count": 0
+      }
+    },
+    "acceptance": {
+      "passed": true,
+      "criteria": [
+        {
+          "name": "mid_temperature_lower",
+          "passed": true,
+          "actual": 50.0,
+          "operator": ">=",
+          "limit": 49.5,
+          "unit": "C",
+          "relative_error": 0.010101010101010102
+        },
+        {
+          "name": "mid_temperature_upper",
+          "passed": true,
+          "actual": 50.0,
+          "operator": "<=",
+          "limit": 50.5,
+          "unit": "C",
+          "relative_error": 0.009900990099009901
+        },
+        {
+          "name": "hot_boundary_temp",
+          "passed": true,
+          "actual": 100.0,
+          "operator": ">=",
+          "limit": 99.5,
+          "unit": "C",
+          "relative_error": 0.005025125628140704
+        },
+        {
+          "name": "cold_boundary_temp",
+          "passed": true,
+          "actual": 2.000000047484455e-34,
+          "operator": "<=",
+          "limit": 0.5,
+          "unit": "C",
+          "relative_error": 1.0
+        },
+        {
+          "name": "max_temperature_profile_error",
+          "passed": true,
+          "actual": 7.105427357601002e-15,
+          "operator": "<=",
+          "limit": 0.5,
+          "unit": "C",
+          "relative_error": 0.9999999999999858
+        }
+      ],
+      "failures": [],
+      "warnings": [],
+      "status": "PASS",
+      "blocked": [],
+      "gates": {
+        "execution": "PASS",
+        "evidence_sufficiency": "NOT_SPECIFIED",
+        "numerical_verification": "SKIPPED",
+        "engineering_checks": "PASS",
+        "mesh_quality": "PASS",
+        "convergence": "SKIPPED",
+        "fatigue": "SKIPPED",
+        "contact": "SKIPPED",
+        "criteria": "PASS"
+      }
+    },
+    "strict_acceptance": {
+      "passed": false,
+      "failures": [
+        "criterion:strict_temperature_gate_artificial"
+      ]
+    },
+    "provenance": {
+      "run_id": "627c3671-6086-4048-83ed-69638bdbf548",
+      "model_name": "ThermalGolden",
+      "job_name": "ThermalGoldenJob",
+      "model_hash": null,
+      "input_hash": null,
+      "output_hash": null,
+      "artifact_manifest_hash": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "intent_hash": null,
+      "action_plan_hash": null,
+      "abaqus_version": "unknown",
+      "python_version": "3.10.5 (main, Jul 27 2024, 04:26:12) [MSC v.1934 64 bit (AMD64)]",
+      "executor": "CAEInProcessExecutor",
+      "action_plan": [
+        {
+          "action_type": "material_conductivity",
+          "model_name": "ThermalGolden",
+          "target": null,
+          "parameters": {
+            "name": "SteelThermal",
+            "table": [
+              [
+                50.0
+              ]
+            ]
+          }
+        },
+        {
+          "action_type": "heat_transfer_step",
+          "model_name": "ThermalGolden",
+          "target": null,
+          "parameters": {
+            "name": "Step-1",
+            "previous": "Initial",
+            "response": "STEADY_STATE",
+            "time_period": 1.0,
+            "max_num_inc": 100,
+            "initial_inc": null,
+            "min_inc": null,
+            "max_inc": null,
+            "time_incrementation_method": "AUTOMATIC",
+            "amplitude": "STEP"
+          }
+        },
+        {
+          "action_type": "solid_section",
+          "model_name": "ThermalGolden",
+          "target": null,
+          "parameters": {
+            "name": "ThermalSection",
+            "material": "SteelThermal"
+          }
+        },
+        {
+          "action_type": "section_assignment",
+          "model_name": "ThermalGolden",
+          "target": null,
+          "parameters": {
+            "part": "Bar",
+            "section": "ThermalSection",
+            "region_expression": "mdb.models['ThermalGolden'].parts['Bar'].sets['AllCells']"
+          }
+        },
+        {
+          "action_type": "temperature_bc",
+          "model_name": "ThermalGolden",
+          "target": "mdb.models['ThermalGolden'].rootAssembly.sets['HotFace']",
+          "parameters": {
+            "name": "HotEndBC",
+            "region_expression": "mdb.models['ThermalGolden'].rootAssembly.sets['HotFace']",
+            "magnitude": 100.0,
+            "step": "Step-1"
+          }
+        },
+        {
+          "action_type": "temperature_bc",
+          "model_name": "ThermalGolden",
+          "target": "mdb.models['ThermalGolden'].rootAssembly.sets['ColdFace']",
+          "parameters": {
+            "name": "ColdEndBC",
+            "region_expression": "mdb.models['ThermalGolden'].rootAssembly.sets['ColdFace']",
+            "magnitude": 0.0,
+            "step": "Step-1"
+          }
+        },
+        {
+          "action_type": "field_output",
+          "model_name": "ThermalGolden",
+          "target": null,
+          "parameters": {
+            "variables": [
+              "NT",
+              "HFL",
+              "RFL"
+            ],
+            "request": "F-Output-1",
+            "step": "Step-1",
+            "frequency": null,
+            "num_intervals": null
+          }
+        },
+        {
+          "action_type": "seed_part",
+          "model_name": "ThermalGolden",
+          "target": null,
+          "parameters": {
+            "part": "Bar",
+            "size": 2.5,
+            "deviation_factor": 0.1,
+            "min_size_factor": 0.1
+          }
+        },
+        {
+          "action_type": "element_type",
+          "model_name": "ThermalGolden",
+          "target": null,
+          "parameters": {
+            "part": "Bar",
+            "region_expression": "mdb.models['ThermalGolden'].parts['Bar'].sets['AllCells']",
+            "elem_code": "DC3D8",
+            "library": "STANDARD"
+          }
+        },
+        {
+          "action_type": "generate_mesh",
+          "model_name": "ThermalGolden",
+          "target": null,
+          "parameters": {
+            "part": "Bar"
+          }
+        },
+        {
+          "action_type": "python",
+          "model_name": "ThermalGolden",
+          "target": null,
+          "parameters": {
+            "code": "\nfrom abaqusConstants import *\nmodel=mdb.models['ThermalGolden']\npart=model.parts['Bar']\ninst=model.rootAssembly.instances['Bar-1']\nmodel.rootAssembly.regenerate()\n\n# Evidence sets are mesh-based so ODB field extraction receives true node/element sets.\nhot_nodes = inst.nodes.getByBoundingBox(xMin=-0.01, xMax=0.01)\nif not hot_nodes:\n    raise RuntimeError('HotNodes set is empty')\nmodel.rootAssembly.Set(name='HotNodes', nodes=hot_nodes)\n\ncold_nodes = inst.nodes.getByBoundingBox(xMin=99.99, xMax=100.01)\nif not cold_nodes:\n    raise RuntimeError('ColdNodes set is empty')\nmodel.rootAssembly.Set(name='ColdNodes', nodes=cold_nodes)\n\nmid_nodes = inst.nodes.getByBoundingBox(xMin=49.99, xMax=50.01)\nif not mid_nodes:\n    raise RuntimeError('MidNodes set is empty')\nmodel.rootAssembly.Set(name='MidNodes', nodes=mid_nodes)\n\nall_bc_nodes = inst.nodes.getByBoundingBox(xMin=-0.01, xMax=0.01) + inst.nodes.getByBoundingBox(xMin=99.99, xMax=100.01)\nmodel.rootAssembly.Set(name='AllBCNodes', nodes=all_bc_nodes)\n\nprint('AIAgent_THERMAL_EVIDENCE_SETS_CREATED')\n"
+          }
+        },
+        {
+          "action_type": "create_job",
+          "model_name": "ThermalGolden",
+          "target": null,
+          "parameters": {
+            "name": "ThermalGoldenJob",
+            "job_type": "STANDARD"
+          }
+        }
+      ],
+      "environment": {},
+      "metadata": {
+        "model_snapshot_hash": "33dd527c12118c196f2c6f8fb5cf84dba927b27b667cbbe9d5ffaac5891f9d98",
+        "content_hash_scope": "not_captured",
+        "action_plan_scope": "caller"
+      }
+    }
+  },
+  "stdout": "",
+  "stderr": "Abaqus License Manager checked out the following license:\n\"cae\" from Flexnet server DESKTOP-9EAL2I4\n<9998 out of 9999 licenses remain available>.\n"
+}

@@ -1,0 +1,149 @@
+{
+  "status": "pass",
+  "case": "mbd2_dual_rigid_body_revolute_connector",
+  "launcher": "C:\\SIMULIA\\Commands\\abaqus.bat",
+  "workdir": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\machine_validation",
+  "script": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\machine_validation\\AIAgent_MBD2RevoluteGolden_script.py",
+  "command": [
+    "C:\\SIMULIA\\Commands\\abaqus.bat",
+    "cae",
+    "noGUI=D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\machine_validation\\AIAgent_MBD2RevoluteGolden_script.py"
+  ],
+  "return_code": 0,
+  "process_succeeded": true,
+  "report": {
+    "status": "pass",
+    "model": {
+      "arm1_length_mm": 300.0,
+      "arm2_length_mm": 300.0,
+      "arm_width_mm": 20.0,
+      "arm_depth_mm": 20.0,
+      "initial_tilt_deg": 10.0,
+      "connector_type": "CONN3D2 / HINGE"
+    },
+    "material": {
+      "density_tonne_mm3": 7.85e-09,
+      "mass_per_arm_kg": 0.9420000000000002
+    },
+    "theory": {
+      "analytical_t1_s": 1.284275864910232,
+      "initial_potential_energy_mJ": 84.23511495547527
+    },
+    "simulation_results": {
+      "measured_t1_s": 1.27737588005213,
+      "period_error_percent": 0.5372665676142908,
+      "max_joint_drift_mm": 9.78406080260905e-06,
+      "max_relative_rotation_rad": 0.121497992426157,
+      "max_relative_rotation_deg": 6.9613221853312375,
+      "max_kinetic_energy_mJ": 80.79316711425781,
+      "energy_loss_ratio": 0.02134132671134906,
+      "frame_count": 154
+    },
+    "workflow": {
+      "solver_completed": true,
+      "job_status": "JobStatus(name='MBD2GoldenJob', state=<JobState.COMPLETED: 'COMPLETED'>, raw={'models': ['MBD2Golden', 'Model-1'], 'parts': ['Arm1', 'Arm2'], 'instances': ['Arm1-1', 'Arm2-1'], 'materials': ['Steel'], 'sections': ['HingeSec', 'SolidSection'], 'steps': ['Initial', 'Step-1', 'Initial'], 'boundary_conditions': ['PivotBC'], 'loads': ['Gravity'], 'amplitudes': [], 'predefined_fields': [], 'interactions': [], 'output_requests': ['F-Output-1'], 'jobs': ['MBD2GoldenJob'], 'metadata': {'model_count': 2, 'job_count': 1, 'job_status': {'MBD2GoldenJob': 'None'}}}, diagnostics=())",
+      "odb_path": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\machine_validation\\MBD2GoldenJob.odb",
+      "mesh_quality_passed": true
+    },
+    "verification": {
+      "joint_report_passed": true,
+      "kinematics_report_passed": true,
+      "energy_report_passed": true,
+      "normal_acceptance_passed": true,
+      "strict_acceptance_passed": false
+    },
+    "acceptance": {
+      "passed": true,
+      "criteria": [
+        {
+          "name": "revolute_joint_drift_bound",
+          "passed": true,
+          "actual": 9.78406080260905e-06,
+          "operator": "<=",
+          "limit": 0.001,
+          "unit": "mm",
+          "relative_error": 0.9902159391973908
+        },
+        {
+          "name": "revolute_relative_articulation_bound",
+          "passed": true,
+          "actual": 0.121497992426157,
+          "operator": ">=",
+          "limit": 0.01,
+          "unit": "rad",
+          "relative_error": 11.1497992426157
+        },
+        {
+          "name": "double_pendulum_fundamental_period_check",
+          "passed": true,
+          "actual": 1.27737588005213,
+          "operator": "<=",
+          "limit": 1.3484896581557435,
+          "unit": "s",
+          "relative_error": 0.05273587207251704
+        },
+        {
+          "name": "energy_loss_bound",
+          "passed": true,
+          "actual": 0.02134132671134906,
+          "operator": "<=",
+          "limit": 0.03,
+          "unit": "",
+          "relative_error": 0.2886224429550313
+        }
+      ],
+      "failures": [],
+      "warnings": [],
+      "status": "PASS",
+      "blocked": [],
+      "gates": {
+        "execution": "PASS",
+        "evidence_sufficiency": "NOT_SPECIFIED",
+        "numerical_verification": "SKIPPED",
+        "engineering_checks": "SKIPPED",
+        "mesh_quality": "SKIPPED",
+        "convergence": "SKIPPED",
+        "fatigue": "SKIPPED",
+        "contact": "SKIPPED",
+        "criteria": "PASS"
+      }
+    },
+    "strict_acceptance": {
+      "passed": false,
+      "criteria": [
+        {
+          "name": "strict_joint_drift_gate",
+          "passed": false,
+          "actual": 9.78406080260905e-06,
+          "operator": "<=",
+          "limit": 1e-15,
+          "unit": "mm",
+          "relative_error": 9784060801.609049
+        }
+      ],
+      "failures": [
+        "criterion:strict_joint_drift_gate"
+      ],
+      "warnings": [],
+      "status": "FAIL",
+      "blocked": [],
+      "gates": {
+        "execution": "PASS",
+        "evidence_sufficiency": "NOT_SPECIFIED",
+        "numerical_verification": "SKIPPED",
+        "engineering_checks": "SKIPPED",
+        "mesh_quality": "SKIPPED",
+        "convergence": "SKIPPED",
+        "fatigue": "SKIPPED",
+        "contact": "SKIPPED",
+        "criteria": "FAIL"
+      }
+    },
+    "provenance": {
+      "action_count": 24,
+      "intent_id": "mbd2-revolute-golden-e2e"
+    }
+  },
+  "stdout": "",
+  "stderr": "Abaqus License Manager checked out the following license:\n\"cae\" from Flexnet server DESKTOP-9EAL2I4\n<9998 out of 9999 licenses remain available>.\n"
+}

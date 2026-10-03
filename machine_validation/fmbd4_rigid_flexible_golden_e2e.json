@@ -1,0 +1,261 @@
+{
+  "acceptance": {
+    "blocked": [],
+    "criteria": [
+      {
+        "actual": 3.134578470568233e-10,
+        "limit": 0.001,
+        "name": "joint_drift",
+        "operator": "<=",
+        "passed": true,
+        "relative_error": 0.9999996865421529,
+        "unit": "mm"
+      },
+      {
+        "actual": 0.0435313880443573,
+        "limit": 0.01,
+        "name": "max_mises_stress_lower",
+        "operator": ">=",
+        "passed": true,
+        "relative_error": 3.3531388044357295,
+        "unit": "MPa"
+      },
+      {
+        "actual": 0.0435313880443573,
+        "limit": 100.0,
+        "name": "max_mises_stress_upper",
+        "operator": "<=",
+        "passed": true,
+        "relative_error": 0.9995646861195564,
+        "unit": "MPa"
+      },
+      {
+        "actual": 0.9992941368820902,
+        "limit": 0.01,
+        "name": "strain_energy_active",
+        "operator": ">=",
+        "passed": true,
+        "relative_error": 98.92941368820902,
+        "unit": ""
+      },
+      {
+        "actual": 0.0055582571796292555,
+        "limit": 0.05,
+        "name": "energy_dissipation",
+        "operator": "<=",
+        "passed": true,
+        "relative_error": 0.888834856407415,
+        "unit": ""
+      }
+    ],
+    "failures": [],
+    "gates": {
+      "contact": "SKIPPED",
+      "convergence": "SKIPPED",
+      "criteria": "PASS",
+      "engineering_checks": "SKIPPED",
+      "evidence_sufficiency": "NOT_SPECIFIED",
+      "execution": "PASS",
+      "fatigue": "SKIPPED",
+      "mesh_quality": "SKIPPED",
+      "numerical_verification": "SKIPPED"
+    },
+    "passed": true,
+    "status": "PASS",
+    "warnings": []
+  },
+  "artifacts": [
+    {
+      "kind": "odb",
+      "path": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\machine_validation\\FMBD4GoldenJob.odb"
+    },
+    {
+      "kind": "script",
+      "path": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\machine_validation\\FMBD4GoldenJob_fmbd4_script.py"
+    }
+  ],
+  "case_id": "fmbd4_rigid_flexible",
+  "job_name": "FMBD4GoldenJob",
+  "launcher": "C:\\SIMULIA\\Commands\\abaqus.bat",
+  "process_succeeded": true,
+  "provenance": {
+    "action_count": 26,
+    "intent_id": "fmbd4-rigid-flexible-golden-e2e",
+    "release": "Abaqus 2025"
+  },
+  "release": "Abaqus 2025",
+  "report": {
+    "acceptance": {
+      "blocked": [],
+      "criteria": [
+        {
+          "actual": 3.134578470568233e-10,
+          "limit": 0.001,
+          "name": "joint_drift",
+          "operator": "<=",
+          "passed": true,
+          "relative_error": 0.9999996865421529,
+          "unit": "mm"
+        },
+        {
+          "actual": 0.0435313880443573,
+          "limit": 0.01,
+          "name": "max_mises_stress_lower",
+          "operator": ">=",
+          "passed": true,
+          "relative_error": 3.3531388044357295,
+          "unit": "MPa"
+        },
+        {
+          "actual": 0.0435313880443573,
+          "limit": 100.0,
+          "name": "max_mises_stress_upper",
+          "operator": "<=",
+          "passed": true,
+          "relative_error": 0.9995646861195564,
+          "unit": "MPa"
+        },
+        {
+          "actual": 0.9992941368820902,
+          "limit": 0.01,
+          "name": "strain_energy_active",
+          "operator": ">=",
+          "passed": true,
+          "relative_error": 98.92941368820902,
+          "unit": ""
+        },
+        {
+          "actual": 0.0055582571796292555,
+          "limit": 0.05,
+          "name": "energy_dissipation",
+          "operator": "<=",
+          "passed": true,
+          "relative_error": 0.888834856407415,
+          "unit": ""
+        }
+      ],
+      "failures": [],
+      "gates": {
+        "contact": "SKIPPED",
+        "convergence": "SKIPPED",
+        "criteria": "PASS",
+        "engineering_checks": "SKIPPED",
+        "evidence_sufficiency": "NOT_SPECIFIED",
+        "execution": "PASS",
+        "fatigue": "SKIPPED",
+        "mesh_quality": "SKIPPED",
+        "numerical_verification": "SKIPPED"
+      },
+      "passed": true,
+      "status": "PASS",
+      "warnings": []
+    },
+    "case_id": "fmbd4_rigid_flexible",
+    "job_name": "FMBD4GoldenJob",
+    "material": {
+      "density_tonne_mm3": 7.85e-09,
+      "poisson": 0.3,
+      "youngs_modulus_mpa": 210000.0
+    },
+    "model": {
+      "connector_type": "CONN3D2 / HINGE",
+      "coupling_type": "KINEMATIC COUPLING",
+      "crank_length_mm": 150.0,
+      "depth_mm": 20.0,
+      "initial_tilt_deg": 15.0,
+      "link_length_mm": 300.0,
+      "width_mm": 20.0
+    },
+    "odb_path": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\machine_validation\\FMBD4GoldenJob.odb",
+    "procedure": "implicit_dynamic",
+    "provenance": {
+      "action_count": 26,
+      "intent_id": "fmbd4-rigid-flexible-golden-e2e",
+      "release": "Abaqus 2025"
+    },
+    "release": "Abaqus 2025",
+    "simulation_results": {
+      "energy_dissipation_ratio": 0.0055582571796292555,
+      "max_joint_drift_mm": 3.134578470568233e-10,
+      "max_mises_stress_mpa": 0.0435313880443573,
+      "num_frames": 336,
+      "peak_kinetic_energy_mj": 106.10174560546875,
+      "peak_strain_energy_mj": 0.0001586706202942878,
+      "strain_energy_ratio": 0.9992941368820902,
+      "total_time_s": 1.2000000476837158
+    },
+    "solver": "standard",
+    "status": "pass",
+    "strict_acceptance": {
+      "blocked": [],
+      "criteria": [
+        {
+          "actual": 3.134578470568233e-10,
+          "limit": 1e-15,
+          "name": "joint_drift_impossible",
+          "operator": "<=",
+          "passed": false,
+          "relative_error": 313456.84705682326,
+          "unit": "mm"
+        }
+      ],
+      "failures": [
+        "criterion:joint_drift_impossible"
+      ],
+      "gates": {
+        "contact": "SKIPPED",
+        "convergence": "SKIPPED",
+        "criteria": "FAIL",
+        "engineering_checks": "SKIPPED",
+        "evidence_sufficiency": "NOT_SPECIFIED",
+        "execution": "PASS",
+        "fatigue": "SKIPPED",
+        "mesh_quality": "SKIPPED",
+        "numerical_verification": "SKIPPED"
+      },
+      "passed": false,
+      "status": "FAIL",
+      "warnings": []
+    },
+    "title": "FMBD-4 Coupled Rigid-Flexible Mechanism Dynamics E2E",
+    "verification": {
+      "energy_conservation_passed": true,
+      "joint_drift_passed": true,
+      "normal_acceptance_passed": true,
+      "strain_energy_passed": true,
+      "stress_sanity_passed": true,
+      "strict_acceptance_passed": false
+    },
+    "workflow": {
+      "job_status": "JobStatus(name='FMBD4GoldenJob', state=<JobState.COMPLETED: 'COMPLETED'>, raw={'models': ['FMBD4Golden', 'Model-1'], 'parts': ['Crank', 'FlexLink'], 'instances': ['Crank-1', 'FlexLink-1'], 'materials': ['Steel'], 'sections': ['Sec_Hinge', 'SolidSec'], 'steps': ['Initial', 'Step-1', 'Initial'], 'boundary_conditions': ['BC-GroundPivot'], 'loads': ['Gravity'], 'amplitudes': [], 'predefined_fields': [], 'interactions': [], 'output_requests': ['F-Output-1'], 'jobs': ['FMBD4GoldenJob'], 'metadata': {'model_count': 2, 'job_count': 1, 'job_status': {'FMBD4GoldenJob': 'None'}}}, diagnostics=())",
+      "mesh_quality_passed": true,
+      "odb_path": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\machine_validation\\FMBD4GoldenJob.odb",
+      "solver_completed": true
+    }
+  },
+  "return_code": 0,
+  "script": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\machine_validation\\FMBD4GoldenJob_fmbd4_script.py",
+  "simulation_results": {
+    "energy_dissipation_ratio": 0.0055582571796292555,
+    "max_joint_drift_mm": 3.134578470568233e-10,
+    "max_mises_stress_mpa": 0.0435313880443573,
+    "num_frames": 336,
+    "peak_kinetic_energy_mj": 106.10174560546875,
+    "peak_strain_energy_mj": 0.0001586706202942878,
+    "strain_energy_ratio": 0.9992941368820902,
+    "total_time_s": 1.2000000476837158
+  },
+  "solver_status": "completed",
+  "status": "pass",
+  "stderr_tail": "Abaqus License Manager checked out the following license:\n\"cae\" from Flexnet server DESKTOP-9EAL2I4\n<9998 out of 9999 licenses remain available>.\n",
+  "stdout_tail": "",
+  "verification": {
+    "energy_conservation_passed": true,
+    "joint_drift_passed": true,
+    "normal_acceptance_passed": true,
+    "strain_energy_passed": true,
+    "stress_sanity_passed": true,
+    "strict_acceptance_passed": false
+  },
+  "workdir": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\machine_validation"
+}

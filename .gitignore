@@ -11,7 +11,10 @@ build/
 .DS_Store
 
 # Local licensed-Abaqus runtime evidence
-machine_validation/
+machine_validation/*
+!machine_validation/*.json
+!machine_validation/*.md
+!machine_validation/*.html
 legacy_job_artifacts/
 *.odb
 *.sta
@@ -33,3 +36,4 @@ legacy_job_artifacts/
 *.mdl
 *.lck
 *.fil
+*.sim

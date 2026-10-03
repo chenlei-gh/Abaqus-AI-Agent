@@ -1,0 +1,47 @@
+{
+  "status": "PASS",
+  "case": "H.5_controlled_solver_failure_diagnostics",
+  "failed_job": "Tier2_CaseE_Job",
+  "diagnosed_issues_count": 3,
+  "diagnosed_ids": [
+    "NEGATIVE_EIGENVALUE",
+    "TOO_MANY_CUTBACKS",
+    "NUMERICAL_SINGULARITY"
+  ],
+  "remediation_actions": [
+    {
+      "diagnosis_id": "NEGATIVE_EIGENVALUE",
+      "severity": "WARNING",
+      "evidence_count": 1,
+      "likely_cause": "Stiffness matrix is non-positive definite; typically caused by unconstrained rigid body modes, material instability, or contact opening.",
+      "suggested_remediation": "Check boundary conditions for unconstrained rigid body motions, verify contact stabilization, or check plasticity/hyperelasticity parameters."
+    },
+    {
+      "diagnosis_id": "TOO_MANY_CUTBACKS",
+      "severity": "ERROR",
+      "evidence_count": 1,
+      "likely_cause": "Solver exceeded maximum cutback count without achieving equilibrium.",
+      "suggested_remediation": "Inspect severity of residual force / displacement correction, check material softening, or relax cutback controls if physics are smooth."
+    },
+    {
+      "diagnosis_id": "NUMERICAL_SINGULARITY",
+      "severity": "WARNING",
+      "evidence_count": 10,
+      "likely_cause": "Ill-conditioned stiffness matrix near node or DOF.",
+      "suggested_remediation": "Verify elastic modulus consistency, node connectivity, and tie constraints."
+    }
+  ],
+  "run_transition_verified": {
+    "from_acceptance": {
+      "passed": false,
+      "status": "SOLVER_SINGULARITY"
+    },
+    "to_acceptance": {
+      "passed": true,
+      "status": "RESULT_VALID"
+    },
+    "assumptions_added": [
+      "Encastre boundary condition applied to fully constrain rigid modes"
+    ]
+  }
+}

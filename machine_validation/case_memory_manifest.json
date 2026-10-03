@@ -1,0 +1,38 @@
+{
+  "total_runs": 3,
+  "runs": [
+    {
+      "id": "golden_run_dynamic",
+      "model_name": "DynamicGolden",
+      "job_name": "DynamicGoldenJob",
+      "solver": "standard",
+      "state": "accepted",
+      "engineering_status": "result_valid",
+      "acceptance_passed": true,
+      "metrics_count": 2,
+      "report_reference": null
+    },
+    {
+      "id": "golden_run_explicit",
+      "model_name": "ExplicitGolden",
+      "job_name": "ExplicitGoldenJob",
+      "solver": "explicit",
+      "state": "accepted",
+      "engineering_status": "result_valid",
+      "acceptance_passed": true,
+      "metrics_count": 2,
+      "report_reference": null
+    },
+    {
+      "id": "golden_run_static",
+      "model_name": "StaticGolden",
+      "job_name": "StaticGoldenJob",
+      "solver": "standard",
+      "state": "accepted",
+      "engineering_status": "result_valid",
+      "acceptance_passed": true,
+      "metrics_count": 2,
+      "report_reference": null
+    }
+  ]
+}

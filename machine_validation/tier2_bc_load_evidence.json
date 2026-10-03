@@ -1,0 +1,71 @@
+{
+  "tier": "Tier 2: BC / Load Engineering Equivalence",
+  "case_a_cf_equilibrium": {
+    "applied_cf2": -1000.0,
+    "sum_reaction_rf2": 1000.0,
+    "residual": 0.0,
+    "relative_error": 0.0,
+    "balanced": true
+  },
+  "case_b_pressure_equilibrium": {
+    "pressure_magnitude": 2.0,
+    "area_mm2": 1000.0,
+    "expected_total_load": 2000.0,
+    "sum_reaction_rf2": 2000.0,
+    "residual": 0.0,
+    "relative_error": 0.0,
+    "balanced": true
+  },
+  "case_c_thermal_gradient": {
+    "t_cold_c": 20.0,
+    "t_hot_c": 100.0,
+    "analytical_mid_temp_c": 60.0,
+    "simulated_mid_temp_c": 60.0,
+    "relative_error": 0.0,
+    "gradient_verified": true
+  },
+  "case_e_singularity_detection": {
+    "job_status": "None",
+    "singularity_detected": true,
+    "matched_diagnostics": [
+      "NUMERICAL SINGULARITY",
+      "SOLVER PROBLEM"
+    ],
+    "verified": true
+  },
+  "passed": true,
+  "diagnostics": [],
+  "case_d_structural_conflict": {
+    "preflight_passed": false,
+    "blockers_caught": [
+      {
+        "name": "step_sequence_valid",
+        "ok": false,
+        "detail": "BC references step 'Step-1' before it is defined in plan",
+        "action_index": 0,
+        "action_type": "fixed_bc"
+      },
+      {
+        "name": "step_sequence_valid",
+        "ok": false,
+        "detail": "BC references step 'Step-1' before it is defined in plan",
+        "action_index": 1,
+        "action_type": "displacement_bc"
+      },
+      {
+        "name": "bc_structural_conflict",
+        "ok": false,
+        "detail": "Conflicting BCs on region 'a.sets['EndFace']' at step 'Step-1': fixed_bc conflicts with non-zero displacement_bc",
+        "action_index": 1,
+        "action_type": "displacement_bc"
+      }
+    ],
+    "verified": true
+  },
+  "provenance": {
+    "launcher": "abaqus",
+    "workdir": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\machine_validation",
+    "return_code": 0,
+    "solver": "Abaqus/Standard 2025"
+  }
+}

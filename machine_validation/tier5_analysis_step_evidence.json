@@ -1,0 +1,46 @@
+{
+  "tier": "Tier 5: AnalysisStep Procedure Verification",
+  "case_static_step": {
+    "time_period": 1.0,
+    "max_inc_specified": 0.2,
+    "total_increments": 7,
+    "inp_has_static_card": true,
+    "inp_has_nlgeom": true,
+    "max_inc_respected": true,
+    "verified": true
+  },
+  "case_heat_transfer_step": {
+    "inp_has_steady_ht_card": true,
+    "max_temp": 100.0,
+    "min_temp": 2.2499999615845168e-33,
+    "thermal_equilibrium_verified": true,
+    "verified": true
+  },
+  "case_frequency_step": {
+    "inp_has_freq_card": true,
+    "extracted_frequencies_hz": [
+      337.04,
+      337.04,
+      1550.9,
+      1879.7,
+      1879.7
+    ],
+    "modes_count": 5,
+    "verified": true
+  },
+  "passed": true,
+  "diagnostics": [],
+  "host_mappings_verified": true,
+  "provenance": {
+    "launcher": "abaqus",
+    "workdir": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\machine_validation",
+    "return_code": 0,
+    "solver": "Abaqus/Standard 2025",
+    "procedures_verified": [
+      "static",
+      "heat_transfer",
+      "frequency",
+      "explicit_dynamic_contract"
+    ]
+  }
+}

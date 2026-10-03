@@ -1,0 +1,470 @@
+<!doctype html><html><head><meta charset='utf-8'><title>3D Cantilever Beam Linear Static Engineering Analysis Report</title></head><body><pre># 3D Cantilever Beam Linear Static Engineering Analysis Report
+
+## 1. Executive Summary
+
+Verify the structural deflection and peak von Mises stress of a 100mm x 10mm x 10mm cantilever beam subjected to a 1000 N tip load against theoretical and numerical criteria.
+
+## 6. Solver / Analysis Procedure
+
+```json
+{
+  &quot;solver&quot;: &quot;STANDARD&quot;,
+  &quot;strategy&quot;: &quot;STATIC_GENERAL&quot;
+}
+```
+
+## 7. Mesh
+
+```json
+{
+  &quot;strategy&quot;: {
+    &quot;element_type&quot;: &quot;C3D8R&quot;,
+    &quot;seed_size&quot;: 2.5,
+    &quot;element_count&quot;: 640
+  },
+  &quot;quality&quot;: [
+    {
+      &quot;kind&quot;: &quot;mesh_quality&quot;,
+      &quot;source&quot;: &quot;abaqus_native&quot;,
+      &quot;locator&quot;: &quot;&quot;,
+      &quot;value&quot;: {
+        &quot;element_count&quot;: 640,
+        &quot;evidence&quot;: [
+          &quot;native_verify:ASPECT_RATIO&quot;,
+          &quot;native_verify:ANGULAR_DEVIATION&quot;,
+          &quot;native_verify:GEOM_DEVIATION_FACTOR&quot;,
+          &quot;native_verify:ANALYSIS_CHECKS&quot;
+        ],
+        &quot;failed_element_count&quot;: 0,
+        &quot;metrics&quot;: {
+          &quot;max_angular_deviation&quot;: 0.0,
+          &quot;max_aspect_ratio&quot;: 1.0,
+          &quot;max_geometric_deviation_factor&quot;: 0.0
+        },
+        &quot;node_count&quot;: 1025,
+        &quot;part&quot;: &quot;Beam&quot;,
+        &quot;source&quot;: &quot;native_abaqus_verifyMeshQuality&quot;,
+        &quot;status&quot;: &quot;pass&quot;,
+        &quot;violations&quot;: [],
+        &quot;warning_element_count&quot;: 0,
+        &quot;warnings&quot;: []
+      },
+      &quot;unit&quot;: &quot;&quot;,
+      &quot;metadata&quot;: {}
+    }
+  ],
+  &quot;convergence&quot;: []
+}
+```
+
+## 8. Results
+
+| Metric Name            | Value            | Unit | Source |
+|------------------------|------------------|------|--------|
+| tip_displacement_lower | 2.06864285469055 | mm   | odb    |
+| tip_displacement_upper | 2.06864285469055 | mm   | odb    |
+| root_mises_sanity      | 471.214080810547 | MPa  | odb    |
+
+```json
+[
+  {
+    &quot;name&quot;: &quot;tip_displacement_lower&quot;,
+    &quot;value&quot;: 2.06864285469055,
+    &quot;unit&quot;: &quot;mm&quot;,
+    &quot;quantity&quot;: &quot;displacement&quot;,
+    &quot;location&quot;: null,
+    &quot;step&quot;: null,
+    &quot;frame&quot;: null,
+    &quot;component&quot;: null,
+    &quot;source&quot;: &quot;odb&quot;,
+    &quot;evidence&quot;: [],
+    &quot;region&quot;: null,
+    &quot;required&quot;: true,
+    &quot;metadata&quot;: {}
+  },
+  {
+    &quot;name&quot;: &quot;tip_displacement_upper&quot;,
+    &quot;value&quot;: 2.06864285469055,
+    &quot;unit&quot;: &quot;mm&quot;,
+    &quot;quantity&quot;: &quot;displacement&quot;,
+    &quot;location&quot;: null,
+    &quot;step&quot;: null,
+    &quot;frame&quot;: null,
+    &quot;component&quot;: null,
+    &quot;source&quot;: &quot;odb&quot;,
+    &quot;evidence&quot;: [],
+    &quot;region&quot;: null,
+    &quot;required&quot;: true,
+    &quot;metadata&quot;: {}
+  },
+  {
+    &quot;name&quot;: &quot;root_mises_sanity&quot;,
+    &quot;value&quot;: 471.214080810547,
+    &quot;unit&quot;: &quot;MPa&quot;,
+    &quot;quantity&quot;: &quot;stress&quot;,
+    &quot;location&quot;: null,
+    &quot;step&quot;: null,
+    &quot;frame&quot;: null,
+    &quot;component&quot;: null,
+    &quot;source&quot;: &quot;odb&quot;,
+    &quot;evidence&quot;: [],
+    &quot;region&quot;: null,
+    &quot;required&quot;: true,
+    &quot;metadata&quot;: {}
+  }
+]
+```
+
+## 11. Acceptance Criteria
+
+| Criterion Name         | Requirement / Limit | Actual Value     | Status |
+|------------------------|---------------------|------------------|--------|
+| tip_displacement_lower | -                   | 2.06864285469055 | PASS   |
+| tip_displacement_upper | -                   | 2.06864285469055 | PASS   |
+| root_mises_sanity      | -                   | 471.214080810547 | PASS   |
+
+```json
+{
+  &quot;passed&quot;: true,
+  &quot;criteria&quot;: [
+    {
+      &quot;name&quot;: &quot;tip_displacement_lower&quot;,
+      &quot;passed&quot;: true,
+      &quot;actual&quot;: 2.06864285469055,
+      &quot;operator&quot;: &quot;&gt;=&quot;,
+      &quot;limit&quot;: 1.6,
+      &quot;unit&quot;: &quot;mm&quot;,
+      &quot;relative_error&quot;: 0.292901784181594
+    },
+    {
+      &quot;name&quot;: &quot;tip_displacement_upper&quot;,
+      &quot;passed&quot;: true,
+      &quot;actual&quot;: 2.06864285469055,
+      &quot;operator&quot;: &quot;&lt;=&quot;,
+      &quot;limit&quot;: 2.2,
+      &quot;unit&quot;: &quot;mm&quot;,
+      &quot;relative_error&quot;: 0.0597077933224774
+    },
+    {
+      &quot;name&quot;: &quot;root_mises_sanity&quot;,
+      &quot;passed&quot;: true,
+      &quot;actual&quot;: 471.214080810547,
+      &quot;operator&quot;: &quot;&lt;=&quot;,
+      &quot;limit&quot;: 1200.0,
+      &quot;unit&quot;: &quot;MPa&quot;,
+      &quot;relative_error&quot;: 0.607321599324544
+    }
+  ],
+  &quot;failures&quot;: [],
+  &quot;warnings&quot;: [],
+  &quot;status&quot;: &quot;PASS&quot;,
+  &quot;blocked&quot;: [],
+  &quot;gates&quot;: {
+    &quot;contact&quot;: &quot;SKIPPED&quot;,
+    &quot;convergence&quot;: &quot;SKIPPED&quot;,
+    &quot;criteria&quot;: &quot;PASS&quot;,
+    &quot;engineering_checks&quot;: &quot;PASS&quot;,
+    &quot;evidence_sufficiency&quot;: &quot;NOT_SPECIFIED&quot;,
+    &quot;execution&quot;: &quot;PASS&quot;,
+    &quot;fatigue&quot;: &quot;SKIPPED&quot;,
+    &quot;mesh_quality&quot;: &quot;SKIPPED&quot;,
+    &quot;numerical_verification&quot;: &quot;SKIPPED&quot;
+  }
+}
+```
+
+## 12. Sensitivity / Uncertainty
+
+```json
+[
+  null,
+  null
+]
+```
+
+## 16. Assumptions / Limitations
+
+```json
+[
+  [],
+  []
+]
+```
+
+## 17. Evidence
+
+```json
+[
+  {
+    &quot;kind&quot;: &quot;acceptance&quot;,
+    &quot;source&quot;: &quot;acceptance_gate&quot;,
+    &quot;locator&quot;: &quot;&quot;,
+    &quot;value&quot;: {
+      &quot;passed&quot;: true,
+      &quot;criteria&quot;: [
+        {
+          &quot;name&quot;: &quot;tip_displacement_lower&quot;,
+          &quot;passed&quot;: true,
+          &quot;actual&quot;: 2.06864285469055,
+          &quot;operator&quot;: &quot;&gt;=&quot;,
+          &quot;limit&quot;: 1.6,
+          &quot;unit&quot;: &quot;mm&quot;,
+          &quot;relative_error&quot;: 0.292901784181594
+        },
+        {
+          &quot;name&quot;: &quot;tip_displacement_upper&quot;,
+          &quot;passed&quot;: true,
+          &quot;actual&quot;: 2.06864285469055,
+          &quot;operator&quot;: &quot;&lt;=&quot;,
+          &quot;limit&quot;: 2.2,
+          &quot;unit&quot;: &quot;mm&quot;,
+          &quot;relative_error&quot;: 0.0597077933224774
+        },
+        {
+          &quot;name&quot;: &quot;root_mises_sanity&quot;,
+          &quot;passed&quot;: true,
+          &quot;actual&quot;: 471.214080810547,
+          &quot;operator&quot;: &quot;&lt;=&quot;,
+          &quot;limit&quot;: 1200.0,
+          &quot;unit&quot;: &quot;MPa&quot;,
+          &quot;relative_error&quot;: 0.607321599324544
+        }
+      ],
+      &quot;failures&quot;: [],
+      &quot;warnings&quot;: [],
+      &quot;status&quot;: &quot;PASS&quot;,
+      &quot;blocked&quot;: [],
+      &quot;gates&quot;: {
+        &quot;contact&quot;: &quot;SKIPPED&quot;,
+        &quot;convergence&quot;: &quot;SKIPPED&quot;,
+        &quot;criteria&quot;: &quot;PASS&quot;,
+        &quot;engineering_checks&quot;: &quot;PASS&quot;,
+        &quot;evidence_sufficiency&quot;: &quot;NOT_SPECIFIED&quot;,
+        &quot;execution&quot;: &quot;PASS&quot;,
+        &quot;fatigue&quot;: &quot;SKIPPED&quot;,
+        &quot;mesh_quality&quot;: &quot;SKIPPED&quot;,
+        &quot;numerical_verification&quot;: &quot;SKIPPED&quot;
+      }
+    },
+    &quot;unit&quot;: &quot;&quot;,
+    &quot;metadata&quot;: {}
+  },
+  {
+    &quot;kind&quot;: &quot;mesh_quality&quot;,
+    &quot;source&quot;: &quot;abaqus_native&quot;,
+    &quot;locator&quot;: &quot;&quot;,
+    &quot;value&quot;: {
+      &quot;element_count&quot;: 640,
+      &quot;evidence&quot;: [
+        &quot;native_verify:ASPECT_RATIO&quot;,
+        &quot;native_verify:ANGULAR_DEVIATION&quot;,
+        &quot;native_verify:GEOM_DEVIATION_FACTOR&quot;,
+        &quot;native_verify:ANALYSIS_CHECKS&quot;
+      ],
+      &quot;failed_element_count&quot;: 0,
+      &quot;metrics&quot;: {
+        &quot;max_angular_deviation&quot;: 0.0,
+        &quot;max_aspect_ratio&quot;: 1.0,
+        &quot;max_geometric_deviation_factor&quot;: 0.0
+      },
+      &quot;node_count&quot;: 1025,
+      &quot;part&quot;: &quot;Beam&quot;,
+      &quot;source&quot;: &quot;native_abaqus_verifyMeshQuality&quot;,
+      &quot;status&quot;: &quot;pass&quot;,
+      &quot;violations&quot;: [],
+      &quot;warning_element_count&quot;: 0,
+      &quot;warnings&quot;: []
+    },
+    &quot;unit&quot;: &quot;&quot;,
+    &quot;metadata&quot;: {}
+  }
+]
+```
+
+## 18. Provenance
+
+```json
+{
+  &quot;run_id&quot;: &quot;run_static_golden_001&quot;,
+  &quot;model_name&quot;: {
+    &quot;height_mm&quot;: 10.0,
+    &quot;length_mm&quot;: 100.0,
+    &quot;width_mm&quot;: 10.0
+  },
+  &quot;job_name&quot;: &quot;StaticGoldenJob&quot;,
+  &quot;model_hash&quot;: null,
+  &quot;input_hash&quot;: null,
+  &quot;output_hash&quot;: null,
+  &quot;artifact_manifest_hash&quot;: null,
+  &quot;intent_hash&quot;: null,
+  &quot;action_plan_hash&quot;: null,
+  &quot;abaqus_version&quot;: &quot;Abaqus 2025&quot;,
+  &quot;python_version&quot;: null,
+  &quot;executor&quot;: &quot;BatchExecutor&quot;,
+  &quot;action_plan&quot;: [],
+  &quot;environment&quot;: {},
+  &quot;metadata&quot;: {
+    &quot;abaqus_version&quot;: &quot;unknown&quot;,
+    &quot;action_plan&quot;: [
+      {
+        &quot;action_type&quot;: &quot;material_elastic&quot;,
+        &quot;model_name&quot;: &quot;StaticGolden&quot;,
+        &quot;parameters&quot;: {
+          &quot;name&quot;: &quot;Steel&quot;,
+          &quot;poisson&quot;: 0.3,
+          &quot;youngs_modulus&quot;: 210000.0
+        },
+        &quot;target&quot;: null
+      },
+      {
+        &quot;action_type&quot;: &quot;static_step&quot;,
+        &quot;model_name&quot;: &quot;StaticGolden&quot;,
+        &quot;parameters&quot;: {
+          &quot;amplitude&quot;: &quot;RAMP&quot;,
+          &quot;initial_inc&quot;: null,
+          &quot;max_inc&quot;: null,
+          &quot;max_num_inc&quot;: 100,
+          &quot;min_inc&quot;: null,
+          &quot;name&quot;: &quot;Step-1&quot;,
+          &quot;nlgeom&quot;: false,
+          &quot;previous&quot;: &quot;Initial&quot;,
+          &quot;stabilization_magnitude&quot;: null,
+          &quot;stabilization_method&quot;: &quot;NONE&quot;,
+          &quot;time_incrementation_method&quot;: &quot;AUTOMATIC&quot;,
+          &quot;time_period&quot;: 1.0
+        },
+        &quot;target&quot;: null
+      },
+      {
+        &quot;action_type&quot;: &quot;solid_section&quot;,
+        &quot;model_name&quot;: &quot;StaticGolden&quot;,
+        &quot;parameters&quot;: {
+          &quot;material&quot;: &quot;Steel&quot;,
+          &quot;name&quot;: &quot;BeamSection&quot;
+        },
+        &quot;target&quot;: null
+      },
+      {
+        &quot;action_type&quot;: &quot;section_assignment&quot;,
+        &quot;model_name&quot;: &quot;StaticGolden&quot;,
+        &quot;parameters&quot;: {
+          &quot;part&quot;: &quot;Beam&quot;,
+          &quot;region_expression&quot;: &quot;mdb.models[&#x27;StaticGolden&#x27;].parts[&#x27;Beam&#x27;].sets[&#x27;AllCells&#x27;]&quot;,
+          &quot;section&quot;: &quot;BeamSection&quot;
+        },
+        &quot;target&quot;: null
+      },
+      {
+        &quot;action_type&quot;: &quot;fixed_bc&quot;,
+        &quot;model_name&quot;: &quot;StaticGolden&quot;,
+        &quot;parameters&quot;: {
+          &quot;name&quot;: &quot;AI-Fixed&quot;,
+          &quot;region_expression&quot;: &quot;mdb.models[&#x27;StaticGolden&#x27;].rootAssembly.sets[&#x27;FixedFace&#x27;]&quot;,
+          &quot;step&quot;: &quot;Initial&quot;
+        },
+        &quot;target&quot;: &quot;mdb.models[&#x27;StaticGolden&#x27;].rootAssembly.sets[&#x27;FixedFace&#x27;]&quot;
+      },
+      {
+        &quot;action_type&quot;: &quot;concentrated_force&quot;,
+        &quot;model_name&quot;: &quot;StaticGolden&quot;,
+        &quot;parameters&quot;: {
+          &quot;amplitude&quot;: null,
+          &quot;cf1&quot;: 0.0,
+          &quot;cf2&quot;: -250.0,
+          &quot;cf3&quot;: 0.0,
+          &quot;name&quot;: &quot;AI-Force&quot;,
+          &quot;region_expression&quot;: &quot;mdb.models[&#x27;StaticGolden&#x27;].rootAssembly.sets[&#x27;TipLoadVertices&#x27;]&quot;,
+          &quot;step&quot;: &quot;Step-1&quot;
+        },
+        &quot;target&quot;: &quot;mdb.models[&#x27;StaticGolden&#x27;].rootAssembly.sets[&#x27;TipLoadVertices&#x27;]&quot;
+      },
+      {
+        &quot;action_type&quot;: &quot;field_output&quot;,
+        &quot;model_name&quot;: &quot;StaticGolden&quot;,
+        &quot;parameters&quot;: {
+          &quot;frequency&quot;: null,
+          &quot;num_intervals&quot;: null,
+          &quot;request&quot;: &quot;F-Output-1&quot;,
+          &quot;step&quot;: &quot;Initial&quot;,
+          &quot;variables&quot;: [
+            &quot;S&quot;,
+            &quot;U&quot;,
+            &quot;RF&quot;
+          ]
+        },
+        &quot;target&quot;: null
+      },
+      {
+        &quot;action_type&quot;: &quot;seed_part&quot;,
+        &quot;model_name&quot;: &quot;StaticGolden&quot;,
+        &quot;parameters&quot;: {
+          &quot;deviation_factor&quot;: 0.1,
+          &quot;min_size_factor&quot;: 0.1,
+          &quot;part&quot;: &quot;Beam&quot;,
+          &quot;size&quot;: 2.5
+        },
+        &quot;target&quot;: null
+      },
+      {
+        &quot;action_type&quot;: &quot;element_type&quot;,
+        &quot;model_name&quot;: &quot;StaticGolden&quot;,
+        &quot;parameters&quot;: {
+          &quot;elem_code&quot;: &quot;C3D8R&quot;,
+          &quot;library&quot;: &quot;STANDARD&quot;,
+          &quot;part&quot;: &quot;Beam&quot;,
+          &quot;region_expression&quot;: &quot;mdb.models[&#x27;StaticGolden&#x27;].parts[&#x27;Beam&#x27;].sets[&#x27;AllCells&#x27;]&quot;
+        },
+        &quot;target&quot;: null
+      },
+      {
+        &quot;action_type&quot;: &quot;generate_mesh&quot;,
+        &quot;model_name&quot;: &quot;StaticGolden&quot;,
+        &quot;parameters&quot;: {
+          &quot;part&quot;: &quot;Beam&quot;
+        },
+        &quot;target&quot;: null
+      },
+      {
+        &quot;action_type&quot;: &quot;python&quot;,
+        &quot;model_name&quot;: &quot;StaticGolden&quot;,
+        &quot;parameters&quot;: {
+          &quot;code&quot;: &quot;\nfrom abaqusConstants import *\nmodel=mdb.models[&#x27;StaticGolden&#x27;]\npart=model.parts[&#x27;Beam&#x27;]\ninst=model.rootAssembly.instances[&#x27;Beam-1&#x27;]\nmodel.rootAssembly.regenerate()\n\n# Evidence sets are mesh-based so ODB field extraction receives true node/element sets.\nfixed_nodes = inst.nodes.getByBoundingBox(xMin=-0.01, xMax=0.01)\nif not fixed_nodes:\n    raise RuntimeError(&#x27;FixedNodes set is empty&#x27;)\nmodel.rootAssembly.Set(name=&#x27;FixedNodes&#x27;, nodes=fixed_nodes)\n\ntip_nodes = inst.nodes.getByBoundingBox(xMin=99.99, xMax=100.01)\nif not tip_nodes:\n    raise RuntimeError(&#x27;TipNodes set is empty&#x27;)\nmodel.rootAssembly.Set(name=&#x27;TipNodes&#x27;, nodes=tip_nodes)\n\nroot_elements = part.elements.getByBoundingBox(xMin=-0.01, xMax=10.01)\nif not root_elements:\n    raise RuntimeError(&#x27;RootElements set is empty&#x27;)\npart.Set(name=&#x27;RootElements&#x27;, elements=root_elements)\n\ntip_rp = model.rootAssembly.referencePoints\n# The four-vertex CLOAD is applied symmetrically; no separate RP is needed.\nprint(&#x27;AIAgent_STATIC_EVIDENCE_SETS_CREATED&#x27;)\n&quot;
+        },
+        &quot;target&quot;: null
+      },
+      {
+        &quot;action_type&quot;: &quot;create_job&quot;,
+        &quot;model_name&quot;: &quot;StaticGolden&quot;,
+        &quot;parameters&quot;: {
+          &quot;job_type&quot;: &quot;STANDARD&quot;,
+          &quot;name&quot;: &quot;StaticGoldenJob&quot;
+        },
+        &quot;target&quot;: null
+      }
+    ],
+    &quot;action_plan_hash&quot;: null,
+    &quot;artifact_manifest_hash&quot;: &quot;4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945&quot;,
+    &quot;environment&quot;: {},
+    &quot;executor&quot;: &quot;CAEInProcessExecutor&quot;,
+    &quot;input_hash&quot;: null,
+    &quot;intent_hash&quot;: null,
+    &quot;job_name&quot;: &quot;StaticGoldenJob&quot;,
+    &quot;metadata&quot;: {
+      &quot;action_plan_scope&quot;: &quot;caller&quot;,
+      &quot;content_hash_scope&quot;: &quot;not_captured&quot;,
+      &quot;model_snapshot_hash&quot;: &quot;89c682f5821b952d029db6e4bc87973373b3c148480e3ce935f72e434d21d269&quot;
+    },
+    &quot;model_hash&quot;: null,
+    &quot;model_name&quot;: &quot;StaticGolden&quot;,
+    &quot;output_hash&quot;: null,
+    &quot;python_version&quot;: &quot;3.10.5 (main, Jul 27 2024, 04:26:12) [MSC v.1934 64 bit (AMD64)]&quot;,
+    &quot;run_id&quot;: &quot;1b0d7283-c9d6-43d6-a3c8-83830b6db339&quot;,
+    &quot;odb_path&quot;: &quot;D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\machine_validation\\StaticGoldenJob.odb&quot;
+  }
+}
+```
+
+## 19. Conclusion
+
+Acceptance criteria passed based on the structured evidence supplied to this report.
+</pre></body></html>
