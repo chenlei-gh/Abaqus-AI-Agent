@@ -7,16 +7,17 @@
 [![CI](https://github.com/chenlei-gh/Abaqus-AI-Agent/actions/workflows/ci.yml/badge.svg)](https://github.com/chenlei-gh/Abaqus-AI-Agent/actions/workflows/ci.yml)
 [![Python](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12-blue.svg)](https://www.python.org/)
 [![Abaqus](https://img.shields.io/badge/Abaqus-2025%20Validated-brightgreen.svg)](https://www.3ds.com/products-services/simulia/products/abaqus/)
-[![Tests](https://img.shields.io/badge/tests-392%20passed-success.svg)](tests/)
+[![Tests](https://img.shields.io/badge/tests-399%20passed-success.svg)](tests/)
 [![Golden Matrix](https://img.shields.io/badge/golden%20matrix-13%2F13%20passed-success.svg)](machine_validation/)
 [![Official Benchmarks](https://img.shields.io/badge/official%20benchmarks-22%2F22%20passed-success.svg)](tools/j_comprehensive_physics_matrix.py)
 [![Live Abaqus Gate](https://img.shields.io/badge/live%20abaqus%20gate-22%2F22%20passed-brightgreen.svg)](tools/j_live_abaqus_matrix.py)
 [![Material Intelligence](https://img.shields.io/badge/material%20intelligence-CAMPUS%20%7C%20ISO%2010350-blue.svg)](src/abaqus_ai_agent/contracts/material_record.py)
+[![Agent Workflows](https://img.shields.io/badge/agent%20workflows-L1--L4%20validated-brightgreen.svg)](#)
 [![Release Gate](https://img.shields.io/badge/release%20gate-RC--1%20frozen-orange.svg)](#)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 
 > **Project status: Release Candidate Baseline Frozen (`v1.0.0-rc1`).**
-> The foundational engineering contracts, deterministic software gates (392 passed tests), full-chain **Abaqus 2025 real-machine execution gates (13/13 Golden Ladder)**, **Phase J-Reference Gate (22/22 passed)**, **Phase J-Live Real-Machine Gate (22/22 live Abaqus 2025 validated)**, and **Public Release Security Audit (4/4 passed)** are complete and closed. All live solver verifications are grounded in verifiable, audited machine artifacts.
+> The foundational engineering contracts, deterministic software gates (399 passed tests), full-chain **Abaqus 2025 real-machine execution gates (13/13 Golden Ladder)**, **Phase J-Reference Gate (22/22 passed)**, **Phase J-Live Real-Machine Gate (22/22 live Abaqus 2025 validated)**, **Phase K Engineering Material Intelligence Layer**, **Phase L Autonomous Agent Engineering Workflow Gates (L1–L4)**, and **Public Release Security Audit (4/4 passed)** are complete and closed. All live solver verifications are grounded in verifiable, audited machine artifacts.
 
 ### Quick navigation
 
@@ -281,8 +282,20 @@ All 22 benchmarks run end-to-end against live Abaqus 2025 with **zero synthetic 
 | **NEG01** | Solver Self-Healing | Diagnostics Manual §3.2 | 1.0000 status | 1.0000 status | 0.00% | 0.1% | ✅ PASS |
 
 *The complete verifiable audit manifest is tracked in git at [`machine_validation/j_live_abaqus_evidence.json`](machine_validation/j_live_abaqus_evidence.json).*
+*Note on S4 metric transparency: In 3D continuum FE models, end kinematic coupling and encastre constraints generate boundary singularities; the 99.5th percentile of Tresca/2 in the uniform gauge section is evaluated to filter local disturbances and align transparently with analytical Saint-Venant outer surface shear stress.*
 
-### 3. Nine Fresh Engineering Categories (Phase I.1)
+### 3. Autonomous Agent Engineering Workflow Validation (Phase L: L1–L4 Gates)
+
+While Phase J validates the underlying finite-element solver fidelity across 22 Dassault Systèmes benchmarks, **Phase L validates the full autonomous engineering loop of the AI Agent itself** across 4 critical industrial capabilities:
+
+| Workflow Gate | Engineering Scope & Validation Chain | Live Solver & Artifact Evidence | Status |
+|:---|:---|:---|:---:|
+| **L1: End-to-End Workflow** | Natural language prompt $\rightarrow$ TypeSafe JEV System One $\rightarrow$ Typed `EngineeringIntent` $\rightarrow$ Action planning $\rightarrow$ Abaqus 2025 execution $\rightarrow$ ODB tensor extraction $\rightarrow$ Engineering acceptance $\rightarrow$ Automated report compilation | Cantilever beam prompt: live Job execution, tip deflection ($0.0475\text{ mm}$), root Mises stress ($59.4\text{ MPa}$), acceptance PASS, Markdown/HTML reports | ✅ PASS |
+| **L2: Material Intelligence Grounding** | Commercial engineering plastic datasheet (CAMPUS / ISO 10350 / ISO 11403 PA66-GF30) $\rightarrow$ `MaterialRecord` $\rightarrow$ `MaterialResolver` temperature compatibility & constitutive sanity $\rightarrow$ Native Abaqus material card synthesis $\rightarrow$ Solver execution & ODB validation | BASF Ultramid A3WG6: $E=8500\text{ MPa}$ at $23^\circ\text{C}$ dry, fail-closed on missing temperature, ODB axial strain ($0.00118$) within $0.3\%$ tolerance | ✅ PASS |
+| **L3: Closed-Loop Solver Healing** | Physical instability / divergence injection $\rightarrow$ Live `.msg` / `.sta` residual parsing $\rightarrow$ Solver Doctor root-cause diagnosis $\rightarrow$ Controlled remediation plan $\rightarrow$ Automated re-submission $\rightarrow$ Convergence & acceptance | Severe cutback & singularity model: extracted force residuals, diagnosed `NUMERICAL_SINGULARITY`, applied stabilization damping, re-run completed with zero divergence | ✅ PASS |
+| **L4: Viewport Topology Grounding** | Graphical 2D camera viewport coordinates $\rightarrow$ 3D spatial ray-casting against geometry candidate database $\rightarrow$ Deterministic `findAt(...)` synthesis $\rightarrow$ Native Sets & Surfaces $\rightarrow$ Boundary condition & load application $\rightarrow$ Reaction equilibrium | Beam model: 2D screen click resolved to Left End Face ($x=0$), created native Set `FixEnd`, applied Encastre BC, solved with exact force balance | ✅ PASS |
+
+### 4. Nine Fresh Engineering Categories (Phase I.1)
 
 All 9 fundamental physical analysis categories are verified via authentic solver outputs and audited evidence packages:
 

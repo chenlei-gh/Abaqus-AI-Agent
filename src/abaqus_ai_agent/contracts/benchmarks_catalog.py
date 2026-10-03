@@ -80,7 +80,11 @@ OFFICIAL_TIER_A_CATALOG: Tuple[OfficialBenchmarkSpec, ...] = (
         title="Saint-Venant Circular Shaft Elastic Torsion",
         physics_domain="solid_mechanics",
         numerical_formulation="linear_static",
-        governing_physics="Torsion of Circular Shaft: theta = T * L / (G * J), tau_max = T * R / J",
+        governing_physics=(
+            "Torsion of Circular Shaft: theta = T * L / (G * J), tau_max = T * R / J. "
+            "In 3D continuum FE models, end constraint and kinematic coupling introduce boundary singularities; "
+            "hence the 99.5th percentile of Tresca/2 in the uniform gauge section is evaluated to filter local disturbances."
+        ),
         official_model_params={"L": 200.0, "R": 10.0, "E": 210000.0, "nu": 0.3, "Torque": 50000.0},
         reference_metric_name="max_shear_stress",
         reference_metric_unit="MPa",

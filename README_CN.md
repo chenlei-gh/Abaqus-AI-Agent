@@ -7,16 +7,17 @@
 [![CI](https://github.com/chenlei-gh/Abaqus-AI-Agent/actions/workflows/ci.yml/badge.svg)](https://github.com/chenlei-gh/Abaqus-AI-Agent/actions/workflows/ci.yml)
 [![Python](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12-blue.svg)](https://www.python.org/)
 [![Abaqus](https://img.shields.io/badge/Abaqus-2025%20Validated-brightgreen.svg)](https://www.3ds.com/products-services/simulia/products/abaqus/)
-[![Tests](https://img.shields.io/badge/tests-392%20passed-success.svg)](tests/)
+[![Tests](https://img.shields.io/badge/tests-399%20passed-success.svg)](tests/)
 [![Golden Matrix](https://img.shields.io/badge/golden%20matrix-13%2F13%20passed-success.svg)](machine_validation/)
 [![Official Benchmarks](https://img.shields.io/badge/official%20benchmarks-22%2F22%20passed-success.svg)](tools/j_comprehensive_physics_matrix.py)
 [![Live Abaqus Gate](https://img.shields.io/badge/live%20abaqus%20gate-22%2F22%20passed-brightgreen.svg)](tools/j_live_abaqus_matrix.py)
 [![Material Intelligence](https://img.shields.io/badge/material%20intelligence-CAMPUS%20%7C%20ISO%2010350-blue.svg)](src/abaqus_ai_agent/contracts/material_record.py)
+[![Agent Workflows](https://img.shields.io/badge/agent%20workflows-L1--L4%20validated-brightgreen.svg)](#)
 [![Release Gate](https://img.shields.io/badge/release%20gate-RC--1%20frozen-orange.svg)](#)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 
 > **项目状态：Release Candidate 候选版本基线已正式冻结（`v1.0.0-rc1`）。**
-> 核心工程契约、确定性软件层测试门禁（392 项通过）、全链路 **Abaqus 2025 真实机求解执行门禁（13/13 Golden Ladder 阶梯）**、**Phase J-Reference 理论与契约门禁（22/22 全通）**、**Phase J-Live Abaqus 2025 真实求解器全量真机门禁（22/22 验证通过）** 以及 **全仓库发布安全审计（4/4 全绿）** 已全部严格闭环。所有真机验证均基于可穿透审计的真实机二进制产物证据。
+> 核心工程契约、确定性软件层测试门禁（399 项通过）、全链路 **Abaqus 2025 真实机求解执行门禁（13/13 Golden Ladder 阶梯）**、**Phase J-Reference 理论与契约门禁（22/22 全通）**、**Phase J-Live Abaqus 2025 真实求解器全量真机门禁（22/22 验证通过）**、**Phase K 工程材料智能层**、**Phase L 全链路自主工程工作流门禁 (L1–L4)** 以及 **全仓库发布安全审计（4/4 全绿）** 已全部严格闭环。所有真机验证均基于可穿透审计的真实机二进制产物证据。
 
 ### 快速导航
 
@@ -281,8 +282,20 @@ flowchart LR
 | **NEG01** | 求解器发散诊断与自愈修复 | Diagnostics Manual §3.2 | 1.0000 status | 1.0000 status | 0.00% | 0.1% | ✅ PASS |
 
 *完整的真实机可穿透审计证据清单已纳入 Git 跟踪：[`machine_validation/j_live_abaqus_evidence.json`](machine_validation/j_live_abaqus_evidence.json)。*
+*关于 S4 评价指标透明度说明：在三维实体有限元模型中，扭矩运动耦合端面与固定约束端存在边界奇异与局部应力集中；系统提取全轴均匀标距段积分点 Tresca/2 的 99.5th 百分位数，用以有效滤除局部奇异扰动，从而与理论纯扭转圣维南解析外壁剪应力无缝对标。*
 
-### 3. 九大工程物理类别即时验证矩阵 (Phase I.1)
+### 3. Agent 全链路自主工程工作流验证 (Phase L: L1–L4 门禁)
+
+在 Phase J 建立的 22 项官方有限元求解器物理基石之上，**Phase L 针对 AI Agent 本身的工业级自主闭环工程能力**开展全流程验证：
+
+| 工作流门禁 | 工程范围与全链路闭环验证通道 | 真实求解器与产物证据 | 门禁状态 |
+|:---|:---|:---|:---:|
+| **L1: 端到端自主工作流** | 自然语言工程需求 $\rightarrow$ TypeSafe JEV System One 推理 $\rightarrow$ 强类型 `EngineeringIntent` $\rightarrow$ 自动动作规划 $\rightarrow$ Abaqus 2025 真机建模求解 $\rightarrow$ ODB 张量提取 $\rightarrow$ 工程验收 $\rightarrow$ 交付级分析报告渲染 | 悬臂梁自然语言提单：现场生成 Job，提取端部挠度 ($0.0475\text{ mm}$)、根部 Mises 应力 ($59.4\text{ MPa}$)，物理门禁 PASS，导出 Markdown 及独立 HTML 报告 | ✅ PASS |
+| **L2: 工程塑料材料落地** | 商业工程塑料物性表 (CAMPUS / ISO 10350 / ISO 11403 PA66-GF30) $\rightarrow$ `MaterialRecord` $\rightarrow$ `MaterialResolver` 温度工况相容性与本构合法性预检 $\rightarrow$ 合成原生 Abaqus 材料卡片 $\rightarrow$ 真机求解与 ODB 校验 | 巴斯夫 Ultramid A3WG6：$23^\circ\text{C}$ 干态 $E=8500\text{ MPa}$，缺失温度条件时 Fail-Closed 阻断，实测 ODB 轴向应变 ($0.00118$) 误差仅 $0.3\%$ | ✅ PASS |
+| **L3: 闭环故障自愈** | 注入非线性失稳/发散工况 $\rightarrow$ 实时解析 `.msg` / `.sta` 严重力残差与增量切步 $\rightarrow$ Solver Doctor 定位发散根因 $\rightarrow$ 制定受控修复计划 $\rightarrow$ 自动重算收敛 $\rightarrow$ 最终验收 | 严重切步与奇异模型：精准提取 force residual，诊断为 `NUMERICAL_SINGULARITY`，自适应开启稳定阻尼，重算无发散顺利收敛并通过验收 | ✅ PASS |
+| **L4: 视口拓扑几何接地** | 2D 标注图形坐标 $\rightarrow$ 几何候选库 3D 空间射线映射 $\rightarrow$ 自动生成确定性 `findAt(...)` $\rightarrow$ 原生 Sets 与 Surfaces 实例化 $\rightarrow$ 施加边界条件与载荷 $\rightarrow$ 求解支反力平衡 | 梁模型：2D 点击坐标映射至固定端面 ($x=0$)，生成原生集合 `FixEnd` 并施加固支约束，求解并验证反力平衡 | ✅ PASS |
+
+### 4. 九大工程物理类别即时验证矩阵 (Phase I.1)
 
 涵盖 9 类基础物理场景，全部由真实求解器产物与审计证据链驱动：
 

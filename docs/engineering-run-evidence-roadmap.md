@@ -803,7 +803,7 @@ Validation is structured into three discrete operational tiers to prevent test s
 - **S1: Uniaxial Tension**: Stress, strain, axial displacement, reaction force vs. analytical Young's modulus & Poisson contraction.
 - **S2: Pure Compression**: Directional sign validation, compressive stiffness, boundary orientation sanity check.
 - **S3: Pure Shear**: Shear stress ($\tau_{xy}$), shear strain ($\gamma_{xy}$), shear modulus $G$, stress component decoupling.
-- **S4: Saint-Venant Torsion**: Circular shaft under pure torque, torsional angle $\theta$, surface shear stress, polar moment $J$.
+- **S4: Saint-Venant Torsion**: Circular shaft under pure torque, torsional angle $\theta$, surface shear stress, polar moment $J$. In 3D continuum FE models, end kinematic coupling and encastre constraints introduce local stress concentrations; the 99.5th percentile of Tresca/2 within the uniform gauge section is evaluated to filter boundary singularities and align transparently with analytical Saint-Venant outer surface shear stress.
 - **M1: Elastoplastic Tension & Unloading**: $J_2$ plasticity, yield onset, plastic strain accumulation, elastic unloading, residual plastic deformation.
 - **M2: Cyclic Plasticity**: Reversed loading, hysteresis loop capture, Bauschinger effect / cyclic strain tracking for fatigue input.
 - **M3: Geometric Nonlinearity (Large Deflection)**: Slender cantilever beam under transverse tip load with `NLGEOM=ON`, load-displacement curvature, geometric stiffening.
@@ -1036,6 +1036,30 @@ This phase establishes the strict dual-gate separation required for production r
   - [x] Implement environmental applicability preflight: verify that material test conditions (temperature, humidity, strain rate) cover the operating conditions specified in the `EngineeringIntent`.
   - [x] Link `MaterialRecord` and `MaterialSource` into `AnalysisRun.provenance` and `EvidenceBundle` for complete end-to-end auditability.
 
+### Phase L — Autonomous Agent Engineering Workflow Validation (L1–L4 Gate) [CLOSED]
+
+With Phase J establishing an unshakeable 22/22 live physical solver foundation, Phase L validates that the **Abaqus AI Agent functions as a fully autonomous, reliable, and fail-closed engineering system** across real-world workflows:
+
+- [x] L1: End-to-End Autonomous Engineering Workflow (Prompt → JEV Intent → Plan → Solve → ODB → Acceptance → Report)
+  - [x] Natural language complex engineering prompt ingestion via TypeSafe JEV System One.
+  - [x] Strongly-typed `EngineeringIntent` compilation with fail-closed rejection for ambiguous/underspecified prompts.
+  - [x] Autonomous Action planning, execution under Abaqus/CAE 2025, and ODB tensor extraction (`U`, `S_Mises`, `RF`).
+  - [x] Deterministic acceptance gating against allowable limits and automatic publication-grade report compilation (Markdown & HTML).
+- [x] L2: Real-World Material Intelligence Grounding (Datasheet / CAMPUS → MaterialRecord → Resolver → Abaqus Model → ODB)
+  - [x] Ground commercial engineering polymers (e.g. PA66-GF30, POM) from structured CAMPUS/manufacturer datasheets into `MaterialRecord`.
+  - [x] `MaterialResolver` environmental preflight: match operating temperatures/moisture and verify constitutive suitability.
+  - [x] Fail-closed rejection (`BLOCKED` / `NEEDS_CLARIFICATION`) when test conditions are missing; prevent naive casting of polymers to metal $J_2$ plasticity.
+  - [x] Native Abaqus material card synthesis (`*ELASTIC`, `*DENSITY`) and solver execution with ODB strain/stress validation.
+- [x] L3: Closed-Loop Solver Diagnostics & Controlled Remediation (Injection → .msg Diagnostics → Doctor → Repair Plan → Rerun → Acceptance)
+  - [x] Cross-physics deliberate injection of divergence-prone conditions (extreme contact penetrations, boundary singularities, severe non-convergence).
+  - [x] Authentic extraction of solver diagnostics from `.msg`, `.sta`, and `.dat` (identifying force residuals, numerical singularities, cutbacks).
+  - [x] Solver Doctor diagnosis classification and generation of a controlled, bounded remediation plan (stabilization damping, step controls, constraint repair).
+  - [x] Automated remediation execution, solver re-submission, convergence verification, and final acceptance.
+- [x] L4: Vision & Viewport Topology Grounding Live Verification (2D Viewport Annotations → 3D Spatial Raycast → findAt Binding → Sets/Surfaces → BC/Load → Solver Closure)
+  - [x] Map 2D engineering drawing/viewport annotations into 3D raycast candidate spatial points.
+  - [x] Automatically synthesize deterministic `findAt(...)` topological selection expressions in native Abaqus/CAE.
+  - [x] Live verification of non-empty entity selection, native Set/Surface generation, boundary condition/load application, and reaction equilibrium closure.
+
 ---
 
 ## 20. Engineering Material Intelligence Architecture (CAMPUS, Real-World Polymers & Constitutive Mapping)
@@ -1159,7 +1183,52 @@ Engineering polymers exhibit strong temperature dependence, viscoelasticity, str
 
 ---
 
-## 21. Change-Control Checklist
+## 21. Phase L Autonomous Agent Engineering Workflow Architecture (L1–L4)
+
+While Phase J validates the underlying finite-element solver fidelity across 22 Dassault Systèmes benchmarks, **Phase L validates the full autonomous engineering loop of the AI Agent itself**. It proves that the agent can accept unstructured human requests, make mathematically defensible decisions, apply verified real-world materials, heal from numerical divergence, and anchor visual features into native Abaqus topology without human intervention.
+
+```text
+                                Phase L Autonomous Agent System
+                                                │
+       ┌────────────────────────┬───────────────┴───────────────┬────────────────────────┐
+       ▼                        ▼                               ▼                        ▼
+[ L1: E2E Workflow ]    [ L2: Material Intel ]         [ L3: Solver Healing ]   [ L4: Viewport Grounding ]
+Prompt -> JEV Intent     Datasheet / CAMPUS              Nonlinear Divergence    2D Camera Viewport Point
+       ↓                        ↓                               ↓                        ↓
+Typed Action Plan        MaterialRecord Schema           .msg Cutback Extraction 3D Spatial Raycast
+       ↓                        ↓                               ↓                        ↓
+Abaqus 2025 Solver       MaterialResolver Engine         Solver Doctor Diagnosis findAt(...) Topology
+       ↓                        ↓                               ↓                        ↓
+ODB Tensor Extraction    Abaqus Material Cards           Remediation Plan        Native Set/Surface
+       ↓                        ↓                               ↓                        ↓
+Engineering Acceptance   Live ODB Verification           Automated Rerun         BC / Load Application
+       ↓                        ↓                               ↓                        ↓
+Automated Report         Traceable Provenance            Final Acceptance        Equilibrium Solver Run
+```
+
+### 21.1 L1: End-to-End Autonomous Engineering Workflow
+- **Input**: Natural language prompt (e.g. *"Perform a structural check on a 100mm cantilever beam under 1000N tip load; ensure deflection <= 2.5mm and Mises stress <= 600MPa"*).
+- **Compilation**: TypeSafe JEV System One analyzes prompt completeness, units (`MM_N_MPA`), and physics domain (`linear_static`). Fails closed to `NEEDS_CLARIFICATION` if critical dimensions or constraints are omitted.
+- **Execution & Acceptance**: Generates executable action plan, launches Abaqus 2025, extracts tip deflection and root Mises stress directly from the physical ODB, performs deterministic acceptance checking against allowable limits, and auto-renders Markdown and standalone HTML reports.
+
+### 21.2 L2: Real-World Material Intelligence Grounding
+- **Input**: Structured external engineering plastic datasheet (e.g. commercial PA66-GF30 from BASF Ultramid A3WG6, ISO 10350 / ISO 11403).
+- **Contract & Preflight**: Constructs canonical `MaterialRecord` with explicit test conditions ($23^\circ\text{C}$, dry-as-molded, ISO 527). `MaterialResolver` verifies temperature compatibility with the operating environment and prevents uncalibrated $J_2$ plastic assignments.
+- **Solver Verification**: Translates into native Abaqus `MaterialDefinition`, solves tensile bar under authentic Abaqus execution, and verifies that the ODB axial strain and reaction force match the datasheet modulus within 1% tolerance.
+
+### 21.3 L3: Closed-Loop Solver Diagnostics & Remediation (Cross-Physics Solver Doctor)
+- **Injection**: Evaluates unstable structural or contact models exhibiting severe force residuals or unconstrained rigid modes causing solver abort.
+- **Diagnostic Capture**: Directly parses live `.msg` and `.sta` outputs, extracting exact numerical singularities, negative eigenvalues, and increment cutbacks.
+- **Remediation & Convergence**: Maps issues to discrete remediation rules (e.g. activate automatic stabilization with damping factor, decrease initial time increment, add kinematic constraints), applies corrections in an updated `AnalysisRun`, re-solves, verifies zero divergence, and achieves engineering acceptance.
+
+### 21.4 L4: Vision & Viewport Topology Grounding Live Closure
+- **Perception**: Accepts 2D graphical coordinates representing annotated regions on a component (e.g. Fixed root face, tip load point).
+- **Spatial Mapping**: Casts 3D projection rays through the geometry candidate database, ranking candidates by screen projection overlap, facing angle, and depth.
+- **Native Materialization**: Produces verified `findAt(...)` strings, creates native Abaqus Sets and Surfaces, applies mechanical boundary conditions, and runs live Abaqus to verify complete reaction force balance.
+
+---
+
+## 22. Change-Control Checklist
 
 Before modifying the engineering core, answer all of these:
 
@@ -1181,7 +1250,7 @@ If the last two questions are problematic, stop and redesign before coding.
 
 ---
 
-## 22. Definition of Done for the Current Phase
+## 23. Definition of Done for the Current Phase
 
 The current phase is complete when:
 
@@ -1206,7 +1275,7 @@ At that point, the project should shift from feature expansion to systematic rea
 
 ---
 
-## 23. External Reference Basis
+## 24. External Reference Basis
 
 The architecture was cross-checked against:
 
@@ -1222,7 +1291,7 @@ These references are design inputs, not instructions to copy their architecture 
 
 ---
 
-## 24. One-Line Architectural Rule
+## 25. One-Line Architectural Rule
 
 > **Do not add another subsystem when an existing AnalysisRun, ResultRequirement, Evidence, Verification, Acceptance, Provenance, Reporting, Geometry/Region, or Unit component can own the requirement.**
 
