@@ -292,18 +292,37 @@ def test_feature_candidate_serialization():
 
 
 def test_feature_candidate_geometry_type_guard():
-    """Verify FeatureCandidate rejects non-primitive complex objects in geometry."""
+    """Verify FeatureCandidate rejects non-primitive complex objects in geometry, including deep nesting."""
     class ArbitraryRuntimeObject:
         pass
 
     import pytest
-    with pytest.raises(TypeError, match="geometry value for key 'bad_obj' must be primitive scalar"):
+    with pytest.raises(TypeError, match="must be a canonical primitive scalar"):
         FeatureCandidate(
-            feature_id="FEAT_BAD",
+            feature_id="FEAT_BAD_TOP",
             feature_type=FeatureType.GENERIC_HOLE,
             status=CapabilityStatus.ASSISTED,
             confidence=0.5,
             geometry={"bad_obj": ArbitraryRuntimeObject()},
+        )
+
+    # Deeply nested object guard
+    with pytest.raises(TypeError, match="must be a canonical primitive scalar"):
+        FeatureCandidate(
+            feature_id="FEAT_BAD_NESTED",
+            feature_type=FeatureType.GENERIC_HOLE,
+            status=CapabilityStatus.ASSISTED,
+            confidence=0.5,
+            geometry={"level1": {"level2": {"bad_nested": ArbitraryRuntimeObject()}}},
+        )
+
+    with pytest.raises(TypeError, match="must be a canonical primitive scalar"):
+        FeatureCandidate(
+            feature_id="FEAT_BAD_LIST",
+            feature_type=FeatureType.GENERIC_HOLE,
+            status=CapabilityStatus.ASSISTED,
+            confidence=0.5,
+            geometry={"items": [1, 2, [ArbitraryRuntimeObject()]]},
         )
 
 
@@ -428,10 +447,89 @@ def test_detect_chamfer_positive():
     assert len(chamfers) == 1
     chamfer = chamfers[0]
     assert chamfer.feature_type == FeatureType.CHAMFER
-    assert chamfer.status == CapabilityStatus.SUPPORTED
-    assert chamfer.confidence >= 0.85
+    # Honest boundary: 3D spatial width requires B-Rep kernel distance evaluation -> ASSISTED
+    assert chamfer.status == CapabilityStatus.ASSISTED
+    assert chamfer.confidence >= 0.75
+    assert chamfer.geometry["width"] == 2.0
+    assert chamfer.geometry["is_planar"] is True
     assert any(e.evidence_type == "TRANSITIONAL_PLANAR_TOPOLOGY" for e in chamfer.evidence)
     assert any(e.evidence_type == "NON_COPLANAR_NEIGHBORS" for e in chamfer.evidence)
+
+
+def test_detect_fillet_without_arc_evidence_downgrades_to_none_radius():
+    """Verify cylindrical transition fillet without circular/arc edges does NOT fabricate a radius."""
+    faces = (
+        CadFace(id="F_TOP", surface_type="PLANE", is_planar=True, normal=(0.0, 0.0, 1.0), edge_ids=("E_RAIL1",)),
+        CadFace(id="F_FILLET_NO_ARC", surface_type="CYLINDRICAL_SURFACE", is_planar=False, edge_ids=("E_RAIL1", "E_RAIL2")),
+        CadFace(id="F_SIDE", surface_type="PLANE", is_planar=True, normal=(1.0, 0.0, 0.0), edge_ids=("E_RAIL2",)),
+    )
+    # Only straight boundary rails, zero circular/arc edges
+    edges = (
+        CadEdge(id="E_RAIL1", length=50.0),
+        CadEdge(id="E_RAIL2", length=50.0),
+    )
+
+    model = GeometryModel(
+        model_id="M_FILLET_NO_ARC",
+        provenance=_make_dummy_provenance(),
+        bounding_box=CadBoundingBox(0.0, 0.0, 0.0, 100.0, 100.0, 100.0),
+        faces=faces,
+        edges=edges,
+    )
+
+    topo = normalize_topology(model)
+    fillets = detect_fillets(model, topo)
+
+    assert len(fillets) == 1
+    fillet = fillets[0]
+    assert fillet.feature_type == FeatureType.FILLET
+    assert fillet.status == CapabilityStatus.ASSISTED
+    # Must NOT fabricate radius=5.0 or area-derived radius
+    assert fillet.geometry["radius"] is None
+    assert fillet.geometry["is_constant_radius"] is False
+    assert fillet.geometry["reason"] == "INSUFFICIENT_RADIUS_EVIDENCE"
+    assert any(
+        e.evidence_type == "LOCAL_SCALE_METRIC" and e.result == "INSUFFICIENT_EVIDENCE"
+        for e in fillet.evidence
+    )
+
+
+def test_detect_chamfer_without_width_evidence_downgrades_to_none_width():
+    """Verify planar chamfer without transverse profile edges does NOT fabricate a width."""
+    faces = (
+        CadFace(id="F_TOP", surface_type="PLANE", is_planar=True, normal=(0.0, 1.0, 0.0), edge_ids=("E_C1",)),
+        CadFace(id="F_CHAMFER_NO_WIDTH", surface_type="PLANE", is_planar=True, normal=(0.0, 0.707, 0.707), edge_ids=("E_C1", "E_C2", "E_CW_UNKNOWN")),
+        CadFace(id="F_FRONT", surface_type="PLANE", is_planar=True, normal=(0.0, 0.0, 1.0), edge_ids=("E_C2",)),
+    )
+    # Shared rails length=10mm (<= 15mm limit), transverse edge lacks length measurement
+    edges = (
+        CadEdge(id="E_C1", length=10.0),
+        CadEdge(id="E_C2", length=10.0),
+        CadEdge(id="E_CW_UNKNOWN", length=None),
+    )
+
+    model = GeometryModel(
+        model_id="M_CHAMFER_NO_WIDTH",
+        provenance=_make_dummy_provenance(),
+        bounding_box=CadBoundingBox(0.0, 0.0, 0.0, 100.0, 100.0, 100.0),
+        faces=faces,
+        edges=edges,
+    )
+
+    topo = normalize_topology(model)
+    chamfers = detect_chamfers(model, topo)
+
+    assert len(chamfers) == 1
+    chamfer = chamfers[0]
+    assert chamfer.feature_type == FeatureType.CHAMFER
+    assert chamfer.status == CapabilityStatus.ASSISTED
+    # Must NOT fabricate width=2.0
+    assert chamfer.geometry["width"] is None
+    assert chamfer.geometry["reason"] == "INSUFFICIENT_CHAMFER_WIDTH_EVIDENCE"
+    assert any(
+        e.evidence_type == "CHAMFER_DIMENSIONAL_METRIC" and e.result == "INSUFFICIENT_EVIDENCE"
+        for e in chamfer.evidence
+    )
 
 
 def test_detect_chamfer_oversized_sloped_surface_rejection():

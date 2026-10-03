@@ -59,6 +59,24 @@ class FeatureEvidence:
             raise ValueError("rule description is required")
 
 
+def _validate_canonical_primitive(val: Any, path: str = "") -> None:
+    """Recursively enforce that geometry metadata contains only JSON-serializable canonical primitives."""
+    if isinstance(val, (int, float, bool, str, type(None))):
+        return
+    elif isinstance(val, (tuple, list)):
+        for idx, item in enumerate(val):
+            _validate_canonical_primitive(item, f"{path}[{idx}]")
+    elif isinstance(val, dict):
+        for k, v in val.items():
+            if not isinstance(k, str):
+                raise TypeError(f"geometry dictionary keys must be str, got {type(k)} at {path}")
+            _validate_canonical_primitive(v, f"{path}.{k}" if path else k)
+    else:
+        raise TypeError(
+            f"geometry value at '{path}' must be a canonical primitive scalar or structure, got {type(val)}"
+        )
+
+
 @dataclass(frozen=True)
 class FeatureCandidate:
     """Canonical feature candidate representation across the engineering chain."""
@@ -77,14 +95,11 @@ class FeatureCandidate:
             raise ValueError("feature_id cannot be empty")
         if not 0.0 <= self.confidence <= 1.0:
             raise ValueError("confidence must be in [0, 1]")
-        # Guard geometry against arbitrary complex objects: only canonical scalars and primitive structures
+        # Deep recursive guard: only canonical scalars, strings, and strictly nested collections
         for k, v in self.geometry.items():
             if not isinstance(k, str):
                 raise TypeError(f"geometry key must be str, got {type(k)}")
-            if not isinstance(v, (int, float, bool, str, type(None), tuple, list, dict)):
-                raise TypeError(
-                    f"geometry value for key '{k}' must be primitive scalar/collection, got {type(v)}"
-                )
+            _validate_canonical_primitive(v, k)
 
     def to_dict(self) -> Dict[str, Any]:
         """Serialize feature candidate for provenance and reporting."""
@@ -425,23 +440,20 @@ def detect_fillets(
             # A true fillet must have at least two shared boundary rails anchoring it to the body
             continue
 
-        # Estimate radius from cylindrical edge curvature or area/length
+        # Estimate radius ONLY when real circular / arc edge geometry evidence exists
         radius = None
+        has_arc_evidence = False
         for eid in face_edges:
             edge = edge_by_id.get(eid)
             if edge and edge.length and edge.length > 0:
-                if edge.curve_type.upper() in ("CIRCLE", "ARC") or "ARC" in edge.curve_type.upper():
+                ct = edge.curve_type.upper()
+                if "CIRCLE" in ct or "ARC" in ct:
                     radius = edge.length / (2.0 * math.pi)
+                    has_arc_evidence = True
                     break
 
-        if radius is None:
-            if face.area and face.area > 0 and char_len > 0:
-                radius = min(math.sqrt(face.area / 4.0), max_fillet_radius * 0.5)
-            else:
-                radius = 5.0
-
-        # Reject oversized cylinder (e.g. main cylinder body or column, not a fillet)
-        if radius > max_fillet_radius:
+        # Rejection of oversized fillets applies when radius is provable
+        if radius is not None and radius > max_fillet_radius:
             continue
 
         evidence_items: List[FeatureEvidence] = [
@@ -457,15 +469,30 @@ def detect_fillets(
                 rule="Cylindrical face bridges two distinct primary adjacent faces via shared boundary rails",
                 result="PASS",
             ),
-            FeatureEvidence(
-                evidence_type="LOCAL_SCALE_METRIC",
-                source_entity_ids=(fid,),
-                rule=f"Estimated radius {radius:.2f} is within local fillet limit {max_fillet_radius:.2f}",
-                measured_value=radius,
-                expected_relation=f"<= {max_fillet_radius:.2f}",
-                result="PASS",
-            ),
         ]
+
+        if has_arc_evidence and radius is not None:
+            evidence_items.append(
+                FeatureEvidence(
+                    evidence_type="LOCAL_SCALE_METRIC",
+                    source_entity_ids=(fid,),
+                    rule=f"Estimated radius {radius:.2f} is within local fillet limit {max_fillet_radius:.2f}",
+                    measured_value=radius,
+                    expected_relation=f"<= {max_fillet_radius:.2f}",
+                    result="PASS",
+                )
+            )
+        else:
+            evidence_items.append(
+                FeatureEvidence(
+                    evidence_type="LOCAL_SCALE_METRIC",
+                    source_entity_ids=(fid,),
+                    rule="Definitive fillet radius requires circular/arc boundary edge geometry evidence",
+                    measured_value=None,
+                    expected_relation="circle/arc edge presence",
+                    result="INSUFFICIENT_EVIDENCE",
+                )
+            )
 
         has_non_manifold = any(e in topology.non_manifold_edges for e in face_edges)
         if has_non_manifold:
@@ -479,11 +506,19 @@ def detect_fillets(
                     result="FAIL",
                 )
             )
+            reason = "NON_MANIFOLD_TOPOLOGY_DEFECT"
+            is_constant_radius = False
         else:
             # Honest surface continuity gating:
             # Model data lacks high-order analytical tangent vector fields for G1 proof
             status = CapabilityStatus.ASSISTED
-            conf = 0.75
+            conf = 0.75 if has_arc_evidence else 0.65
+            reason = (
+                "INSUFFICIENT_SURFACE_CONTINUITY_EVIDENCE"
+                if has_arc_evidence
+                else "INSUFFICIENT_RADIUS_EVIDENCE"
+            )
+            is_constant_radius = True if has_arc_evidence else False
             evidence_items.append(
                 FeatureEvidence(
                     evidence_type="SURFACE_CONTINUITY",
@@ -502,10 +537,10 @@ def detect_fillets(
             face_ids=(fid,),
             edge_ids=tuple(sorted(shared_boundary_edges)),
             geometry={
-                "radius": round(radius, 3),
-                "is_constant_radius": True,
+                "radius": round(radius, 3) if radius is not None else None,
+                "is_constant_radius": is_constant_radius,
                 "continuity_verified": False,
-                "reason": "INSUFFICIENT_SURFACE_CONTINUITY_EVIDENCE",
+                "reason": reason,
             },
             evidence=tuple(evidence_items),
         )
@@ -574,32 +609,28 @@ def detect_chamfers(
         if len(shared_boundary_edges) < 2:
             continue
 
-        # Estimate chamfer width across the transition
-        shared_lengths = [
-            edge_by_id[e].length for e in shared_boundary_edges
-            if e in edge_by_id and edge_by_id[e].length and edge_by_id[e].length > 0
+        # Estimate chamfer width:
+        # 1. Non-shared transverse profile edges give direct transverse width measurement.
+        # 2. Lower-bound scale rejection: if all boundary edges exceed threshold, it cannot be a local chamfer.
+        non_shared_lengths = [
+            edge_by_id[e].length for e in face_edges
+            if e not in shared_boundary_edges and e in edge_by_id and edge_by_id[e].length and edge_by_id[e].length > 0
         ]
         all_lengths = [
             edge_by_id[e].length for e in face_edges
             if e in edge_by_id and edge_by_id[e].length and edge_by_id[e].length > 0
         ]
 
-        if face.area and face.area > 0 and shared_lengths:
-            chamfer_width = face.area / max(shared_lengths)
-        elif all_lengths and shared_lengths and len(all_lengths) > len(shared_lengths):
-            # Non-shared boundary edges represent end-width profiles
-            non_shared_lengths = [
-                edge_by_id[e].length for e in face_edges
-                if e not in shared_boundary_edges and e in edge_by_id and edge_by_id[e].length
-            ]
-            chamfer_width = min(non_shared_lengths) if non_shared_lengths else min(all_lengths)
-        elif all_lengths:
+        if non_shared_lengths:
+            chamfer_width = min(non_shared_lengths)
+        elif all_lengths and min(all_lengths) > max_chamfer_width:
+            # Lower-bound scale rejection: every boundary edge strictly exceeds chamfer threshold
             chamfer_width = min(all_lengths)
         else:
-            chamfer_width = 2.0
+            chamfer_width = None
 
         # Reject oversized sloped face (primary sloped surface, not a local chamfer)
-        if chamfer_width > max_chamfer_width:
+        if chamfer_width is not None and chamfer_width > max_chamfer_width:
             continue
 
         evidence_items: List[FeatureEvidence] = [
@@ -615,15 +646,30 @@ def detect_chamfers(
                 rule="Primary adjacent neighbors exhibit distinct non-coplanar spatial orientations",
                 result="PASS",
             ),
-            FeatureEvidence(
-                evidence_type="CHAMFER_DIMENSIONAL_METRIC",
-                source_entity_ids=(fid,),
-                rule=f"Chamfer width {chamfer_width:.2f} is within local threshold {max_chamfer_width:.2f}",
-                measured_value=chamfer_width,
-                expected_relation=f"<= {max_chamfer_width:.2f}",
-                result="PASS",
-            ),
         ]
+
+        if chamfer_width is not None:
+            evidence_items.append(
+                FeatureEvidence(
+                    evidence_type="CHAMFER_DIMENSIONAL_METRIC",
+                    source_entity_ids=(fid,),
+                    rule=f"Chamfer transverse width {chamfer_width:.2f} is within local threshold {max_chamfer_width:.2f}",
+                    measured_value=chamfer_width,
+                    expected_relation=f"<= {max_chamfer_width:.2f}",
+                    result="PASS",
+                )
+            )
+        else:
+            evidence_items.append(
+                FeatureEvidence(
+                    evidence_type="CHAMFER_DIMENSIONAL_METRIC",
+                    source_entity_ids=(fid,),
+                    rule="Definitive chamfer width requires transverse boundary edge geometry evidence",
+                    measured_value=None,
+                    expected_relation="transverse edge presence",
+                    result="INSUFFICIENT_EVIDENCE",
+                )
+            )
 
         has_non_manifold = any(e in topology.non_manifold_edges for e in face_edges)
         if has_non_manifold:
@@ -637,9 +683,17 @@ def detect_chamfers(
                     result="FAIL",
                 )
             )
+            reason = "NON_MANIFOLD_TOPOLOGY_DEFECT"
         else:
-            status = CapabilityStatus.SUPPORTED
-            conf = 0.90
+            # Planar transition topology is proven, but rigorous 3D spatial width verification
+            # requires full CAD B-Rep kernel distance calculation -> ASSISTED
+            status = CapabilityStatus.ASSISTED
+            conf = 0.80 if chamfer_width is not None else 0.70
+            reason = (
+                "INSUFFICIENT_EXACT_SPATIAL_METRIC_EVIDENCE"
+                if chamfer_width is not None
+                else "INSUFFICIENT_CHAMFER_WIDTH_EVIDENCE"
+            )
 
         feat_id = f"FEAT_CHAMFER_{fid}"
         candidate = FeatureCandidate(
@@ -650,8 +704,9 @@ def detect_chamfers(
             face_ids=(fid,),
             edge_ids=tuple(sorted(shared_boundary_edges)),
             geometry={
-                "width": round(chamfer_width, 3),
+                "width": round(chamfer_width, 3) if chamfer_width is not None else None,
                 "is_planar": True,
+                "reason": reason,
             },
             evidence=tuple(evidence_items),
         )
