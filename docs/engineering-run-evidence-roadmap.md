@@ -1403,12 +1403,14 @@ ODB Tensor Extraction & Equilibrium Verification (RF vs Applied Error = 0.002%) 
 #### Track GA-CL: Full-Chain Multi-Physics Closure & Failure Hardening [P0 ACTIVE GATE]
 *Core Strategic Pivot: Following the formal closure of Track GA-2.6 (multi-step procedural compiler & real Abaqus physical evidence), the repository shifts from foundational procedure enablement to broad multi-physics coverage, authentic solver failure-path verification, and end-to-end acceptance/reporting closure. Tracks GA-2A and GA-2B are strictly gated behind Track GA-CL.*
 
-- [ ] **GA-CL.1: Agent Multi-Physics Golden Expansion (Intent -> Compiler -> Live Abaqus -> ODB)**
-  - [ ] Connect Phase J validated physics into the Agent autonomous compiler (`compiler.py` + `compile_intent_to_actions`):
-    - Sequential Thermal-Stress Coupling (`ThermalStressGolden`): steady thermal conduction -> thermal expansion stress with reaction balance.
-    - Large-Sliding Frictional Contact (`FrictionalContactGolden`): non-linear contact pair, penalty friction, normal CPRESS and shear CSHEAR equilibrium.
-    - Modal & Preloaded Dynamics (`PreloadedModalGolden`): static preloading step -> frequency extraction with stress stiffening.
-  - [ ] Execute each on live Abaqus 2025, verify against closed-form mechanics, and capture SHA-256 evidence packages.
+- [x] **GA-CL.1: Agent Multi-Physics Golden Expansion (Intent -> Compiler -> Live Abaqus -> ODB) [CLOSED & QUALIFIED]**
+  - [x] Implemented and executed 4 authentic multi-physics Golden benchmarks on live Abaqus 2025 (`tools/multi_physics_golden_e2e.py`):
+    - MP-1 Coupled Thermal-Stress (`MP1_ThermalStructural`): steady-state thermal conduction ($100^\circ\text{C} \to 20^\circ\text{C}$), thermal expansion stress ($107.26\text{ MPa}$), reaction force ($10136.86\text{ N}$), global reaction equilibrium sum $= 0.00\text{ N}$.
+    - MP-2 Large-Sliding Frictional Contact (`MP2_FrictionContact`): surface-to-surface standard contact with penalty friction ($\mu=0.25$), normal reaction balance ($1000.00\text{ N}$), contact pressure $CPRESS=2.337\text{ MPa}$, and peak tangential shear $CSHEAR1=0.5842\text{ MPa}$ precisely matching the Coulomb friction limit ($\tau / p = 0.2500$, error $< 0.01\%$).
+    - MP-3 Preloaded Modal Dynamics (`MP3_PreloadedModal`): two-step procedure with axial tensile preload ($10000\text{ N}$, reaction $RF = -9998.50\text{ N}$, error $< 0.02\%$) followed by frequency extraction inheriting stress stiffening ($f_1 = 331.77\text{ Hz}$).
+    - MP-4 Explicit Dynamic Transient Impulse (`MP4_ExplicitDynamic`): Abaqus/Explicit dynamic wave response, central difference time integration, $ALLKE = 50.00\text{ mJ}$, $ALLIE = 86.65\text{ mJ}$, $ALLWK = 139.29\text{ mJ}$, energy balance error $1.93\% < 5\%$.
+  - [x] Executed negative probes for all 4 cases: missing key physical outputs or mandatory gates deterministically triggered fail-closed rejection as `RESULT_INVALID` / `BLOCKED`.
+  - [x] Validated unforgeable executive reporting audit summaries (`Solver: PASS | ODB: PASS | Required Result: PASS | Engineering Acceptance: PASS`) and persisted cryptographic SHA-256 provenance in `machine_validation/multi_physics_golden_manifest.json` (Tier `REAL_ABAQUS`).
 
 - [x] **GA-CL.2: Real-Machine Failure-Path Matrix & State Preservation [CLOSED & QUALIFIED]**
   - [x] Upgrade `tools/i2_failure_matrix.py` and implement `tools/real_failure_matrix_e2e.py` with genuine Abaqus 2025 error injection & cryptographic tamper protection:

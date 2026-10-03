@@ -256,6 +256,47 @@ def get_physics_result_profile(domain: str, **custom_overrides) -> PhysicsResult
                 "fatigue": "Static contact equilibrium; fatigue life gate not requested.",
             },
         )
+    elif d in ("thermal_structural", "thermal_stress", "sequential_thermal_stress"):
+        prof = PhysicsResultProfile(
+            domain="thermal_structural",
+            required_fields=("NT11", "U", "S", "RF"),
+            required_metrics=("max_temperature", "max_displacement", "max_mises", "reaction_force"),
+            required_gates=("execution", "odb", "thermal_balance", "criteria"),
+            step_requirements={
+                "Step-Thermal": ("max_temperature",),
+                "Step-Structural": ("max_displacement", "max_mises", "reaction_force"),
+            },
+            gate_justifications={
+                "contact": "Single continuum thermal-structural model; contact interaction not applicable.",
+                "fatigue": "Monotonic thermal stress cycle; fatigue life gate not requested.",
+            },
+        )
+    elif d in ("preloaded_modal", "preloaded_frequency", "preloaded_dynamics"):
+        prof = PhysicsResultProfile(
+            domain="preloaded_modal",
+            required_fields=("U", "S", "RF", "frequency", "eigenvalue"),
+            required_metrics=("preload_reaction", "frequency"),
+            required_gates=("execution", "odb", "procedure", "criteria"),
+            step_requirements={
+                "Step-Preload": ("preload_reaction",),
+                "Step-Modal": ("frequency",),
+            },
+            gate_justifications={
+                "contact": "Fixed-end continuum beam; contact diagnostics not applicable.",
+                "fatigue": "Frequency extraction; time-domain fatigue not requested.",
+            },
+        )
+    elif d in ("explicit_dynamic", "explicit", "dynamic_explicit"):
+        prof = PhysicsResultProfile(
+            domain="explicit_dynamic",
+            required_fields=("U", "V", "S", "ALLKE", "ALLIE"),
+            required_metrics=("max_displacement", "max_mises", "kinetic_energy", "internal_energy"),
+            required_gates=("execution", "odb", "criteria"),
+            gate_justifications={
+                "contact": "Impact dynamic response of continuum solid; contact not modeled.",
+                "fatigue": "Short transient dynamic wave event; high-cycle fatigue not applicable.",
+            },
+        )
     elif d in ("modal", "frequency", "eigenvalue"):
         prof = PhysicsResultProfile(
             domain="modal",
