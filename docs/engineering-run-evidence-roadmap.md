@@ -1381,8 +1381,13 @@ ODB Tensor Extraction & Equilibrium Verification (RF vs Applied Error = 0.002%) 
     - [x] **API Calibration**: Calibrated native Abaqus CAE concentrated moment syntax (`m.Moment` instead of invalid `m.ConcentratedForce(..., cm3=...)` which triggered solver keyword rejection).
     - [x] Persisted certified live solver manifest: `machine_validation/ga261_probe_evidence.json` (4/4 Probes PASS on Abaqus 2025).
     - [x] Added 4 probe regression tests (`tests/test_ga261_probes.py`, 569 repository-wide regression tests).
-  - [ ] **GA-2.6.2: Multi-Step & Physical Procedure Compiler**
-    - [ ] Upgrade `compiler.py` to synthesize multi-step analysis sequences, native `BoltLoad` & `setValuesInStep`, kinematics coupling for moment, and `ExpressionField`.
+  - [x] **GA-2.6.2: Multi-Step & Physical Procedure Compiler Integration [CLOSED & QUALIFIED]**
+    - [x] Upgraded `src/abaqus_ai_agent/planning/compiler.py` to synthesize multi-step DAG analysis sequences (`MultiStepProcedureSpec` / `steps` / legacy `step`), guaranteeing 100% backward compatibility for single-step intents.
+    - [x] Integrated two-stage bolt pretension lifecycle (`BoltPretensionLifecycleSpec`): automatically generates `DatumAxisByTwoPoints` direction reference, sets `BoltLoad(..., boltMethod=APPLY_FORCE)` in the preload step, and calls `loads[...].setValuesInStep(..., boltMethod=FIX_LENGTH)` in the service step.
+    - [x] Implemented moment/torque transfer on continuous media (`MomentLoadSpec`, `MomentTransferStrategy.RP_COUPLING`): automatically creates Reference Point, Kinematic Coupling constraint, and applies native `m.Moment(name, createStepName, region, cm1, cm2, cm3)` directly on the RP set.
+    - [x] Implemented spatial analytical field compilation (`SpatialLoadField`): performs fail-closed AST validation (`validate_field_expression`), synthesizes `ExpressionField(...)`, and connects pressure loads via `Pressure(..., distributionType=FIELD, field=...)`.
+    - [x] Integrated symmetry boundary conditions (`XsymmBC`, `YsymmBC`, `ZsymmBC`) across explicit boundary specs and grounded semantics (`SYMMETRY_PLANE_X/Y/Z`).
+    - [x] Added 6 comprehensive compiler integration tests in `tests/test_agent_compiler.py` (9/9 compiler tests passed; 575 repository-wide regression tests passed).
   - [ ] **GA-2.6.3: Real Abaqus 2025 Multi-Step Golden Verification**
     - [ ] Execute real-machine verification: Two-step nonlinear bolt preload followed by external service moment/load.
 

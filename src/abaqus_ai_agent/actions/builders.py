@@ -113,9 +113,9 @@ def initial_stress(model, name, region_expression, sigma11=0.0, sigma22=0.0, sig
                    region_expression=expr, sigma11=sigma11, sigma22=sigma22,
                    sigma33=sigma33, sigma12=sigma12, sigma13=sigma13, sigma23=sigma23)
 
-def pressure_load(model, name, region_expression, magnitude, step="Step-1", amplitude=None):
+def pressure_load(model, name, region_expression, magnitude, step="Step-1", amplitude=None, field=None):
     expr = _normalize_region_expr(region_expression)
-    return _action("pressure_load", model, expr, name=name, region_expression=expr, magnitude=magnitude, step=step, amplitude=amplitude)
+    return _action("pressure_load", model, expr, name=name, region_expression=expr, magnitude=magnitude, step=step, amplitude=amplitude, field=field)
 def concentrated_force(model, name, region_expression, cf1=0.0, cf2=0.0, cf3=0.0, step="Step-1", amplitude=None):
     expr = _normalize_region_expr(region_expression)
     return _action("concentrated_force", model, expr, name=name, region_expression=expr, cf1=cf1, cf2=cf2, cf3=cf3, step=step, amplitude=amplitude)

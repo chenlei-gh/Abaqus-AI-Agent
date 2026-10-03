@@ -201,3 +201,386 @@ def test_compile_multi_anchor_group_intent():
     pre = preflight_plan(plan.actions)
     assert pre.passed is True
     assert len(pre.blockers) == 0
+
+
+def test_compile_multi_step_procedure_dag():
+    """Verify GA-2.6.2 compilation of multi-step procedure DAG with state inheritance."""
+    from abaqus_ai_agent.contracts.procedure import MultiStepProcedureSpec, StepDependency
+
+    geom = IntentGeometrySpec(shape="cantilever_box", length=100.0, width=10.0, height=10.0)
+    mat = MaterialDefinition(
+        name="Steel",
+        unit_system="MM_N_MPA",
+        elastic=ElasticProperties(youngs_modulus=210000.0, poisson_ratio=0.3),
+    )
+    proc = MultiStepProcedureSpec(
+        steps=(
+            StepDependency(name="Step-Preload", previous="Initial", procedure="static", time_period=1.0),
+            StepDependency(name="Step-Service", previous="Step-Preload", procedure="static", time_period=1.0),
+        )
+    )
+    bcs = [IntentBoundarySpec(name="FixRoot", bc_type="ENCASTRE", region="RootFace")]
+    loads = [
+        IntentLoadSpec(name="Preload", load_type="concentrated_force", region="TipFace", magnitude=1000.0, step="Step-Preload"),
+        IntentLoadSpec(name="ServiceLoad", load_type="concentrated_force", region="TipFace", magnitude=500.0, step="Step-Service"),
+    ]
+    mesh = IntentMeshSpec(element_type="C3D8R", global_size=5.0)
+
+    plan = compile_intent_to_actions(
+        model_name="MultiStepModel",
+        part_name="BeamPart",
+        job_name="MultiStepJob",
+        geometry=geom,
+        material=mat,
+        procedure=proc,
+        bcs=bcs,
+        loads=loads,
+        mesh=mesh,
+    )
+
+    assert plan.intent_summary["steps_count"] == 2
+    script = plan.cae_script
+
+    # Verify both steps are defined with correct DAG previous relationship
+    assert "StaticStep(name='Step-Preload', previous='Initial'" in script
+    assert "StaticStep(name='Step-Service', previous='Step-Preload'" in script
+    # Loads assigned to their respective steps
+    assert "createStepName='Step-Preload'" in script
+    assert "createStepName='Step-Service'" in script
+
+    # Verify invalid DAG failure handling
+    invalid_proc = MultiStepProcedureSpec(
+        steps=(
+            StepDependency(name="Step-2", previous="NonExistentStep", procedure="static"),
+        )
+    )
+    with pytest.raises(ValueError, match="Invalid procedure DAG"):
+        compile_intent_to_actions(
+            model_name="BadModel",
+            part_name="BeamPart",
+            job_name="BadJob",
+            geometry=geom,
+            material=mat,
+            procedure=invalid_proc,
+            bcs=bcs,
+            loads=loads,
+            mesh=mesh,
+        )
+
+
+def test_compile_bolt_pretension_two_stage_lifecycle():
+    """Verify GA-2.6.2 two-stage bolt pretension lifecycle compilation (APPLY_FORCE -> FIX_LENGTH)."""
+    from abaqus_ai_agent.contracts.procedure import BoltPretensionLifecycleSpec
+
+    geom = IntentGeometrySpec(shape="cantilever_box", length=100.0, width=10.0, height=10.0)
+    mat = MaterialDefinition(
+        name="Steel",
+        unit_system="MM_N_MPA",
+        elastic=ElasticProperties(youngs_modulus=210000.0, poisson_ratio=0.3),
+    )
+    steps = [
+        IntentStepSpec(name="Step-Preload", step_type="static_general", previous="Initial"),
+        IntentStepSpec(name="Step-Service", step_type="static_general", previous="Step-Preload"),
+    ]
+    bcs = [IntentBoundarySpec(name="FixBottom", bc_type="ENCASTRE", region="RootFace")]
+    bolt_spec = BoltPretensionLifecycleSpec(
+        name="BoltPreload",
+        region_expression="BoltCutFace",
+        preload_magnitude=5000.0,
+        preload_step="Step-Preload",
+        service_step="Step-Service",
+        direction_vector=(0.0, 0.0, 1.0),
+    )
+
+    plan = compile_intent_to_actions(
+        model_name="BoltModel",
+        part_name="BoltPart",
+        job_name="BoltJob",
+        geometry=geom,
+        material=mat,
+        steps=steps,
+        bcs=bcs,
+        bolt_pretensions=[bolt_spec],
+    )
+
+    assert plan.intent_summary["bolt_pretensions_count"] == 1
+    script = plan.cae_script
+
+    # DatumAxis created for direction
+    assert "DatumAxisByTwoPoints" in script
+    # Stage 1: BoltLoad with APPLY_FORCE in preload step
+    assert "BoltLoad(name='BoltPreload', createStepName='Step-Preload'" in script
+    assert "magnitude=5000.0" in script
+    assert "boltMethod=APPLY_FORCE" in script
+    # Stage 2: setValuesInStep with FIX_LENGTH in service step
+    assert "loads['BoltPreload'].setValuesInStep(stepName='Step-Service', boltMethod=FIX_LENGTH)" in script
+
+    # Check action types
+    action_types = [a.action_type for a in plan.actions]
+    assert "bolt_load" in action_types
+    assert "bolt_load_set_values" in action_types
+
+
+def test_compile_moment_rp_coupling_strategy():
+    """Verify GA-2.6.2 Moment / Torque compilation with Reference Point & Kinematic Coupling."""
+    from abaqus_ai_agent.contracts.procedure import MomentLoadSpec, MomentTransferStrategy
+
+    geom = IntentGeometrySpec(shape="cantilever_box", length=100.0, width=10.0, height=10.0)
+    mat = MaterialDefinition(
+        name="Steel",
+        unit_system="MM_N_MPA",
+        elastic=ElasticProperties(youngs_modulus=210000.0, poisson_ratio=0.3),
+    )
+    step = IntentStepSpec(name="Step-1", step_type="static_general")
+    bcs = [IntentBoundarySpec(name="FixRoot", bc_type="ENCASTRE", region="RootFace")]
+    moment_spec = MomentLoadSpec(
+        name="TorqueLoad",
+        region_expression="TipFace",
+        magnitude=100000.0,
+        axis="CM3",
+        step="Step-1",
+        strategy=MomentTransferStrategy.RP_COUPLING,
+        rp_coordinates=(5.0, 5.0, 100.0),
+    )
+
+    plan = compile_intent_to_actions(
+        model_name="TorqueModel",
+        part_name="ShaftPart",
+        job_name="TorqueJob",
+        geometry=geom,
+        material=mat,
+        step=step,
+        bcs=bcs,
+        moments=[moment_spec],
+    )
+
+    assert plan.intent_summary["moments_count"] == 1
+    script = plan.cae_script
+
+    # Reference point & set created
+    assert "ReferencePoint(point=(5.0, 5.0, 100.0))" in script
+    assert "TorqueLoad_RP_Set" in script
+    # Kinematic coupling created
+    assert "Coupling(name='TorqueLoad_Coupling'" in script
+    assert "couplingType=KINEMATIC" in script
+    # Native Moment API used (not ConcentratedForce with cm3)
+    assert "Moment(name='TorqueLoad', createStepName='Step-1', region=rp_set, cm1=0.0, cm2=0.0, cm3=100000.0)" in script
+
+    # Check action types
+    action_types = [a.action_type for a in plan.actions]
+    assert "reference_point" in action_types
+    assert "coupling_constraint" in action_types
+    assert "concentrated_moment" in action_types
+
+
+def test_compile_spatial_load_field():
+    """Verify GA-2.6.2 SpatialLoadField compilation and field expression validation."""
+    from abaqus_ai_agent.contracts.procedure import SpatialLoadField
+
+    geom = IntentGeometrySpec(shape="cantilever_box", length=50.0, width=20.0, height=10.0)
+    mat = MaterialDefinition(
+        name="Steel",
+        unit_system="MM_N_MPA",
+        elastic=ElasticProperties(youngs_modulus=210000.0, poisson_ratio=0.3),
+    )
+    step = IntentStepSpec(name="Step-1", step_type="static_general")
+    bcs = [IntentBoundarySpec(name="FixRoot", bc_type="ENCASTRE", region="RootFace")]
+    field_spec = SpatialLoadField(name="LinearYField", expression="1.0 + 0.02 * Y")
+    loads = [
+        IntentLoadSpec(
+            name="SpatialPressure",
+            load_type="pressure",
+            region="TopFace",
+            magnitude=10.0,
+            field="LinearYField",
+        )
+    ]
+
+    plan = compile_intent_to_actions(
+        model_name="FieldModel",
+        part_name="PlatePart",
+        job_name="FieldJob",
+        geometry=geom,
+        material=mat,
+        step=step,
+        bcs=bcs,
+        loads=loads,
+        fields=[field_spec],
+    )
+
+    assert plan.intent_summary["fields_count"] == 1
+    script = plan.cae_script
+
+    # ExpressionField defined in CAE script
+    assert "ExpressionField(name='LinearYField', expression='1.0 + 0.02 * Y')" in script
+    # Pressure load references field
+    assert "Pressure(name='SpatialPressure', createStepName='Step-1'" in script
+    assert "distributionType=FIELD" in script
+    assert "field='LinearYField'" in script
+
+    # Check action types
+    action_types = [a.action_type for a in plan.actions]
+    assert "expression_field" in action_types
+    assert "pressure_load" in action_types
+
+    # Disallowed expression syntax check in SpatialLoadField
+    with pytest.raises(ValueError, match="Invalid field expression"):
+        SpatialLoadField(name="BadField", expression="__import__('os').system('ls')")
+
+
+def test_compile_symmetry_bc_all_planes():
+    """Verify GA-2.6.2 Symmetry BC compilation for XSYMM, YSYMM, ZSYMM and SYMMETRY_PLANE grounding."""
+    from abaqus_ai_agent.grounding.feature_grounding import GroundedRegion
+
+    geom = IntentGeometrySpec(shape="cantilever_box", length=100.0, width=50.0, height=20.0)
+    mat = MaterialDefinition(
+        name="Steel",
+        unit_system="MM_N_MPA",
+        elastic=ElasticProperties(youngs_modulus=210000.0, poisson_ratio=0.3),
+    )
+    step = IntentStepSpec(name="Step-1", step_type="static_general")
+    bcs = [
+        IntentBoundarySpec(name="SymmX", bc_type="XSYMM", region="SYMM_X_FACE"),
+        IntentBoundarySpec(name="SymmY", bc_type="YSYMM", region="SYMM_Y_FACE"),
+        IntentBoundarySpec(name="SymmZ", bc_type="ZSYMM", region="SYMM_Z_FACE"),
+    ]
+    grounded = {
+        "SYMM_X_FACE": GroundedRegion(
+            target_semantic="SYMMETRY_PLANE_X",
+            entity_type="Face",
+            entity_ids=("F_X",),
+            anchor_point=(0.0, 25.0, 10.0),
+            confidence=1.0,
+        ),
+        "SYMM_Y_FACE": GroundedRegion(
+            target_semantic="SYMMETRY_PLANE_Y",
+            entity_type="Face",
+            entity_ids=("F_Y",),
+            anchor_point=(25.0, 0.0, 10.0),
+            confidence=1.0,
+        ),
+        "SYMM_Z_FACE": GroundedRegion(
+            target_semantic="SYMMETRY_PLANE_Z",
+            entity_type="Face",
+            entity_ids=("F_Z",),
+            anchor_point=(25.0, 25.0, 0.0),
+            confidence=1.0,
+        ),
+    }
+
+    plan = compile_intent_to_actions(
+        model_name="SymmModel",
+        part_name="SymmPart",
+        job_name="SymmJob",
+        geometry=geom,
+        material=mat,
+        step=step,
+        bcs=bcs,
+        grounded_regions=grounded,
+    )
+
+    script = plan.cae_script
+    assert "XsymmBC(name='SymmX', createStepName='Initial'" in script
+    assert "YsymmBC(name='SymmY', createStepName='Initial'" in script
+    assert "ZsymmBC(name='SymmZ', createStepName='Initial'" in script
+
+    # Check symmetry_bc action types
+    symm_actions = [a for a in plan.actions if a.action_type == "symmetry_bc"]
+    assert len(symm_actions) == 3
+    planes = [a.parameters["plane"] for a in symm_actions]
+    assert planes == ["X", "Y", "Z"]
+
+
+def test_compile_comprehensive_multi_physics_plan():
+    """Verify comprehensive compilation of Multi-Step + Bolt + Moment + Field + Symmetry with Preflight validation."""
+    from abaqus_ai_agent.contracts.procedure import (
+        BoltPretensionLifecycleSpec,
+        MomentLoadSpec,
+        MomentTransferStrategy,
+        MultiStepProcedureSpec,
+        SpatialLoadField,
+        StepDependency,
+    )
+    from abaqus_ai_agent.validation.preflight import preflight_plan
+
+    geom = IntentGeometrySpec(shape="cantilever_box", length=120.0, width=20.0, height=20.0)
+    mat = MaterialDefinition(
+        name="Titanium",
+        unit_system="MM_N_MPA",
+        elastic=ElasticProperties(youngs_modulus=110000.0, poisson_ratio=0.34),
+        density=4.5e-9,
+    )
+    proc = MultiStepProcedureSpec(
+        steps=(
+            StepDependency(name="Step-Preload", previous="Initial", procedure="static", time_period=1.0),
+            StepDependency(name="Step-Service", previous="Step-Preload", procedure="static", time_period=1.0),
+        )
+    )
+    bcs = [
+        IntentBoundarySpec(name="FixRoot", bc_type="ENCASTRE", region="RootFace"),
+        IntentBoundarySpec(name="SymmetryX", bc_type="XSYMM", region="SymmFace"),
+    ]
+    bolt_spec = BoltPretensionLifecycleSpec(
+        name="MainBolt",
+        region_expression="BoltCut",
+        preload_magnitude=8000.0,
+        preload_step="Step-Preload",
+        service_step="Step-Service",
+        direction_vector=(0.0, 0.0, 1.0),
+    )
+    moment_spec = MomentLoadSpec(
+        name="TipTorque",
+        region_expression="TipFace",
+        magnitude=50000.0,
+        axis="CM3",
+        step="Step-Service",
+        strategy=MomentTransferStrategy.RP_COUPLING,
+        rp_coordinates=(10.0, 10.0, 120.0),
+    )
+    field_spec = SpatialLoadField(name="GradField", expression="2.0 + 0.05 * Y")
+    loads = [
+        IntentLoadSpec(
+            name="GradPressure",
+            load_type="pressure",
+            region="TopFace",
+            magnitude=5.0,
+            step="Step-Service",
+            field="GradField",
+        )
+    ]
+
+    plan = compile_intent_to_actions(
+        model_name="ComprehensiveModel",
+        part_name="Part1",
+        job_name="ComprehensiveJob",
+        geometry=geom,
+        material=mat,
+        procedure=proc,
+        bcs=bcs,
+        loads=loads,
+        fields=[field_spec],
+        bolt_pretensions=[bolt_spec],
+        moments=[moment_spec],
+    )
+
+    # Summary asserts
+    summary = plan.intent_summary
+    assert summary["steps_count"] == 2
+    assert summary["fields_count"] == 1
+    assert summary["bolt_pretensions_count"] == 1
+    assert summary["moments_count"] == 1
+    assert summary["actions_count"] > 15
+
+    # Script asserts
+    script = plan.cae_script
+    assert "ExpressionField(name='GradField'" in script
+    assert "BoltLoad(name='MainBolt'" in script
+    assert "FIX_LENGTH" in script
+    assert "Coupling(name='TipTorque_Coupling'" in script
+    assert "Moment(name='TipTorque'" in script
+    assert "XsymmBC(name='SymmetryX'" in script
+
+    # Preflight verification
+    pre = preflight_plan(plan.actions)
+    assert pre.passed is True
+    assert len(pre.blockers) == 0
