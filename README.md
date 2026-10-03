@@ -650,33 +650,33 @@ All core architectural blueprints, engineering contracts, and credibility standa
 
 ## Post-RC 1.0 General Availability (GA) Roadmap
 
-With `v1.0.0-rc1` formally frozen under **`CONDITIONAL PASS`**, the engineering focus shifts from baseline verification to production capability expansion along three explicit tracks, strictly adhering to the **Single Canonical AnalysisRun** architecture:
+With `v1.0.0-rc1` formally frozen under **`CONDITIONAL PASS`**, the engineering focus shifts from baseline verification to production capability expansion along three explicit tracks, strictly adhering to the **Single Canonical AnalysisRun** architecture (Zero duplicate subsystems):
 
 1. **Track GA-3: Production Runtime Infrastructure & Enterprise Resilience [P0 Core Priority]**
    - AnalysisRun asynchronous task queue & explicit lifecycle state machine (`PENDING` $\to$ `RUNNING` $\to$ `COMPLETED`).
    - Vendor-agnostic abstract `LicenseProvider` interface with pluggable `FlexNetAdapter` and `DSLSAdapter`.
    - Non-blocking license wait queue with exponential backoff & randomized jitter retry.
    - Per-run scratch workdir sandboxing & ephemeral artifact isolation (zero `.lck` collisions).
-   - Process crash recovery & background solver resumption via checkpointing.
+   - **Run-Level Recovery & Resumption Checkpointing**: Inspects workspace artifacts (`.lck`, `.odb`, `.sta`, `.msg`) to evaluate state (`RECOVERABLE_RECONNECT`, `NON_RECOVERABLE_RESUBMIT`, `CLEANUP_FAILED`).
 
 2. **Track GA-1: Arbitrary Complex CAD Topology & Adaptive Meshing [P1 Engineering Core]**
-   - Multi-stage pipeline: `CAD Import → Geometry Inspection → Feature Recognition → Geometry Strategy → Partition Strategy → Mesh Strategy → Mesh Gate`.
-   - Explicit status gating at every boundary (`SUPPORTED`, `ASSISTED`, `BLOCKED`, `UNSUPPORTED`); unpartitionable geometry halts with actionable feedback.
+   - Multi-stage pipeline: `CAD Import → Geometry Health / Topology → Feature Recognition → Meshability Assessment → Geometry / Partition Strategy → Mesh Strategy → Existing Mesh Gate`.
+   - Explicit `CapabilityResult` status gating at every boundary (`SUPPORTED`, `ASSISTED`, `BLOCKED`, `UNSUPPORTED`); unpartitionable geometry halts with actionable feedback.
    - STEP / IGES neutral CAD ingestion, automated defect inspection & tolerance healing.
-   - Functional feature recognition (bolt holes, fillets, chamfers, thin-walled ribs).
+   - Functional feature recognition & pre-partition **Meshability Assessment** to classify mappable vs. tetrahedral volumes.
    - Autonomous virtual topology & 3D geometry partitioning into sweepable sub-volumes.
-   - Hybrid mesh strategies (C3D8R sweepable cores $\to$ C3D10 transition zones) with strict mesh quality gate preflights.
+   - Hybrid mesh strategies (C3D8R sweepable cores $\to$ C3D10 transition zones) directly verified through **Existing Mesh Gate (`mesh/mesh_gate.py`)**.
    - Complex multi-part assembly hierarchy resolution & automated contact pair discovery.
 
 3. **Track GA-2A: Perspective Viewport Grounding [P1 Extension of L4 Grounding]**
    - Full pinhole camera model supporting $4\times 4$ projection matrix calibration ($[R|T]$).
    - Diverging perspective raycasting & multi-surface depth ($Z$-buffer) disambiguation.
-   - Deterministic topological region grounding to native Abaqus `findAt(...)` selections and Set/Surface synthesis.
+   - Deterministic topological region grounding directly reusing existing `GeometryCandidate` and `GroundingResult` contracts.
 
 4. **Track GA-2B: Multimodal Photo & Engineering Drawing Understanding [P2 Perception Extension]**
    - 2D engineering drawing feature parsing (multi-view projections, standard callouts, welding/load annotations).
    - Semantic mapping from drawing annotations to 3D CAD topological entities.
-   - External perspective photo registration and human-in-the-loop review.
+   - External perspective photo registration with **Mandatory Human-in-the-Loop (HITL) Review** prior to solver application.
 
 *Detailed implementation checklists are maintained in [Engineering Run & Evidence Closure Roadmap](docs/engineering-run-evidence-roadmap.md).*
 
