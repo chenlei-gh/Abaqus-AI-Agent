@@ -1,0 +1,109 @@
+{
+  "schema_version": "real_failure_matrix_v1",
+  "evidence_tier": "REAL_ABAQUS",
+  "solver_version": "Abaqus 2025",
+  "verified_at": "2026-10-03T17:02:04.552325+00:00",
+  "all_cases_fail_closed": true,
+  "cases_count": 5,
+  "passed_cases_count": 5,
+  "cases": [
+    {
+      "case_id": "F1",
+      "name": "UNCONSTRAINED_RIGID_BODY",
+      "target_status": "FAILED",
+      "solver_completed_cleanly": false,
+      "diagnosed_issue_ids": [
+        "NEGATIVE_EIGENVALUE",
+        "TOO_MANY_CUTBACKS",
+        "NUMERICAL_SINGULARITY"
+      ],
+      "has_singularity_or_cutbacks": true,
+      "acceptance_status": "BLOCKED",
+      "acceptance_passed": false,
+      "fail_closed": true,
+      "artifacts": {
+        "inp_sha256": "3c900c6256b30bc7f47545ba77c3dc9f2d38cde2eca3bf3eabc7fc198375db93",
+        "msg_sha256": "fbd47fe1ebdce424346967858cdf5205b5268e0de6a7be0113ca6c11788cb207",
+        "sta_sha256": "faa243418c52a68891bb6a66fc220d610b1996edf4327d314208f2e31943aeec",
+        "dat_sha256": "2c4e0fb34644a05b532cf5be17052b81ab3541e1cd5d952229eefec37d2e6f84",
+        "log_sha256": "4c739f55c4d1df3c698cc7c3c2a80801ba3c6bb93a660db52f7db9b45c24ef2d"
+      }
+    },
+    {
+      "case_id": "F2",
+      "name": "CONVERGENCE_CUTBACK_EXHAUSTED",
+      "target_status": "FAILED",
+      "solver_completed_cleanly": false,
+      "diagnosed_issue_ids": [
+        "NEGATIVE_EIGENVALUE",
+        "TIME_INCREMENT_LESS_THAN_MINIMUM",
+        "EXCESSIVE_DISTORTION"
+      ],
+      "has_cutback_or_distortion": true,
+      "acceptance_status": "BLOCKED",
+      "acceptance_passed": false,
+      "fail_closed": true,
+      "artifacts": {
+        "inp_sha256": "e516fd81a604931fb9abc02c243a71070e1515246a64ccf0448b29f220482d18",
+        "msg_sha256": "db67ccc8c196456240197a676142f5557ac958725d0441e853328a788f5a7ed8",
+        "sta_sha256": "4f75f0514f10c8f3b957e80fece2ae54bbcb186c95d63debf2dd47986277a440",
+        "dat_sha256": "19a1aa682d713c14220ec0d302d73139e4eb03a8ea4f9e8ae36af8a3a2eac014",
+        "log_sha256": "d72ce0883b2f940cd829c1e1e8c93375d60009547ebbaa2e5ee83a301be6d30c"
+      }
+    },
+    {
+      "case_id": "F3",
+      "name": "INP_SYNTAX_ABORT",
+      "target_status": "FAILED",
+      "pre_processor_rejected": true,
+      "acceptance_status": "BLOCKED",
+      "acceptance_passed": false,
+      "fail_closed": true,
+      "artifacts": {
+        "inp_sha256": "f21eabea57d030c0dc44bbee0b3a3751311423ab0c1023c4ef33b574a027160e",
+        "dat_sha256": "541fc8a6da68e905bfb939de5a401825653fe449a5700fde47419647b0d2d09e",
+        "log_sha256": null,
+        "odb_sha256": "aab1899be78f16f98cef96a20d972b1e12e01bc36792d36dcb2cb70e7abc9f26"
+      }
+    },
+    {
+      "case_id": "F4",
+      "name": "MISSING_REQUIRED_FIELD_OUTPUT",
+      "target_status": "RESULT_INVALID",
+      "solver_succeeded": true,
+      "odb_exists": true,
+      "available_field_outputs": [
+        "S"
+      ],
+      "displacement_missing": true,
+      "acceptance_status": "BLOCKED",
+      "acceptance_passed": false,
+      "acceptance_failures": [],
+      "acceptance_blocked": [
+        "missing_required_metric:max_displacement",
+        "missing_required_metric:None"
+      ],
+      "fail_closed": true,
+      "artifacts": {
+        "inp_sha256": "186be768fd62e64aa892215cd90ebb14c7f06d1e02914fd383ab1a54249d9727",
+        "odb_sha256": "0e5cf0dcd673a619de2ed4d5d62d66b565cddedd1cafbaa6c19489001565db70",
+        "sta_sha256": "c708dee78cb528612cfb0c420ae06e66e163dae2ae3118409516d986a3b89343",
+        "msg_sha256": "d87a43dbd2faa292c21431b689765bb66ee8ac6f6dada452a16de27c5b6f5f62",
+        "log_sha256": "ead91d86392102cc75acc29f11da78fb9097b48fa586e1d27da7de6dd7261136"
+      }
+    },
+    {
+      "case_id": "F5",
+      "name": "EVIDENCE_TAMPER_PROTECTION",
+      "target_status": "EVIDENCE_TAMPERED",
+      "odb_tamper_detected": true,
+      "inp_tamper_detected": true,
+      "evidence_tampered_rejected": true,
+      "original_odb_sha256": "0e5cf0dcd673a619de2ed4d5d62d66b565cddedd1cafbaa6c19489001565db70",
+      "tampered_odb_sha256": "ef8832d32503263316c8777f95c534c52a1b2dccdae1acf9925541ef6aa39478",
+      "original_inp_sha256": "186be768fd62e64aa892215cd90ebb14c7f06d1e02914fd383ab1a54249d9727",
+      "tampered_inp_sha256": "79162ec397be44dfe98b766b8577fba6cbad3d67615c20b36ea4ccb6b04a7541",
+      "fail_closed": true
+    }
+  ]
+}

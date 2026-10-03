@@ -140,8 +140,13 @@ The following three tracks represent the ongoing evolution beyond `v1.0.0-rc1` d
 │      Live Abaqus 2025: GA-2-GOLDEN equilibrium error = 0.002%;              │
 │      GA-2.6.3 multi-step bolt preload + service torque equilibrium error    │
 │      < 0.0001% (axial error 3.8e-9, torque error 9.2e-9, net drift 2.3e-13).│
+├─────────────────────────────────────────────────────────────────────────────┤
+│ Track GA-CL: Full-Chain Multi-Physics Closure & Failure Hardening [ACTIVE]  │
+│    - Status: GA-CL.1 Multi-Physics Golden, GA-CL.2 Real Failure Matrix,     │
+│      GA-CL.3 Acceptance Gate Closure, GA-CL.4 Evidence V2 Freezing,         │
+│      GA-CL.5 Cross-Physics Report Verification.                             │
 │    - Next: Track GA-2A Perspective Viewport (P1), Track GA-2B Multimodal    │
-│      Perception (P2 HITL).                                                  │
+│      Perception (P2 HITL) [Strictly gated behind Track GA-CL].              │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -187,6 +192,18 @@ The following three tracks represent the ongoing evolution beyond `v1.0.0-rc1` d
 | **GA-2.6.3-GOLDEN** | **Bolt Pretension $\to$ FIX_LENGTH $\to$ Service Torque $\to$ ODB Physical Acceptance** | `tools/ga263_e2e_golden_case.py`, `planning/compiler.py` | `tools/ga263_e2e_golden_case.py`<br>`tests/test_ga263_golden.py` | `QUALIFIED`: Real-machine autonomous closed loop on live Abaqus 2025 (`Job_GA263_Job`). 76 preflight checks passed. Step 1 preload applied $5000\text{ N}$, live $\Sigma RF_z = -4999.9999\text{ N}$ (error $1.5 \times 10^{-8}$). Step 2 locked bolt length, freed top U3, applied $2000\text{ N}$ tension + $100000\text{ N}\cdot\text{mm}$ torque via RP Kinematic Coupling. Live service axial reaction $\Sigma RF_z = -1999.99999\text{ N}$ (error $3.8 \times 10^{-9}$), reaction torque $\Sigma RM_z = -99999.999\text{ N}\cdot\text{mm}$ (error $9.2 \times 10^{-9}$), net shear drift $2.3 \times 10^{-13}\text{ N}$. Max Mises $74.72\text{ MPa}$, max displacement $0.0804\text{ mm}$. Deterministic acceptance: `PASS`. Evidence manifest in `machine_validation/ga263_golden_evidence.json`. | `REAL_ABAQUS` | Proves full autonomous chain: Intent $\to$ Multi-Step Procedure DAG $\to$ Physical Actions $\to$ Abaqus 2025 Solver $\to$ ODB Extraction $\to$ Engineering Acceptance. |
 
 *Canonical qualification package recorded in `machine_validation/ga2_golden_evidence.json` (QUALIFIED).*
+
+---
+
+### 3.2.2 Track GA-CL Real-Machine Multi-Physics Closure & Failure Hardening (Audit Status)
+
+| Benchmark ID | Scenario / Verification Intent | Implementation Reference | Execution Benchmark & Test Suite | Real-Machine Physical Evidence Status | Evidence Level | Capability Boundary & Audit Conclusion |
+| :--- | :--- | :--- | :--- | :--- | :---: | :--- |
+| **GA-CL.1** | **Agent Multi-Physics Golden Expansion (Thermal, Contact, Modal)** | `planning/compiler.py`, `actions/builders.py` | `tools/` (Multi-Physics E2E Golden Suite) | `OPEN`: Synthesize thermal-stress, large sliding friction, and preloaded dynamics into high-level `AgentIntent`. Execute on live Abaqus 2025. | `PLANNED` | Extends autonomous compiler beyond static/bolt to multi-physics domains. |
+| **GA-CL.2** | **Real-Machine Failure-Path Injection Matrix** | `tools/real_failure_matrix_e2e.py`<br>`diagnostics/solver_patterns.py` | `tools/real_failure_matrix_e2e.py`<br>`tests/test_real_failure_matrix.py` | `QUALIFIED`: 5 authentic failure & tamper scenarios on Abaqus 2025 (F1 Zero Pivot, F2 minInc cutback, F3 INP syntax fatal error, F4 missing required output, F5 cryptographic hash tamper). 100% fail-closed. | `REAL_ABAQUS` | Proves fail-closed boundary: neither solver aborts nor missing field outputs nor artifact tampering can yield a false PASS. |
+| **GA-CL.3** | **Mesh → Solver → ODB → Acceptance Full Pipeline Closure** | `acceptance.py`, `results/` | `tests/test_acceptance.py`<br>`tests/test_acceptance_gates.py` | `OPEN`: Physics-aware gate dispatch; eliminate ungrounded `SKIPPED` gates across multi-physics runs. | `PLANNED` | Enforces mandatory domain gates (contact, fatigue, mesh quality) based on physics intent. |
+| **GA-CL.4** | **Evidence / Provenance Schema V2 & Baseline Freezing** | `evidence/`, `machine_validation/` | `tests/test_evidence.py`<br>`tests/test_provenance.py` | `OPEN`: Standardize all manifests to `ManifestV2`; guard against dirty timestamp diffs during regression test runs. | `PLANNED` | Unifies cryptographic provenance across all validation artifacts. |
+| **GA-CL.5** | **Engineering Report Cross-Physics Consistency** | `reporting/renderer.py`, `reporting/` | `tools/h1_engineering_report_e2e.py`<br>`tests/test_h1_engineering_report_e2e.py` | `OPEN`: Extend 19-section renderer to support multi-step load history, mode frequencies, thermal gradients, and contact pressure. | `PLANNED` | Guarantees structured executive deliverables across any supported physical discipline. |
 
 ---
 

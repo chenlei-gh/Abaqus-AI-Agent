@@ -2,8 +2,8 @@
 
 **Status:** 
 - **RC 1.0 Frozen Baseline**: `v1.0.0-rc1` CONDITIONAL PASS Frozen at Commit `deec6a3` (428 tests) ✅
-- **GA Working Baseline**: Commit `cb597d6`+ ACTIVE (553 tests, Track GA-3 Real-Machine Qualified, Track GA-1.1~GA-1.4 Frozen & Real-Machine Qualified on STEP Benchmarks, Track GA-2.1~GA-2.5 Qualified on E2E Golden Case & Extended Grounding) 🚀
-**Version:** 2026-10-03 (Release Candidate 1.0 Frozen & GA Evolution Baseline)  
+- **GA Working Baseline**: Commit `969af3c`+ ACTIVE (579 tests, Track GA-3 Real-Machine Qualified, Track GA-1.1~GA-1.4 Frozen & Real-Machine Qualified on STEP Benchmarks, Track GA-2.1~GA-2.6 Closed & Real-Machine Qualified, Track GA-CL Active) 🚀
+**Version:** 2026-10-04 (Release Candidate 1.0 Frozen & GA Evolution Baseline)  
 **Scope:** Abaqus-AI-Agent engineering architecture, foundational contracts, evidence chain, real-machine physics benchmarks, and material intelligence grounding
 
 ---
@@ -1400,7 +1400,43 @@ ODB Tensor Extraction & Equilibrium Verification (RF vs Applied Error = 0.002%) 
 
 ---
 
-#### Track GA-2A: Perspective Viewport Grounding [P1 EXTENSION OF L4 GROUNDING]
+#### Track GA-CL: Full-Chain Multi-Physics Closure & Failure Hardening [P0 ACTIVE GATE]
+*Core Strategic Pivot: Following the formal closure of Track GA-2.6 (multi-step procedural compiler & real Abaqus physical evidence), the repository shifts from foundational procedure enablement to broad multi-physics coverage, authentic solver failure-path verification, and end-to-end acceptance/reporting closure. Tracks GA-2A and GA-2B are strictly gated behind Track GA-CL.*
+
+- [ ] **GA-CL.1: Agent Multi-Physics Golden Expansion (Intent -> Compiler -> Live Abaqus -> ODB)**
+  - [ ] Connect Phase J validated physics into the Agent autonomous compiler (`compiler.py` + `compile_intent_to_actions`):
+    - Sequential Thermal-Stress Coupling (`ThermalStressGolden`): steady thermal conduction -> thermal expansion stress with reaction balance.
+    - Large-Sliding Frictional Contact (`FrictionalContactGolden`): non-linear contact pair, penalty friction, normal CPRESS and shear CSHEAR equilibrium.
+    - Modal & Preloaded Dynamics (`PreloadedModalGolden`): static preloading step -> frequency extraction with stress stiffening.
+  - [ ] Execute each on live Abaqus 2025, verify against closed-form mechanics, and capture SHA-256 evidence packages.
+
+- [x] **GA-CL.2: Real-Machine Failure-Path Matrix & State Preservation [CLOSED & QUALIFIED]**
+  - [x] Upgrade `tools/i2_failure_matrix.py` and implement `tools/real_failure_matrix_e2e.py` with genuine Abaqus 2025 error injection & cryptographic tamper protection:
+    - `UNCONSTRAINED_RIGID_BODY` (F1): omit boundary conditions, trigger Abaqus Standard Zero Pivot / Numerical Singularity abort -> verified status `FAILED`/`BLOCKED`, fail_closed=True.
+    - `CONVERGENCE_CUTBACK_EXHAUSTED` (F2): plastic softening with minInc=0.08, initialInc=0.1, trigger cutback below minimum time increment -> verified status `FAILED`/`BLOCKED`, fail_closed=True.
+    - `INP_SYNTAX_ABORT` (F3): inject invalid keyword syntax, trigger Abaqus pre-processor fatal error rejection -> verified status `FAILED`/`BLOCKED` with `.dat` preservation, fail_closed=True.
+    - `MISSING_REQUIRED_FIELD_OUTPUT` (F4): job succeeds exit 0 and ODB exists, but required field output `U` (`max_displacement`) is omitted -> verified deterministic intercept as `RESULT_INVALID` / `BLOCKED`, fail_closed=True.
+    - `EVIDENCE_TAMPER_PROTECTION` (F5): cryptographic SHA-256 mutation detection on ODB/INP -> verified fail-closed rejection.
+  - [x] Persist certified live evidence package: `machine_validation/real_failure_matrix_evidence.json` (5/5 cases fail-closed).
+
+- [ ] **GA-CL.3: Mesh -> Solver -> ODB -> Acceptance Full Pipeline Closure**
+  - [ ] Enhance `evaluate_result_acceptance` with physics-aware mandatory gate dispatch:
+    - Analysis intents with contact MUST require `contact_diagnostics` (no silent `SKIPPED`).
+    - Analysis intents with cyclic loading MUST require `fatigue` evaluation.
+    - Analysis intents with complex mesh MUST require `mesh_quality` evaluation.
+  - [ ] Eliminate accidental false-pass caused by ungrounded `SKIPPED` gates across multi-physics runs.
+
+- [ ] **GA-CL.4: Evidence / Provenance Schema V2 & Baseline Freezing**
+  - [ ] Standardize all evidence manifests in `machine_validation/` under unified `ManifestV2` (Abaqus version, execution host, timestamp, `.inp/.odb/.sta/.msg/.dat/.log` SHA-256 hashes).
+  - [ ] Establish regression freeze guards to ensure test runs (`pytest`) execute in read-only mode and do not generate dirty timestamp diffs.
+
+- [ ] **GA-CL.5: Engineering Report Cross-Physics Consistency**
+  - [ ] Extend `src/abaqus_ai_agent/reporting/renderer.py` to render specialized structured tables for multi-step preload history, modal frequencies & effective masses, thermal gradients, and contact pressure/closure.
+  - [ ] Verify end-to-end report generation across static, thermal, contact, modal, and multi-step bolt analysis runs.
+
+---
+
+#### Track GA-2A: Perspective Viewport Grounding [P1 EXTENSION - GATED BEHIND GA-CL]
 *Deterministic Viewport Projection: Direct mathematical extension of Phase L4, upgrading parallel CAE viewports to calibrated perspective viewpoints while fully reusing existing Grounding data contracts.*
 
 - [ ] **GA-2A.1: Perspective Camera Model & Projection Matrix Calibration**
