@@ -134,52 +134,123 @@ To eliminate ambiguity across commercial workflows and academic verification, th
 
 ## At a glance
 
-### End-to-End Workflow
+### 1. End-to-End Engineering Workflow
+
+```text
+┌─────────────────────────────────────────────────────────────┐
+│ 1. Engineering Intent Layer                                 │
+│    Requirements ──> JEV Intent Routing ──> Ambiguity Gate   │
+└──────────────────────────────┬──────────────────────────────┘
+                               ▼
+┌─────────────────────────────────────────────────────────────┐
+│ 2. Planning & Preflight Checks                              │
+│    Native Action Compilation ──> Unit Checks ──> Mesh Gate  │
+└──────────────────────────────┬──────────────────────────────┘
+                               ▼
+┌─────────────────────────────────────────────────────────────┐
+│ 3. Abaqus Solver Execution                                  │
+│    CAE Batch (noGUI) ──> Real Solver ──> .sta/.msg/.odb     │
+└──────────────────────────────┬──────────────────────────────┘
+                               ▼
+┌─────────────────────────────────────────────────────────────┐
+│ 4. Extraction & Acceptance                                  │
+│    ODB Tensor Extraction ──> Verification ──> Markdown/HTML │
+└─────────────────────────────────────────────────────────────┘
+```
+
+<details>
+<summary><b>Click to expand interactive Mermaid flowchart (Desktop view)</b></summary>
 
 ```mermaid
-flowchart LR
-    U["Engineering Intent"] --> AI["AI: Reason · Plan · Explain"]
+flowchart TD
+    U["1. Engineering Intent"] --> AI["AI Reasoning & Planning"]
     AI --> B{"Capability Boundary"}
     B -->|SUPPORTED| A["Typed Action"]
-    B -->|EXECUTABLE| X["Native Python Escape Hatch"]
-    B -->|ASSISTED / BLOCKED| P["Proposal / Blocker"]
-    A --> V["Validation + Preflight"]
-    V --> E["Abaqus Execution"]
-    X --> E
-    E --> O["Job / ODB / Artifacts"]
-    O --> R["Result Extraction"]
-    R --> Q["Verification"]
-    Q --> C["Acceptance"]
-    C --> EV["Evidence"]
-    EV --> REP["Engineering Report"]
+    B -->|EXECUTABLE| X["Native Escape Hatch"]
+    B -->|BLOCKED| P["Assisted / Blocked Proposal"]
+    A --> V["Validation & Preflight"]
+    X --> V
+    V --> E["Authentic Abaqus Execution"]
+    E --> O["Job Artifacts (.odb/.sta/.msg)"]
+    O --> R["Physical Tensor Extraction"]
+    R --> Q["Numerical Verification"]
+    Q --> C["Acceptance Evaluation"]
+    C --> EV["Cryptographic Evidence"]
+    EV --> REP["Publication-Grade Report"]
 ```
 
-### The Engineering Evidence Ladder
+</details>
+
+---
+
+### 2. The Engineering Evidence Ladder
+
+```text
+  [1] API Invocation Success    (Python exit code 0 != physical validity)
+          │
+          ▼
+  [2] Model-State Evidence      (Geometry valid, sections & materials bound)
+          │
+          ▼
+  [3] Job Execution Evidence    (Abaqus solver process exited cleanly)
+          │
+          ▼
+  [4] Solver Artifact Evidence  (.sta/.msg free of cutbacks & singularities)
+          │
+          ▼
+  [5] ODB Tensor Evidence       (Target fieldOutputs successfully extracted)
+          │
+          ▼
+  [6] Acceptance Evidence       (Error <= tolerance, physical balance verified)
+```
+
+<details>
+<summary><b>Click to expand interactive Mermaid ladder (Desktop view)</b></summary>
 
 ```mermaid
-flowchart TB
-    I["API Invocation"] --> M["Model-State Evidence"]
+flowchart TD
+    I["API Invocation (Exit Code 0)"] --> M["Model-State Topology Evidence"]
     M --> J["Job Execution Evidence"]
-    J --> S["Solver Artifact Evidence"]
-    S --> O["ODB Evidence"]
-    O --> R["Result Evidence"]
-    R --> A["Acceptance Evidence"]
-    N["A successful Python call"] -. "does NOT imply" .-> A
+    J --> S["Solver Artifact Evidence (.sta/.msg)"]
+    S --> O["ODB Database Generation Evidence"]
+    O --> R["Field/History Tensor Extraction"]
+    R --> A["Final Acceptance Evidence"]
+    N["Python Script Success"] -. "does NOT guarantee" .-> A
 ```
 
-### Capability Lifecycle
+</details>
+
+---
+
+### 3. Capability Lifecycle Decisions
+
+```text
+  Engineering Need Identified
+       │
+  ┌────┴────┐
+  │ Does a typed contract exist?
+  │  ├─ Yes ──> [SUPPORTED]        (Autonomous planning, preflight, full gate)
+  │  └─ No  ──> Can native Abaqus API execute it?
+  │              ├─ Yes ──> [EXECUTABLE]   (Native Python escape hatch with gate)
+  │              └─ No  ──> [BLOCKED]      (Fails closed; requests clarification)
+```
+
+<details>
+<summary><b>Click to expand interactive Mermaid decision tree (Desktop view)</b></summary>
 
 ```mermaid
-flowchart LR
-    D["Capability Gap"] --> T{"Typed contract exists?"}
-    T -->|Yes| S["SUPPORTED"]
+flowchart TD
+    D["Engineering Need Identified"] --> T{"Typed Contract Exists?"}
+    T -->|Yes| S["SUPPORTED (Autonomous planning & preflight)"]
     T -->|No| P{"Can native Abaqus API execute it?"}
-    P -->|Yes| X["EXECUTABLE (unverified)"]
-    P -->|No| A["ASSISTED / BLOCKED"]
-    X --> H["Repeated engineering need"]
-    H --> C["Contract, Validation, Results, Tests"]
+    P -->|Yes| X["EXECUTABLE (Native Python escape hatch)"]
+    P -->|No| A["BLOCKED (Fails closed; requests clarification)"]
+    X --> H["Recurring Engineering Pattern"]
+    H --> C["Formalize Contract, Preflight & Tests"]
     C --> S
 ```
+
+</details>
 
 ---
 

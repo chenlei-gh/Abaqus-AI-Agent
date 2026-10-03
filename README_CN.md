@@ -134,52 +134,123 @@
 
 ## 一眼看懂
 
-### 端到端工程闭环流程
+### 1. 端到端工程闭环流程
 
-```mermaid
-flowchart LR
-    U["工程意图"] --> AI["AI: 理解 · 推理 · 规划 · 解释"]
-    AI --> B{"能力边界"}
-    B -->|SUPPORTED| A["Typed Action"]
-    B -->|EXECUTABLE| X["原生 Python Escape Hatch"]
-    B -->|ASSISTED / BLOCKED| P["辅助方案 / 阻塞说明"]
-    A --> V["Validation + Preflight"]
-    V --> E["Abaqus 执行"]
-    X --> E
-    E --> O["Job / ODB / Artifacts"]
-    O --> R["结果提取"]
-    R --> Q["工程验证"]
-    Q --> C["Acceptance"]
-    C --> EV["Evidence"]
-    EV --> REP["工程报告"]
+```text
+┌─────────────────────────────────────────────────────────────┐
+│ 1. 工程意图层 (Engineering Intent)                          │
+│    用户需求描述 ──> JEV 意图路由 ──> 完备性检查 (不满足则阻断)│
+└──────────────────────────────┬──────────────────────────────┘
+                               ▼
+┌─────────────────────────────────────────────────────────────┐
+│ 2. 动作规划与预检 (Planning & Preflight)                    │
+│    原生 Action 动作编译 ──> 单位制量纲校验 ──> 网格质量检查 │
+└──────────────────────────────┬──────────────────────────────┘
+                               ▼
+┌─────────────────────────────────────────────────────────────┐
+│ 3. 求解器执行层 (Abaqus Execution)                          │
+│    CAE 批处理无界面运行 ──> 真实求解 ──> 生成 .sta/.msg/.odb │
+└──────────────────────────────┬──────────────────────────────┘
+                               ▼
+┌─────────────────────────────────────────────────────────────┐
+│ 4. 张量提取与工程验收 (Extraction & Acceptance)              │
+│    ODB 物理场提取 ──> 数值精度校验 ──> 交付级 Markdown/HTML  │
+└─────────────────────────────────────────────────────────────┘
 ```
 
-### 工程证据阶梯
+<details>
+<summary><b>点击查看 Mermaid 流程图（适合桌面浏览器查看）</b></summary>
 
 ```mermaid
-flowchart TB
-    I["API 调用"] --> M["Model-State 证据"]
-    M --> J["Job 执行证据"]
-    J --> S["Solver 产物证据"]
-    S --> O["ODB 证据"]
-    O --> R["结果证据"]
-    R --> A["工程验收证据"]
-    N["Python 调用成功"] -. "不能直接推出" .-> A
+flowchart TD
+    U["1. 工程意图 (Intent)"] --> AI["AI 推理与意图解析"]
+    AI --> B{"能力边界判断"}
+    B -->|SUPPORTED| A["强类型动作 (Typed Action)"]
+    B -->|EXECUTABLE| X["原生脚本 (Escape Hatch)"]
+    B -->|BLOCKED| P["非标需求 (阻断/人工辅助)"]
+    A --> V["动作预检 (Preflight)"]
+    X --> V
+    V --> E["Abaqus 真实求解执行"]
+    E --> O["求解器成果物 (.odb/.sta/.msg)"]
+    O --> R["物理量张量提取"]
+    R --> Q["工程判定与容差比对"]
+    Q --> C["工程验收 (Acceptance)"]
+    C --> EV["加密存证 (Evidence)"]
+    EV --> REP["交付级工程报告 (Report)"]
 ```
 
-### 能力生命周期管理
+</details>
+
+---
+
+### 2. 工程证据攀登阶梯
+
+```text
+  [1] API 调用成功           (Python exit code = 0，不代表物理有效)
+          │
+          ▼
+  [2] Model-State 拓扑有效   (几何无穿透、材料与截面绑定完整)
+          │
+          ▼
+  [3] Job 正常计算完成       (Abaqus 求解进程成功退出)
+          │
+          ▼
+  [4] Solver 产物无发散      (.sta/.msg 无未收敛截断、无虚假刚度)
+          │
+          ▼
+  [5] ODB 张量真实提取       (位移/应力/反力目标 FieldOutput 存在)
+          │
+          ▼
+  [6] 满足工程验收门禁       (误差 ≤ 容差，满足物理守恒规律)
+```
+
+<details>
+<summary><b>点击查看 Mermaid 阶梯图（适合桌面浏览器查看）</b></summary>
 
 ```mermaid
-flowchart LR
-    D["发现能力缺口"] --> T{"已有 Typed Contract？"}
-    T -->|是| S["SUPPORTED"]
-    T -->|否| P{"原生 Abaqus API 能否执行？"}
-    P -->|是| X["EXECUTABLE（未验证）"]
-    P -->|否| A["ASSISTED / BLOCKED"]
-    X --> H["重复出现的工程需求"]
-    H --> C["Contract, Validation, 结果语义, Tests"]
+flowchart TD
+    I["API 调用成功 (Exit Code 0)"] --> M["Model-State 模型状态证据"]
+    M --> J["Job 求解进程执行证据"]
+    J --> S["Solver 产物无发散证据 (.sta/.msg)"]
+    S --> O["真实 ODB 数据库生成证据"]
+    O --> R["物理场张量成功提取证据"]
+    R --> A["最终工程验收通过证据 (Acceptance)"]
+    N["单纯脚本执行成功"] -. "绝对不能等同于" .-> A
+```
+
+</details>
+
+---
+
+### 3. 能力生命周期三层判定
+
+```text
+  发现工程需求
+       │
+  ┌────┴────┐
+  │ 是否已有强类型 Contract？
+  │  ├─ 是 ──> [SUPPORTED]        (全自动规划、强类型参数预检、零幻觉执行)
+  │  └─ 否 ──> 是否属于 Abaqus 原生能力？
+  │             ├─ 是 ──> [EXECUTABLE]    (原生 Python 逃逸通道，带验收门禁)
+  │             └─ 否 ──> [BLOCKED]       (主动阻断并给出工程澄清建议)
+```
+
+<details>
+<summary><b>点击查看 Mermaid 判定图（适合桌面浏览器查看）</b></summary>
+
+```mermaid
+flowchart TD
+    D["接收工程需求"] --> T{"已有强类型 Contract？"}
+    T -->|是| S["SUPPORTED (全自动参数校验与规划)"]
+    T -->|否| P{"Abaqus 原生 API 能否支持？"}
+    P -->|是| X["EXECUTABLE (原生 Python 逃逸执行)"]
+    P -->|否| A["BLOCKED (主动阻断并请求工程师澄清)"]
+    X --> H["提炼高频工程模式"]
+    H --> C["补充 Contract、Preflight 与测试用例"]
     C --> S
 ```
+
+</details>
 
 ---
 
