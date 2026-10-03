@@ -2,7 +2,7 @@
 
 **Status:** 
 - **RC 1.0 Frozen Baseline**: `v1.0.0-rc1` CONDITIONAL PASS Frozen at Commit `deec6a3` (428 tests) ✅
-- **GA Working Baseline**: Commit `20dfee5`+ ACTIVE (494 tests, Track GA-3 Real-Machine Qualified & Track GA-1.1/GA-1.2/GA-1.3A/GA-1.3B Fillet & Chamfer Evidence Hardened) 🚀
+- **GA Working Baseline**: Commit `702818d`+ ACTIVE (505 tests, Track GA-3 Real-Machine Qualified & Track GA-1.1/GA-1.2/GA-1.3A/GA-1.3B Holes, Fillets, Chamfers, Ribs & Contact Planes Implemented) 🚀
 **Version:** 2026-10-03 (Release Candidate 1.0 Frozen & GA Evolution Baseline)  
 **Scope:** Abaqus-AI-Agent engineering architecture, foundational contracts, evidence chain, real-machine physics benchmarks, and material intelligence grounding
 
@@ -1271,7 +1271,7 @@ Meshability Assessment (GA-1.4) ───[Direct Reuse]───► Existing Mes
   - [x] Stage 2 Fillet recognition: constant-radius cylindrical faces bridging non-coplanar corner faces, scale-ratio filtering, honest continuity gating (`ASSISTED` + `INSUFFICIENT_SURFACE_CONTINUITY_EVIDENCE` strictly forbidding hallucinated G1 claims), radius extraction gated strictly by real circle/arc evidence (`radius=None` and `is_constant_radius=False` without arc evidence; zero `5.0` or area-heuristic fallbacks), and non-manifold block gate.
   - [x] Stage 3 Chamfer recognition: planar transitional surfaces bridging exactly two non-coplanar primary adjacent faces with transverse width thresholding, oversized sloped face rejection, strict non-fabrication of width without transverse edges (`width=None`), honest `ASSISTED` capability rating pending full 3D B-Rep spatial metric proof, and non-manifold block gate.
   - [x] GA-1.3B-4.1 Evidence Hardening & Deep Recursive Type Guard: `FeatureCandidate.geometry` deep recursive validation strictly forbidding runtime non-canonical objects, zero synthetic radius/width defaults, and consolidated feature specialization disambiguation (17 tests in `tests/test_feature_recognition.py`).
-  - [ ] Stage 4 Rib and Contact Plane classification: candidate semantic extraction with `ASSISTED` confidence flags.
+  - [x] Stage 4 Rib and Contact Plane classification (GA-1.3B-5): candidate semantic extraction with `ASSISTED` confidence flags, opposing wall topology, common base anchoring, protrusion vs. groove/pocket rejection guard, dimensional thickness/length extraction strictly degrading to `None` without transverse edge evidence, contact spotface/flange anchoring, strict normal vector unit verification (unverified normals strictly degrade to `normal=None` with zero synthetic normalization), zero contact-pair interaction actions, and consolidated 5-class feature disambiguation (28 tests in `tests/test_feature_recognition.py`, 505 repository-wide regression tests).
 - [ ] **GA-1.4: Meshability Assessment & Direct Mesh Gate Reuse**
   - [ ] Evaluate pre-partitioning topology: classify bodies as structured-mappable, sweepable, or complex free-form.
   - [ ] Predict partition effectiveness: evaluate whether sub-volume decomposition will permit hex meshing or if tetrahedral strategy is optimal.

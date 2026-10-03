@@ -160,10 +160,7 @@ def normalize_topology(model: GeometryModel) -> NormalizedTopology:
             inner_edges.extend(in_loop.edge_ids)
 
         # Consolidated edge list
-        if outer_edges or inner_edges:
-            combined_edges = tuple(sorted(set(outer_edges + inner_edges)))
-        else:
-            combined_edges = tuple(sorted(set(face.edge_ids)))
+        combined_edges = tuple(sorted(set(list(face.edge_ids) + outer_edges + inner_edges)))
 
         face_to_edges[face.id] = combined_edges
 

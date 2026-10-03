@@ -39,6 +39,8 @@ from .features import (
     detect_fastener_holes,
     detect_fillets,
     detect_chamfers,
+    detect_ribs,
+    detect_contact_planes,
     detect_features,
 )
 
@@ -73,5 +75,7 @@ __all__ = [
     "detect_fastener_holes",
     "detect_fillets",
     "detect_chamfers",
+    "detect_ribs",
+    "detect_contact_planes",
     "detect_features",
 ]

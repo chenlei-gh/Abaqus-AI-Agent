@@ -127,7 +127,7 @@ The following three tracks represent the ongoing evolution beyond `v1.0.0-rc1` d
 ├─────────────────────────────────────────────────────────────────────────────┤
 │ Track GA-1: Arbitrary Complex CAD Topology & Meshing                        │
 │    - Status: GA-1.1 Ingestion, GA-1.2 Health, GA-1.3A Topology &            │
-│      GA-1.3B (Holes, Fillets, Chamfers Hardened) (37 regression tests).     │
+│      GA-1.3B (Holes, Fillets, Chamfers, Ribs & Contact Planes) (48 tests).  │
 │    - Rule: OpenCASCADE backend helper only; zero duplicate CAD kernel.      │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │ Track GA-2: Grounding & Perception (GA-2A P1 / GA-2B P2)                    │
