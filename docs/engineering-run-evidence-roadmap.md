@@ -2,7 +2,7 @@
 
 **Status:** 
 - **RC 1.0 Frozen Baseline**: `v1.0.0-rc1` CONDITIONAL PASS Frozen at Commit `deec6a3` (428 tests) ✅
-- **GA Working Baseline**: Commit `ddd3cb8`+ ACTIVE (464 tests, Track GA-3 Real-Machine Qualified & Track GA-1.1 Ingestion Implemented) 🚀
+- **GA Working Baseline**: Commit `d5657c4`+ ACTIVE (472 tests, Track GA-3 Real-Machine Qualified & Track GA-1.1/GA-1.2 Ingestion & Health Gate Implemented) 🚀
 **Version:** 2026-10-03 (Release Candidate 1.0 Frozen & GA Evolution Baseline)  
 **Scope:** Abaqus-AI-Agent engineering architecture, foundational contracts, evidence chain, real-machine physics benchmarks, and material intelligence grounding
 
@@ -1256,10 +1256,11 @@ Meshability Assessment (GA-1.4) ───[Direct Reuse]───► Existing Mes
   - [x] Enforce source provenance tracking: SHA-256 hash of original CAD file, import timestamps, and CAD system vendor tags.
   - [x] Implemented canonical 4-state capability boundary evaluation (`SUPPORTED`, `ASSISTED`, `BLOCKED`, `UNSUPPORTED`).
   - [x] Zero duplicate CAD kernel: lightweight deterministic Python parser with 100% offline regression coverage (7 tests in `tests/test_cad_ingestion.py`).
-- [ ] **GA-1.2: Geometry Health Inspection & Defect Detection Gate**
-  - [ ] Automated topological defect detection: open shells/free edges, non-manifold edges, self-intersecting faces, invalid solid topology, micro-slivers, and tolerance gaps.
-  - [ ] Map health diagnostic results directly into the 4-state capability contract (`SUPPORTED`, `ASSISTED`, `BLOCKED`, `UNSUPPORTED`).
-  - [ ] Strict Fail-Closed Rule: If geometry violates manifoldness or contains unstitched gaps, halt with `BLOCKED: UNRECOVERABLE_GEOMETRY_DEFECT` and provide specific topological violation coordinates.
+- [x] **GA-1.2: Geometry Health Inspection & Defect Detection Gate**
+  - [x] Multi-layer non-destructive geometry audit: topological consistency (non-manifold edge, dangling edge, shell closure), geometric consistency (degenerate zero-length edge, zero-area face), scale anomalies (micro-slivers, tiny edge features).
+  - [x] Analysis-intent compatibility: explicitly differentiate intentional shell/surface models (`SUPPORTED` under shell intent) from invalid solid volume voids (`BLOCKED` under solid intent) without assuming open shell is an unconditional defect.
+  - [x] Strict Fail-Closed Rule: Map health diagnostic results directly into the 4-state capability contract (`SUPPORTED`, `ASSISTED`, `BLOCKED`, `UNSUPPORTED`).
+  - [x] Strict non-destructive contract: pure detection and auditing; zero auto-healing, zero auto-stitching, zero secondary CAD kernel invention (8 tests in `tests/test_geometry_health.py`).
 - [ ] **GA-1.3: Topology Normalization & Functional Feature Recognition**
   - [ ] Normalize raw CAD topological entities into a deterministic `TopologyGraph` with persistent, canonical geometric identifiers.
   - [ ] Detect standard industrial functional engineering features: fastener holes, fillets, chamfers, thin-walled ribs, draft angles, symmetry planes, and planar contact surfaces.

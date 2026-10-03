@@ -19,6 +19,13 @@ from .cad_ingestion import (
     detect_cad_format,
     ingest_cad_file,
 )
+from .health import (
+    GeometryHealthIssue,
+    GeometryHealthReport,
+    HealthIssueKind,
+    HealthSeverity,
+    inspect_geometry_health,
+)
 
 __all__ = [
     "CadBoundingBox",
@@ -36,4 +43,9 @@ __all__ = [
     "compute_file_sha256",
     "detect_cad_format",
     "ingest_cad_file",
+    "GeometryHealthIssue",
+    "GeometryHealthReport",
+    "HealthIssueKind",
+    "HealthSeverity",
+    "inspect_geometry_health",
 ]

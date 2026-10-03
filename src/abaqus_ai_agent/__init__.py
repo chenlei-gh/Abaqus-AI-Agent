@@ -56,4 +56,4 @@ from .planning.mesh_strategy import local_seeds_from_geometry_plan, mesh_specifi
 from .contracts.geometry_features import GeometryFeature, GeometryFeatureEvidence, characterize_geometry
 from .capability_boundary import CapabilityBoundary, CapabilityStatus, classify_action
 from .fatigue import stress_range_and_amplitude, turning_points, rainflow_count, goodman_corrected_amplitude, miner_damage, fatigue_life_blocks, sn_life, reduce_multiaxial_history
-from .geometry import GeometryModel, ingest_cad_file, classify_cad_model
+from .geometry import GeometryModel, ingest_cad_file, classify_cad_model, inspect_geometry_health, GeometryHealthReport
