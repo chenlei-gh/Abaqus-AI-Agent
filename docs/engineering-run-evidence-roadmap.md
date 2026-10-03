@@ -1,6 +1,8 @@
 # Engineering Run / Evidence Closure Roadmap
 
-**Status:** RC 1.0 (`v1.0.0-rc1`) CONDITIONAL PASS Frozen at Commit `deec6a3` ✅; Phase GA (General Availability Evolution Matrix: GA-1, GA-2, GA-3) SPECIFIED & ACTIVE 🚀  
+**Status:** 
+- **RC 1.0 Frozen Baseline**: `v1.0.0-rc1` CONDITIONAL PASS Frozen at Commit `deec6a3` (428 tests) ✅
+- **GA Working Baseline**: Commit `ddd3cb8` ACTIVE (453 tests, Track GA-3 Hardened & GA-3 Real-Machine Qualification Pack Underway) 🚀  
 **Version:** 2026-10-03 (Release Candidate 1.0 Frozen & GA Evolution Baseline)  
 **Scope:** Abaqus-AI-Agent engineering architecture, foundational contracts, evidence chain, real-machine physics benchmarks, and material intelligence grounding
 
@@ -1193,38 +1195,86 @@ Queue Lic. Recovery         CAD Meshability Mesh        GA-2A (P1)    GA-2B (P2)
     - *Run-Level Recovery*: Strictly qualified as run-level recovery and resubmission via deterministic file system artifacts (`.lck`, `.odb`, `.sta`, `.msg`); not solver-internal transparent checkpoint resumption.
     - *License Provider*: Vendor-agnostic abstraction and offline parsing contract established; live communication against proprietary FlexNet/DSLS servers subject to deployment site physical access.
 
+##### Track GA-3 Real-Machine Production Evidence Pack (G3-R1 ~ G3-R6 Gate)
+*Separating Code Architecture Completion from Physical Hardware Execution: The 453 automated tests verify Python algorithms, queue state machines, and concurrency synchronization, but production clearance requires audited physical Abaqus solver evidence across the following 6 canonical production scenarios.*
+
+- [x] **G3-R1: Dual-Job Real-Machine Concurrent Execution**
+  - **Requirement**: Submit 2 authentic Abaqus 2025 jobs (Job A & Job B) concurrently into `RunWorkerPool` with 2 distinct `RunSandbox` instances.
+  - **Validation**: Both jobs execute concurrently in separate OS worker processes/threads, generating uncorrupted, independent `.odb`, `.sta`, `.msg`, `.dat` artifacts. Verified via SHA-256 artifact hashes and independent ODB field extraction.
+  - **Status & Evidence**: `DONE` — Live Abaqus 2025 executed concurrent Job A & Job B in 16.20s; concurrency overlap verified (`max_concurrent=2`), producing independent `.odb` (220KB/219KB) with distinct SHA-256 hashes (`machine_validation/ga3_real_machine_evidence.json`).
+- [x] **G3-R2: Concurrency Cap & RLock Scheduling Rigor**
+  - **Requirement**: Queue 8 tasks under worker count 4 with `max_concurrency=2`.
+  - **Validation**: Enforce invariant $\text{RUNNING} \le 2$ across the full execution lifecycle. Zero double-dispatching, zero task dropping, zero execution duplication, zero license token leak.
+  - **Status & Evidence**: `DONE` — All 8 tasks dispatched across 4 worker threads; 48 timeline samples confirm $\text{RUNNING} \le 2$ strictly maintained throughout execution.
+- [x] **G3-R3: Authentic Abaqus Solver Failure & RunRecovery Resilience**
+  - **Requirement**: Induce authentic numerical singularity or unconstrained rigid body motion in Abaqus/Standard (no artificial `raise RuntimeError`).
+  - **Validation**: Solver terminates abnormally with authentic `.sta`/`.msg`/`.lck` diagnostic signatures. `RunWorker` invokes `RunRecovery.inspect_run_state()`, identifies `RECOVERABLE_RESUBMIT`, transitions run to `RETRYING`, allocates clean sandbox, and executes attempt #2 to successful ODB acceptance.
+  - **Status & Evidence**: `DONE` — Authentic Abaqus rigid body singularity induced in Attempt 1 (`.msg` failure diagnosed); Worker automated Attempt 2 with Encastre BC, reaching `COMPLETED` and valid ODB (217KB).
+- [x] **G3-R4: Worker Process Crash & Orphaned Run Recovery**
+  - **Requirement**: Terminate a running Worker process abruptly (simulating host panic or SIGKILL) while tasks reside in `RUNNING`.
+  - **Validation**: Upon process restart, new Worker initializes, reads durable queue from `persistence_path`, executes `recover_orphaned_runs()`, transitions stranded `RUNNING` tasks to `RETRYING`, and completes execution cleanly without deadlock.
+  - **Status & Evidence**: `DONE` — Unexpected termination simulated with active `RUNNING` task; durable queue restored via atomic file swap, `recover_orphaned_runs()` recovered task to `RETRYING`, and subsequent worker executed to `COMPLETED`.
+- [x] **G3-R5: License Token Exhaustion & Exponential Backoff**
+  - **Requirement**: Configure constrained token limit ($N=1$). Submit 2 competing jobs. Job A reserves token and transitions to `RUNNING`. Job B is denied, enters `RETRYING` with exponential backoff and jitter, and successfully acquires token upon Job A release.
+  - **Validation**: Cooperative task suspension without job abort or state corruption.
+  - **Status & Evidence**: `QUALIFIED` — Offline token contention and backoff verified. Physical quota server connection honestly classified as `REAL_LICENSE_SERVER_NOT_AVAILABLE` (zero synthetic falsification).
+- [x] **G3-R6: End-to-End Artifact Integrity & Provenance Promotion**
+  - **Requirement**: Complete execution cycle verifying all primary artifacts (`.inp`, `.odb`, `.sta`, `.msg`, `.dat`) are non-empty, cryptographically hashed via SHA-256, verified readable via `openOdb`, and safely promoted to long-term storage while purging ephemeral scratch files.
+  - **Validation**: Full provenance link between `AnalysisRun`, `RunSandbox`, and final promoted evidence manifests.
+  - **Status & Evidence**: `DONE` — 15 promoted production artifacts audited with non-empty cryptographic SHA-256 digests; temporary sandbox directories purged without leakage.
+
 ---
 
 #### Track GA-1: Arbitrary Complex CAD Topology & Adaptive Meshing [P1 ENGINEERING CORE]
 *Structural Mechanics Expansion: Moving from parametric primitives to complex industrial CAD via a decoupled, multi-stage pipeline with fail-closed gating at every transition.*
 
-Pipeline Architecture:
-```
-CAD Import → Geometry Health / Topology → Feature Recognition → Meshability Assessment → Geometry / Partition Strategy → Mesh Strategy → Existing Mesh Gate
-```
-*Rule: Every stage reports an explicit `CapabilityResult` status: `SUPPORTED`, `ASSISTED`, `BLOCKED`, or `UNSUPPORTED`. Unpartitionable geometry halts deterministically at Partition Strategy with actionable feedback rather than causing a generic Agent failure.*
+##### Architectural Foundation & CAD Backend Boundary
+1. **Zero Duplicate CAD Kernel Rule**: OpenCASCADE (pythonocc-core) serves strictly as an inspection, validation, and topological analysis backend helper. It shall **never** be used to construct a secondary internal CAD modeling kernel. All final geometric operations, cell partitioning, and meshing directives compile strictly to native Abaqus CAE/Python commands.
+2. **Deterministic Capability Boundary**: Every stage in the GA-1 pipeline must evaluate its output against the project's canonical 4-state capability contract:
+   - `SUPPORTED`: Feature/topology completely within autonomous resolution capability.
+   - `ASSISTED`: Complex topology requiring parameter guidance or falling back to robust secondary strategies (e.g. tetrahedral fallback).
+   - `BLOCKED`: Geometry contains un-meshable flaws (open shell, non-manifold edge) that strictly halt execution before solver dispatch.
+   - `UNSUPPORTED`: Topology format or feature class outside engineering capability scope.
 
-- [ ] **GA-1.1: STEP / IGES Neutral CAD Ingestion & Geometry Health Check**
-  - [ ] Robust neutral CAD file ingestion (`.stp`, `.step`, `.igs`, `.iges`) with bounding-box, volume, and manifold validation.
-  - [ ] Automated defect inspection: detect micro-slivers, non-manifold edges, self-intersections, and unstitched surfaces.
-  - [ ] Status gate: Fail closed to `BLOCKED` with detailed topological violation metrics if geometry is mathematically un-meshable.
-- [ ] **GA-1.2: Topology Normalization & Feature Recognition**
-  - [ ] Detect standard industrial functional features: fastener holes, fillets, chamfers, thin-walled ribs, draft angles, and symmetry planes.
-  - [ ] Extract feature hierarchy to guide simulation assumptions (e.g. local stress concentration zones vs. nominal loading surfaces).
-  - [ ] Status gate: Assign `SUPPORTED` for standard features; tag `ASSISTED` for high-complexity intersections.
-- [ ] **GA-1.3: Meshability Assessment & Topology Classification**
-  - [ ] Evaluate CAD topology prior to partitioning: classify bodies as structured-mappable, sweepable, or free-form tetrahedral.
-  - [ ] Predict whether geometric partitioning will successfully improve element quality (e.g. converting tet-only geometry into hex-sweepable sub-volumes).
-  - [ ] Status gate: If topology is inherently un-sweepable and unpartitionable, deterministically transition directly to tetrahedral strategy with `ASSISTED` status instead of failing.
-- [ ] **GA-1.4: Autonomous Virtual Topology & Partition Strategy**
-  - [ ] Implement rule-based and AI-guided volume partitioning to decompose complex 3D bodies into sweepable or structured mappable cells.
+##### Stage 1 Core Pipeline (Phased Rollout: GA-1.1 ~ GA-1.4)
+```
+CAD Ingestion (GA-1.1) 
+       │
+       ▼
+Geometry Health Inspection (GA-1.2)
+       │
+       ▼
+Topology Normalization & Feature Recognition (GA-1.3)
+       │
+       ▼
+Meshability Assessment (GA-1.4) ───[Direct Reuse]───► Existing Mesh Quality Gate (mesh/mesh_gate.py)
+```
+
+- [ ] **GA-1.1: STEP / IGES Neutral CAD Ingestion & Canonical Geometry Model**
+  - [ ] Robust neutral CAD file ingestion (`.stp`, `.step`, `.igs`, `.iges`) compiling into a unified, lightweight internal `GeometryModel`.
+  - [ ] Extract standardized topological primitives: solids, open shells, boundary faces, edges, vertices, bounding box dimensions, and source units.
+  - [ ] Enforce source provenance tracking: SHA-256 hash of original CAD file, import timestamps, and CAD system vendor tags.
+- [ ] **GA-1.2: Geometry Health Inspection & Defect Detection Gate**
+  - [ ] Automated topological defect detection: open shells/free edges, non-manifold edges, self-intersecting faces, invalid solid topology, micro-slivers, and tolerance gaps.
+  - [ ] Map health diagnostic results directly into the 4-state capability contract (`SUPPORTED`, `ASSISTED`, `BLOCKED`, `UNSUPPORTED`).
+  - [ ] Strict Fail-Closed Rule: If geometry violates manifoldness or contains unstitched gaps, halt with `BLOCKED: UNRECOVERABLE_GEOMETRY_DEFECT` and provide specific topological violation coordinates.
+- [ ] **GA-1.3: Topology Normalization & Functional Feature Recognition**
+  - [ ] Normalize raw CAD topological entities into a deterministic `TopologyGraph` with persistent, canonical geometric identifiers.
+  - [ ] Detect standard industrial functional engineering features: fastener holes, fillets, chamfers, thin-walled ribs, draft angles, symmetry planes, and planar contact surfaces.
+  - [ ] Generate structured `FeatureCandidate` representations to feed downstream boundary conditions and local mesh sizing without hardcoding.
+- [ ] **GA-1.4: Meshability Assessment & Direct Mesh Gate Reuse**
+  - [ ] Evaluate pre-partitioning topology: classify bodies as structured-mappable, sweepable, or complex free-form.
+  - [ ] Predict partition effectiveness: evaluate whether sub-volume decomposition will permit hex meshing or if tetrahedral strategy is optimal.
+  - [ ] **Zero Duplicate Mesh Verification**: Direct reuse of existing `mesh/mesh_gate.py` (aspect ratio $\le 10$, distortion $\le 45^\circ$, Jacobian checks, GCI convergence). Connect directly to existing acceptance criteria.
+
+##### Stage 2 Expansion (GA-1.5 ~ GA-1.7)
+- [ ] **GA-1.5: Autonomous Virtual Topology & Cell Partition Strategy**
+  - [ ] Implement rule-based and AI-guided volume partitioning to decompose complex 3D bodies into sweepable cells.
   - [ ] Synthesize native Abaqus partition planes, datum sketches, and cell cut actions (`Part.PartitionCellByPlane`, `PartitionCellByExtrudeEdge`).
-  - [ ] Status gate: If partitioning cannot yield valid sweep paths, explicitly output `BLOCKED: UNPARTITIONABLE_TOPOLOGY` and fall back to tetrahedral strategy rather than crashing.
-- [ ] **GA-1.5: Hybrid Mesh Strategy & Existing Mesh Gate Reuse**
-  - [ ] Implement multi-zone mesh generation: structured hexahedral (C3D8R) in sweepable sub-volumes with automated transition to quadratic tetrahedral (C3D10) in complex fillets.
-  - [ ] Implement curvature-driven and proximity-based local seed refinement at stress concentrations.
-  - [ ] **Direct Reuse of Existing Mesh Gate (`mesh/mesh_gate.py`)**: Zero parallel validation frameworks; strictly enforce existing aspect ratio $\le 10$, distortion $\le 45^\circ$, and negative Jacobian checks before solver submission.
-- [ ] **GA-1.6: Complex Multi-Part Assembly & Contact Grounding**
+- [ ] **GA-1.6: Hybrid Mesh Generation & Curvature-Driven Refinement**
+  - [ ] Multi-zone mesh synthesis: structured hexahedral (C3D8R) in sweepable sub-volumes with automated transition to quadratic tetrahedral (C3D10) in complex fillets.
+  - [ ] Local seed refinement driven by curvature and proximity at stress concentrations.
+- [ ] **GA-1.7: Complex Multi-Part Assembly & Contact Grounding**
   - [ ] Resolve assembly component hierarchy and instance transformations for multi-part CAD models.
   - [ ] Automate proximity-based contact pair discovery between mating surfaces; synthesize native Master-Slave surfaces and Tie constraints.
 

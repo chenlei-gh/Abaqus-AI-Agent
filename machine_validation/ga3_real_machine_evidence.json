@@ -1,0 +1,370 @@
+{
+  "suite_name": "Phase GA-3 Real-Machine Production Qualification Suite",
+  "version": "1.0.0-ga",
+  "timestamp": "2026-10-03T08:30:21.059690+00:00",
+  "total_benchmarks": 6,
+  "passed_benchmarks": 6,
+  "all_passed": true,
+  "results": {
+    "G3-R1": {
+      "benchmark_id": "G3-R1",
+      "title": "Dual-Job Real-Machine Concurrent Execution",
+      "passed": true,
+      "elapsed_seconds": 16.19532084465027,
+      "max_concurrent_running_observed": 2,
+      "concurrency_overlap_verified": true,
+      "job_a": {
+        "job_name": "Job_G3_R1_A",
+        "state": "COMPLETED",
+        "odb_sha256": "35e80ec2c8b363be3b7b95fa60a2dbfd05563fc9e1a491c27cd5b270567029a3",
+        "odb_size_bytes": 220552,
+        "metrics": {
+          "job_name": "Job_G3_R1_A",
+          "max_mises": 173.205078125,
+          "max_displacement": 1751.6239128472528,
+          "sandbox_id": "item_r1_a",
+          "promoted_artifacts": [
+            {
+              "artifact_type": "dat",
+              "filename": "Job_G3_R1_A.dat",
+              "source_path": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\machine_validation\\ga3_qualification_workdir\\G3_R1_Concurrency\\sandboxes\\abaqus_sandbox_item_r1_a\\Job_G3_R1_A.dat",
+              "target_path": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\machine_validation\\ga3_qualification_workdir\\G3_R1_Concurrency\\promoted_artifacts\\Job_G3_R1_A.dat",
+              "sha256": "4191ce067f5de6cf33685ad55e6b8c3455931ecc976d285232ac26666815a7e8",
+              "size_bytes": 9440
+            },
+            {
+              "artifact_type": "inp",
+              "filename": "Job_G3_R1_A.inp",
+              "source_path": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\machine_validation\\ga3_qualification_workdir\\G3_R1_Concurrency\\sandboxes\\abaqus_sandbox_item_r1_a\\Job_G3_R1_A.inp",
+              "target_path": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\machine_validation\\ga3_qualification_workdir\\G3_R1_Concurrency\\promoted_artifacts\\Job_G3_R1_A.inp",
+              "sha256": "eb51880e7e5e136eaf2de35d401be8158d325d58a4e4f7a7baf865131cd21fd6",
+              "size_bytes": 4054
+            },
+            {
+              "artifact_type": "log",
+              "filename": "Job_G3_R1_A.log",
+              "source_path": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\machine_validation\\ga3_qualification_workdir\\G3_R1_Concurrency\\sandboxes\\abaqus_sandbox_item_r1_a\\Job_G3_R1_A.log",
+              "target_path": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\machine_validation\\ga3_qualification_workdir\\G3_R1_Concurrency\\promoted_artifacts\\Job_G3_R1_A.log",
+              "sha256": "88a4082794a4e6b430beb2e92b90e23b33440d1df82d1a2aafdc5a607116ec96",
+              "size_bytes": 663
+            },
+            {
+              "artifact_type": "msg",
+              "filename": "Job_G3_R1_A.msg",
+              "source_path": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\machine_validation\\ga3_qualification_workdir\\G3_R1_Concurrency\\sandboxes\\abaqus_sandbox_item_r1_a\\Job_G3_R1_A.msg",
+              "target_path": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\machine_validation\\ga3_qualification_workdir\\G3_R1_Concurrency\\promoted_artifacts\\Job_G3_R1_A.msg",
+              "sha256": "434ba44f6f7aaa202183356fa6ac4c365e09466b71f463df02460d270c1860cf",
+              "size_bytes": 7995
+            },
+            {
+              "artifact_type": "odb",
+              "filename": "Job_G3_R1_A.odb",
+              "source_path": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\machine_validation\\ga3_qualification_workdir\\G3_R1_Concurrency\\sandboxes\\abaqus_sandbox_item_r1_a\\Job_G3_R1_A.odb",
+              "target_path": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\machine_validation\\ga3_qualification_workdir\\G3_R1_Concurrency\\promoted_artifacts\\Job_G3_R1_A.odb",
+              "sha256": "35e80ec2c8b363be3b7b95fa60a2dbfd05563fc9e1a491c27cd5b270567029a3",
+              "size_bytes": 220552
+            },
+            {
+              "artifact_type": "sta",
+              "filename": "Job_G3_R1_A.sta",
+              "source_path": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\machine_validation\\ga3_qualification_workdir\\G3_R1_Concurrency\\sandboxes\\abaqus_sandbox_item_r1_a\\Job_G3_R1_A.sta",
+              "target_path": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\machine_validation\\ga3_qualification_workdir\\G3_R1_Concurrency\\promoted_artifacts\\Job_G3_R1_A.sta",
+              "sha256": "a0fae9d612464a3cec4a4a1de80f11a9cfb50795322f1ee2718353905ba8b88f",
+              "size_bytes": 443
+            },
+            {
+              "artifact_type": "json",
+              "filename": "Job_G3_R1_A_res.json",
+              "source_path": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\machine_validation\\ga3_qualification_workdir\\G3_R1_Concurrency\\sandboxes\\abaqus_sandbox_item_r1_a\\Job_G3_R1_A_res.json",
+              "target_path": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\machine_validation\\ga3_qualification_workdir\\G3_R1_Concurrency\\promoted_artifacts\\Job_G3_R1_A_res.json",
+              "sha256": "6c1b5edef8ffa58c50db40e8a3247141a23b8e72e207bbce60981647cb907ac6",
+              "size_bytes": 95
+            }
+          ]
+        }
+      },
+      "job_b": {
+        "job_name": "Job_G3_R1_B",
+        "state": "COMPLETED",
+        "odb_sha256": "a8df934e24d554be4d31de0cc6bf571ef933889e590d2d441eae9879f97432da",
+        "odb_size_bytes": 219696,
+        "metrics": {
+          "job_name": "Job_G3_R1_B",
+          "max_mises": 259.8076171875,
+          "max_displacement": 936.2524854076001,
+          "sandbox_id": "item_r1_b",
+          "promoted_artifacts": [
+            {
+              "artifact_type": "dat",
+              "filename": "Job_G3_R1_B.dat",
+              "source_path": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\machine_validation\\ga3_qualification_workdir\\G3_R1_Concurrency\\sandboxes\\abaqus_sandbox_item_r1_b\\Job_G3_R1_B.dat",
+              "target_path": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\machine_validation\\ga3_qualification_workdir\\G3_R1_Concurrency\\promoted_artifacts\\Job_G3_R1_B.dat",
+              "sha256": "9494553ef6e7be5c42e6b2ab7eab62c296a0c31c818afcd0cacf7842f8f362b9",
+              "size_bytes": 9440
+            },
+            {
+              "artifact_type": "inp",
+              "filename": "Job_G3_R1_B.inp",
+              "source_path": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\machine_validation\\ga3_qualification_workdir\\G3_R1_Concurrency\\sandboxes\\abaqus_sandbox_item_r1_b\\Job_G3_R1_B.inp",
+              "target_path": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\machine_validation\\ga3_qualification_workdir\\G3_R1_Concurrency\\promoted_artifacts\\Job_G3_R1_B.inp",
+              "sha256": "f3bdaa7ecc1e7fcce2c50e935e63fcec0318b06dd64bda5a2a099e886151d48c",
+              "size_bytes": 3562
+            },
+            {
+              "artifact_type": "log",
+              "filename": "Job_G3_R1_B.log",
+              "source_path": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\machine_validation\\ga3_qualification_workdir\\G3_R1_Concurrency\\sandboxes\\abaqus_sandbox_item_r1_b\\Job_G3_R1_B.log",
+              "target_path": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\machine_validation\\ga3_qualification_workdir\\G3_R1_Concurrency\\promoted_artifacts\\Job_G3_R1_B.log",
+              "sha256": "dc611eb53f1077e47efb9b744b75fe770bab60c4004a647e7b85cc1b1eedb47b",
+              "size_bytes": 663
+            },
+            {
+              "artifact_type": "msg",
+              "filename": "Job_G3_R1_B.msg",
+              "source_path": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\machine_validation\\ga3_qualification_workdir\\G3_R1_Concurrency\\sandboxes\\abaqus_sandbox_item_r1_b\\Job_G3_R1_B.msg",
+              "target_path": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\machine_validation\\ga3_qualification_workdir\\G3_R1_Concurrency\\promoted_artifacts\\Job_G3_R1_B.msg",
+              "sha256": "f842039deccab609d3e4bb40ff3f215f590d54d0f9ae5fdb3500219db7fe822e",
+              "size_bytes": 7995
+            },
+            {
+              "artifact_type": "odb",
+              "filename": "Job_G3_R1_B.odb",
+              "source_path": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\machine_validation\\ga3_qualification_workdir\\G3_R1_Concurrency\\sandboxes\\abaqus_sandbox_item_r1_b\\Job_G3_R1_B.odb",
+              "target_path": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\machine_validation\\ga3_qualification_workdir\\G3_R1_Concurrency\\promoted_artifacts\\Job_G3_R1_B.odb",
+              "sha256": "a8df934e24d554be4d31de0cc6bf571ef933889e590d2d441eae9879f97432da",
+              "size_bytes": 219696
+            },
+            {
+              "artifact_type": "sta",
+              "filename": "Job_G3_R1_B.sta",
+              "source_path": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\machine_validation\\ga3_qualification_workdir\\G3_R1_Concurrency\\sandboxes\\abaqus_sandbox_item_r1_b\\Job_G3_R1_B.sta",
+              "target_path": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\machine_validation\\ga3_qualification_workdir\\G3_R1_Concurrency\\promoted_artifacts\\Job_G3_R1_B.sta",
+              "sha256": "a0fae9d612464a3cec4a4a1de80f11a9cfb50795322f1ee2718353905ba8b88f",
+              "size_bytes": 443
+            },
+            {
+              "artifact_type": "json",
+              "filename": "Job_G3_R1_B_res.json",
+              "source_path": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\machine_validation\\ga3_qualification_workdir\\G3_R1_Concurrency\\sandboxes\\abaqus_sandbox_item_r1_b\\Job_G3_R1_B_res.json",
+              "target_path": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\machine_validation\\ga3_qualification_workdir\\G3_R1_Concurrency\\promoted_artifacts\\Job_G3_R1_B_res.json",
+              "sha256": "dbe73730c7d87edeb691e9cb6282b8d9c4eeaba2186f2b4ef997de8debef9a6d",
+              "size_bytes": 95
+            }
+          ]
+        }
+      }
+    },
+    "G3-R2": {
+      "benchmark_id": "G3-R2",
+      "title": "Concurrency Cap & Scheduling Invariant Timeline",
+      "passed": true,
+      "max_concurrency_limit": 2,
+      "worker_thread_count": 4,
+      "total_tasks_processed": 8,
+      "max_running_observed": 2,
+      "cap_strictly_maintained": true,
+      "total_elapsed_seconds": 0.7396581172943115,
+      "timeline_sample_count": 48,
+      "timeline_snippet": [
+        {
+          "t": 0.0,
+          "running": 0,
+          "pending": 8,
+          "completed": 0
+        },
+        {
+          "t": 0.061,
+          "running": 2,
+          "pending": 6,
+          "completed": 0
+        },
+        {
+          "t": 0.123,
+          "running": 2,
+          "pending": 6,
+          "completed": 0
+        },
+        {
+          "t": 0.185,
+          "running": 2,
+          "pending": 5,
+          "completed": 1
+        },
+        {
+          "t": 0.247,
+          "running": 2,
+          "pending": 4,
+          "completed": 2
+        },
+        {
+          "t": 0.309,
+          "running": 2,
+          "pending": 3,
+          "completed": 3
+        },
+        {
+          "t": 0.37,
+          "running": 2,
+          "pending": 3,
+          "completed": 3
+        },
+        {
+          "t": 0.432,
+          "running": 2,
+          "pending": 1,
+          "completed": 5
+        },
+        {
+          "t": 0.493,
+          "running": 2,
+          "pending": 1,
+          "completed": 5
+        },
+        {
+          "t": 0.556,
+          "running": 2,
+          "pending": 0,
+          "completed": 6
+        },
+        {
+          "t": 0.618,
+          "running": 1,
+          "pending": 0,
+          "completed": 7
+        },
+        {
+          "t": 0.679,
+          "running": 1,
+          "pending": 0,
+          "completed": 7
+        }
+      ]
+    },
+    "G3-R3": {
+      "benchmark_id": "G3-R3",
+      "title": "Authentic Abaqus Solver Failure & Worker Healing Retry",
+      "passed": true,
+      "attempts_required": 2,
+      "final_state": "completed",
+      "attempt_1_diagnostic": "NUMERICAL_SINGULARITY (Unconstrained rigid body mode)",
+      "attempt_2_remediation": "Encastre BC applied to base face -> Solved successfully",
+      "healed_odb_sha256": "483b088e67240f050ed995eb1d2e09cc84b444922021e124b39082c8deeda035",
+      "healed_odb_size_bytes": 217948
+    },
+    "G3-R4": {
+      "benchmark_id": "G3-R4",
+      "title": "Worker Process Abrupt Termination & Orphan Run Recovery",
+      "passed": true,
+      "persistence_file": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\machine_validation\\ga3_qualification_workdir\\G3_R4_CrashRecovery\\queue_durable.json",
+      "recovered_orphan_count": 1,
+      "final_task_state": "completed"
+    },
+    "G3-R5": {
+      "benchmark_id": "G3-R5",
+      "title": "License Token Contention & Honest Real-Server Qualification",
+      "passed": true,
+      "offline_contention_passed": true,
+      "real_server_available": false,
+      "qualification_status": "REAL_LICENSE_SERVER_NOT_AVAILABLE",
+      "audit_note": "Offline token contention contract verified. Physical enterprise license quota server connection honest boundary established."
+    },
+    "G3-R6": {
+      "benchmark_id": "G3-R6",
+      "title": "Worker Artifact Promotion & Cryptographic Provenance Integrity",
+      "passed": true,
+      "audited_artifacts_count": 15,
+      "artifacts": [
+        {
+          "filename": "Job_G3_R1_A.dat",
+          "suffix": ".dat",
+          "size_bytes": 9440,
+          "sha256": "4191ce067f5de6cf33685ad55e6b8c3455931ecc976d285232ac26666815a7e8"
+        },
+        {
+          "filename": "Job_G3_R1_A.inp",
+          "suffix": ".inp",
+          "size_bytes": 4054,
+          "sha256": "eb51880e7e5e136eaf2de35d401be8158d325d58a4e4f7a7baf865131cd21fd6"
+        },
+        {
+          "filename": "Job_G3_R1_A.msg",
+          "suffix": ".msg",
+          "size_bytes": 7995,
+          "sha256": "434ba44f6f7aaa202183356fa6ac4c365e09466b71f463df02460d270c1860cf"
+        },
+        {
+          "filename": "Job_G3_R1_A.odb",
+          "suffix": ".odb",
+          "size_bytes": 220552,
+          "sha256": "35e80ec2c8b363be3b7b95fa60a2dbfd05563fc9e1a491c27cd5b270567029a3"
+        },
+        {
+          "filename": "Job_G3_R1_A.sta",
+          "suffix": ".sta",
+          "size_bytes": 443,
+          "sha256": "a0fae9d612464a3cec4a4a1de80f11a9cfb50795322f1ee2718353905ba8b88f"
+        },
+        {
+          "filename": "Job_G3_R1_B.dat",
+          "suffix": ".dat",
+          "size_bytes": 9440,
+          "sha256": "9494553ef6e7be5c42e6b2ab7eab62c296a0c31c818afcd0cacf7842f8f362b9"
+        },
+        {
+          "filename": "Job_G3_R1_B.inp",
+          "suffix": ".inp",
+          "size_bytes": 3562,
+          "sha256": "f3bdaa7ecc1e7fcce2c50e935e63fcec0318b06dd64bda5a2a099e886151d48c"
+        },
+        {
+          "filename": "Job_G3_R1_B.msg",
+          "suffix": ".msg",
+          "size_bytes": 7995,
+          "sha256": "f842039deccab609d3e4bb40ff3f215f590d54d0f9ae5fdb3500219db7fe822e"
+        },
+        {
+          "filename": "Job_G3_R1_B.odb",
+          "suffix": ".odb",
+          "size_bytes": 219696,
+          "sha256": "a8df934e24d554be4d31de0cc6bf571ef933889e590d2d441eae9879f97432da"
+        },
+        {
+          "filename": "Job_G3_R1_B.sta",
+          "suffix": ".sta",
+          "size_bytes": 443,
+          "sha256": "a0fae9d612464a3cec4a4a1de80f11a9cfb50795322f1ee2718353905ba8b88f"
+        },
+        {
+          "filename": "Job_G3_R3_Attempt2.dat",
+          "suffix": ".dat",
+          "size_bytes": 9422,
+          "sha256": "bed37fc284cedec96cb1031f1d7270bb2b7258440b878634ef2c1ed61d32bfbd"
+        },
+        {
+          "filename": "Job_G3_R3_Attempt2.inp",
+          "suffix": ".inp",
+          "size_bytes": 2597,
+          "sha256": "c72188221d293949e5377fb1fb9c1a575e30bd442d48b6fa3f2194b8b412b6fc"
+        },
+        {
+          "filename": "Job_G3_R3_Attempt2.msg",
+          "suffix": ".msg",
+          "size_bytes": 7994,
+          "sha256": "c6befba4ca62081f1c6d4b855fefe1ee13f7c3ab92282602c608fc12aa7a6221"
+        },
+        {
+          "filename": "Job_G3_R3_Attempt2.odb",
+          "suffix": ".odb",
+          "size_bytes": 217948,
+          "sha256": "483b088e67240f050ed995eb1d2e09cc84b444922021e124b39082c8deeda035"
+        },
+        {
+          "filename": "Job_G3_R3_Attempt2.sta",
+          "suffix": ".sta",
+          "size_bytes": 443,
+          "sha256": "8680cefbfe5e5a1d637c1a93aa6ca9b8613317607d2d927afc23d596a35198bf"
+        }
+      ]
+    }
+  }
+}
