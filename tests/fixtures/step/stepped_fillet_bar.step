@@ -1,0 +1,275 @@
+ISO-10303-21;
+HEADER;
+FILE_DESCRIPTION(('Abaqus AI Agent Benchmark Stepped Bar with Fillet Transition'),'2;1');
+FILE_NAME('stepped_fillet_bar.step','2026-10-03T12:00:00',('Engineer'),('SIMULIA'),'Abaqus 2025','STEP AP203 Ingestion Engine','');
+FILE_SCHEMA(('CONFIG_CONTROL_DESIGN'));
+ENDSEC;
+DATA;
+/* ---------------- Units ---------------- */
+#10 = ( LENGTH_UNIT() NAMED_UNIT(*) SI_UNIT(.MILLI.,.METRE.) );
+
+/* ---------------- Directions and Placements ---------------- */
+#20 = DIRECTION('DIR_Z_POS', (0.0, 0.0, 1.0));
+#21 = DIRECTION('DIR_Z_NEG', (0.0, 0.0, -1.0));
+#22 = DIRECTION('DIR_X_POS', (1.0, 0.0, 0.0));
+#23 = DIRECTION('DIR_X_NEG', (-1.0, 0.0, 0.0));
+#24 = DIRECTION('DIR_Y_POS', (0.0, 1.0, 0.0));
+#25 = DIRECTION('DIR_Y_NEG', (0.0, -1.0, 0.0));
+
+/* ---------------- Cartesian Points ---------------- */
+/* Bottom vertices (Z = 0) */
+#101 = CARTESIAN_POINT('P_B_L0', (0.0, 0.0, 0.0));
+#102 = CARTESIAN_POINT('P_B_R0', (100.0, 0.0, 0.0));
+#103 = CARTESIAN_POINT('P_B_R40', (100.0, 40.0, 0.0));
+#104 = CARTESIAN_POINT('P_B_L40', (0.0, 40.0, 0.0));
+
+/* Left face top vertices (X = 0, Z = 20) */
+#105 = CARTESIAN_POINT('P_LT_0', (0.0, 0.0, 20.0));
+#106 = CARTESIAN_POINT('P_LT_40', (0.0, 40.0, 20.0));
+
+/* Low step top / Fillet start rail (X = 45, Z = 20) */
+#107 = CARTESIAN_POINT('P_FIL_START_0', (45.0, 0.0, 20.0));
+#108 = CARTESIAN_POINT('P_FIL_START_40', (45.0, 40.0, 20.0));
+
+/* Fillet end rail / High step side start (X = 50, Z = 25) */
+#109 = CARTESIAN_POINT('P_FIL_END_0', (50.0, 0.0, 25.0));
+#110 = CARTESIAN_POINT('P_FIL_END_40', (50.0, 40.0, 25.0));
+
+/* High step top corner (X = 50, Z = 40) */
+#111 = CARTESIAN_POINT('P_HT_L0', (50.0, 0.0, 40.0));
+#112 = CARTESIAN_POINT('P_HT_L40', (50.0, 40.0, 40.0));
+
+/* High step right top corner (X = 100, Z = 40) */
+#113 = CARTESIAN_POINT('P_HT_R0', (100.0, 0.0, 40.0));
+#114 = CARTESIAN_POINT('P_HT_R40', (100.0, 40.0, 40.0));
+
+/* Fillet cylinder axis center points (Center: X=50, Z=25, R=5) */
+#115 = CARTESIAN_POINT('P_FIL_CTR_0', (50.0, 0.0, 25.0));
+#116 = CARTESIAN_POINT('P_FIL_CTR_40', (50.0, 40.0, 25.0));
+
+/* ---------------- Topological Vertex Points ---------------- */
+#121 = VERTEX_POINT('VP_B_L0', #101);
+#122 = VERTEX_POINT('VP_B_R0', #102);
+#123 = VERTEX_POINT('VP_B_R40', #103);
+#124 = VERTEX_POINT('VP_B_L40', #104);
+#125 = VERTEX_POINT('VP_LT_0', #105);
+#126 = VERTEX_POINT('VP_LT_40', #106);
+#127 = VERTEX_POINT('VP_FIL_START_0', #107);
+#128 = VERTEX_POINT('VP_FIL_START_40', #108);
+#129 = VERTEX_POINT('VP_FIL_END_0', #109);
+#130 = VERTEX_POINT('VP_FIL_END_40', #110);
+#131 = VERTEX_POINT('VP_HT_L0', #111);
+#132 = VERTEX_POINT('VP_HT_L40', #112);
+#133 = VERTEX_POINT('VP_HT_R0', #113);
+#134 = VERTEX_POINT('VP_HT_R40', #114);
+
+/* ---------------- Geometric Curves ---------------- */
+/* Rails along Y axis */
+#141 = LINE('L_BOT_L', #101, #24);
+#142 = LINE('L_BOT_R', #102, #24);
+#143 = LINE('L_LT', #105, #24);
+#144 = LINE('L_FIL_START', #107, #24);
+#145 = LINE('L_FIL_END', #109, #24);
+#146 = LINE('L_HT_L', #111, #24);
+#147 = LINE('L_HT_R', #113, #24);
+
+/* Lines in Y=0 and Y=40 planes */
+#148 = LINE('L_BOT_F', #101, #22);
+#149 = LINE('L_BOT_BK', #104, #22);
+#150 = LINE('L_LT_F', #105, #22);
+#151 = LINE('L_LT_BK', #106, #22);
+#152 = LINE('L_HIGH_SIDE_F', #109, #20);
+#153 = LINE('L_HIGH_SIDE_BK', #110, #20);
+#154 = LINE('L_HT_F', #111, #22);
+#155 = LINE('L_HT_BK', #112, #22);
+#156 = LINE('L_END_R_F', #102, #20);
+#157 = LINE('L_END_R_BK', #103, #20);
+#158 = LINE('L_END_L_F', #101, #20);
+#159 = LINE('L_END_L_BK', #104, #20);
+
+/* Fillet circular arcs (R = 5.0) */
+#161 = AXIS2_PLACEMENT_3D('PLACE_ARC_0', #115, #24, #23);
+#162 = CIRCLE('C_FIL_0', #161, 5.0);
+
+#163 = AXIS2_PLACEMENT_3D('PLACE_ARC_40', #116, #24, #23);
+#164 = CIRCLE('C_FIL_40', #163, 5.0);
+
+/* ---------------- Topological Edge Curves ---------------- */
+/* Fillet boundary rails and arcs */
+#171 = EDGE_CURVE('E_FIL_RAIL_START', #127, #128, #144, .T.);
+#172 = EDGE_CURVE('E_FIL_RAIL_END', #129, #130, #145, .T.);
+#173 = EDGE_CURVE('E_FIL_ARC_0', #127, #129, #162, .T.);
+#174 = EDGE_CURVE('E_FIL_ARC_40', #128, #130, #164, .T.);
+
+/* Low step top edges */
+#175 = EDGE_CURVE('E_LT_L', #125, #126, #143, .T.);
+#176 = EDGE_CURVE('E_LT_F', #125, #127, #150, .T.);
+#177 = EDGE_CURVE('E_LT_BK', #126, #128, #151, .T.);
+
+/* High step side vertical edges */
+#178 = EDGE_CURVE('E_HIGH_SIDE_F', #129, #131, #152, .T.);
+#179 = EDGE_CURVE('E_HIGH_SIDE_BK', #130, #132, #153, .T.);
+#180 = EDGE_CURVE('E_HIGH_TOP_L', #131, #132, #146, .T.);
+
+/* High step top edges */
+#181 = EDGE_CURVE('E_HT_F', #131, #133, #154, .T.);
+#182 = EDGE_CURVE('E_HT_BK', #132, #134, #155, .T.);
+#183 = EDGE_CURVE('E_HT_R', #133, #134, #147, .T.);
+
+/* Right end vertical edges */
+#184 = EDGE_CURVE('E_R_V_F', #122, #133, #156, .T.);
+#185 = EDGE_CURVE('E_R_V_BK', #123, #134, #157, .T.);
+
+/* Left end vertical edges */
+#186 = EDGE_CURVE('E_L_V_F', #121, #125, #158, .T.);
+#187 = EDGE_CURVE('E_L_V_BK', #124, #126, #159, .T.);
+
+/* Bottom edges */
+#188 = EDGE_CURVE('E_B_F', #121, #122, #148, .T.);
+#189 = EDGE_CURVE('E_B_BK', #124, #123, #149, .T.);
+#190 = EDGE_CURVE('E_B_L', #121, #124, #141, .T.);
+#191 = EDGE_CURVE('E_B_R', #122, #123, #142, .T.);
+
+/* ---------------- Oriented Edges ---------------- */
+#201 = ORIENTED_EDGE('*', *, *, #171, .T.);
+#202 = ORIENTED_EDGE('*', *, *, #172, .T.);
+#203 = ORIENTED_EDGE('*', *, *, #173, .T.);
+#204 = ORIENTED_EDGE('*', *, *, #174, .T.);
+#205 = ORIENTED_EDGE('*', *, *, #171, .F.);
+#206 = ORIENTED_EDGE('*', *, *, #172, .F.);
+#207 = ORIENTED_EDGE('*', *, *, #173, .F.);
+#208 = ORIENTED_EDGE('*', *, *, #174, .F.);
+
+#209 = ORIENTED_EDGE('*', *, *, #175, .T.);
+#210 = ORIENTED_EDGE('*', *, *, #176, .T.);
+#211 = ORIENTED_EDGE('*', *, *, #177, .T.);
+#212 = ORIENTED_EDGE('*', *, *, #175, .F.);
+#213 = ORIENTED_EDGE('*', *, *, #176, .F.);
+#214 = ORIENTED_EDGE('*', *, *, #177, .F.);
+
+#215 = ORIENTED_EDGE('*', *, *, #178, .T.);
+#216 = ORIENTED_EDGE('*', *, *, #179, .T.);
+#217 = ORIENTED_EDGE('*', *, *, #180, .T.);
+#218 = ORIENTED_EDGE('*', *, *, #178, .F.);
+#219 = ORIENTED_EDGE('*', *, *, #179, .F.);
+#220 = ORIENTED_EDGE('*', *, *, #180, .F.);
+
+#221 = ORIENTED_EDGE('*', *, *, #181, .T.);
+#222 = ORIENTED_EDGE('*', *, *, #182, .T.);
+#223 = ORIENTED_EDGE('*', *, *, #183, .T.);
+#224 = ORIENTED_EDGE('*', *, *, #181, .F.);
+#225 = ORIENTED_EDGE('*', *, *, #182, .F.);
+#226 = ORIENTED_EDGE('*', *, *, #183, .F.);
+
+#227 = ORIENTED_EDGE('*', *, *, #184, .T.);
+#228 = ORIENTED_EDGE('*', *, *, #185, .T.);
+#229 = ORIENTED_EDGE('*', *, *, #184, .F.);
+#230 = ORIENTED_EDGE('*', *, *, #185, .F.);
+
+#231 = ORIENTED_EDGE('*', *, *, #186, .T.);
+#232 = ORIENTED_EDGE('*', *, *, #187, .T.);
+#233 = ORIENTED_EDGE('*', *, *, #186, .F.);
+#234 = ORIENTED_EDGE('*', *, *, #187, .F.);
+
+#235 = ORIENTED_EDGE('*', *, *, #188, .T.);
+#236 = ORIENTED_EDGE('*', *, *, #189, .T.);
+#237 = ORIENTED_EDGE('*', *, *, #190, .T.);
+#238 = ORIENTED_EDGE('*', *, *, #191, .T.);
+#239 = ORIENTED_EDGE('*', *, *, #188, .F.);
+#240 = ORIENTED_EDGE('*', *, *, #189, .F.);
+#241 = ORIENTED_EDGE('*', *, *, #190, .F.);
+#242 = ORIENTED_EDGE('*', *, *, #191, .F.);
+
+/* ---------------- Edge Loops ---------------- */
+/* Fillet transition loop */
+#251 = EDGE_LOOP('LOOP_FILLET', (#201, #204, #206, #207));
+
+/* Low step top loop */
+#252 = EDGE_LOOP('LOOP_LOW_TOP', (#209, #211, #205, #213));
+
+/* High step side loop */
+#253 = EDGE_LOOP('LOOP_HIGH_SIDE', (#202, #216, #220, #218));
+
+/* High step top loop */
+#254 = EDGE_LOOP('LOOP_HIGH_TOP', (#221, #223, #225, #220));
+
+/* Right face loop */
+#255 = EDGE_LOOP('LOOP_RIGHT', (#238, #228, #226, #229));
+
+/* Left face loop */
+#256 = EDGE_LOOP('LOOP_LEFT', (#237, #232, #212, #233));
+
+/* Bottom face loop */
+#257 = EDGE_LOOP('LOOP_BOT', (#235, #238, #240, #241));
+
+/* Front face profile loop */
+#258 = EDGE_LOOP('LOOP_FRONT', (#235, #227, #224, #218, #207, #213, #233));
+
+/* Back face profile loop */
+#259 = EDGE_LOOP('LOOP_BACK', (#236, #228, #225, #219, #208, #214, #234));
+
+/* ---------------- Face Bounds ---------------- */
+#261 = FACE_OUTER_BOUND('BND_FILLET', #251, .T.);
+#262 = FACE_OUTER_BOUND('BND_LOW_TOP', #252, .T.);
+#263 = FACE_OUTER_BOUND('BND_HIGH_SIDE', #253, .T.);
+#264 = FACE_OUTER_BOUND('BND_HIGH_TOP', #254, .T.);
+#265 = FACE_OUTER_BOUND('BND_RIGHT', #255, .T.);
+#266 = FACE_OUTER_BOUND('BND_LEFT', #256, .T.);
+#267 = FACE_OUTER_BOUND('BND_BOT', #257, .T.);
+#268 = FACE_OUTER_BOUND('BND_FRONT', #258, .T.);
+#269 = FACE_OUTER_BOUND('BND_BACK', #259, .T.);
+
+/* ---------------- Surfaces ---------------- */
+/* Fillet cylinder: origin (50, 0, 25), axis along Y (0, 1, 0), radius = 5.0 */
+#271 = AXIS2_PLACEMENT_3D('PLACE_FIL_CYL', #115, #24, #23);
+#272 = CYLINDRICAL_SURFACE('SURF_FILLET', #271, 5.0);
+
+/* Low step top plane: Z=20, normal (0, 0, 1) */
+#273 = AXIS2_PLACEMENT_3D('PLACE_LOW_TOP', #105, #20, #22);
+#274 = PLANE('SURF_LOW_TOP', #273);
+
+/* High step side plane: X=50, normal (-1, 0, 0) */
+#275 = AXIS2_PLACEMENT_3D('PLACE_HIGH_SIDE', #109, #23, #24);
+#276 = PLANE('SURF_HIGH_SIDE', #275);
+
+/* High step top plane: Z=40, normal (0, 0, 1) */
+#277 = AXIS2_PLACEMENT_3D('PLACE_HIGH_TOP', #111, #20, #22);
+#278 = PLANE('SURF_HIGH_TOP', #277);
+
+/* Right end plane: X=100, normal (1, 0, 0) */
+#279 = AXIS2_PLACEMENT_3D('PLACE_RIGHT', #102, #22, #24);
+#280 = PLANE('SURF_RIGHT', #279);
+
+/* Left end plane: X=0, normal (-1, 0, 0) */
+#281 = AXIS2_PLACEMENT_3D('PLACE_LEFT', #101, #23, #24);
+#282 = PLANE('SURF_LEFT', #281);
+
+/* Bottom plane: Z=0, normal (0, 0, -1) */
+#283 = AXIS2_PLACEMENT_3D('PLACE_BOT', #101, #21, #22);
+#284 = PLANE('SURF_BOT', #283);
+
+/* Front profile plane: Y=0, normal (0, -1, 0) */
+#285 = AXIS2_PLACEMENT_3D('PLACE_FRONT', #101, #25, #22);
+#286 = PLANE('SURF_FRONT', #285);
+
+/* Back profile plane: Y=40, normal (0, 1, 0) */
+#287 = AXIS2_PLACEMENT_3D('PLACE_BACK', #104, #24, #22);
+#288 = PLANE('SURF_BACK', #287);
+
+/* ---------------- Advanced Faces ---------------- */
+#291 = ADVANCED_FACE('FACE_FILLET', (#261), #272, .T.);
+#292 = ADVANCED_FACE('FACE_LOW_TOP', (#262), #274, .T.);
+#293 = ADVANCED_FACE('FACE_HIGH_SIDE', (#263), #276, .T.);
+#294 = ADVANCED_FACE('FACE_HIGH_TOP', (#264), #278, .T.);
+#295 = ADVANCED_FACE('FACE_RIGHT', (#265), #280, .T.);
+#296 = ADVANCED_FACE('FACE_LEFT', (#266), #282, .T.);
+#297 = ADVANCED_FACE('FACE_BOT', (#267), #284, .T.);
+#298 = ADVANCED_FACE('FACE_FRONT', (#268), #286, .T.);
+#299 = ADVANCED_FACE('FACE_BACK', (#269), #288, .T.);
+
+/* ---------------- Closed Shell and Solid B-Rep ---------------- */
+#300 = CLOSED_SHELL('SHELL_STEPPED_FILLET_BAR', (#291, #292, #293, #294, #295, #296, #297, #298, #299));
+#310 = MANIFOLD_SOLID_BREP('SOLID_STEPPED_FILLET_BAR', #300);
+
+ENDSEC;
+END-ISO-10303-21;

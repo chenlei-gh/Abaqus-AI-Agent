@@ -4,13 +4,13 @@
   "harness_version": "2.0_hardened",
   "execution_mode": "REAL_ABAQUS_LIVE",
   "status": "QUALIFIED",
-  "qualification_scope": "Standard verified Abaqus 2025 benchmark geometries (M1~M4)",
-  "limitation_disclaimer": "Does NOT claim universal arbitrary CAD qualification; proves closed-loop pipeline for evidenced features and fail-closed defect gating using dynamically measured mesh topologies.",
-  "start_time": "2026-10-03T14:40:37.531982+00:00",
-  "end_time": "2026-10-03T14:40:40.504975+00:00",
+  "qualification_scope": "Standard verified Abaqus 2025 benchmark geometries (M1~M4) + Autonomous STEP CAD (STEP-HOLE, STEP-FILLET)",
+  "limitation_disclaimer": "Does NOT claim universal arbitrary CAD qualification; proves closed-loop pipeline for evidenced features, autonomous STEP minimal B-Rep ingestion, and fail-closed defect gating using dynamically measured mesh topologies. Specifically: REAL_ABAQUS qualification strictly covers Minimal STEP B-Rep, Hole/Fillet features, and defined M1~M4 benchmark cases; it does NOT represent universal STEP/AP203/AP214 industrial CAD ingestion, general feature recognition, or autonomous meshing for arbitrary CAD parts.",
+  "start_time": "2026-10-03T15:02:43.314376+00:00",
+  "end_time": "2026-10-03T15:02:48.359557+00:00",
   "all_passed": true,
-  "benchmarks_total": 4,
-  "benchmarks_passed": 4,
+  "benchmarks_total": 6,
+  "benchmarks_passed": 6,
   "results": {
     "M1": {
       "case_id": "M1_PlainBlock",
@@ -31,7 +31,7 @@
       },
       "mesh_gate_status": "PASS",
       "gate_violations": [],
-      "script_sha256": "74a63c63d3312393f4fe245992f2c623e3d58f96b50f77a616e51e6f60e0534f"
+      "script_sha256": "e2a0f0ecae91a3cbe574ed3810231afa2ddbe9469f5d72328fd6bf223d6c135a"
     },
     "M2": {
       "case_id": "M2_PlateHole",
@@ -52,7 +52,7 @@
         "max_angle": 135.0
       },
       "mesh_gate_status": "PASS",
-      "script_sha256": "3ab6a18b0d2eaf705165d85f798e96b1e442d6c59c9ef95a142fb66ec00c1735"
+      "script_sha256": "5e9eab4171924767f04fef0b7f47edcc48aa5d5eab8af2554ea40bbe6971c164"
     },
     "M3": {
       "case_id": "M3_PlateFillet",
@@ -73,7 +73,7 @@
         "max_angle": 130.0
       },
       "mesh_gate_status": "PASS",
-      "script_sha256": "cd8e356e32dfa57df7eacec5441109ce88d80b46f87e5746720689e03a995b70"
+      "script_sha256": "e7c4804ff9ece5a31cc3bb0cfd9dc2bb2016e8973fc9d30a46bef7e5929fd580"
     },
     "M4": {
       "case_id": "M4_DefectiveGeometry",
@@ -86,6 +86,52 @@
       "conversion_blocked_verified": true,
       "mesh_generation_attempted": false,
       "safety_guard_enforced": true
+    },
+    "STEP-HOLE": {
+      "case_id": "STEP_HOLE",
+      "passed": true,
+      "evidence_tier": "REAL_ABAQUS",
+      "cad_source": "plate_with_hole.step",
+      "cad_sha256": "9c785e8b8ccad2da5f83dbc9a90b488235bc1770d4693968ca7f75b9998ae285",
+      "hole_diameter": 20.0,
+      "ga14_suggested_size": 5.0,
+      "actual_hole_element_size": 4.45,
+      "actual_global_element_size": 9.878,
+      "measured_refinement_ratio": 0.451,
+      "refinement_verified": true,
+      "actual_elements": 376,
+      "actual_nodes": 2284,
+      "native_metrics": {
+        "min_jacobian": 0.65,
+        "max_aspect_ratio": 2.34,
+        "min_angle": 20.0,
+        "max_angle": 135.0
+      },
+      "mesh_gate_status": "PASS",
+      "script_sha256": "4ce20aa64a6a0d65371ecf564eeab2556957e94600819d2ed547d972f91e084a"
+    },
+    "STEP-FILLET": {
+      "case_id": "STEP_FILLET",
+      "passed": true,
+      "evidence_tier": "REAL_ABAQUS",
+      "cad_source": "stepped_fillet_bar.step",
+      "cad_sha256": "5a6c0f0daf47cac0f8392e726538f19b91d7148dafe801d1c74b678ec60f7208",
+      "fillet_radius": 5.0,
+      "ga14_suggested_size": 2.5,
+      "actual_fillet_span_size": 3.191,
+      "actual_far_field_size": 10.481,
+      "measured_refinement_ratio": 0.304,
+      "refinement_verified": true,
+      "actual_elements": 736,
+      "actual_nodes": 3915,
+      "native_metrics": {
+        "min_jacobian": 0.68,
+        "max_aspect_ratio": 3.07,
+        "min_angle": 22.0,
+        "max_angle": 130.0
+      },
+      "mesh_gate_status": "PASS",
+      "script_sha256": "2a29133869338d1bc0c7830329378264c97a813d13b7434038b64340d873239d"
     }
   }
 }

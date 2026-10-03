@@ -1,0 +1,218 @@
+ISO-10303-21;
+HEADER;
+FILE_DESCRIPTION(('Abaqus AI Agent Benchmark Plate with Through Hole'),'2;1');
+FILE_NAME('plate_with_hole.step','2026-10-03T12:00:00',('Engineer'),('SIMULIA'),'Abaqus 2025','STEP AP203 Ingestion Engine','');
+FILE_SCHEMA(('CONFIG_CONTROL_DESIGN'));
+ENDSEC;
+DATA;
+/* ---------------- Units ---------------- */
+#10 = ( LENGTH_UNIT() NAMED_UNIT(*) SI_UNIT(.MILLI.,.METRE.) );
+
+/* ---------------- Directions and Placements ---------------- */
+#20 = DIRECTION('DIR_Z_POS', (0.0, 0.0, 1.0));
+#21 = DIRECTION('DIR_Z_NEG', (0.0, 0.0, -1.0));
+#22 = DIRECTION('DIR_X_POS', (1.0, 0.0, 0.0));
+#23 = DIRECTION('DIR_X_NEG', (-1.0, 0.0, 0.0));
+#24 = DIRECTION('DIR_Y_POS', (0.0, 1.0, 0.0));
+#25 = DIRECTION('DIR_Y_NEG', (0.0, -1.0, 0.0));
+
+/* ---------------- Cartesian Points ---------------- */
+/* Outer box bottom vertices (Z = 0) */
+#101 = CARTESIAN_POINT('P1', (0.0, 0.0, 0.0));
+#102 = CARTESIAN_POINT('P2', (100.0, 0.0, 0.0));
+#103 = CARTESIAN_POINT('P3', (100.0, 100.0, 0.0));
+#104 = CARTESIAN_POINT('P4', (0.0, 100.0, 0.0));
+
+/* Outer box top vertices (Z = 20) */
+#105 = CARTESIAN_POINT('P5', (0.0, 0.0, 20.0));
+#106 = CARTESIAN_POINT('P6', (100.0, 0.0, 20.0));
+#107 = CARTESIAN_POINT('P7', (100.0, 100.0, 20.0));
+#108 = CARTESIAN_POINT('P8', (0.0, 100.0, 20.0));
+
+/* Hole circular anchor points (Center: 50, 50, Radius: 10, Diameter: 20) */
+#109 = CARTESIAN_POINT('P_HOLE_BOT', (60.0, 50.0, 0.0));
+#110 = CARTESIAN_POINT('P_HOLE_TOP', (60.0, 50.0, 20.0));
+#111 = CARTESIAN_POINT('P_CENTER_BOT', (50.0, 50.0, 0.0));
+#112 = CARTESIAN_POINT('P_CENTER_TOP', (50.0, 50.0, 20.0));
+
+/* ---------------- Topological Vertex Points ---------------- */
+#121 = VERTEX_POINT('VP1', #101);
+#122 = VERTEX_POINT('VP2', #102);
+#123 = VERTEX_POINT('VP3', #103);
+#124 = VERTEX_POINT('VP4', #104);
+#125 = VERTEX_POINT('VP5', #105);
+#126 = VERTEX_POINT('VP6', #106);
+#127 = VERTEX_POINT('VP7', #107);
+#128 = VERTEX_POINT('VP8', #108);
+#129 = VERTEX_POINT('VP_HOLE_BOT', #109);
+#130 = VERTEX_POINT('VP_HOLE_TOP', #110);
+
+/* ---------------- Geometric Curves ---------------- */
+/* Lines for bottom outer boundary */
+#141 = LINE('L1', #101, #22);
+#142 = LINE('L2', #102, #24);
+#143 = LINE('L3', #103, #23);
+#144 = LINE('L4', #104, #25);
+
+/* Lines for top outer boundary */
+#145 = LINE('L5', #105, #22);
+#146 = LINE('L6', #106, #24);
+#147 = LINE('L7', #107, #23);
+#148 = LINE('L8', #108, #25);
+
+/* Vertical lines for 4 corners */
+#149 = LINE('L9', #101, #20);
+#150 = LINE('L10', #102, #20);
+#151 = LINE('L11', #103, #20);
+#152 = LINE('L12', #104, #20);
+
+/* Vertical line seam on hole cylinder */
+#153 = LINE('L_HOLE_SEAM', #109, #20);
+
+/* Hole circular curves (D = 20, R = 10) */
+#161 = AXIS2_PLACEMENT_3D('PLACE_HOLE_BOT', #111, #20, #22);
+#162 = CIRCLE('C_HOLE_BOT', #161, 10.0);
+
+#163 = AXIS2_PLACEMENT_3D('PLACE_HOLE_TOP', #112, #20, #22);
+#164 = CIRCLE('C_HOLE_TOP', #163, 10.0);
+
+/* ---------------- Topological Edge Curves ---------------- */
+/* Bottom outer edges */
+#171 = EDGE_CURVE('E_B1', #121, #122, #141, .T.);
+#172 = EDGE_CURVE('E_B2', #122, #123, #142, .T.);
+#173 = EDGE_CURVE('E_B3', #123, #124, #143, .T.);
+#174 = EDGE_CURVE('E_B4', #124, #121, #144, .T.);
+
+/* Top outer edges */
+#175 = EDGE_CURVE('E_T1', #125, #126, #145, .T.);
+#176 = EDGE_CURVE('E_T2', #126, #127, #146, .T.);
+#177 = EDGE_CURVE('E_T3', #127, #128, #147, .T.);
+#178 = EDGE_CURVE('E_T4', #128, #125, #148, .T.);
+
+/* Vertical corner edges */
+#179 = EDGE_CURVE('E_V1', #121, #125, #149, .T.);
+#180 = EDGE_CURVE('E_V2', #122, #126, #150, .T.);
+#181 = EDGE_CURVE('E_V3', #123, #127, #151, .T.);
+#182 = EDGE_CURVE('E_V4', #124, #128, #152, .T.);
+
+/* Hole edges */
+#183 = EDGE_CURVE('E_HOLE_BOT', #129, #129, #162, .T.);
+#184 = EDGE_CURVE('E_HOLE_TOP', #130, #130, #164, .T.);
+#185 = EDGE_CURVE('E_HOLE_SEAM', #129, #130, #153, .T.);
+
+/* ---------------- Oriented Edges ---------------- */
+#191 = ORIENTED_EDGE('*', *, *, #171, .T.);
+#192 = ORIENTED_EDGE('*', *, *, #172, .T.);
+#193 = ORIENTED_EDGE('*', *, *, #173, .T.);
+#194 = ORIENTED_EDGE('*', *, *, #174, .T.);
+
+#195 = ORIENTED_EDGE('*', *, *, #175, .T.);
+#196 = ORIENTED_EDGE('*', *, *, #176, .T.);
+#197 = ORIENTED_EDGE('*', *, *, #177, .T.);
+#198 = ORIENTED_EDGE('*', *, *, #178, .T.);
+
+#199 = ORIENTED_EDGE('*', *, *, #179, .T.);
+#200 = ORIENTED_EDGE('*', *, *, #180, .T.);
+#201 = ORIENTED_EDGE('*', *, *, #181, .T.);
+#202 = ORIENTED_EDGE('*', *, *, #182, .T.);
+
+#203 = ORIENTED_EDGE('*', *, *, #179, .F.);
+#204 = ORIENTED_EDGE('*', *, *, #180, .F.);
+#205 = ORIENTED_EDGE('*', *, *, #181, .F.);
+#206 = ORIENTED_EDGE('*', *, *, #182, .F.);
+
+#207 = ORIENTED_EDGE('*', *, *, #171, .F.);
+#208 = ORIENTED_EDGE('*', *, *, #172, .F.);
+#209 = ORIENTED_EDGE('*', *, *, #173, .F.);
+#210 = ORIENTED_EDGE('*', *, *, #174, .F.);
+
+#211 = ORIENTED_EDGE('*', *, *, #175, .F.);
+#212 = ORIENTED_EDGE('*', *, *, #176, .F.);
+#213 = ORIENTED_EDGE('*', *, *, #177, .F.);
+#214 = ORIENTED_EDGE('*', *, *, #178, .F.);
+
+#215 = ORIENTED_EDGE('*', *, *, #183, .T.);
+#216 = ORIENTED_EDGE('*', *, *, #184, .T.);
+#217 = ORIENTED_EDGE('*', *, *, #183, .F.);
+#218 = ORIENTED_EDGE('*', *, *, #184, .F.);
+#219 = ORIENTED_EDGE('*', *, *, #185, .T.);
+#220 = ORIENTED_EDGE('*', *, *, #185, .F.);
+
+/* ---------------- Edge Loops ---------------- */
+/* Top outer boundary loop */
+#231 = EDGE_LOOP('LOOP_TOP_OUTER', (#195, #196, #197, #198));
+/* Top hole inner boundary loop */
+#232 = EDGE_LOOP('LOOP_TOP_HOLE_INNER', (#216));
+
+/* Bottom outer boundary loop */
+#233 = EDGE_LOOP('LOOP_BOT_OUTER', (#210, #209, #208, #207));
+/* Bottom hole inner boundary loop */
+#234 = EDGE_LOOP('LOOP_BOT_HOLE_INNER', (#217));
+
+/* Side boundary loops (Front, Right, Back, Left) */
+#235 = EDGE_LOOP('LOOP_FRONT', (#191, #200, #211, #203));
+#236 = EDGE_LOOP('LOOP_RIGHT', (#192, #201, #212, #204));
+#237 = EDGE_LOOP('LOOP_BACK', (#193, #202, #213, #205));
+#238 = EDGE_LOOP('LOOP_LEFT', (#194, #199, #214, #206));
+
+/* Hole cylinder barrel loop */
+#239 = EDGE_LOOP('LOOP_HOLE_CYL', (#215, #219, #218, #220));
+
+/* ---------------- Face Bounds ---------------- */
+#241 = FACE_OUTER_BOUND('BOUND_TOP_OUTER', #231, .T.);
+#242 = FACE_BOUND('BOUND_TOP_INNER', #232, .T.);
+
+#243 = FACE_OUTER_BOUND('BOUND_BOT_OUTER', #233, .T.);
+#244 = FACE_BOUND('BOUND_BOT_INNER', #234, .T.);
+
+#245 = FACE_OUTER_BOUND('BOUND_FRONT', #235, .T.);
+#246 = FACE_OUTER_BOUND('BOUND_RIGHT', #236, .T.);
+#247 = FACE_OUTER_BOUND('BOUND_BACK', #237, .T.);
+#248 = FACE_OUTER_BOUND('BOUND_LEFT', #238, .T.);
+
+#249 = FACE_OUTER_BOUND('BOUND_HOLE_CYL', #239, .T.);
+
+/* ---------------- Surfaces ---------------- */
+#251 = AXIS2_PLACEMENT_3D('PLACE_TOP', #105, #20, #22);
+#252 = PLANE('SURF_TOP', #251);
+
+#253 = AXIS2_PLACEMENT_3D('PLACE_BOT', #101, #21, #22);
+#254 = PLANE('SURF_BOT', #253);
+
+#255 = AXIS2_PLACEMENT_3D('PLACE_FRONT', #101, #25, #22);
+#256 = PLANE('SURF_FRONT', #255);
+
+#257 = AXIS2_PLACEMENT_3D('PLACE_RIGHT', #102, #22, #24);
+#258 = PLANE('SURF_RIGHT', #257);
+
+#259 = AXIS2_PLACEMENT_3D('PLACE_BACK', #103, #24, #23);
+#260 = PLANE('SURF_BACK', #259);
+
+#261 = AXIS2_PLACEMENT_3D('PLACE_LEFT', #104, #23, #25);
+#262 = PLANE('SURF_LEFT', #261);
+
+#263 = AXIS2_PLACEMENT_3D('PLACE_CYL', #111, #20, #22);
+#264 = CYLINDRICAL_SURFACE('SURF_HOLE_CYL', #263, 10.0);
+
+/* ---------------- Advanced Faces ---------------- */
+/* Top Face with outer loop and inner hole loop */
+#271 = ADVANCED_FACE('FACE_TOP', (#241, #242), #252, .T.);
+
+/* Bottom Face with outer loop and inner hole loop */
+#272 = ADVANCED_FACE('FACE_BOT', (#243, #244), #254, .T.);
+
+/* 4 Outer Side Faces */
+#273 = ADVANCED_FACE('FACE_FRONT', (#245), #256, .T.);
+#274 = ADVANCED_FACE('FACE_RIGHT', (#246), #258, .T.);
+#275 = ADVANCED_FACE('FACE_BACK', (#247), #260, .T.);
+#276 = ADVANCED_FACE('FACE_LEFT', (#248), #262, .T.);
+
+/* Hole Cylindrical Barrel Face */
+#277 = ADVANCED_FACE('FACE_HOLE_CYL', (#249), #264, .T.);
+
+/* ---------------- Closed Shell and Solid B-Rep ---------------- */
+#280 = CLOSED_SHELL('SHELL_PLATE_WITH_HOLE', (#271, #272, #273, #274, #275, #276, #277));
+#290 = MANIFOLD_SOLID_BREP('SOLID_PLATE_WITH_HOLE', #280);
+
+ENDSEC;
+END-ISO-10303-21;

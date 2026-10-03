@@ -20,6 +20,8 @@ from tools.ga14_real_machine_qualification import (
     execute_m2_plate_with_hole,
     execute_m3_plate_with_fillet,
     execute_m4_defective_fail_closed,
+    execute_step_hole_qualification,
+    execute_step_fillet_qualification,
     run_ga14_qualification_suite,
 )
 
@@ -83,6 +85,36 @@ def test_m4_defective_fail_closed_qualification(tmp_path: Path):
     assert res["safety_guard_enforced"] is True
 
 
+def test_step_hole_end_to_end_cad_qualification(tmp_path: Path):
+    """Verify autonomous STEP file ingestion -> Hole recognition -> Meshability -> Abaqus local refinement."""
+    res = execute_step_hole_qualification(tmp_path, offline=True)
+    assert res["passed"] is True
+    assert res["case_id"] == "STEP_HOLE"
+    assert res["cad_source"] == "plate_with_hole.step"
+    assert len(res["cad_sha256"]) == 64
+    assert res["hole_diameter"] == 20.0
+    assert res["ga14_suggested_size"] == 5.0
+    assert res["refinement_verified"] is True
+    assert res["measured_refinement_ratio"] < 0.70
+    assert res["actual_hole_element_size"] < res["actual_global_element_size"]
+    assert res["mesh_gate_status"] == "PASS"
+
+
+def test_step_fillet_end_to_end_cad_qualification(tmp_path: Path):
+    """Verify autonomous STEP file ingestion -> Fillet recognition -> Meshability -> Abaqus local refinement."""
+    res = execute_step_fillet_qualification(tmp_path, offline=True)
+    assert res["passed"] is True
+    assert res["case_id"] == "STEP_FILLET"
+    assert res["cad_source"] == "stepped_fillet_bar.step"
+    assert len(res["cad_sha256"]) == 64
+    assert res["fillet_radius"] == 5.0
+    assert res["ga14_suggested_size"] == 2.5
+    assert res["refinement_verified"] is True
+    assert res["measured_refinement_ratio"] < 0.60
+    assert res["actual_fillet_span_size"] < res["actual_far_field_size"]
+    assert res["mesh_gate_status"] == "PASS"
+
+
 def test_fail_fast_no_silent_fallback(tmp_path: Path):
     """Verify live mode strictly raises RuntimeError without falling back when launcher is missing."""
     fake_launcher = "nonexistent_abaqus_binary_xyz"
@@ -103,19 +135,21 @@ def test_ga14_real_machine_evidence_manifest():
     assert data["harness_version"] == "2.0_hardened"
     assert data["status"] in ("QUALIFIED", "OFFLINE_VERIFIED")
     assert data["all_passed"] is True
-    assert data["benchmarks_total"] == 4
-    assert data["benchmarks_passed"] == 4
+    assert data["benchmarks_total"] == 6
+    assert data["benchmarks_passed"] == 6
 
     # Check limitation disclaimer explicitly recorded
     assert "limitation_disclaimer" in data
     assert "Does NOT claim universal arbitrary CAD qualification" in data["limitation_disclaimer"]
 
-    # Verify M1 ~ M4 entries
+    # Verify M1 ~ M4 + STEP entries
     results = data["results"]
     assert "M1" in results and results["M1"]["passed"] is True
     assert "M2" in results and results["M2"]["passed"] is True
     assert "M3" in results and results["M3"]["passed"] is True
     assert "M4" in results and results["M4"]["passed"] is True
+    assert "STEP-HOLE" in results and results["STEP-HOLE"]["passed"] is True
+    assert "STEP-FILLET" in results and results["STEP-FILLET"]["passed"] is True
 
     # Detailed M2 dynamic topological verification in manifest
     assert results["M2"]["refinement_verified"] is True
