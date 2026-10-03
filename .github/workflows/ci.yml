@@ -9,6 +9,7 @@ jobs:
   test:
     runs-on: ${{ matrix.os }}
     strategy:
+      fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest]
         python-version: ["3.10", "3.11", "3.12"]
@@ -21,7 +22,10 @@ jobs:
         run: python -m pip install -e ".[test]"
       - name: Run pytest with strict warnings
         run: |
-          python -m pytest -W error -ra -v || { echo "=== FAILED TESTS DETAILS ==="; python -m pytest --tb=long -v; exit 1; }
+          python -m pytest -W error -q || {
+            echo "::error title=Pytest Failure::$(python -m pytest --tb=short -q | grep -E 'FAILED' | head -n 5)"
+            exit 1
+          }
       - name: Verify CLI entrypoint and commands
         run: |
           abaqus-ai-agent --help
