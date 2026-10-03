@@ -23,6 +23,7 @@ jobs:
       - name: Run pytest with strict warnings
         run: python -c "import subprocess, sys; res = subprocess.run([sys.executable, '-m', 'pytest', '-W', 'error', '--tb=short', '-q'], capture_output=True, text=True); print(res.stdout); print(res.stderr, file=sys.stderr); [print('::error title=Pytest Error::' + line) for line in (res.stdout + res.stderr).splitlines() if 'FAILED' in line or 'ERROR' in line or 'AssertionError' in line or 'Error:' in line][:10]; sys.exit(res.returncode)"
       - name: Verify CLI entrypoint and commands
+        shell: bash
         run: |
           abaqus-ai-agent --help
           abaqus-ai-agent matrix --list
@@ -31,6 +32,7 @@ jobs:
           abaqus-agent inspect --json
           abaqus-agent ask "对100mm悬臂梁端部施加1000N垂直载荷，材料为结构钢，固定根部，校核端部挠度不超过2.5mm。" --dry-run
       - name: Run Golden Evidence & Release Quality Audits
+        shell: bash
         run: |
           python tools/run_golden_matrix.py --validate-evidence all
           python tools/i6_release_audit.py
