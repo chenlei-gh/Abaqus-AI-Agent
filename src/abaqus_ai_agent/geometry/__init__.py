@@ -37,6 +37,9 @@ from .features import (
     FeatureType,
     HoleSubType,
     detect_fastener_holes,
+    detect_fillets,
+    detect_chamfers,
+    detect_features,
 )
 
 __all__ = [
@@ -68,4 +71,7 @@ __all__ = [
     "FeatureType",
     "HoleSubType",
     "detect_fastener_holes",
+    "detect_fillets",
+    "detect_chamfers",
+    "detect_features",
 ]

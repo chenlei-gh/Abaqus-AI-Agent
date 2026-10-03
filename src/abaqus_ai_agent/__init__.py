@@ -70,4 +70,7 @@ from .geometry import (
     FeatureType,
     HoleSubType,
     detect_fastener_holes,
+    detect_fillets,
+    detect_chamfers,
+    detect_features,
 )
