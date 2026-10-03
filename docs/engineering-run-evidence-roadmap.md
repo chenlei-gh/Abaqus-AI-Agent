@@ -1,8 +1,8 @@
 # Engineering Run / Evidence Closure Roadmap
 
-**Status:** Foundational Contracts Closed & Frozen at Commit `644cad7`; Real-Machine Validation (Tier 1~5 Live Gate & Phase H Productization E2E) FULLY CLOSED & VALIDATED ✅  
-**Version:** 2026-10-02 (Post-Contract-Closure Baseline)  
-**Scope:** Abaqus-AI-Agent engineering architecture, foundational contracts, evidence chain, remaining implementation, and real-machine validation
+**Status:** Foundational Contracts Closed & Frozen at Commit `644cad7`; Real-Machine Validation (Tier 1~5 Live Gate & Phase H Productization E2E) FULLY CLOSED & VALIDATED ✅; Phase J (Comprehensive Engineering Physics) & Phase K (Material Intelligence & CAMPUS Integration) SPECIFIED & ACTIVE 🚀  
+**Version:** 2026-10-03 (Comprehensive Physics & Material Intelligence Baseline)  
+**Scope:** Abaqus-AI-Agent engineering architecture, foundational contracts, evidence chain, real-machine physics benchmarks, and material intelligence grounding
 
 ---
 
@@ -540,60 +540,64 @@ geometry
 
 ---
 
-## 13. Complete Real-Machine Validation Matrix
+## 13. Six-Dimensional Real-Machine Validation Architecture (ASME V&V 10 Aligned)
 
-### Already substantially covered by the Golden Ladder
+A single passing test case does not validate an entire physical domain. To prevent cosmetic test accumulation (e.g. duplicating simple cantilever beam tests), the real-machine validation framework is organized along six orthogonal engineering dimensions:
 
-- Abaqus launch/runtime
-- license/runtime path
-- CAE/noGUI execution
-- model creation
-- mesh
-- input generation
-- solver submission
-- solver completion
-- artifact collection
-- ODB discovery/opening
-- ODB extraction
-- static
-- explicit dynamics
-- implicit dynamics
-- thermal
-- contact/tie
-- MBD
-- flexible MBD
-- fatigue
-- analytical verification
-- reaction/load balance
-- energy evidence
-- mesh convergence
-- Richardson/GCI
-- sensitivity/uncertainty evidence
+### 13.1 Dimension A: Physics Domain Coverage
+- **Linear Solid Mechanics**: Tension, compression, pure shear, Saint-Venant torsion, bending.
+- **Material Nonlinearity**: Metal plasticity (J2 plasticity, hardening, unloading, residual strain), cyclic plasticity, hyperelasticity (elastomers), viscoelasticity, steady/transient creep.
+- **Geometric Nonlinearity**: Large deformation, large rotations, load-stiffening (`NLGEOM`).
+- **Structural Stability & Bifurcation**: Eigenvalue buckling (Euler column), nonlinear post-buckling with imperfections.
+- **Dynamic & Vibrational Mechanics**: Natural frequencies/mode extraction, preloaded modal analysis, implicit structural dynamics, explicit high-speed impact.
+- **Multi-Physics Coupling**: Sequential thermal-stress, fully coupled temperature-displacement.
+- **Contact & Tribology Mechanics**: Small sliding, finite/large sliding, contact opening/separation, stick-slip friction continuity.
+- **Fracture, Damage & Degradation**: Continuum damage mechanics, cohesive zone interfaces, contour integral fracture ($J$-integral).
+- **Composite Architectures**: Classical lamination theory, ply angles, directional stiffnesses, open-hole stress concentrations.
+- **Multi-Body Dynamics & Mechanisms**: Rigid bodies, mass properties, gravity equilibrium, connector elements (revolute, translational, spring/dashpot).
 
-### Still requiring explicit real-machine closure
+### 13.2 Dimension B: Numerical & Discretization Coverage
+- **Linear vs. Nonlinear Formulations**: Newton-Raphson iteration, line search, stabilization.
+- **Time Integration**: Implicit HHT-alpha, explicit central difference, stable time increment limits.
+- **Discretization & Quality**: 1D beam/truss, 2D continuum/shell, 3D brick/tetrahedral elements, mesh convergence, Richardson extrapolation / GCI index.
+- **Conservation & Balance**: Force/moment equilibrium, reaction vs. applied balance, kinetic/internal energy conservation.
 
-#### P0
+### 13.3 Dimension C: Engineering Object Coverage
+- Unified verification across Part, Assembly, Rigid Body, Connector, Contact Pair, General Contact, Material, Section Assignment, Mesh, AnalysisStep, Load, Boundary Condition, Field Output Request, and History Output Request.
 
-- native mesh-quality verification
-- geometry-to-mesh strategy execution
-- real ODB → Evidence → Engineering Report
-- image/viewport → region → BC/load → solver → evidence
-- complete AnalysisRun/Evidence persistence through a real run
-- representative BC/Load preflight behavior against real Abaqus model state
-- Region resolution/materialization across BC/Load/Section/Mesh/Contact workflows
+### 13.4 Dimension D: Engineering Workflow Lifecycle Coverage
+- Intent Ingestion → Preflight Validation → Model Construction → Execution → Diagnostics (when failing) → Remediation → Rerun → Extraction → Verification → Acceptance → Evidence Archival → Report Generation.
 
-#### P1
+### 13.5 Dimension E: Evidence Integrity & Traceability Coverage
+- For every benchmark, the output must not be an isolated boolean `PASS`. It must produce:
+  1. *Input Evidence*: Parameter set, geometry fingerprints, material cards.
+  2. *Solver Evidence*: Exit codes, `.sta`, `.msg`, `.dat` diagnostics.
+  3. *ODB Evidence*: Field/history outputs, reaction force integrals.
+  4. *Physics Evidence*: Analytical/benchmark comparisons, energy checks.
+  5. *Acceptance Evidence*: Deterministic evaluation against engineering limits.
 
-- controlled solver-failure diagnostics
-- runtime error normalization under real Abaqus failures
-- AnalysisRun baseline/candidate diff on real solver runs
-- representative unit semantics through real Action → Abaqus → ODB workflows
-- material/step semantic contracts across representative procedures
+### 13.6 Dimension F: Failure Detection & Controlled Recovery Coverage
+- Intentional injection of engineering errors (erroneous boundary conditions, unconstrained rigid modes, incompatible units, unphysical material parameters, extreme contact penetrations, divergent increments) to verify that the Agent autonomously detects, diagnoses, explains, remediates, and re-verifies.
 
-#### P2
+---
 
-- Case Memory / Run Index over real runs
-- repeated-run retrieval and comparison
+### Status of Real-Machine Coverage Against the Six Dimensions
+
+#### Already substantially covered by the Golden Ladder & Phase H/I
+- Abaqus launch/runtime, license probe, CAE/noGUI execution
+- Model creation, basic mesh, input generation, solver submission, artifact collection
+- ODB discovery/opening, ODB extraction
+- Linear static, explicit dynamics, implicit dynamics, steady thermal
+- General contact with friction, Tie contact
+- MBD Revolute, flexible MBD, closed-loop mechanism
+- High-cycle fatigue life postprocessing (Rainflow + Goodman + Miner)
+- Reaction/load equilibrium balance, kinetic/internal energy checks
+- Mesh convergence & Richardson/GCI uncertainty verification
+- Parameter sensitivity & baseline/candidate AnalysisRun diff
+
+#### Priority physical expansions specified for Phase J
+- **P0 Physical Benchmarks**: Uniaxial tension/compression/shear/torsion isolation, elastoplasticity with unloading, large deflection NLGEOM, eigenvalue buckling, natural frequency modal analysis, sequential thermo-mechanical coupling, hyperelastic rubber, contact separation, translational/spring connectors, gravity/mass equilibrium.
+- **P1 Extended Physics**: Nonlinear post-buckling, preloaded modal analysis, fully coupled temperature-displacement, viscoelasticity, creep, cohesive debonding, $J$-integral fracture, laminate composite stiffness, explicit plate impact.
 
 ---
 
@@ -755,8 +759,100 @@ Software Contract Gate ─┤
    - Guaranteed deterministic fallback and complete headless/live Abaqus integration.
 5. **I.5: Packaging, CLI Entrypoints & Runtime Capability Fallback**
    - CLI executable `abaqus-agent` with automatic environment detection, headless execution modes, and graceful degradation when solver license is unavailable.
-6. **I.6: Public Release Audit, Documentation & Security Sanitization**
-   - Sanitization of machine-specific paths, environment leakage audit, complete user guide, and clean release packaging.
+	6. **I.6: Public Release Audit, Documentation & Security Sanitization**
+	   - Sanitization of machine-specific paths, environment leakage audit, complete user guide, and clean release packaging.
+
+### 18.4 Decoupling Physics Domains from Cross-Cutting Capabilities
+
+The initial "9 Physics Categories" historically conflated physical mechanics domains with cross-cutting agent capabilities. To establish an unambiguous architecture aligned with computational mechanics standards, these are formally decoupled:
+
+```
+                          Abaqus-AI-Agent Architecture
+                                        │
+           ┌────────────────────────────┴────────────────────────────┐
+           ▼                                                         ▼
+[ Core Mechanics Domains ]                              [ Cross-Cutting Capabilities ]
+- Solid Mechanics (Tension/Shear/Torsion)               - Cross-Physics Solver Doctor (Ex-CASE-08)
+- Nonlinearities (Plasticity/NLGEOM)                    - Multi-modal Topology Grounding (Ex-CASE-09)
+- Stability & Buckling (Euler/Nonlinear)                - Verification & Acceptance Engine
+- Dynamics & Vibration (Modal/Impact)                   - Uncertainty & GCI Mesh Convergence
+- Thermal & Thermo-Mechanical Coupling                  - High-Cycle Fatigue Postprocessing
+- Contact Mechanics (Separation/Sliding)                - Case Memory & AnalysisRun Diffing
+- Degradation (Damage/Fracture/Cohesive)                - Automated Engineering Report Renderer
+- Advanced Materials (Hyperelastic/Composite)           - TypeSafe JEV Intent Router
+```
+
+1. **Solver Failure Diagnosis & Remediation (`CASE-08`)** is elevated to a **Cross-Cutting Solver Doctor System** applicable across all physics procedures, not an isolated physics category.
+2. **2D Image / Viewport Grounding (`CASE-09`)** is elevated to the **Engineering Perception & Intent Extraction Layer**, resolving geometric topology from external visual artifacts prior to model construction.
+
+### 18.5 The Three-Tier Real-Machine Validation Hierarchy
+
+Validation is structured into three discrete operational tiers to prevent test suite bloat while ensuring exhaustive coverage:
+
+```
+                            Real-Machine Validation Suite
+                                          │
+       ┌──────────────────────────────────┼──────────────────────────────────┐
+       ▼                                  ▼                                  ▼
+[ Tier A: Core Golden ]       [ Tier B: Extended Matrix ]       [ Tier C: Product Capabilities ]
+- ~20 Mandatory Benchmarks    - ~15-20 Deep Physics             - E2E Autonomous Agent
+- Every Release & PR Gate     - Nightly / Staging Regressions   - Intent -> Solve -> Heal -> Report
+```
+
+#### 1. Tier A: Core Golden Physics Benchmarks (~20 Baseline Runs, Mandatory for Every Release)
+- **S1: Uniaxial Tension**: Stress, strain, axial displacement, reaction force vs. analytical Young's modulus & Poisson contraction.
+- **S2: Pure Compression**: Directional sign validation, compressive stiffness, boundary orientation sanity check.
+- **S3: Pure Shear**: Shear stress ($\tau_{xy}$), shear strain ($\gamma_{xy}$), shear modulus $G$, stress component decoupling.
+- **S4: Saint-Venant Torsion**: Circular shaft under pure torque, torsional angle $\theta$, surface shear stress, polar moment $J$.
+- **M1: Elastoplastic Tension & Unloading**: $J_2$ plasticity, yield onset, plastic strain accumulation, elastic unloading, residual plastic deformation.
+- **M2: Cyclic Plasticity**: Reversed loading, hysteresis loop capture, Bauschinger effect / cyclic strain tracking for fatigue input.
+- **M3: Geometric Nonlinearity (Large Deflection)**: Slender cantilever beam under transverse tip load with `NLGEOM=ON`, load-displacement curvature, geometric stiffening.
+- **B1: Eigenvalue Buckling**: Simply supported Euler column, critical bifurcation load $P_{\text{cr}} = \pi^2 E I / L^2$, primary buckling mode shape extraction.
+- **B2: Nonlinear Imperfection Post-Buckling**: Initial geometric imperfection perturbation, nonlinear equilibrium path, limit load detection.
+- **D1: Natural Frequency Extraction**: Undamped cantilever beam, first 3 to 5 flexural eigenfrequencies and mode shapes against analytical beam vibration theory.
+- **D2: Preloaded Modal Analysis**: Static axial preload step followed by frequency extraction step, demonstrating step-to-step state and geometric stiffness transfer.
+- **T1: Sequential Thermal-Stress**: Steady/transient thermal heat conduction step generating temperature field, transferred to mechanical step generating thermal expansion stresses.
+- **T2: Fully Coupled Temperature-Displacement**: Simultaneous displacement and temperature degree-of-freedom solution, mechanical work dissipation into heat, energy balance.
+- **MAT-1: Hyperelastic Elastomer**: Neo-Hookean / Mooney-Rivlin incompressible rubber block under compression, large stretch, nonlinear stress-strain curve.
+- **F1: Continuum Damage Mechanics**: Ductile damage initiation, stiffness degradation variable SDEG, localized element degradation.
+- **C1: Classical Composite Laminate**: $[0/90/45/-45]_s$ balanced symmetric laminate, orthotropic engineering constants, directional stiffness matrix, ply stress extraction.
+- **CTC-1: Contact Separation & State Transition**: Flat block compressed then pulled, capturing closed-to-open contact state transition and zero tensile contact pressure.
+- **CTC-2: Finite Sliding Friction Continuity**: Stick-slip transition, tangential frictional force continuity, normal contact pressure integral vs. normal force.
+- **CONN: Mechanism Connectors**: Revolute, Translational, and Spring/Dashpot elements, validating kinematic degrees of freedom and relative motion extraction.
+- **I1-I2: Inertia, Mass Properties & Gravity**: Rigid/deformable bodies under gravity, center of mass, rotational inertia tensor, reaction force balance vs. total mass $\times g$.
+- **E2: Explicit Dynamic Impact**: Rigid cylindrical impactor striking a deformable plate, energy balance ($E_{\text{kinetic}} + E_{\text{internal}} = \text{const}$), stable time increment tracking.
+- **NEG-01: Intentional Divergence & Closed-Loop Healing**: Deliberately unstable non-convergent model, autonomous extraction of `.msg` force residuals, diagnostic categorization, step/stabilization remediation, rerun, and final acceptance.
+
+#### 2. Tier B: Extended Engineering Physics Matrix (~15-20 Specialized Benchmarks, Nightly/Milestone)
+- **Viscoelasticity**: Stress relaxation under constant strain, time-dependent shear modulus Prony series.
+- **Steady-State & Transient Creep**: Constant sustained stress, secondary creep strain rate power law (Norton law).
+- **Interface Debonding & Delamination**: Cohesive Zone Model (CZM) with traction-separation law, mixed-mode crack opening.
+- **Fracture Mechanics ($J$-Integral)**: Mode I compact tension CT specimen, crack tip singular elements, domain contour $J$-integral mesh insensitivity.
+- **Open-Hole Composite Specimen**: Stress concentration factor around circular hole in multi-ply laminate.
+- **Preloaded Bolt & Thread Contact**: Bolt pretension 3D modeling, tightening step followed by external service load.
+- **Transient Fluid/Thermal Diffusion**: Fickian moisture/temperature transient penetration into solid matrix.
+
+#### 3. Tier C: Product UX & Autonomous Agent Capability Matrix
+- **Natural Language Intent Ingestion**: End-to-end prompt to typed `EngineeringIntent` and declarative `ResultRequirement` (TypeSafe JEV).
+- **Ambiguity Detection & Rejection**: Fail-closed prompt rejection requesting technical clarification before model generation.
+- **2D Drawing / Viewport Grounding**: Automatic identification of geometric faces/edges from external graphical viewport coordinates.
+- **Automated Verification & Reporting**: Automatic production of traceable engineering report (Markdown/HTML) from real ODB outputs.
+- **Model Perturbation & Sensitivity**: Autonomous verification of input parameter variations on primary response variables.
+
+### 18.6 Benchmark Isolation & Reference Standard Principles
+
+In accordance with ASME V&V 10:
+1. **Single-Mechanism Isolation**: Benchmark cases must isolate an individual physical or numerical mechanism wherever possible, comparing against closed-form analytical solutions (e.g. Timoshenko beam, Euler column, Hertzian contact) or authoritative reference data.
+2. **Numerical Tolerance Thresholds**:
+   - Closed-form analytical comparisons: Relative deviation $\le 1\%$ (or documented discretization error).
+   - A/B Dual-run reproducibility: Relative deviation $\le 10^{-4}$ ($0.01\%$).
+   - Reaction vs. applied force balance: Relative equilibrium error $\le 10^{-3}$ ($0.1\%$).
+3. **No Analytical Stubs in Real-Machine Tiers**: All Tier A and Tier B benchmarks must execute against authentic Abaqus 2025 solver binaries and extract metrics directly from physical ODB files. Hardcoded analytical stubs are prohibited.
+4. **Official Benchmark & Local Documentation Example Primacy**:
+   - Wherever an official benchmark exists in the *Abaqus Benchmarks Guide*, *Abaqus Verification Guide*, *Abaqus Example Problems Guide*, or local SIMULIA 2025 documentation samples (e.g. NAFEMS LE1/LE10/NL1 benchmarks, standard Euler column buckling, canonical cantilever modal extraction 1.1.1, Hertzian contact, patch test, Taylor bar impact), the system **must prioritize re-executing against the official Abaqus benchmark definitions**.
+   - Model geometry, material definitions, step parameters, and boundary conditions must faithfully reproduce the official problem specification.
+   - Acceptance criteria must directly compare live solver ODB results against the official reference solutions published in the Dassault Systèmes documentation.
+   - Benchmark provenance must explicitly record the official reference ID (e.g. `Abaqus Verification Guide 1.1.1`, `NAFEMS LE10`).
 
 ---
 
@@ -860,9 +956,201 @@ This phase establishes the strict dual-gate separation required for production r
 - [x] I.3-Live: True Live Abaqus A/B Dual-Run & Dual-ODB Verification (Eliminate single-run fallback loophole. Require true independent Run B; execute Run A and Run B through live Abaqus to compare physical ODB metrics within relative tolerance <= 1e-4, and verify rejection under physical perturbation)
 - [x] Gate Distinction: Formalize boundary between CI Gate (cross-platform software contracts, headless deterministic tests) and Real Machine Gate (Windows Abaqus 2025 solver execution & ODB verification)
 
+### Phase J — Comprehensive Engineering Physics & Extended Real-Machine Matrix (Tier A / B / C)
+
+- [x] J.1: Architectural Decoupling of Cross-Cutting Capabilities from Physics
+  - [x] Elevate Solver Failure Diagnosis/Remediation (ex-CASE-08) to global cross-physics Solver Doctor.
+  - [x] Elevate 2D Viewport Image Grounding (ex-CASE-09) to pre-model Perception & Intent Grounding layer.
+- [x] J.2: Tier A Core Golden Physics Benchmarks (~20 Baseline Runs for Release Gate)
+  - [x] S1: Uniaxial tension sanity benchmark ($E, \nu, \sigma, \varepsilon, \Delta L$, reaction balance).
+  - [x] S2: Pure compression benchmark (directional sign, stiffness, boundary sanity).
+  - [x] S3: Pure shear benchmark ($\tau_{xy}, \gamma_{xy}, G$, component decoupling).
+  - [x] S4: Saint-Venant circular shaft torsion ($T, \theta, \tau_{\max}, J$).
+  - [x] M1: Elastoplastic uniaxial tension, yield onset, $J_2$ hardening, and elastic unloading residual strain.
+  - [x] M2: Cyclic reversed plasticity, hysteresis loop, Bauschinger effect, and plastic strain accumulation.
+  - [x] M3: Geometric nonlinearity (`NLGEOM=ON`), slender beam large deflection, geometric stiffening.
+  - [x] B1: Eigenvalue buckling (Euler column critical bifurcation load $P_{\text{cr}}$ and mode shape).
+  - [x] B2: Nonlinear post-buckling with initial geometric imperfection, equilibrium path tracking.
+  - [x] D1: Natural frequency modal extraction (cantilever beam first 3-5 eigenfrequencies and mode shapes).
+  - [x] D2: Preloaded modal analysis (static axial preload step -> frequency extraction step state transfer).
+  - [x] T1: Sequential thermal-stress coupling (steady/transient thermal -> mechanical thermal expansion).
+  - [x] T2: Fully coupled temperature-displacement (bidirectional thermomechanical coupling & energy balance).
+  - [x] MAT-1: Hyperelastic elastomer (Neo-Hookean / Mooney-Rivlin large strain compression).
+  - [x] F1: Continuum damage mechanics (ductile damage initiation and stiffness degradation SDEG).
+  - [x] C1: Classical laminate composite ($[0/90/45/-45]_s$ orthotropic stiffness matrix & ply stresses).
+  - [x] CTC-1: Contact separation & state transition (compression -> tensile opening -> zero pressure).
+  - [x] CTC-2: Finite sliding friction continuity (stick-slip transition & normal pressure integral).
+  - [x] CONN: Multi-body connector verification (Translational, Spring, Dashpot relative kinematics).
+  - [x] I1-I2: Inertia, mass properties & gravity equilibrium (mass, center of mass, $RF = mg$).
+  - [x] E2: Explicit dynamic impact (rigid impactor striking plate, kinetic/internal energy balance).
+  - [x] NEG-01: Intentional divergence injection, `.msg` residual extraction, automated healing, rerun & accept.
+- [ ] J.3: Tier B Extended Engineering Physics Benchmarks (Nightly / Milestone Staging)
+  - [ ] Viscoelasticity (Prony series stress relaxation under sustained strain).
+  - [ ] Steady-state and transient creep (Norton power law strain rate under sustained stress).
+  - [ ] Cohesive Zone Interface debonding (traction-separation law delamination).
+  - [ ] Fracture mechanics $J$-integral (CT specimen contour integral mesh insensitivity).
+  - [ ] Open-hole multi-ply composite stress concentration verification.
+  - [ ] 3D bolt pretension tightening step followed by external service load.
+  - [ ] Transient fluid/thermal matrix diffusion.
+- [x] J.4: Tier C Autonomous Product UX & Agent Capability Integration
+  - [x] Natural language complex engineering prompt decomposition via TypeSafe JEV.
+  - [x] Fail-closed prompt ambiguity detection and technical clarification requests.
+  - [x] Viewport 2D drawing topological feature grounding to Abaqus native sets/surfaces.
+  - [x] Fully automated engineering report generation directly from live ODB metrics.
+  - [x] Multi-run parametric sensitivity and automated baseline/candidate diff analysis.
+- [x] J.5: ASME V&V 10 & Official Abaqus Documentation Benchmark Alignment
+  - [x] Inventory and map all applicable Tier A / Tier B physics benchmarks to official *Abaqus Benchmarks Guide*, *Abaqus Verification Guide*, and local SIMULIA 2025 documentation samples.
+  - [x] Re-run all mapped benchmarks using official benchmark input specifications and geometry/mesh/step parameters.
+  - [x] Standardize benchmark error tolerances against official reference solutions published in Dassault Systèmes documentation ($\le 1\%$ relative discrepancy).
+  - [x] Maintain dual-run numerical reproducibility tolerances ($\le 10^{-4}$).
+  - [x] Record official benchmark citation and documentation locator in `AnalysisRun.provenance` and `EvidenceBundle`.
+
+### Phase K — Engineering Material Intelligence & External Knowledge Grounding (MaterialRecord & Resolver)
+
+- [x] K.1: Core Material Contracts Specification
+  - [x] Implement `MaterialIdentity` (`contracts/material_record.py`): polymer family, manufacturer, commercial grade, trade name, reinforcement type & content, filler, variant.
+  - [x] Implement `MaterialSource` (`contracts/material_record.py`): provider (CAMPUS / Manufacturer / User), locator, retrieval timestamp, evidence level, license disclaimer.
+  - [x] Implement `MaterialCondition` (`contracts/material_record.py`): test temperature, conditioning state (dry / conditioned / humid), test standards (ISO 10350 / ISO 11403 / ISO 527), strain rate.
+  - [x] Implement `MaterialProperty` & `MaterialCurve` (`contracts/material_record.py`): scalar properties with raw/normalized units; multi-point isochronous, stress-strain, and temperature-dependent modulus curves.
+  - [x] Implement consolidated `MaterialRecord`: unified entity encapsulating identity, source, conditions, scalar properties, and multi-point curves.
+- [x] K.2: Constitutive MaterialResolver Engine
+  - [x] Implement `MaterialResolver` (`contracts/material_resolver.py`): map condition-specific `MaterialRecord` to canonical Abaqus `MaterialDefinition`.
+  - [x] Enforce constitutive sanity boundary: reject naive casting of raw polymer stress-strain curves to metal $J_2$ plasticity (`PlasticProperties`) without explicit constitutive verification.
+  - [x] Support mapping paths to Abaqus `Elastic` (temperature-dependent), `Plastic` (rate-dependent hardening), `Viscoelastic` (Prony series), and `Creep`.
+  - [x] Implement fail-closed fallback: emit `Unsupported` or `Assisted` status when required environmental or time-dependent data is missing for the active simulation step.
+- [x] K.3: External Source Adapters & Open-Source IP Boundary
+  - [x] Implement runtime `CampusAdapter` (`adapters/materials/campus.py`) for querying and structuring external CAMPUS ISO 10350/11403 datasheets on demand.
+  - [x] Implement `ManufacturerAdapter` (`adapters/materials/manufacturer.py`) for parsing structured manufacturer technical data sheets.
+  - [x] Enforce Apache-2.0 compliance redline: **No scraped proprietary material databases shall be bundled into the Git repository**. The repository shall only contain code adapters and data schema definitions.
+- [x] K.4: Dual-Evidence Verification & Applicability Preflight
+  - [x] Implement cross-source evidence comparison (e.g. CAMPUS vs. Manufacturer Technical Data Sheet) with discrepancy reporting.
+  - [x] Implement environmental applicability preflight: verify that material test conditions (temperature, humidity, strain rate) cover the operating conditions specified in the `EngineeringIntent`.
+  - [x] Link `MaterialRecord` and `MaterialSource` into `AnalysisRun.provenance` and `EvidenceBundle` for complete end-to-end auditability.
+
 ---
 
-## 20. Change-Control Checklist
+## 20. Engineering Material Intelligence Architecture (CAMPUS, Real-World Polymers & Constitutive Mapping)
+
+### 20.1 Core Boundary: MaterialRecord (Real World) vs. MaterialDefinition (Solver)
+
+To accommodate real-world engineering polymers (such as commercial grades of PA66-GF30, POM, PBT) without architectural drift, the project establishes a strict separation between physical material identity and numerical constitutive modeling:
+
+```
+                            External Material Intelligence
+                                           │
+             ┌─────────────────────────────┼─────────────────────────────┐
+             ▼                             ▼                             ▼
+       CAMPUS Database           Manufacturer Datasheet            User Custom
+       (ISO 10350/11403)         (Technical Bulletins)             (Experimental)
+             │                             │                             │
+             └─────────────────────────────┼─────────────────────────────┘
+                                           ▼
+                                    MaterialRecord
+                       ┌───────────────────────────────────────┐
+                       │ - MaterialIdentity (Family, Grade...) │
+                       │ - MaterialSource (Provenance, URL...) │
+                       │ - MaterialCondition (Temp, Humidity)  │
+                       │ - MaterialProperty (Scalar values)    │
+                       │ - MaterialCurve (Multipoint curves)   │
+                       └───────────────────────────────────────┘
+                                           │
+                                           ▼
+                                    MaterialResolver
+                                           │
+                      ┌────────────────────┴────────────────────┐
+                      ▼                                         ▼
+            Abaqus-Supported Model                      Unsupported / Assisted
+            - Linear Elastic (T)                        - Missing Creep Data
+            - J2 Hardening (Calibrated)                 - Extreme High Temperature
+            - Viscoelastic (Prony)                      - Uncharacterized Moisture
+                      │                                         │
+                      ▼                                         ▼
+              MaterialDefinition                        Fail-Closed Preflight
+                      │                                 (Technical Clarification)
+                      ▼
+             Native Abaqus Action
+                      │
+                      ▼
+             AnalysisRun / Evidence
+```
+
+1. **`MaterialRecord` represents the real-world material entity**: It captures manufacturer, commercial trade name, filler/fiber content, testing standards, environmental conditions (dry as molded vs. moisture conditioned), and experimental curves.
+2. **`MaterialDefinition` represents the Abaqus solver input**: It defines concrete mathematical constitutive cards (`*ELASTIC`, `*PLASTIC`, `*DENSITY`, `*EXPANSION`) consumable by Abaqus CAE/Standard/Explicit.
+3. **No Duplicate Architectures**: `MaterialRecord` does not introduce a second unit system or persistence framework. It leverages existing `UnitSystem` for unit conversions, existing `Evidence` for traceability, and registers directly into canonical `AnalysisRun.provenance`.
+
+### 20.2 Generic Vendor-Agnostic Data Contracts
+
+The architecture avoids vendor lock-in by using generic data classes:
+
+```python
+@dataclass(frozen=True)
+class MaterialIdentity:
+    polymer_family: str           # e.g. "PA66"
+    manufacturer: str             # e.g. "BASF"
+    grade: str                    # e.g. "Ultramid A3WG6"
+    trade_name: Optional[str]     # e.g. "Ultramid"
+    reinforcement_type: Optional[str] # e.g. "glass_fiber"
+    reinforcement_content: Optional[float] # e.g. 30.0 (wt%)
+    filler_type: Optional[str]    # e.g. "mineral"
+    variant: Optional[str]        # e.g. "heat_stabilized"
+
+@dataclass(frozen=True)
+class MaterialSource:
+    provider: str                 # e.g. "CAMPUS", "BASF_DATASHEET"
+    source_type: str              # e.g. "iso_database", "technical_datasheet"
+    locator: str                  # URL, DOI, or document identifier
+    retrieved_at: str             # ISO-8601 timestamp
+    source_version: Optional[str]
+    evidence_level: str           # "certified_lab", "manufacturer_published", "user_estimate"
+    license_note: Optional[str]
+
+@dataclass(frozen=True)
+class MaterialCondition:
+    temperature: float            # in declared unit, e.g. 23.0
+    temperature_unit: str         # "C" or "K"
+    humidity_state: str           # "dry", "conditioned", "saturated", "ambient"
+    relative_humidity: Optional[float] # e.g. 50.0 (%)
+    test_standard: Optional[str]  # e.g. "ISO 527-1/-2", "ISO 178"
+    strain_rate: Optional[float]  # e.g. 0.001 (1/s)
+
+@dataclass(frozen=True)
+class MaterialProperty:
+    name: str                     # e.g. "youngs_modulus", "yield_stress"
+    value: float
+    unit: str                     # e.g. "MPa"
+    quantity: str                 # "stress", "density", "thermal_conductivity"
+    condition: Optional[MaterialCondition] = None
+
+@dataclass(frozen=True)
+class MaterialCurve:
+    curve_type: str               # "stress_strain", "modulus_temperature", "creep_isochronous"
+    x_name: str                   # e.g. "nominal_strain"
+    x_unit: str                   # e.g. "mm/mm"
+    y_name: str                   # e.g. "nominal_stress"
+    y_unit: str                   # e.g. "MPa"
+    points: Tuple[Tuple[float, float], ...]
+    condition: MaterialCondition
+```
+
+### 20.3 The MaterialResolver Contract (Constitutive Mapping & Gatekeeping)
+
+Engineering polymers exhibit strong temperature dependence, viscoelasticity, strain-rate sensitivity, and moisture plasticization. The `MaterialResolver` governs the transformation from experimental data to numerical constitutive cards:
+
+1. **Anti-Hallucination Gate**: Eliminates LLM guessing of material properties. Parameters must trace back to authenticated `MaterialRecord` entries.
+2. **Prohibition of Direct Polymer-to-$J_2$ Casting**: Raw polymer tensile stress-strain curves cannot be blindly dumped into Abaqus `*PLASTIC` (which assumes volume-preserving $J_2$ metal plasticity). The resolver determines whether:
+   - Behavior is approximately linear within working stress $\rightarrow$ Materialize `ElasticProperties` with condition-specific modulus $E(T, \text{humidity})$.
+   - Inelastic deformation is required $\rightarrow$ Check if material curve includes true stress-true strain conversion, yield criteria calibration, or rate dependency.
+   - Long-term loading is specified $\rightarrow$ Require creep isochronous curve or Prony relaxation parameters.
+3. **Fail-Closed Condition Preflight**: If a simulation step specifies an operating temperature of $120^\circ\text{C}$, but the material record only possesses room-temperature ($23^\circ\text{C}$) data, `MaterialResolver` rejects execution with status `BLOCKED` / `NEEDS_CLARIFICATION`, rather than executing with unvalidated room-temperature stiffness.
+
+### 20.4 Open-Source Distribution & IP Boundary (Apache-2.0 Redline)
+
+- **Strict Repository Cleanliness**: The GitHub repository is distributed under Apache-2.0. Proprietary material databases (such as raw CAMPUS database dumps, manufacturer proprietary bulk datasets, or commercial material libraries) **shall never be committed into the Git repository**.
+- **Runtime Adapter Architecture**: All external material access is handled via runtime adapters (`CampusAdapter`, `DatasheetAdapter`). These adapters query remote services or read locally provided user files on demand, strictly recording provenance and source locator metadata in the generated `AnalysisRun` evidence envelope.
+
+---
+
+## 21. Change-Control Checklist
 
 Before modifying the engineering core, answer all of these:
 
@@ -884,7 +1172,7 @@ If the last two questions are problematic, stop and redesign before coding.
 
 ---
 
-## 20. Definition of Done for the Current Phase
+## 22. Definition of Done for the Current Phase
 
 The current phase is complete when:
 
@@ -909,7 +1197,7 @@ At that point, the project should shift from feature expansion to systematic rea
 
 ---
 
-## 21. External Reference Basis
+## 23. External Reference Basis
 
 The architecture was cross-checked against:
 
@@ -925,7 +1213,7 @@ These references are design inputs, not instructions to copy their architecture 
 
 ---
 
-## 22. One-Line Architectural Rule
+## 24. One-Line Architectural Rule
 
 > **Do not add another subsystem when an existing AnalysisRun, ResultRequirement, Evidence, Verification, Acceptance, Provenance, Reporting, Geometry/Region, or Unit component can own the requirement.**
 

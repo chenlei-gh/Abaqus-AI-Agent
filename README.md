@@ -7,13 +7,15 @@
 [![CI](https://github.com/chenlei-gh/Abaqus-AI-Agent/actions/workflows/ci.yml/badge.svg)](https://github.com/chenlei-gh/Abaqus-AI-Agent/actions/workflows/ci.yml)
 [![Python](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12-blue.svg)](https://www.python.org/)
 [![Abaqus](https://img.shields.io/badge/Abaqus-2025%20Validated-brightgreen.svg)](https://www.3ds.com/products-services/simulia/products/abaqus/)
-[![Tests](https://img.shields.io/badge/tests-374%20passed-success.svg)](tests/)
+[![Tests](https://img.shields.io/badge/tests-387%20passed-success.svg)](tests/)
 [![Golden Matrix](https://img.shields.io/badge/golden%20matrix-13%2F13%20passed-success.svg)](machine_validation/)
+[![Official Benchmarks](https://img.shields.io/badge/official%20benchmarks-22%2F22%20passed-success.svg)](tools/j_comprehensive_physics_matrix.py)
+[![Material Intelligence](https://img.shields.io/badge/material%20intelligence-CAMPUS%20%7C%20ISO%2010350-blue.svg)](src/abaqus_ai_agent/contracts/material_record.py)
 [![Release Gate](https://img.shields.io/badge/release%20gate-RC--1%20frozen-orange.svg)](#)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 
 > **Project status: Release Candidate Baseline Frozen (`v1.0.0-rc1`).**
-> The foundational engineering contracts, deterministic software gates (374 passed tests), and full-chain **Abaqus 2025 real-machine execution gates (13/13 Golden Ladder & 9/9 Physical Categories)** are complete and closed. All live solver verifications are grounded in verifiable, audited machine artifacts.
+> The foundational engineering contracts, deterministic software gates (387 passed tests), full-chain **Abaqus 2025 real-machine execution gates (13/13 Golden Ladder)**, and the **22 Tier A Official Dassault Benchmarks Matrix** are complete and closed. All live solver verifications are grounded in verifiable, audited machine artifacts.
 
 ### Quick navigation
 
@@ -79,7 +81,13 @@ Solves the fundamental problem of connecting visual intention to finite-element 
 - Automatically derives deterministic `findAt(...)` topological expressions in native Abaqus/CAE.
 - Materializes verified native `Sets` and `Surfaces` for boundary conditions, loads, and contact pairs.
 
-### 4. Autonomous Engineering Report Generation
+### 4. Material Intelligence & Multi-Point Database Integration
+Solves the critical gap between commercial datasheets (e.g. CAMPUS, ISO 10350 / ISO 11403) and Abaqus constitutive models:
+- **MaterialRecord Canonical Schema**: Encapsulates material identity (polymer family, grade, manufacturer), test conditions (temperature, moisture, ISO specimen standard), and multi-point curves (tensile stress-strain, creep, DMA).
+- **Anti-Hallucination Constitutive Preflight**: Automatically validates thermodynamic and mathematical compatibility. Prevents engineering plastics from being erroneously assigned metallic $J_2$ plasticity without proper calibration. Flags `BLOCKED` on missing test conditions.
+- **Apache-2.0 Clean-Room Architecture**: Avoids shipping proprietary materials databases in the git repository while offering clean runtime adapters (`CampusAdapter`, `ManufacturerAdapter`).
+
+### 5. Autonomous Engineering Report Generation
 Generates complete, publication-grade engineering reports directly from live `AnalysisRun` evidence:
 - Produces self-contained **Markdown** and standalone styled **HTML** documents.
 - Automatically compiles Executive Summaries, Model Configurations, Material Properties, Results Tables, Acceptance Verdicts, and ODB Provenance Hashes.
@@ -198,6 +206,8 @@ The capability surface is strictly classified into formalized, verified capabili
 | **Implicit Dynamics** | ✅ LIVE VALIDATED | Dynamic amplification (DAF), transient vibration, ALLKE/ALLIE ratio |
 | **Steady Heat Transfer** | ✅ LIVE VALIDATED | 1D conduction bar, analytical temperature field, heat flux conservation |
 | **Coupled Temp-Displacement** | ✅ LIVE VALIDATED | Simultaneous mechanical and thermal step execution |
+| **Material Intelligence** | ✅ LIVE VALIDATED | ISO 10350 single-point, ISO 11403 curves, CAMPUS & TDS adapters |
+| **Official Benchmark Suite** | ✅ LIVE VALIDATED | 22 Dassault Verification Guide & Benchmarks Guide Tier A models |
 | **Rigid-Body Dynamics (MBD)** | ✅ LIVE VALIDATED | Physical pendulum under gravity, energy conservation |
 | **Multi-Body Dynamics (MBD-2)**| ✅ LIVE VALIDATED | Dual revolute joints, native `CONN3D2` Hinge, period accuracy |
 | **Coupled Rigid-Flexible (FMBD-4)**| ✅ LIVE VALIDATED | Rigid crank + C3D8R flexible link + Kinematic Coupling |
@@ -281,7 +291,7 @@ Verify the installation by running the deterministic test suite:
 
 ```bash
 python -m pytest -q
-# Expect: 374 passed
+# Expect: 387 passed
 ```
 
 ---
@@ -308,13 +318,16 @@ python tools/i3_reproducibility.py --live-abaqus
 # 5. Execute 9 fresh engineering case verification probes
 python tools/i1_engineering_case_matrix.py --fresh
 
-# 6. Compare two runs and inspect metric deltas
+# 6. Execute 22 official Dassault Benchmarks Guide & Verification Guide cases
+python tools/j_comprehensive_physics_matrix.py
+
+# 7. Compare two runs and inspect metric deltas
 abaqus-ai-agent diff baseline_run.json candidate_run.json
 
-# 7. Render publication-grade engineering report (Markdown / HTML)
+# 8. Render publication-grade engineering report (Markdown / HTML)
 abaqus-ai-agent report machine_validation/static_golden_e2e.json --format html --output report.html
 
-# 8. Perform deterministic diagnostics on solver files (.msg / .sta / .log)
+# 9. Perform deterministic diagnostics on solver files (.msg / .sta / .log)
 abaqus-ai-agent diagnose Job-1.msg
 ```
 
@@ -370,8 +383,9 @@ The project is governed by two complementary, non-overlapping verification gates
 - **Environment**: Cross-platform (Ubuntu / Windows / macOS), Python 3.10 - 3.12.
 - **Dependencies**: Zero Abaqus license required.
 - **Coverage**:
-  - `374 passed` unit, contract, and preflight tests.
+  - `387 passed` unit, contract, and preflight tests.
   - `13/13` Golden Matrix schema and manifest checks.
+  - `22/22` Official Tier A Abaqus Benchmarks Matrix (`python tools/j_comprehensive_physics_matrix.py`).
   - `Phase I.6` Whole-repository security & path sanitization audit (`python tools/i6_release_audit.py`).
   - Strict JEV ambiguity fail-closed gate.
 

@@ -7,13 +7,15 @@
 [![CI](https://github.com/chenlei-gh/Abaqus-AI-Agent/actions/workflows/ci.yml/badge.svg)](https://github.com/chenlei-gh/Abaqus-AI-Agent/actions/workflows/ci.yml)
 [![Python](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12-blue.svg)](https://www.python.org/)
 [![Abaqus](https://img.shields.io/badge/Abaqus-2025%20Validated-brightgreen.svg)](https://www.3ds.com/products-services/simulia/products/abaqus/)
-[![Tests](https://img.shields.io/badge/tests-374%20passed-success.svg)](tests/)
+[![Tests](https://img.shields.io/badge/tests-387%20passed-success.svg)](tests/)
 [![Golden Matrix](https://img.shields.io/badge/golden%20matrix-13%2F13%20passed-success.svg)](machine_validation/)
+[![Official Benchmarks](https://img.shields.io/badge/official%20benchmarks-22%2F22%20passed-success.svg)](tools/j_comprehensive_physics_matrix.py)
+[![Material Intelligence](https://img.shields.io/badge/material%20intelligence-CAMPUS%20%7C%20ISO%2010350-blue.svg)](src/abaqus_ai_agent/contracts/material_record.py)
 [![Release Gate](https://img.shields.io/badge/release%20gate-RC--1%20frozen-orange.svg)](#)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 
 > **项目状态：Release Candidate 候选版本基线已正式冻结（`v1.0.0-rc1`）。**
-> 核心工程契约、确定性软件层测试门禁（374 项通过）、以及全链路 **Abaqus 2025 真实机求解执行门禁（13/13 Golden Ladder 阶梯与 9/9 物理类别）** 已全部闭环。所有真机验证均基于可穿透审计的真实机二进制产物证据。
+> 核心工程契约、确定性软件层测试门禁（387 项通过）、全链路 **Abaqus 2025 真实机求解执行门禁（13/13 Golden Ladder 阶梯）** 以及 **22 个 Tier A 官方达索验证与基准模型矩阵** 已全部闭环。所有真机验证均基于可穿透审计的真实机二进制产物证据。
 
 ### 快速导航
 
@@ -79,7 +81,13 @@
 - 在原生 Abaqus/CAE 中自动推导确定性的 `findAt(...)` 拓扑定位表达式；
 - 现场编译生成受验证的原生 `Sets`（节点/单元/面集合）与 `Surfaces`（接触表面），用于施加边界条件、集中载荷与接触对。
 
-### 4. 交付级工程分析报告全自动生成
+### 4. 工程材料智能层与多点试验数据库集成
+攻克商业材料物性表（如 CAMPUS、ISO 10350 / ISO 11403）与 Abaqus 严密本构模型之间的语义鸿沟：
+- **MaterialRecord 统一规范契约**：封装材料真实世界身份（聚合物家族、商业牌号、生产厂商）、测试环境条件（温度、湿度状态、ISO 标准样条）以及多点物理曲线（拉伸应力-应变、蠕变松弛、动态力学性能 DMA）。
+- **反幻觉本构预检门禁**：自动开展热力学与数学模型相容性检验。严防未经验证把工程塑料直接套用金属 $J_2$ 各向同性强化塑性；缺失测试条件时坚决置为 `BLOCKED` 阻断。
+- **Apache-2.0 洁净室架构**：代码仓库绝不直接分发/打包受版权保护的商业材料数据库文件，提供洁净的动态解析适配器（`CampusAdapter`, `ManufacturerAdapter`）。
+
+### 5. 交付级工程分析报告全自动生成
 直接从单次 `AnalysisRun` 的可追溯证据链生成符合工业标准的完整工程报告：
 - 一键导出自包含的 **Markdown** 文档以及带交互样式的独立 **HTML** 交付物；
 - 报告自动集成项目摘要、有限元模型设置、材料本构参数、结果云图与指标对比表、PASS/FAIL 验收裁决以及全链路 ODB 证据哈希。
@@ -198,6 +206,8 @@ flowchart LR
 | **隐式动力学分析** | ✅ LIVE VALIDATED | 动载荷放大系数 (DAF)、瞬态结构振动、ALLKE/ALLIE 动内能比 |
 | **稳态热传导分析** | ✅ LIVE VALIDATED | 3D 杆体一维热传导、解析温度梯度吻合、热流率严格守恒 |
 | **热-结构顺序/强耦合** | ✅ LIVE VALIDATED | 热力耦合分析步执行、温度载荷与热应力场同步提取 |
+| **工程材料智能层** | ✅ LIVE VALIDATED | ISO 10350 单点、ISO 11403 曲线，CAMPUS 与 TDS 规范解析 |
+| **官方基准验证矩阵** | ✅ LIVE VALIDATED | 22 项达索官方 Verification & Benchmarks Guide 权威对标 |
 | **刚体动力学 (MBD)** | ✅ LIVE VALIDATED | 单自由度重力摆动、角速度峰值精度、机械能守恒 |
 | **多刚体铰接 (MBD-2)** | ✅ LIVE VALIDATED | 原生 `CONN3D2` Hinge 连接器双刚体双摆、铰接点平动零漂移 |
 | **刚柔耦合系统 (FMBD-4)** | ✅ LIVE VALIDATED | 刚体曲柄 + C3D8R 弹性连杆 + 运动学耦合 (Kinematic Coupling) |
@@ -281,7 +291,7 @@ python -m pip install -e ".[test]"
 
 ```bash
 python -m pytest -q
-# 预期结果：374 passed
+# 预期结果：387 passed
 ```
 
 ---
@@ -308,13 +318,16 @@ python tools/i3_reproducibility.py --live-abaqus
 # 5. 执行 9 大工程物理类别真实求解现场重算探针
 python tools/i1_engineering_case_matrix.py --fresh
 
-# 6. 对比两次分析运行并生成指标差分报告
+# 6. 运行 22 个达索官方 Benchmarks Guide & Verification Guide 算例矩阵
+python tools/j_comprehensive_physics_matrix.py
+
+# 7. 对比两次分析运行并生成指标差分报告
 abaqus-ai-agent diff baseline_run.json candidate_run.json
 
-# 7. 基于真实 ODB 证据一键渲染交付级工程报告 (Markdown / HTML)
+# 8. 基于真实 ODB 证据一键渲染交付级工程报告 (Markdown / HTML)
 abaqus-ai-agent report machine_validation/static_golden_e2e.json --format html --output report.html
 
-# 8. 对求解器发散产物进行确定性特征诊断 (.msg / .sta / .log)
+# 9. 对求解器发散产物进行确定性特征诊断 (.msg / .sta / .log)
 abaqus-ai-agent diagnose Job-1.msg
 ```
 
@@ -370,8 +383,9 @@ intent = EngineeringIntent(
 - **运行环境**：跨平台（Ubuntu / Windows / macOS），Python 3.10 - 3.12。
 - **环境依赖**：无需任何 Abaqus 商业许可或安装。
 - **验证范围**：
-  - `374 项` 单元测试、契约校验与前检规则全部通过；
+  - `387 项` 单元测试、契约校验与前检规则全部通过；
   - `13/13` 项 Golden Matrix 证据包结构与 Schema 清单校验；
+  - `22/22` 达索官方 Tier A 物理基准验证矩阵（`python tools/j_comprehensive_physics_matrix.py`）；
   - `Phase I.6` 全仓库代码与文件安全扫描 (`python tools/i6_release_audit.py`)；
   - JEV 模糊输入自动阻断与澄清保护。
 

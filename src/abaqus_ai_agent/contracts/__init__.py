@@ -19,4 +19,16 @@ from .material import (
     PlasticProperties,
     ThermalProperties,
 )
+from .material_record import (
+    MaterialIdentity,
+    MaterialSource,
+    MaterialCondition,
+    MaterialProperty,
+    MaterialCurve,
+    MaterialRecord,
+)
+from .material_resolver import (
+    MaterialResolver,
+    MaterialResolutionResult,
+)
 from .step import AnalysisStep
