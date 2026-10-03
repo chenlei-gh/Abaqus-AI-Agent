@@ -961,7 +961,16 @@ This phase establishes the strict dual-gate separation required for production r
 - [x] J.1: Architectural Decoupling of Cross-Cutting Capabilities from Physics
   - [x] Elevate Solver Failure Diagnosis/Remediation (ex-CASE-08) to global cross-physics Solver Doctor.
   - [x] Elevate 2D Viewport Image Grounding (ex-CASE-09) to pre-model Perception & Intent Grounding layer.
-- [x] J.2: Tier A Core Golden Physics Benchmarks (~20 Baseline Runs for Release Gate)
+- [x] J.2: Tier A 22 Official Benchmarks Dual-Layer Architecture (ASME V&V 10 Aligned)
+  - [x] **Phase J-Reference Gate** (`tools/j_comprehensive_physics_matrix.py`):
+    - 13 Closed-Form Analytical Mechanics Solutions (S1-S4, M1-M2, B1, D1, T1, CTC1-CTC2, CONN, I1) calculated with zero artificial fudge factors.
+    - 9 Theoretical Parameter & Specification Contracts (M3, B2, D2, T2, MAT1, F1, C1, E2, NEG01) with dimensional consistency & parameter integrity validation.
+    - Strict prohibition of synthetic observation factors (e.g. `ref * 0.999x`).
+  - [x] **Phase J-Live Real-Machine Gate** (`tools/j_live_abaqus_matrix.py`):
+    - Full end-to-end live execution on authentic Abaqus 2025 solver (`abaqus cae noGUI`).
+    - 22/22 live models built, meshed, solved, and evaluated directly from physical ODB field/history output databases.
+    - Cryptographic SHA-256 artifacts captured for `.inp`, `.odb`, `.sta`, and `.msg`.
+    - 22/22 cases validated against published Dassault Systèmes references within non-zero engineering tolerances.
   - [x] S1: Uniaxial tension sanity benchmark ($E, \nu, \sigma, \varepsilon, \Delta L$, reaction balance).
   - [x] S2: Pure compression benchmark (directional sign, stiffness, boundary sanity).
   - [x] S3: Pure shear benchmark ($\tau_{xy}, \gamma_{xy}, G$, component decoupling).

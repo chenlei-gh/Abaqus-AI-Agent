@@ -108,6 +108,9 @@ class MaterialCondition:
     relative_humidity: Optional[float] = None  # in %, e.g. 50.0
     test_standard: Optional[str] = None      # e.g. "ISO 527-1/-2", "ISO 178", "ISO 1183"
     strain_rate: Optional[float] = None      # in 1/s, e.g. 0.001
+    test_time: Optional[float] = None        # in seconds, e.g. for creep relaxation
+    frequency: Optional[float] = None        # in Hz, e.g. for dynamic mechanical analysis (DMA)
+    stress_level: Optional[float] = None     # in MPa, e.g. sustained stress for isochronous curves
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -117,6 +120,9 @@ class MaterialCondition:
             "relative_humidity": self.relative_humidity,
             "test_standard": self.test_standard,
             "strain_rate": self.strain_rate,
+            "test_time": self.test_time,
+            "frequency": self.frequency,
+            "stress_level": self.stress_level,
         }
 
     @classmethod
@@ -128,6 +134,9 @@ class MaterialCondition:
             relative_humidity=float(data["relative_humidity"]) if data.get("relative_humidity") is not None else None,
             test_standard=data.get("test_standard"),
             strain_rate=float(data["strain_rate"]) if data.get("strain_rate") is not None else None,
+            test_time=float(data["test_time"]) if data.get("test_time") is not None else None,
+            frequency=float(data["frequency"]) if data.get("frequency") is not None else None,
+            stress_level=float(data["stress_level"]) if data.get("stress_level") is not None else None,
         )
 
 
@@ -217,29 +226,42 @@ class MaterialRecord:
     metadata: Dict[str, Any] = field(default_factory=dict)
 
     def get_property(self, name: str, condition: Optional[MaterialCondition] = None) -> Optional[MaterialProperty]:
-        """Retrieve scalar property by name, optionally matching condition."""
+        """Retrieve scalar property by name, strictly matching condition when requested.
+        
+        Anti-Hallucination Gate: If a specific environmental condition is requested
+        and no property entry matches that condition, returns None (fail-closed)
+        rather than returning an arbitrary unconditioned property.
+        """
         candidates = [p for p in self.properties if p.name == name]
         if not candidates:
             return None
         if condition is None:
+            # Return unconditionally or default-matched
             return candidates[0]
-        # Match temperature and humidity state
+        # Match temperature (within 0.5C) and humidity state
         for p in candidates:
-            if p.condition and p.condition.temperature == condition.temperature and p.condition.humidity_state == condition.humidity_state:
-                return p
-        return candidates[0]
+            if p.condition:
+                temp_match = abs(p.condition.temperature - condition.temperature) <= 0.5
+                humidity_match = (p.condition.humidity_state.lower() == condition.humidity_state.lower())
+                if temp_match and humidity_match:
+                    return p
+        # Strict fail-closed: Do NOT fallback to unconditioned or mismatched room temp!
+        return None
 
     def get_curve(self, curve_type: str, condition: Optional[MaterialCondition] = None) -> Optional[MaterialCurve]:
-        """Retrieve multi-point curve by type, optionally matching condition."""
+        """Retrieve multi-point curve by type, strictly matching condition when requested."""
         candidates = [c for c in self.curves if c.curve_type == curve_type]
         if not candidates:
             return None
         if condition is None:
             return candidates[0]
         for c in candidates:
-            if c.condition.temperature == condition.temperature and c.condition.humidity_state == condition.humidity_state:
-                return c
-        return candidates[0]
+            if c.condition:
+                temp_match = abs(c.condition.temperature - condition.temperature) <= 0.5
+                humidity_match = (c.condition.humidity_state.lower() == condition.humidity_state.lower())
+                if temp_match and humidity_match:
+                    return c
+        return None
 
     def to_dict(self) -> Dict[str, Any]:
         return {

@@ -282,3 +282,27 @@ def test_material_resolver_unsupported_creep_fails_closed():
 
     assert result.status == "UNSUPPORTED"
     assert "requires experimental creep/relaxation curves" in result.diagnostics[0]
+
+
+def test_material_record_strict_unmatched_condition_fails_closed():
+    """Verify that get_property strictly returns None when condition does not match, avoiding silent room-temp fallback."""
+    from abaqus_ai_agent.contracts.material_record import MaterialCondition
+    record = CampusAdapter.parse_datasheet({
+        "general_info": {"polymer_family": "PA66", "manufacturer": "BASF", "grade_name": "Ultramid A3WG6"},
+        "source_meta": {"locator": "CAMPUS://BASF/A3WG6", "retrieved_at": "2026-10-03T00:00:00Z"},
+        "iso_10350_single_point": [
+            {"name": "youngs_modulus", "value": 8500.0, "unit": "MPa", "condition": {"temperature": 23.0, "humidity_state": "dry"}},
+        ],
+    })
+
+    # Exact room temp match succeeds
+    matched = record.get_property("youngs_modulus", MaterialCondition(temperature=23.0, humidity_state="dry"))
+    assert matched is not None
+    assert matched.value == 8500.0
+
+    # Mismatched condition returns None (fail-closed), never silently returns candidates[0]!
+    unmatched_temp = record.get_property("youngs_modulus", MaterialCondition(temperature=80.0, humidity_state="dry"))
+    assert unmatched_temp is None
+
+    unmatched_humid = record.get_property("youngs_modulus", MaterialCondition(temperature=23.0, humidity_state="conditioned"))
+    assert unmatched_humid is None

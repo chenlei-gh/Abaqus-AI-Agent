@@ -7,15 +7,16 @@
 [![CI](https://github.com/chenlei-gh/Abaqus-AI-Agent/actions/workflows/ci.yml/badge.svg)](https://github.com/chenlei-gh/Abaqus-AI-Agent/actions/workflows/ci.yml)
 [![Python](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12-blue.svg)](https://www.python.org/)
 [![Abaqus](https://img.shields.io/badge/Abaqus-2025%20Validated-brightgreen.svg)](https://www.3ds.com/products-services/simulia/products/abaqus/)
-[![Tests](https://img.shields.io/badge/tests-387%20passed-success.svg)](tests/)
+[![Tests](https://img.shields.io/badge/tests-392%20passed-success.svg)](tests/)
 [![Golden Matrix](https://img.shields.io/badge/golden%20matrix-13%2F13%20passed-success.svg)](machine_validation/)
 [![Official Benchmarks](https://img.shields.io/badge/official%20benchmarks-22%2F22%20passed-success.svg)](tools/j_comprehensive_physics_matrix.py)
+[![Live Abaqus Gate](https://img.shields.io/badge/live%20abaqus%20gate-22%2F22%20passed-brightgreen.svg)](tools/j_live_abaqus_matrix.py)
 [![Material Intelligence](https://img.shields.io/badge/material%20intelligence-CAMPUS%20%7C%20ISO%2010350-blue.svg)](src/abaqus_ai_agent/contracts/material_record.py)
 [![Release Gate](https://img.shields.io/badge/release%20gate-RC--1%20frozen-orange.svg)](#)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 
 > **项目状态：Release Candidate 候选版本基线已正式冻结（`v1.0.0-rc1`）。**
-> 核心工程契约、确定性软件层测试门禁（387 项通过）、全链路 **Abaqus 2025 真实机求解执行门禁（13/13 Golden Ladder 阶梯）** 以及 **22 个 Tier A 官方达索验证与基准模型矩阵** 已全部闭环。所有真机验证均基于可穿透审计的真实机二进制产物证据。
+> 核心工程契约、确定性软件层测试门禁（392 项通过）、全链路 **Abaqus 2025 真实机求解执行门禁（13/13 Golden Ladder 阶梯）**、**Phase J-Reference 理论与契约门禁（22/22 全通）**、**Phase J-Live Abaqus 2025 真实求解器全量真机门禁（22/22 验证通过）** 以及 **全仓库发布安全审计（4/4 全绿）** 已全部严格闭环。所有真机验证均基于可穿透审计的真实机二进制产物证据。
 
 ### 快速导航
 
@@ -318,16 +319,20 @@ python tools/i3_reproducibility.py --live-abaqus
 # 5. 执行 9 大工程物理类别真实求解现场重算探针
 python tools/i1_engineering_case_matrix.py --fresh
 
-# 6. 运行 22 个达索官方 Benchmarks Guide & Verification Guide 算例矩阵
+# 6. 运行 Phase J-Reference 官方基准理论与参数契约矩阵
 python tools/j_comprehensive_physics_matrix.py
 
-# 7. 对比两次分析运行并生成指标差分报告
+# 7. 运行 Phase J-Live 真实 Abaqus 2025 官方基准求解与 ODB 提取矩阵
+python tools/j_live_abaqus_matrix.py --smoke   # 快速运行 4 个核心物理真机算例
+python tools/j_live_abaqus_matrix.py --all     # 全量运行 22 个 Abaqus 官方真机模型
+
+# 8. 对比两次分析运行并生成指标差分报告
 abaqus-ai-agent diff baseline_run.json candidate_run.json
 
-# 8. 基于真实 ODB 证据一键渲染交付级工程报告 (Markdown / HTML)
+# 9. 基于真实 ODB 证据一键渲染交付级工程报告 (Markdown / HTML)
 abaqus-ai-agent report machine_validation/static_golden_e2e.json --format html --output report.html
 
-# 9. 对求解器发散产物进行确定性特征诊断 (.msg / .sta / .log)
+# 10. 对求解器发散产物进行确定性特征诊断 (.msg / .sta / .log)
 abaqus-ai-agent diagnose Job-1.msg
 ```
 

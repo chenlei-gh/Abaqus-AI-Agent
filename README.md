@@ -7,15 +7,16 @@
 [![CI](https://github.com/chenlei-gh/Abaqus-AI-Agent/actions/workflows/ci.yml/badge.svg)](https://github.com/chenlei-gh/Abaqus-AI-Agent/actions/workflows/ci.yml)
 [![Python](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12-blue.svg)](https://www.python.org/)
 [![Abaqus](https://img.shields.io/badge/Abaqus-2025%20Validated-brightgreen.svg)](https://www.3ds.com/products-services/simulia/products/abaqus/)
-[![Tests](https://img.shields.io/badge/tests-387%20passed-success.svg)](tests/)
+[![Tests](https://img.shields.io/badge/tests-392%20passed-success.svg)](tests/)
 [![Golden Matrix](https://img.shields.io/badge/golden%20matrix-13%2F13%20passed-success.svg)](machine_validation/)
 [![Official Benchmarks](https://img.shields.io/badge/official%20benchmarks-22%2F22%20passed-success.svg)](tools/j_comprehensive_physics_matrix.py)
+[![Live Abaqus Gate](https://img.shields.io/badge/live%20abaqus%20gate-22%2F22%20passed-brightgreen.svg)](tools/j_live_abaqus_matrix.py)
 [![Material Intelligence](https://img.shields.io/badge/material%20intelligence-CAMPUS%20%7C%20ISO%2010350-blue.svg)](src/abaqus_ai_agent/contracts/material_record.py)
 [![Release Gate](https://img.shields.io/badge/release%20gate-RC--1%20frozen-orange.svg)](#)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 
 > **Project status: Release Candidate Baseline Frozen (`v1.0.0-rc1`).**
-> The foundational engineering contracts, deterministic software gates (387 passed tests), full-chain **Abaqus 2025 real-machine execution gates (13/13 Golden Ladder)**, and the **22 Tier A Official Dassault Benchmarks Matrix** are complete and closed. All live solver verifications are grounded in verifiable, audited machine artifacts.
+> The foundational engineering contracts, deterministic software gates (392 passed tests), full-chain **Abaqus 2025 real-machine execution gates (13/13 Golden Ladder)**, **Phase J-Reference Gate (22/22 passed)**, **Phase J-Live Real-Machine Gate (22/22 live Abaqus 2025 validated)**, and **Public Release Security Audit (4/4 passed)** are complete and closed. All live solver verifications are grounded in verifiable, audited machine artifacts.
 
 ### Quick navigation
 
@@ -318,16 +319,20 @@ python tools/i3_reproducibility.py --live-abaqus
 # 5. Execute 9 fresh engineering case verification probes
 python tools/i1_engineering_case_matrix.py --fresh
 
-# 6. Execute 22 official Dassault Benchmarks Guide & Verification Guide cases
+# 6. Execute Phase J-Reference theoretical benchmark matrix
 python tools/j_comprehensive_physics_matrix.py
 
-# 7. Compare two runs and inspect metric deltas
+# 7. Execute Phase J-Live Abaqus 2025 real-machine benchmark matrix
+python tools/j_live_abaqus_matrix.py --smoke   # Fast 4-case sanity
+python tools/j_live_abaqus_matrix.py --all     # Full 22 live Abaqus models
+
+# 8. Compare two runs and inspect metric deltas
 abaqus-ai-agent diff baseline_run.json candidate_run.json
 
-# 8. Render publication-grade engineering report (Markdown / HTML)
+# 9. Render publication-grade engineering report (Markdown / HTML)
 abaqus-ai-agent report machine_validation/static_golden_e2e.json --format html --output report.html
 
-# 9. Perform deterministic diagnostics on solver files (.msg / .sta / .log)
+# 10. Perform deterministic diagnostics on solver files (.msg / .sta / .log)
 abaqus-ai-agent diagnose Job-1.msg
 ```
 
