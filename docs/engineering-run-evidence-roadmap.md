@@ -2,7 +2,7 @@
 
 **Status:** 
 - **RC 1.0 Frozen Baseline**: `v1.0.0-rc1` CONDITIONAL PASS Frozen at Commit `deec6a3` (428 tests) ✅
-- **GA Working Baseline**: Commit `ddd3cb8` ACTIVE (453 tests, Track GA-3 Hardened & GA-3 Real-Machine Qualification Pack Underway) 🚀  
+- **GA Working Baseline**: Commit `ddd3cb8`+ ACTIVE (464 tests, Track GA-3 Real-Machine Qualified & Track GA-1.1 Ingestion Implemented) 🚀
 **Version:** 2026-10-03 (Release Candidate 1.0 Frozen & GA Evolution Baseline)  
 **Scope:** Abaqus-AI-Agent engineering architecture, foundational contracts, evidence chain, real-machine physics benchmarks, and material intelligence grounding
 
@@ -1250,10 +1250,12 @@ Topology Normalization & Feature Recognition (GA-1.3)
 Meshability Assessment (GA-1.4) ───[Direct Reuse]───► Existing Mesh Quality Gate (mesh/mesh_gate.py)
 ```
 
-- [ ] **GA-1.1: STEP / IGES Neutral CAD Ingestion & Canonical Geometry Model**
-  - [ ] Robust neutral CAD file ingestion (`.stp`, `.step`, `.igs`, `.iges`) compiling into a unified, lightweight internal `GeometryModel`.
-  - [ ] Extract standardized topological primitives: solids, open shells, boundary faces, edges, vertices, bounding box dimensions, and source units.
-  - [ ] Enforce source provenance tracking: SHA-256 hash of original CAD file, import timestamps, and CAD system vendor tags.
+- [x] **GA-1.1: STEP / IGES Neutral CAD Ingestion & Canonical Geometry Model**
+  - [x] Robust neutral CAD file ingestion (`.stp`, `.step`, `.igs`, `.iges`) compiling into a unified, lightweight internal `GeometryModel`.
+  - [x] Extract standardized topological primitives: solids, open shells, boundary faces, edges, vertices, bounding box dimensions, and source units.
+  - [x] Enforce source provenance tracking: SHA-256 hash of original CAD file, import timestamps, and CAD system vendor tags.
+  - [x] Implemented canonical 4-state capability boundary evaluation (`SUPPORTED`, `ASSISTED`, `BLOCKED`, `UNSUPPORTED`).
+  - [x] Zero duplicate CAD kernel: lightweight deterministic Python parser with 100% offline regression coverage (7 tests in `tests/test_cad_ingestion.py`).
 - [ ] **GA-1.2: Geometry Health Inspection & Defect Detection Gate**
   - [ ] Automated topological defect detection: open shells/free edges, non-manifold edges, self-intersecting faces, invalid solid topology, micro-slivers, and tolerance gaps.
   - [ ] Map health diagnostic results directly into the 4-state capability contract (`SUPPORTED`, `ASSISTED`, `BLOCKED`, `UNSUPPORTED`).
