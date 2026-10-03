@@ -43,6 +43,15 @@ from .features import (
     detect_contact_planes,
     detect_features,
 )
+from .meshability import (
+    MeshabilityResult,
+    MeshabilityRisk,
+    MeshabilityRiskKind,
+    MeshabilitySeverity,
+    MeshRefinementCandidate,
+    RecommendedMeshStrategy,
+    assess_meshability,
+)
 
 __all__ = [
     "CadBoundingBox",
@@ -78,4 +87,11 @@ __all__ = [
     "detect_ribs",
     "detect_contact_planes",
     "detect_features",
+    "MeshabilityResult",
+    "MeshabilityRisk",
+    "MeshabilityRiskKind",
+    "MeshabilitySeverity",
+    "MeshRefinementCandidate",
+    "RecommendedMeshStrategy",
+    "assess_meshability",
 ]

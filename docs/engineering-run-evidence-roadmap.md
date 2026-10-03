@@ -2,7 +2,7 @@
 
 **Status:** 
 - **RC 1.0 Frozen Baseline**: `v1.0.0-rc1` CONDITIONAL PASS Frozen at Commit `deec6a3` (428 tests) ✅
-- **GA Working Baseline**: Commit `b3bff34`+ ACTIVE (507 tests, Track GA-3 Real-Machine Qualified & Track GA-1.1/GA-1.2/GA-1.3A/GA-1.3B Holes, Fillets, Chamfers, Ribs & Contact Planes Implemented with GA-1.3B-5.1 Evidence Hardening) 🚀
+- **GA Working Baseline**: Commit `d4ff37b`+ ACTIVE (517 tests, Track GA-3 Real-Machine Qualified & Track GA-1.1/GA-1.2/GA-1.3A/GA-1.3B/GA-1.4 Meshability Assessment & Mesh Gate Reuse Implemented) 🚀
 **Version:** 2026-10-03 (Release Candidate 1.0 Frozen & GA Evolution Baseline)  
 **Scope:** Abaqus-AI-Agent engineering architecture, foundational contracts, evidence chain, real-machine physics benchmarks, and material intelligence grounding
 
@@ -1273,10 +1273,11 @@ Meshability Assessment (GA-1.4) ───[Direct Reuse]───► Existing Mes
   - [x] GA-1.3B-4.1 Evidence Hardening & Deep Recursive Type Guard: `FeatureCandidate.geometry` deep recursive validation strictly forbidding runtime non-canonical objects, zero synthetic radius/width defaults, and consolidated feature specialization disambiguation (17 tests in `tests/test_feature_recognition.py`).
   - [x] Stage 4 Rib and Contact Plane classification (GA-1.3B-5): candidate semantic extraction with `ASSISTED` confidence flags, opposing wall topology, common base anchoring, protrusion vs. groove/pocket rejection guard, dimensional thickness/length extraction strictly degrading to `None` without transverse edge evidence, contact spotface/flange anchoring, strict normal vector unit verification (unverified normals strictly degrade to `normal=None` with zero synthetic normalization), zero contact-pair interaction actions, and consolidated 5-class feature disambiguation (28 tests in `tests/test_feature_recognition.py`).
   - [x] GA-1.3B-5.1 Evidence Hardening: Groove guard loophole closed (V-groove/bottom seam sharing edge without outward cap strictly rejected), honest docstring/code convergence to direct common-base attachment (zero unverified `attachment_depth <= 2` claims), normal validity unit guard on candidate rib walls, and conservative protrusion evidence enforcement (30 tests in `tests/test_feature_recognition.py`, 507 repository-wide regression tests).
-- [ ] **GA-1.4: Meshability Assessment & Direct Mesh Gate Reuse**
-  - [ ] Evaluate pre-partitioning topology: classify bodies as structured-mappable, sweepable, or complex free-form.
-  - [ ] Predict partition effectiveness: evaluate whether sub-volume decomposition will permit hex meshing or if tetrahedral strategy is optimal.
-  - [ ] **Zero Duplicate Mesh Verification**: Direct reuse of existing `mesh/mesh_gate.py` (aspect ratio $\le 10$, distortion $\le 45^\circ$, Jacobian checks, GCI convergence). Connect directly to existing acceptance criteria.
+- [x] **GA-1.4: Meshability Assessment & Direct Mesh Gate Reuse**
+  - [x] Pre-meshing Geometry Meshability Gate: Multi-layer evaluation consuming `GeometryModel`, `GeometryHealthReport`, `NormalizedTopology`, and `FeatureCandidate`. Fail-closed blocking (`BLOCKED`, `is_meshable=False`) on topological or geometric defects (non-manifold edge, unclosed solid shell).
+  - [x] Local Geometric Risk Screening: Detect sub-scale tiny edges ($L_e < 0.005 L_{\text{char}}$) and micro-sliver faces ($A < 10^{-4} L_{\text{char}}^2$) generating `TINY_FEATURE_DEFORMATION` and `SLIVER_FACE_DISTORTION` warning risks. Detect target mesh size conflicts ($h_{\text{target}} > 2 \times \min(L_e)$) as non-blocking `SCALE_CONFLICT_ELEMENT_SWALLOWING` warnings.
+  - [x] Evidenced Feature Scale Hints: Heuristic refinement candidate derivation strictly bounded by proven feature parameters (holes $\sim 0.25D$ without Kt assumptions, fillets $\sim 0.5R$ strictly gated by proven radius, chamfers $\sim 0.5W$, ribs $\sim 0.5T$ with zero partition mandates, contact planes with zero synthetic interaction pairs). Unproven dimensions strictly degrade to `suggested_size=None` and review classification.
+  - [x] Zero Duplicate Mesh Gate: Direct bridge to existing `GeometryMeshPlan` (`MeshRefinementRequest`) with explicit separation before post-meshing element shape gates in `src/abaqus_ai_agent/mesh_gate.py` (`evaluate_mesh_quality_gate`). Explicit `limitations` contract stating unverified hex sweep and partition feasibility (10 tests in `tests/test_meshability.py`, 517 repository-wide tests).
 
 ##### Stage 2 Expansion (GA-1.5 ~ GA-1.7)
 - [ ] **GA-1.5: Autonomous Virtual Topology & Cell Partition Strategy**
