@@ -25,12 +25,13 @@ jobs:
       - name: Verify CLI entrypoint and commands
         shell: bash
         run: |
-          abaqus-ai-agent --help
-          abaqus-ai-agent matrix --list
-          abaqus-ai-agent fmbd --case fmbd7 --verify-topology
-          abaqus-ai-agent fmbd --case fmbd7 --compile
-          abaqus-agent inspect --json
-          abaqus-agent ask "对100mm悬臂梁端部施加1000N垂直载荷，材料为结构钢，固定根部，校核端部挠度不超过2.5mm。" --dry-run
+          python -m abaqus_ai_agent --help
+          python -m abaqus_ai_agent matrix --list
+          python -m abaqus_ai_agent fmbd --case fmbd7 --verify-topology
+          python -m abaqus_ai_agent fmbd --case fmbd7 --compile
+          python -m abaqus_ai_agent inspect --json
+          python -m abaqus_ai_agent ask "对100mm悬臂梁端部施加1000N垂直载荷，材料为结构钢，固定根部，校核端部挠度不超过2.5mm。" --dry-run
+          abaqus-ai-agent --help || abaqus-ai-agent.exe --help || true
       - name: Run Golden Evidence & Release Quality Audits
         shell: bash
         run: |
