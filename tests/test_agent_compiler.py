@@ -141,3 +141,63 @@ def test_compile_grounded_intent_plate_with_hole():
     pre_res = preflight_plan(plan.actions)
     assert pre_res.passed is True
     assert len(pre_res.blockers) == 0
+
+
+def test_compile_multi_anchor_group_intent():
+    """Verify GA-2.5 compilation of multi-anchor feature groups into native multi-findAt sets."""
+    from abaqus_ai_agent.grounding.feature_grounding import GroundedRegion
+    from abaqus_ai_agent.validation.preflight import preflight_plan
+
+    geom = IntentGeometrySpec(shape="plate_with_hole", length=100.0, width=100.0, height=100.0)
+    mat = MaterialDefinition(
+        name="Steel",
+        unit_system="MM_N_MPA",
+        elastic=ElasticProperties(youngs_modulus=200000.0, poisson_ratio=0.3),
+    )
+    step = IntentStepSpec(name="StaticStep", step_type="static_general")
+    bcs = [IntentBoundarySpec(name="FixAllBolts", bc_type="ENCASTRE", region="ALL_BOLTS")]
+    loads = [IntentLoadSpec(name="BottomPressure", load_type="pressure", region="BOTTOM_FACE", magnitude=5.0)]
+    mesh = IntentMeshSpec(element_type="C3D10", global_size=10.0)
+
+    grounded = {
+        "ALL_BOLTS": GroundedRegion(
+            target_semantic="ALL_HOLES",
+            entity_type="Face",
+            entity_ids=("F_1", "F_2"),
+            anchor_point=(15.0, 15.0, 10.0),
+            anchor_points=((15.0, 15.0, 10.0), (85.0, 85.0, 10.0)),
+            confidence=0.95,
+        ),
+        "BOTTOM_FACE": GroundedRegion(
+            target_semantic="BOTTOM_SURFACE",
+            entity_type="Face",
+            entity_ids=("F_BOT",),
+            anchor_point=(50.0, 50.0, 0.0),
+            confidence=1.0,
+        ),
+    }
+
+    plan = compile_intent_to_actions(
+        model_name="GroupModel",
+        part_name="GroupPart",
+        job_name="GroupJob",
+        geometry=geom,
+        material=mat,
+        step=step,
+        bcs=bcs,
+        loads=loads,
+        mesh=mesh,
+        grounded_regions=grounded,
+    )
+
+    script = plan.cae_script
+    # Must contain both anchor points inside the findAt call for ALL_BOLTS
+    assert "findAt(((15.0, 15.0, 10.0),), ((85.0, 85.0, 10.0),))" in script
+    # Bottom face anchor
+    assert "findAt(((50.0, 50.0, 0.0),))" in script
+    assert "EncastreBC" in script
+    assert "Pressure" in script
+
+    pre = preflight_plan(plan.actions)
+    assert pre.passed is True
+    assert len(pre.blockers) == 0

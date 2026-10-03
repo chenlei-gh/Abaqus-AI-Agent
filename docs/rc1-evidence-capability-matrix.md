@@ -16,7 +16,7 @@ To eliminate ambiguity across commercial workflows and academic verification, th
 | **Level 1** | `REAL_ABAQUS` | Executed against authentic, licensed Abaqus 2025. Generates disk `.odb`, `.sta`, `.msg`, `.dat` artifacts verified via cryptographic SHA-256 manifests. |
 | **Level 2** | `ANALYTICAL` | Exact closed-form continuum mechanics equations evaluated at machine precision. Zero numerical perturbation factors (`ref * 0.999x` strictly forbidden). |
 | **Level 3** | `THEORETICAL_CONTRACT` | Formal parameter, dimensional, and boundary-condition contracts for high-order FE configurations; delegates FE execution to live solver. |
-| **Level 4** | `OFFLINE_REGRESSION` | Automated unit/integration test suite (428 pytest cases at RC 1.0 Freeze `deec6a3`; expanded to 533 at GA-1 Freeze `cb597d6`, and 544 in GA-2 Working Baseline) executed without solver license dependencies in CI across Linux/Windows. |
+| **Level 4** | `OFFLINE_REGRESSION` | Automated unit/integration test suite (428 pytest cases at RC 1.0 Freeze `deec6a3`; expanded to 533 at GA-1 Freeze `cb597d6`, 544 at GA-2.4, and 553 in GA-2.5 Working Baseline) executed without solver license dependencies in CI across Linux/Windows. |
 | **Level 5** | `FAULT_INJECTION` | Controlled numerical singularities, invalid inputs, or geometric distortions designed to verify non-bypassable fail-closed gates. |
 
 ---
@@ -134,9 +134,10 @@ The following three tracks represent the ongoing evolution beyond `v1.0.0-rc1` d
 ├─────────────────────────────────────────────────────────────────────────────┤
 │ Track GA-2: Semantic Physical Grounding & Deterministic Intent Compilation  │
 │    - Status: GA-2.1 Intent, GA-2.2 Feature Grounding, GA-2.3 Compiler       │
-│      Consumption, and GA-2.4 Real-Machine Golden Case E2E QUALIFIED.        │
+│      Consumption, GA-2.4 Real-Machine Golden Case E2E, and GA-2.5 Extended  │
+│      Feature Semantics QUALIFIED.                                           │
 │      Live Abaqus 2025: RF equilibrium error = 0.002% on plate_with_hole.    │
-│    - Pending: GA-2.5 Extended Semantics, GA-2.6 Multi-Step Load Compilation,│
+│    - Pending: GA-2.6 Multi-Step Load Compilation,                           │
 │      GA-2A Perspective Viewport (P1), GA-2B Multimodal Perception (P2 HITL).│
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
@@ -176,8 +177,9 @@ The following three tracks represent the ongoing evolution beyond `v1.0.0-rc1` d
 | Benchmark ID | Scenario / Verification Intent | Implementation Reference | Execution Benchmark & Test Suite | Real-Machine Physical Evidence Status | Evidence Level | Capability Boundary & Audit Conclusion |
 | :--- | :--- | :--- | :--- | :--- | :---: | :--- |
 | **GA-2-GOLDEN** | **Natural Language $\to$ STEP B-Rep $\to$ Feature Grounding $\to$ Compiler $\to$ Solver $\to$ Equilibrium** | `grounding/feature_grounding.py`, `planning/compiler.py` | `tools/ga2_e2e_golden_case.py`<br>`tests/test_ga2_e2e_golden.py` | `QUALIFIED`: User prompt (*"将安装孔的圆柱面完全固定，在顶面施加 1000 N 向下集中载荷，计算最大应力和位移"*). Grounding anchored hole face & top planar face into `GroundedRegion`. Compiler synthesized native `findAt` & converted point load to uniform pressure ($P=F/A$). Live Abaqus 2025 solved Job `Job_GA2_Golden_Plate`; 33 Preflight checks passed; applied $-1000.0\text{ N}$, live $\Sigma RF_z = 1000.02\text{ N}$; **equilibrium error $0.002\%$**; max Mises $3.149\text{ MPa}$, max displacement $0.000777\text{ mm}$. | `REAL_ABAQUS` | First complete autonomous closed loop from raw human engineering language through real STEP file to physical equilibrium ODB evidence. |
+| **GA-2.5-GROUNDING** | **Extended Semantics & Multi-Feature Group Grounding** | `grounding/feature_grounding.py`, `planning/compiler.py` | `tests/test_feature_grounding.py`<br>`tests/test_agent_compiler.py` | `QUALIFIED`: Extended semantic resolvers for `BOTTOM_SURFACE`, `SYMMETRY_PLANE` (X/Y/Z), `SIDE_WALL` (Left/Right/Front/Back), `BEARING_SEAT`, and multi-feature groups (`ALL_HOLES`, `BOLT_GROUP`). Composite `anchor_points` compiled into native multi-tuple `findAt(...)` sets. Strict fail-closed verification: 14 grounding tests + 3 compiler tests passed. | `OFFLINE_REGRESSION` | Deterministic geometric feature grounding extended across standard mechanical structural constraints and load surfaces with zero heuristic leakage. |
 
-*Canonical qualification package recorded in `machine_validation/ga2_golden_evidence.json` (QUALIFIED, Commit pending).*
+*Canonical qualification package recorded in `machine_validation/ga2_golden_evidence.json` (QUALIFIED).*
 
 ---
 

@@ -2,7 +2,7 @@
 
 **Status:** 
 - **RC 1.0 Frozen Baseline**: `v1.0.0-rc1` CONDITIONAL PASS Frozen at Commit `deec6a3` (428 tests) ✅
-- **GA Working Baseline**: Commit `cb597d6`+ ACTIVE (544 tests, Track GA-3 Real-Machine Qualified, Track GA-1.1~GA-1.4 Frozen & Real-Machine Qualified on STEP Benchmarks, Track GA-2.1~GA-2.4 Real-Machine Qualified on E2E Golden Case) 🚀
+- **GA Working Baseline**: Commit `cb597d6`+ ACTIVE (553 tests, Track GA-3 Real-Machine Qualified, Track GA-1.1~GA-1.4 Frozen & Real-Machine Qualified on STEP Benchmarks, Track GA-2.1~GA-2.5 Qualified on E2E Golden Case & Extended Grounding) 🚀
 **Version:** 2026-10-03 (Release Candidate 1.0 Frozen & GA Evolution Baseline)  
 **Scope:** Abaqus-AI-Agent engineering architecture, foundational contracts, evidence chain, real-machine physics benchmarks, and material intelligence grounding
 
@@ -1358,9 +1358,12 @@ ODB Tensor Extraction & Equilibrium Verification (RF vs Applied Error = 0.002%) 
   - [x] Full provenance & evidence envelope: `machine_validation/ga2_golden_evidence.json` marked as `QUALIFIED` with `REAL_ABAQUS` level (4 tests in `tests/test_ga2_e2e_golden.py`, 544 repository-wide regression tests).
 
 ##### Stage 2 Intent Expansion & Multimodal Grounding (GA-2.5 ~ GA-2.6 & GA-2A / GA-2B)
-- [ ] **GA-2.5: Extended Feature Semantics Grounding**
-  - [ ] Implement semantic resolvers for `BOTTOM_SURFACE`, `SYMMETRY_PLANE`, `BEARING_SEAT`, `BOLT_FLANGE`, and `SIDE_WALL`.
-  - [ ] Support multi-feature topological group grounding (e.g. *"all 4 bolt holes in the flange"*).
+- [x] **GA-2.5: Extended Feature Semantics Grounding [CLOSED & QUALIFIED]**
+  - [x] Implemented semantic resolvers for `BOTTOM_SURFACE`, `SYMMETRY_PLANE` (including `SYMMETRY_X/Y/Z`), `BEARING_SEAT`, `SIDE_WALL` (including `LEFT/RIGHT/FRONT/BACK_WALL`), and multi-feature groups (`ALL_HOLES`, `FASTENER_HOLES`, `BOLT_GROUP`).
+  - [x] Upgraded `GroundedRegion` contract to support composite `anchor_points` and `feature_ids` while preserving complete backward compatibility with existing single-entity consumers.
+  - [x] Upgraded `compiler.py` to synthesize native multi-object `findAt(((x1,y1,z1),), ((x2,y2,z2),), ...)` sets and surfaces, enabling simultaneous group constraint and load application.
+  - [x] Enforced strict fail-closed gating: 0 candidates -> `NOT_FOUND`, competing candidates without dominant area or un-directed side/symmetry planes -> `AMBIGUOUS` with explicit user guidance.
+  - [x] Added 9 targeted tests covering all extended semantics and boundary failure modes (14 tests in `tests/test_feature_grounding.py`, 3 tests in `tests/test_agent_compiler.py`, 553 repository-wide regression tests).
 - [ ] **GA-2.6: Multi-Step & Complex Physical Load Procedure Compilation**
   - [ ] Support sequence of analysis steps (e.g. Bolt Pretension step followed by External Service Load step).
   - [ ] Compile moment/torque loads, thermal boundary flux, and pressure distributions with coordinate-dependent fields.

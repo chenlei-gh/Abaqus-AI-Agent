@@ -183,19 +183,20 @@ def compile_intent_to_actions(
     for bc in bcs:
         gr = grounded_regions.get(bc.region) if grounded_regions else None
         if gr is not None:
-            gx, gy, gz = gr.anchor_point
+            pts = gr.anchor_points if gr.anchor_points else (gr.anchor_point,)
+            find_at_str = ", ".join(f"(({p[0]}, {p[1]}, {p[2]}),)" for p in pts)
             if gr.entity_type.lower() == "face":
                 bc_code = (
                     f"a = mdb.models['{model_name}'].rootAssembly\n"
                     f"f = a.instances['{inst_name}'].faces\n"
-                    f"target_faces = f.findAt((({gx}, {gy}, {gz}),))\n"
+                    f"target_faces = f.findAt({find_at_str})\n"
                     f"region = a.Set(faces=target_faces, name='{bc.region}')\n"
                 )
             else:
                 bc_code = (
                     f"a = mdb.models['{model_name}'].rootAssembly\n"
                     f"v = a.instances['{inst_name}'].vertices\n"
-                    f"target_verts = v.findAt((({gx}, {gy}, {gz}),))\n"
+                    f"target_verts = v.findAt({find_at_str})\n"
                     f"region = a.Set(vertices=target_verts, name='{bc.region}')\n"
                 )
             if bc.bc_type == "ENCASTRE":
@@ -239,12 +240,13 @@ def compile_intent_to_actions(
     for ld in loads:
         gr = grounded_regions.get(ld.region) if grounded_regions else None
         if gr is not None:
-            gx, gy, gz = gr.anchor_point
+            pts = gr.anchor_points if gr.anchor_points else (gr.anchor_point,)
+            find_at_str = ", ".join(f"(({p[0]}, {p[1]}, {p[2]}),)" for p in pts)
             if ld.load_type == "pressure":
                 load_code = (
                     f"a = mdb.models['{model_name}'].rootAssembly\n"
                     f"f = a.instances['{inst_name}'].faces\n"
-                    f"target_faces = f.findAt((({gx}, {gy}, {gz}),))\n"
+                    f"target_faces = f.findAt({find_at_str})\n"
                     f"surf = a.Surface(side1Faces=target_faces, name='{ld.region}_Surf')\n"
                     f"mdb.models['{model_name}'].Pressure(name='{ld.name}', createStepName='{step.name}', "
                     f"region=surf, magnitude={ld.magnitude})\n"
@@ -269,7 +271,7 @@ def compile_intent_to_actions(
                         f"# Total force {ld.magnitude} N on face converted to equivalent surface pressure: {eq_pressure:.6f} MPa\n"
                         f"a = mdb.models['{model_name}'].rootAssembly\n"
                         f"f = a.instances['{inst_name}'].faces\n"
-                        f"target_faces = f.findAt((({gx}, {gy}, {gz}),))\n"
+                        f"target_faces = f.findAt({find_at_str})\n"
                         f"surf = a.Surface(side1Faces=target_faces, name='{ld.region}_Surf')\n"
                         f"mdb.models['{model_name}'].Pressure(name='{ld.name}', createStepName='{step.name}', "
                         f"region=surf, magnitude={eq_pressure})\n"
@@ -286,7 +288,7 @@ def compile_intent_to_actions(
                     load_code = (
                         f"a = mdb.models['{model_name}'].rootAssembly\n"
                         f"v = a.instances['{inst_name}'].vertices\n"
-                        f"target_verts = v.findAt((({gx}, {gy}, {gz}),))\n"
+                        f"target_verts = v.findAt({find_at_str})\n"
                         f"region = a.Set(vertices=target_verts, name='{ld.region}')\n"
                         f"mdb.models['{model_name}'].ConcentratedForce(name='{ld.name}', createStepName='{step.name}', "
                         f"region=region, {ld.direction}={ld.magnitude})\n"

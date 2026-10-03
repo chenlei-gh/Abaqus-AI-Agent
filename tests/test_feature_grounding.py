@@ -229,10 +229,242 @@ def test_ground_unsupported_semantic_target(plate_model_and_features):
 
     with pytest.raises(GroundingResolutionError) as exc_info:
         resolve_feature_grounding(
-            target_semantic="SIDE_BEARING_BRACKET",
+            target_semantic="NON_EXISTENT_MAGIC_FEATURE",
             model=model,
             topology=topology,
             feature_candidates=features,
             strict=True,
         )
     assert "UNSUPPORTED_SEMANTIC_TARGET" in str(exc_info.value)
+
+
+def test_ground_bottom_surface_on_real_step(plate_model_and_features):
+    """Test grounding BOTTOM_SURFACE on real plate_with_hole.step."""
+    model, topology, features = plate_model_and_features
+
+    region = resolve_feature_grounding(
+        target_semantic="BOTTOM_SURFACE",
+        model=model,
+        topology=topology,
+        feature_candidates=features,
+        strict=True,
+    )
+
+    assert isinstance(region, GroundedRegion)
+    assert region.status == "RESOLVED"
+    assert region.entity_type == "Face"
+    assert len(region.entity_ids) == 1
+    assert region.confidence == 1.0
+
+    # Anchor point must be at Z = 0.0
+    x, y, z = region.anchor_point
+    assert abs(z - 0.0) < 1e-3
+    # Anchor point must NOT be inside the hole (r = 10 at (50, 50))
+    dist_to_hole = ((x - 50.0) ** 2 + (y - 50.0) ** 2) ** 0.5
+    assert dist_to_hole > 10.0
+    assert len(region.evidence) > 0
+
+
+def test_ground_bottom_surface_competing_faces_ambiguity_gate():
+    """Verify that multiple competing bottom faces trigger AMBIGUOUS."""
+    v1 = CadVertex("V1", (0.0, 0.0, 0.0))
+    v2 = CadVertex("V2", (10.0, 0.0, 0.0))
+    v3 = CadVertex("V3", (10.0, 10.0, 0.0))
+    v4 = CadVertex("V4", (0.0, 10.0, 0.0))
+    e1 = CadEdge("E1", "LINE", "V1", "V2", 10.0)
+    e2 = CadEdge("E2", "LINE", "V2", "V3", 10.0)
+    e3 = CadEdge("E3", "LINE", "V3", "V4", 10.0)
+    e4 = CadEdge("E4", "LINE", "V4", "V1", 10.0)
+
+    f1 = CadFace(
+        id="F_BOT_1",
+        surface_type="PLANE",
+        is_planar=True,
+        normal=(0.0, 0.0, -1.0),
+        edge_ids=("E1", "E2", "E3", "E4"),
+        area=100.0,
+    )
+    f2 = CadFace(
+        id="F_BOT_2",
+        surface_type="PLANE",
+        is_planar=True,
+        normal=(0.0, 0.0, -1.0),
+        edge_ids=("E1", "E2", "E3", "E4"),
+        area=100.0,
+    )
+
+    bbox = CadBoundingBox(0.0, 0.0, 0.0, 20.0, 20.0, 50.0)
+    model = GeometryModel(
+        model_id="MODEL_BOT_COMPETING",
+        provenance=_make_dummy_provenance("bot_competing.step"),
+        unit=CadUnit.MM,
+        solids=(),
+        shells=(),
+        faces=(f1, f2),
+        edges=(e1, e2, e3, e4),
+        vertices=(v1, v2, v3, v4),
+        bounding_box=bbox,
+    )
+
+    with pytest.raises(GroundingAmbiguityError) as exc_info:
+        resolve_feature_grounding("BOTTOM_SURFACE", model, strict=True)
+    assert "MULTIPLE_BOTTOM_FACES" in str(exc_info.value)
+
+
+def test_ground_directional_side_walls_on_real_step(plate_model_and_features):
+    """Verify distinct directional side wall resolution on real plate_with_hole.step."""
+    model, topology, features = plate_model_and_features
+
+    # Left wall (-X, x=0)
+    left = resolve_feature_grounding("LEFT_WALL", model, topology, features, strict=True)
+    assert left.status == "RESOLVED"
+    assert abs(left.anchor_point[0] - 0.0) < 1e-2
+
+    # Right wall (+X, x=100)
+    right = resolve_feature_grounding("RIGHT_WALL", model, topology, features, strict=True)
+    assert right.status == "RESOLVED"
+    assert abs(right.anchor_point[0] - 100.0) < 1e-2
+
+    # Front wall (-Y, y=0)
+    front = resolve_feature_grounding("FRONT_WALL", model, topology, features, strict=True)
+    assert front.status == "RESOLVED"
+    assert abs(front.anchor_point[1] - 0.0) < 1e-2
+
+    # Back wall (+Y, y=100)
+    back = resolve_feature_grounding("BACK_WALL", model, topology, features, strict=True)
+    assert back.status == "RESOLVED"
+    assert abs(back.anchor_point[1] - 100.0) < 1e-2
+
+
+def test_ground_generic_side_wall_ambiguity_gate(plate_model_and_features):
+    """Verify that un-directed SIDE_WALL on a multi-sided plate triggers AMBIGUOUS."""
+    model, topology, features = plate_model_and_features
+
+    with pytest.raises(GroundingAmbiguityError) as exc_info:
+        resolve_feature_grounding("SIDE_WALL", model, topology, features, strict=True)
+    assert "MULTIPLE_SIDE_WALLS" in str(exc_info.value)
+
+
+def test_ground_bearing_seat_on_real_step(plate_model_and_features):
+    """Verify BEARING_SEAT resolves to the evidenced cylindrical hole face."""
+    model, topology, features = plate_model_and_features
+
+    region = resolve_feature_grounding("BEARING_SEAT", model, topology, features, strict=True)
+    assert region.status == "RESOLVED"
+    assert region.entity_type == "Face"
+    assert region.entity_ids == ("F_277",)
+    assert region.feature_id == "FEAT_FASTENER_HOLE_F_277"
+    dist = ((region.anchor_point[0] - 50.0) ** 2 + (region.anchor_point[1] - 50.0) ** 2) ** 0.5
+    assert abs(dist - 10.0) < 1e-3
+
+
+def test_ground_bearing_seat_multiple_ambiguity_gate(plate_model_and_features):
+    """Verify multiple cylindrical seats trigger AMBIGUOUS."""
+    model, topology, features = plate_model_and_features
+    hole1 = [f for f in features if f.feature_type == FeatureType.FASTENER_HOLE][0]
+    hole2 = FeatureCandidate(
+        feature_id="FEAT_FASTENER_HOLE_2",
+        feature_type=FeatureType.FASTENER_HOLE,
+        face_ids=("F_888",),
+        geometry={"diameter": 30.0},
+        confidence=0.95,
+        status="ASSISTED",
+    )
+
+    with pytest.raises(GroundingAmbiguityError) as exc_info:
+        resolve_feature_grounding("BEARING_SEAT", model, topology, (hole1, hole2), strict=True)
+    assert "MULTIPLE_BEARING_SEATS_FOUND" in str(exc_info.value)
+
+
+def test_ground_symmetry_plane_disambiguation_and_ambiguity_gate():
+    """Verify symmetry plane resolution by axis and multi-axis ambiguity gate."""
+    # A block symmetric about X=0 and Y=0
+    v1 = CadVertex("V1", (0.0, -10.0, 0.0))
+    v2 = CadVertex("V2", (0.0, 10.0, 0.0))
+    v3 = CadVertex("V3", (0.0, 10.0, 20.0))
+    v4 = CadVertex("V4", (0.0, -10.0, 20.0))
+    e1 = CadEdge("E1", "LINE", "V1", "V2", 20.0)
+    e2 = CadEdge("E2", "LINE", "V2", "V3", 20.0)
+    e3 = CadEdge("E3", "LINE", "V3", "V4", 20.0)
+    e4 = CadEdge("E4", "LINE", "V4", "V1", 20.0)
+    f_sym_x = CadFace(
+        id="F_SYM_X",
+        surface_type="PLANE",
+        is_planar=True,
+        normal=(1.0, 0.0, 0.0),
+        edge_ids=("E1", "E2", "E3", "E4"),
+        area=400.0,
+    )
+
+    # Face on Y=0 plane
+    v5 = CadVertex("V5", (-10.0, 0.0, 0.0))
+    v6 = CadVertex("V6", (10.0, 0.0, 0.0))
+    v7 = CadVertex("V7", (10.0, 0.0, 20.0))
+    v8 = CadVertex("V8", (-10.0, 0.0, 20.0))
+    e5 = CadEdge("E5", "LINE", "V5", "V6", 20.0)
+    e6 = CadEdge("E6", "LINE", "V6", "V7", 20.0)
+    e7 = CadEdge("E7", "LINE", "V7", "V8", 20.0)
+    e8 = CadEdge("E8", "LINE", "V8", "V5", 20.0)
+    f_sym_y = CadFace(
+        id="F_SYM_Y",
+        surface_type="PLANE",
+        is_planar=True,
+        normal=(0.0, 1.0, 0.0),
+        edge_ids=("E5", "E6", "E7", "E8"),
+        area=400.0,
+    )
+
+    bbox = CadBoundingBox(-10.0, -10.0, 0.0, 10.0, 10.0, 20.0)
+    model = GeometryModel(
+        model_id="MODEL_SYM",
+        provenance=_make_dummy_provenance("sym.step"),
+        unit=CadUnit.MM,
+        solids=(),
+        shells=(),
+        faces=(f_sym_x, f_sym_y),
+        edges=(e1, e2, e3, e4, e5, e6, e7, e8),
+        vertices=(v1, v2, v3, v4, v5, v6, v7, v8),
+        bounding_box=bbox,
+    )
+
+    # Specific axis: SYMMETRY_X -> f_sym_x
+    rx = resolve_feature_grounding("SYMMETRY_X", model, strict=True)
+    assert rx.status == "RESOLVED"
+    assert rx.entity_ids == ("F_SYM_X",)
+
+    # Specific axis: SYMMETRY_Y -> f_sym_y
+    ry = resolve_feature_grounding("SYMMETRY_Y", model, strict=True)
+    assert ry.status == "RESOLVED"
+    assert ry.entity_ids == ("F_SYM_Y",)
+
+    # Generic SYMMETRY_PLANE without axis -> AMBIGUOUS due to multiple axes
+    with pytest.raises(GroundingAmbiguityError) as exc_info:
+        resolve_feature_grounding("SYMMETRY_PLANE", model, strict=True)
+    assert "MULTIPLE_SYMMETRY_AXES_FOUND" in str(exc_info.value)
+
+
+def test_ground_hole_group_single_and_multi(plate_model_and_features):
+    """Verify ALL_HOLES grounds all holes with multiple spatial anchor points."""
+    model, topology, features = plate_model_and_features
+
+    # Single hole on plate
+    grp1 = resolve_feature_grounding("ALL_HOLES", model, topology, features, strict=True)
+    assert grp1.status == "RESOLVED"
+    assert grp1.entity_ids == ("F_277",)
+    assert len(grp1.anchor_points) == 1
+
+    # Multiple holes synthetic group
+    h1 = [f for f in features if f.feature_type == FeatureType.FASTENER_HOLE][0]
+    h2 = FeatureCandidate(
+        feature_id="FEAT_FASTENER_HOLE_2",
+        feature_type=FeatureType.FASTENER_HOLE,
+        face_ids=("F_999",),
+        geometry={"diameter": 16.0},
+        confidence=0.95,
+        status="ASSISTED",
+    )
+    grp2 = resolve_feature_grounding("BOLT_GROUP", model, topology, (h1, h2), strict=True)
+    assert grp2.status == "RESOLVED"
+    assert grp2.entity_ids == ("F_277", "F_999")
+    assert len(grp2.anchor_points) == 2
+    assert len(grp2.feature_ids) == 2
