@@ -21,7 +21,7 @@ jobs:
       - name: Install package and test dependencies
         run: python -m pip install -e ".[test]"
       - name: Run pytest with strict warnings
-        run: python -m pytest -W error -q
+        run: python -c "import subprocess, sys; res = subprocess.run([sys.executable, '-m', 'pytest', '-W', 'error', '--tb=short', '-q'], capture_output=True, text=True); print(res.stdout); print(res.stderr, file=sys.stderr); [print('::error title=Pytest Error::' + line) for line in (res.stdout + res.stderr).splitlines() if 'FAILED' in line or 'ERROR' in line or 'AssertionError' in line or 'Error:' in line][:10]; sys.exit(res.returncode)"
       - name: Verify CLI entrypoint and commands
         run: |
           abaqus-ai-agent --help
