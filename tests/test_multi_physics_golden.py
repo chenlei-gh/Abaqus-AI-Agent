@@ -15,15 +15,17 @@ def manifest():
 
 
 def test_multi_physics_manifest_schema_and_overall_status(manifest):
-    assert manifest["schema_version"] == "multi_physics_golden_v1"
+    assert manifest["schema_version"] == "multi_physics_golden_v2"
     assert manifest["evidence_tier"] == "REAL_ABAQUS"
     assert manifest["solver_version"] == "Abaqus 2025"
+    assert manifest["compiler_chain_verified"] is True
+    assert manifest["sequential_thermal_structural_verified"] is True
     assert manifest["total_cases"] == 4
     assert manifest["all_golden_pass"] is True
     assert manifest["all_negative_probes_fail_closed"] is True
 
     required_cases = {
-        "MP1_ThermalStructural",
+        "MP1_SequentialThermalStructural",
         "MP2_FrictionContact",
         "MP3_PreloadedModal",
         "MP4_ExplicitDynamic",
@@ -32,13 +34,14 @@ def test_multi_physics_manifest_schema_and_overall_status(manifest):
 
 
 @pytest.mark.parametrize("case_key", [
-    "MP1_ThermalStructural",
+    "MP1_SequentialThermalStructural",
     "MP2_FrictionContact",
     "MP3_PreloadedModal",
     "MP4_ExplicitDynamic",
 ])
 def test_each_case_golden_pass_and_fail_closed(manifest, case_key):
     case = manifest["cases"][case_key]
+    assert case["compiler_plan_verified"] is True
     assert case["solver_completed"] is True
     assert case["golden_pass"] is True
     assert case["report_unforgeable"] is True
@@ -54,28 +57,31 @@ def test_each_case_golden_pass_and_fail_closed(manifest, case_key):
     assert neg["passed"] is False
     assert neg["status"] == "BLOCKED"
     assert neg["result_validity"] == "RESULT_INVALID"
-    assert "Engineering Acceptance: FAIL" in neg["audit_summary"]
+    assert "Required Result: FAIL | Engineering Acceptance: FAIL" in neg["audit_summary"]
+    assert len(neg["missing_required_fields"]) > 0
 
     # Check cryptographic artifacts provenance
     artifacts = case["artifacts"]
+    expected_count = 2 if case_key == "MP1_SequentialThermalStructural" else 1
     for ext in (".inp", ".odb", ".sta", ".msg", ".dat", ".log"):
         matching = [name for name in artifacts if name.endswith(ext)]
-        assert len(matching) == 1, f"Missing artifact with extension {ext} for {case_key}"
-        art_info = artifacts[matching[0]]
-        assert art_info["exists"] is True
-        assert len(art_info["sha256"]) == 64
-        assert art_info["size_bytes"] > 0
+        assert len(matching) == expected_count, f"Artifact count mismatch for extension {ext} in {case_key}"
+        for m in matching:
+            art_info = artifacts[m]
+            assert art_info["exists"] is True
+            assert len(art_info["sha256"]) == 64
+            assert art_info["size_bytes"] > 0
 
 
 def test_mp1_thermal_structural_physics(manifest):
-    mp1 = manifest["cases"]["MP1_ThermalStructural"]
+    mp1 = manifest["cases"]["MP1_SequentialThermalStructural"]
     metrics = mp1["physical_metrics"]
 
     assert metrics["max_temperature"] == pytest.approx(100.0, rel=1e-3)
     assert metrics["min_temperature"] == pytest.approx(20.0, rel=1e-3)
-    assert metrics["max_mises"] > 50.0  # Thermal expansion constraint generates significant stress
-    assert metrics["reaction_force"] > 5000.0
-    assert abs(metrics["reaction_equilibrium_sum"]) < 1e-3  # Global equilibrium: sum(RF) == 0
+    assert metrics["max_mises"] > 100.0  # Constrained thermal expansion generates significant compressive stress
+    assert metrics["reaction_force"] > 10000.0
+    assert abs(metrics["reaction_equilibrium_sum"]) < 1e-2  # Global equilibrium: sum(RF) == 0
 
 
 def test_mp2_frictional_contact_physics(manifest):

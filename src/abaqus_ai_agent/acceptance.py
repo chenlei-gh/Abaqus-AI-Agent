@@ -25,6 +25,7 @@ class AcceptanceResult:
     gate_justifications: Dict[str, str] = field(default_factory=dict)
     missing_required_metrics: tuple = ()
     missing_required_gates: tuple = ()
+    missing_required_fields: tuple = ()
     result_validity: str = "VALID"  # VALID, RESULT_INVALID, SOLVER_FAILED, CRITERIA_FAILED
     audit_summary: str = ""
     odb_status: str = "valid"
@@ -41,6 +42,7 @@ class AcceptanceResult:
             "blocked": list(self.blocked),
             "missing_required_metrics": list(self.missing_required_metrics),
             "missing_required_gates": list(self.missing_required_gates),
+            "missing_required_fields": list(self.missing_required_fields),
             "gates": dict(self.gates),
             "gate_justifications": dict(self.gate_justifications),
             "criteria": [
@@ -139,7 +141,7 @@ def evaluate_result_acceptance(result_status, numerical=None, engineering=None,
                                require_evidence=False,
                                required_gates=None, physics_domain=None, result_requirements=None,
                                odb_status=None, gate_justifications=None, procedure_verification=None,
-                               thermal_balance=None):
+                               thermal_balance=None, odb_fields=None, required_fields=None):
     """Combine execution/result evidence with deterministic acceptance criteria.
 
     - ResultRequirement & Physics Domain profile drive mandatory gates & required metrics.
@@ -156,9 +158,11 @@ def evaluate_result_acceptance(result_status, numerical=None, engineering=None,
     gates = {}
     missing_required_gates = []
     missing_required_metrics = []
+    missing_required_fields = []
 
     effective_required_gates = set(required_gates or ())
     effective_required_metrics = list(required_metrics or ())
+    effective_required_fields = list(required_fields or ())
     effective_justifications = dict(gate_justifications or {})
 
     # If physics_domain is specified, incorporate canonical domain profile
@@ -168,6 +172,9 @@ def evaluate_result_acceptance(result_status, numerical=None, engineering=None,
         for rm in prof.required_metrics:
             if rm not in effective_required_metrics:
                 effective_required_metrics.append(rm)
+        for rf in getattr(prof, "required_fields", ()) or ():
+            if rf not in effective_required_fields:
+                effective_required_fields.append(rf)
         for g_k, g_v in prof.gate_justifications.items():
             effective_justifications.setdefault(g_k, g_v)
 
@@ -365,9 +372,20 @@ def evaluate_result_acceptance(result_status, numerical=None, engineering=None,
             missing_required_metrics.append(rm)
             blocked.append("missing_required_metric:%s" % rm)
 
-    if missing_required_metrics:
+    # Required ODB Fields Evaluation against odb_fields
+    if odb_fields is not None and effective_required_fields:
+        norm_available = [str(f).upper() for f in odb_fields]
+        for rf in effective_required_fields:
+            rf_upper = str(rf).upper()
+            matched = any(rf_upper == f or rf_upper in f for f in norm_available)
+            if not matched:
+                missing_required_fields.append(rf)
+                failures.append("missing_required_field:%s" % rf)
+                blocked.append("missing_required_field:%s" % rf)
+
+    if missing_required_metrics or missing_required_fields:
         gates["required_results"] = "BLOCKED"
-    elif effective_required_metrics:
+    elif effective_required_metrics or effective_required_fields:
         gates["required_results"] = "PASS"
     else:
         gates["required_results"] = "NOT_SPECIFIED"
@@ -396,7 +414,7 @@ def evaluate_result_acceptance(result_status, numerical=None, engineering=None,
         warnings.append("no_explicit_acceptance_criteria")
 
     # Status & Result Validity Synthesis
-    if missing_required_metrics or missing_required_gates:
+    if missing_required_metrics or missing_required_fields or missing_required_gates:
         result_validity = "RESULT_INVALID"
     elif blocked:
         if result_status == "completed":
@@ -424,7 +442,7 @@ def evaluate_result_acceptance(result_status, numerical=None, engineering=None,
     # Deterministic Audit Summary Line
     s_part = "PASS" if result_status == "completed" else "FAIL"
     o_part = gates.get("odb", "PASS" if s_part == "PASS" else "FAIL")
-    r_part = "FAIL" if (missing_required_metrics or gates.get("required_results") == "BLOCKED") else "PASS"
+    r_part = "FAIL" if (missing_required_metrics or missing_required_fields or gates.get("required_results") == "BLOCKED") else "PASS"
     e_part = "PASS" if passed else "FAIL"
     audit_summary = f"Solver: {s_part} | ODB: {o_part} | Required Result: {r_part} | Engineering Acceptance: {e_part}"
 
@@ -439,6 +457,7 @@ def evaluate_result_acceptance(result_status, numerical=None, engineering=None,
         gate_justifications=effective_justifications,
         missing_required_metrics=tuple(missing_required_metrics),
         missing_required_gates=tuple(missing_required_gates),
+        missing_required_fields=tuple(missing_required_fields),
         result_validity=result_validity,
         audit_summary=audit_summary,
         odb_status=effective_odb_status,

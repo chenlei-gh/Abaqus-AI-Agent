@@ -6,6 +6,38 @@ from abaqus_ai_agent.acceptance import (
 )
 
 
+def test_missing_required_field_blocks_acceptance():
+    res = evaluate_result_acceptance(
+        result_status="completed",
+        values={"max_displacement": 0.5},
+        criteria=[{"name": "disp", "value_key": "max_displacement", "operator": "<", "limit": 1.0}],
+        physics_domain="static",
+        odb_fields=["U"],  # static requires U, S, RF; S and RF are missing
+    )
+    assert res.passed is False
+    assert res.status == "BLOCKED"
+    assert res.result_validity == "RESULT_INVALID"
+    assert "missing_required_field:S" in res.blocked
+    assert "missing_required_field:RF" in res.blocked
+    assert "Required Result: FAIL | Engineering Acceptance: FAIL" in res.audit_summary
+    assert res.gates["required_results"] == "BLOCKED"
+
+
+def test_matching_required_fields_passes():
+    res = evaluate_result_acceptance(
+        result_status="completed",
+        values={"max_displacement": 0.5, "max_mises": 120.0, "reaction_force": 1000.0},
+        criteria=[{"name": "disp", "value_key": "max_displacement", "operator": "<", "limit": 1.0}],
+        physics_domain="static",
+        odb_fields=["U", "S", "RF"],
+    )
+    assert res.passed is True
+    assert res.status == "PASS"
+    assert res.result_validity == "VALID"
+    assert len(res.missing_required_fields) == 0
+    assert "Required Result: PASS | Engineering Acceptance: PASS" in res.audit_summary
+
+
 def test_missing_required_metric_blocks_acceptance():
     criteria = [
         {"name": "mises", "value_key": "max_mises", "operator": "<", "limit": 250.0, "required": True},

@@ -29,7 +29,7 @@ class PlasticProperties:
 
 @dataclass(frozen=True)
 class ThermalProperties:
-    conductivity: float
+    conductivity: Optional[float] = None
     specific_heat: Optional[float] = None
     expansion_coefficient: Optional[float] = None
 

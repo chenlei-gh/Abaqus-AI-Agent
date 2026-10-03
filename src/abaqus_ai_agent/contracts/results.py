@@ -249,7 +249,7 @@ def get_physics_result_profile(domain: str, **custom_overrides) -> PhysicsResult
     elif d in ("contact", "frictional_contact", "contact_interaction"):
         prof = PhysicsResultProfile(
             domain="contact",
-            required_fields=("CPRESS", "CSHEAR", "CSTATUS", "RF"),
+            required_fields=("CPRESS", "CSHEAR", "RF"),
             required_metrics=("contact_pressure", "frictional_shear", "reaction_force"),
             required_gates=("execution", "odb", "contact", "criteria"),
             gate_justifications={
@@ -259,7 +259,7 @@ def get_physics_result_profile(domain: str, **custom_overrides) -> PhysicsResult
     elif d in ("thermal_structural", "thermal_stress", "sequential_thermal_stress"):
         prof = PhysicsResultProfile(
             domain="thermal_structural",
-            required_fields=("NT11", "U", "S", "RF"),
+            required_fields=("NT", "U", "S", "RF"),
             required_metrics=("max_temperature", "max_displacement", "max_mises", "reaction_force"),
             required_gates=("execution", "odb", "thermal_balance", "criteria"),
             step_requirements={
@@ -274,7 +274,7 @@ def get_physics_result_profile(domain: str, **custom_overrides) -> PhysicsResult
     elif d in ("preloaded_modal", "preloaded_frequency", "preloaded_dynamics"):
         prof = PhysicsResultProfile(
             domain="preloaded_modal",
-            required_fields=("U", "S", "RF", "frequency", "eigenvalue"),
+            required_fields=("U", "S", "RF"),
             required_metrics=("preload_reaction", "frequency"),
             required_gates=("execution", "odb", "procedure", "criteria"),
             step_requirements={

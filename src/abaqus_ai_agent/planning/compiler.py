@@ -75,6 +75,31 @@ class IntentMeshSpec:
     element_type: str = "C3D8R"
     global_size: float = 2.5
     deviation_factor: float = 0.1
+    element_library: str = "STANDARD"  # "STANDARD", "EXPLICIT"
+
+
+@dataclass(frozen=True)
+class IntentInteractionSpec:
+    name: str
+    interaction_type: str = "surface_to_surface_contact"
+    master_region: str = ""
+    slave_region: str = ""
+    friction_coefficient: float = 0.0
+    normal_behavior: str = "HARD"
+    step: str = "Initial"
+
+
+@dataclass(frozen=True)
+class IntentPredefinedFieldSpec:
+    name: str
+    field_type: str = "temperature"
+    region: str = "AllCells"
+    distribution_type: str = "FROM_FILE"
+    file_name: Optional[str] = None
+    begin_step: int = 1
+    interpolate: bool = True
+    magnitudes: Optional[float] = None
+    step: str = "Initial"
 
 
 @dataclass(frozen=True)
@@ -104,6 +129,9 @@ def compile_intent_to_actions(
     fields: Optional[Sequence[SpatialLoadField]] = None,
     bolt_pretensions: Optional[Sequence[BoltPretensionLifecycleSpec]] = None,
     moments: Optional[Sequence[MomentLoadSpec]] = None,
+    interactions: Optional[Sequence[IntentInteractionSpec]] = None,
+    predefined_fields: Optional[Sequence[IntentPredefinedFieldSpec]] = None,
+    submit_job: bool = False,
 ) -> CompiledAgentPlan:
     """Compile structured engineering intent into an ordered sequence of AbaqusActions."""
     actions: List[AbaqusAction] = []
@@ -122,6 +150,22 @@ def compile_intent_to_actions(
             f"p = mdb.models['{model_name}'].Part(name='{part_name}', dimensionality=THREE_D, type=DEFORMABLE_BODY)\n"
             f"p.BaseSolidExtrude(sketch=s, depth={p_depth})\n"
             f"del mdb.models['{model_name}'].sketches['__profile__']\n"
+        )
+    elif geometry.shape == "two_blocks_contact":
+        base_w = geometry.width if geometry.width > 0 else 100.0
+        base_h = geometry.height if geometry.height > 0 else 20.0
+        base_l = geometry.length if geometry.length > 0 else 10.0
+        geo_code = (
+            f"s1 = mdb.models['{model_name}'].ConstrainedSketch(name='__profile_base__', sheetSize=200.0)\n"
+            f"s1.rectangle(point1=(0.0, 0.0), point2=({base_w}, {base_h}))\n"
+            f"p_base = mdb.models['{model_name}'].Part(name='Base', dimensionality=THREE_D, type=DEFORMABLE_BODY)\n"
+            f"p_base.BaseSolidExtrude(sketch=s1, depth={base_l})\n"
+            f"del mdb.models['{model_name}'].sketches['__profile_base__']\n"
+            f"s2 = mdb.models['{model_name}'].ConstrainedSketch(name='__profile_slider__', sheetSize=200.0)\n"
+            f"s2.rectangle(point1=(30.0, 0.0), point2=(60.0, {base_h}))\n"
+            f"p_slider = mdb.models['{model_name}'].Part(name='Slider', dimensionality=THREE_D, type=DEFORMABLE_BODY)\n"
+            f"p_slider.BaseSolidExtrude(sketch=s2, depth={base_l})\n"
+            f"del mdb.models['{model_name}'].sketches['__profile_slider__']\n"
         )
     elif geometry.shape == "cantilever_box":
         geo_code = (
@@ -173,25 +217,76 @@ def compile_intent_to_actions(
             name=material.name,
             table=material.plastic.hardening_table,
         ))
+    if material.thermal is not None:
+        if material.thermal.conductivity is not None:
+            actions.append(builders.material_conductivity(
+                model=model_name,
+                name=material.name,
+                table=((material.thermal.conductivity,),),
+            ))
+        if material.thermal.specific_heat is not None:
+            actions.append(builders.material_specific_heat(
+                model=model_name,
+                name=material.name,
+                table=((material.thermal.specific_heat,),),
+            ))
+        if material.thermal.expansion_coefficient is not None:
+            actions.append(builders.material_expansion(
+                model=model_name,
+                name=material.name,
+                table=((material.thermal.expansion_coefficient,),),
+            ))
 
     # 3. Section and Assignment
     sec_name = f"{material.name}_Section"
     actions.append(builders.solid_section(model=model_name, name=sec_name, material=material.name))
-    sec_assign_code = (
-        f"p = mdb.models['{model_name}'].parts['{part_name}']\n"
-        f"c = p.cells\n"
-        f"region = p.Set(cells=c, name='AllCells')\n"
-        f"p.SectionAssignment(region=region, sectionName='{sec_name}')\n"
-    )
+    if geometry.shape != "two_blocks_contact":
+        sec_assign_code = (
+            f"p = mdb.models['{model_name}'].parts['{part_name}']\n"
+            f"c = p.cells\n"
+            f"region = p.Set(cells=c, name='AllCells')\n"
+            f"p.SectionAssignment(region=region, sectionName='{sec_name}')\n"
+        )
+    else:
+        sec_assign_code = (
+            f"p_base = mdb.models['{model_name}'].parts['Base']\n"
+            f"p_slider = mdb.models['{model_name}'].parts['Slider']\n"
+            f"reg_b = p_base.Set(cells=p_base.cells, name='AllCells')\n"
+            f"p_base.SectionAssignment(region=reg_b, sectionName='{sec_name}')\n"
+            f"reg_s = p_slider.Set(cells=p_slider.cells, name='AllCells')\n"
+            f"p_slider.SectionAssignment(region=reg_s, sectionName='{sec_name}')\n"
+        )
     actions.append(builders.python_action(model_name, sec_assign_code))
 
     # 4. Assembly Instance
-    inst_name = f"{part_name}-1"
-    inst_code = (
-        f"a = mdb.models['{model_name}'].rootAssembly\n"
-        f"a.DatumCsysByDefault(CARTESIAN)\n"
-        f"a.Instance(name='{inst_name}', part=p, dependent=ON)\n"
-    )
+    if geometry.shape != "two_blocks_contact":
+        inst_name = f"{part_name}-1"
+        inst_code = (
+            f"a = mdb.models['{model_name}'].rootAssembly\n"
+            f"a.DatumCsysByDefault(CARTESIAN)\n"
+            f"a.Instance(name='{inst_name}', part=p, dependent=ON)\n"
+        )
+    else:
+        base_w = geometry.width if geometry.width > 0 else 100.0
+        base_h = geometry.height if geometry.height > 0 else 20.0
+        base_l = geometry.length if geometry.length > 0 else 10.0
+        inst_name = "Base-1"
+        inst_code = (
+            f"a = mdb.models['{model_name}'].rootAssembly\n"
+            f"a.DatumCsysByDefault(CARTESIAN)\n"
+            f"a.Instance(name='Base-1', part=p_base, dependent=ON)\n"
+            f"a.Instance(name='Slider-1', part=p_slider, dependent=ON)\n"
+            f"a.translate(instanceList=('Slider-1',), vector=(0.0, 0.0, {base_l}))\n"
+            f"f_base_top = a.instances['Base-1'].faces.findAt((({base_w/2.0}, {base_h/2.0}, {base_l}),))\n"
+            f"a.Surface(side1Faces=f_base_top, name='BaseSurf')\n"
+            f"f_slider_bot = a.instances['Slider-1'].faces.findAt(((45.0, {base_h/2.0}, {base_l}),))\n"
+            f"a.Surface(side1Faces=f_slider_bot, name='SliderSurf')\n"
+            f"f_base_bot = a.instances['Base-1'].faces.findAt((({base_w/2.0}, {base_h/2.0}, 0.0),))\n"
+            f"a.Set(faces=f_base_bot, name='BaseFixed')\n"
+            f"f_slider_top = a.instances['Slider-1'].faces.findAt(((45.0, {base_h/2.0}, {2.0 * base_l}),))\n"
+            f"a.Set(faces=f_slider_top, name='SliderTop')\n"
+            f"a.Surface(side1Faces=f_slider_top, name='SliderTop_Surf')\n"
+        )
     actions.append(builders.python_action(model_name, inst_code))
 
     # 5. Spatial Expression Fields
@@ -254,10 +349,12 @@ def compile_intent_to_actions(
                     nlgeom=nlgeom_val,
                 ))
             elif proc_type == "heat_transfer":
+                resp_val = s.metadata.get("response", "STEADY_STATE") if (hasattr(s, "metadata") and s.metadata) else "STEADY_STATE"
                 actions.append(builders.heat_transfer_step(
                     model=model_name,
                     name=s.name,
                     previous=s.previous,
+                    response=resp_val,
                     time_period=s.time_period,
                     initial_inc=s.initial_inc,
                     min_inc=s.min_inc,
@@ -322,6 +419,63 @@ def compile_intent_to_actions(
             ))
         defined_steps.append(active_step.name)
         default_step_name = active_step.name
+
+    # 6b. Contact Interactions
+    if interactions:
+        for inter in interactions:
+            prop_name = f"{inter.name}_Prop"
+            inter_code = f"mdb.models['{model_name}'].ContactProperty('{prop_name}')\n"
+            if inter.friction_coefficient > 0.0:
+                inter_code += (
+                    f"mdb.models['{model_name}'].interactionProperties['{prop_name}'].TangentialBehavior("
+                    f"formulation=PENALTY, directionality=ISOTROPIC, slipRateDependency=OFF, "
+                    f"pressureDependency=OFF, temperatureDependency=OFF, dependencies=0, "
+                    f"table=(({inter.friction_coefficient}, ),), shearStressLimit=None, maximumElasticSlip=FRACTION, "
+                    f"fraction=0.005, elasticSlipStiffness=None)\n"
+                )
+            if inter.normal_behavior == "HARD":
+                inter_code += (
+                    f"mdb.models['{model_name}'].interactionProperties['{prop_name}'].NormalBehavior("
+                    f"pressureOverclosure=HARD, allowSeparation=ON, constraintEnforcementMethod=DEFAULT)\n"
+                )
+            inter_code += (
+                f"a = mdb.models['{model_name}'].rootAssembly\n"
+                f"m_surf = a.surfaces['{inter.master_region}']\n"
+                f"s_surf = a.surfaces['{inter.slave_region}']\n"
+                f"try:\n"
+                f"    mdb.models['{model_name}'].SurfaceToSurfaceContactStd(name='{inter.name}', "
+                f"createStepName='{inter.step}', main=m_surf, secondary=s_surf, sliding=FINITE, "
+                f"interactionProperty='{prop_name}')\n"
+                f"except (TypeError, NameError):\n"
+                f"    mdb.models['{model_name}'].SurfaceToSurfaceContactStd(name='{inter.name}', "
+                f"createStepName='{inter.step}', master=m_surf, slave=s_surf, sliding=FINITE, "
+                f"interactionProperty='{prop_name}')\n"
+            )
+            actions.append(builders.python_action(model_name, inter_code))
+
+    # 6c. Predefined Fields (Initial Temperature, Imported Temperature Field)
+    if predefined_fields:
+        for pf in predefined_fields:
+            if pf.field_type == "temperature":
+                if pf.distribution_type == "FROM_FILE":
+                    interp_str = "ON" if pf.interpolate else "OFF"
+                    pf_code = (
+                        f"a = mdb.models['{model_name}'].rootAssembly\n"
+                        f"c_all = a.instances['{inst_name}'].cells\n"
+                        f"reg = a.Set(cells=c_all, name='{pf.region}')\n"
+                        f"mdb.models['{model_name}'].Temperature(name='{pf.name}', createStepName='{pf.step}', "
+                        f"region=reg, distributionType=FROM_FILE, fileName='{pf.file_name}', "
+                        f"beginStep={pf.begin_step}, interpolate={interp_str})\n"
+                    )
+                else:
+                    pf_code = (
+                        f"a = mdb.models['{model_name}'].rootAssembly\n"
+                        f"c_all = a.instances['{inst_name}'].cells\n"
+                        f"reg = a.Set(cells=c_all, name='{pf.region}')\n"
+                        f"mdb.models['{model_name}'].Temperature(name='{pf.name}', createStepName='{pf.step}', "
+                        f"region=reg, distributionType=UNIFORM, magnitudes=({pf.magnitudes},))\n"
+                    )
+                actions.append(builders.python_action(model_name, pf_code))
 
     # 7. Moment / Torque & Coupling Actions (defined before BCs so BCs can attach to RP if coupled)
     if moments:
@@ -424,6 +578,17 @@ def compile_intent_to_actions(
                     region_expression=f"mdb.models['{model_name}'].rootAssembly.sets['{bc.region}']",
                     step=bc_step,
                 ))
+            elif bc.bc_type == "TEMPERATURE":
+                mag = bc.values.get("magnitude", bc.values.get("temp", 0.0))
+                bc_code = (
+                    f"a = mdb.models['{model_name}'].rootAssembly\n"
+                    f"f = a.instances['{inst_name}'].faces\n"
+                    f"target_faces = f.findAt({find_at_str})\n"
+                    f"region = a.Set(faces=target_faces, name='{bc.region}')\n"
+                    f"mdb.models['{model_name}'].TemperatureBC(name='{bc.name}', createStepName='{bc_step}', "
+                    f"region=region, distributionType=UNIFORM, magnitude={mag})\n"
+                )
+                actions.append(builders.python_action(model_name, bc_code))
             elif bc.bc_type == "DISPLACEMENT":
                 # Check if region is an RP set or matches a moment RP coupling
                 rp_coupled_moment = None
@@ -433,16 +598,18 @@ def compile_intent_to_actions(
                             rp_coupled_moment = m_spec
                             break
 
-                u1 = bc.values.get("u1", 0.0)
-                u2 = bc.values.get("u2", 0.0)
-                u3 = bc.values.get("u3", 0.0)
+                dof_args = []
+                for dof in ("u1", "u2", "u3", "ur1", "ur2", "ur3"):
+                    if dof in bc.values:
+                        dof_args.append(f"{dof}={bc.values[dof]}")
+                dof_str = ", ".join(dof_args) if dof_args else "u1=0.0, u2=0.0, u3=0.0"
 
                 if rp_coupled_moment:
                     bc_code = (
                         f"a = mdb.models['{model_name}'].rootAssembly\n"
                         f"region = a.sets['{rp_coupled_moment.name}_RP_Set']\n"
                         f"mdb.models['{model_name}'].DisplacementBC(name='{bc.name}', createStepName='{bc_step}', "
-                        f"region=region, u1={u1}, u2={u2}, u3={u3})\n"
+                        f"region=region, {dof_str})\n"
                     )
                     actions.append(builders.python_action(model_name, bc_code))
                     actions.append(builders.displacement_bc(
@@ -450,7 +617,7 @@ def compile_intent_to_actions(
                         name=bc.name,
                         region_expression=f"mdb.models['{model_name}'].rootAssembly.sets['{rp_coupled_moment.name}_RP_Set']",
                         step=bc_step,
-                        u1=u1, u2=u2, u3=u3,
+                        u1=bc.values.get("u1", 0.0), u2=bc.values.get("u2", 0.0), u3=bc.values.get("u3", 0.0),
                     ))
                 else:
                     bc_code = (
@@ -459,7 +626,7 @@ def compile_intent_to_actions(
                         f"disp_faces = f.findAt({find_at_str})\n"
                         f"region = a.Set(faces=disp_faces, name='{bc.region}')\n"
                         f"mdb.models['{model_name}'].DisplacementBC(name='{bc.name}', createStepName='{bc_step}', "
-                        f"region=region, u1={u1}, u2={u2}, u3={u3})\n"
+                        f"region=region, {dof_str})\n"
                     )
                     actions.append(builders.python_action(model_name, bc_code))
                     actions.append(builders.displacement_bc(
@@ -467,8 +634,23 @@ def compile_intent_to_actions(
                         name=bc.name,
                         region_expression=f"mdb.models['{model_name}'].rootAssembly.sets['{bc.region}']",
                         step=bc_step,
-                        u1=u1, u2=u2, u3=u3,
+                        u1=bc.values.get("u1", 0.0), u2=bc.values.get("u2", 0.0), u3=bc.values.get("u3", 0.0),
                     ))
+        elif geometry.shape == "two_blocks_contact" and bc.region in ("BaseFixed", "SliderTop"):
+            dof_args = []
+            for dof in ("u1", "u2", "u3", "ur1", "ur2", "ur3"):
+                if dof in bc.values:
+                    dof_args.append(f"{dof}={bc.values[dof]}")
+            dof_str = ", ".join(dof_args) if dof_args else "u1=0.0, u2=0.0, u3=0.0"
+            bc_code = (
+                f"a = mdb.models['{model_name}'].rootAssembly\n"
+                f"region = a.sets['{bc.region}']\n"
+            )
+            if bc.bc_type == "ENCASTRE":
+                bc_code += f"mdb.models['{model_name}'].EncastreBC(name='{bc.name}', createStepName='{bc_step}', region=region)\n"
+            elif bc.bc_type == "DISPLACEMENT":
+                bc_code += f"mdb.models['{model_name}'].DisplacementBC(name='{bc.name}', createStepName='{bc_step}', region=region, {dof_str})\n"
+            actions.append(builders.python_action(model_name, bc_code))
         else:
             # Fallback for primitive geometric models without explicit GroundedRegion mapping
             if bc.bc_type in ("SYMMETRY", "XSYMM", "YSYMM", "ZSYMM"):
@@ -503,6 +685,19 @@ def compile_intent_to_actions(
                     region_expression=f"mdb.models['{model_name}'].rootAssembly.sets['{bc.region}']",
                     step=bc_step,
                 ))
+            elif bc.bc_type == "TEMPERATURE":
+                mag = bc.values.get("magnitude", bc.values.get("temp", 0.0))
+                z_loc = geometry.length if "TOP" in bc.region.upper() else 0.0
+                target_faces = f"(({geometry.width/2.0}, {geometry.height/2.0}, {z_loc}),)"
+                bc_code = (
+                    f"a = mdb.models['{model_name}'].rootAssembly\n"
+                    f"f = a.instances['{inst_name}'].faces\n"
+                    f"disp_faces = f.findAt({target_faces})\n"
+                    f"region = a.Set(faces=disp_faces, name='{bc.region}')\n"
+                    f"mdb.models['{model_name}'].TemperatureBC(name='{bc.name}', createStepName='{bc_step}', "
+                    f"region=region, distributionType=UNIFORM, magnitude={mag})\n"
+                )
+                actions.append(builders.python_action(model_name, bc_code))
             elif bc.bc_type == "DISPLACEMENT":
                 # Check if region is an RP set or matches a moment RP coupling
                 rp_coupled_moment = None
@@ -512,16 +707,18 @@ def compile_intent_to_actions(
                             rp_coupled_moment = m_spec
                             break
 
-                u1 = bc.values.get("u1", 0.0)
-                u2 = bc.values.get("u2", 0.0)
-                u3 = bc.values.get("u3", 0.0)
+                dof_args = []
+                for dof in ("u1", "u2", "u3", "ur1", "ur2", "ur3"):
+                    if dof in bc.values:
+                        dof_args.append(f"{dof}={bc.values[dof]}")
+                dof_str = ", ".join(dof_args) if dof_args else "u1=0.0, u2=0.0, u3=0.0"
 
                 if rp_coupled_moment:
                     bc_code = (
                         f"a = mdb.models['{model_name}'].rootAssembly\n"
                         f"region = a.sets['{rp_coupled_moment.name}_RP_Set']\n"
                         f"mdb.models['{model_name}'].DisplacementBC(name='{bc.name}', createStepName='{bc_step}', "
-                        f"region=region, u1={u1}, u2={u2}, u3={u3})\n"
+                        f"region=region, {dof_str})\n"
                     )
                     actions.append(builders.python_action(model_name, bc_code))
                     actions.append(builders.displacement_bc(
@@ -529,7 +726,7 @@ def compile_intent_to_actions(
                         name=bc.name,
                         region_expression=f"mdb.models['{model_name}'].rootAssembly.sets['{rp_coupled_moment.name}_RP_Set']",
                         step=bc_step,
-                        u1=u1, u2=u2, u3=u3,
+                        u1=bc.values.get("u1", 0.0), u2=bc.values.get("u2", 0.0), u3=bc.values.get("u3", 0.0),
                     ))
                 else:
                     z_loc = geometry.length if "TOP" in bc.region.upper() else 0.0
@@ -540,7 +737,7 @@ def compile_intent_to_actions(
                         f"disp_faces = f.findAt({target_faces})\n"
                         f"region = a.Set(faces=disp_faces, name='{bc.region}')\n"
                         f"mdb.models['{model_name}'].DisplacementBC(name='{bc.name}', createStepName='{bc_step}', "
-                        f"region=region, u1={u1}, u2={u2}, u3={u3})\n"
+                        f"region=region, {dof_str})\n"
                     )
                     actions.append(builders.python_action(model_name, bc_code))
                     actions.append(builders.displacement_bc(
@@ -548,7 +745,7 @@ def compile_intent_to_actions(
                         name=bc.name,
                         region_expression=f"mdb.models['{model_name}'].rootAssembly.sets['{bc.region}']",
                         step=bc_step,
-                        u1=u1, u2=u2, u3=u3,
+                        u1=bc.values.get("u1", 0.0), u2=bc.values.get("u2", 0.0), u3=bc.values.get("u3", 0.0),
                     ))
 
         # Multi-Step BC Modifications (e.g. freeing DOF in subsequent service steps)
@@ -634,6 +831,14 @@ def compile_intent_to_actions(
                         cf3=ld.magnitude,
                         step=target_step,
                     ))
+        elif geometry.shape == "two_blocks_contact" and ld.region in ("SliderTop_Surf", "BaseSurf", "SliderSurf"):
+            load_code = (
+                f"a = mdb.models['{model_name}'].rootAssembly\n"
+                f"surf = a.surfaces['{ld.region}']\n"
+                f"mdb.models['{model_name}'].Pressure(name='{ld.name}', createStepName='{target_step}', "
+                f"region=surf, magnitude={ld.magnitude}{field_arg})\n"
+            )
+            actions.append(builders.python_action(model_name, load_code))
         else:
             if ld.load_type == "pressure":
                 z_loc = geometry.length if "TOP" in ld.region.upper() else 0.0
@@ -725,34 +930,60 @@ def compile_intent_to_actions(
                 ))
 
     # 11. Mesh Generation Actions
-    actions.append(builders.seed_part(
-        model=model_name,
-        part=part_name,
-        size=mesh.global_size,
-        deviation_factor=mesh.deviation_factor,
-    ))
-    if mesh.element_type.startswith("C3D10") or mesh.element_type.startswith("C3D4"):
+    if geometry.shape == "two_blocks_contact":
         mesh_elem_code = (
-            f"p = mdb.models['{model_name}'].parts['{part_name}']\n"
-            f"p.setMeshControls(regions=p.cells, elemShape=TET, technique=FREE)\n"
-            f"elemType1 = mesh.ElemType(elemCode={mesh.element_type}, elemLibrary=STANDARD)\n"
-            f"p.setElementType(regions=(p.cells,), elemTypes=(elemType1,))\n"
-            f"p.generateMesh()\n"
+            f"p_base = mdb.models['{model_name}'].parts['Base']\n"
+            f"p_slider = mdb.models['{model_name}'].parts['Slider']\n"
+            f"p_base.seedPart(size={mesh.global_size}, deviationFactor={mesh.deviation_factor})\n"
+            f"elemType1 = mesh.ElemType(elemCode={mesh.element_type}, elemLibrary={mesh.element_library})\n"
+            f"p_base.setElementType(regions=(p_base.cells,), elemTypes=(elemType1,))\n"
+            f"p_base.generateMesh()\n"
+            f"p_slider.seedPart(size={mesh.global_size}, deviationFactor={mesh.deviation_factor})\n"
+            f"p_slider.setElementType(regions=(p_slider.cells,), elemTypes=(elemType1,))\n"
+            f"p_slider.generateMesh()\n"
         )
+        actions.append(builders.python_action(model_name, mesh_elem_code))
     else:
-        mesh_elem_code = (
-            f"p = mdb.models['{model_name}'].parts['{part_name}']\n"
-            f"elemType1 = mesh.ElemType(elemCode={mesh.element_type}, elemLibrary=STANDARD)\n"
-            f"p.setElementType(regions=(p.cells,), elemTypes=(elemType1,))\n"
-            f"p.generateMesh()\n"
-        )
-    actions.append(builders.python_action(model_name, mesh_elem_code))
+        actions.append(builders.seed_part(
+            model=model_name,
+            part=part_name,
+            size=mesh.global_size,
+            deviation_factor=mesh.deviation_factor,
+        ))
+        if mesh.element_type.startswith("C3D10") or mesh.element_type.startswith("C3D4"):
+            mesh_elem_code = (
+                f"p = mdb.models['{model_name}'].parts['{part_name}']\n"
+                f"p.setMeshControls(regions=p.cells, elemShape=TET, technique=FREE)\n"
+                f"elemType1 = mesh.ElemType(elemCode={mesh.element_type}, elemLibrary={mesh.element_library})\n"
+                f"p.setElementType(regions=(p.cells,), elemTypes=(elemType1,))\n"
+                f"p.generateMesh()\n"
+            )
+        else:
+            mesh_elem_code = (
+                f"p = mdb.models['{model_name}'].parts['{part_name}']\n"
+                f"elemType1 = mesh.ElemType(elemCode={mesh.element_type}, elemLibrary={mesh.element_library})\n"
+                f"p.setElementType(regions=(p.cells,), elemTypes=(elemType1,))\n"
+                f"p.generateMesh()\n"
+            )
+        actions.append(builders.python_action(model_name, mesh_elem_code))
 
     # 12. Output Requests & Job Creation
+    if any("explicit" in s.lower() for s in defined_steps):
+        out_req_code = (
+            f"if 'F-Output-1' in mdb.models['{model_name}'].fieldOutputRequests:\n"
+            f"    mdb.models['{model_name}'].fieldOutputRequests['F-Output-1'].setValues(variables=('S', 'U', 'V', 'A'), numIntervals=10)\n"
+            f"if 'H-Output-1' in mdb.models['{model_name}'].historyOutputRequests:\n"
+            f"    mdb.models['{model_name}'].historyOutputRequests['H-Output-1'].setValues(variables=('ALLKE', 'ALLIE', 'ALLVD', 'ALLAE', 'ALLWK', 'ETOTAL'))\n"
+        )
+        actions.append(builders.python_action(model_name, out_req_code))
+
     job_code = (
         f"mdb.Job(name='{job_name}', model='{model_name}', type=ANALYSIS, "
         f"description='Autonomous Agent Compiled Job', waitMinutes=0, waitHours=0)\n"
+        f"mdb.jobs['{job_name}'].writeInput()\n"
     )
+    if submit_job:
+        job_code += f"mdb.jobs['{job_name}'].submit(consistencyChecking=OFF)\nmdb.jobs['{job_name}'].waitForCompletion()\n"
     actions.append(builders.python_action(model_name, job_code))
 
     # Render entire action list to executable script
@@ -788,6 +1019,8 @@ def compile_intent_to_actions(
         "fields_count": len(fields) if fields else 0,
         "bolt_pretensions_count": len(bolt_pretensions) if bolt_pretensions else 0,
         "moments_count": len(moments) if moments else 0,
+        "interactions_count": len(interactions) if interactions else 0,
+        "predefined_fields_count": len(predefined_fields) if predefined_fields else 0,
     }
 
     return CompiledAgentPlan(

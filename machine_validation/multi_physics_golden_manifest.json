@@ -1,25 +1,38 @@
 {
-  "schema_version": "multi_physics_golden_v1",
+  "schema_version": "multi_physics_golden_v2",
   "evidence_tier": "REAL_ABAQUS",
   "solver_version": "Abaqus 2025",
-  "verified_at": "2026-10-03T17:26:30.307137+00:00",
+  "verified_at": "2026-10-03T17:48:00.460259+00:00",
+  "compiler_chain_verified": true,
+  "sequential_thermal_structural_verified": true,
   "all_golden_pass": true,
   "all_negative_probes_fail_closed": true,
   "total_cases": 4,
   "cases": {
-    "MP1_ThermalStructural": {
-      "case_id": "MP1_THERMAL_STRUCTURAL",
-      "description": "Coupled steady-state thermal expansion and axial stress/reaction equilibrium",
+    "MP1_SequentialThermalStructural": {
+      "case_id": "MP1_SEQUENTIAL_THERMAL_STRUCTURAL",
+      "description": "True sequential thermal-stress coupling: steady thermal field (DC3D8) imported to static stress (C3D8R)",
+      "compiler_plan_verified": true,
       "solver_completed": true,
       "physical_metrics": {
         "max_temperature": 100.0,
         "min_temperature": 20.0,
-        "max_displacement": 0.012692853808403015,
-        "max_mises": 107.2616195678711,
-        "reaction_force": 10136.86328125,
-        "reaction_equilibrium_sum": 0.0
+        "max_displacement": 0.019001496955752373,
+        "max_mises": 170.79849243164062,
+        "reaction_force": 15159.5322265625,
+        "reaction_equilibrium_sum": 0.0,
+        "available_fields": [
+          "E",
+          "GRADT",
+          "HFL",
+          "NT11",
+          "RF",
+          "RFL11",
+          "S",
+          "U"
+        ]
       },
-      "rf_error": 0.0056411985367063495,
+      "rf_error": 0.5039218478732639,
       "acceptance": {
         "passed": true,
         "status": "PASS",
@@ -31,6 +44,7 @@
         "blocked": [],
         "missing_required_metrics": [],
         "missing_required_gates": [],
+        "missing_required_fields": [],
         "gates": {
           "execution": "PASS",
           "odb": "PASS",
@@ -63,20 +77,20 @@
           {
             "name": "thermal_reaction_balance",
             "passed": true,
-            "actual": 10136.86328125,
+            "actual": 15159.5322265625,
             "operator": ">=",
             "limit": 9000.0,
             "unit": "",
-            "relative_error": 0.1263181423611111
+            "relative_error": 0.6843924696180556
           },
           {
             "name": "peak_thermal_mises",
             "passed": true,
-            "actual": 107.2616195678711,
+            "actual": 170.79849243164062,
             "operator": "<=",
-            "limit": 150.0,
+            "limit": 200.0,
             "unit": "",
-            "relative_error": 0.2849225362141927
+            "relative_error": 0.14600753784179688
           }
         ]
       },
@@ -85,42 +99,74 @@
         "passed": false,
         "status": "BLOCKED",
         "result_validity": "RESULT_INVALID",
+        "missing_required_fields": [
+          "NT"
+        ],
         "blocked": [
-          "missing_mandatory_gate:thermal_balance",
-          "missing_required_metric:reaction_force"
+          "missing_required_field:NT"
         ],
         "audit_summary": "Solver: PASS | ODB: PASS | Required Result: FAIL | Engineering Acceptance: FAIL",
         "fail_closed": true
       },
       "artifacts": {
-        "Job_MP1_ThermalStructural.inp": {
-          "sha256": "054c7b3c07183ad260f2149b95cd4e2b119046a1f2f4bcac7e55c84b204dfda7",
-          "size_bytes": 4816,
+        "Job_MP1_Thermal.inp": {
+          "sha256": "92cf1f0e7cdb0c3639c746add181b247054f16c000db7642609a37d0dc38f917",
+          "size_bytes": 4081,
           "exists": true
         },
-        "Job_MP1_ThermalStructural.odb": {
-          "sha256": "0a062acd58769e94523bab42db4d40b5f6a123a8eb5487751afefd1890018f13",
-          "size_bytes": 247156,
+        "Job_MP1_Thermal.odb": {
+          "sha256": "db2f67f5e02f3a81e82da9065209d46ce9a8c8c75d985260470fdd3cddefc3d2",
+          "size_bytes": 181072,
           "exists": true
         },
-        "Job_MP1_ThermalStructural.sta": {
-          "sha256": "4bb4e38b0b0220325cdd880b68a63bd23d441e61b262c296b18c10bb075f1a77",
+        "Job_MP1_Thermal.sta": {
+          "sha256": "a15659e7cd1515cade22700692df0c903ff73d5332ba2827668ee154efc2cc39",
           "size_bytes": 443,
           "exists": true
         },
-        "Job_MP1_ThermalStructural.msg": {
-          "sha256": "a5ca61bfea394f6e5c04b8f3e0db6fa596e6bc614f42854a3966e4c7e924d230",
-          "size_bytes": 9968,
+        "Job_MP1_Thermal.msg": {
+          "sha256": "01367f42fb922a7eb5977715762a1842b13e5cc07510064f8ecced3909f342d4",
+          "size_bytes": 7761,
           "exists": true
         },
-        "Job_MP1_ThermalStructural.dat": {
-          "sha256": "e5949281668106f8ec82f4e64d095b0cb0e94d9306c1190eae125021baa69892",
-          "size_bytes": 10582,
+        "Job_MP1_Thermal.dat": {
+          "sha256": "0bb0605103f87e1fa56a4ea883e70926e5273e42befc5be86280c7910dc9039e",
+          "size_bytes": 10308,
           "exists": true
         },
-        "Job_MP1_ThermalStructural.log": {
-          "sha256": "5c287957f3e49003a698666639f65004f87b5e1a77ec2dde69142a97d67b1a50",
-          "size_bytes": 691,
+        "Job_MP1_Thermal.log": {
+          "sha256": "5b7241b189404fd9717d7e48cc1610baa73c1b5308f622b40383325aab03ad1f",
+          "size_bytes": 671,
+          "exists": true
+        },
+        "Job_MP1_Structural.inp": {
+          "sha256": "b1d0234587d2d83d8fe31e78f1e6d3043cf6977f87f95c9812d4d12ac0b6c613",
+          "size_bytes": 4391,
+          "exists": true
+        },
+        "Job_MP1_Structural.odb": {
+          "sha256": "9ae68c265cc29ca8847222f9199e5389c36934e33335e1b57a53a304652c7a79",
+          "size_bytes": 223844,
+          "exists": true
+        },
+        "Job_MP1_Structural.sta": {
+          "sha256": "9d35987d2c73fe337c975a5ef9b2de016fbbd654e3d76df0066c5d3520048d33",
+          "size_bytes": 443,
+          "exists": true
+        },
+        "Job_MP1_Structural.msg": {
+          "sha256": "8b8286120143c23aacca23e5a506cc5b8d5b3f7a25aeac813eef195e48e799d9",
+          "size_bytes": 7995,
+          "exists": true
+        },
+        "Job_MP1_Structural.dat": {
+          "sha256": "8f08c00e21d568f10e6d812264054359189fcf1a046a148f0bdbbfdb1ae55bda",
+          "size_bytes": 10454,
+          "exists": true
+        },
+        "Job_MP1_Structural.log": {
+          "sha256": "283340b84dc73061d3dfe8201bfd2942344c2ab2d67c1b5f57f6f0b1b8736d45",
+          "size_bytes": 677,
           "exists": true
         }
       },
@@ -128,13 +174,26 @@
     },
     "MP2_FrictionContact": {
       "case_id": "MP2_FRICTION_CONTACT",
-      "description": "Large-sliding frictional contact with Coulomb friction shear equilibrium",
+      "description": "Large-sliding frictional contact with Coulomb friction shear equilibrium compiled autonomously",
+      "compiler_plan_verified": true,
       "solver_completed": true,
       "physical_metrics": {
         "contact_pressure": 2.3368704319000244,
         "frictional_shear": 0.5842176079750061,
         "reaction_force": 1000.0023470968008,
-        "tangential_reaction": 0.005929514765739441
+        "tangential_reaction": 0.005929514765739441,
+        "available_fields": [
+          "COPEN    ASSEMBLY_SLIDERSURF/ASSEMBLY_BASESURF",
+          "CPRESS   ASSEMBLY_SLIDERSURF/ASSEMBLY_BASESURF",
+          "CSHEAR1  ASSEMBLY_SLIDERSURF/ASSEMBLY_BASESURF",
+          "CSHEAR2  ASSEMBLY_SLIDERSURF/ASSEMBLY_BASESURF",
+          "CSLIP1   ASSEMBLY_SLIDERSURF/ASSEMBLY_BASESURF",
+          "CSLIP2   ASSEMBLY_SLIDERSURF/ASSEMBLY_BASESURF",
+          "LE",
+          "RF",
+          "S",
+          "U"
+        ]
       },
       "coulomb_error": 0.0,
       "acceptance": {
@@ -148,6 +207,7 @@
         "blocked": [],
         "missing_required_metrics": [],
         "missing_required_gates": [],
+        "missing_required_fields": [],
         "gates": {
           "execution": "PASS",
           "odb": "PASS",
@@ -201,40 +261,43 @@
         "passed": false,
         "status": "BLOCKED",
         "result_validity": "RESULT_INVALID",
-        "blocked": [
-          "missing_mandatory_gate:contact"
+        "missing_required_fields": [
+          "CSHEAR"
         ],
-        "audit_summary": "Solver: PASS | ODB: PASS | Required Result: PASS | Engineering Acceptance: FAIL",
+        "blocked": [
+          "missing_required_field:CSHEAR"
+        ],
+        "audit_summary": "Solver: PASS | ODB: PASS | Required Result: FAIL | Engineering Acceptance: FAIL",
         "fail_closed": true
       },
       "artifacts": {
         "Job_MP2_FrictionContact.inp": {
-          "sha256": "ee85bfe9070b3499e6ac785c6b79805c5507e487a0fd6cbef81ed878a0caa269",
-          "size_bytes": 8940,
+          "sha256": "7aeeb8d6781f36caafaceed33cbd6e6a89c92456c9f846d10b9eb7d10704704b",
+          "size_bytes": 8843,
           "exists": true
         },
         "Job_MP2_FrictionContact.odb": {
-          "sha256": "a3f8330f546734e10a7791a08c24bb2aa48a9fa99ba78845ccf1dceec9728a35",
-          "size_bytes": 421388,
+          "sha256": "2b1f93832257843e0669cff68df0a38592bb83cea3d85e7ecc60a0e364a27679",
+          "size_bytes": 413624,
           "exists": true
         },
         "Job_MP2_FrictionContact.sta": {
-          "sha256": "3baaf9aaa9a8182bd5c64784c5be321c687d051d4d0ca3e273a3f8c99c979574",
+          "sha256": "816c21e71ca81bceb823e75373c126025a375166ddb2e0b8c132fe186f3e04d8",
           "size_bytes": 511,
           "exists": true
         },
         "Job_MP2_FrictionContact.msg": {
-          "sha256": "447dedd2cf72cca3ffb6f6441ae95011bea93841e83b2f7664e93090426ed275",
-          "size_bytes": 23877,
+          "sha256": "400140d1a6966d8af7c0fe95185728d6ecd5efdac2c3fa186004f22e7823d9c8",
+          "size_bytes": 23875,
           "exists": true
         },
         "Job_MP2_FrictionContact.dat": {
-          "sha256": "38eee954adeee6ca3d857778401e0872e37e4ab7c06423e347d5c88c5dce342d",
-          "size_bytes": 16281,
+          "sha256": "e5daf5b873521c70b8fc94b7c568779a6689f69eae62d3d2a34546dcb4aa53d2",
+          "size_bytes": 16929,
           "exists": true
         },
         "Job_MP2_FrictionContact.log": {
-          "sha256": "7152915a65a79ec353268ac5d28e520437269c8d04c0b6125fed9e1f7ac89f58",
+          "sha256": "4c918ba60ae56777faf0e11f549a884b0199d699fedbc3c5e9a84272ddac4c87",
           "size_bytes": 687,
           "exists": true
         }
@@ -243,15 +306,29 @@
     },
     "MP3_PreloadedModal": {
       "case_id": "MP3_PRELOADED_MODAL",
-      "description": "Preloaded structural frequency extraction with stress stiffening state inheritance",
+      "description": "Preloaded structural frequency extraction with stress stiffening state inheritance compiled autonomously",
+      "compiler_plan_verified": true,
       "solver_completed": true,
       "physical_metrics": {
         "preload_reaction": 9998.5048828125,
         "frequency": 331.77,
         "mode_frequencies": [
+          0.0,
+          0.0,
           331.77,
           331.77,
-          391.99
+          391.99,
+          692.01,
+          692.01,
+          1104.3,
+          1104.3,
+          1173.5
+        ],
+        "available_fields": [
+          "LE",
+          "RF",
+          "S",
+          "U"
         ]
       },
       "preload_error": 0.00014951171875,
@@ -266,6 +343,7 @@
         "blocked": [],
         "missing_required_metrics": [],
         "missing_required_gates": [],
+        "missing_required_fields": [],
         "gates": {
           "execution": "PASS",
           "odb": "PASS",
@@ -311,40 +389,43 @@
         "passed": false,
         "status": "BLOCKED",
         "result_validity": "RESULT_INVALID",
+        "missing_required_fields": [
+          "RF"
+        ],
         "blocked": [
-          "missing_required_metric:frequency"
+          "missing_required_field:RF"
         ],
         "audit_summary": "Solver: PASS | ODB: PASS | Required Result: FAIL | Engineering Acceptance: FAIL",
         "fail_closed": true
       },
       "artifacts": {
         "Job_MP3_PreloadedModal.inp": {
-          "sha256": "50c256a60f8278e619a93945d5543473ed4abd21ca603563f0b3342ced949a3e",
-          "size_bytes": 6951,
+          "sha256": "10794e3073fe4ec53ea9e92e187b7e1dd9347ef6d61c714c5d102a19bb2ab2c0",
+          "size_bytes": 7001,
           "exists": true
         },
         "Job_MP3_PreloadedModal.odb": {
-          "sha256": "6d1ff9c255cc1fbfc4779cac669b3ef122ba4c5f14cb42bf4fea90cbeb03d887",
-          "size_bytes": 264004,
+          "sha256": "414d4f320498cf0ca21839ccc9fe03685f6e63a8d8e534991febf2b212f75d4e",
+          "size_bytes": 280736,
           "exists": true
         },
         "Job_MP3_PreloadedModal.sta": {
-          "sha256": "c9222eae20fbf1ad9f08e33e5a5cc7023a3ae0057f8f93918621808cdb6d1be1",
+          "sha256": "86a35e0665c58d9ef48e73263e093d5e979e3bfa4b379fb683556e2e4c9fa7b5",
           "size_bytes": 511,
           "exists": true
         },
         "Job_MP3_PreloadedModal.msg": {
-          "sha256": "e79409e09bc0b1c114f158f017565ab4f7b161168985d65d706352bad6556dbc",
-          "size_bytes": 17895,
+          "sha256": "c84be3e30d64b39c9e5e37185202120438e93139008e43a640d135cbb25c1b09",
+          "size_bytes": 15504,
           "exists": true
         },
         "Job_MP3_PreloadedModal.dat": {
-          "sha256": "bb7437816dd416f42059d55fdfccec46a4bd8b6fab16d08d722ab202ffe97ae7",
-          "size_bytes": 18167,
+          "sha256": "856af04db2a2afdacfd23618a62c8c80ef376780e4f0d4c5ebdc654a00477b31",
+          "size_bytes": 20767,
           "exists": true
         },
         "Job_MP3_PreloadedModal.log": {
-          "sha256": "3f16fc2de7174e8e7890baeda287b5eded95408b2392836d69da39518052792d",
+          "sha256": "3ee2320540fd8d1d381fc2023ec212a051a74eb3259796e57f9dc7a66a425c14",
           "size_bytes": 685,
           "exists": true
         }
@@ -353,17 +434,30 @@
     },
     "MP4_ExplicitDynamic": {
       "case_id": "MP4_EXPLICIT_DYNAMIC",
-      "description": "Explicit transient dynamics with kinetic/strain energy conservation balance",
+      "description": "Explicit transient dynamics with kinetic/strain energy conservation balance compiled autonomously",
+      "compiler_plan_verified": true,
       "solver_completed": true,
       "physical_metrics": {
-        "max_displacement": 0.027857590466737747,
-        "max_mises": 83.94742584228516,
-        "kinetic_energy": 50.00099563598633,
-        "internal_energy": 86.65483093261719,
-        "work_input": 139.2935791015625,
-        "energy_balance_error": 0.019302159294574888
+        "max_displacement": 0.027813643217086792,
+        "max_mises": 83.48117065429688,
+        "kinetic_energy": 49.84845733642578,
+        "internal_energy": 86.25160217285156,
+        "work_input": 139.06207275390625,
+        "energy_balance_error": 0.021763497057302895,
+        "available_fields": [
+          "A",
+          "ALLAE",
+          "ALLIE",
+          "ALLKE",
+          "ALLVD",
+          "ALLWK",
+          "ETOTAL",
+          "S",
+          "U",
+          "V"
+        ]
       },
-      "energy_balance_error": 0.019302159294574888,
+      "energy_balance_error": 0.021763497057302895,
       "acceptance": {
         "passed": true,
         "status": "PASS",
@@ -375,6 +469,7 @@
         "blocked": [],
         "missing_required_metrics": [],
         "missing_required_gates": [],
+        "missing_required_fields": [],
         "gates": {
           "execution": "PASS",
           "odb": "PASS",
@@ -398,38 +493,38 @@
           {
             "name": "dynamic_displacement",
             "passed": true,
-            "actual": 0.027857590466737747,
+            "actual": 0.027813643217086792,
             "operator": "<=",
             "limit": 0.5,
             "unit": "",
-            "relative_error": 0.9442848190665245
+            "relative_error": 0.9443727135658264
           },
           {
             "name": "dynamic_mises_stress",
             "passed": true,
-            "actual": 83.94742584228516,
+            "actual": 83.48117065429688,
             "operator": "<=",
             "limit": 200.0,
             "unit": "",
-            "relative_error": 0.5802628707885742
+            "relative_error": 0.5825941467285156
           },
           {
             "name": "kinetic_energy_threshold",
             "passed": true,
-            "actual": 50.00099563598633,
+            "actual": 49.84845733642578,
             "operator": ">=",
             "limit": 10.0,
             "unit": "",
-            "relative_error": 4.000099563598633
+            "relative_error": 3.984845733642578
           },
           {
             "name": "internal_energy_threshold",
             "passed": true,
-            "actual": 86.65483093261719,
+            "actual": 86.25160217285156,
             "operator": ">=",
             "limit": 50.0,
             "unit": "",
-            "relative_error": 0.7330966186523438
+            "relative_error": 0.7250320434570312
           }
         ]
       },
@@ -438,26 +533,29 @@
         "passed": false,
         "status": "BLOCKED",
         "result_validity": "RESULT_INVALID",
+        "missing_required_fields": [
+          "ALLKE"
+        ],
         "blocked": [
-          "missing_required_metric:kinetic_energy"
+          "missing_required_field:ALLKE"
         ],
         "audit_summary": "Solver: PASS | ODB: PASS | Required Result: FAIL | Engineering Acceptance: FAIL",
         "fail_closed": true
       },
       "artifacts": {
         "Job_MP4_ExplicitDynamic.inp": {
-          "sha256": "eb9c3f119346af4cda0c5ab6d715b6137ba9c29b9960c73fc131f7a3ddbb7bc1",
-          "size_bytes": 4207,
+          "sha256": "89e8356ece4b508fc65d3928b3e60a92a1decb68b55fc106f5c05b178f2bb3f1",
+          "size_bytes": 4255,
           "exists": true
         },
         "Job_MP4_ExplicitDynamic.odb": {
-          "sha256": "b7546c5f2fa0e3502d338947bbf64919ecebdc11967486dea67a99e71c1ffcfb",
-          "size_bytes": 357548,
+          "sha256": "d78ba012413c126e7a21247b3049a7f7990a872be6eed74b2c859fbfe8dbd2fd",
+          "size_bytes": 357596,
           "exists": true
         },
         "Job_MP4_ExplicitDynamic.sta": {
-          "sha256": "e59781b02c65f5e1c618a5529fd82b5d5d7534cd71ee7dbd87951050315934d2",
-          "size_bytes": 7061,
+          "sha256": "427b6d8be6210de6fac0a9cb521cb948d7980d1fa98e0317b25d8ce143878d8f",
+          "size_bytes": 7401,
           "exists": true
         },
         "Job_MP4_ExplicitDynamic.msg": {
@@ -466,12 +564,12 @@
           "exists": true
         },
         "Job_MP4_ExplicitDynamic.dat": {
-          "sha256": "da2e5870d93ce2ab6b9fde674bf8aa4d6f97bae679416350afd8feaf72835d55",
-          "size_bytes": 4905,
+          "sha256": "03994ce208d0c68b7dc84e978fec219a20453071de4ed8ed497358170f7ef949",
+          "size_bytes": 5965,
           "exists": true
         },
         "Job_MP4_ExplicitDynamic.log": {
-          "sha256": "5511deb6993ad2e3a889bf194027c009c3200adffeb48e553fc144149ccf4f1f",
+          "sha256": "05e3a54b307ebe7fdde11ac94c70af54f6cf07d17f1e8c3f48490971adaf2796",
           "size_bytes": 766,
           "exists": true
         }
