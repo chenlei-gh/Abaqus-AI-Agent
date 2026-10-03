@@ -1372,9 +1372,18 @@ ODB Tensor Extraction & Equilibrium Verification (RF vs Applied Error = 0.002%) 
     - [x] Implemented strict whitelist AST validator for analytical spatial fields (`validate_field_expression`, `SpatialLoadField`), eliminating string injection while permitting coordinate arithmetic ($X, Y, Z$).
     - [x] Upgraded `preflight.py` with fail-closed gates for step DAG order, `nlgeom` downgrade blocking, bolt lifecycle inversions, moment strategy checks, and field expression AST guards.
     - [x] Added 12 targeted procedure & preflight tests (`tests/test_procedure_contracts_preflight.py`, 565 repository-wide regression tests).
-  - [ ] **GA-2.6.1: Multi-Step & Physical Procedure Compiler**
+  - [x] **GA-2.6.1: Abaqus 2025 Physical API Probes & Solver Calibration [CLOSED & QUALIFIED]**
+    - [x] Implemented fail-fast physical probe harness in `tools/ga261_physical_api_probes.py`.
+    - [x] Probe 0 (P0 Multi-Step State Inheritance): Verified state inheritance across `Initial` $\to$ `Step-1` $\to$ `Step-2`. Step-1 load $1000.0\text{ N}$ propagated into Step-2 with $500.0\text{ N}$ increment; live $\Sigma RF_y = 1500.0\text{ N}$ (relative error $< 2 \times 10^{-6}\%$).
+    - [x] Probe 1 (P1 Bolt Pretension Lifecycle): Verified two-stage lifecycle (`APPLY_FORCE` $\to$ `FIX_LENGTH`). Step-Preload achieved target bolt reaction $-5000.0\text{ N}$ ($0.0\%$ error); Step-Service locked length, released top support, and applied $2000.0\text{ N}$ external tension with exact bottom reaction equilibrium ($-2000.0\text{ N}$).
+    - [x] Probe 2 (P2 Analytical Spatial Load Field): Verified native `ExpressionField` (`1.0 + 0.02 * Y`) with `Pressure(..., distributionType=FIELD)`. Numerical surface integration yielded $\Sigma RF_z = 14999.9999\text{ N}$ against exact analytical integral $15000.0\text{ N}$ (relative error $7.1 \times 10^{-7}\%$).
+    - [x] Probe 3 (P3 Moment / Coupling Strategy): Verified Reference Point + Kinematic Coupling on 3D solid continuum with zero rotational DOFs. Applied $100000.0\text{ N}\cdot\text{mm}$ torque $M_z$; root reaction shear couple yielded $-99999.997\text{ N}\cdot\text{mm}$ (equilibrium error $2.9 \times 10^{-6}\%$, net shear force zero drift $2.6 \times 10^{-11}\text{ N}$).
+    - [x] **API Calibration**: Calibrated native Abaqus CAE concentrated moment syntax (`m.Moment` instead of invalid `m.ConcentratedForce(..., cm3=...)` which triggered solver keyword rejection).
+    - [x] Persisted certified live solver manifest: `machine_validation/ga261_probe_evidence.json` (4/4 Probes PASS on Abaqus 2025).
+    - [x] Added 4 probe regression tests (`tests/test_ga261_probes.py`, 569 repository-wide regression tests).
+  - [ ] **GA-2.6.2: Multi-Step & Physical Procedure Compiler**
     - [ ] Upgrade `compiler.py` to synthesize multi-step analysis sequences, native `BoltLoad` & `setValuesInStep`, kinematics coupling for moment, and `ExpressionField`.
-  - [ ] **GA-2.6.2: Real Abaqus 2025 Multi-Step Golden Verification**
+  - [ ] **GA-2.6.3: Real Abaqus 2025 Multi-Step Golden Verification**
     - [ ] Execute real-machine verification: Two-step nonlinear bolt preload followed by external service moment/load.
 
 ---

@@ -1,0 +1,66 @@
+{
+  "phase": "GA-2.6.1",
+  "timestamp": "2026-10-03T16:09:12.839062+00:00",
+  "solver_version": "Abaqus 2025",
+  "all_probes_passed": true,
+  "probe_count": 4,
+  "evidence_tier": "REAL_ABAQUS",
+  "probes": [
+    {
+      "probe": "P0_MULTI_STEP_INHERITANCE",
+      "evidence_tier": "REAL_ABAQUS",
+      "passed": true,
+      "script_sha256": "f4870f992e1c6dcf53994461cc67826685a5a4a12ad49e0ef6cc720acbd7bf67",
+      "steps_verified": [
+        "Step-1",
+        "Step-2"
+      ],
+      "step1_rf_y": 1000.0000035464764,
+      "step1_error": 3.546476364135742e-09,
+      "step2_rf_y": 1499.9999767243862,
+      "step2_error": 1.5517075856526694e-08,
+      "elem_count": 80,
+      "node_count": 189
+    },
+    {
+      "probe": "P1_BOLT_PRETENSION_LIFECYCLE",
+      "evidence_tier": "REAL_ABAQUS",
+      "passed": true,
+      "script_sha256": "d24605162acfab98f102c7b71f9f81a2a936c97f1b1eff7c12c2bd733634efc6",
+      "rf_bottom_preload": -5000.0,
+      "rf_top_preload": 5000.0,
+      "preload_error": 0.0,
+      "rf_bottom_service": -2000.0,
+      "rf_top_service": 0.0,
+      "service_error": 0.0,
+      "u3_top_service": -0.014367495146062639,
+      "elem_count": 80,
+      "node_count": 189
+    },
+    {
+      "probe": "P2_SPATIAL_LOAD_FIELD",
+      "evidence_tier": "REAL_ABAQUS",
+      "passed": true,
+      "script_sha256": "a1de5cc2d79487be6746619f908eaa949be77b6db390d512430e615bb40bead1",
+      "analytical_reference": 15000.0,
+      "actual_total_rf3": 14999.999893188477,
+      "integral_relative_error": 7.120768229166667e-09,
+      "elem_count": 80,
+      "node_count": 165
+    },
+    {
+      "probe": "P3_MOMENT_COUPLING_STRATEGY",
+      "evidence_tier": "REAL_ABAQUS",
+      "passed": true,
+      "script_sha256": "d6367582042006ede1a9837b4460feeb6d880cc58cc833bd7d78081144e6f5c6",
+      "applied_torque": 100000.0,
+      "reaction_torque": -99999.9970703125,
+      "torque_equilibrium_error": 2.9296875e-08,
+      "net_shear_force": 2.6174650758836214e-11,
+      "max_ur3": 0.0056762308813631535,
+      "root_node_count": 25,
+      "elem_count": 320,
+      "node_count": 525
+    }
+  ]
+}

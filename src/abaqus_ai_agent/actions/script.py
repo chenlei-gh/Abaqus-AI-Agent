@@ -476,7 +476,7 @@ def _load_script(action):
         )
     if action.action_type == "concentrated_moment":
         amp = ", amplitude=%s" % _q(p["amplitude"]) if p.get("amplitude") else ""
-        return "mdb.models[%s].ConcentratedForce(name=%s, createStepName=%s, region=%s, cm1=%r, cm2=%r, cm3=%r%s)" % (
+        return "mdb.models[%s].Moment(name=%s, createStepName=%s, region=%s, cm1=%r, cm2=%r, cm3=%r%s)" % (
             _q(m), _q(name), _q(step), region, p.get("cm1", 0.0), p.get("cm2", 0.0), p.get("cm3", 0.0), amp
         )
     if action.action_type == "body_heat_flux":

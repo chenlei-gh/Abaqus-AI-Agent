@@ -16,7 +16,7 @@ To eliminate ambiguity across commercial workflows and academic verification, th
 | **Level 1** | `REAL_ABAQUS` | Executed against authentic, licensed Abaqus 2025. Generates disk `.odb`, `.sta`, `.msg`, `.dat` artifacts verified via cryptographic SHA-256 manifests. |
 | **Level 2** | `ANALYTICAL` | Exact closed-form continuum mechanics equations evaluated at machine precision. Zero numerical perturbation factors (`ref * 0.999x` strictly forbidden). |
 | **Level 3** | `THEORETICAL_CONTRACT` | Formal parameter, dimensional, and boundary-condition contracts for high-order FE configurations; delegates FE execution to live solver. |
-| **Level 4** | `OFFLINE_REGRESSION` | Automated unit/integration test suite (428 pytest cases at RC 1.0 Freeze `deec6a3`; expanded to 533 at GA-1 Freeze `cb597d6`, 544 at GA-2.4, 553 in GA-2.5, and 565 in GA-2.6.0 Baseline) executed without solver license dependencies in CI across Linux/Windows. |
+| **Level 4** | `OFFLINE_REGRESSION` | Automated unit/integration test suite (428 pytest cases at RC 1.0 Freeze `deec6a3`; expanded to 533 at GA-1 Freeze `cb597d6`, 544 at GA-2.4, 553 in GA-2.5, 565 in GA-2.6.0, and 569 in GA-2.6.1 Baseline) executed without solver license dependencies in CI across Linux/Windows. |
 | **Level 5** | `FAULT_INJECTION` | Controlled numerical singularities, invalid inputs, or geometric distortions designed to verify non-bypassable fail-closed gates. |
 
 ---
@@ -135,9 +135,11 @@ The following three tracks represent the ongoing evolution beyond `v1.0.0-rc1` d
 │ Track GA-2: Semantic Physical Grounding & Deterministic Intent Compilation  │
 │    - Status: GA-2.1 Intent, GA-2.2 Feature Grounding, GA-2.3 Compiler       │
 │      Consumption, GA-2.4 Real-Machine Golden Case E2E, GA-2.5 Extended      │
-│      Feature Semantics, and GA-2.6.0 Procedure Contracts QUALIFIED.         │
-│      Live Abaqus 2025: RF equilibrium error = 0.002% on plate_with_hole.    │
-│    - Pending: GA-2.6.1 Compiler Upgrade, GA-2.6.2 Real-Machine Verification,│
+│      Feature Semantics, GA-2.6.0 Procedure Contracts, and GA-2.6.1 Physical │
+│      API Probes (P0~P3) QUALIFIED on live Abaqus 2025.                      │
+│      Live Abaqus 2025: RF equilibrium error = 0.002% on plate_with_hole;    │
+│      4/4 physical probes passed with exact analytical & reaction balance.    │
+│    - Pending: GA-2.6.2 Compiler Integration, GA-2.6.3 Real-Machine Golden,  │
 │      GA-2A Perspective Viewport (P1), GA-2B Multimodal Perception (P2 HITL).│
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
@@ -179,6 +181,7 @@ The following three tracks represent the ongoing evolution beyond `v1.0.0-rc1` d
 | **GA-2-GOLDEN** | **Natural Language $\to$ STEP B-Rep $\to$ Feature Grounding $\to$ Compiler $\to$ Solver $\to$ Equilibrium** | `grounding/feature_grounding.py`, `planning/compiler.py` | `tools/ga2_e2e_golden_case.py`<br>`tests/test_ga2_e2e_golden.py` | `QUALIFIED`: User prompt (*"将安装孔的圆柱面完全固定，在顶面施加 1000 N 向下集中载荷，计算最大应力和位移"*). Grounding anchored hole face & top planar face into `GroundedRegion`. Compiler synthesized native `findAt` & converted point load to uniform pressure ($P=F/A$). Live Abaqus 2025 solved Job `Job_GA2_Golden_Plate`; 33 Preflight checks passed; applied $-1000.0\text{ N}$, live $\Sigma RF_z = 1000.02\text{ N}$; **equilibrium error $0.002\%$**; max Mises $3.149\text{ MPa}$, max displacement $0.000777\text{ mm}$. | `REAL_ABAQUS` | First complete autonomous closed loop from raw human engineering language through real STEP file to physical equilibrium ODB evidence. |
 | **GA-2.5-GROUNDING** | **Extended Semantics & Multi-Feature Group Grounding** | `grounding/feature_grounding.py`, `planning/compiler.py` | `tests/test_feature_grounding.py`<br>`tests/test_agent_compiler.py` | `QUALIFIED`: Extended semantic resolvers for `BOTTOM_SURFACE`, `SYMMETRY_PLANE` (X/Y/Z), `SIDE_WALL` (Left/Right/Front/Back), `BEARING_SEAT`, and multi-feature groups (`ALL_HOLES`, `BOLT_GROUP`). Composite `anchor_points` compiled into native multi-tuple `findAt(...)` sets. Strict fail-closed verification: 14 grounding tests + 3 compiler tests passed. | `OFFLINE_REGRESSION` | Deterministic geometric feature grounding extended across standard mechanical structural constraints and load surfaces with zero heuristic leakage. |
 | **GA-2.6.0-PROCEDURE** | **Physical Procedure & Multi-Step Lifecycle Contracts** | `contracts/procedure.py`, `validation/preflight.py` | `tests/test_procedure_contracts_preflight.py` | `QUALIFIED`: Multi-Step Procedure DAG contract with parent validation & `nlgeom` downgrade safety check; Two-stage bolt pretension lifecycle contract (`APPLY_FORCE` $\to$ `FIX_LENGTH`); Moment transfer strategy matrix (`RP_COUPLING`, `DISTRIBUTED_COUPLE`); Whitelist AST validator for spatial expressions (`validate_field_expression`). Strict fail-closed Preflight gate enforcement (12 tests passed, 565 repository-wide regression tests). | `OFFLINE_REGRESSION` | Procedure DAG, bolt lifecycle state transitions, moment transfer strategies, and expression AST bounds formalized before compiler code modification. |
+| **GA-2.6.1-PROBES** | **Abaqus 2025 Physical API Probes & Solver Calibration** | `tools/ga261_physical_api_probes.py`, `actions/script.py` | `tools/ga261_physical_api_probes.py`<br>`tests/test_ga261_probes.py` | `QUALIFIED`: 4 focused physical probes executed against live Abaqus 2025: P0 multi-step state inheritance ($1500.0\text{ N}$ balance, error $< 2\times 10^{-6}\%$); P1 bolt pretension two-stage lifecycle ($-5000.0\text{ N}$ preload $\to$ length locked $\to$ $-2000.0\text{ N}$ service equilibrium); P2 spatial field integration ($14999.9999\text{ N}$ vs $15000.0\text{ N}$ analytical, error $7.1\times 10^{-7}\%$); P3 moment on solid continuum via RP + Kinematic Coupling ($-99999.997\text{ N}\cdot\text{mm}$ torque balance, error $2.9\times 10^{-6}\%$). Calibrated native `m.Moment` syntax in compiler script builder. | `REAL_ABAQUS` | Empirical solver API behavior and closed-form equilibrium certified directly against Abaqus 2025 without synthetic emulation. |
 
 *Canonical qualification package recorded in `machine_validation/ga2_golden_evidence.json` (QUALIFIED).*
 
