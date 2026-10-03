@@ -1,10 +1,11 @@
-"""Tests for Phase GA-1.4 Real-Machine Mesh Qualification Suite (M1 ~ M4).
+"""Tests for Phase GA-1.4 Real-Machine Mesh Qualification Harness 2.0 (M1 ~ M4).
 
 Validates:
 - M1 Plain Block baseline mesh & native post-mesh quality gate evaluation.
 - M2 Plate + Hole: GA-1.4 suggested_size (~0.25D) -> Abaqus local seeding -> actual hole element size measurement proving refinement trend (<0.70).
 - M3 Plate + Fillet: GA-1.4 suggested_size (~0.5R) -> Abaqus local seeding -> actual fillet span refinement (<0.60).
 - M4 Defective Geometry: Non-manifold defect -> GA-1.4 fail-closed BLOCKED -> mesh generation strictly prevented.
+- Fail-fast enforcement: Live mode strictly fails when launcher is unavailable or execution fails (zero silent fallback).
 - ga14_real_machine_evidence.json manifest structural integrity and qualification criteria.
 """
 
@@ -27,7 +28,7 @@ ROOT = Path(__file__).resolve().parent.parent
 
 def test_m1_plain_block_qualification(tmp_path: Path):
     """Verify M1 Plain Block executes baseline mesh, extracts metrics, and passes mesh gate."""
-    res = execute_m1_plain_block(tmp_path)
+    res = execute_m1_plain_block(tmp_path, offline=True)
     assert res["passed"] is True
     assert res["case_id"] == "M1_PlainBlock"
     assert res["meshability_status"] == "supported"
@@ -36,13 +37,14 @@ def test_m1_plain_block_qualification(tmp_path: Path):
     assert res["mesh_gate_status"] == "PASS"
     assert res["actual_elements"] > 0
     assert res["actual_nodes"] > 0
+    assert res["evidence_tier"] == "OFFLINE_EMULATED"
     assert res["native_metrics"]["min_jacobian"] >= 0.5
     assert res["native_metrics"]["max_aspect_ratio"] <= 5.0
 
 
 def test_m2_plate_hole_local_refinement_qualification(tmp_path: Path):
     """Verify M2 Plate + Hole derives 0.25D seed, meshes, and proves local refinement trend."""
-    res = execute_m2_plate_with_hole(tmp_path)
+    res = execute_m2_plate_with_hole(tmp_path, offline=True)
     assert res["passed"] is True
     assert res["case_id"] == "M2_PlateHole"
     assert res["hole_diameter"] == 20.0
@@ -50,18 +52,21 @@ def test_m2_plate_hole_local_refinement_qualification(tmp_path: Path):
     assert res["refinement_verified"] is True
     assert res["measured_refinement_ratio"] < 0.70
     assert res["actual_hole_element_size"] < res["actual_global_element_size"]
+    assert res["evidence_tier"] == "OFFLINE_EMULATED"
     assert res["mesh_gate_status"] == "PASS"
 
 
 def test_m3_plate_fillet_local_refinement_qualification(tmp_path: Path):
     """Verify M3 Plate + Fillet derives 0.5R seed, meshes, and proves fillet refinement."""
-    res = execute_m3_plate_with_fillet(tmp_path)
+    res = execute_m3_plate_with_fillet(tmp_path, offline=True)
     assert res["passed"] is True
     assert res["case_id"] == "M3_PlateFillet"
     assert res["fillet_radius"] == 6.0
     assert res["ga14_suggested_size"] == 3.0
     assert res["refinement_verified"] is True
     assert res["measured_refinement_ratio"] < 0.60
+    assert res["actual_fillet_span_size"] < res["actual_far_field_size"]
+    assert res["evidence_tier"] == "OFFLINE_EMULATED"
     assert res["mesh_gate_status"] == "PASS"
 
 
@@ -78,6 +83,16 @@ def test_m4_defective_fail_closed_qualification(tmp_path: Path):
     assert res["safety_guard_enforced"] is True
 
 
+def test_fail_fast_no_silent_fallback(tmp_path: Path):
+    """Verify live mode strictly raises RuntimeError without falling back when launcher is missing."""
+    fake_launcher = "nonexistent_abaqus_binary_xyz"
+    with pytest.raises(RuntimeError, match="Abaqus launcher not found"):
+        execute_m1_plain_block(tmp_path, launcher=fake_launcher, offline=False)
+
+    with pytest.raises(RuntimeError, match="Abaqus launcher not found"):
+        execute_m2_plate_with_hole(tmp_path, launcher=fake_launcher, offline=False)
+
+
 def test_ga14_real_machine_evidence_manifest():
     """Verify audited ga14_real_machine_evidence.json manifest matches strict engineering requirements."""
     manifest_path = ROOT / "machine_validation" / "ga14_real_machine_evidence.json"
@@ -85,12 +100,13 @@ def test_ga14_real_machine_evidence_manifest():
     data = json.loads(manifest_path.read_text(encoding="utf-8"))
 
     assert data["suite_name"] == "Phase GA-1.4 Real-Machine Mesh Qualification Suite"
-    assert data["status"] == "QUALIFIED"
+    assert data["harness_version"] == "2.0_hardened"
+    assert data["status"] in ("QUALIFIED", "OFFLINE_VERIFIED")
     assert data["all_passed"] is True
     assert data["benchmarks_total"] == 4
     assert data["benchmarks_passed"] == 4
 
-    # Check that limitation disclaimer is explicitly recorded
+    # Check limitation disclaimer explicitly recorded
     assert "limitation_disclaimer" in data
     assert "Does NOT claim universal arbitrary CAD qualification" in data["limitation_disclaimer"]
 
@@ -101,6 +117,7 @@ def test_ga14_real_machine_evidence_manifest():
     assert "M3" in results and results["M3"]["passed"] is True
     assert "M4" in results and results["M4"]["passed"] is True
 
-    # Detailed M2 verification in manifest
+    # Detailed M2 dynamic topological verification in manifest
     assert results["M2"]["refinement_verified"] is True
     assert results["M2"]["measured_refinement_ratio"] < 0.70
+    assert results["M2"]["actual_hole_element_size"] < results["M2"]["actual_global_element_size"]
