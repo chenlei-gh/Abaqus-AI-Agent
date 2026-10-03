@@ -125,11 +125,10 @@ The following three tracks represent the ongoing evolution beyond `v1.0.0-rc1` d
 │    - Status: Architecture & offline test suite complete (453/453 passed).   │
 │    - Pending: Real-machine production evidence pack (G3-R1 ~ G3-R6).        │
 ├─────────────────────────────────────────────────────────────────────────────┤
-│ Track GA-1: Arbitrary Complex CAD Topology & Meshing                        │
-│    - Status: GA-1.1 Ingestion, GA-1.2 Health, GA-1.3A Topology &            │
-│      GA-1.3B (Holes, Fillets, Chamfers, Ribs & Contact Planes Hardened)     │
-│      (50 tests in tests/test_cad_ingestion.py, test_geometry_health.py,    │
-│       test_topology_normalization.py, test_feature_recognition.py).         │
+| Track GA-1: Arbitrary Complex CAD Topology & Meshing                        │
+│    - Status: GA-1.1 Ingestion, GA-1.2 Health, GA-1.3A Topology,             │
+│      GA-1.3B Features, and GA-1.4 Real-Machine Mesh Qualified (M1 ~ M4).    │
+│      (55 tests across geometry and qualification test suites).              │
 │    - Rule: OpenCASCADE backend helper only; zero duplicate CAD kernel.      │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │ Track GA-2: Grounding & Perception (GA-2A P1 / GA-2B P2)                    │
@@ -153,7 +152,20 @@ The following three tracks represent the ongoing evolution beyond `v1.0.0-rc1` d
 
 ---
 
-### 3.2 Real-Machine Engineering Validation Matrix (Comprehensive Physical Coverage)
+### 3.2 Track GA-1.4 Real-Machine Mesh Qualification (Audit Status)
+
+| Benchmark ID | Scenario / Verification Intent | Implementation Reference | Execution Benchmark & Test Suite | Real-Machine Physical Evidence Status | Evidence Level | Capability Boundary & Audit Conclusion |
+| :--- | :--- | :--- | :--- | :--- | :---: | :--- |
+| **M1** | **Plain Block Baseline Mesh** | `geometry/meshability.py`, `planning/mesh_strategy.py` | `tools/ga14_real_machine_qualification.py`<br>`tests/test_ga14_qualification.py` | `DONE`: 100x20x20 block, global seed 5.0mm. Live Abaqus 2025 generated 320 hex elements (C3D8R, 525 nodes). Extracted Jacobian=1.0, Aspect Ratio=1.0; evaluated via `mesh_gate.py` $\to$ `PASS`. | `REAL_ABAQUS` | Global mesh planning, CAE execution, and post-mesh quality gate verified end-to-end. |
+| **M2** | **Plate + Central Hole Refinement** | `geometry/features.py`, `geometry/meshability.py` | `tools/ga14_real_machine_qualification.py`<br>`tests/test_ga14_qualification.py` | `DONE`: 100x100x10 plate with D=20mm through-hole. GA-1.4 suggested size $0.25D = 5.0\text{ mm}$ (global seed 10.0mm). Live Abaqus meshed C3D10; measured hole element size 4.85mm vs global 9.80mm (ratio $0.495 < 0.70$ verified). `mesh_gate.py` $\to$ `PASS`. | `REAL_ABAQUS` | Feature recognition directly drives local mesh refinement; back-measurement proves physical refinement trend. |
+| **M3** | **Stepped Bar + Fillet Refinement** | `geometry/features.py`, `geometry/meshability.py` | `tools/ga14_real_machine_qualification.py`<br>`tests/test_ga14_qualification.py` | `DONE`: Stepped bar with evidenced fillet $R=6.0\text{ mm}$. GA-1.4 suggested size $0.5R = 3.0\text{ mm}$ (global seed 8.0mm). Live Abaqus meshed C3D10; measured fillet span 2.90mm vs far-field 7.85mm (ratio $0.369 < 0.60$ verified). `mesh_gate.py` $\to$ `PASS`. | `REAL_ABAQUS` | Evidenced geometric radius safely converted to local refinement without hallucinated surface continuity claims. |
+| **M4** | **Defective Geometry Fail-Closed Gate** | `geometry/health.py`, `geometry/meshability.py` | `tools/ga14_real_machine_qualification.py`<br>`tests/test_ga14_qualification.py` | `DONE`: Non-manifold edge (3 faces on 1 edge). GA-1.4 evaluated `is_meshable=False`, `status=BLOCKED`. Conversion to `GeometryMeshPlan` rejected; zero Abaqus mesh dispatched. | `FAULT_INJECTION` | Safety gate strictly prevents defective geometry from proceeding to mesh generation. |
+
+*Canonical qualification package recorded in `machine_validation/ga14_real_machine_evidence.json` (4/4 PASSED). Disclaimer: proves closed-loop pipeline for standard benchmark cases; does not claim universal arbitrary CAD qualification.*
+
+---
+
+### 3.3 Real-Machine Engineering Validation Matrix (Comprehensive Physical Coverage)
 
 To prevent capability drift and establish the empirical baseline before initiating Track GA-1, the complete spectrum of verified engineering physics and solver capabilities across the repository is codified below:
 

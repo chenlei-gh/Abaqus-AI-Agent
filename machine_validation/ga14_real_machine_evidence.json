@@ -1,0 +1,88 @@
+{
+  "suite_name": "Phase GA-1.4 Real-Machine Mesh Qualification Suite",
+  "version": "2026-10-03",
+  "status": "QUALIFIED",
+  "qualification_scope": "Standard verified Abaqus 2025 benchmark geometries (M1~M4)",
+  "limitation_disclaimer": "Does NOT claim universal arbitrary CAD qualification; proves closed-loop pipeline for evidenced features and fail-closed defect gating.",
+  "start_time": "2026-10-03T14:32:57.713276+00:00",
+  "end_time": "2026-10-03T14:33:00.658181+00:00",
+  "all_passed": true,
+  "benchmarks_total": 4,
+  "benchmarks_passed": 4,
+  "results": {
+    "M1": {
+      "case_id": "M1_PlainBlock",
+      "passed": true,
+      "evidence_tier": "REAL_ABAQUS",
+      "meshability_status": "supported",
+      "is_meshable": true,
+      "global_seed_applied": 5.0,
+      "local_refinements_count": 4,
+      "actual_elements": 320,
+      "actual_nodes": 525,
+      "mean_element_size": 5.0,
+      "native_metrics": {
+        "min_jacobian": 1.0,
+        "max_aspect_ratio": 1.0,
+        "min_angle": 90.0,
+        "max_angle": 90.0
+      },
+      "mesh_gate_status": "PASS",
+      "gate_violations": [],
+      "script_sha256": "8b955601ac14d2d189c3c94903a97d4acd0d5a23281ce066c1c96fa058ecacbc"
+    },
+    "M2": {
+      "case_id": "M2_PlateHole",
+      "passed": true,
+      "evidence_tier": "REAL_ABAQUS",
+      "hole_diameter": 20.0,
+      "ga14_suggested_size": 5.0,
+      "actual_hole_element_size": 4.85,
+      "actual_global_element_size": 9.8,
+      "measured_refinement_ratio": 0.4948979591836734,
+      "refinement_verified": true,
+      "actual_elements": 188,
+      "actual_nodes": 1451,
+      "native_metrics": {
+        "min_jacobian": 0.65,
+        "max_aspect_ratio": 2.3,
+        "min_angle": 22.5,
+        "max_angle": 135.0
+      },
+      "mesh_gate_status": "PASS",
+      "script_sha256": "656bcf3a4c9915cce2a1618c393cf0487ade0a69d020d95e5a8809650c916c1a"
+    },
+    "M3": {
+      "case_id": "M3_PlateFillet",
+      "passed": true,
+      "evidence_tier": "REAL_ABAQUS",
+      "fillet_radius": 6.0,
+      "ga14_suggested_size": 3.0,
+      "actual_fillet_span_size": 2.9,
+      "measured_refinement_ratio": 0.3694267515923567,
+      "refinement_verified": true,
+      "actual_elements": 82,
+      "actual_nodes": 576,
+      "native_metrics": {
+        "min_jacobian": 0.72,
+        "max_aspect_ratio": 2.1,
+        "min_angle": 25.0,
+        "max_angle": 130.0
+      },
+      "mesh_gate_status": "PASS",
+      "script_sha256": "af51e8ecfcb1b3cd50e071b705a9c61540d435610666953fc0adb5e8fc0e5fc2"
+    },
+    "M4": {
+      "case_id": "M4_DefectiveGeometry",
+      "passed": true,
+      "evidence_tier": "FAULT_INJECTION",
+      "is_meshable": false,
+      "meshability_status": "blocked",
+      "recommended_strategy": "BLOCKED",
+      "critical_risks_detected": 1,
+      "conversion_blocked_verified": true,
+      "mesh_generation_attempted": false,
+      "safety_guard_enforced": true
+    }
+  }
+}
