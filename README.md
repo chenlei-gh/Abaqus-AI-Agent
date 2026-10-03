@@ -7,7 +7,7 @@
 [![CI](https://github.com/chenlei-gh/Abaqus-AI-Agent/actions/workflows/ci.yml/badge.svg)](https://github.com/chenlei-gh/Abaqus-AI-Agent/actions/workflows/ci.yml)
 [![Python](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12-blue.svg)](https://www.python.org/)
 [![Abaqus](https://img.shields.io/badge/Abaqus-2025%20Validated-brightgreen.svg)](https://www.3ds.com/products-services/simulia/products/abaqus/)
-[![Tests](https://img.shields.io/badge/tests-443%20passed-success.svg)](tests/)
+[![Tests](https://img.shields.io/badge/tests-448%20passed-success.svg)](tests/)
 [![Golden Matrix](https://img.shields.io/badge/golden%20matrix-13%2F13%20passed-success.svg)](machine_validation/)
 [![Official Benchmarks](https://img.shields.io/badge/tier%20a%20benchmarks-22%2F22%20passed-success.svg)](tools/j_comprehensive_physics_matrix.py)
 [![Tier B Benchmarks](https://img.shields.io/badge/tier%20b%20benchmarks-7%2F7%20passed-success.svg)](tools/j3_tier_b_extended_physics.py)
@@ -20,7 +20,7 @@
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 
 > **Project status: Release Candidate Baseline Established (`v1.0.0-rc1`) — Audit Verdict: CONDITIONAL PASS; Track GA-3 Enterprise Runtime Deployed.**
-> The foundational engineering contracts, deterministic software gates (**443 passed tests, 0 warnings**), full-chain **Abaqus 2025 real-machine execution gates (13/13 Golden Ladder)**, **Phase J-Reference Theory Gate (22/22 Tier A passed)**, **Phase J.3 Tier B Analytical Physics Gate (7/7 passed)**, **Phase J-Live Solver Capability Gate (22/22 live Abaqus 2025 validated)**, **Phase K Engineering Material Intelligence Layer (Condition 2.0)**, **Phase L Autonomous Agent Engineering Workflow Gates (L1–L4)**, **Phase M Production Engineering Task Matrix (T1–T6)**, **Track GA-3 Production Runtime Infrastructure (Multi-Job Queue, Abstract License Provider, Scratch Sandbox & Run-Level Recovery)**, and **Public Release Security Audit (4/4 passed)** are complete.
+> The foundational engineering contracts, deterministic software gates (**448 passed tests, 0 warnings**), full-chain **Abaqus 2025 real-machine execution gates (13/13 Golden Ladder)**, **Phase J-Reference Theory Gate (22/22 Tier A passed)**, **Phase J.3 Tier B Analytical Physics Gate (7/7 passed)**, **Phase J-Live Solver Capability Gate (22/22 live Abaqus 2025 validated)**, **Phase K Engineering Material Intelligence Layer (Condition 2.0)**, **Phase L Autonomous Agent Engineering Workflow Gates (L1–L4)**, **Phase M Production Engineering Task Matrix (T1–T6)**, **Track GA-3 Production Runtime Infrastructure (Persistent Multi-Job Queue, Worker Pool, Abstract License Provider, Scratch Sandbox & Run-Level Recovery)**, and **Public Release Security Audit (4/4 passed)** are complete.
 >
 > 📄 **Official Audit Report**: See [Release Candidate 1.0 Independent Engineering Audit](docs/rc1-release-audit.md) for full status ratings (DONE / PARTIAL / GAP / RISK), the audited 5-level evidence pyramid, zero-conflation boundaries (distinguishing live solver runs, analytical baselines, and parameter contracts), and the formal conditions required for General Availability (GA).
 
@@ -117,7 +117,7 @@ To eliminate ambiguity across commercial workflows and academic verification, th
                │ Level 3: Parameter Contracts  │  (Tier A 9 complex FE benchmark specs)
                │ (Dimensional & Setup Checks)  │  Validates setup integrity in offline mode.
                ├───────────────────────────────┤
-               │ Level 4: Unit Regression Mock │  (443 pytest cases on CI runner)
+               │ Level 4: Unit Regression Mock │  (448 pytest cases on CI runner)
                │ (Cross-Platform Determinism)  │  Zero-license regression protection across OS/Python.
                ├───────────────────────────────┤
                │ Level 5: Fault & Remediation  │  (NEG-01, L3, T6 Divergence Healing)
@@ -128,7 +128,7 @@ To eliminate ambiguity across commercial workflows and academic verification, th
 - **Level 1 (Live Real-Machine)**: Executes real Abaqus/CAE 2025 processes, extracting fieldOutputs/historyOutputs from `.odb` with complete cryptographic SHA-256 hashing (`machine_validation/j_live_abaqus_evidence.json`).
 - **Level 2 (Closed-Form Analytical)**: Grounded in classic continuum mechanics (Euler buckling, Saint-Venant torsion, Maxwell/Kelvin-Voigt viscoelasticity) with zero fudge factors.
 - **Level 3 (Specification Contracts)**: Guarantees complex nonlinear setups (NLGEOM, Riks post-buckling, damage degradation) possess valid parameter spaces prior to execution.
-- **Level 4 (Deterministic Unit Suite)**: 443 automated tests running across Linux/Windows under Python 3.10, 3.11, and 3.12 without requiring commercial licenses.
+- **Level 4 (Deterministic Unit Suite)**: 448 automated tests running across Linux/Windows under Python 3.10, 3.11, and 3.12 without requiring commercial licenses.
 - **Level 5 (Solver Doctor Remediation)**: Deterministic cutback mitigation, stabilizing contact chatter and matrix singularities into converged runs.
 
 ---
@@ -478,7 +478,7 @@ Verify the installation by running the deterministic test suite:
 
 ```bash
 python -m pytest -q
-# Expect: 443 passed, 0 warnings
+# Expect: 448 passed, 0 warnings
 ```
 
 ---
@@ -574,13 +574,13 @@ The project is governed by two complementary, non-overlapping verification gates
 - **Environment**: Cross-platform (Ubuntu / Windows / macOS), Python 3.10 - 3.12.
 - **Dependencies**: Zero Abaqus license required.
 - **Coverage**:
-  - `443 passed` unit, contract, and preflight tests (0 warnings).
+  - `448 passed` unit, contract, and preflight tests (0 warnings).
   - `13/13` Golden Matrix schema and manifest checks.
   - `22/22` Official Tier A Abaqus Benchmarks Matrix (`python tools/j_comprehensive_physics_matrix.py`).
   - `7/7` Official Tier B Extended Engineering Physics Benchmarks (`python tools/j3_tier_b_extended_physics.py`).
   - `22/22` Live Abaqus 2025 Benchmarks Matrix (`python tools/j_live_abaqus_matrix.py --all`).
   - `T1–T6` Production Engineering Task Matrix (`python tools/m_engineering_task_matrix.py`).
-  - `GA-3` Production Runtime Infrastructure (`LicenseProvider`, `RunSandbox`, `AnalysisRunQueue`, `RunRecovery`).
+  - `GA-3` Production Runtime Infrastructure (`LicenseProvider`, `RunSandbox`, `AnalysisRunQueue` with disk persistence, `RunWorkerPool`, `RunRecovery`).
   - `Phase I.6` Whole-repository security & path sanitization audit (`python tools/i6_release_audit.py`).
   - Strict JEV ambiguity fail-closed gate.
 
@@ -627,7 +627,7 @@ Abaqus-AI-Agent/
 │       ├── reporting/        # Markdown & HTML engineering report renderers
 │       ├── validation/       # UnitSystem, preflight & physical consistency checks
 │       └── workflow/         # High-level fatigue, contact, and convergence workflows
-├── tests/                    # 443 deterministic test suites
+├── tests/                    # 448 deterministic test suites
 ├── tools/                    # Golden Matrix, CLI runner, and verification probes
 ```
 
@@ -655,11 +655,12 @@ All core architectural blueprints, engineering contracts, and credibility standa
 With `v1.0.0-rc1` formally frozen under **`CONDITIONAL PASS`**, the engineering focus shifts from baseline verification to production capability expansion along three explicit tracks, strictly adhering to the **Single Canonical AnalysisRun** architecture (Zero duplicate subsystems):
 
 1. **Track GA-3: Production Runtime Infrastructure & Enterprise Resilience [P0 Core Priority]**
-   - AnalysisRun asynchronous task queue & explicit lifecycle state machine (`PENDING` $\to$ `RUNNING` $\to$ `COMPLETED`).
+   - AnalysisRun persistent task queue (`persistence_path`) & explicit lifecycle state machine (`PENDING` $\to$ `RUNNING` $\to$ `COMPLETED`).
+   - Production Worker Runtime (`RunWorker`, `RunWorkerPool`) executing in isolated `RunSandbox`, promoting verified artifacts (`.odb`, `.sta`, `.msg`, `.dat`), and updating canonical `AnalysisRun`.
    - Vendor-agnostic abstract `LicenseProvider` interface with pluggable `FlexNetAdapter` and `DSLSAdapter`.
    - Non-blocking license wait queue with exponential backoff & randomized jitter retry.
    - Per-run scratch workdir sandboxing & ephemeral artifact isolation (zero `.lck` collisions).
-   - **Run-Level Recovery & Resumption Checkpointing**: Inspects workspace artifacts (`.lck`, `.odb`, `.sta`, `.msg`) to evaluate state (`RECOVERABLE_RECONNECT`, `NON_RECOVERABLE_RESUBMIT`, `CLEANUP_FAILED`).
+   - **Run-Level Recovery & Resumption Checkpointing**: Inspects workspace artifacts (`.lck`, `.odb`, `.sta`, `.msg`) to evaluate state (`RECOVERABLE_RECONNECT`, `NON_RECOVERABLE_RESUBMIT`, `CLEANUP_FAILED`). Cleans stranded crash jobs safely without solver-level black-box assumptions.
 
 2. **Track GA-1: Arbitrary Complex CAD Topology & Adaptive Meshing [P1 Engineering Core]**
    - Multi-stage pipeline: `CAD Import → Geometry Health / Topology → Feature Recognition → Meshability Assessment → Geometry / Partition Strategy → Mesh Strategy → Existing Mesh Gate`.

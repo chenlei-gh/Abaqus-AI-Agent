@@ -32,6 +32,7 @@ from abaqus_ai_agent.execution.recovery import (
     recover_and_resume,
 )
 from abaqus_ai_agent.execution.analysis_run import AnalysisRun, AnalysisRunState
+from abaqus_ai_agent.execution.worker import RunWorker, RunWorkerPool
 
 
 # ---------------------------------------------------------------------------
@@ -398,3 +399,164 @@ def test_run_recovery_crashed_clears_stale_lock(tmp_path):
     assert not os.path.exists(lck_file)
     assert recovered_run.state == AnalysisRunState.PREFLIGHTED
     assert recovered_run.metadata.get("cleaned_locks_count") == 1
+
+
+# ---------------------------------------------------------------------------
+# 6. GA-3.6 Production Worker Runtime & Persistent Queue Tests
+# ---------------------------------------------------------------------------
+
+def test_queue_disk_persistence_and_reload(tmp_path):
+    persist_file = os.path.join(tmp_path, "queue_store.json")
+    prov = MockLicenseProvider(initial_tokens={"standard": 5})
+
+    q1 = AnalysisRunQueue(max_concurrency=2, license_provider=prov, persistence_path=persist_file)
+    item1 = q1.enqueue(payload={"task": "task1"}, priority=QueuePriority.HIGH)
+    item2 = q1.enqueue(payload={"task": "task2"}, priority=QueuePriority.LOW)
+
+    # Dispatch item1
+    d1 = q1.process_next()
+    assert d1 is not None
+    assert d1.item_id == item1.item_id
+    q1.complete(item1.item_id, result={"status": "SUCCESS"})
+
+    assert os.path.exists(persist_file)
+
+    # Re-instantiate queue from persistence_path
+    q2 = AnalysisRunQueue(max_concurrency=2, license_provider=prov, persistence_path=persist_file)
+    loaded1 = q2.get_item(item1.item_id)
+    assert loaded1 is not None
+    assert loaded1.state == QueueItemState.COMPLETED
+    assert loaded1.result == {"status": "SUCCESS"}
+
+    loaded2 = q2.get_item(item2.item_id)
+    assert loaded2 is not None
+    assert loaded2.state == QueueItemState.PENDING
+
+
+def test_queue_recover_orphaned_runs(tmp_path):
+    persist_file = os.path.join(tmp_path, "queue_crash.json")
+    prov = MockLicenseProvider(initial_tokens={"standard": 5})
+
+    q1 = AnalysisRunQueue(max_concurrency=2, license_provider=prov, persistence_path=persist_file)
+    item = q1.enqueue(payload={"task": "crash_me"})
+    dispatched = q1.process_next()
+    assert dispatched.state == QueueItemState.RUNNING
+
+    # Simulate abrupt process death and restart: new queue instance loads state
+    q2 = AnalysisRunQueue(max_concurrency=2, license_provider=prov, persistence_path=persist_file)
+    reloaded_item = q2.get_item(item.item_id)
+    assert reloaded_item.state == QueueItemState.RUNNING  # Left running by previous process
+
+    # Trigger recovery of orphaned runs
+    recovered_count = q2.recover_orphaned_runs(recovery_strategy="requeue")
+    assert recovered_count == 1
+    assert reloaded_item.state == QueueItemState.RETRYING
+    assert reloaded_item.retry_count == 1
+    assert reloaded_item.license_handle is None
+
+    # Next eligible dispatch can now pick it up cleanly
+    redump = q2.process_next()
+    assert redump is not None
+    assert redump.item_id == item.item_id
+    assert redump.state == QueueItemState.RUNNING
+
+
+def test_run_worker_e2e_execution(tmp_path):
+    sandbox_base = os.path.join(tmp_path, "sandboxes")
+    target_artifacts = os.path.join(tmp_path, "artifacts")
+    prov = MockLicenseProvider(initial_tokens={"standard": 2})
+    queue = AnalysisRunQueue(max_concurrency=2, license_provider=prov)
+
+    # Define a mock task payload that writes a fake ODB in the sandbox
+    def sample_task(sandbox: RunSandbox):
+        odb = sandbox.resolve_path("Job-1.odb")
+        with open(odb, "wb") as f:
+            f.write(b"SAMPLE_ODB_CONTENT")
+        sta = sandbox.resolve_path("Job-1.sta")
+        with open(sta, "w") as f:
+            f.write("THE ANALYSIS HAS COMPLETED SUCCESSFULLY\n")
+        return AnalysisRun(id=sandbox.run_id, model_name="M1", job_name="Job-1", state=AnalysisRunState.COMPLETED)
+
+    item = queue.enqueue(payload=sample_task)
+    worker = RunWorker(
+        queue=queue,
+        sandbox_base_dir=sandbox_base,
+        target_artifacts_dir=target_artifacts,
+    )
+
+    executed_item = worker.poll_and_execute_once()
+    assert executed_item is not None
+    assert executed_item.error is None, f"Worker failed with error: {executed_item.error}"
+    assert executed_item.state == QueueItemState.COMPLETED
+
+    # Check that artifact was promoted to target_artifacts
+    assert os.path.exists(os.path.join(target_artifacts, "Job-1.odb"))
+    assert os.path.exists(os.path.join(target_artifacts, "Job-1.sta"))
+
+    # Check that scratch sandbox was cleaned up
+    assert not os.path.exists(os.path.join(sandbox_base, f"abaqus_sandbox_{item.item_id}"))
+
+    # Check license was released
+    assert prov.available_tokens("standard") == 2
+
+
+def test_run_worker_failure_and_retry():
+    prov = MockLicenseProvider(initial_tokens={"standard": 2})
+    queue = AnalysisRunQueue(max_concurrency=2, license_provider=prov)
+
+    attempt_counter = [0]
+
+    def flaky_task(sandbox: RunSandbox):
+        attempt_counter[0] += 1
+        if attempt_counter[0] == 1:
+            # Leave a lock file and raise error to simulate crash
+            lck = sandbox.resolve_path("Job-1.lck")
+            with open(lck, "w") as f:
+                f.write("CRASH_LOCK")
+            raise RuntimeError("Simulated solver crash on step 1")
+        return "SUCCESS_ON_ATTEMPT_2"
+
+    item = queue.enqueue(payload=flaky_task, max_retries=2, backoff_base=0.01)
+    worker = RunWorker(queue=queue)
+
+    # First attempt fails and transitions to RETRYING
+    worker.poll_and_execute_once()
+    assert item.state == QueueItemState.RETRYING
+    assert item.retry_count == 1
+    # License released during backoff
+    assert prov.available_tokens("standard") == 2
+
+    # Fast forward time to allow retry
+    item.next_eligible_at = time.time() - 0.1
+
+    # Second attempt succeeds
+    worker.poll_and_execute_once()
+    assert item.state == QueueItemState.COMPLETED
+    assert item.result == "SUCCESS_ON_ATTEMPT_2"
+
+
+def test_run_worker_pool_concurrency(tmp_path):
+    prov = MockLicenseProvider(initial_tokens={"standard": 2})
+    queue = AnalysisRunQueue(max_concurrency=2, license_provider=prov)
+
+    def quick_task(sandbox: RunSandbox):
+        time.sleep(0.05)
+        return "OK"
+
+    # Enqueue 4 tasks
+    for i in range(4):
+        queue.enqueue(payload=quick_task, item_id=f"t_{i}")
+
+    pool = RunWorkerPool(queue=queue, worker_count=2)
+    pool.start(poll_interval=0.02)
+
+    drained = pool.wait_until_drained(timeout=5.0)
+    pool.stop()
+
+    assert drained is True
+    for i in range(4):
+        it = queue.get_item(f"t_{i}")
+        assert it is not None
+        assert it.state == QueueItemState.COMPLETED
+
+    assert prov.available_tokens("standard") == 2

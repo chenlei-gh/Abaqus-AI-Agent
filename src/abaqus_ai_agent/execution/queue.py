@@ -1,9 +1,11 @@
+import json
+import os
 import random
 import time
 import uuid
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional
 
 from .license import LicenseHandle, LicenseProvider, LocalLicenseProvider
 
@@ -98,9 +100,9 @@ class QueueItem:
 
 
 class AnalysisRunQueue:
-    """Production job execution queue with concurrency throttling, priority dispatch,
+    """Production job execution queue with persistent storage, concurrency throttling,
 
-    and resilient license backoff.
+    priority dispatch, and resilient license backoff.
     """
 
     def __init__(
@@ -108,11 +110,154 @@ class AnalysisRunQueue:
         max_concurrency: int = 2,
         license_provider: Optional[LicenseProvider] = None,
         default_timeout: float = 3600.0,
+        persistence_path: Optional[str] = None,
     ):
         self.max_concurrency = max(1, max_concurrency)
         self.license_provider = license_provider or LocalLicenseProvider()
         self.default_timeout = default_timeout
+        self.persistence_path = os.path.abspath(persistence_path) if persistence_path else None
         self._items: Dict[str, QueueItem] = {}
+        if self.persistence_path and os.path.exists(self.persistence_path):
+            self._load_state()
+
+    def _persist_state(self) -> None:
+        """Atomic write of queue state to persistence_path."""
+        if not self.persistence_path:
+            return
+        os.makedirs(os.path.dirname(self.persistence_path), exist_ok=True)
+        tmp_file = f"{self.persistence_path}.tmp_{uuid.uuid4().hex[:8]}"
+        serializable_items = {}
+        for k, it in self._items.items():
+            payload_data = None
+            if hasattr(it.payload, "to_dict"):
+                payload_data = it.payload.to_dict()
+            elif isinstance(it.payload, (dict, list, str, int, float, bool)) or it.payload is None:
+                payload_data = it.payload
+
+            result_data = None
+            if hasattr(it.result, "to_dict"):
+                result_data = it.result.to_dict()
+            elif isinstance(it.result, (dict, list, str, int, float, bool)) or it.result is None:
+                result_data = it.result
+
+            serializable_items[k] = {
+                "item_id": it.item_id,
+                "priority": it.priority.value if hasattr(it.priority, "value") else str(it.priority),
+                "state": it.state.value if hasattr(it.state, "value") else str(it.state),
+                "enqueued_at": it.enqueued_at,
+                "started_at": it.started_at,
+                "finished_at": it.finished_at,
+                "retry_count": it.retry_count,
+                "max_retries": it.max_retries,
+                "backoff_base": it.backoff_base,
+                "backoff_max": it.backoff_max,
+                "jitter_ratio": it.jitter_ratio,
+                "next_eligible_at": it.next_eligible_at,
+                "error": it.error,
+                "resources": {
+                    "feature": it.resources.feature,
+                    "tokens": it.resources.tokens,
+                    "cpus": it.resources.cpus,
+                    "memory_mb": it.resources.memory_mb,
+                    "custom": dict(it.resources.custom),
+                },
+                "payload": payload_data,
+                "result": result_data,
+            }
+
+        data = {
+            "version": "queue_state_v1",
+            "saved_at": time.time(),
+            "max_concurrency": self.max_concurrency,
+            "items": serializable_items,
+        }
+        try:
+            with open(tmp_file, "w", encoding="utf-8") as f:
+                json.dump(data, f, indent=2)
+            if os.path.exists(self.persistence_path):
+                os.remove(self.persistence_path)
+            os.rename(tmp_file, self.persistence_path)
+        except Exception:
+            if os.path.exists(tmp_file):
+                try:
+                    os.remove(tmp_file)
+                except OSError:
+                    pass
+
+    def _load_state(self) -> None:
+        """Load queue items from persistent JSON file."""
+        if not self.persistence_path or not os.path.exists(self.persistence_path):
+            return
+        try:
+            with open(self.persistence_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            raw_items = data.get("items", {})
+            for k, it in raw_items.items():
+                p_val = it.get("priority", "normal")
+                try:
+                    priority = QueuePriority(p_val)
+                except (ValueError, TypeError):
+                    priority = QueuePriority.NORMAL
+
+                st_val = it.get("state", "pending")
+                try:
+                    state = QueueItemState(st_val)
+                except (ValueError, TypeError):
+                    state = QueueItemState.PENDING
+
+                res_data = it.get("resources", {})
+                res = RunResourceSpec(
+                    feature=res_data.get("feature", "standard"),
+                    tokens=res_data.get("tokens", 1),
+                    cpus=res_data.get("cpus", 1),
+                    memory_mb=res_data.get("memory_mb"),
+                    custom=dict(res_data.get("custom", {})),
+                )
+                qitem = QueueItem(
+                    item_id=str(it.get("item_id", k)),
+                    priority=priority,
+                    payload=it.get("payload"),
+                    resources=res,
+                    state=state,
+                    enqueued_at=float(it.get("enqueued_at", time.time())),
+                    started_at=it.get("started_at"),
+                    finished_at=it.get("finished_at"),
+                    retry_count=int(it.get("retry_count", 0)),
+                    max_retries=int(it.get("max_retries", 3)),
+                    backoff_base=float(it.get("backoff_base", 1.0)),
+                    backoff_max=float(it.get("backoff_max", 30.0)),
+                    jitter_ratio=float(it.get("jitter_ratio", 0.2)),
+                    next_eligible_at=float(it.get("next_eligible_at", time.time())),
+                    error=it.get("error"),
+                    result=it.get("result"),
+                )
+                self._items[qitem.item_id] = qitem
+        except Exception:
+            pass
+
+    def recover_orphaned_runs(self, recovery_strategy: str = "requeue") -> int:
+        """Reset jobs left in RUNNING or ACQUIRING_LICENSE from an abnormal crash.
+        
+        Since previous process exited, external solver handles and in-memory licenses
+        were lost. Requeues or marks them deterministically.
+        """
+        recovered = 0
+        for it in self._items.values():
+            if it.state in (QueueItemState.RUNNING, QueueItemState.ACQUIRING_LICENSE):
+                it.license_handle = None
+                if recovery_strategy == "requeue":
+                    it.state = QueueItemState.RETRYING
+                    it.retry_count += 1
+                    it.error = "Recovered from process crash; requeued for clean execution"
+                    it.next_eligible_at = time.time()
+                else:
+                    it.state = QueueItemState.FAILED
+                    it.error = "Orphaned run aborted due to abnormal system termination"
+                    it.finished_at = time.time()
+                recovered += 1
+        if recovered > 0:
+            self._persist_state()
+        return recovered
 
     def enqueue(
         self,
@@ -140,6 +285,7 @@ class AnalysisRunQueue:
             next_eligible_at=now,
         )
         self._items[item.item_id] = item
+        self._persist_state()
         return item
 
     def get_item(self, item_id: str) -> Optional[QueueItem]:
@@ -157,6 +303,7 @@ class AnalysisRunQueue:
         item.state = QueueItemState.CANCELLED
         item.finished_at = time.time()
         item.error = reason
+        self._persist_state()
         return True
 
     def active_running_count(self) -> int:
@@ -197,6 +344,7 @@ class AnalysisRunQueue:
                 item.license_handle = handle
                 item.state = QueueItemState.RUNNING
                 item.started_at = now
+                self._persist_state()
                 return item
             else:
                 # License rejected/unavailable -> backoff and retry
@@ -215,6 +363,7 @@ class AnalysisRunQueue:
                     item.state = QueueItemState.RETRYING
                     item.next_eligible_at = now + delay
                     item.error = f"License exhausted; backing off for {delay:.2f}s (retry {item.retry_count}/{item.max_retries})"
+                self._persist_state()
 
         return None
 
@@ -230,6 +379,7 @@ class AnalysisRunQueue:
         item.state = QueueItemState.COMPLETED
         item.finished_at = time.time()
         item.result = result
+        self._persist_state()
         return True
 
     def fail(self, item_id: str, error: str, retryable: bool = False) -> bool:
@@ -253,11 +403,13 @@ class AnalysisRunQueue:
             item.state = QueueItemState.RETRYING
             item.next_eligible_at = now + delay
             item.error = f"Task failed: {error}; backing off for {delay:.2f}s"
+            self._persist_state()
             return True
         else:
             item.state = QueueItemState.FAILED
             item.finished_at = now
             item.error = error
+            self._persist_state()
             return True
 
     def stats(self) -> Dict[str, Any]:

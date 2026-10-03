@@ -1184,6 +1184,14 @@ Queue Lic. Recovery         CAD Meshability Mesh        GA-2A (P1)    GA-2B (P2)
     - `RECOVERABLE_RECONNECT`: Background Abaqus solver is still running or finished cleanly; reconnect and extract metrics without re-solving.
     - `NON_RECOVERABLE_RESUBMIT`: Abrupt solver termination or corrupted database; clean up workspace and requeue task cleanly.
     - `CLEANUP_FAILED`: Fatal unresolvable state; record diagnostic evidence and mark run failed closed.
+- [x] **GA-3.6: Production Worker Runtime & Persistent Queue Closure**
+  - [x] Implement atomic disk persistence (`persistence_path`) with atomic file swap to protect queue state against sudden process crashes.
+  - [x] Implement `recover_orphaned_runs()` to self-heal jobs stranded in `RUNNING` or `ACQUIRING_LICENSE` after unexpected crashes into safe `RETRYING` states without deadlocks.
+  - [x] Deliver `RunWorker` execution loop executing inside isolated `RunSandbox`, promoting verified artifacts (`.odb`, `.sta`, `.msg`, `.dat`), diagnosing failures via `inspect_run_state`, and updating canonical `AnalysisRun`.
+  - [x] Deliver `RunWorkerPool` for concurrent multi-threaded execution with graceful drain and shutdown capabilities.
+  - [x] **Audit Boundary Clarification**:
+    - *Run-Level Recovery*: Strictly qualified as run-level recovery and resubmission via deterministic file system artifacts (`.lck`, `.odb`, `.sta`, `.msg`); not solver-internal transparent checkpoint resumption.
+    - *License Provider*: Vendor-agnostic abstraction and offline parsing contract established; live communication against proprietary FlexNet/DSLS servers subject to deployment site physical access.
 
 ---
 
