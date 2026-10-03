@@ -137,121 +137,76 @@ To eliminate ambiguity across commercial workflows and academic verification, th
 
 ### 1. End-to-End Engineering Workflow
 
-```text
-┌─────────────────────────────────────────────────────────────┐
-│ 1. Engineering Intent Layer                                 │
-│    Requirements ──> JEV Intent Routing ──> Ambiguity Gate   │
-└──────────────────────────────┬──────────────────────────────┘
-                               ▼
-┌─────────────────────────────────────────────────────────────┐
-│ 2. Planning & Preflight Checks                              │
-│    Native Action Compilation ──> Unit Checks ──> Mesh Gate  │
-└──────────────────────────────┬──────────────────────────────┘
-                               ▼
-┌─────────────────────────────────────────────────────────────┐
-│ 3. Abaqus Solver Execution                                  │
-│    CAE Batch (noGUI) ──> Real Solver ──> .sta/.msg/.odb     │
-└──────────────────────────────┬──────────────────────────────┘
-                               ▼
-┌─────────────────────────────────────────────────────────────┐
-│ 4. Extraction & Acceptance                                  │
-│    ODB Tensor Extraction ──> Verification ──> Markdown/HTML │
-└─────────────────────────────────────────────────────────────┘
-```
+> 🎯 **Intent Ingestion** ──> 📐 **Planning & Preflight** ──> ⚙️ **Authentic Abaqus Solve** ──> 📊 **Tensor Extraction** ──> 🏆 **Acceptance & Evidence**
 
-<details>
-<summary><b>Click to expand interactive Mermaid flowchart (Desktop view)</b></summary>
+| Stage | Core Tasks | Verification & Safety Gate | Canonical Artifacts |
+| :--- | :--- | :--- | :--- |
+| **① Intent Layer**<br>`Intent` | • Natural-language engineering input<br>• JEV semantic routing & slot extraction<br>• Structured parameter completeness check | ❌ Missing key boundary conditions or loads **fails closed** | `EngineeringIntent`<br>`IntentAmbiguity` |
+| **② Planning & Preflight**<br>`Planning` | • Typed Action sequence orchestration<br>• Dimensional unit & spatial consistency check<br>• Mesh quality pre-check (Jacobian/Aspect Ratio) | ❌ Negative volumes or severe element distortion **aborted** | `ActionPlan`<br>`PreflightResult` |
+| **③ Solver Execution**<br>`Execution` | • Abaqus batch execution in isolated sandbox<br>• Real-time process monitoring & lock management<br>• Generates authentic `.sta`, `.msg`, and `.odb` | ❌ Divergence cutbacks trigger automated **Solver Doctor** | `JobStatus`<br>`.sta` / `.msg` / `.odb` |
+| **④ Tensor Extraction**<br>`Acceptance` | • Strict extraction of fieldOutputs / historyOutputs<br>• Relative discrepancy numerical verification<br>• Production-grade report with cryptographic SHA-256 | ❌ Physical imbalance or tolerance violation marks **FAILED** | `AnalysisRun`<br>`AcceptedEvidence` |
 
 ```mermaid
-flowchart TD
-    U["1. Engineering Intent"] --> AI["AI Reasoning & Planning"]
-    AI --> B{"Capability Boundary"}
-    B -->|SUPPORTED| A["Typed Action"]
-    B -->|EXECUTABLE| X["Native Escape Hatch"]
-    B -->|BLOCKED| P["Assisted / Blocked Proposal"]
-    A --> V["Validation & Preflight"]
-    X --> V
-    V --> E["Authentic Abaqus Execution"]
-    E --> O["Job Artifacts (.odb/.sta/.msg)"]
-    O --> R["Physical Tensor Extraction"]
-    R --> Q["Numerical Verification"]
-    Q --> C["Acceptance Evaluation"]
-    C --> EV["Cryptographic Evidence"]
-    EV --> REP["Publication-Grade Report"]
+flowchart LR
+    A["🎯 1. Intent<br>(Engineering Intent)"] --> B["📐 2. Planning<br>(Preflight & Gate)"]
+    B --> C["⚙️ 3. Execution<br>(Authentic Abaqus)"]
+    C --> D["📊 4. Extraction<br>(ODB Tensors)"]
+    D --> E["🏆 5. Acceptance<br>(Tolerance Check)"]
+    E --> F["📑 6. Report<br>(SHA-256 Proof)"]
 ```
-
-</details>
 
 ---
 
 ### 2. The Engineering Evidence Ladder
 
-```text
-  [1] API Invocation Success    (Python exit code 0 != physical validity)
-          │
-          ▼
-  [2] Model-State Evidence      (Geometry valid, sections & materials bound)
-          │
-          ▼
-  [3] Job Execution Evidence    (Abaqus solver process exited cleanly)
-          │
-          ▼
-  [4] Solver Artifact Evidence  (.sta/.msg free of cutbacks & singularities)
-          │
-          ▼
-  [5] ODB Tensor Evidence       (Target fieldOutputs successfully extracted)
-          │
-          ▼
-  [6] Acceptance Evidence       (Error <= tolerance, physical balance verified)
-```
+> ⚠️ **Quality Rule**: Pure script execution success (Level 1) **never guarantees** engineering acceptance (Level 6). Only climbing to Level 6 authorizes engineering conclusions.
 
-<details>
-<summary><b>Click to expand interactive Mermaid ladder (Desktop view)</b></summary>
+| Level | Evidence Category | Physical Meaning & Verification Criteria | Assurance Tier |
+| :---: | :--- | :--- | :---: |
+| **Level 1** | **API Invocation Success** | Python process exits with code 0. **Does NOT guarantee physical validity.** | ⚪ Connectivity |
+| **Level 2** | **Model Topology Valid** | Geometry free of self-intersections; sections, materials, and BCs self-consistent. | 🟡 Topology Valid |
+| **Level 3** | **Job Computation Complete** | Abaqus solver process finishes without OS crash, OOM, or abnormal abortion. | 🟡 Process Valid |
+| **Level 4** | **Solver Uncut / Converged** | `.sta` and `.msg` verify equilibrium iterations converged without cutbacks. | 🟢 Solver Valid |
+| **Level 5** | **ODB Tensor Extracted** | Target FieldOutput tensors (S, U, RF, CPRESS) exist, non-null, and finite. | 🟢 Metric Valid |
+| **Level 6** | **Acceptance Gate Passed** | Extracted tensors strictly within tolerance of benchmark/analytical reference. | 🏆 **Full Engineering Closure** |
 
 ```mermaid
 flowchart TD
-    I["API Invocation (Exit Code 0)"] --> M["Model-State Topology Evidence"]
-    M --> J["Job Execution Evidence"]
-    J --> S["Solver Artifact Evidence (.sta/.msg)"]
-    S --> O["ODB Database Generation Evidence"]
-    O --> R["Field/History Tensor Extraction"]
-    R --> A["Final Acceptance Evidence"]
-    N["Python Script Success"] -. "does NOT guarantee" .-> A
+    L1["Level 1: API Invocation (Exit Code 0)"] --> L2["Level 2: Model Topology Evidence"]
+    L2 --> L3["Level 3: Job Execution Evidence"]
+    L3 --> L4["Level 4: Solver Convergence Evidence (.sta/.msg)"]
+    L4 --> L5["Level 5: Authentic ODB Tensor Evidence"]
+    L5 --> L6["Level 6: Engineering Acceptance Gate (Closure)"]
+    N["Script Exit 0"] -. "does NOT guarantee" .-> L6
 ```
-
-</details>
 
 ---
 
 ### 3. Capability Lifecycle Decisions
 
-```text
-  Engineering Need Identified
-       │
-  ┌────┴────┐
-  │ Does a typed contract exist?
-  │  ├─ Yes ──> [SUPPORTED]        (Autonomous planning, preflight, full gate)
-  │  └─ No  ──> Can native Abaqus API execute it?
-  │              ├─ Yes ──> [EXECUTABLE]   (Native Python escape hatch with gate)
-  │              └─ No  ──> [BLOCKED]      (Fails closed; requests clarification)
-```
+For any incoming engineering request, the system evaluates three deterministic capability tiers:
 
-<details>
-<summary><b>Click to expand interactive Mermaid decision tree (Desktop view)</b></summary>
+* 🟢 **`SUPPORTED` (Strongly-Typed Support)**
+  * **Mechanism**: Governed by typed `AbaqusAction` and preflight contracts.
+  * **Behavior**: Fully autonomous planning, unit verification, zero-hallucination execution.
+* 🟡 **`EXECUTABLE` (Native Escape Hatch)**
+  * **Mechanism**: Supported natively by Abaqus CAE / Python API but lacks typed contract wrapper.
+  * **Behavior**: Executed via sandboxed Python escape hatch with mandatory post-solve ODB acceptance verification.
+* 🔴 **`BLOCKED` (Deterministic Guardrail)**
+  * **Mechanism**: Exceeds solver capability boundary, lacks necessary experimental curves, or poses numerical divergence risks.
+  * **Behavior**: Fails closed proactively, offering engineers explicit remediation paths and parameter requirements.
 
 ```mermaid
 flowchart TD
     D["Engineering Need Identified"] --> T{"Typed Contract Exists?"}
-    T -->|Yes| S["SUPPORTED (Autonomous planning & preflight)"]
+    T -->|Yes| S["🟢 SUPPORTED (Autonomous planning & preflight)"]
     T -->|No| P{"Can native Abaqus API execute it?"}
-    P -->|Yes| X["EXECUTABLE (Native Python escape hatch)"]
-    P -->|No| A["BLOCKED (Fails closed; requests clarification)"]
+    P -->|Yes| X["🟡 EXECUTABLE (Native Python escape hatch)"]
+    P -->|No| A["🔴 BLOCKED (Fails closed; requests clarification)"]
     X --> H["Recurring Engineering Pattern"]
     H --> C["Formalize Contract, Preflight & Tests"]
     C --> S
 ```
-
-</details>
 
 ---
 
