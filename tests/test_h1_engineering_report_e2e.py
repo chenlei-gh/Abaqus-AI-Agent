@@ -2,6 +2,8 @@ import json
 from pathlib import Path
 from tools.h1_engineering_report_e2e import run_h1_report_generation
 
+ROOT = Path(__file__).resolve().parent.parent
+
 def test_h1_engineering_report_generator_e2e():
     evidence = run_h1_report_generation()
     assert evidence["status"] == "PASS"
@@ -12,8 +14,8 @@ def test_h1_engineering_report_generator_e2e():
     assert evidence["html_size_bytes"] > 5000
 
     # Verify report file contents
-    md_path = Path(evidence["markdown_report_path"])
-    html_path = Path(evidence["html_report_path"])
+    md_path = ROOT / evidence["markdown_report_path"] if not Path(evidence["markdown_report_path"]).is_absolute() else Path(evidence["markdown_report_path"])
+    html_path = ROOT / evidence["html_report_path"] if not Path(evidence["html_report_path"]).is_absolute() else Path(evidence["html_report_path"])
     assert md_path.exists()
     assert html_path.exists()
 

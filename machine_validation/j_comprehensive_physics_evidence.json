@@ -5,7 +5,7 @@
   "analytical_count": 13,
   "contract_count": 9,
   "all_passed": true,
-  "timestamp": "2026-10-03T06:11:36.847854+00:00",
+  "timestamp": "2026-10-03T06:30:10.986098+00:00",
   "benchmarks": [
     {
       "benchmark_id": "S1_UNIAXIAL_TENSION",
@@ -37,7 +37,7 @@
           "nu": 0.3,
           "F": 10000.0
         },
-        "evaluation_timestamp": "2026-10-03T06:11:36.847092+00:00",
+        "evaluation_timestamp": "2026-10-03T06:30:10.985738+00:00",
         "discrepancy_percentage": 0.0001,
         "note": "Closed-form analytical mechanics solution strictly matched against official reference."
       }
@@ -72,7 +72,7 @@
           "nu": 0.33,
           "P": 28000.0
         },
-        "evaluation_timestamp": "2026-10-03T06:11:36.847123+00:00",
+        "evaluation_timestamp": "2026-10-03T06:30:10.985764+00:00",
         "discrepancy_percentage": 0.0,
         "note": "Closed-form analytical mechanics solution strictly matched against official reference."
       }
@@ -107,7 +107,7 @@
           "nu": 0.3,
           "shear_force": 5000.0
         },
-        "evaluation_timestamp": "2026-10-03T06:11:36.847142+00:00",
+        "evaluation_timestamp": "2026-10-03T06:30:10.985782+00:00",
         "discrepancy_percentage": 0.0,
         "note": "Closed-form analytical mechanics solution strictly matched against official reference."
       }
@@ -141,7 +141,7 @@
           "nu": 0.3,
           "Torque": 50000.0
         },
-        "evaluation_timestamp": "2026-10-03T06:11:36.847657+00:00",
+        "evaluation_timestamp": "2026-10-03T06:30:10.985894+00:00",
         "discrepancy_percentage": 0.0,
         "note": "Closed-form analytical mechanics solution strictly matched against official reference."
       }
@@ -176,7 +176,7 @@
           "E_tan": 20000.0,
           "applied_strain": 0.015
         },
-        "evaluation_timestamp": "2026-10-03T06:11:36.847680+00:00",
+        "evaluation_timestamp": "2026-10-03T06:30:10.985916+00:00",
         "discrepancy_percentage": 0.0,
         "note": "Closed-form analytical mechanics solution strictly matched against official reference."
       }
@@ -209,7 +209,7 @@
           "amplitude_strain": 0.01,
           "gauge_volume": 14.0
         },
-        "evaluation_timestamp": "2026-10-03T06:11:36.847692+00:00",
+        "evaluation_timestamp": "2026-10-03T06:30:10.985929+00:00",
         "discrepancy_percentage": 0.0,
         "note": "Closed-form analytical mechanics solution strictly matched against official reference."
       }
@@ -244,7 +244,7 @@
           "nu": 0.3,
           "tip_load": 212.5
         },
-        "evaluation_timestamp": "2026-10-03T06:11:36.847704+00:00",
+        "evaluation_timestamp": "2026-10-03T06:30:10.985939+00:00",
         "discrepancy_percentage": 0.0,
         "note": "Theoretical model parameter & boundary specification contract verified. Real FE execution and ODB field extraction is verified in Phase J-Live."
       }
@@ -278,7 +278,7 @@
           "E": 210000.0,
           "nu": 0.3
         },
-        "evaluation_timestamp": "2026-10-03T06:11:36.847714+00:00",
+        "evaluation_timestamp": "2026-10-03T06:30:10.985949+00:00",
         "discrepancy_percentage": 0.0011,
         "note": "Closed-form analytical mechanics solution strictly matched against official reference."
       }
@@ -309,7 +309,7 @@
           "L": 1000.0,
           "imperfection_amplitude": 0.1
         },
-        "evaluation_timestamp": "2026-10-03T06:11:36.847723+00:00",
+        "evaluation_timestamp": "2026-10-03T06:30:10.985959+00:00",
         "discrepancy_percentage": 0.0,
         "note": "Theoretical model parameter & boundary specification contract verified. Real FE execution and ODB field extraction is verified in Phase J-Live."
       }
@@ -344,7 +344,7 @@
           "rho": 7.85e-09,
           "nu": 0.3
         },
-        "evaluation_timestamp": "2026-10-03T06:11:36.847732+00:00",
+        "evaluation_timestamp": "2026-10-03T06:30:10.985970+00:00",
         "discrepancy_percentage": 0.9932,
         "note": "Closed-form analytical mechanics solution strictly matched against official reference."
       }
@@ -377,7 +377,7 @@
           "E": 210000.0,
           "rho": 7.85e-09
         },
-        "evaluation_timestamp": "2026-10-03T06:11:36.847741+00:00",
+        "evaluation_timestamp": "2026-10-03T06:30:10.985979+00:00",
         "discrepancy_percentage": 0.0,
         "note": "Theoretical model parameter & boundary specification contract verified. Real FE execution and ODB field extraction is verified in Phase J-Live."
       }
@@ -410,7 +410,7 @@
           "alpha": 1.2e-05,
           "delta_T": 100.0
         },
-        "evaluation_timestamp": "2026-10-03T06:11:36.847749+00:00",
+        "evaluation_timestamp": "2026-10-03T06:30:10.985988+00:00",
         "discrepancy_percentage": 0.0,
         "note": "Closed-form analytical mechanics solution strictly matched against official reference."
       }
@@ -444,7 +444,7 @@
           "k": 45.0,
           "specific_heat": 460.0
         },
-        "evaluation_timestamp": "2026-10-03T06:11:36.847757+00:00",
+        "evaluation_timestamp": "2026-10-03T06:30:10.985996+00:00",
         "discrepancy_percentage": 0.0,
         "note": "Theoretical model parameter & boundary specification contract verified. Real FE execution and ODB field extraction is verified in Phase J-Live."
       }
@@ -476,7 +476,7 @@
           "D1": 0.001,
           "nominal_compression_strain": -0.3
         },
-        "evaluation_timestamp": "2026-10-03T06:11:36.847765+00:00",
+        "evaluation_timestamp": "2026-10-03T06:30:10.986004+00:00",
         "discrepancy_percentage": 0.0,
         "note": "Theoretical model parameter & boundary specification contract verified. Real FE execution and ODB field extraction is verified in Phase J-Live."
       }
@@ -508,7 +508,7 @@
           "fracture_strain": 0.05,
           "displacement_at_failure": 0.2
         },
-        "evaluation_timestamp": "2026-10-03T06:11:36.847772+00:00",
+        "evaluation_timestamp": "2026-10-03T06:30:10.986012+00:00",
         "discrepancy_percentage": 0.0,
         "note": "Theoretical model parameter & boundary specification contract verified. Real FE execution and ODB field extraction is verified in Phase J-Live."
       }
@@ -553,7 +553,7 @@
           "G12": 5000.0,
           "transverse_pressure": 0.0008458
         },
-        "evaluation_timestamp": "2026-10-03T06:11:36.847780+00:00",
+        "evaluation_timestamp": "2026-10-03T06:30:10.986021+00:00",
         "discrepancy_percentage": 0.0,
         "note": "Theoretical model parameter & boundary specification contract verified. Real FE execution and ODB field extraction is verified in Phase J-Live."
       }
@@ -585,7 +585,7 @@
           "compressive_load": 5000.0,
           "tensile_pull_load": 2000.0
         },
-        "evaluation_timestamp": "2026-10-03T06:11:36.847787+00:00",
+        "evaluation_timestamp": "2026-10-03T06:30:10.986029+00:00",
         "discrepancy_percentage": 0.0,
         "note": "Closed-form analytical mechanics solution strictly matched against official reference."
       }
@@ -617,7 +617,7 @@
           "friction_coefficient": 0.25,
           "sliding_distance": 10.0
         },
-        "evaluation_timestamp": "2026-10-03T06:11:36.847795+00:00",
+        "evaluation_timestamp": "2026-10-03T06:30:10.986037+00:00",
         "discrepancy_percentage": 0.0,
         "note": "Closed-form analytical mechanics solution strictly matched against official reference."
       }
@@ -648,7 +648,7 @@
           "spring_stiffness": 1000.0,
           "applied_displacement": 5.0
         },
-        "evaluation_timestamp": "2026-10-03T06:11:36.847802+00:00",
+        "evaluation_timestamp": "2026-10-03T06:30:10.986045+00:00",
         "discrepancy_percentage": 0.0,
         "note": "Closed-form analytical mechanics solution strictly matched against official reference."
       }
@@ -680,7 +680,7 @@
           "density": 7.85e-09,
           "g": 9806.65
         },
-        "evaluation_timestamp": "2026-10-03T06:11:36.847810+00:00",
+        "evaluation_timestamp": "2026-10-03T06:30:10.986054+00:00",
         "discrepancy_percentage": 0.0029,
         "note": "Closed-form analytical mechanics solution strictly matched against official reference."
       }
@@ -711,7 +711,7 @@
           "impactor_mass": 0.5,
           "initial_velocity": 50000.0
         },
-        "evaluation_timestamp": "2026-10-03T06:11:36.847817+00:00",
+        "evaluation_timestamp": "2026-10-03T06:30:10.986062+00:00",
         "discrepancy_percentage": 0.0,
         "note": "Theoretical model parameter & boundary specification contract verified. Real FE execution and ODB field extraction is verified in Phase J-Live."
       }
@@ -741,7 +741,7 @@
         "input_parameters": {
           "instability_type": "severe_discontinuity"
         },
-        "evaluation_timestamp": "2026-10-03T06:11:36.847825+00:00",
+        "evaluation_timestamp": "2026-10-03T06:30:10.986070+00:00",
         "discrepancy_percentage": 0.0,
         "note": "Theoretical model parameter & boundary specification contract verified. Real FE execution and ODB field extraction is verified in Phase J-Live."
       }

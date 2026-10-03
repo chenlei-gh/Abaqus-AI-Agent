@@ -109,6 +109,12 @@ def run_release_audit() -> Dict[str, Any]:
                 content = fpath.read_text(encoding="utf-8", errors="ignore")
                 for pattern, desc in forbidden_patterns:
                     matches = re.findall(pattern, content)
+                    # Filter out CI runner ephemeral public paths (e.g. GitHub Actions /home/runner)
+                    if "POSIX" in desc and matches:
+                        matches = [
+                            m for m in matches 
+                            if not (m.startswith("/home/runner") or m.startswith("/Users/runner"))
+                        ]
                     if matches:
                         rel_p = fpath.relative_to(ROOT)
                         leaks.append({

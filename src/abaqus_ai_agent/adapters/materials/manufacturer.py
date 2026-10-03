@@ -54,6 +54,10 @@ class ManufacturerAdapter:
                 humidity_state=cond_dict.get("humidity_state", "dry"),
                 relative_humidity=float(cond_dict["relative_humidity"]) if cond_dict.get("relative_humidity") is not None else None,
                 test_standard=prop.get("test_standard"),
+                strain_rate=float(cond_dict["strain_rate"]) if cond_dict.get("strain_rate") is not None else None,
+                test_time=float(cond_dict["test_time"]) if cond_dict.get("test_time") is not None else None,
+                frequency=float(cond_dict["frequency"]) if cond_dict.get("frequency") is not None else None,
+                stress_level=float(cond_dict["stress_level"]) if cond_dict.get("stress_level") is not None else None,
             )
             properties.append(
                 MaterialProperty(
@@ -72,6 +76,11 @@ class ManufacturerAdapter:
                 temperature=float(cond_dict.get("temperature", 23.0)),
                 temperature_unit=cond_dict.get("temperature_unit", "C"),
                 humidity_state=cond_dict.get("humidity_state", "dry"),
+                test_standard=c.get("test_standard"),
+                strain_rate=float(cond_dict["strain_rate"]) if cond_dict.get("strain_rate") is not None else None,
+                test_time=float(cond_dict["test_time"]) if cond_dict.get("test_time") is not None else None,
+                frequency=float(cond_dict["frequency"]) if cond_dict.get("frequency") is not None else None,
+                stress_level=float(cond_dict["stress_level"]) if cond_dict.get("stress_level") is not None else None,
             )
             raw_pts = c.get("points", [])
             pts = tuple((float(p[0]), float(p[1])) for p in raw_pts if len(p) >= 2)

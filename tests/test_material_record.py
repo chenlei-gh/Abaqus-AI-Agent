@@ -284,6 +284,78 @@ def test_material_resolver_unsupported_creep_fails_closed():
     assert "requires experimental creep/relaxation curves" in result.diagnostics[0]
 
 
+def test_material_condition_matches_multi_dimensional():
+    base = MaterialCondition(
+        temperature=23.0,
+        humidity_state="dry",
+        strain_rate=0.001,
+        frequency=1.0,
+        test_standard="ISO 527-1/-2",
+    )
+    # Target with matching parameters
+    target_match = MaterialCondition(
+        temperature=23.2,
+        humidity_state="dry",
+        strain_rate=0.0011,
+        frequency=1.05,
+        test_standard="ISO 527",
+    )
+    assert base.matches(target_match)
+
+    # Temperature mismatch
+    target_temp_mismatch = MaterialCondition(temperature=28.0, humidity_state="dry")
+    assert not base.matches(target_temp_mismatch)
+
+    # Humidity mismatch
+    target_hum_mismatch = MaterialCondition(temperature=23.0, humidity_state="conditioned")
+    assert not base.matches(target_hum_mismatch)
+
+    # Strain rate mismatch
+    target_sr_mismatch = MaterialCondition(temperature=23.0, humidity_state="dry", strain_rate=0.1)
+    assert not base.matches(target_sr_mismatch)
+
+
+def test_material_condition_strain_rate_mismatch_fails_closed():
+    record = CampusAdapter.parse_datasheet({
+        "general_info": {"polymer_family": "PA66", "manufacturer": "BASF", "grade_name": "Ultramid A3WG6"},
+        "source_meta": {"locator": "CAMPUS://BASF/A3WG6", "retrieved_at": "2026-10-03T00:00:00Z"},
+        "iso_10350_single_point": [
+            {
+                "name": "youngs_modulus",
+                "value": 8500.0,
+                "unit": "MPa",
+                "condition": {"temperature": 23.0, "humidity_state": "dry", "strain_rate": 0.001},
+            },
+        ],
+    })
+    # Query with high dynamic strain rate (10.0 1/s)
+    res = MaterialResolver.resolve(
+        record=record,
+        target_temperature=23.0,
+        operating_strain_rate=10.0,
+    )
+    assert res.status == "BLOCKED"
+    assert "Missing youngs_modulus for requested condition" in res.diagnostics[0]
+
+
+def test_material_resolver_extreme_thermal_extrapolation_blocked_even_with_assisted():
+    record = CampusAdapter.parse_datasheet({
+        "general_info": {"polymer_family": "PA66", "manufacturer": "BASF", "grade_name": "Ultramid A3WG6"},
+        "source_meta": {"locator": "CAMPUS://BASF/A3WG6", "retrieved_at": "2026-10-03T00:00:00Z"},
+        "iso_10350_single_point": [
+            {"name": "youngs_modulus", "value": 8500.0, "unit": "MPa", "condition": {"temperature": 23.0, "humidity_state": "dry"}},
+        ],
+    })
+    # Extreme temperature discrepancy (180 C vs 23 C data) with assisted=True
+    res = MaterialResolver.resolve(
+        record=record,
+        target_temperature=180.0,
+        allow_assisted_assumptions=True,
+    )
+    assert res.status == "BLOCKED"
+    assert "Fail-closed on uncharacterized thermal degradation/glass transition" in res.diagnostics[0]
+
+
 def test_material_record_strict_unmatched_condition_fails_closed():
     """Verify that get_property strictly returns None when condition does not match, avoiding silent room-temp fallback."""
     from abaqus_ai_agent.contracts.material_record import MaterialCondition

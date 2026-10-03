@@ -459,7 +459,7 @@ Verify the structural deflection and peak von Mises stress of a 100mm x 10mm x 1
     "output_hash": null,
     "python_version": "3.10.5 (main, Jul 27 2024, 04:26:12) [MSC v.1934 64 bit (AMD64)]",
     "run_id": "1b0d7283-c9d6-43d6-a3c8-83830b6db339",
-    "odb_path": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\machine_validation\\StaticGoldenJob.odb"
+    "odb_path": "machine_validation/StaticGoldenJob.odb"
   }
 }
 ```

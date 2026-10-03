@@ -81,6 +81,9 @@ class MaterialResolver:
         constitutive_intent: str = "linear_elastic",
         target_unit_system: str = "MM_N_MPA",
         allow_assisted_assumptions: bool = True,
+        operating_strain_rate: Optional[float] = None,
+        operating_duration: Optional[float] = None,
+        test_standard: Optional[str] = None,
     ) -> MaterialResolutionResult:
         """Resolve a MaterialRecord into an executable Abaqus MaterialDefinition.
 
@@ -91,6 +94,9 @@ class MaterialResolver:
             constitutive_intent: "linear_elastic", "elastoplastic", "viscoelastic", "creep".
             target_unit_system: Desired solver unit system ("MM_N_MPA", "SI").
             allow_assisted_assumptions: Whether engineering approximations are permitted.
+            operating_strain_rate: Specific operating strain rate (1/s).
+            operating_duration: Sustained loading duration for creep/viscoelasticity (s).
+            test_standard: Preferred testing standard (e.g. "ISO 527-1/-2").
         """
         diagnostics: List[str] = []
         assumptions: List[str] = []
@@ -108,31 +114,48 @@ class MaterialResolver:
             available_temps.add(c.condition.temperature)
 
         temp_diff = min(abs(req_temp - t) for t in available_temps)
-        if temp_diff > 25.0:  # significant thermal discrepancy
-            if not allow_assisted_assumptions:
-                return MaterialResolutionResult(
-                    status="BLOCKED",
-                    material_definition=None,
-                    diagnostics=(
-                        f"Operating temperature {req_temp} C has no close experimental data "
-                        f"(closest available: {min(available_temps, key=lambda t: abs(req_temp - t))} C). "
-                        "Fail-closed on uncharacterized thermal degradation.",
-                    ),
-                    evidence_source=record.source.locator,
-                )
+        # Strict anti-extrapolation: even under assisted mode, refuse extreme thermal shift (> 50C)
+        if temp_diff > 50.0 or (temp_diff > 25.0 and not allow_assisted_assumptions):
+            return MaterialResolutionResult(
+                status="BLOCKED",
+                material_definition=None,
+                diagnostics=(
+                    f"Operating temperature {req_temp} C has no close experimental data "
+                    f"(closest available: {min(available_temps, key=lambda t: abs(req_temp - t))} C, diff={temp_diff:.1f} C). "
+                    "Fail-closed on uncharacterized thermal degradation/glass transition.",
+                ),
+                evidence_source=record.source.locator,
+            )
+        if temp_diff > 25.0:
             assumptions.append(
                 f"Operating temperature {req_temp} C extrapolated from test data at "
                 f"{min(available_temps, key=lambda t: abs(req_temp - t))} C (thermal shift uncalibrated)."
             )
 
         # 2. Extract Young's Modulus & Poisson's ratio
-        cond_query = MaterialCondition(temperature=req_temp, humidity_state=target_humidity)
+        cond_query = MaterialCondition(
+            temperature=req_temp,
+            humidity_state=target_humidity,
+            strain_rate=operating_strain_rate,
+            test_time=operating_duration,
+            test_standard=test_standard,
+        )
         prop_e = record.get_property("youngs_modulus", cond_query) or record.get_property("tensile_modulus", cond_query)
         if prop_e is None:
+            # Check if property exists under unconditioned query to provide informative diagnostics
+            fallback_prop = record.get_property("youngs_modulus") or record.get_property("tensile_modulus")
+            diag_msg = f"Missing youngs_modulus for requested condition (T={req_temp}C, humidity={target_humidity}"
+            if operating_strain_rate:
+                diag_msg += f", strain_rate={operating_strain_rate}"
+            if operating_duration:
+                diag_msg += f", duration={operating_duration}"
+            diag_msg += ")."
+            if fallback_prop and fallback_prop.condition:
+                diag_msg += f" Closest available test condition was T={fallback_prop.condition.temperature}C, {fallback_prop.condition.humidity_state}."
             return MaterialResolutionResult(
                 status="BLOCKED",
                 material_definition=None,
-                diagnostics=("Missing youngs_modulus / tensile_modulus in MaterialRecord.",),
+                diagnostics=(diag_msg,),
                 evidence_source=record.source.locator,
             )
 

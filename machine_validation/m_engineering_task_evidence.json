@@ -1,0 +1,141 @@
+{
+  "schema_version": "engineering_task_matrix_v1",
+  "verified_at": "2026-10-03T06:30:19.654921+00:00",
+  "total_tasks": 6,
+  "passed_tasks": 6,
+  "all_passed": true,
+  "tasks": [
+    {
+      "task_id": "T1_STATIC_STRENGTH_FOS",
+      "title": "Structural Static Strength & Factor of Safety Verification",
+      "scenario": "150mm cantilever beam under 1000N tip load with allowable yield stress limit.",
+      "passed": true,
+      "status": "PASS",
+      "metrics": {
+        "max_mises_stress_mpa": 72.0,
+        "tip_displacement_mm": 0.2057,
+        "factor_of_safety": 3.472,
+        "allowable_stress_mpa": 166.667
+      },
+      "acceptance_criteria": {
+        "min_required_fos": 1.5,
+        "max_allowable_deflection_mm": 1.0,
+        "verdict": "PASS"
+      },
+      "diagnostics": [],
+      "provenance": {
+        "mechanics": "Euler-Bernoulli beam theory with Factor of Safety predicate"
+      }
+    },
+    {
+      "task_id": "T2_THERMO_MECHANICAL",
+      "title": "Constrained Bar Thermal-Structural Stress & Reaction Force",
+      "scenario": "Steel component under 80K thermal gradient fully constrained axially.",
+      "passed": true,
+      "status": "PASS",
+      "metrics": {
+        "thermal_stress_mpa": -201.6,
+        "reaction_force_n": 20160.0,
+        "free_thermal_strain": 0.00096
+      },
+      "acceptance_criteria": {
+        "max_allowable_thermal_stress_mpa": 250.0,
+        "equilibrium_verified": true
+      },
+      "diagnostics": [],
+      "provenance": {
+        "mechanics": "1D thermo-elastic constitutive constraint"
+      }
+    },
+    {
+      "task_id": "T3_CONTACT_TRIBOLOGY",
+      "title": "Frictional Contact Normal Pressure & Tangential Continuity",
+      "scenario": "Two-body contact interface under normal clamping and frictional sliding.",
+      "passed": true,
+      "status": "PASS",
+      "metrics": {
+        "contact_pressure_mpa": 2.5,
+        "normal_force_n": 5000.0,
+        "tangential_shear_force_n": 1500.0,
+        "friction_coefficient": 0.3
+      },
+      "acceptance_criteria": {
+        "contact_status": "CLOSED",
+        "normal_equilibrium_error": 0.0,
+        "frictional_shear_limit_met": true
+      },
+      "diagnostics": [],
+      "provenance": {
+        "mechanics": "Coulomb frictional contact formulation"
+      }
+    },
+    {
+      "task_id": "T4_PLASTIC_HARDENING_UNLOAD",
+      "title": "J2 Plastic Hardening, Overload & Residual Strain Tracking",
+      "scenario": "Bilinear hardening tensile coupon loaded past yield and unconstrainedly relaxed.",
+      "passed": true,
+      "status": "PASS",
+      "metrics": {
+        "peak_stress_mpa": 420.0,
+        "yield_onset_stress_mpa": 200.0,
+        "peak_strain": 0.012,
+        "residual_plastic_strain": 0.0099,
+        "elastic_recovery_strain": 0.0021
+      },
+      "acceptance_criteria": {
+        "plastic_dissipation_verified": true,
+        "residual_strain_positive": true
+      },
+      "diagnostics": [],
+      "provenance": {
+        "mechanics": "Bilinear J2 plasticity with kinematic/isotropic unloading"
+      }
+    },
+    {
+      "task_id": "T5_DYNAMIC_ENERGY_CONSERVATION",
+      "title": "Transient Structural Dynamic Impulse & Energy Conservation",
+      "scenario": "Dynamic oscillator under transient response verifying mechanical energy balance.",
+      "passed": true,
+      "status": "PASS",
+      "metrics": {
+        "total_initial_energy_j": 10.000000000000002,
+        "mid_cycle_internal_energy_j": 5.0,
+        "mid_cycle_kinetic_energy_j": 5.0,
+        "energy_discrepancy_rel": 0.0
+      },
+      "acceptance_criteria": {
+        "max_allowed_energy_drift": 0.0001,
+        "energy_balance_satisfied": true
+      },
+      "diagnostics": [],
+      "provenance": {
+        "mechanics": "Hamiltonian energy conservation in elastic continuum"
+      }
+    },
+    {
+      "task_id": "T6_DIAGNOSTICS_SELF_HEALING",
+      "title": "Cross-Physics Solver Failure Diagnostics & Controlled Healing",
+      "scenario": "Autonomous detection of force residual explosion, controlled repair, and re-solve.",
+      "passed": true,
+      "status": "PASS",
+      "metrics": {
+        "initial_solver_exit_code": 1,
+        "healed_solver_exit_code": 0,
+        "final_equilibrium_residual": 1.2e-06
+      },
+      "acceptance_criteria": {
+        "diagnosis_identified": true,
+        "remediation_effective": true,
+        "final_run_converged": true
+      },
+      "diagnostics": [
+        "Diagnosed: RIGID_BODY_SINGULARITY_OR_UNDERCONSTRAINT",
+        "Remediated: APPLY_ENCASTRE_GROUND_BC_AND_CONTACT_STABILIZATION",
+        "Rerun completed with 0 errors."
+      ],
+      "provenance": {
+        "mechanics": "Abaqus Solver Doctor diagnostic rules & state transition"
+      }
+    }
+  ]
+}

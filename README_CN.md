@@ -7,17 +7,18 @@
 [![CI](https://github.com/chenlei-gh/Abaqus-AI-Agent/actions/workflows/ci.yml/badge.svg)](https://github.com/chenlei-gh/Abaqus-AI-Agent/actions/workflows/ci.yml)
 [![Python](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12-blue.svg)](https://www.python.org/)
 [![Abaqus](https://img.shields.io/badge/Abaqus-2025%20Validated-brightgreen.svg)](https://www.3ds.com/products-services/simulia/products/abaqus/)
-[![Tests](https://img.shields.io/badge/tests-399%20passed-success.svg)](tests/)
+[![Tests](https://img.shields.io/badge/tests-416%20passed-success.svg)](tests/)
 [![Golden Matrix](https://img.shields.io/badge/golden%20matrix-13%2F13%20passed-success.svg)](machine_validation/)
 [![Official Benchmarks](https://img.shields.io/badge/official%20benchmarks-22%2F22%20passed-success.svg)](tools/j_comprehensive_physics_matrix.py)
 [![Live Abaqus Gate](https://img.shields.io/badge/live%20abaqus%20gate-22%2F22%20passed-brightgreen.svg)](tools/j_live_abaqus_matrix.py)
+[![Task Matrix](https://img.shields.io/badge/task%20matrix-T1--T6%20passed-brightgreen.svg)](tools/m_engineering_task_matrix.py)
 [![Material Intelligence](https://img.shields.io/badge/material%20intelligence-CAMPUS%20%7C%20ISO%2010350-blue.svg)](src/abaqus_ai_agent/contracts/material_record.py)
 [![Agent Workflows](https://img.shields.io/badge/agent%20workflows-L1--L4%20validated-brightgreen.svg)](#)
 [![Release Gate](https://img.shields.io/badge/release%20gate-RC--1%20frozen-orange.svg)](#)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 
 > **项目状态：Release Candidate 候选版本基线已正式冻结（`v1.0.0-rc1`）。**
-> 核心工程契约、确定性软件层测试门禁（399 项通过）、全链路 **Abaqus 2025 真实机求解执行门禁（13/13 Golden Ladder 阶梯）**、**Phase J-Reference 理论与契约门禁（22/22 全通）**、**Phase J-Live Abaqus 2025 真实求解器全量真机门禁（22/22 验证通过）**、**Phase K 工程材料智能层**、**Phase L 全链路自主工程工作流门禁 (L1–L4)** 以及 **全仓库发布安全审计（4/4 全绿）** 已全部严格闭环。所有真机验证均基于可穿透审计的真实机二进制产物证据。
+> 核心工程契约、确定性软件层测试门禁（416 项通过）、全链路 **Abaqus 2025 真实机求解执行门禁（13/13 Golden Ladder 阶梯）**、**Phase J-Reference 理论与契约门禁（22/22 全通）**、**Phase J-Live Abaqus 2025 真实求解器全量真机门禁（22/22 验证通过）**、**Phase K 工程材料智能层 (Condition 2.0)**、**Phase L 全链路自主工程工作流门禁 (L1–L4)**、**Phase M 复杂工程任务验收矩阵 (T1–T6)** 以及 **全仓库发布安全审计（4/4 全绿）** 已全部严格闭环。所有真机验证均基于可穿透审计的真实机二进制产物证据。
 
 ### 快速导航
 

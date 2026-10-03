@@ -1,6 +1,6 @@
 {
   "schema_version": "reproducibility_evidence_v1",
-  "verified_at": "2026-10-03T04:23:55.945036+00:00",
+  "verified_at": "2026-10-03T06:30:19.490368+00:00",
   "case_id": "static_cantilever",
   "run_a_source": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\machine_validation\\static_golden_e2e.json",
   "run_b_source": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\machine_validation\\static_golden_run_b.json",

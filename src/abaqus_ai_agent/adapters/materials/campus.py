@@ -62,6 +62,9 @@ class CampusAdapter:
                 relative_humidity=float(cond_data["relative_humidity"]) if cond_data.get("relative_humidity") is not None else None,
                 test_standard=prop_item.get("test_standard", "ISO 10350"),
                 strain_rate=float(cond_data["strain_rate"]) if cond_data.get("strain_rate") is not None else None,
+                test_time=float(cond_data["test_time"]) if cond_data.get("test_time") is not None else None,
+                frequency=float(cond_data["frequency"]) if cond_data.get("frequency") is not None else None,
+                stress_level=float(cond_data["stress_level"]) if cond_data.get("stress_level") is not None else None,
             )
             prop = MaterialProperty(
                 name=prop_item["name"],
@@ -80,6 +83,10 @@ class CampusAdapter:
                 temperature_unit=cond_data.get("temperature_unit", "C"),
                 humidity_state=cond_data.get("humidity_state", "dry"),
                 test_standard=curve_item.get("test_standard", "ISO 11403-1"),
+                strain_rate=float(cond_data["strain_rate"]) if cond_data.get("strain_rate") is not None else None,
+                test_time=float(cond_data["test_time"]) if cond_data.get("test_time") is not None else None,
+                frequency=float(cond_data["frequency"]) if cond_data.get("frequency") is not None else None,
+                stress_level=float(cond_data["stress_level"]) if cond_data.get("stress_level") is not None else None,
             )
             raw_pts = curve_item.get("points", [])
             parsed_pts = tuple((float(p[0]), float(p[1])) for p in raw_pts if len(p) >= 2)

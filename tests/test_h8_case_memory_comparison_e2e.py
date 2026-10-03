@@ -12,5 +12,5 @@ def test_h8_case_memory_comparison_e2e():
     assert evidence["queries_verified"]["high_stress_count"] == 1
     assert evidence["comparison_verified"]["solver_changed"] is True
 
-    ev_path = Path("machine_validation") / "h8_case_memory_comparison_evidence.json"
+    ev_path = Path(__file__).resolve().parent.parent / "machine_validation" / "h8_case_memory_comparison_evidence.json"
     assert ev_path.exists()

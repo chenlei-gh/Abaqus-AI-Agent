@@ -7,17 +7,18 @@
 [![CI](https://github.com/chenlei-gh/Abaqus-AI-Agent/actions/workflows/ci.yml/badge.svg)](https://github.com/chenlei-gh/Abaqus-AI-Agent/actions/workflows/ci.yml)
 [![Python](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12-blue.svg)](https://www.python.org/)
 [![Abaqus](https://img.shields.io/badge/Abaqus-2025%20Validated-brightgreen.svg)](https://www.3ds.com/products-services/simulia/products/abaqus/)
-[![Tests](https://img.shields.io/badge/tests-399%20passed-success.svg)](tests/)
+[![Tests](https://img.shields.io/badge/tests-416%20passed-success.svg)](tests/)
 [![Golden Matrix](https://img.shields.io/badge/golden%20matrix-13%2F13%20passed-success.svg)](machine_validation/)
 [![Official Benchmarks](https://img.shields.io/badge/official%20benchmarks-22%2F22%20passed-success.svg)](tools/j_comprehensive_physics_matrix.py)
 [![Live Abaqus Gate](https://img.shields.io/badge/live%20abaqus%20gate-22%2F22%20passed-brightgreen.svg)](tools/j_live_abaqus_matrix.py)
+[![Task Matrix](https://img.shields.io/badge/task%20matrix-T1--T6%20passed-brightgreen.svg)](tools/m_engineering_task_matrix.py)
 [![Material Intelligence](https://img.shields.io/badge/material%20intelligence-CAMPUS%20%7C%20ISO%2010350-blue.svg)](src/abaqus_ai_agent/contracts/material_record.py)
 [![Agent Workflows](https://img.shields.io/badge/agent%20workflows-L1--L4%20validated-brightgreen.svg)](#)
 [![Release Gate](https://img.shields.io/badge/release%20gate-RC--1%20frozen-orange.svg)](#)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 
 > **Project status: Release Candidate Baseline Frozen (`v1.0.0-rc1`).**
-> The foundational engineering contracts, deterministic software gates (399 passed tests), full-chain **Abaqus 2025 real-machine execution gates (13/13 Golden Ladder)**, **Phase J-Reference Gate (22/22 passed)**, **Phase J-Live Real-Machine Gate (22/22 live Abaqus 2025 validated)**, **Phase K Engineering Material Intelligence Layer**, **Phase L Autonomous Agent Engineering Workflow Gates (L1–L4)**, and **Public Release Security Audit (4/4 passed)** are complete and closed. All live solver verifications are grounded in verifiable, audited machine artifacts.
+> The foundational engineering contracts, deterministic software gates (416 passed tests), full-chain **Abaqus 2025 real-machine execution gates (13/13 Golden Ladder)**, **Phase J-Reference Gate (22/22 passed)**, **Phase J-Live Real-Machine Gate (22/22 live Abaqus 2025 validated)**, **Phase K Engineering Material Intelligence Layer (Condition 2.0)**, **Phase L Autonomous Agent Engineering Workflow Gates (L1–L4)**, **Phase M Production Engineering Task Matrix (T1–T6)**, and **Public Release Security Audit (4/4 passed)** are complete and closed. All live solver verifications are grounded in verifiable, audited machine artifacts.
 
 ### Quick navigation
 

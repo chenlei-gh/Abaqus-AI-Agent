@@ -1060,6 +1060,37 @@ With Phase J establishing an unshakeable 22/22 live physical solver foundation, 
   - [x] Automatically synthesize deterministic `findAt(...)` topological selection expressions in native Abaqus/CAE.
   - [x] Live verification of non-empty entity selection, native Set/Surface generation, boundary condition/load application, and reaction equilibrium closure.
 
+### Phase M — Production Engineering Convergence & Task-Level Verification (R0–R5 Gate)
+
+Following the live closure of the 22-case Tier A physics matrix (Phase J) and autonomous workflows (Phase L), Phase M seals remaining architectural deliverables to elevate Abaqus-AI-Agent from a solver automation suite to a true, commercial-grade autonomous engineering product:
+
+- [x] **R0: CI Cross-Platform Hardening & Path Hygiene Closure**
+  - [x] Eliminate ephemeral CI runner absolute path false positives in `i6_release_audit.py` (filter `/home/runner` and `/Users/runner`).
+  - [x] Convert all tool-generated evidence outputs (e.g. `h1_engineering_report_evidence.json`, `h8_case_memory_comparison_evidence.json`) from OS-specific absolute paths to repository-relative paths (`machine_validation/...`).
+  - [x] Enforce explicit `testpaths = ["tests"]` in `pyproject.toml` to prevent unintended directory discovery.
+  - [x] Achieve 100% green status across all Python matrix environments (3.10, 3.11, 3.12) on Linux and Windows.
+- [ ] **R1: Agent-Native Action Chain End-to-End Grounding**
+  - [ ] Transform L1 from pre-packaged CAE script execution into a dynamic agent pipeline: `EngineeringIntent → ActionPlan → ActionBuilders → CAE Native Model → Solver → ODB → Acceptance → Report`.
+  - [ ] Prove that the model parameters and scripts are compiled directly from intent specifications rather than test-harness stubs.
+- [ ] **R2: Mesh Engineering Gate & Multi-Family Quality Verification**
+  - [ ] Real-machine verification across continuum, shell, and beam element families: C3D8/C3D8R, C3D10, S4R, B31.
+  - [ ] Extraction of native Abaqus element quality metrics: aspect ratio, minimum interior angles, face out-of-plane distortion, and negative Jacobian indicators.
+  - [ ] Fail-closed mesh acceptance gate: unresolvable element distortion or negative Jacobian triggers `BLOCKED` status before solver invocation.
+- [ ] **R3: Material Condition 2.0 Multi-Dimensional Fail-Closed Matching**
+  - [ ] Extend `MaterialCondition` matching beyond scalar temperature to multi-dimensional criteria: `strain_rate`, `test_time` (creep duration), `frequency` (DMA), and `humidity_state` (dry vs. conditioned).
+  - [ ] Enforce strict anti-extrapolation: out-of-range operating conditions must result in `BLOCKED` / `NEEDS_CLARIFICATION` rather than uncontrolled room-temperature fallback.
+- [ ] **R4: Clean-Room External Material Source Adapters**
+  - [ ] Deliver pluggable runtime adapters (`CampusAdapter`, `DatasheetAdapter`) with structured JSON/dict ingestion.
+  - [ ] Enforce Apache-2.0 legal boundary: zero proprietary database bulk dumps committed to repository; runtime translation into canonical `MaterialRecord` with full provenance tracking.
+- [ ] **R5: Engineering Task Acceptance Matrix (T1–T6 Real-World Scenarios)**
+  - [ ] Transition from isolated benchmark problems to multi-step engineering tasks:
+    - **T1: Structural Static Strength & Factor of Safety (FoS)** task under deflection and stress limits.
+    - **T2: Coupled Thermo-Mechanical Thermal Stress** task with temperature gradient and expansion constraints.
+    - **T3: Contact & Tribological Interaction** task evaluating contact pressure, gap closure, and frictional dissipation.
+    - **T4: Nonlinear Plastic Hardening & Residual Stress** task evaluating post-yield deformation.
+    - **T5: Transient Dynamic Vibration & Energy Balance** task with kinematic/internal energy checks.
+    - **T6: Autonomous Diagnosis & Self-Healing** task recovering from intentional non-convergence.
+
 ---
 
 ## 20. Engineering Material Intelligence Architecture (CAMPUS, Real-World Polymers & Constitutive Mapping)

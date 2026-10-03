@@ -155,7 +155,7 @@ def run_h8_case_memory_comparison():
             "assumptions_added": list(diff_static_vs_explicit.assumptions_added),
             "assumptions_removed": list(diff_static_vs_explicit.assumptions_removed),
         },
-        "manifest_path": str(manifest_path),
+        "manifest_path": "machine_validation/case_memory_manifest.json",
     }
 
     out_file = validation_dir / "h8_case_memory_comparison_evidence.json"

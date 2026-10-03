@@ -78,7 +78,7 @@ def run_h1_report_generation():
 
     # 4. Build Provenance
     prov_dict = report_dict.get("provenance", {})
-    odb_file_path = str(validation_dir / "StaticGoldenJob.odb")
+    odb_file_path = "machine_validation/StaticGoldenJob.odb"
     provenance = AnalysisProvenance(
         run_id="run_static_golden_001",
         model_name=report_dict.get("model", "StaticGolden"),
@@ -147,8 +147,8 @@ def run_h1_report_generation():
         "case": "H.1_engineering_report_generator",
         "job_name": run.job_name,
         "run_id": run.id,
-        "markdown_report_path": str(md_out_path),
-        "html_report_path": str(html_out_path),
+        "markdown_report_path": "machine_validation/static_golden_engineering_report.md",
+        "html_report_path": "machine_validation/static_golden_engineering_report.html",
         "markdown_size_bytes": md_out_path.stat().st_size,
         "html_size_bytes": html_out_path.stat().st_size,
         "metrics_reported_count": len(metrics_list),

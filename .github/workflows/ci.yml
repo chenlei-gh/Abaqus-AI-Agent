@@ -36,3 +36,4 @@ jobs:
           python tools/i1_engineering_case_matrix.py
           python tools/i2_failure_matrix.py
           python tools/i3_reproducibility.py
+          python tools/m_engineering_task_matrix.py

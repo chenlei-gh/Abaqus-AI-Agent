@@ -112,6 +112,36 @@ class MaterialCondition:
     frequency: Optional[float] = None        # in Hz, e.g. for dynamic mechanical analysis (DMA)
     stress_level: Optional[float] = None     # in MPa, e.g. sustained stress for isochronous curves
 
+    def matches(self, other: "MaterialCondition", temp_tol: float = 0.5) -> bool:
+        """Check if this condition satisfies the requested target condition."""
+        if abs(self.temperature - other.temperature) > temp_tol:
+            return False
+        if self.humidity_state.lower() != other.humidity_state.lower():
+            return False
+        # If relative humidity is explicitly provided in both, check within 5%
+        if self.relative_humidity is not None and other.relative_humidity is not None:
+            if abs(self.relative_humidity - other.relative_humidity) > 5.0:
+                return False
+        # If strain_rate is specified in target, condition must match within 20%
+        if other.strain_rate is not None:
+            if self.strain_rate is None or abs(self.strain_rate - other.strain_rate) / max(other.strain_rate, 1e-9) > 0.2:
+                return False
+        # If frequency is specified in target, condition must match within 10%
+        if other.frequency is not None:
+            if self.frequency is None or abs(self.frequency - other.frequency) / max(other.frequency, 1e-9) > 0.1:
+                return False
+        # If test_time (creep) is specified in target, condition must match within 15%
+        if other.test_time is not None:
+            if self.test_time is None or abs(self.test_time - other.test_time) / max(other.test_time, 1e-9) > 0.15:
+                return False
+        # If test_standard is specified in target, must match or be compatible family
+        if other.test_standard is not None and self.test_standard is not None:
+            norm_self = self.test_standard.strip().lower().replace(" ", "").replace("-", "")
+            norm_other = other.test_standard.strip().lower().replace(" ", "").replace("-", "")
+            if norm_self != norm_other and not (norm_self.startswith(norm_other) or norm_other.startswith(norm_self)):
+                return False
+        return True
+
     def to_dict(self) -> Dict[str, Any]:
         return {
             "temperature": self.temperature,
@@ -238,13 +268,10 @@ class MaterialRecord:
         if condition is None:
             # Return unconditionally or default-matched
             return candidates[0]
-        # Match temperature (within 0.5C) and humidity state
+        # Multi-dimensional matching via condition.matches
         for p in candidates:
-            if p.condition:
-                temp_match = abs(p.condition.temperature - condition.temperature) <= 0.5
-                humidity_match = (p.condition.humidity_state.lower() == condition.humidity_state.lower())
-                if temp_match and humidity_match:
-                    return p
+            if p.condition and p.condition.matches(condition):
+                return p
         # Strict fail-closed: Do NOT fallback to unconditioned or mismatched room temp!
         return None
 
@@ -256,11 +283,8 @@ class MaterialRecord:
         if condition is None:
             return candidates[0]
         for c in candidates:
-            if c.condition:
-                temp_match = abs(c.condition.temperature - condition.temperature) <= 0.5
-                humidity_match = (c.condition.humidity_state.lower() == condition.humidity_state.lower())
-                if temp_match and humidity_match:
-                    return c
+            if c.condition and c.condition.matches(condition):
+                return c
         return None
 
     def to_dict(self) -> Dict[str, Any]:
