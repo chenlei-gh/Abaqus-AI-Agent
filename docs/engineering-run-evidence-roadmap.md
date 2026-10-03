@@ -1365,8 +1365,17 @@ ODB Tensor Extraction & Equilibrium Verification (RF vs Applied Error = 0.002%) 
   - [x] Enforced strict fail-closed gating: 0 candidates -> `NOT_FOUND`, competing candidates without dominant area or un-directed side/symmetry planes -> `AMBIGUOUS` with explicit user guidance.
   - [x] Added 9 targeted tests covering all extended semantics and boundary failure modes (14 tests in `tests/test_feature_grounding.py`, 3 tests in `tests/test_agent_compiler.py`, 553 repository-wide regression tests).
 - [ ] **GA-2.6: Multi-Step & Complex Physical Load Procedure Compilation**
-  - [ ] Support sequence of analysis steps (e.g. Bolt Pretension step followed by External Service Load step).
-  - [ ] Compile moment/torque loads, thermal boundary flux, and pressure distributions with coordinate-dependent fields.
+  - [x] **GA-2.6.0: Physical Procedure & Lifecycle Contracts [CLOSED & QUALIFIED]**
+    - [x] Implemented multi-step procedure DAG contract (`MultiStepProcedureSpec`, `StepDependency`) with parent dependency validation and `nlgeom` cross-step conflict safety guards.
+    - [x] Formulated two-stage bolt pretension lifecycle contract (`BoltPretensionLifecycleSpec`, `BoltPretensionMethod`: `APPLY_FORCE` -> `FIX_LENGTH`).
+    - [x] Formulated load transfer strategy matrix for moment/torque on continuous media (`MomentLoadSpec`, `MomentTransferStrategy`: `RP_COUPLING`, `DISTRIBUTED_COUPLE`, `EXISTING_RP`, `DIRECT_DOF`).
+    - [x] Implemented strict whitelist AST validator for analytical spatial fields (`validate_field_expression`, `SpatialLoadField`), eliminating string injection while permitting coordinate arithmetic ($X, Y, Z$).
+    - [x] Upgraded `preflight.py` with fail-closed gates for step DAG order, `nlgeom` downgrade blocking, bolt lifecycle inversions, moment strategy checks, and field expression AST guards.
+    - [x] Added 12 targeted procedure & preflight tests (`tests/test_procedure_contracts_preflight.py`, 565 repository-wide regression tests).
+  - [ ] **GA-2.6.1: Multi-Step & Physical Procedure Compiler**
+    - [ ] Upgrade `compiler.py` to synthesize multi-step analysis sequences, native `BoltLoad` & `setValuesInStep`, kinematics coupling for moment, and `ExpressionField`.
+  - [ ] **GA-2.6.2: Real Abaqus 2025 Multi-Step Golden Verification**
+    - [ ] Execute real-machine verification: Two-step nonlinear bolt preload followed by external service moment/load.
 
 ---
 

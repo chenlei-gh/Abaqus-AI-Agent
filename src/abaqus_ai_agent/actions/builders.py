@@ -158,6 +158,25 @@ def export_odb_csv(model, odb_path, output_path, step=None, frame=-1, variable="
     return _action("export_odb_csv", model, odb_path=odb_path, output_path=output_path,
                    step=step, frame=frame, variable=variable, component=component, position=position)
 
+def bolt_load(model, name, region_expression, magnitude, step="Step-Preload", bolt_method="APPLY_FORCE", direction_vector=None):
+    expr = _normalize_region_expr(region_expression)
+    return _action("bolt_load", model, expr, name=name, region_expression=expr, magnitude=magnitude, step=step, bolt_method=bolt_method, direction_vector=direction_vector)
+
+def bolt_load_set_values(model, name, step="Step-Service", bolt_method="FIX_LENGTH"):
+    return _action("bolt_load_set_values", model, name, name=name, step=step, bolt_method=bolt_method)
+
+def concentrated_moment(model, name, region_expression, cm1=0.0, cm2=0.0, cm3=0.0, step="Step-1", amplitude=None, strategy="RP_COUPLING"):
+    expr = _normalize_region_expr(region_expression)
+    return _action("concentrated_moment", model, expr, name=name, region_expression=expr, cm1=cm1, cm2=cm2, cm3=cm3, step=step, amplitude=amplitude, strategy=strategy)
+
+def expression_field(model, name, expression, local_csys=None):
+    return _action("expression_field", model, name, name=name, expression=expression, local_csys=local_csys)
+
+def coupling_constraint(model, name, surface_expression, ref_point_expression, coupling_type="KINEMATIC"):
+    surf = _normalize_region_expr(surface_expression)
+    rp = _normalize_region_expr(ref_point_expression)
+    return _action("coupling_constraint", model, name, name=name, surface_expression=surf, ref_point_expression=rp, coupling_type=coupling_type)
+
 def tie(model, name, master_expression, slave_expression):
     m_expr = _normalize_region_expr(master_expression)
     s_expr = _normalize_region_expr(slave_expression)

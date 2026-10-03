@@ -33,3 +33,13 @@ from .material_resolver import (
 )
 from .step import AnalysisStep
 from .capability import CapabilityStatus, CapabilityResult
+from .procedure import (
+    BoltPretensionMethod,
+    BoltPretensionLifecycleSpec,
+    MomentTransferStrategy,
+    MomentLoadSpec,
+    SpatialLoadField,
+    StepDependency,
+    MultiStepProcedureSpec,
+    validate_field_expression,
+)

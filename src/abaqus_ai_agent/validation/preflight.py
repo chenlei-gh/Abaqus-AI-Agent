@@ -3,6 +3,7 @@ from dataclasses import dataclass
 from typing import Sequence, Optional
 from ..contracts.geometry import resolve_region
 from ..contracts.units import validate_action_quantities
+from ..contracts.procedure import validate_field_expression
 from .actions import (
     VALID_CONNECTOR_ASSEMBLED_TYPES,
     VALID_CONNECTOR_TRANSLATIONAL_TYPES,
@@ -61,7 +62,8 @@ def preflight_action(action, snapshot=None):
         check("action_quantities_valid", False, str(e))
 
     if action.action_type in ("fixed_bc", "displacement_bc", "symmetry_bc",
-                              "pressure_load", "concentrated_force",
+                              "pressure_load", "concentrated_force", "concentrated_moment",
+                              "bolt_load",
                               "body_force", "section_assignment", "initial_temperature", "initial_stress"):
         raw_reg = action.parameters.get("region_expression")
         check("region_expression", bool(raw_reg))
@@ -98,7 +100,8 @@ def preflight_action(action, snapshot=None):
             check("temperature_magnitude_finite", _is_finite_number(mag), mag)
 
     # Loads preflight
-    if action.action_type in ("pressure_load", "concentrated_force", "body_force", "body_heat_flux", "surface_heat_flux"):
+    if action.action_type in ("pressure_load", "concentrated_force", "concentrated_moment",
+                              "body_force", "body_heat_flux", "surface_heat_flux", "bolt_load"):
         step_name = action.parameters.get("step")
         if snapshot is not None and step_name:
             steps = snapshot.get("steps", ()) if isinstance(snapshot, dict) else getattr(snapshot, "steps", ())
@@ -114,6 +117,38 @@ def preflight_action(action, snapshot=None):
             specified = [c for c in comps if c is not None]
             check("cf_components_specified", len(specified) > 0, action.parameters)
             check("cf_components_finite", all(_is_finite_number(c) for c in specified), specified)
+
+        if action.action_type == "concentrated_moment":
+            comps = [action.parameters.get(k) for k in ("cm1", "cm2", "cm3")]
+            specified = [c for c in comps if c is not None]
+            check("cm_components_specified", len(specified) > 0, action.parameters)
+            check("cm_components_finite", all(_is_finite_number(c) for c in specified), specified)
+            strat = action.parameters.get("strategy", "RP_COUPLING")
+            valid_strats = {"RP_COUPLING", "DISTRIBUTED_COUPLE", "EXISTING_RP", "DIRECT_DOF"}
+            check("moment_strategy_valid", str(strat).upper() in valid_strats, strat)
+
+        if action.action_type == "bolt_load":
+            mag = action.parameters.get("magnitude")
+            check("bolt_preload_magnitude_positive", _is_finite_number(mag) and mag > 0, mag)
+            method = action.parameters.get("bolt_method", "APPLY_FORCE")
+            check("bolt_method_valid", str(method).upper() in ("APPLY_FORCE", "FIX_LENGTH"), method)
+            check("step_not_initial", step_name != "Initial", step_name)
+
+    if action.action_type == "bolt_load_set_values":
+        step_name = action.parameters.get("step")
+        check("name", bool(action.parameters.get("name")))
+        check("step_not_initial", bool(step_name and step_name != "Initial"), step_name)
+        method = action.parameters.get("bolt_method", "FIX_LENGTH")
+        check("bolt_method_valid", str(method).upper() in ("APPLY_FORCE", "FIX_LENGTH"), method)
+
+    if action.action_type == "expression_field":
+        check("name", bool(action.parameters.get("name")))
+        expr = action.parameters.get("expression")
+        if expr:
+            valid, err = validate_field_expression(expr)
+            check("expression_field_safe_ast", valid, err or expr)
+        else:
+            check("expression_field_safe_ast", False, "expression required")
 
         if action.action_type == "body_force":
             comps = [action.parameters.get(k) for k in ("comp1", "comp2", "comp3")]
@@ -210,6 +245,8 @@ def preflight_plan(actions: Sequence, snapshot=None) -> PlanPreflightResult:
     bc_count = 0
     load_count = 0
     constrained_regions = set()
+    nlgeom_enabled_steps = set()
+    bolt_registry = {}
 
     for idx, action in enumerate(actions):
         res = preflight_action(action, snapshot=snapshot)
@@ -227,8 +264,37 @@ def preflight_plan(actions: Sequence, snapshot=None) -> PlanPreflightResult:
         # Track steps defined in this plan
         if action.action_type.endswith("_step"):
             step_name = action.parameters.get("name")
+            prev_step = action.parameters.get("previous", "Initial")
+            if prev_step not in defined_steps:
+                item = {
+                    "name": "step_sequence_valid",
+                    "ok": False,
+                    "detail": f"Step '{step_name}' references previous step '{prev_step}' before it is defined in plan",
+                    "action_index": idx,
+                    "action_type": action.action_type,
+                }
+                all_checks.append(item)
+                all_blockers.append(item)
             if step_name:
                 defined_steps.add(step_name)
+
+            # Safety check: nlgeom conflict check across steps
+            nlgeom_val = action.parameters.get("nlgeom")
+            if nlgeom_val is True:
+                nlgeom_enabled_steps.add(step_name)
+            elif nlgeom_val is False and nlgeom_enabled_steps:
+                item = {
+                    "name": "nlgeom_conflict_safety",
+                    "ok": False,
+                    "detail": (
+                        f"Safety conflict: Step '{step_name}' attempts to disable nlgeom (False) "
+                        f"after earlier step(s) {sorted(nlgeom_enabled_steps)} enabled it"
+                    ),
+                    "action_index": idx,
+                    "action_type": action.action_type,
+                }
+                all_checks.append(item)
+                all_blockers.append(item)
 
         # Track BCs and Loads
         if action.action_type in ("fixed_bc", "displacement_bc", "symmetry_bc"):
@@ -248,7 +314,7 @@ def preflight_plan(actions: Sequence, snapshot=None) -> PlanPreflightResult:
                 all_checks.append(item)
                 all_blockers.append(item)
 
-        if action.action_type in ("pressure_load", "concentrated_force", "body_force"):
+        if action.action_type in ("pressure_load", "concentrated_force", "concentrated_moment", "body_force"):
             load_count += 1
             step = action.parameters.get("step")
             if step and step not in defined_steps:
@@ -261,6 +327,50 @@ def preflight_plan(actions: Sequence, snapshot=None) -> PlanPreflightResult:
                 }
                 all_checks.append(item)
                 all_blockers.append(item)
+
+        if action.action_type in ("bolt_load", "bolt_load_set_values"):
+            load_count += 1
+            b_name = action.parameters.get("name")
+            step = action.parameters.get("step")
+            if step and step not in defined_steps:
+                item = {
+                    "name": "step_sequence_valid",
+                    "ok": False,
+                    "detail": f"Bolt load action references step '{step}' before it is defined in plan",
+                    "action_index": idx,
+                    "action_type": action.action_type,
+                }
+                all_checks.append(item)
+                all_blockers.append(item)
+
+            b_method = action.parameters.get("bolt_method", "APPLY_FORCE" if action.action_type == "bolt_load" else "FIX_LENGTH")
+            if action.action_type == "bolt_load":
+                if b_name:
+                    bolt_registry[b_name] = {"created_idx": idx, "created_step": step, "method": b_method}
+            elif action.action_type == "bolt_load_set_values":
+                if b_name not in bolt_registry:
+                    item = {
+                        "name": "bolt_pretension_lifecycle_valid",
+                        "ok": False,
+                        "detail": f"Bolt load '{b_name}' modified in setValuesInStep has not been defined in prior steps",
+                        "action_index": idx,
+                        "action_type": action.action_type,
+                    }
+                    all_checks.append(item)
+                    all_blockers.append(item)
+                else:
+                    prior_method = bolt_registry[b_name]["method"]
+                    if b_method == "FIX_LENGTH" and prior_method != "APPLY_FORCE":
+                        item = {
+                            "name": "bolt_pretension_lifecycle_valid",
+                            "ok": False,
+                            "detail": f"Bolt load '{b_name}' cannot be set to FIX_LENGTH without prior APPLY_FORCE",
+                            "action_index": idx,
+                            "action_type": action.action_type,
+                        }
+                        all_checks.append(item)
+                        all_blockers.append(item)
+                    bolt_registry[b_name]["method"] = b_method
 
     # Obvious rigid-body-motion risk check
     if load_count > 0 and bc_count == 0:

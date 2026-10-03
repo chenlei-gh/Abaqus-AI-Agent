@@ -109,8 +109,11 @@ def action_to_script(action):
         if p.get("region_expression"): args.append("region=%s" % p["region_expression"])
         if p.get("amplitude"): args.append("amplitude=%s" % _q(p["amplitude"]))
         return "from abaqusConstants import *; mdb.models[%s].Gravity(%s)" % (_q(m), ", ".join(args))
-    if k in ("pressure_load", "concentrated_force", "body_force", "body_heat_flux", "surface_heat_flux"):
+    if k in ("pressure_load", "concentrated_force", "body_force", "body_heat_flux", "surface_heat_flux", "bolt_load", "bolt_load_set_values", "concentrated_moment"):
         return _load_script(action)
+    if k == "expression_field":
+        csys = (", localCsys=%s" % p["local_csys"]) if p.get("local_csys") else ""
+        return "mdb.models[%s].ExpressionField(name=%s, expression=%r%s)" % (_q(m), _q(p["name"]), p["expression"], csys)
     if k == "assembly_inspect":
         return _assembly_inspection_script(m)
     if k == "instance_translate":
@@ -454,10 +457,28 @@ def _bc_script(action):
 
 def _load_script(action):
     p, m = action.parameters, action.model_name
-    region, name, step = p["region_expression"], p["name"], p.get("step", "Step-1")
+    region = p.get("region_expression")
+    name, step = p["name"], p.get("step", "Step-1")
     if action.action_type == "pressure_load":
         amp = ", amplitude=%s" % _q(p["amplitude"]) if p.get("amplitude") else ""
-        return "mdb.models[%s].Pressure(name=%s, createStepName=%s, region=%s, magnitude=%r%s)" % (_q(m), _q(name), _q(step), region, p["magnitude"], amp)
+        field_arg = ", distributionType=FIELD, field=%s" % _q(p["field"]) if p.get("field") else ""
+        return "mdb.models[%s].Pressure(name=%s, createStepName=%s, region=%s, magnitude=%r%s%s)" % (_q(m), _q(name), _q(step), region, p["magnitude"], amp, field_arg)
+    if action.action_type == "bolt_load":
+        direction = (", datumAxis=%r" % (tuple(p["direction_vector"]),)) if p.get("direction_vector") else ""
+        method = p.get("bolt_method", "APPLY_FORCE")
+        return "from abaqusConstants import *; mdb.models[%s].BoltLoad(name=%s, createStepName=%s, region=%s, magnitude=%r, boltMethod=%s%s)" % (
+            _q(m), _q(name), _q(step), region, p["magnitude"], method, direction
+        )
+    if action.action_type == "bolt_load_set_values":
+        method = p.get("bolt_method", "FIX_LENGTH")
+        return "from abaqusConstants import *; mdb.models[%s].loads[%s].setValuesInStep(stepName=%s, boltMethod=%s)" % (
+            _q(m), _q(name), _q(step), method
+        )
+    if action.action_type == "concentrated_moment":
+        amp = ", amplitude=%s" % _q(p["amplitude"]) if p.get("amplitude") else ""
+        return "mdb.models[%s].ConcentratedForce(name=%s, createStepName=%s, region=%s, cm1=%r, cm2=%r, cm3=%r%s)" % (
+            _q(m), _q(name), _q(step), region, p.get("cm1", 0.0), p.get("cm2", 0.0), p.get("cm3", 0.0), amp
+        )
     if action.action_type == "body_heat_flux":
         return "mdb.models[%s].BodyHeatFlux(name=%s, createStepName=%s, region=%s, magnitude=%r)" % (_q(m), _q(name), _q(step), region, p["magnitude"])
     if action.action_type == "surface_heat_flux":
@@ -468,8 +489,6 @@ def _load_script(action):
     if action.action_type == "concentrated_force":
         amp = ", amplitude=%s" % _q(p["amplitude"]) if p.get("amplitude") else ""
         return "mdb.models[%s].ConcentratedForce(name=%s, createStepName=%s, region=%s, cf1=%r,cf2=%r,cf3=%r%s)" % (_q(m), _q(name), _q(step), region, p.get("cf1",0), p.get("cf2",0), p.get("cf3",0), amp)
-    if action.action_type == "body_heat_flux":
-        return "mdb.models[%s].BodyHeatFlux(name=%s, createStepName=%s, region=%s, magnitude=%r)" % (_q(m), _q(name), _q(step), region, p["magnitude"])
     return "mdb.models[%s].SurfaceHeatFlux(name=%s, createStepName=%s, region=%s, magnitude=%r)" % (_q(m), _q(name), _q(step), region, p["magnitude"])
 
 
