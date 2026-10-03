@@ -1,6 +1,6 @@
 {
   "schema_version": "failure_path_matrix_v1",
-  "verified_at": "2026-10-03T06:30:19.279937+00:00",
+  "verified_at": "2026-10-03T06:34:50.991899+00:00",
   "total_states": 8,
   "verified_states": 8,
   "all_contracts_verified": true,
@@ -259,7 +259,7 @@
         ]
       },
       "is_live_subprocess": true,
-      "real_pid": 23760,
+      "real_pid": 10144,
       "real_exit_code": -9
     },
     {

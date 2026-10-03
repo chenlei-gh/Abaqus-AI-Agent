@@ -84,8 +84,8 @@ def run_release_audit() -> Dict[str, Any]:
 
     # Check 2: Repository-Wide Security & Path Sanitization
     forbidden_patterns = [
-        (r"[c-zC-Z]:\\Users\\[a-zA-Z0-9_\.]+", "Windows personal user profile path"),
-        (r"[c-zC-Z]:\\Vault", "Private Vault directory path"),
+        (r"[c-zC-Z]:\\[U]sers\\[a-zA-Z0-9_\.]+", "Windows personal user profile path"),
+        (r"[c-zC-Z]:\\[V]ault", "Private Vault directory path"),
         (r"/(?:home|Users)/[a-zA-Z0-9_\.]+", "POSIX user profile path"),
         (r"sk-[a-zA-Z0-9]{20,}", "OpenAI/API secret key"),
         (r"ghp_[a-zA-Z0-9]{20,}", "GitHub Personal Access Token"),

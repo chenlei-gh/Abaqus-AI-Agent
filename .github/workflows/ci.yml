@@ -20,7 +20,7 @@ jobs:
       - name: Install package and test dependencies
         run: python -m pip install -e ".[test]"
       - name: Run pytest with strict warnings
-        run: python -m pytest -W error -q
+        run: python -m pytest -W error -ra -v
       - name: Verify CLI entrypoint and commands
         run: |
           abaqus-ai-agent --help
