@@ -775,6 +775,71 @@ def test_detect_rib_groove_rejection():
     assert len(ribs) == 0
 
 
+def test_detect_rib_v_groove_shared_edge_rejection():
+    """Verify V-groove/bottom seam sharing an edge without outward cap is rejected (protrusion evidence guard)."""
+    # A block containing an internal V-groove cut into the substrate.
+    # The two groove walls F_GROOVE_W1 (+X) and F_GROOVE_W2 (-X) face each other.
+    # They both connect to F_BASE at the top (E_B1, E_B2).
+    # At the bottom of the V-groove, they intersect and share a bottom seam edge E_BOTTOM_SEAM.
+    # There is NO outward top cap ribbon face (cap is None).
+    # Without outward protrusion evidence, this must strictly output 0 RIB candidates.
+    faces = (
+        CadFace(id="F_BASE", surface_type="PLANE", is_planar=True, normal=(0.0, 1.0, 0.0), area=10000.0, edge_ids=("E_B1", "E_B2")),
+        CadFace(id="F_GROOVE_W1", surface_type="PLANE", is_planar=True, normal=(1.0, 0.0, 0.0), area=1200.0, edge_ids=("E_B1", "E_BOTTOM_SEAM")),
+        CadFace(id="F_GROOVE_W2", surface_type="PLANE", is_planar=True, normal=(-1.0, 0.0, 0.0), area=1200.0, edge_ids=("E_B2", "E_BOTTOM_SEAM")),
+    )
+    edges = (
+        CadEdge(id="E_B1", length=60.0),
+        CadEdge(id="E_B2", length=60.0),
+        CadEdge(id="E_BOTTOM_SEAM", length=60.0),
+    )
+
+    model = GeometryModel(
+        model_id="M_V_GROOVE_SEAM",
+        provenance=_make_dummy_provenance(),
+        bounding_box=CadBoundingBox(0.0, 0.0, 0.0, 100.0, 100.0, 100.0),
+        faces=faces,
+        edges=edges,
+    )
+
+    topo = normalize_topology(model)
+    ribs = detect_ribs(model, topo)
+
+    # Must conservatively reject V-groove seam: shared edge cannot prove outward protrusion
+    assert len(ribs) == 0
+
+
+def test_detect_rib_unnormalized_normal_rejection():
+    """Verify faces with unnormalized normal vectors are excluded by Normal Validity Guard."""
+    # Similar to stiffener rib but side wall normals are unnormalized (e.g. length 10.0)
+    faces = (
+        CadFace(id="F_BASE", surface_type="PLANE", is_planar=True, normal=(0.0, 1.0, 0.0), area=10000.0, edge_ids=("E_B1", "E_B2")),
+        CadFace(id="F_RIB_SIDE1", surface_type="PLANE", is_planar=True, normal=(10.0, 0.0, 0.0), area=1200.0, edge_ids=("E_B1", "E_CAP1")),
+        CadFace(id="F_RIB_SIDE2", surface_type="PLANE", is_planar=True, normal=(-10.0, 0.0, 0.0), area=1200.0, edge_ids=("E_B2", "E_CAP2")),
+        CadFace(id="F_RIB_CAP", surface_type="PLANE", is_planar=True, normal=(0.0, 1.0, 0.0), area=180.0, edge_ids=("E_CAP1", "E_CAP2")),
+    )
+    edges = (
+        CadEdge(id="E_B1", length=60.0),
+        CadEdge(id="E_B2", length=60.0),
+        CadEdge(id="E_CAP1", length=60.0),
+        CadEdge(id="E_CAP2", length=60.0),
+    )
+
+    model = GeometryModel(
+        model_id="M_UNNORMALIZED_RIB",
+        provenance=_make_dummy_provenance(),
+        bounding_box=CadBoundingBox(0.0, 0.0, 0.0, 100.0, 100.0, 100.0),
+        faces=faces,
+        edges=edges,
+    )
+
+    topo = normalize_topology(model)
+    ribs = detect_ribs(model, topo)
+
+    # Unnormalized side normals cannot participate in angle calculation -> 0 ribs
+    assert len(ribs) == 0
+
+
 def test_detect_rib_oversized_slab_rejection():
     """Verify primary massive slab (e.g. main block body) is rejected as a rib."""
     # Plain rectangular block (6 faces) with two massive opposing faces (100x100mm)

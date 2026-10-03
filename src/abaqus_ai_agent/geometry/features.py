@@ -15,7 +15,7 @@ Zero duplicate CAD kernel rule: operates directly on GeometryModel and Normalize
 from dataclasses import dataclass, field
 from enum import Enum
 import math
-from typing import Any, Dict, List, Optional, Set, Tuple
+from typing import Any, Dict, List, Optional, Sequence, Set, Tuple
 
 from ..capability_boundary import CapabilityStatus
 from .model import CadFace, CadLoop, GeometryModel
@@ -716,8 +716,16 @@ def detect_chamfers(
 
 
 # ---------------------------------------------------------------------------
-# Rib Candidate Recognition (GA-1.3B-5)
+# Rib Candidate Recognition (GA-1.3B-5 & GA-1.3B-5.1 Hardening)
 # ---------------------------------------------------------------------------
+
+def _is_unit_normal(normal: Optional[Sequence[float]], tol: float = 0.05) -> bool:
+    """Validate that normal vector has 3 components and unit Euclidean norm within tolerance."""
+    if not normal or len(normal) != 3:
+        return False
+    norm_len = math.sqrt(sum(c * c for c in normal))
+    return abs(norm_len - 1.0) <= tol
+
 
 def detect_ribs(
     model: GeometryModel,
@@ -728,13 +736,14 @@ def detect_ribs(
     """Identify structural rib/stiffener candidates from normalized topology.
 
     Evaluates:
-    1. Opposing planar side walls (F1, F2) with approximately anti-parallel normals (n1 . n2 <= -0.80).
-    2. Common base attachment topology: both side walls connect directly or via single-level transition
-       to a shared primary base support face (attachment_depth <= 2).
-    3. Cap closure / ridge topology: side walls share a common ridge edge or top cap ribbon face.
-    4. Protrusion vs. Groove/Cavity Rejection:
+    1. Opposing planar side walls (F1, F2) with unit-normalized anti-parallel normals (n1 . n2 <= -0.80).
+       Unverified/unnormalized normals strictly rejected from candidate side walls.
+    2. Direct common base attachment topology: both side walls directly connect to a shared primary base support face.
+    3. Cap closure and outward protrusion topology:
+       Side walls terminate in an outward protruding top cap ribbon face (n_cap . n_base >= 0.50).
+    4. Protrusion vs. Groove / Cavity / Seam Rejection:
        Stiffener ribs protrude outward from the base surface into ambient space.
-       Inner grooves, slots, and cavities whose walls open inward without outward protrusion
+       Inner grooves, slots, cavities, and V-grooves sharing a bottom seam edge without outward cap closure
        are conservatively rejected (protrusion evidence missing; zero groove misreporting).
     5. Primary slab and free-standing sheet rejection:
        Isolated flat slabs without supporting base or free-standing sheets are rejected.
@@ -755,10 +764,10 @@ def detect_ribs(
         char_len = min(dims) if dims else max(model.bounding_box.diagonal, 1.0)
     max_rib_thickness = char_len * max_thickness_ratio
 
-    # Identify planar faces with valid normals
+    # Identify planar faces with strictly verified unit normals
     candidate_planar_faces: List[CadFace] = []
     for f in sorted(model.faces, key=lambda x: x.id):
-        if (f.is_planar or f.surface_type.upper() == "PLANE") and f.normal and len(f.normal) == 3:
+        if (f.is_planar or f.surface_type.upper() == "PLANE") and _is_unit_normal(f.normal):
             candidate_planar_faces.append(f)
 
     processed_pairs: Set[Tuple[str, str]] = set()
@@ -791,13 +800,13 @@ def detect_ribs(
                 continue
 
             # Find base attachment face:
-            # A common neighbor roughly perpendicular to both opposing walls (|n_wall . n_base| < 0.40)
+            # Direct common base attachment: a common neighbor roughly perpendicular to both opposing walls (|n_wall . n_base| < 0.40)
             base_face_candidate: Optional[CadFace] = None
             cap_face_candidate: Optional[CadFace] = None
 
             for neighbor_id in sorted(common_neighbors):
                 neighbor = face_by_id.get(neighbor_id)
-                if not neighbor or not neighbor.normal or len(neighbor.normal) != 3:
+                if not neighbor or not _is_unit_normal(neighbor.normal):
                     continue
                 # Base is roughly perpendicular to rib walls
                 dot_base1 = abs(sum(a * b for a, b in zip(n1, neighbor.normal)))
@@ -817,32 +826,25 @@ def detect_ribs(
             if base_face_candidate is None:
                 continue
 
-            # Cap closure or ridge topology:
-            # Rib must have a top boundary: either a shared ridge edge, or a cap face
-            has_ridge = len(shared_edges) > 0
-            has_cap = cap_face_candidate is not None
-
-            # Protrusion Evidence vs Groove / Pocket Rejection:
-            # For a true rib, walls protrude outward from the base.
-            # If walls form an internal groove or cavity without top ridge/cap closure,
-            # or if the walls are carved into the substrate, protrusion evidence is lacking.
-            if not has_ridge and not has_cap:
-                # Open groove/pocket or lack of top closure -> reject
+            # Protrusion Evidence vs Groove / Cavity / Seam Rejection:
+            # For a true rib, walls protrude outward from the base into ambient space.
+            # In lightweight B-Rep topology without dihedral angles or solid booleans,
+            # side walls sharing a ridge edge alone cannot prove outward protrusion
+            # (they are geometrically indistinguishable from a V-groove bottom seam).
+            # Conservatively require a distinct outward protruding cap face (n_cap . n_base >= 0.50).
+            # Inner grooves, slots, cavities, and V-grooves lacking outward cap closure are rejected.
+            if cap_face_candidate is None:
                 continue
 
-            # Groove rejection: if cap face exists, cap normal should point outward along extrusion direction
-            # (i.e. dot(n_cap, n_base) should not be opposing, and cap face should be a narrow ribbon).
-            if has_cap and cap_face_candidate:
-                n_cap = cap_face_candidate.normal
-                if n_cap and len(n_cap) == 3:
-                    dot_cap_base = sum(a * b for a, b in zip(n_cap, base_face_candidate.normal))
-                    if dot_cap_base < -0.5:
-                        # Opposing cap normal indicates internal groove/recess floor -> reject
-                        continue
+            n_cap = cap_face_candidate.normal
+            dot_cap_base = sum(a * b for a, b in zip(n_cap, base_face_candidate.normal))
+            if dot_cap_base < 0.50:
+                # Opposing or tilted cap normal indicates internal groove/recess floor -> reject
+                continue
 
             # Slab rejection: if the model consists essentially of only f1 and f2 as the primary walls
             # without significant structural differentiation, reject as main slab
-            if len(model.faces) <= 6 and not has_cap and not has_ridge:
+            if len(model.faces) <= 6 and base_face_candidate.area and (f1.area or 0) > base_face_candidate.area * 0.8:
                 continue
 
             # Measure thickness and length:
@@ -906,20 +908,19 @@ def detect_ribs(
                 FeatureEvidence(
                     evidence_type="BASE_ATTACHMENT_TOPOLOGY",
                     source_entity_ids=(f1.id, f2.id, base_face_candidate.id),
-                    rule="Both rib side walls anchor to a shared structural substrate base plane",
+                    rule="Both rib side walls anchor directly to a shared structural substrate base plane",
                     result="PASS",
                 ),
             ]
 
-            if has_ridge or has_cap:
-                evidence_items.append(
-                    FeatureEvidence(
-                        evidence_type="TOP_CLOSURE_PROTRUSION",
-                        source_entity_ids=(f1.id, f2.id) + ((cap_face_candidate.id,) if cap_face_candidate else ()),
-                        rule="Rib walls terminate in outward protruding ridge or cap closure",
-                        result="PASS",
-                    )
+            evidence_items.append(
+                FeatureEvidence(
+                    evidence_type="TOP_CLOSURE_PROTRUSION",
+                    source_entity_ids=(f1.id, f2.id, cap_face_candidate.id),
+                    rule="Rib walls terminate in outward protruding top cap ribbon face",
+                    result="PASS",
                 )
+            )
 
             if thickness is not None:
                 evidence_items.append(
