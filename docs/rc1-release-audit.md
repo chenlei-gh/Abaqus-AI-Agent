@@ -24,6 +24,26 @@ The repository has established a sound, strictly auditable technical baseline. H
 4. **Industrial Automation vs. General Autonomous Agent**:
    - The system qualifies as an **Audited Abaqus Automation & Engineering Agent Core Baseline**, not yet an unrestricted "general-purpose AI finite element engineer".
 
+### Official Level-by-Level Status Matrix
+
+| Subsystem / Layer | Audited Engineering Finding | Final RC 1.0 Status |
+| :--- | :--- | :---: |
+| 1. 工程契约与数据模型 (Contracts & Data Models) | `AnalysisRun` canonical schema, typed metrics, unit validation fully closed. | ✅ **CLOSED** |
+| 2. Abaqus 2025 真机求解能力 (Solver Execution) | Live process invocation, FlexNet license checkout, binary `.odb` generation. | ✅ **CLOSED** |
+| 3. Golden / J-Live Solver Gate (求解器基准门禁) | 13 Golden + 22 J-Live verified under real solver with direct ODB extraction. | ✅ **CLOSED** |
+| 4. Tier A/B 理论验证 (Analytical Theory Baselines) | 13 Tier A closed-form checks + 7 Tier B extended physics analytical baselines. | ✅ **CLOSED** |
+| 5. Failure / Solver Doctor (发散诊断与自愈) | Automated `.msg/.sta` cutback parsing, numerical singularity recovery loop. | ✅ **CLOSED** |
+| 6. Verification / Acceptance / Evidence (验收与证据) | Deterministic criteria evaluation, cryptographic hashes, zero fudge factors. | ✅ **CLOSED** |
+| 7. Agent $\to$ Native Action 编译 (Compiler) | Parametric intent compilation closed; arbitrary CAD topology requires guidance. | 🟡 **PARTIAL** |
+| 8. 任意复杂 CAD 自动建模 (Arbitrary CAD Modeling) | Complex imported STEP/IGES CAD decomposition deferred to GA roadmap. | 🟡 **PARTIAL** |
+| 9. Viewport Grounding (视口几何拓扑接地) | Parallel projection raycasting closed; perspective projection strictly blocked. | 🟡 **PARTIAL** |
+| 10. 外部照片/工程图通用理解 (General Vision/Drawing) | Limited to CAE viewport topology raycasting; external photo understanding deferred. | 🟡 **NOT GENERALIZED** |
+| 11. Engineering Report (工程交付报告) | Authentic read-only extraction of ODB tensors into Markdown & HTML. | ✅ **CLOSED** |
+| 12. Case Memory / Run Diff (历史案例记忆与差分) | Run Index hash storage, metric delta calculation, assumption tracking. | ✅ **CLOSED** |
+| 13. Release / Security Audit (发布与安全审计) | Zero leaked credentials, zero absolute paths, packaging verified (4/4 passed). | ✅ **CLOSED** |
+| 14. CI (持续集成流水线) | 428 automated regression tests pass cross-platform (Ubuntu/Windows). | ✅ **CLOSED** |
+| **RC 1.0 综合发布裁决 (Verdict)** | **Baseline frozen; production engineering boundaries clearly established** | **CONDITIONAL PASS** |
+
 ---
 
 ## 2. Definitive Answers to the Three Core Audit Questions
