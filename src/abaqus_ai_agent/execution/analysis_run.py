@@ -207,7 +207,11 @@ class AnalysisRun:
         )
 
 
-def discover_odb(executor, job_name):
+def discover_odb(executor, job_name, workdir=None):
+    if workdir:
+        candidate = os.path.join(workdir, job_name + ".odb")
+        if os.path.exists(candidate):
+            return os.path.abspath(candidate)
     raw = executor.execute(
         "import os; print(os.path.abspath(%r + '.odb') if os.path.exists(%r + '.odb') else '')"
         % (job_name, job_name))
@@ -237,8 +241,11 @@ class AnalysisRunner:
             result_values=None, numerical_verification=None, engineering_checks=None,
             mesh_quality=None, mesh_convergence=None, fatigue=None, contact_diagnostics=None, sensitivity=None, uncertainty=None,
             timeout=3600, action_plan=(), environment=None, engineering_intent=None,
-            postprocess_profile=None):
+            postprocess_profile=None, workdir=None):
         run_id = str(uuid.uuid4())
+        orig_executor_workdir = getattr(self.executor, "workdir", None)
+        if workdir and hasattr(self.executor, "workdir"):
+            self.executor.workdir = workdir
         runtime = _runtime_provenance(self.executor)
         initial_snapshot = None
         try:
@@ -326,13 +333,13 @@ class AnalysisRunner:
                 execute(self.executor, output_action)
 
             status = jobs.submit(job_name, wait=True, timeout=timeout)
-            artifacts = _collect_artifacts(self.executor, job_name)
+            artifacts = _collect_artifacts(self.executor, job_name, workdir=workdir)
             run = run.with_state(
                 run.state,
                 provenance=_provenance_with_artifacts(run.provenance, artifacts),
             )
             if status.state != JobState.COMPLETED:
-                solver_diagnostics = _collect_diagnostics(self.executor, job_name)
+                solver_diagnostics = _collect_diagnostics(self.executor, job_name, workdir=workdir)
                 sta_tail = solver_diagnostics.get(".sta", {}).get("tail", "")
                 log_tail = solver_diagnostics.get(".log", {}).get("tail", "")
                 if "THE ANALYSIS HAS COMPLETED SUCCESSFULLY" in sta_tail and "COMPLETED" in log_tail:
@@ -358,7 +365,7 @@ class AnalysisRunner:
                 engineering_status=EngineeringStatus.RESULT_SUSPICIOUS.value,
                 artifacts=artifacts)
 
-            path = odb_path or discover_odb(self.executor, job_name)
+            path = odb_path or discover_odb(self.executor, job_name, workdir=workdir)
             if not path:
                 return run.with_state(
                     AnalysisRunState.FAILED,
@@ -498,13 +505,16 @@ class AnalysisRunner:
                 verification=verification_map,
                 evidence=evidence, artifacts=artifacts, metrics=locals().get("run_metrics", ()))
         except Exception as exc:
-            artifacts = _collect_artifacts(self.executor, job_name)
-            diagnostics = _collect_diagnostics(self.executor, job_name)
+            artifacts = _collect_artifacts(self.executor, job_name, workdir=workdir)
+            diagnostics = _collect_diagnostics(self.executor, job_name, workdir=workdir)
             return run.with_state(
                 AnalysisRunState.FAILED,
                 engineering_status=EngineeringStatus.EXECUTION_FAILED.value,
                 artifacts=artifacts,
                 diagnostics=({"error": str(exc), "solver_artifacts": diagnostics},))
+        finally:
+            if hasattr(self.executor, "workdir"):
+                self.executor.workdir = orig_executor_workdir
 
 
 def _provenance_with_artifacts(provenance, artifacts):
@@ -522,18 +532,17 @@ def _provenance_with_artifacts(provenance, artifacts):
         executor=provenance.executor, action_plan=provenance.action_plan,
         environment=provenance.environment, metadata=dict(provenance.metadata))
 
-
-def _collect_diagnostics(executor, job_name):
+def _collect_diagnostics(executor, job_name, workdir=None):
     try:
         from .artifacts import inspect_job_diagnostics
-        return inspect_job_diagnostics(executor, job_name)
+        return inspect_job_diagnostics(executor, job_name, workdir=workdir)
     except Exception:
         return {}
 
-def _collect_artifacts(executor, job_name):
+def _collect_artifacts(executor, job_name, workdir=None):
     try:
         from .artifacts import inspect_job_artifacts
-        return inspect_job_artifacts(executor, job_name).items
+        return inspect_job_artifacts(executor, job_name, workdir=workdir).items
     except Exception:
         return ()
 

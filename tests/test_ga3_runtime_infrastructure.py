@@ -24,12 +24,18 @@ from abaqus_ai_agent.execution.queue import (
     QueuePriority,
     RunResourceSpec,
     compute_backoff,
+    register_task,
+    get_registered_task,
+    task_handler,
 )
 from abaqus_ai_agent.execution.recovery import (
     RecoveryVerdict,
     RunRecoveryInspection,
     inspect_run_state,
     recover_and_resume,
+    is_pid_alive,
+    is_lock_active,
+    clean_stale_locks,
 )
 from abaqus_ai_agent.execution.analysis_run import AnalysisRun, AnalysisRunState
 from abaqus_ai_agent.execution.worker import RunWorker, RunWorkerPool
@@ -560,3 +566,229 @@ def test_run_worker_pool_concurrency(tmp_path):
         assert it.state == QueueItemState.COMPLETED
 
     assert prov.available_tokens("standard") == 2
+
+
+# ---------------------------------------------------------------------------
+# 7. GA-3.6.1 Hardening Tests (Durable Descriptor, Thread Safety, Sandbox Binding, Lock Protection)
+# ---------------------------------------------------------------------------
+
+def test_atomic_persistence_and_durable_analysis_run(tmp_path):
+    persist_file = os.path.join(tmp_path, "durable_queue.json")
+    prov = MockLicenseProvider(initial_tokens={"standard": 5})
+
+    q1 = AnalysisRunQueue(max_concurrency=2, license_provider=prov, persistence_path=persist_file)
+
+    # 1. Enqueue structured AnalysisRun
+    ar = AnalysisRun(
+        id="run-durable-1",
+        model_name="BeamModel",
+        job_name="Job-Durable-1",
+        state=AnalysisRunState.CREATED,
+    )
+    item_ar = q1.enqueue(payload=ar, priority=QueuePriority.HIGH)
+
+    # 2. Enqueue registered callable task
+    @task_handler("test_registered_task_handler")
+    def my_registered_task(sandbox: RunSandbox):
+        return "SUCCESSFUL_EXECUTION"
+
+    item_fn = q1.enqueue(payload=my_registered_task, priority=QueuePriority.NORMAL)
+
+    # Dispatch item_ar to RUNNING
+    d1 = q1.process_next()
+    assert d1 is not None
+    assert d1.item_id == item_ar.item_id
+    assert d1.state == QueueItemState.RUNNING
+
+    # Re-instantiate queue from disk
+    q2 = AnalysisRunQueue(max_concurrency=2, license_provider=prov, persistence_path=persist_file)
+
+    reloaded_ar = q2.get_item(item_ar.item_id)
+    assert reloaded_ar is not None
+    # Payload restored as AnalysisRun instance, not None or raw dict
+    assert isinstance(reloaded_ar.payload, AnalysisRun)
+    assert reloaded_ar.payload.id == "run-durable-1"
+    assert reloaded_ar.payload.model_name == "BeamModel"
+
+    reloaded_fn = q2.get_item(item_fn.item_id)
+    assert reloaded_fn is not None
+    assert callable(reloaded_fn.payload) or (isinstance(reloaded_fn.payload, dict) and reloaded_fn.payload.get("task_name") == "test_registered_task_handler")
+
+    # Recover orphaned runs
+    recovered = q2.recover_orphaned_runs(recovery_strategy="requeue")
+    assert recovered == 1
+    assert reloaded_ar.state == QueueItemState.RETRYING
+    assert isinstance(reloaded_ar.payload, AnalysisRun)
+
+
+def test_queue_thread_safe_concurrent_dispatch(tmp_path):
+    import concurrent.futures
+
+    prov = MockLicenseProvider(initial_tokens={"standard": 10})
+    queue = AnalysisRunQueue(max_concurrency=3, license_provider=prov)
+
+    # Enqueue 15 items
+    for i in range(15):
+        queue.enqueue(payload=f"Task_{i}", item_id=f"item_{i}")
+
+    max_observed_concurrency = [0]
+    import threading
+    lock = threading.Lock()
+
+    def dispatch_worker():
+        for _ in range(20):
+            item = queue.process_next()
+            if item is not None:
+                running_now = queue.active_running_count()
+                with lock:
+                    if running_now > max_observed_concurrency[0]:
+                        max_observed_concurrency[0] = running_now
+                time.sleep(0.01)
+                queue.complete(item.item_id, result="DONE")
+            time.sleep(0.005)
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=8) as executor:
+        futures = [executor.submit(dispatch_worker) for _ in range(8)]
+        concurrent.futures.wait(futures)
+
+    # Concurrency never exceeded max_concurrency
+    assert max_observed_concurrency[0] <= 3
+    # All items successfully drained
+    completed = queue.list_items(state=QueueItemState.COMPLETED)
+    assert len(completed) == 15
+
+
+def test_process_aware_stale_lock_protection(tmp_path):
+    workdir = str(tmp_path)
+    job_name = "Job-Protected"
+    lck_path = os.path.join(workdir, f"{job_name}.lck")
+
+    with open(lck_path, "w") as f:
+        f.write("LOCK_CONTENT")
+
+    # 1. Protection when process is alive: pass current process PID
+    my_pid = os.getpid()
+    assert is_pid_alive(my_pid) is True
+
+    cleaned = clean_stale_locks(workdir, job_name=job_name, associated_pid=my_pid)
+    assert cleaned == 0
+    assert os.path.exists(lck_path) is True  # Lock protected!
+
+    # 2. When process is dead (e.g. non-existent PID): safe cleanup
+    cleaned_dead = clean_stale_locks(workdir, job_name=job_name, associated_pid=99999999)
+    assert cleaned_dead == 1
+    assert os.path.exists(lck_path) is False  # Safely removed
+
+    # 3. Test RunSandbox.clear_stale_locks honors process awareness
+    sandbox = RunSandbox(run_id="test_lock_sandbox", base_dir=workdir)
+    sandbox.create()
+    s_lck = sandbox.resolve_path("Solver.lck")
+    with open(s_lck, "w") as f:
+        f.write("LOCK")
+
+    # Alive PID -> refused
+    assert sandbox.clear_stale_locks(associated_pid=my_pid) == 0
+    assert os.path.exists(s_lck) is True
+
+    # Dead PID -> cleared
+    assert sandbox.clear_stale_locks(associated_pid=99999999) == 1
+    assert os.path.exists(s_lck) is False
+    sandbox.cleanup()
+
+
+def test_worker_executes_registered_task_after_recovery(tmp_path):
+    persist_file = os.path.join(tmp_path, "recovered_task_queue.json")
+    sandbox_base = os.path.join(tmp_path, "sandboxes")
+    target_artifacts = os.path.join(tmp_path, "artifacts")
+    prov = MockLicenseProvider(initial_tokens={"standard": 2})
+
+    @task_handler("durable_resilient_task")
+    def resilient_task(sandbox: RunSandbox):
+        sta = sandbox.resolve_path("Job-Resilient.sta")
+        with open(sta, "w") as f:
+            f.write("THE ANALYSIS HAS COMPLETED SUCCESSFULLY\n")
+        return "RESILIENT_RUN_FINISHED"
+
+    q1 = AnalysisRunQueue(max_concurrency=1, license_provider=prov, persistence_path=persist_file)
+    item = q1.enqueue(payload=resilient_task)
+
+    # Dispatch to RUNNING
+    d1 = q1.process_next()
+    assert d1.state == QueueItemState.RUNNING
+
+    # Crash & restart
+    q2 = AnalysisRunQueue(max_concurrency=1, license_provider=prov, persistence_path=persist_file)
+    q2.recover_orphaned_runs(recovery_strategy="requeue")
+
+    worker = RunWorker(
+        queue=q2,
+        sandbox_base_dir=sandbox_base,
+        target_artifacts_dir=target_artifacts,
+    )
+
+    # Worker executes the recovered registered task seamlessly
+    executed = worker.poll_and_execute_once()
+    assert executed is not None
+    assert executed.state == QueueItemState.COMPLETED
+    assert executed.result == "RESILIENT_RUN_FINISHED"
+    assert os.path.exists(os.path.join(target_artifacts, "Job-Resilient.sta"))
+
+
+def test_worker_runner_sandbox_binding(tmp_path):
+    from abaqus_ai_agent.execution.analysis_run import AnalysisRunner
+
+    class MockBoundExecutor:
+        def __init__(self):
+            self.workdir = None
+
+        def execute(self, code):
+            # If code is checking for odb in workdir
+            if "exists" in code and self.workdir:
+                return os.path.join(self.workdir, "Job-Bound.odb")
+            return ""
+
+    sandbox_base = os.path.join(tmp_path, "sandboxes")
+    target_artifacts = os.path.join(tmp_path, "artifacts")
+    prov = MockLicenseProvider(initial_tokens={"standard": 2})
+    queue = AnalysisRunQueue(max_concurrency=1, license_provider=prov)
+
+    mock_exec = MockBoundExecutor()
+    runner = AnalysisRunner(executor=mock_exec)
+
+    ar = AnalysisRun(
+        id="run-bound-1",
+        model_name="BoundModel",
+        job_name="Job-Bound",
+        state=AnalysisRunState.CREATED,
+    )
+    queue.enqueue(payload=ar)
+
+    # Create dummy solver hook by monkeypatching JobController.submit
+    from abaqus_ai_agent.execution.jobs import JobController, JobStatus, JobState
+    orig_submit = JobController.submit
+
+    def mock_submit(self, job_name, wait=True, timeout=3600):
+        # Write ODB and STA inside executor workdir
+        if mock_exec.workdir:
+            with open(os.path.join(mock_exec.workdir, f"{job_name}.odb"), "wb") as f:
+                f.write(b"MOCK_ODB")
+            with open(os.path.join(mock_exec.workdir, f"{job_name}.sta"), "w") as f:
+                f.write("THE ANALYSIS HAS COMPLETED SUCCESSFULLY\n")
+        return JobStatus(name=job_name, state=JobState.COMPLETED)
+
+    JobController.submit = mock_submit
+    try:
+        worker = RunWorker(
+            queue=queue,
+            runner=runner,
+            sandbox_base_dir=sandbox_base,
+            target_artifacts_dir=target_artifacts,
+        )
+        executed = worker.poll_and_execute_once()
+        assert executed is not None
+        assert executed.state == QueueItemState.COMPLETED
+        # Verify artifact promotion succeeded from the sandbox directory
+        assert os.path.exists(os.path.join(target_artifacts, "Job-Bound.odb"))
+        assert os.path.exists(os.path.join(target_artifacts, "Job-Bound.sta"))
+    finally:
+        JobController.submit = orig_submit

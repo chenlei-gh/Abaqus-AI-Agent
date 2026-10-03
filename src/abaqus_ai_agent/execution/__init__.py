@@ -21,6 +21,9 @@ from .queue import (
     QueuePriority,
     RunResourceSpec,
     compute_backoff,
+    register_task,
+    get_registered_task,
+    task_handler,
 )
 from .recovery import (
     RecoveryVerdict,

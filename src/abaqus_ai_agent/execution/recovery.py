@@ -17,6 +17,87 @@ class RecoveryVerdict(str, Enum):
     CLEANUP_FAILED = "cleanup_failed"
 
 
+def is_pid_alive(pid: int) -> bool:
+    """Check if process with given PID is currently active on the host OS."""
+    if pid <= 0:
+        return False
+    try:
+        if os.name == "nt":
+            import ctypes
+            kernel32 = ctypes.windll.kernel32
+            PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
+            STILL_ACTIVE = 259
+            handle = kernel32.OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, False, pid)
+            if not handle:
+                return False
+            exit_code = ctypes.c_ulong()
+            success = kernel32.GetExitCodeProcess(handle, ctypes.byref(exit_code))
+            kernel32.CloseHandle(handle)
+            return bool(success and exit_code.value == STILL_ACTIVE)
+        else:
+            os.kill(pid, 0)
+            return True
+    except Exception:
+        return False
+
+
+def is_lock_active(lock_path: str, associated_pid: Optional[int] = None) -> bool:
+    """Probe if a .lck lock file is actively held by a live solver process.
+    
+    Returns True if:
+      - associated_pid is specified and that process is alive
+      - or the file is actively locked/opened by an OS process (probe via exclusive read/write open)
+    """
+    if not os.path.exists(lock_path):
+        return False
+
+    if associated_pid is not None and associated_pid > 0:
+        if is_pid_alive(associated_pid):
+            return True
+
+    # Try lock probing via exclusive append/write check
+    try:
+        with open(lock_path, "r+b"):
+            pass
+        return False
+    except (PermissionError, OSError):
+        return True
+
+
+def clean_stale_locks(
+    workspace_dir: str,
+    job_name: Optional[str] = None,
+    associated_pid: Optional[int] = None,
+) -> int:
+    """Safely clear stale .lck files only when confirmed dead/inactive.
+    
+    If the lock is actively held by a live process, refuses removal and protects the running solver.
+    """
+    abs_dir = os.path.abspath(workspace_dir)
+    if not os.path.exists(abs_dir):
+        return 0
+    cleaned = 0
+    candidates = []
+    if job_name:
+        candidates.append(os.path.join(abs_dir, f"{job_name}.lck"))
+    else:
+        for f in os.listdir(abs_dir):
+            if f.endswith(".lck"):
+                candidates.append(os.path.join(abs_dir, f))
+
+    for lck in candidates:
+        if os.path.exists(lck):
+            if is_lock_active(lck, associated_pid=associated_pid):
+                # Lock is active! Do NOT delete.
+                continue
+            try:
+                os.remove(lck)
+                cleaned += 1
+            except OSError:
+                pass
+    return cleaned
+
+
 @dataclass(frozen=True)
 class RunRecoveryInspection:
     verdict: RecoveryVerdict
@@ -169,15 +250,8 @@ def recover_and_resume(
         return updated_run, inspection
 
     elif inspection.verdict == RecoveryVerdict.NON_RECOVERABLE_RESUBMIT:
-        # Clear stale locks
-        cleaned_locks = 0
-        for lck in inspection.lock_files:
-            try:
-                if os.path.exists(lck):
-                    os.remove(lck)
-                    cleaned_locks += 1
-            except OSError:
-                pass
+        # Clear stale locks with process awareness
+        cleaned_locks = clean_stale_locks(workdir, job_name=run.job_name)
         metadata["cleaned_locks_count"] = cleaned_locks
         updated_run = run.with_state(
             AnalysisRunState.PREFLIGHTED,

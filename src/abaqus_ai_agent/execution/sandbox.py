@@ -95,17 +95,10 @@ class RunSandbox:
         """True if any active .lck files exist in the sandbox."""
         return len(self.check_locks()) > 0
 
-    def clear_stale_locks(self) -> int:
-        """Forcefully remove stale .lck files if verified dead/abandoned."""
-        locks = self.check_locks()
-        removed = 0
-        for lck in locks:
-            try:
-                os.remove(lck)
-                removed += 1
-            except OSError:
-                pass
-        return removed
+    def clear_stale_locks(self, associated_pid: Optional[int] = None) -> int:
+        """Safely remove stale .lck files only when confirmed dead/inactive."""
+        from .recovery import clean_stale_locks
+        return clean_stale_locks(self.sandbox_dir, associated_pid=associated_pid)
 
     def promote_artifacts(
         self,

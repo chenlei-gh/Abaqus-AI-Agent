@@ -45,8 +45,15 @@ class RunWorker:
             if callable(payload):
                 # Custom task function
                 result_run = payload(sandbox=sandbox)
+            elif isinstance(payload, dict) and payload.get("__payload_type__") == "callable_task":
+                from .queue import get_registered_task
+                t_name = payload.get("task_name")
+                fn = get_registered_task(t_name) if t_name else None
+                if fn is None:
+                    raise RuntimeError(f"Unregistered task descriptor cannot be executed: {t_name}")
+                result_run = fn(sandbox=sandbox)
             elif self.runner is not None:
-                # Orchestrate through canonical AnalysisRunner
+                # Orchestrate through canonical AnalysisRunner, binding sandbox.sandbox_dir as workdir
                 if isinstance(payload, AnalysisRun):
                     job_name = payload.job_name
                     model_name = payload.model_name
@@ -54,6 +61,7 @@ class RunWorker:
                         model_name=model_name,
                         job_name=job_name,
                         action_plan=payload.action_plan,
+                        workdir=sandbox.sandbox_dir,
                     )
                 elif isinstance(payload, dict):
                     job_name = payload.get("job_name", "Job-1")
@@ -63,12 +71,14 @@ class RunWorker:
                         job_name=job_name,
                         criteria=payload.get("criteria", ()),
                         action_plan=payload.get("action_plan", ()),
+                        workdir=sandbox.sandbox_dir,
                     )
                 else:
-                    # Generic runner call with payload as intent or model
+                    # Generic runner call with sandbox working dir
                     result_run = self.runner.run(
                         model_name="Model-1",
                         job_name=job_name,
+                        workdir=sandbox.sandbox_dir,
                     )
             else:
                 result_run = payload
