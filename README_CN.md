@@ -566,6 +566,7 @@ Abaqus-AI-Agent/
 
 | 文档 | 说明 |
 | :--- | :--- |
+| [RC 1.0 证据与能力全景矩阵](docs/rc1-evidence-capability-matrix.md) | **六元组全景审计：** 彻底穿透 需求 $\to$ 实现 $\to$ 测试 $\to$ 真实机证据 $\to$ 证据等级 $\to$ 能力边界。 |
 | [Release Candidate 1.0 (RC 1.0) 独立工程审计报告](docs/rc1-release-audit.md) | **官方终审报告：** 独立评估生产就绪度、五级证据金字塔、零伪造因子保障，以及 22 Tier A + 7 Tier B + L1–L4 + T1–T6 全矩阵严格闭环。 |
 | [工程运行与证据闭环路线图](docs/engineering-run-evidence-roadmap.md) | **核心基准：** 系统架构、基础工程契约、反伪造门禁、求解器规范与真机 Golden Ladder 演进路线图。 |
 | [AI / Agent 能力边界](docs/ai-agent-capability-boundary.md) | LLM 规划与确定性工程内核的职责分工，以及能力分级晋升准则。 |

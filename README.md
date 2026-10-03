@@ -566,6 +566,7 @@ All core architectural blueprints, engineering contracts, and credibility standa
 
 | Document | Description |
 | :--- | :--- |
+| [RC 1.0 Evidence & Capability Matrix](docs/rc1-evidence-capability-matrix.md) | **Six-Tuple Audit Matrix:** Exhaustive mapping of all capabilities across Requirement $\to$ Implementation $\to$ Test $\to$ Evidence $\to$ Level $\to$ Boundary. |
 | [Release Candidate 1.0 (RC 1.0) Audit Report](docs/rc1-release-audit.md) | **Official Audit Report:** Independent engineering audit evaluating production readiness, 5-level evidence pyramid, zero-fudge guarantees, and complete closure of 22 Tier A + 7 Tier B + L1–L4 + T1–T6 matrices. |
 | [Engineering Run & Evidence Closure Roadmap](docs/engineering-run-evidence-roadmap.md) | **Core Baseline:** System architecture, foundational contracts, anti-fabrication gates, solver-specific specifications, and real-machine Golden Ladder milestones. |
 | [AI / Agent Capability Boundary](docs/ai-agent-capability-boundary.md) | Division of responsibility between LLM planning and deterministic engineering engines, along with promotion criteria. |

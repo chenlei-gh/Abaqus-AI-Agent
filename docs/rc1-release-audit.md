@@ -92,7 +92,10 @@ To prevent commercial misrepresentation, all capabilities are formally mapped to
 | Tier A Closed-Form (13 items) | **ANALYTICAL** | Evaluated via exact theoretical equations in `tools/j_comprehensive_physics_matrix.py`. | **DONE** |
 | Tier A Complex FE (9 items) | **THEORETICAL_CONTRACT** | Evaluates model parameter contracts; explicitly designates FE execution to J-Live. | **DONE** |
 | J.3 Tier B Extended (7 items) | **ANALYTICAL** | Evaluated via exact continuum laws (Maxwell, Norton, CZM, ASTM CT, Lekhnitskii). | **DONE** |
-| L1 Autonomous Engineering E2E | **REAL_ABAQUS** | Jev routing + CAE execution + ODB extraction + Acceptance + Report generation. | **DONE** |
+| L1 Workflow Contract | **OFFLINE_REGRESSION** | Formal schema and state transition validation for autonomous workflow pipeline. | **DONE** |
+| L1 Intent $\to$ Native CAE Script | **OFFLINE / SCRIPT_GENERATION** | Dynamic parametric translation of structured intent into native CAE Python commands. | **DONE** |
+| L1 Live Solver Execution | **REAL_ABAQUS** | Execution of synthesized script in authentic Abaqus 2025 subprocess (`Job_L1_E2E`). | **DONE** |
+| L1 ODB Extraction & Acceptance | **REAL_ABAQUS** | Live extraction of displacement tensor from ODB and strict threshold verification. | **DONE** |
 | L2 Material Grounding | **REAL_ABAQUS** | Resolves commercial polymer to Abaqus card + live FE verification + condition gate. | **DONE** |
 | L3 Divergence Healing | **FAULT_INJECTION** / **REAL_ABAQUS** | Injects unconstrained singularity, parses `.msg`, injects stabilization, recovers. | **DONE** |
 | L4 Viewport Grounding | **REAL_ABAQUS** | Projects 2D normalized viewport coordinates to 3D model vertices via parallel raycast. | **DONE** |
@@ -149,11 +152,14 @@ This distinction is essential for commercial transparency:
   - **Verdict**: 100% analytically sound ($\le 0.006\%$ discrepancy against reference literature). Must never be described as live FE solver runs.
 
 ### 4. L1 Agent Main Pipeline & Compiler Autonomy
-- **Finding**: **HYBRID AGENT COMPILATION (ROUTED + PARAMETRIC INTENT COMPILER)**.
+- **Finding**: **DECOUPLED FOUR-STAGE PIPELINE (NOT A BLANKET REAL_ABAQUS CLAIM)**.
 - **Audit Evidence**:
-  - `JevIntentRouter` reliably classifies physical regimes, validates required fields, and rejects underspecified prompts with `NEEDS_CLARIFICATION`.
-  - `compiler.py` supports structured compilation for beam/box, plate, and cylindrical geometries into executable `AbaqusAction` sequences.
-  - In `execute_l1_workflow`, model dimensions ($L=100, b=10, h=10, E=210000, F=1000$) are provided as structured intent parameters. Arbitrary natural language free-form feature synthesis remains an ongoing roadmap item.
+  - To prevent evidence inflation, L1 must not be designated as a monolithic `REAL_ABAQUS` pass. It comprises four auditable stages:
+    1. **Workflow Contract** (`OFFLINE_REGRESSION`): `JevIntentRouter` reliably classifies physical regimes, validates required fields, and rejects underspecified prompts with `NEEDS_CLARIFICATION`.
+    2. **Compiler Translation** (`OFFLINE / SCRIPT_GENERATION`): `compiler.py` dynamically translates structured parametric intent ($L=100, b=10, h=10, E=210000, F=1000$) into an ordered sequence of native `AbaqusAction` operations.
+    3. **Live Solver Execution** (`REAL_ABAQUS`): Executes the synthesized script in authentic Abaqus 2025, producing valid `.odb` and `.sta` job artifacts.
+    4. **ODB Extraction & Acceptance** (`REAL_ABAQUS`): Direct tensor extraction evaluates compliance against the engineering deflection limit ($0.38095\text{ mm} \le 2.5\text{ mm}$, verdict `PASS`).
+  - **Boundary Clarification**: Dynamic parametric intent compilation is fully closed; arbitrary unassisted feature synthesis for complex imported CAD assemblies remains an ongoing GA roadmap item.
 
 ### 5. L4 Viewport Grounding vs. Computer Vision
 - **Finding**: **VIEWPORT 2D TOPOLOGY GROUNDING (NOT GENERAL CV)**.
