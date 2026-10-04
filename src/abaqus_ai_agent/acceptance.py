@@ -29,6 +29,7 @@ class AcceptanceResult:
     result_validity: str = "VALID"  # VALID, RESULT_INVALID, SOLVER_FAILED, CRITERIA_FAILED
     audit_summary: str = ""
     odb_status: str = "valid"
+    evidence_status: str = "NOT_SPECIFIED"  # VALID, TAMPERED, INCOMPLETE, STALE, MISSING, NOT_SPECIFIED
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -37,6 +38,7 @@ class AcceptanceResult:
             "result_validity": self.result_validity,
             "audit_summary": self.audit_summary,
             "odb_status": self.odb_status,
+            "evidence_status": self.evidence_status,
             "failures": list(self.failures),
             "warnings": list(self.warnings),
             "blocked": list(self.blocked),
@@ -141,13 +143,16 @@ def evaluate_result_acceptance(result_status, numerical=None, engineering=None,
                                require_evidence=False,
                                required_gates=None, physics_domain=None, result_requirements=None,
                                odb_status=None, gate_justifications=None, procedure_verification=None,
-                               thermal_balance=None, odb_fields=None, required_fields=None):
+                               thermal_balance=None, odb_fields=None, required_fields=None,
+                               evidence_manifest=None, expected_run_id=None, base_dir=None,
+                               max_age_seconds=None, mandatory_roles=None):
     """Combine execution/result evidence with deterministic acceptance criteria.
 
     - ResultRequirement & Physics Domain profile drive mandatory gates & required metrics.
     - Mandatory gates can NEVER be silently SKIPPED (missing mandatory gate -> BLOCKED / RESULT_INVALID).
     - Non-mandatory gates may be SKIPPED with an explicit engineering justification.
     - Missing required outputs block acceptance and mark result_validity as RESULT_INVALID.
+    - EvidenceManifestV2 cryptographically verified against tampering, stale reuse, and missing files.
     - Produces a tamper-proof audit_summary: Solver PASS/FAIL | ODB PASS/FAIL | Required Result PASS/FAIL | Engineering Acceptance PASS/FAIL.
     """
     from .contracts.results import get_physics_result_profile
@@ -218,12 +223,52 @@ def evaluate_result_acceptance(result_status, numerical=None, engineering=None,
         gates["odb"] = "PASS" if result_status == "completed" else "NOT_SPECIFIED"
 
     # Gate 3: Evidence Sufficiency Gate
-    if require_evidence and not evidence:
+    manifest_target = evidence_manifest if evidence_manifest is not None else evidence
+    evidence_status = "NOT_SPECIFIED"
+
+    def _is_v2_manifest(target):
+        if target is None:
+            return False
+        if hasattr(target, "schema_version") and getattr(target, "schema_version") == "evidence_manifest_v2":
+            return True
+        if isinstance(target, dict) and (
+            target.get("schema_version") == "evidence_manifest_v2"
+            or ("artifacts" in target and "run_id" in target and isinstance(target.get("artifacts"), dict))
+        ):
+            return True
+        return False
+
+    if manifest_target is not None and _is_v2_manifest(manifest_target):
+        from .contracts.evidence import verify_evidence_integrity
+        m_roles = mandatory_roles if mandatory_roles is not None else ("inp", "odb", "msg", "dat", "sta", "log")
+        verif_rep = verify_evidence_integrity(
+            manifest_target,
+            base_dir=base_dir,
+            expected_run_id=expected_run_id,
+            max_age_seconds=max_age_seconds,
+            mandatory_roles=m_roles,
+        )
+        evidence_status = verif_rep.validity
+        if not verif_rep.valid:
+            gates["evidence_sufficiency"] = "FAIL"
+            failures.extend(verif_rep.failures)
+            blocked.extend(verif_rep.failures)
+        else:
+            gates["evidence_sufficiency"] = "PASS"
+    elif require_evidence and not evidence and not evidence_manifest:
         failures.append("missing_required_evidence")
         blocked.append("missing_required_evidence")
         gates["evidence_sufficiency"] = "BLOCKED"
-    elif evidence:
+        evidence_status = "MISSING"
+    elif "evidence_sufficiency" in effective_required_gates and not evidence and not evidence_manifest:
+        failures.append("missing_mandatory_gate:evidence_sufficiency")
+        blocked.append("missing_mandatory_gate:evidence_sufficiency")
+        gates["evidence_sufficiency"] = "BLOCKED"
+        missing_required_gates.append("evidence_sufficiency")
+        evidence_status = "MISSING"
+    elif evidence or evidence_manifest:
         gates["evidence_sufficiency"] = "PASS"
+        evidence_status = "VALID"
     else:
         gates["evidence_sufficiency"] = "NOT_SPECIFIED"
 
@@ -461,4 +506,5 @@ def evaluate_result_acceptance(result_status, numerical=None, engineering=None,
         result_validity=result_validity,
         audit_summary=audit_summary,
         odb_status=effective_odb_status,
+        evidence_status=evidence_status,
     )

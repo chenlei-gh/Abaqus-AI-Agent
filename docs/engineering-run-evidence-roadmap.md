@@ -2,7 +2,7 @@
 
 **Status:** 
 - **RC 1.0 Frozen Baseline**: `v1.0.0-rc1` CONDITIONAL PASS Frozen at Commit `deec6a3` (428 tests) ✅
-- **GA Working Baseline**: Commit `969af3c`+ ACTIVE (579 tests, Track GA-3 Real-Machine Qualified, Track GA-1.1~GA-1.4 Frozen & Real-Machine Qualified on STEP Benchmarks, Track GA-2.1~GA-2.6 Closed & Real-Machine Qualified, Track GA-CL Active) 🚀
+- **GA Working Baseline**: Commit `969af3c`+ ACTIVE (608 tests, Track GA-3 Real-Machine Qualified, Track GA-1.1~GA-1.4 Frozen & Real-Machine Qualified on STEP Benchmarks, Track GA-2.1~GA-2.6 Closed & Real-Machine Qualified, Track GA-CL Active / GA-CL.1~GA-CL.4 Qualified) 🚀
 **Version:** 2026-10-04 (Release Candidate 1.0 Frozen & GA Evolution Baseline)  
 **Scope:** Abaqus-AI-Agent engineering architecture, foundational contracts, evidence chain, real-machine physics benchmarks, and material intelligence grounding
 

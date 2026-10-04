@@ -45,7 +45,8 @@ def _render_custom_table_for_section(heading, value):
     elif heading.startswith("11. Acceptance") and value is not None:
         # 11a. Render Integrity & Gate Audit if available
         gates = getattr(value, "gates", None) or (value.get("gates") if isinstance(value, dict) else None)
-        justs = getattr(value, "gate_justifications", None) or (value.get("gate_justifications") if isinstance(value, dict) else {})
+        raw_justs = getattr(value, "gate_justifications", None) or (value.get("gate_justifications") if isinstance(value, dict) else None)
+        justs = raw_justs if isinstance(raw_justs, dict) else {}
         missing_m = getattr(value, "missing_required_metrics", None) or (value.get("missing_required_metrics") if isinstance(value, dict) else ())
         res_val = getattr(value, "result_validity", "VALID") if hasattr(value, "result_validity") else (value.get("result_validity", "VALID") if isinstance(value, dict) else "VALID")
         odb_st = getattr(value, "odb_status", "valid") if hasattr(value, "odb_status") else (value.get("odb_status", "valid") if isinstance(value, dict) else "valid")
@@ -61,6 +62,16 @@ def _render_custom_table_for_section(heading, value):
                 ["Required Physical Outputs", req_status, "PASS" if not missing_m else "FAIL (RESULT_INVALID)"],
                 ["Engineering Result Validity", res_val, "PASS" if res_val == "VALID" else "REJECTED"],
             ]
+            if "evidence_sufficiency" in gates:
+                ev_gate = gates["evidence_sufficiency"]
+                ev_stat = getattr(value, "evidence_status", None) or (value.get("evidence_status") if isinstance(value, dict) else None)
+                if ev_gate == "PASS":
+                    ev_desc = "Verified Authentic & Intact (SHA-256 Provenance Confirmed)"
+                elif ev_stat and ev_stat != "NOT_SPECIFIED":
+                    ev_desc = f"FAIL ({ev_stat})"
+                else:
+                    ev_desc = f"FAIL ({ev_gate})"
+                integrity_rows.append(["Evidence & Artifact Integrity", ev_desc, ev_gate])
             lines += ["### Verification Integrity & Audit Summary", "", _format_markdown_table(["Verification Dimension", "Actual State / Output", "Gate Verdict"], integrity_rows), ""]
 
             # Render Verification Gates Table
@@ -113,6 +124,49 @@ def _render_custom_table_for_section(heading, value):
         rows = [[k, str(v)] for k, v in value.items() if not isinstance(v, (dict, list, tuple))]
         if rows:
             lines += [_format_markdown_table(["Topological Parameter", "Value"], rows), ""]
+
+    # 17. Evidence -> Evidence Manifest V2 Table
+    elif heading.startswith("17. Evidence") and value is not None:
+        manifest_data = None
+        if hasattr(value, "schema_version") and getattr(value, "schema_version") == "evidence_manifest_v2":
+            manifest_data = value.to_dict()
+        elif isinstance(value, dict) and (value.get("schema_version") == "evidence_manifest_v2" or "artifacts" in value):
+            manifest_data = value
+        elif isinstance(value, (list, tuple)):
+            for item in value:
+                v = getattr(item, "value", item)
+                if isinstance(v, dict) and (v.get("schema_version") == "evidence_manifest_v2" or "artifacts" in v):
+                    manifest_data = v
+                    break
+
+        if manifest_data and isinstance(manifest_data, dict):
+            run_id = manifest_data.get("run_id", "-")
+            case_id = manifest_data.get("case_id", "-")
+            val = manifest_data.get("validity", "VALID")
+            sig = manifest_data.get("audit_signature", "-")
+            sig_display = f"{sig[:16]}... (SHA-256)" if sig and len(sig) > 16 else (sig or "-")
+            summary_rows = [
+                ["Run ID", run_id],
+                ["Case ID", case_id],
+                ["Created At", manifest_data.get("created_at", "-")],
+                ["Evidence Validity", val],
+                ["Audit Signature", sig_display],
+            ]
+            lines += ["### Evidence Manifest Summary", "", _format_markdown_table(["Manifest Property", "Value"], summary_rows), ""]
+
+            arts = manifest_data.get("artifacts") or {}
+            if isinstance(arts, dict) and arts:
+                art_rows = []
+                for a_name, a_info in sorted(arts.items()):
+                    if isinstance(a_info, dict):
+                        role = a_info.get("role", "-")
+                        exists = "YES" if a_info.get("exists") else "NO"
+                        size = str(a_info.get("size_bytes", 0))
+                        sha = a_info.get("sha256", "-")
+                        sha_short = f"{sha[:12]}..." if sha and len(sha) > 12 else (sha or "-")
+                        art_rows.append([a_name, role, exists, size, sha_short])
+                if art_rows:
+                    lines += ["### Cryptographic Artifact Provenance", "", _format_markdown_table(["Artifact Name", "Role", "Exists", "Size (bytes)", "SHA-256"], art_rows), ""]
 
     return lines
 
@@ -221,6 +275,12 @@ def _conclusion(report):
         return f"{prefix}Acceptance criteria passed based on the structured evidence supplied to this report."
 
     detail_parts = []
+    if any("evidence_tampered" in f for f in failures):
+        detail_parts.append("EVIDENCE TAMPER DETECTED: Artifact checksum mismatch against manifest provenance.")
+    if any("evidence_incomplete" in f for f in failures):
+        detail_parts.append("EVIDENCE INCOMPLETE: Mandatory solver artifacts are missing from disk.")
+    if any("evidence_stale" in f for f in failures):
+        detail_parts.append("EVIDENCE STALE: Run ID mismatch or timestamp expired; stale evidence reuse is prohibited.")
     if result_validity == "RESULT_INVALID":
         detail_parts.append("Engineering conclusion is REJECTED (RESULT_INVALID): Required physical outputs or mandatory verification gates were not satisfied.")
     if missing_metrics:

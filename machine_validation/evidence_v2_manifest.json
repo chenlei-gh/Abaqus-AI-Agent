@@ -1,0 +1,101 @@
+{
+  "schema_version": "evidence_v2_manifest_v1",
+  "milestone": "GA-CL.4",
+  "qualified_at": "2026-10-04T01:36:28.878809+00:00",
+  "qualification_tier": "REAL_ABAQUS_PROVENANCE_V2",
+  "all_vectors_passed": true,
+  "vectors_count": 7,
+  "vectors": {
+    "V1_valid_manifest_qualification": {
+      "valid": true,
+      "validity": "VALID",
+      "audit_signature_valid": true,
+      "artifacts_checked_count": 6,
+      "acceptance_passed": true,
+      "acceptance_status": "PASS",
+      "result_validity": "VALID",
+      "evidence_gate": "PASS",
+      "audit_summary": "Solver: PASS | ODB: PASS | Required Result: PASS | Engineering Acceptance: PASS",
+      "passed": true
+    },
+    "V2_artifact_tamper_detection": {
+      "valid": false,
+      "validity": "TAMPERED",
+      "tampered_artifacts": [
+        "GA263_Job.odb"
+      ],
+      "failures": [
+        "evidence_tampered:hash_mismatch:GA263_Job.odb",
+        "evidence_incomplete:missing_mandatory_role:odb"
+      ],
+      "acceptance_passed": false,
+      "acceptance_status": "BLOCKED",
+      "result_validity": "RESULT_INVALID",
+      "evidence_gate": "FAIL",
+      "audit_summary": "Solver: PASS | ODB: PASS | Required Result: PASS | Engineering Acceptance: FAIL",
+      "fail_closed": true
+    },
+    "V3_missing_critical_artifact": {
+      "valid": false,
+      "validity": "INCOMPLETE",
+      "missing_artifacts": [
+        "GA263_Job.sta"
+      ],
+      "failures": [
+        "evidence_incomplete:missing_artifact:GA263_Job.sta",
+        "evidence_incomplete:missing_mandatory_role:sta"
+      ],
+      "acceptance_passed": false,
+      "acceptance_status": "BLOCKED",
+      "result_validity": "RESULT_INVALID",
+      "evidence_gate": "FAIL",
+      "fail_closed": true
+    },
+    "V4_run_identity_mismatch": {
+      "valid": false,
+      "validity": "STALE",
+      "stale": true,
+      "failures": [
+        "evidence_stale:run_id_mismatch:run_ga263_20261004_v2_qualified_expected_run_20261004_new_active_job_different_id"
+      ],
+      "acceptance_passed": false,
+      "acceptance_status": "BLOCKED",
+      "result_validity": "RESULT_INVALID",
+      "evidence_gate": "FAIL",
+      "fail_closed": true
+    },
+    "V5_timestamp_expiry_stale": {
+      "valid": false,
+      "validity": "STALE",
+      "stale": true,
+      "failures": [
+        "evidence_stale:timestamp_expired:213240988.9s_exceeds_3600.0s"
+      ],
+      "acceptance_passed": false,
+      "acceptance_status": "BLOCKED",
+      "result_validity": "RESULT_INVALID",
+      "fail_closed": true
+    },
+    "V6_manifest_signature_tamper": {
+      "valid": false,
+      "validity": "TAMPERED",
+      "audit_signature_valid": false,
+      "failures": [
+        "evidence_tampered:manifest_signature_mismatch"
+      ],
+      "acceptance_passed": false,
+      "result_validity": "RESULT_INVALID",
+      "fail_closed": true
+    },
+    "V7_report_synchronization": {
+      "valid_report_has_manifest_summary": true,
+      "valid_report_has_artifacts_table": true,
+      "valid_report_has_verified_audit": true,
+      "valid_report_passed": true,
+      "tampered_report_has_tamper_warning": true,
+      "tampered_report_rejected": true,
+      "tampered_report_no_false_pass": true,
+      "fail_closed": true
+    }
+  }
+}
