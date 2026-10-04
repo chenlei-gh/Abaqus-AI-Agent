@@ -7,8 +7,8 @@
 [![CI](https://github.com/chenlei-gh/Abaqus-AI-Agent/actions/workflows/ci.yml/badge.svg)](https://github.com/chenlei-gh/Abaqus-AI-Agent/actions/workflows/ci.yml)
 [![Python](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12-blue.svg)](https://www.python.org/)
 [![Abaqus](https://img.shields.io/badge/Abaqus-2025%20Validated-brightgreen.svg)](https://www.3ds.com/products-services/simulia/products/abaqus/)
-[![Tests](https://img.shields.io/badge/tests-448%20passed-success.svg)](tests/)
-[![Golden Matrix](https://img.shields.io/badge/golden%20matrix-13%2F13%20passed-success.svg)](machine_validation/)
+[![Tests](https://img.shields.io/badge/tests-695%20passed-success.svg)](tests/)
+[![Golden Matrix](https://img.shields.io/badge/golden%20matrix-20%2F20%20L4%20passed-success.svg)](machine_validation/)
 [![Official Benchmarks](https://img.shields.io/badge/tier%20a%20benchmarks-22%2F22%20passed-success.svg)](tools/j_comprehensive_physics_matrix.py)
 [![Tier B Benchmarks](https://img.shields.io/badge/tier%20b%20benchmarks-7%2F7%20passed-success.svg)](tools/j3_tier_b_extended_physics.py)
 [![Live Abaqus Gate](https://img.shields.io/badge/live%20abaqus%20gate-22%2F22%20passed-brightgreen.svg)](tools/j_live_abaqus_matrix.py)
@@ -271,7 +271,7 @@ flowchart TD
 | **隐式动力学分析** | ✅ LIVE VALIDATED | 动载荷放大系数 (DAF)、瞬态结构振动、ALLKE/ALLIE 动内能比 |
 | **稳态热传导分析** | ✅ LIVE VALIDATED | 3D 杆体一维热传导、解析温度梯度吻合、热流率严格守恒 |
 | **热-结构顺序/强耦合** | ✅ LIVE VALIDATED | 热力耦合分析步执行、温度载荷与热应力场同步提取 |
-| **意图编译器 (Compiler)** | 🟡 PARTIAL | 参数化箱梁/板/柱意图动态编译支持；复杂任意 CAD 拓扑拆分仍需人工引导 |
+| **意图编译器 (Compiler)** | ✅ LIVE VALIDATED | 支持覆盖 20 个 L4 物理工程领域的声明式动作规划编译；自动注入必需场输出与连接器/接触定义 |
 | **工程材料智能层** | ✅ LIVE VALIDATED | ISO 10350 单点、ISO 11403 曲线，CAMPUS 与 TDS 规范解析，工况不匹配自动阻断 |
 | **官方基准求解器矩阵** | ✅ LIVE VALIDATED | 22 项 Tier A 求解器能力实机验证通过；7 项 Tier B 闭式精确理论基准检验 |
 | **刚体动力学 (MBD)** | ✅ LIVE VALIDATED | 单自由度重力摆动、角速度峰值精度、机械能守恒 |
@@ -517,6 +517,30 @@ intent = EngineeringIntent(
     unit_system="MM_N_MPA",
     description="验证端部集中力作用下的结构挠度与反力平衡",
 )
+```
+
+### 3. P1 统一工程智能体产品入口 (`solve_requirement`)
+
+从自然语言工程需求直接端到端完成澄清检测、能力路由、求解器调用、证据验签与工程验收：
+
+```python
+from abaqus_ai_agent import AbaqusAIAgent
+
+agent = AbaqusAIAgent()
+
+# 一行代码执行端到端工程需求分析
+result = agent.solve_requirement(
+    "对长度 100mm、截面 10x10mm 的钢制悬臂梁进行线性静力分析，"
+    "根部完全固定，自由端施加 1000N 向下的集中力，材料为 Q235 钢，"
+    "要求最大挠度 <= 2.5mm，根部 Mises 应力 <= 600MPa。"
+)
+
+if result.status == "NEEDS_CLARIFICATION":
+    print("需要工程师补充物理参数:", result.clarification_needed)
+elif result.status == "COMPLETED":
+    print("工程验收裁决:", result.acceptance.conclusion)
+    print("核心物理指标:", result.metrics)
+    print("交付报告摘要:\n", result.summary)
 ```
 
 ---

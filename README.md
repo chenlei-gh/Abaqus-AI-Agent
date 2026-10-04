@@ -7,8 +7,8 @@
 [![CI](https://github.com/chenlei-gh/Abaqus-AI-Agent/actions/workflows/ci.yml/badge.svg)](https://github.com/chenlei-gh/Abaqus-AI-Agent/actions/workflows/ci.yml)
 [![Python](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12-blue.svg)](https://www.python.org/)
 [![Abaqus](https://img.shields.io/badge/Abaqus-2025%20Validated-brightgreen.svg)](https://www.3ds.com/products-services/simulia/products/abaqus/)
-[![Tests](https://img.shields.io/badge/tests-448%20passed-success.svg)](tests/)
-[![Golden Matrix](https://img.shields.io/badge/golden%20matrix-13%2F13%20passed-success.svg)](machine_validation/)
+[![Tests](https://img.shields.io/badge/tests-695%20passed-success.svg)](tests/)
+[![Golden Matrix](https://img.shields.io/badge/golden%20matrix-20%2F20%20L4%20passed-success.svg)](machine_validation/)
 [![Official Benchmarks](https://img.shields.io/badge/tier%20a%20benchmarks-22%2F22%20passed-success.svg)](tools/j_comprehensive_physics_matrix.py)
 [![Tier B Benchmarks](https://img.shields.io/badge/tier%20b%20benchmarks-7%2F7%20passed-success.svg)](tools/j3_tier_b_extended_physics.py)
 [![Live Abaqus Gate](https://img.shields.io/badge/live%20abaqus%20gate-22%2F22%20passed-brightgreen.svg)](tools/j_live_abaqus_matrix.py)
@@ -517,6 +517,30 @@ intent = EngineeringIntent(
     unit_system="MM_N_MPA",
     description="Validate tip displacement under concentrated force",
 )
+```
+
+### 3. P1 Unified Engineering Agent Product Entrance (`solve_requirement`)
+
+Solve, verify, sign, and accept directly from a natural language engineering requirement:
+
+```python
+from abaqus_ai_agent import AbaqusAIAgent
+
+agent = AbaqusAIAgent()
+
+# Solve end-to-end with automated parameter clarification & fail-closed gates
+result = agent.solve_requirement(
+    "Perform a linear static analysis of a 100mm cantilever beam with 10x10mm section. "
+    "Fixed root, 1000N downward tip load, Q235 steel. "
+    "Ensure tip displacement <= 2.5mm and max Mises stress <= 600MPa."
+)
+
+if result.status == "NEEDS_CLARIFICATION":
+    print("Parameters needed from engineer:", result.clarification_needed)
+elif result.status == "COMPLETED":
+    print("Acceptance Conclusion:", result.acceptance.conclusion)
+    print("Physical Metrics:", result.metrics)
+    print("Report Summary:\n", result.summary)
 ```
 
 ---

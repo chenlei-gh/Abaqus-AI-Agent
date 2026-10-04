@@ -1609,12 +1609,13 @@ In practical engineering practice, user requests do not arrive as pre-grounded A
   - [x] Full-chain live Abaqus 2025 execution: `EngineeringIntent` with `IntentFatigueSpec` $\to$ `compile_intent_to_actions` $\to$ multi-step cyclic solve on Abaqus 2025 $\to$ real ODB extraction $\to$ deterministic rainflow + Goodman + Miner $\to$ `EvidenceManifestV2` $\to$ `evaluate_result_acceptance` $\to$ `PASS`.
   - [x] 4 negative probes verified fail-closed on live artifacts: missing field output 'S' $\to$ `RESULT_INVALID`; omitted fatigue gate $\to$ `BLOCKED`; excessive damage $\to$ `FAIL`; tampered evidence $\to$ `EVIDENCE_TAMPERED`.
   - [x] Persisted authentic cryptographic evidence in `machine_validation/fatigue_l4_golden_manifest.json`.
-  - [x] Promoted High-Cycle Fatigue from **L3 Specialized Workflow** to **L4 Agent Full-Chain Qualified** (18 L4 / 2 L3 achieved on live Abaqus 2025).
+  - [x] Promoted High-Cycle Fatigue from **L3 Specialized Workflow** to **L4 Agent Full-Chain Qualified** (Interim milestone: 18 L4 / 2 L3; finalized at 20 L4 / 0 L3 on live Abaqus 2025).
 
 ---
 
-#### Track GA-2B: Multimodal Perception & Intent Ingestion (Drawings, Blueprints, Photos) [CLOSED & QUALIFIED]
+#### Track GA-2B: Multimodal Perception & Intent Ingestion (Drawings, Blueprints, Photos) [CLOSED & QUALIFIED - Grounding & HITL Protocol]
 *Open-World Engineering Context: Associating real-world photos and standard 2D blueprints with 3D CAD models under mandatory Human-in-the-Loop review.*
+*(Note: GA-2B closed the Grounding Observation schema, structured callout ingestion, GroundedRegion synthesis, HITL fail-closed protocol, and live Abaqus 2025 closure. True end-to-end computer vision/OCR model ingestion is formally tracked under Phase P1.1).*
 
 - [x] **GA-2B.1: 2D Engineering Drawing Feature & Annotation Parsing**
   - [x] Ingest standard 2D mechanical engineering blueprints (orthographic multi-view projections, section views, datum lines).
@@ -1891,3 +1892,36 @@ These references are design inputs, not instructions to copy their architecture 
 > **Do not add another subsystem when an existing AnalysisRun, ResultRequirement, Evidence, Verification, Acceptance, Provenance, Reporting, Geometry/Region, or Unit component can own the requirement.**
 
 This rule should be used during future code reviews to prevent architectural drift.
+
+---
+
+## 26. Phase P1: Commercial Productization & Autonomous Engineering Agent (P1.0 ~ P1.5)
+
+With all 20 physical engineering domains fully qualified at L4 on authentic Abaqus 2025, the strategic roadmap shifts permanently to **Commercial Productization and Usability**.
+
+For full requirements backlog, input/output schemas, anti-hallucination constraints, and acceptance criteria, refer to the dedicated specification:
+👉 [Phase P1 Commercial Productization Requirements Backlog (p1-product-requirements.md)](p1-product-requirements.md)
+
+### Summary of P1 Tracks
+
+- **P1.0 Agent Product Entry Point (`solve_requirement`) [CLOSED & QUALIFIED ✅]**:
+  - Unified declarative entry point accepting natural language or intent dict.
+  - Fail-closed clarification gate (`NEEDS_CLARIFICATION`) when required engineering parameters are omitted.
+  - Decoupled capability resolver across all 20 L4 physics domains.
+  - Unified `EngineeringTaskResult` container (intent, execution, acceptance, metrics, summary, report).
+- **P1.1 Real Engineering Input Perception (Drawings & Photo OCR) [NEXT UP 🎯]**:
+  - Ingestion of real PNG, JPEG, and PDF mechanical engineering blueprints.
+  - OCR extraction of dimensions, tolerances, surface finishes, and load arrows into `VisualCallout`.
+  - Mandatory Human-in-the-Loop (HITL) gate before synthesizing `EngineeringIntent`.
+- **P1.2 Engineering Reasoning & Parameter Completion [PLANNED]**:
+  - Intelligent material mapping backed by verified CAMPUS/TDS sources.
+  - Bounded mesh recommendations with transparent engineering rationale (strictly zero black-box default guesses).
+- **P1.3 Deliverable-Grade Multidimensional Result Visualization [PLANNED]**:
+  - Automated headless ODB field contour rendering (Mises, Displacement, Contact Pressure).
+  - Dynamic energy-balance history curves and interactive standalone HTML reports.
+- **P1.4 Solver Doctor Diagnostics & Autonomous Remediation [PLANNED]**:
+  - Deep parsing of `.msg`/`.sta` divergence and cutbacks.
+  - Bounded remediation playbooks (stabilization damping, step sizing, boundary adjustments) with diff auditability.
+- **P1.5 Commercial Engineering Workbench (Web / Desktop UI) [PLANNED]**:
+  - Interactive 3D WebGL viewport picking and visual HITL confirmation cards.
+  - Enterprise job queue, token license management, and case memory.
