@@ -1,0 +1,105 @@
+{
+  "case_id": "CASE_03_EXHAUST_MANIFOLD_THERMO_MECHANICAL",
+  "title": "Heavy-Duty Diesel Engine Exhaust Manifold Thermo-Mechanical Contact Analysis",
+  "domain": "engine_thermo_mechanical_contact",
+  "source": "Abaqus 2025 Example Problems - Thermal-Stress Analysis of an Exhaust Manifold; SAE Technical Papers on Heavy-Duty Exhaust System Durability",
+  "problem_description": "Four-cylinder heavy-duty diesel engine exhaust manifold clamped to cylinder head via 8 high-strength preloaded bolts. The manifold experiences cyclical high-temperature exhaust gas (650 deg C) while the cylinder head is liquid-cooled (95 deg C). Analysis evaluates non-uniform temperature distribution, bolt preload retention, differential thermal expansion slip across the gasketed flange, and peak thermal stresses at runner junction fillets.",
+  "geometry": {
+    "manifold_type": "4-into-1 Cast Exhaust Manifold",
+    "overall_length_mm": 520.0,
+    "runner_outer_diameter_mm": 52.0,
+    "runner_wall_thickness_mm": 6.0,
+    "flange_thickness_mm": 18.0,
+    "flange_width_mm": 75.0,
+    "bolt_count": 8,
+    "bolt_nominal_size": "M10 x 1.5 Class 10.9",
+    "bolt_clearance_hole_diameter_mm": 11.5,
+    "bolt_radial_clearance_mm": 0.75,
+    "gasket_type": "Multi-Layer Steel (MLS) Exhaust Gasket",
+    "gasket_nominal_thickness_mm": 1.6
+  },
+  "materials": {
+    "exhaust_manifold_casting": {
+      "material_name": "SiMo Nodular Ductile Cast Iron (EN-GJS-SiMo40-6)",
+      "operating_temperature_range_c": [20.0, 650.0],
+      "density_tonne_mm3": 7.3e-9,
+      "elastic_modulus_at_operating_temp_mpa": 145000.0,
+      "poisson_ratio": 0.28,
+      "thermal_conductivity_w_m_k": 36.0,
+      "specific_heat_j_kg_k": 520.0,
+      "thermal_expansion_coeff_1_k": 1.35e-5,
+      "yield_strength_at_operating_temp_mpa": 240.0,
+      "ultimate_tensile_strength_mpa": 460.0
+    },
+    "cylinder_head_block": {
+      "material_name": "Gray Cast Iron HT250 / A356-T6 Equivalent Cylinder Head Surface",
+      "elastic_modulus_mpa": 125000.0,
+      "poisson_ratio": 0.26,
+      "thermal_conductivity_w_m_k": 48.0,
+      "thermal_expansion_coeff_1_k": 1.15e-5,
+      "effective_coolant_temperature_c": 95.0
+    },
+    "flange_fastener_studs": {
+      "material_name": "High-Strength Alloy Steel Fastener (ISO 898-1 Class 10.9)",
+      "elastic_modulus_mpa": 205000.0,
+      "poisson_ratio": 0.3,
+      "nominal_tensile_stress_area_mm2": 58.0,
+      "nominal_preload_per_bolt_n": 25000.0,
+      "proof_load_capacity_per_bolt_n": 48000.0,
+      "thermal_expansion_coeff_1_k": 1.2e-5
+    }
+  },
+  "loading_procedure": [
+    {
+      "step_number": 0,
+      "step_name": "Step-0-SteadyStateThermal",
+      "type": "HEAT_TRANSFER",
+      "description": "Steady-state convective heat transfer: exhaust runners internal convection (T_gas = 650 deg C, h = 320 W/m2-K); external ambient cooling (T_ambient = 50 deg C, h = 25 W/m2-K); cylinder head interface coolant conduction (T_head = 95 deg C). Generates spatial temperature field NT11.",
+      "boundary": "Prescribed coolant boundary temperature on cylinder head back-face",
+      "internal_gas_temperature_c": 650.0,
+      "cylinder_head_temperature_c": 95.0
+    },
+    {
+      "step_number": 1,
+      "step_name": "Step-1-BoltPretension",
+      "type": "STATIC_GENERAL",
+      "description": "Uniform cold bolt clamping: 8 bolts tensioned to 25.0 kN each (200.0 kN total clamping force) establishing initial normal contact pressure and seating the MLS gasket.",
+      "total_preload_all_bolts_n": 200000.0,
+      "nominal_preload_per_bolt_n": 25000.0,
+      "temperature_c": 20.0
+    },
+    {
+      "step_number": 2,
+      "step_name": "Step-2-ThermoMechanicalOperational",
+      "type": "STATIC_GENERAL_COUPLED",
+      "description": "Lock bolt length (LOCK_LENGTH) and sequentially map the non-uniform temperature field NT11 from Step 0. Thermal expansion causes outward runner expansion, differential sliding (slip) against the cylinder head, and high thermal stress concentrations at runner junctions.",
+      "bolt_condition": "LOCK_LENGTH",
+      "temperature_field_source": "Step-0-SteadyStateThermal.odb"
+    }
+  ],
+  "contact_interaction": {
+    "interface": "Manifold Flange to Cylinder Head via MLS Gasket",
+    "normal_behavior": "Hard Contact Penalty Formulation",
+    "tangential_behavior": "Isotropic Coulomb Friction (mu = 0.20)",
+    "friction_coefficient": 0.2
+  },
+  "acceptance_criteria": {
+    "thermal_balance_energy_error_max_percent": 0.1,
+    "max_thermal_stress_junction_mises_mpa": 240.0,
+    "flange_max_differential_slip_mm": 0.75,
+    "min_operating_gasket_contact_pressure_mpa": 25.0,
+    "max_operating_bolt_tension_n": 38000.0,
+    "bolt_safety_factor_min": 1.25,
+    "reaction_force_balance_max_error_percent": 0.1
+  },
+  "reference_benchmarks": {
+    "max_operating_temperature_c": 615.4,
+    "min_operating_flange_temperature_c": 132.8,
+    "step_1_avg_gasket_contact_pressure_mpa": 48.5,
+    "step_2_operating_gasket_contact_pressure_mpa": 38.6,
+    "step_2_max_flange_thermal_slip_mm": 0.42,
+    "step_2_peak_thermal_mises_stress_mpa": 215.8,
+    "step_2_operating_bolt_tension_n": 28420.0,
+    "thermal_balance_relative_error_percent": 0.024
+  }
+}

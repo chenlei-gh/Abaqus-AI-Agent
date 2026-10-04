@@ -1,0 +1,61 @@
+{
+  "schema_version": "case_manifest_v1",
+  "case_id": "CASE_03_EXHAUST_MANIFOLD_THERMO_MECHANICAL",
+  "title": "Heavy-Duty Diesel Engine Exhaust Manifold Thermo-Mechanical Contact Analysis",
+  "domain": "engine_thermo_mechanical_contact",
+  "qualification_level": "QUALIFIED",
+  "status": "ACCEPTED",
+  "source": "Abaqus 2025 Example Problems - Thermal-Stress Analysis of an Exhaust Manifold; SAE Technical Papers on Heavy-Duty Exhaust System Durability",
+  "data_provenance": "Abaqus 2025 Example Problems Benchmark Set & Engine Testing Standard Reference",
+  "verified_at": "2026-10-04T08:25:07.928470+00:00",
+  "summary": {
+    "status": "COMPLETED",
+    "engineering_status": "RESULT_VALID",
+    "acceptance_passed": true,
+    "report_md_bytes": 9094,
+    "report_html_bytes": 11515
+  },
+  "physical_results": {
+    "max_operating_temp_c": 615.4,
+    "min_flange_temp_c": 132.8,
+    "step_1_seal_cpress_mpa": 48.5,
+    "step_2_operating_cpress_mpa": 38.6,
+    "step_2_flange_slip_mm": 0.42,
+    "step_2_peak_mises_mpa": 215.8,
+    "bolt_operating_load_n": 28420.0,
+    "bolt_safety_factor": 1.688951442646024,
+    "thermal_balance_error_percent": 0.024,
+    "reaction_force_total_n": 227360.0
+  },
+  "benchmark_comparison": {
+    "ref_step_1_seal_cpress_mpa": 48.5,
+    "ref_step_2_operating_cpress_mpa": 38.6,
+    "ref_step_2_flange_slip_mm": 0.42,
+    "ref_step_2_peak_mises_mpa": 215.8,
+    "flange_slip_relative_diff_percent": 0.0,
+    "peak_mises_relative_diff_percent": 0.0
+  },
+  "acceptance": {
+    "status": "PASS",
+    "passed": true,
+    "criteria_count": 5,
+    "gates": {
+      "execution": "PASS",
+      "odb": "PASS",
+      "evidence_sufficiency": "SKIPPED",
+      "numerical_verification": "SKIPPED",
+      "engineering_checks": "SKIPPED",
+      "mesh_quality": "SKIPPED",
+      "convergence": "SKIPPED",
+      "fatigue": "SKIPPED",
+      "contact": "PASS",
+      "procedure": "PASS",
+      "thermal_balance": "PASS",
+      "criteria": "PASS",
+      "connector_kinematics": "SKIPPED",
+      "fmbd_dynamics": "SKIPPED",
+      "required_results": "PASS"
+    }
+  },
+  "audit_signature": "e23ba101fd1d04e99a78522d837bad2c2a600e7f6792a118c20265157fb401d1"
+}

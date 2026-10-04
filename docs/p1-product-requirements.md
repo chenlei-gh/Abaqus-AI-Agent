@@ -684,7 +684,7 @@ Benchmark 必须区分软件回归与真实 Abaqus 物理验证。
 | Phase 2 (Package A) | REQ-P2-003 FMBD 工程场景深度 | 🟢 **QUALIFIED** (Gate 14, 刚柔耦合, 能量耗散 < 1%) |
 | Phase 2 (Package A) | REQ-P2-004 多物理 / 多工况组合验证 | 🟢 **QUALIFIED** (热-固传递, 预紧模态应力刚化, 库伦摩擦接触) |
 | Phase 2 (Package A) | REQ-P2-005 Phase 2 组合 Golden Matrix 收口 | 🟢 **QUALIFIED** (`p2_package_a_manifest.json` 密码学验签) |
-| Phase 2 (Package B) | REQ-P2-006 10 个真实复杂工程问题实战终验包 | 🟡 **IN PROGRESS (2/10 QUALIFIED)**: Case 1 法兰连接 & Case 2 RPV 反应堆闭合结构闭环 |
+| Phase 2 (Package B) | REQ-P2-006 10 个真实复杂工程问题实战终验包 | 🟡 **IN PROGRESS (3/10 QUALIFIED)**: Case 1 法兰连接、Case 2 RPV 反应堆闭合结构、Case 3 发动机排气歧管热机械接触闭环 |
 | Phase 3 | Planning | ⚪ POST-FREEZE ROADMAP |
 | Phase 3 | Clarification | ⚪ POST-FREEZE ROADMAP |
 | Phase 3 | Iteration | ⚪ POST-FREEZE ROADMAP |

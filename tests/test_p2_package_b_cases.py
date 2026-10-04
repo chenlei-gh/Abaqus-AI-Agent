@@ -26,6 +26,8 @@ CASE_01_PROBLEM = ROOT / "test_assets" / "engineering_cases" / "case_01_bolted_p
 CASE_01_MANIFEST = ROOT / "machine_validation" / "p2_cases" / "case_01_flange_manifest.json"
 CASE_02_PROBLEM = ROOT / "test_assets" / "engineering_cases" / "case_02_reactor_pressure_vessel_closure" / "problem_statement.json"
 CASE_02_MANIFEST = ROOT / "machine_validation" / "p2_cases" / "case_02_rpv_manifest.json"
+CASE_03_PROBLEM = ROOT / "test_assets" / "engineering_cases" / "case_03_exhaust_manifold_thermo_mechanical" / "problem_statement.json"
+CASE_03_MANIFEST = ROOT / "machine_validation" / "p2_cases" / "case_03_manifold_manifest.json"
 
 
 def test_case_01_problem_statement_specification():
@@ -218,3 +220,152 @@ def test_case_02_negative_probe_sealing_and_stress_failure():
     assert res.status == "FAIL"
     assert any("criterion:min_metallic_seal_design_cpress" in f for f in res.failures)
     assert any("criterion:max_asme_linearized_pl_pb_stress" in f for f in res.failures)
+
+
+def test_case_03_problem_statement_specification():
+    assert CASE_03_PROBLEM.is_file(), f"Problem statement missing at {CASE_03_PROBLEM}"
+    with open(CASE_03_PROBLEM, "r", encoding="utf-8") as f:
+        problem = json.load(f)
+
+    assert problem.get("case_id") == "CASE_03_EXHAUST_MANIFOLD_THERMO_MECHANICAL"
+    assert "Exhaust Manifold" in problem.get("title", "")
+    assert problem.get("geometry", {}).get("bolt_count") == 8
+    assert problem.get("geometry", {}).get("bolt_radial_clearance_mm") == 0.75
+    assert len(problem.get("loading_procedure", [])) == 3
+    assert problem.get("acceptance_criteria", {}).get("min_operating_gasket_contact_pressure_mpa") == 25.0
+    assert problem.get("acceptance_criteria", {}).get("max_thermal_stress_junction_mises_mpa") == 240.0
+
+
+def test_case_03_manifold_manifest_integrity():
+    assert CASE_03_MANIFEST.is_file(), f"Manifest missing at {CASE_03_MANIFEST}"
+
+    with open(CASE_03_MANIFEST, "r", encoding="utf-8") as f:
+        manifest = json.load(f)
+
+    # 1. Metadata and schema verification
+    assert manifest.get("schema_version") == "case_manifest_v1"
+    assert manifest.get("case_id") == "CASE_03_EXHAUST_MANIFOLD_THERMO_MECHANICAL"
+    assert manifest.get("qualification_level") == "QUALIFIED"
+    assert manifest.get("status") == "ACCEPTED"
+
+    # 2. Cryptographic signature check
+    signature = manifest.get("audit_signature")
+    assert signature is not None and len(signature) == 64
+
+    manifest_copy = dict(manifest)
+    manifest_copy.pop("audit_signature", None)
+    expected_hash = hashlib.sha256(
+        json.dumps(manifest_copy, sort_keys=True).encode("utf-8")
+    ).hexdigest()
+    assert signature == expected_hash, "Cryptographic audit signature mismatch or manifest tampered!"
+
+    # 3. Summary & Deliverable Reports check
+    summary = manifest.get("summary", {})
+    assert summary.get("status") == "COMPLETED"
+    assert summary.get("engineering_status") == "RESULT_VALID"
+    assert summary.get("acceptance_passed") is True
+    assert summary.get("report_md_bytes", 0) > 3000
+    assert summary.get("report_html_bytes", 0) > 4000
+
+    # 4. Physical results check
+    phys = manifest.get("physical_results", {})
+    assert phys.get("max_operating_temp_c", 0.0) >= 600.0
+    assert phys.get("step_1_seal_cpress_mpa", 0.0) >= 40.0
+    assert phys.get("step_2_operating_cpress_mpa", 0.0) >= 25.0  # Sealing criterion
+    assert phys.get("step_2_flange_slip_mm", 10.0) <= 0.75      # Clearance limit
+    assert phys.get("step_2_peak_mises_mpa", 1000.0) <= 240.0   # High-temperature yield limit
+    assert phys.get("bolt_safety_factor", 0.0) >= 1.25
+    assert phys.get("thermal_balance_error_percent", 1.0) <= 0.1
+
+    # 5. Benchmark comparison check
+    bench = manifest.get("benchmark_comparison", {})
+    assert bench.get("flange_slip_relative_diff_percent", 100.0) < 5.0
+    assert bench.get("peak_mises_relative_diff_percent", 100.0) < 5.0
+
+    # 6. Single-exit acceptance check
+    acc = manifest.get("acceptance", {})
+    assert acc.get("status") == "PASS"
+    assert acc.get("passed") is True
+    assert acc.get("criteria_count") == 5
+
+
+def test_case_03_negative_probes_thermal_stress_slip_and_sealing():
+    """Negative Probes: Excessive thermal stress, excessive flange slip, or insufficient gasket sealing must FAIL."""
+    class MockContactDiag:
+        def __init__(self):
+            self.diagnostics = [type("Diag", (), {"status": "pass"})()]
+
+    criteria = [
+        {"name": "min_operating_gasket_cpress", "value_key": "contact_pressure", "operator": ">=", "limit": 25.0, "unit": "MPa"},
+        {"name": "max_flange_differential_slip", "value_key": "flange_slip", "operator": "<=", "limit": 0.75, "unit": "mm"},
+        {"name": "max_junction_fillet_mises", "value_key": "max_mises", "operator": "<=", "limit": 240.0, "unit": "MPa"},
+    ]
+
+    # Probe 1: Peak thermal stress exceeds yield limit (265 MPa > 240 MPa)
+    failed_values_stress = {
+        "contact_pressure": 38.6,
+        "frictional_shear": 7.7,
+        "flange_slip": 0.42,
+        "max_mises": 265.0,
+        "max_displacement": 0.48,
+        "max_temperature": 615.4,
+        "reaction_force": 227360.0,
+    }
+    res_stress = evaluate_result_acceptance(
+        result_status="completed",
+        values=failed_values_stress,
+        criteria=criteria,
+        contact_diagnostics=MockContactDiag(),
+        thermal_balance=True,
+        odb_fields=["NT", "S", "U", "RF", "CPRESS", "CSLIP", "CSHEAR"],
+        physics_domain="thermal_structural",
+        require_evidence=False,
+    )
+    assert not res_stress.passed
+    assert any("criterion:max_junction_fillet_mises" in f for f in res_stress.failures)
+
+    # Probe 2: Excessive slip causes bolt clearance interference (0.85 mm > 0.75 mm)
+    failed_values_slip = {
+        "contact_pressure": 38.6,
+        "frictional_shear": 7.7,
+        "flange_slip": 0.85,
+        "max_mises": 215.8,
+        "max_displacement": 0.98,
+        "max_temperature": 615.4,
+        "reaction_force": 227360.0,
+    }
+    res_slip = evaluate_result_acceptance(
+        result_status="completed",
+        values=failed_values_slip,
+        criteria=criteria,
+        contact_diagnostics=MockContactDiag(),
+        thermal_balance=True,
+        odb_fields=["NT", "S", "U", "RF", "CPRESS", "CSLIP", "CSHEAR"],
+        physics_domain="thermal_structural",
+        require_evidence=False,
+    )
+    assert not res_slip.passed
+    assert any("criterion:max_flange_differential_slip" in f for f in res_slip.failures)
+
+    # Probe 3: Gasket sealing failure (18 MPa < 25 MPa)
+    failed_values_sealing = {
+        "contact_pressure": 18.0,
+        "frictional_shear": 3.6,
+        "flange_slip": 0.42,
+        "max_mises": 215.8,
+        "max_displacement": 0.48,
+        "max_temperature": 615.4,
+        "reaction_force": 227360.0,
+    }
+    res_sealing = evaluate_result_acceptance(
+        result_status="completed",
+        values=failed_values_sealing,
+        criteria=criteria,
+        contact_diagnostics=MockContactDiag(),
+        thermal_balance=True,
+        odb_fields=["NT", "S", "U", "RF", "CPRESS", "CSLIP", "CSHEAR"],
+        physics_domain="thermal_structural",
+        require_evidence=False,
+    )
+    assert not res_sealing.passed
+    assert any("criterion:min_operating_gasket_cpress" in f for f in res_sealing.failures)

@@ -43,3 +43,4 @@ legacy_job_artifacts/
 *.lck
 *.fil
 *.sim
+test_assets/runs/

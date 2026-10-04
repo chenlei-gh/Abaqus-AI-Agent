@@ -42,9 +42,9 @@
 ```text
 Package B: 10 Authentic Complex Engineering Projects
 ├── Case 01: Bolted Pipe Flange Connection with Gasket Sealing [QUALIFIED]
-├── Case 02: Reactor Pressure Vessel (RPV) Bolted Closure Joint [IN PROGRESS]
-├── Case 03: Heavy-Duty Engine Exhaust Manifold Thermo-Mechanical Contact
-├── Case 04: Automotive Front Subframe Multi-Axis Durability & Fatigue
+├── Case 02: Reactor Pressure Vessel (RPV) Bolted Closure Joint [QUALIFIED]
+├── Case 03: Heavy-Duty Engine Exhaust Manifold Thermo-Mechanical Contact [QUALIFIED]
+├── Case 04: Automotive Front Subframe Multi-Axis Durability & Fatigue [IN PROGRESS]
 ├── Case 05: Open-Hole Composite Cylindrical Shell Buckling & Post-Buckling
 ├── Case 06: Multi-Stage Sheet Metal Assembly with Submodeling
 ├── Case 07: Automotive Suspension Hyperelastic Jounce Bumper Self-Contact
