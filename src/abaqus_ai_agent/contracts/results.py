@@ -101,7 +101,11 @@ _RESULT_QUANTITIES = {
     "connector_position": "displacement",
     "joint_drift": "displacement",
     "revolute_joint_drift": "displacement",
+    "fmbd_drift": "displacement",
     "relative_articulation": "angle",
+    "max_mises_stress": "stress",
+    "strain_energy_ratio": "energy",
+    "energy_dissipation_ratio": "energy",
 }
 
 
@@ -141,6 +145,7 @@ _FIELD_ALIASES = {
     "max_strain": ("E", "MISES"),
     "max_reaction_force": ("RF", "MAGNITUDE"),
     "max_rf": ("RF", "MAGNITUDE"),
+    "max_mises_stress": ("S", "MISES"),
     "connector_relative_motion": ("CU", "MAGNITUDE"),
     "connector_relative_displacement": ("CU", "MAGNITUDE"),
     "connector_force": ("CTF", "MAGNITUDE"),
@@ -347,6 +352,17 @@ def get_physics_result_profile(domain: str, **custom_overrides) -> PhysicsResult
             gate_justifications={
                 "contact": "Discrete kinematic connector elements; continuous contact diagnostics not applicable.",
                 "fatigue": "Kinematic mechanism motion; high-cycle fatigue not requested.",
+            },
+        )
+    elif d in ("fmbd", "flexible_multibody", "rigid_flexible_coupling", "fmbd_dynamics"):
+        prof = PhysicsResultProfile(
+            domain="fmbd",
+            required_fields=("S", "U", "CU", "CTF"),
+            required_metrics=("joint_drift", "max_mises_stress", "strain_energy_ratio", "energy_dissipation_ratio"),
+            required_gates=("execution", "odb", "fmbd_dynamics", "criteria"),
+            gate_justifications={
+                "contact": "Coupled rigid-flexible mechanism via kinematic coupling and connectors; continuous contact diagnostics not required.",
+                "fatigue": "Nonlinear transient flexible multibody dynamic analysis; high-cycle fatigue not requested.",
             },
         )
     elif d in ("multi_step", "bolt_service", "bolt_pretension"):

@@ -18,6 +18,11 @@ from ..contracts.connector import (
     ConnectorBehaviorSpec,
     CONNECTOR_TYPES_REQUIRING_ORIENTATION,
 )
+from ..contracts.fmbd import (
+    IntentFMBDSpec,
+    RigidBodySpec,
+    FlexibleInterfaceSpec,
+)
 from ..contracts.material import MaterialDefinition
 from ..contracts.procedure import (
     BoltPretensionLifecycleSpec,
@@ -141,6 +146,7 @@ def compile_intent_to_actions(
     predefined_fields: Optional[Sequence[IntentPredefinedFieldSpec]] = None,
     fatigue: Optional[IntentFatigueSpec] = None,
     connectors: Optional[Sequence[IntentConnectorSpec]] = None,
+    fmbd: Optional[IntentFMBDSpec] = None,
     submit_job: bool = False,
 ) -> CompiledAgentPlan:
     """Compile structured engineering intent into an ordered sequence of AbaqusActions."""
@@ -488,8 +494,14 @@ def compile_intent_to_actions(
                 actions.append(builders.python_action(model_name, pf_code))
 
     # 6d. Kinematic Connectors & Joints
-    if connectors:
-        for c_spec in connectors:
+    all_connectors = list(connectors or ())
+    if fmbd and fmbd.connectors:
+        for fc in fmbd.connectors:
+            if fc not in all_connectors:
+                all_connectors.append(fc)
+
+    if all_connectors:
+        for c_spec in all_connectors:
             p1_name = c_spec.endpoint_a.reference_point_name or c_spec.endpoint_a.semantic_region or f"{c_spec.name}_RP_A"
             p2_name = c_spec.endpoint_b.reference_point_name or c_spec.endpoint_b.semantic_region or f"{c_spec.name}_RP_B"
 
@@ -559,6 +571,46 @@ def compile_intent_to_actions(
                 orientation=orient_ref,
                 wire_feature_name=c_spec.wire_feature_name,
                 wire_set_name=c_spec.wire_set_name,
+            ))
+
+    # 6e. Flexible Multibody Dynamics (FMBD) Rigid Bodies & Flexible Coupling Interfaces
+    if fmbd:
+        for rb in fmbd.rigid_bodies:
+            if rb.point_coords is not None:
+                actions.append(builders.reference_point(model=model_name, name=rb.ref_point_name, coordinates=rb.point_coords))
+            actions.append(builders.rigid_body(
+                model=model_name,
+                name=rb.name,
+                ref_point_expression=rb.ref_point_expression,
+                body_expression=rb.body_region,
+                tie_region=rb.tie_region,
+                pin_region=rb.pin_region,
+            ))
+
+        for fi in fmbd.flexible_interfaces:
+            cp_name = fi.effective_control_point
+            if fi.effective_coords is not None:
+                actions.append(builders.reference_point(model=model_name, name=cp_name, coordinates=fi.effective_coords))
+            actions.append(builders.coupling_constraint(
+                model=model_name,
+                name=fi.name,
+                control_point_name=cp_name,
+                surface_expression=fi.effective_surface_region,
+                coupling_type=fi.coupling_type,
+                influence_radius=fi.influence_radius,
+                u1=fi.u1, u2=fi.u2, u3=fi.u3,
+                ur1=fi.ur1, ur2=fi.ur2, ur3=fi.ur3,
+            ))
+
+        if fmbd.gravity is not None:
+            g_step = default_step_name
+            actions.append(builders.gravity(
+                model=model_name,
+                name=f"Gravity_{fmbd.name}",
+                comp1=fmbd.gravity[0],
+                comp2=fmbd.gravity[1],
+                comp3=fmbd.gravity[2],
+                step=g_step,
             ))
 
     # 7. Moment / Torque & Coupling Actions (defined before BCs so BCs can attach to RP if coupled)
@@ -1060,13 +1112,26 @@ def compile_intent_to_actions(
         )
         actions.append(builders.python_action(model_name, fatigue_out_req))
 
-    if connectors:
+    if connectors or (fmbd and fmbd.connectors):
         conn_out_req = (
             f"import step\n"
             f"for _for_name in list(mdb.models['{model_name}'].fieldOutputRequests.keys()):\n"
             f"    mdb.models['{model_name}'].fieldOutputRequests[_for_name].setValues(variables=('CU', 'CTF', 'U', 'UR', 'RF', 'RM'))\n"
         )
         actions.append(builders.python_action(model_name, conn_out_req))
+
+    if fmbd is not None:
+        fmbd_field_out = (
+            f"import step\n"
+            f"for _for_name in list(mdb.models['{model_name}'].fieldOutputRequests.keys()):\n"
+            f"    mdb.models['{model_name}'].fieldOutputRequests[_for_name].setValues(variables=('S', 'U', 'UR', 'V', 'VR', 'CU', 'CTF', 'RF', 'RM'))\n"
+        )
+        actions.append(builders.python_action(model_name, fmbd_field_out))
+        fmbd_hist_out = (
+            f"if 'H-Output-1' in mdb.models['{model_name}'].historyOutputRequests:\n"
+            f"    mdb.models['{model_name}'].historyOutputRequests['H-Output-1'].setValues(variables=('ALLIE', 'ALLKE', 'ALLWK', 'ALLSE', 'ETOTAL'))\n"
+        )
+        actions.append(builders.python_action(model_name, fmbd_hist_out))
 
     if any("explicit" in s.lower() for s in defined_steps):
         out_req_code = (
@@ -1121,7 +1186,9 @@ def compile_intent_to_actions(
         "moments_count": len(moments) if moments else 0,
         "interactions_count": len(interactions) if interactions else 0,
         "predefined_fields_count": len(predefined_fields) if predefined_fields else 0,
-        "connectors_count": len(connectors) if connectors else 0,
+        "connectors_count": len(all_connectors) if all_connectors else 0,
+        "fmbd_specs_count": (len(fmbd.rigid_bodies) + len(fmbd.flexible_interfaces)) if fmbd else 0,
+        "fmbd": fmbd.to_dict() if fmbd else None,
         "fatigue": fatigue.to_dict() if fatigue else None,
     }
 

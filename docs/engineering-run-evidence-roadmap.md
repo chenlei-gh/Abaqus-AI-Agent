@@ -14,8 +14,8 @@ RC1 freezes the existing engineering capability boundary rather than expanding t
 
 ### 20-domain qualification split
 
-- **19 L4 Agent Full-Chain domains:** Linear Static; Nonlinear Static; Contact & Friction; Bolt Pretension; Thermal; Sequential Thermal-Structural; Modal/Frequency; Preloaded Modal; Explicit Dynamics; Implicit Dynamics; High-Cycle Fatigue; Multi-Step Procedure; Spatial Field Loading; Kinematic Connectors; Assembly & Tie Interaction; Mesh Quality & GCI; Material Constitutive; Boundary & Load Grounding; Result Acceptance & Engineering Report.
-- **1 L3 Specialized Workflow domain:** Flexible Multibody (FMBD).
+- **20 L4 Agent Full-Chain domains:** Linear Static; Nonlinear Static; Contact & Friction; Bolt Pretension; Thermal; Sequential Thermal-Structural; Modal/Frequency; Preloaded Modal; Explicit Dynamics; Implicit Dynamics; High-Cycle Fatigue; Multi-Step Procedure; Spatial Field Loading; Kinematic Connectors; Flexible Multibody (FMBD); Assembly & Tie Interaction; Mesh Quality & GCI; Material Constitutive; Boundary & Load Grounding; Result Acceptance & Engineering Report.
+- **0 L3 Specialized Workflow domains remaining:** All 20 physical engineering domains fully qualified at L4 Agent Full-Chain.
 
 L4 requires the canonical path:
 
@@ -1639,8 +1639,16 @@ In practical engineering practice, user requests do not arrive as pre-grounded A
   - Full canonical chain: `EngineeringIntent(connectors=(IntentConnectorSpec(...),))` $\to$ `compile_intent_to_actions` (automatic RP, DatumCsys, ConnectorSection, WireConnector, and CU/CTF extraction injection) $\to$ `preflight_plan` (0 blockers) $\to$ live Abaqus 2025 Standard solver $\to$ real ODB $\to$ `ConnectorKinematicsVerification` $\to$ Gate 13 (`connector_kinematics`) $\to$ `ACCEPTED` & `RESULT_VALID`.
   - Stated scope: CONN3D2, HINGE / standard connection types, DatumCsys orientation, elasticity/damping behavior, ODB CU/CTF extraction, double pendulum benchmark ($T_1$ error 0.54%, joint drift $9.78\times 10^{-6}$ mm $\le 10^{-3}$ mm, relative rotation $6.96^\circ \ge 2^\circ$, energy dissipation $2.13\% \le 3\%$).
   - Verified 9 negative fail-closed probes (missing endpoints, self-connection, undefined section, missing orientation, invalid types, missing required ODB fields, evidence tampering, semantic tampering, physical criteria violation).
-  - Persisted certified cryptographic manifest in `machine_validation/connector_l4_manifest.json` (Tier `REAL_ABAQUS`). Capability split: **19 L4 + 1 L3** (FMBD remains the sole L3).
-- [ ] **Track GA-M3: Flexible Multibody Dynamics (FMBD)** [L3 Stable / Next Milestone]: Dedicated FMBD Golden workflow with live Abaqus evidence; direct compiler synthesis scheduled post-Connector L4.
+  - Persisted certified cryptographic manifest in `machine_validation/connector_l4_manifest.json` (Tier `REAL_ABAQUS`).
+- [x] **Track GA-M4: Flexible Multibody Dynamics (FMBD)** [CLOSED & QUALIFIED AT L4]:
+  - Promoted Flexible Multibody Dynamics (FMBD) to **L4 (Agent Full-Chain Qualified, stated rigid-flexible coupling scope)**.
+  - Implemented `IntentFMBDSpec`, `RigidBodySpec`, `FlexibleInterfaceSpec`, and `FMBDKinematicsVerification` in `contracts/fmbd.py` and wired into `EngineeringIntent.fmbd`.
+  - Canonical compiler integration in `compile_intent_to_actions()`: automated Reference Point synthesis, native `rigid_body` constraints, native `coupling_constraint` (KINEMATIC/DISTRIBUTING), connector coupling, gravity loading, and automatic `S, U, UR, V, VR, CU, CTF, RF, RM` field output and `ALLIE, ALLKE, ALLWK, ALLSE, ETOTAL` history output injection.
+  - Strict preflight lifecycle gate in `preflight_action()` and `preflight_plan()`: checks coupling control point and surface existence and distinctness, rigid body distinct regions, and connector sections with 0 blockers.
+  - ODB result extraction and acceptance: Gate 14 `fmbd_dynamics` integrated into `evaluate_result_acceptance()` and `AnalysisRunner.run()`. Physics profile for `fmbd` enforcing required fields (`S, U, CU, CTF`), required metrics (`joint_drift, max_mises_stress, strain_energy_ratio, energy_dissipation_ratio`), and required gates.
+  - Live Abaqus 2025 Standard execution in `tools/fmbd_l4_golden_e2e.py`: coupled rigid crank and flexible link under gravity; 336 frames; joint drift $3.13\times 10^{-10}\text{ mm} \le 10^{-3}\text{ mm}$, flexible link max Mises $0.0435\text{ MPa}$, strain energy ratio $0.9993 \ge 0.01$, energy dissipation ratio $0.0056 \le 0.05$.
+  - 9 negative boundary probes verified fail-closed (missing coupling control point, missing surface, identical endpoints, undefined connector section, missing local orientation, missing mandatory gate, evidence tampering, rigid body self-tie, strict physical drift violation).
+  - Persisted certified cryptographic manifest in `machine_validation/fmbd_l4_manifest.json` (Tier `REAL_ABAQUS`). Capability split: **20 L4 / 0 L3 (100% Agent Full-Chain Qualified across all 20 physical engineering domains)**.
 
 ---
 

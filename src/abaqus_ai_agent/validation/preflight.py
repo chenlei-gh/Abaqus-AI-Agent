@@ -176,6 +176,33 @@ def preflight_action(action, snapshot=None):
     if action.action_type == "rigid_body":
         check("name", bool(action.parameters.get("name")))
         check("ref_point_expression", bool(action.parameters.get("ref_point_expression")))
+        rp = action.parameters.get("ref_point_expression")
+        tie = action.parameters.get("tie_region")
+        body = action.parameters.get("body_expression")
+        if rp and tie:
+            check("rigid_body_distinct_tie", str(rp).strip() != str(tie).strip(), f"ref point and tie region cannot be identical: {rp}")
+        if rp and body:
+            check("rigid_body_distinct_body", str(rp).strip() != str(body).strip(), f"ref point and body region cannot be identical: {rp}")
+
+    if action.action_type == "coupling_constraint":
+        check("name", bool(action.parameters.get("name")))
+        p_name = action.parameters.get("name")
+        cp = (
+            action.parameters.get("control_point_name")
+            or action.parameters.get("control_point_expression")
+            or action.parameters.get("control_point")
+            or action.parameters.get("ref_point_expression")
+        )
+        check("control_point", bool(cp), f"Coupling '{p_name}' missing control point")
+        surf = (
+            action.parameters.get("surface_name")
+            or action.parameters.get("surface_expression")
+            or action.parameters.get("surface")
+            or action.parameters.get("surface_region")
+        )
+        check("surface", bool(surf), f"Coupling '{p_name}' missing surface expression")
+        if cp and surf:
+            check("coupling_distinct", str(cp).strip() != str(surf).strip(), f"Coupling '{p_name}' control point and surface cannot be identical: {cp}")
 
     if action.action_type == "connector_section":
         check("name", bool(action.parameters.get("name")))
@@ -316,6 +343,77 @@ def preflight_plan(actions: Sequence, snapshot=None) -> PlanPreflightResult:
                     "name": "connector_not_self_connected",
                     "ok": False,
                     "detail": f"Wire connector '{w_name}' connects identical endpoint '{p1}'",
+                    "action_index": idx,
+                    "action_type": action.action_type,
+                }
+                all_checks.append(item)
+                all_blockers.append(item)
+
+        if action.action_type == "rigid_body":
+            rb_name = action.parameters.get("name")
+            rp = action.parameters.get("ref_point_expression")
+            tie = action.parameters.get("tie_region")
+            body = action.parameters.get("body_expression")
+            if not rp:
+                item = {
+                    "name": "rigid_body_ref_point_required",
+                    "ok": False,
+                    "detail": f"Rigid body '{rb_name}' missing reference point",
+                    "action_index": idx,
+                    "action_type": action.action_type,
+                }
+                all_checks.append(item)
+                all_blockers.append(item)
+            if rp and tie and str(rp).strip() == str(tie).strip():
+                item = {
+                    "name": "rigid_body_distinct_regions",
+                    "ok": False,
+                    "detail": f"Rigid body '{rb_name}' ref point and tie region are identical: '{rp}'",
+                    "action_index": idx,
+                    "action_type": action.action_type,
+                }
+                all_checks.append(item)
+                all_blockers.append(item)
+
+        if action.action_type == "coupling_constraint":
+            c_name = action.parameters.get("name")
+            cp = (
+                action.parameters.get("control_point_name")
+                or action.parameters.get("control_point_expression")
+                or action.parameters.get("control_point")
+                or action.parameters.get("ref_point_expression")
+            )
+            surf = (
+                action.parameters.get("surface_name")
+                or action.parameters.get("surface_expression")
+                or action.parameters.get("surface")
+                or action.parameters.get("surface_region")
+            )
+            if not cp:
+                item = {
+                    "name": "coupling_control_point_required",
+                    "ok": False,
+                    "detail": f"Coupling constraint '{c_name}' missing control point reference",
+                    "action_index": idx,
+                    "action_type": action.action_type,
+                }
+                all_checks.append(item)
+                all_blockers.append(item)
+            if not surf:
+                item = {
+                    "name": "coupling_surface_required",
+                    "ok": False,
+                    "detail": f"Coupling constraint '{c_name}' missing surface reference",
+                    "action_index": idx,
+                    "action_type": action.action_type,
+                }
+                all_checks.append(item)
+                all_blockers.append(item)
+            if cp and surf and str(cp).strip() == str(surf).strip():
+                item = {
+                    "name": "coupling_distinct_endpoints",
+                    "ok": False,
+                    "detail": f"Coupling constraint '{c_name}' connects identical control point and surface: '{cp}'",
                     "action_index": idx,
                     "action_type": action.action_type,
                 }

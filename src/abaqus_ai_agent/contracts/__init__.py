@@ -72,3 +72,10 @@ from .connector import (
     ConnectorKinematicsVerification,
     CONNECTOR_TYPES_REQUIRING_ORIENTATION,
 )
+from .fmbd import (
+    BodyType,
+    RigidBodySpec,
+    FlexibleInterfaceSpec,
+    IntentFMBDSpec,
+    FMBDKinematicsVerification,
+)

@@ -12,6 +12,13 @@ from .connector import (
     CONNECTOR_TYPES_REQUIRING_ORIENTATION,
 )
 from .fatigue import IntentFatigueSpec
+from .fmbd import (
+    BodyType,
+    RigidBodySpec,
+    FlexibleInterfaceSpec,
+    IntentFMBDSpec,
+    FMBDKinematicsVerification,
+)
 from .geometry import ImagePoint
 
 
@@ -41,3 +48,4 @@ class EngineeringIntent:
     metadata: Dict[str, Any] = field(default_factory=dict)
     fatigue: Optional[IntentFatigueSpec] = None
     connectors: tuple = ()
+    fmbd: Optional[IntentFMBDSpec] = None

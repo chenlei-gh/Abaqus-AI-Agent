@@ -1,0 +1,95 @@
+{
+  "schema_version": "fmbd_l4_golden_v1",
+  "case_id": "MP_FMBD_L4_Golden",
+  "evidence_tier": "REAL_ABAQUS",
+  "solver": "Abaqus 2025",
+  "verified_at": "2026-10-04T04:43:25.488481+00:00",
+  "status": "QUALIFIED",
+  "compiler_chain_verified": true,
+  "run_id": "run_fmbd_l4_real_20261004_124325",
+  "workflow": {
+    "intent_fmbd_contract": "PASS",
+    "canonical_compiler": "PASS",
+    "preflight_checks": "PASS",
+    "live_solver_execution": "PASS",
+    "odb_extraction": "PASS",
+    "fmbd_dynamics_gate": "PASS",
+    "evidence_v2_manifest": "PASS",
+    "acceptance": "PASS"
+  },
+  "negative_probes": {
+    "probe_1_missing_control_point": "PASS",
+    "probe_2_missing_surface": "PASS",
+    "probe_3_identical_coupling_endpoints": "PASS",
+    "probe_4_undefined_section": "PASS",
+    "probe_5_missing_orientation": "PASS",
+    "probe_6_missing_mandatory_gate": "PASS",
+    "probe_7_evidence_tampering": "PASS",
+    "probe_8_rigid_body_self_tie": "PASS",
+    "probe_9_physical_drift_violation": "PASS"
+  },
+  "metrics": {
+    "max_joint_drift_mm": 3.134578470568233e-10,
+    "overall_max_mises_mpa": 0.0435313880443573,
+    "peak_kinetic_energy_mj": 106.10174560546875,
+    "peak_strain_energy_mj": 0.0001586706202942878,
+    "strain_energy_ratio": 0.9992941368820902,
+    "energy_dissipation_ratio": 0.0055582571796292555,
+    "frame_count": 336
+  },
+  "artifacts": {
+    "Job_FMBD_L4.inp": {
+      "sha256": "6665d4820f4dd6d32d0d51ff7715f1725676668666c5275abba5665b3e95f801",
+      "size_bytes": 24663,
+      "exists": true
+    },
+    "Job_FMBD_L4.odb": {
+      "sha256": "a6c31401bced57f225e875e186434177530796d2e337dad4b7b3e6c0156d23a0",
+      "size_bytes": 16448752,
+      "exists": true
+    },
+    "Job_FMBD_L4.sta": {
+      "sha256": "1b8e009cfbfb98d19dcd70e724856e9017e13a8cbfec3fc89bb239970c69e0e1",
+      "size_bytes": 24923,
+      "exists": true
+    },
+    "Job_FMBD_L4.msg": {
+      "sha256": "6290fdd517c24d38ffa4058c4d570d7e35e061a2a82027f4d84fed3a880d91bb",
+      "size_bytes": 2182660,
+      "exists": true
+    },
+    "Job_FMBD_L4.dat": {
+      "sha256": "fee4fd0ba1b628b1a61f8808ea6223c1329f4b7af86e87c8d48a78bf0f3b2607",
+      "size_bytes": 18787,
+      "exists": true
+    },
+    "Job_FMBD_L4.log": {
+      "sha256": "e6113ae2cfb136b2e90ddedc8924292f7e08002d4c451712e033a7eb9190de18",
+      "size_bytes": 669,
+      "exists": true
+    }
+  },
+  "acceptance": {
+    "passed": true,
+    "status": "PASS",
+    "result_validity": "VALID",
+    "gates": {
+      "execution": "PASS",
+      "odb": "PASS",
+      "evidence_sufficiency": "PASS",
+      "numerical_verification": "SKIPPED",
+      "engineering_checks": "SKIPPED",
+      "mesh_quality": "SKIPPED",
+      "convergence": "SKIPPED",
+      "fatigue": "SKIPPED",
+      "contact": "SKIPPED",
+      "procedure": "SKIPPED",
+      "thermal_balance": "SKIPPED",
+      "connector_kinematics": "SKIPPED",
+      "fmbd_dynamics": "PASS",
+      "required_results": "PASS",
+      "criteria": "PASS"
+    },
+    "failures": []
+  }
+}

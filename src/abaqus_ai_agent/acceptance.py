@@ -143,7 +143,7 @@ def evaluate_result_acceptance(result_status, numerical=None, engineering=None,
                                require_evidence=False,
                                required_gates=None, physics_domain=None, result_requirements=None,
                                odb_status=None, gate_justifications=None, procedure_verification=None,
-                               thermal_balance=None, connector_kinematics=None, odb_fields=None, required_fields=None,
+                               thermal_balance=None, connector_kinematics=None, fmbd_dynamics=None, odb_fields=None, required_fields=None,
                                evidence_manifest=None, expected_run_id=None, base_dir=None,
                                max_age_seconds=None, mandatory_roles=None):
     """Combine execution/result evidence with deterministic acceptance criteria.
@@ -453,6 +453,39 @@ def evaluate_result_acceptance(result_status, numerical=None, engineering=None,
         missing_required_gates.append("connector_kinematics")
     else:
         gates["connector_kinematics"] = "SKIPPED"
+
+    # Gate 14: FMBD Dynamics Gate
+    if fmbd_dynamics is not None:
+        fmbd_ok = False
+        fmbd_status = None
+        if isinstance(fmbd_dynamics, bool):
+            fmbd_ok = fmbd_dynamics
+            fmbd_status = "pass" if fmbd_ok else "fail"
+        elif isinstance(fmbd_dynamics, dict):
+            fmbd_status = fmbd_dynamics.get("status")
+            fmbd_ok = fmbd_status == "pass" or fmbd_dynamics.get("passed", False) is True
+            warnings.extend(tuple(fmbd_dynamics.get("warnings", ()) or ()))
+            failures.extend(tuple(fmbd_dynamics.get("failures", ()) or ()))
+        else:
+            fmbd_status = getattr(fmbd_dynamics, "status", None)
+            fmbd_ok = fmbd_status == "pass" or getattr(fmbd_dynamics, "passed", False) is True
+            warnings.extend(tuple(getattr(fmbd_dynamics, "warnings", ()) or ()))
+            failures.extend(tuple(getattr(fmbd_dynamics, "failures", ()) or ()))
+
+        if fmbd_ok:
+            gates["fmbd_dynamics"] = "PASS"
+        else:
+            failures.append("fmbd_dynamics_failed")
+            gates["fmbd_dynamics"] = "FAIL"
+            if fmbd_status == "warning":
+                warnings.append("fmbd_dynamics_warning")
+    elif "fmbd_dynamics" in effective_required_gates:
+        gates["fmbd_dynamics"] = "BLOCKED"
+        failures.append("missing_mandatory_gate:fmbd_dynamics")
+        blocked.append("missing_mandatory_gate:fmbd_dynamics")
+        missing_required_gates.append("fmbd_dynamics")
+    else:
+        gates["fmbd_dynamics"] = "SKIPPED"
 
     # Required Metrics Evaluation against Values Map
     values_map = values or {}
