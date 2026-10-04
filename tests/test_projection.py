@@ -281,3 +281,104 @@ def test_select_geometry_by_ray_z_buffer_depth_sorting():
     assert region.anchor_point == (0.02, 0.0, 4.0)
     assert region.confidence > 0.9
     assert len(region.evidence) == 3
+
+
+def test_ga2a_viewport_click_to_compiler_action_plan_e2e():
+    """Verify GA-2A full chain: screen click -> raycast -> GroundedRegion -> compiler ActionPlan."""
+    from abaqus_ai_agent.contracts.geometry import resolve_region
+    from abaqus_ai_agent.planning.compiler import (
+        compile_intent_to_actions,
+        IntentGeometrySpec,
+        IntentStepSpec,
+        IntentBoundarySpec,
+        IntentLoadSpec,
+        IntentMeshSpec,
+    )
+    from abaqus_ai_agent.contracts.material import MaterialDefinition, ElasticProperties
+    from abaqus_ai_agent.validation.preflight import preflight_action, preflight_plan
+
+    # 1. Viewport camera looking down Z towards model
+    view = ViewProjection(
+        viewport_id="Viewport: 1",
+        projection_type="PERSPECTIVE",
+        image_width=1000,
+        image_height=1000,
+        camera_position=(50.0, 10.0, 200.0),
+        camera_target=(50.0, 10.0, 50.0),
+        up_vector=(0.0, 1.0, 0.0),
+        view_width=100.0,
+        view_height=100.0,
+    )
+
+    # 2. Simulated user clicks center of screen on Root Face at (50, 10, 0)
+    click = ImagePoint(0.5, 0.5)
+    ray = unproject_point_to_ray(click, view)
+    assert ray.direction == pytest.approx((0, 0, -1))
+
+    # Candidate faces
+    candidates = [
+        {
+            "name": "RootFace",
+            "entity_type": "Face",
+            "point": (50.0, 10.0, 0.0),
+            "normal": (0.0, 0.0, 1.0),
+            "index": 1,
+        },
+        {
+            "name": "SideFace",
+            "entity_type": "Face",
+            "point": (0.0, 10.0, 50.0),
+            "normal": (-1.0, 0.0, 0.0),
+            "index": 2,
+        },
+    ]
+
+    selected = select_geometry_by_ray(ray, candidates, max_distance=10.0)
+    assert len(selected) > 0
+    assert selected[0]["name"] == "RootFace"
+    assert selected[0]["selected"] is True
+
+    # 3. Create GroundedRegion
+    grounded_region = grounded_region_from_ray_selection(selected[0], target_semantic="FIXED_ROOT")
+    assert grounded_region.status == "RESOLVED"
+    assert grounded_region.anchor_point == (50.0, 10.0, 0.0)
+
+    # 4. Resolve canonical region reference
+    region_ref = resolve_region(grounded_region, instance_name="BeamPart-1")
+    assert region_ref.kind == "grounded_region"
+    assert "findAt(((50.0, 10.0, 0.0),))" in region_ref.expression
+
+    # 5. Compile into ActionPlan
+    geom = IntentGeometrySpec(shape="cantilever_box", length=100.0, width=20.0, height=10.0)
+    mat = MaterialDefinition(
+        name="Steel",
+        unit_system="MM_N_MPA",
+        elastic=ElasticProperties(youngs_modulus=210e3, poisson_ratio=0.3),
+    )
+    step = IntentStepSpec(name="StaticLoad", time_period=1.0)
+    bcs = [IntentBoundarySpec(name="EncastreRoot", bc_type="ENCASTRE", region="FIXED_ROOT")]
+    loads = [IntentLoadSpec(name="TipPressure", load_type="pressure", magnitude=5.0, region="FIXED_ROOT")]
+
+    plan = compile_intent_to_actions(
+        model_name="RaycastModel",
+        part_name="BeamPart",
+        job_name="RaycastJob",
+        geometry=geom,
+        material=mat,
+        step=step,
+        bcs=bcs,
+        loads=loads,
+        mesh=IntentMeshSpec(global_size=5.0),
+        grounded_regions={"FIXED_ROOT": grounded_region},
+    )
+
+    assert plan.model_name == "RaycastModel"
+    assert plan.job_name == "RaycastJob"
+    assert "findAt(((50.0, 10.0, 0.0),))" in plan.cae_script
+    assert "EncastreBC" in plan.cae_script
+    assert "Pressure" in plan.cae_script
+
+    # 6. Verify preflight checks on all generated actions
+    for action in plan.actions:
+        pf = preflight_action(action)
+        assert pf.passed is True, f"Preflight failed on action {action.action_type}: {pf.blockers}"
