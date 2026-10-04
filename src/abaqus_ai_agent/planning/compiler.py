@@ -219,11 +219,13 @@ def compile_intent_to_actions(
     if bolt_pretensions and geometry.shape in ("cantilever_box", "cylinder", "plate"):
         part_partition_code = f"p = mdb.models['{model_name}'].parts['{part_name}']\n"
         for b_spec in bolt_pretensions:
-            gr = grounded_regions.get(b_spec.region_expression) if grounded_regions else None
+            b_name = getattr(b_spec, "name", None) or (b_spec.get("name") if isinstance(b_spec, dict) else None) or (b_spec.get("bolt_name") if isinstance(b_spec, dict) else "B1")
+            reg_expr = getattr(b_spec, "region_expression", None) or (b_spec.get("region_expression") if isinstance(b_spec, dict) else None)
+            gr = grounded_regions.get(reg_expr) if (grounded_regions and reg_expr) else None
             cut_z = gr.anchor_point[2] if (gr and gr.anchor_point) else (geometry.length / 2.0)
             part_partition_code += (
-                f"d_plane_{b_spec.name} = p.DatumPlaneByPrincipalPlane(principalPlane=XYPLANE, offset={cut_z})\n"
-                f"p.PartitionCellByDatumPlane(datumPlane=p.datums[d_plane_{b_spec.name}.id], cells=p.cells)\n"
+                f"d_plane_{b_name} = p.DatumPlaneByPrincipalPlane(principalPlane=XYPLANE, offset={cut_z})\n"
+                f"p.PartitionCellByDatumPlane(datumPlane=p.datums[d_plane_{b_name}.id], cells=p.cells)\n"
             )
         actions.append(builders.python_action(model_name, part_partition_code))
 
@@ -1328,7 +1330,12 @@ def compile_engineering_intent(
             eff_step = IntentStepSpec(**raw_step)
         else:
             analysis = str(intent.analysis_type or intent.kind or "linear_static").lower()
-            if analysis in ("nonlinear_static", "plasticity"):
+            if analysis in ("bolt_pretension", "bolt_service") or intent.metadata.get("bolt_pretensions"):
+                eff_steps = [
+                    IntentStepSpec(name="Step-Preload", step_type="static_general", nlgeom=False),
+                    IntentStepSpec(name="Step-Service", step_type="static_general", nlgeom=False, previous="Step-Preload"),
+                ]
+            elif analysis in ("nonlinear_static", "plasticity"):
                 eff_step = IntentStepSpec(name="Step-1", step_type="static_general", nlgeom=True)
             elif analysis in ("steady_thermal", "thermal", "heat_transfer"):
                 eff_step = IntentStepSpec(name="Step-1", step_type="heat_transfer", nlgeom=False)

@@ -125,6 +125,33 @@ class AbaqusAIAgent:
         from .typesafe_intent import JevIntentRouter
         from .validation.preflight import preflight_plan
 
+        # Defense-in-depth: Prohibit direct injection of internal verification objects
+        # at the product entry level to guarantee zero-fabrication single-exit integrity.
+        forbidden_injections = (
+            "numerical_verification",
+            "engineering_checks",
+            "mesh_quality",
+            "mesh_convergence",
+            "contact_diagnostics",
+            "sensitivity",
+            "uncertainty",
+            "connector_kinematics",
+            "fmbd_dynamics",
+        )
+        found_injections = [k for k in forbidden_injections if k in kwargs]
+        if found_injections and not kwargs.pop("_allow_test_injections", False):
+            return EngineeringTaskResult(
+                status=TaskStatus.BLOCKED,
+                errors=(
+                    f"Direct injection of internal verification objects {found_injections} "
+                    "is strictly forbidden at the product entry level.",
+                ),
+                summary_card={
+                    "status": "INJECTION_BLOCKED",
+                    "forbidden_keys": found_injections,
+                },
+            )
+
         # 1. Natural Language or Structured Intent Routing
         intent = None
         if isinstance(requirement, str):

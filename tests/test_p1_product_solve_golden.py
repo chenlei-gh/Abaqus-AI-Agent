@@ -59,9 +59,14 @@ def test_p1_product_solve_manifest_integrity():
         assert art.get("size_bytes", 0) > 0
         assert len(art.get("sha256", "")) == 64
 
-    # Summary verification
+    # Summary verification with strict multi-state bidirectional equivalence
     summary = manifest.get("summary", {})
-    assert summary.get("task_status") == "COMPLETED"
-    assert summary.get("run_state") in ("accepted", "ACCEPTED")
-    assert summary.get("engineering_status") in ("RESULT_VALID", "ACCEPTED")
-    assert summary.get("acceptance_passed") is True
+    is_task_completed = (summary.get("task_status") == "COMPLETED")
+    assert is_task_completed is True
+    assert (summary.get("run_state", "").lower() == "accepted") == is_task_completed
+    assert (summary.get("engineering_status") in ("RESULT_VALID", "ACCEPTED")) == is_task_completed
+    assert (summary.get("acceptance_passed") is True) == is_task_completed
+
+    summary_card = summary.get("summary_card", {})
+    assert (summary_card.get("status") == "COMPLETED") == is_task_completed
+    assert (summary_card.get("acceptance_passed") is True) == is_task_completed

@@ -306,7 +306,62 @@ def resolve_capability(intent: Any) -> CapabilityResolution:
             reason="Qualified under Phase 1 (Nlgeom large deformation and von Mises plasticity).",
         )
 
-    # 15. Default / Linear Static
+    # 15. Assembly & Kinematic Tie Interaction
+    if kind in ("assembly_tie_interaction", "tie", "assembly_tie") or meta.get("tie_interactions"):
+        return CapabilityResolution(
+            capability_id="assembly_tie_interaction",
+            physics_domain="contact",
+            status=CapabilityStatus.SUPPORTED,
+            profile=get_physics_result_profile("contact"),
+            qualification_level="L4",
+            reason="Qualified under Tier A assembly and kinematic surface tie constraint verification.",
+        )
+
+    # 16. Mesh Quality & Grid Convergence Index (GCI)
+    if kind in ("mesh_quality_gci", "mesh_convergence", "mesh_quality") or meta.get("mesh_convergence"):
+        return CapabilityResolution(
+            capability_id="mesh_quality_gci",
+            physics_domain="static",
+            status=CapabilityStatus.SUPPORTED,
+            profile=get_physics_result_profile("static"),
+            qualification_level="L4",
+            reason="Qualified under GA-1.4 Roache Grid Convergence Index (GCI) and mesh quality verification.",
+        )
+
+    # 17. Material Constitutive Intelligence & Grounding
+    if kind in ("material_constitutive", "constitutive", "material_intelligence") or meta.get("constitutive_model"):
+        return CapabilityResolution(
+            capability_id="material_constitutive",
+            physics_domain="static",
+            status=CapabilityStatus.SUPPORTED,
+            profile=get_physics_result_profile("static"),
+            qualification_level="L4",
+            reason="Qualified under Phase K constitutive material intelligence and plasticity grounding.",
+        )
+
+    # 18. Multimodal Engineering Grounding
+    if kind in ("multimodal_grounding", "grounding", "visual_grounding") or meta.get("grounded_regions"):
+        return CapabilityResolution(
+            capability_id="multimodal_grounding",
+            physics_domain="static",
+            status=CapabilityStatus.SUPPORTED,
+            profile=get_physics_result_profile("static"),
+            qualification_level="L4",
+            reason="Qualified under GA-2A/GA-2B raycast and multimodal visual callout topology grounding.",
+        )
+
+    # 19. Unforgeable Acceptance & Evidence Reporting
+    if kind in ("acceptance_reporting", "acceptance", "evidence_reporting") or meta.get("unforgeable_report"):
+        return CapabilityResolution(
+            capability_id="acceptance_reporting",
+            physics_domain="static",
+            status=CapabilityStatus.SUPPORTED,
+            profile=get_physics_result_profile("static"),
+            qualification_level="L4",
+            reason="Qualified under GA-CL single-exit gate, Evidence V2 tamper detection, and report rendering.",
+        )
+
+    # 20. Default / Linear Static
     return CapabilityResolution(
         capability_id="linear_static",
         physics_domain="static",

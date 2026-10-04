@@ -30,6 +30,7 @@ from abaqus_ai_agent.planning.compiler import (
     IntentGeometrySpec,
     IntentLoadSpec,
     IntentMeshSpec,
+    IntentStepSpec,
     compile_engineering_intent,
 )
 from abaqus_ai_agent.validation.preflight import PreflightResult
@@ -282,3 +283,165 @@ class TestP1ProductEntryAudit:
         assert task_res.summary_card["status"] == "COMPLETED"
         assert task_res.summary_card["metrics"]["max_mises"] == 528.9
         assert "Engineering Analysis Report" in task_res.report_markdown
+
+    @pytest.mark.parametrize("capability_id", ALL_L4_CAPABILITIES)
+    def test_p1_09_all_20_l4_capabilities_matrix_audit(self, capability_id, agent):
+        """Automated parameterized matrix audit: all 20 L4 capabilities must resolve cleanly,
+
+        bind valid PhysicsResultProfile contracts (fields, metrics, gates), and pass through
+        solve_requirement() without capability ambiguity or unhandled exceptions.
+        """
+        # Synthesize capability-targeted EngineeringIntent
+        intent_kwargs = {
+            "id": f"intent-{capability_id}",
+            "kind": capability_id,
+            "description": f"Automated test for capability {capability_id}",
+            "analysis_type": capability_id,
+            "unit_system": "MM_N_MPA",
+            "material": {
+                "name": "Steel",
+                "youngs_modulus": 210000.0,
+                "poisson_ratio": 0.3,
+            },
+            "metadata": {
+                "geometry": IntentGeometrySpec(shape="cantilever_box", length=100.0, width=10.0, height=10.0),
+            },
+            "boundary_conditions": (IntentBoundarySpec(name="FixedRoot", bc_type="ENCASTRE", region="RootFace"),),
+            "loads": (IntentLoadSpec(name="Load", load_type="concentrated_force", region="TipFace", magnitude=-1000.0),),
+        }
+
+        # Specialized domain requirements
+        if capability_id == "high_cycle_fatigue":
+            intent_kwargs["fatigue"] = IntentFatigueSpec(
+                target_cycles=1e6,
+                material_curve=((300.0, 1e5), (200.0, 1e7)),
+                ultimate_strength=400.0,
+            )
+        elif capability_id == "flexible_multibody":
+            intent_kwargs["fmbd"] = IntentFMBDSpec(
+                rigid_bodies=(RigidBodySpec(name="Crank", ref_point_name="RP_Crank", point_coords=(0.0, 0.0, 0.0), body_region="CrankFace"),),
+                flexible_interfaces=(),
+            )
+        elif capability_id == "bolt_pretension":
+            from abaqus_ai_agent.contracts.procedure import BoltPretensionLifecycleSpec
+            intent_kwargs["metadata"]["bolt_pretensions"] = [
+                BoltPretensionLifecycleSpec(name="B1", region_expression="RootFace", preload_magnitude=5000.0)
+            ]
+        elif capability_id == "spatial_field_loading":
+            from abaqus_ai_agent.contracts.procedure import SpatialLoadField
+            intent_kwargs["metadata"]["fields"] = [
+                SpatialLoadField(name="Field1", expression="100.0 * X")
+            ]
+        elif capability_id == "multi_step_procedure":
+            intent_kwargs["metadata"]["steps"] = [
+                IntentStepSpec(name="Step-1", step_type="static_general"),
+                IntentStepSpec(name="Step-2", step_type="static_general", previous="Step-1"),
+            ]
+
+        intent = EngineeringIntent(**intent_kwargs)
+
+        # 1. Capability Resolution Contract
+        cap = resolve_capability(intent)
+        assert cap.capability_id == capability_id, f"Resolved {cap.capability_id} != expected {capability_id}"
+        assert cap.status == CapabilityStatus.SUPPORTED
+        assert cap.qualification_level == "L4"
+        assert cap.physics_domain is not None
+        assert cap.reason != ""
+
+        # 2. PhysicsResultProfile Contract
+        prof = cap.profile
+        assert prof is not None
+        assert len(prof.required_fields) > 0, f"Capability {capability_id} has empty required_fields"
+        assert len(prof.required_metrics) > 0, f"Capability {capability_id} has empty required_metrics"
+        assert len(prof.required_gates) > 0, f"Capability {capability_id} has empty required_gates"
+        assert "execution" in prof.required_gates or "criteria" in prof.required_gates
+
+        # 3. Compiler Compatibility
+        plan = compile_engineering_intent(intent, submit_job=False)
+        assert plan.model_name is not None
+        assert len(plan.actions) > 0
+
+        # 4. solve_requirement Capability Binding
+        # With mock executor and no solver run, preflight passes and it resolves capability correctly
+        res = agent.solve_requirement(intent, submit_job=False, odb_path="dummy.odb")
+        assert res.capability.capability_id == capability_id
+        assert res.summary_card["capability_id"] == capability_id
+        assert res.summary_card["physics_domain"] == cap.physics_domain
+
+    def test_p1_10_forbidden_internal_injection_defense(self, agent):
+        """Direct injection of internal verification objects must fail closed with INJECTION_BLOCKED."""
+        intent = EngineeringIntent(
+            id="intent-inject-probe",
+            kind="linear_static",
+            description="Injection Probe",
+            analysis_type="linear_static",
+            unit_system="MM_N_MPA",
+            material={"name": "Steel", "youngs_modulus": 210000.0, "poisson_ratio": 0.3},
+            metadata={"geometry": IntentGeometrySpec(shape="cantilever_box", length=100.0, width=10.0, height=10.0)},
+        )
+
+        # Attempt to pass internal verification objects at product entry
+        res = agent.solve_requirement(
+            intent,
+            numerical_verification={"equilibrium": 0.0},
+            contact_diagnostics={"penetration": 0.0},
+        )
+        assert res.status == TaskStatus.BLOCKED
+        assert "INJECTION_BLOCKED" == res.summary_card["status"]
+        assert "numerical_verification" in res.summary_card["forbidden_keys"]
+        assert "contact_diagnostics" in res.summary_card["forbidden_keys"]
+        assert any("Direct injection of internal verification objects" in err for err in res.errors)
+
+    def test_p1_11_six_state_strong_equivalence_consistency(self, agent, monkeypatch):
+        """Assert strict bidirectional state equivalence across TaskResult, AnalysisRun, and Acceptance.
+
+        TaskStatus.COMPLETED <=> run.state == ACCEPTED <=> run.acceptance_passed == True
+        <=> acceptance.passed == True <=> summary_card['status'] == COMPLETED
+        <=> summary_card['acceptance_passed'] == True.
+        """
+        intent = EngineeringIntent(
+            id="intent-equiv-01",
+            kind="linear_static",
+            description="Equivalence Probe",
+            analysis_type="linear_static",
+            unit_system="MM_N_MPA",
+            material={"name": "Steel", "youngs_modulus": 210000.0, "poisson_ratio": 0.3},
+            metadata={"geometry": IntentGeometrySpec(shape="cantilever_box", length=100.0, width=10.0, height=10.0)},
+            boundary_conditions=(IntentBoundarySpec(name="FixedRoot", bc_type="ENCASTRE", region="RootFace"),),
+            loads=(IntentLoadSpec(name="Load", load_type="concentrated_force", region="TipFace", magnitude=-1000.0),),
+        )
+
+        # Case A: Fully Authentic Success
+        mock_run_pass = MagicMock(spec=AnalysisRun)
+        mock_run_pass.state = AnalysisRunState.ACCEPTED
+        mock_run_pass.engineering_status = "RESULT_VALID"
+        mock_run_pass.acceptance_passed = True
+        mock_run_pass.acceptance = AcceptanceResult(passed=True, criteria=(), status="PASS")
+        mock_run_pass.metrics = ()
+        monkeypatch.setattr(agent, "analysis_run", lambda *a, **kw: mock_run_pass)
+
+        res_pass = agent.solve_requirement(intent, submit_job=False)
+        is_completed = (res_pass.status == TaskStatus.COMPLETED)
+        assert is_completed is True
+        assert (res_pass.run.state == AnalysisRunState.ACCEPTED) == is_completed
+        assert (getattr(res_pass.run, "acceptance_passed", False) is True) == is_completed
+        assert (res_pass.acceptance.passed is True) == is_completed
+        assert (res_pass.summary_card["status"] == "COMPLETED") == is_completed
+        assert (res_pass.summary_card["acceptance_passed"] is True) == is_completed
+
+        # Case B: Desynchronized Failure (acceptance_passed False while run_state claims ACCEPTED)
+        mock_run_desync = MagicMock(spec=AnalysisRun)
+        mock_run_desync.state = AnalysisRunState.ACCEPTED
+        mock_run_desync.engineering_status = "RESULT_INVALID"
+        mock_run_desync.acceptance_passed = False
+        mock_run_desync.acceptance = AcceptanceResult(passed=False, criteria=(), status="FAIL")
+        mock_run_desync.metrics = ()
+        monkeypatch.setattr(agent, "analysis_run", lambda *a, **kw: mock_run_desync)
+
+        res_desync = agent.solve_requirement(intent, submit_job=False)
+        is_completed_desync = (res_desync.status == TaskStatus.COMPLETED)
+        assert is_completed_desync is False
+        assert (res_desync.summary_card["status"] == "FAILED")
+        assert (res_desync.summary_card["acceptance_passed"] is False)
+        # Verify no partial green lights can leak through
+        assert res_desync.status != TaskStatus.COMPLETED

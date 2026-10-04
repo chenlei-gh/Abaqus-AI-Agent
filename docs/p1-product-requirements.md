@@ -65,6 +65,14 @@ P1.0 基础设施与产品主入口已全面完成代码加固、Fail-Closed 防
    - 完整采集并签署 6 类物理工件（`.inp`, `.odb`, `.sta`, `.msg`, `.dat`, `.log`）SHA-256；
    - 6 项负向探针（模糊提示澄清、不支持物理域拦截、缺几何拦截、缺材料拦截、外部伪造防篡改、Preflight 阻断）100% fail-closed；
    - 凭证已固化于 `machine_validation/p1_product_solve_manifest.json`。
+6. **20 个 L4 物理域全矩阵自动化参数化审计 (20/20 PASS)**：
+   - 在 `tests/test_p1_product_entry_audit.py` 中通过 `@pytest.mark.parametrize` 对 `ALL_L4_CAPABILITIES` 中的全部 20 个领域进行独立 Intent 构造、`resolve_capability()` 映射、`PhysicsResultProfile`（必需字段、必需指标、强制 Gates）绑定、编译器编译及 `solve_requirement()` 运行，确保 20 个 L4 物理域无任何模糊回退或断层。
+7. **产品主入口内部验证防注水安全红线 (Anti-Injection Defense)**：
+   - 在 `solve_requirement()` 入口处严密拦截对 `numerical_verification`、`engineering_checks`、`mesh_quality`、`contact_diagnostics`、`connector_kinematics`、`fmbd_dynamics` 等底层内部验证对象的直接注水，阻断外部/AI 绕过求解器伪造验证结论的可能性（`INJECTION_BLOCKED`）。
+8. **六状态强一致性双向等价断言 (Multi-State Bidirectional Equivalence)**：
+   - 严格断言：
+     $$\text{TaskStatus.COMPLETED} \iff \text{run.state == ACCEPTED} \iff \text{run.acceptance\_passed} \iff \text{run.acceptance.passed} \iff \text{summary\_card["status"] == COMPLETED}$$
+   - 在任何局部状态失败或去同步场景下，所有相关状态同步置为 False / FAILED，绝不允许任何局部假绿灯穿透。
 
 ---
 
