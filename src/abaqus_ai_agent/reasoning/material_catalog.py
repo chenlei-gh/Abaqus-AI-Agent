@@ -46,7 +46,7 @@ STANDARD_MATERIALS: Tuple[StandardMaterialProfile, ...] = (
     ),
     StandardMaterialProfile(
         canonical_name="Steel_45",
-        aliases=("45#", "45号钢", "45钢", "1045", "aisi 1045"),
+        aliases=("45#", "45号钢", "45钢", "45号", "1045", "aisi 1045"),
         youngs_modulus_mpa=210000.0,
         poissons_ratio=0.29,
         density_tonne_mm3=7.85e-9,
@@ -239,17 +239,28 @@ def _find_profile(query: str) -> Optional[StandardMaterialProfile]:
         if q in p.aliases:
             return p
 
-    # 2. Strict word-boundary or long alias match
-    # Only match if alias appears as a distinct word or substring >= 3 chars
+    # 2. Match specific materials first, sorting by alias length descending
+    # Generic materials (e.g. generic Structural_Steel) are relegated to low priority
+    all_pairs = []
     for p in STANDARD_MATERIALS:
-        for alias in p.aliases:
-            if len(alias) <= 2:
-                # Require word boundary for short aliases (e.g. 'al')
-                pattern = rf"(?<![a-zA-Z0-9]){re.escape(alias)}(?![a-zA-Z0-9])"
-                if re.search(pattern, q):
+        is_generic = p.canonical_name == "Structural_Steel"
+        for a in p.aliases:
+            all_pairs.append((is_generic, len(a), a, p))
+
+    # Sort: non-generic first (is_generic=False), then longer aliases first
+    all_pairs.sort(key=lambda x: (x[0], -x[1]))
+
+    for is_gen, length, alias, p in all_pairs:
+        if length <= 2:
+            if alias in ("钢", "al"):
+                if q == alias:
                     return p
-            else:
-                if alias in q:
-                    return p
+                continue
+            pattern = rf"(?<![a-zA-Z0-9]){re.escape(alias)}(?![a-zA-Z0-9])"
+            if re.search(pattern, q):
+                return p
+        else:
+            if alias in q:
+                return p
 
     return None

@@ -1,0 +1,222 @@
+{
+  "schema_version": "p1_2_reasoning_qualification_manifest_v1",
+  "case_id": "P1_2_Reasoning_Qualification_Consolidated",
+  "evidence_tier": "REAL_ABAQUS",
+  "solver": "Abaqus 2025",
+  "verified_at": "2026-10-04T07:06:26.982636+00:00",
+  "status": "QUALIFIED",
+  "summary": {
+    "g1_material_matrix_passed": true,
+    "g2_mesh_matrix_passed": true,
+    "g3_plausibility_matrix_passed": true,
+    "g4_tiered_hitl_passed": true,
+    "g5_live_abaqus_golden_passed": true
+  },
+  "g1_material_matrix": {
+    "Q235\u78b3\u7d20\u7ed3\u6784\u94a2": {
+      "resolved_name": "Q235",
+      "elastic_modulus_mpa": 210000.0,
+      "poisson_ratio": 0.3,
+      "yield_strength_mpa": 235.0,
+      "density_tonne_mm3": 7.85e-09,
+      "risk_level": "LOW",
+      "confidence": 0.88,
+      "rationale": "Matched 'Q235\u78b3\u7d20\u7ed3\u6784\u94a2' to verified standard Q235 (E=210000.0 MPa, nu=0.3, Yield=235.0 MPa) per GB/T 700-2006.",
+      "status": "PASS"
+    },
+    "Q345\u4f4e\u5408\u91d1\u9ad8\u5f3a\u5ea6\u94a2": {
+      "resolved_name": "Q345",
+      "elastic_modulus_mpa": 206000.0,
+      "poisson_ratio": 0.3,
+      "yield_strength_mpa": 345.0,
+      "density_tonne_mm3": 7.85e-09,
+      "risk_level": "LOW",
+      "confidence": 0.88,
+      "rationale": "Matched 'Q345\u4f4e\u5408\u91d1\u9ad8\u5f3a\u5ea6\u94a2' to verified standard Q345 (E=206000.0 MPa, nu=0.3, Yield=345.0 MPa) per GB/T 1591-2018.",
+      "status": "PASS"
+    },
+    "45\u53f7\u4f18\u8d28\u78b3\u7d20\u94a2": {
+      "resolved_name": "Steel_45",
+      "elastic_modulus_mpa": 210000.0,
+      "poisson_ratio": 0.29,
+      "yield_strength_mpa": 355.0,
+      "density_tonne_mm3": 7.85e-09,
+      "risk_level": "LOW",
+      "confidence": 0.88,
+      "rationale": "Matched '45\u53f7\u4f18\u8d28\u78b3\u7d20\u94a2' to verified standard Steel_45 (E=210000.0 MPa, nu=0.29, Yield=355.0 MPa) per GB/T 699-2015.",
+      "status": "PASS"
+    },
+    "304\u5965\u6c0f\u4f53\u4e0d\u9508\u94a2": {
+      "resolved_name": "Stainless_Steel_304",
+      "elastic_modulus_mpa": 193000.0,
+      "poisson_ratio": 0.29,
+      "yield_strength_mpa": 205.0,
+      "density_tonne_mm3": 7.93e-09,
+      "risk_level": "LOW",
+      "confidence": 0.88,
+      "rationale": "Matched '304\u5965\u6c0f\u4f53\u4e0d\u9508\u94a2' to verified standard Stainless_Steel_304 (E=193000.0 MPa, nu=0.29, Yield=205.0 MPa) per ASTM A240 / GB/T 3280-2015.",
+      "status": "PASS"
+    },
+    "6061-T6\u822a\u7a7a\u786c\u94dd": {
+      "resolved_name": "Aluminum_6061_T6",
+      "elastic_modulus_mpa": 68900.0,
+      "poisson_ratio": 0.33,
+      "yield_strength_mpa": 276.0,
+      "density_tonne_mm3": 2.7e-09,
+      "risk_level": "LOW",
+      "confidence": 0.88,
+      "rationale": "Matched '6061-T6\u822a\u7a7a\u786c\u94dd' to verified standard Aluminum_6061_T6 (E=68900.0 MPa, nu=0.33, Yield=276.0 MPa) per ASTM B221 / GB/T 3190-2020.",
+      "status": "PASS"
+    },
+    "TC4\u9ad8\u5f3a\u949b\u5408\u91d1": {
+      "resolved_name": "Titanium_TC4",
+      "elastic_modulus_mpa": 113800.0,
+      "poisson_ratio": 0.34,
+      "yield_strength_mpa": 880.0,
+      "density_tonne_mm3": 4.43e-09,
+      "risk_level": "LOW",
+      "confidence": 0.88,
+      "rationale": "Matched 'TC4\u9ad8\u5f3a\u949b\u5408\u91d1' to verified standard Titanium_TC4 (E=113800.0 MPa, nu=0.34, Yield=880.0 MPa) per GB/T 3620.1 / ASTM B348.",
+      "status": "PASS"
+    }
+  },
+  "g2_mesh_matrix": {
+    "Thin Plate (100 x 100 x 2 mm)": {
+      "inferred_global_size_mm": 1.0,
+      "inferred_element_type": "C3D8R",
+      "risk_level": "MEDIUM",
+      "confidence": 0.92,
+      "rationale": "Derived global mesh size 1.0 mm from geometry bounding dimensions (100.0 x 100.0 x 2.0 mm), providing ~2 elements across thickness (2.0 mm) per standard solid structural discretization heuristics. Selected C3D8R reduced-integration brick elements with hourglass control.",
+      "status": "PASS"
+    },
+    "Structural Beam (100 x 10 x 10 mm)": {
+      "inferred_global_size_mm": 2.5,
+      "inferred_element_type": "C3D8R",
+      "risk_level": "MEDIUM",
+      "confidence": 0.92,
+      "rationale": "Derived global mesh size 2.5 mm from geometry bounding dimensions (100.0 x 10.0 x 10.0 mm), providing ~4 elements across thickness (10.0 mm) per standard solid structural discretization heuristics. Selected C3D8R reduced-integration brick elements with hourglass control.",
+      "status": "PASS"
+    },
+    "Slender Bar (300 x 10 x 10 mm)": {
+      "inferred_global_size_mm": 3.0,
+      "inferred_element_type": "C3D8R",
+      "risk_level": "MEDIUM",
+      "confidence": 0.92,
+      "rationale": "Derived global mesh size 3.0 mm from geometry bounding dimensions (300.0 x 10.0 x 10.0 mm), providing ~4 elements across thickness (10.0 mm) per standard solid structural discretization heuristics. Selected C3D8R reduced-integration brick elements with hourglass control.",
+      "status": "PASS"
+    }
+  },
+  "g3_plausibility_matrix": {
+    "probe_3_1_rigid_body_motion_interception": {
+      "status": "PASS",
+      "reasoning_status": "BLOCKED",
+      "blockers": [
+        "rigid_body_constraint_check: Model contains applied loads but ZERO boundary constraints. Static analysis will result in unconstrained rigid body motion (solver singular matrix / zero pivot)."
+      ]
+    },
+    "probe_3_2_severe_overload_interception": {
+      "status": "PASS",
+      "reasoning_status": "BLOCKED",
+      "blockers": [
+        "stress_magnitude_plausibility: Grossly unphysical load magnitude: estimated nominal stress (100000.0 MPa) exceeds 100x material yield strength (235.0 MPa). Suspected unit scaling error (e.g. entered kN as N or vice versa)."
+      ]
+    },
+    "probe_3_3_unit_system_dimension_conflict": {
+      "status": "PASS",
+      "reasoning_status": "BLOCKED",
+      "blockers": [
+        "unit_system_consistency: Unit system mismatch: Model specifies unit system MM_N_MPA, but Young's modulus is 2.1e+11, which resembles Pascals (SI) rather than MPa. Stiffness would be exaggerated by 10^6."
+      ]
+    },
+    "probe_3_4_missing_geometry_interception": {
+      "status": "PASS",
+      "reasoning_status": "BLOCKED",
+      "blockers": [
+        "Cannot compile engineering intent: missing geometry specification. Provide geometry via intent.metadata['geometry'] or explicit geometry parameter."
+      ]
+    },
+    "probe_3_5_self_consistent_problem_executable": {
+      "status": "PASS",
+      "reasoning_status": "ASSISTED",
+      "blockers": []
+    }
+  },
+  "g4_tiered_hitl_matrix": {
+    "case_4_1_low_risk_auto_completion": "PASS",
+    "case_4_2_medium_risk_mesh_inference": "PASS",
+    "case_4_3_high_risk_strict_interception": "PASS"
+  },
+  "g5_live_golden": {
+    "task_status": "COMPLETED",
+    "run_state": "accepted",
+    "engineering_status": "RESULT_VALID",
+    "acceptance_passed": true,
+    "summary_card": {
+      "status": "COMPLETED",
+      "model_name": "Model_P1_2_Reasoning_Golden",
+      "job_name": "Job_P1_2_Reasoning_Golden",
+      "capability_id": "linear_static",
+      "physics_domain": "static",
+      "engineering_status": "RESULT_VALID",
+      "acceptance_passed": true,
+      "metrics": {
+        "tip_displacement": 2.16584849357605,
+        "max_mises": 505.026702880859
+      },
+      "reasoning_status": "ASSISTED",
+      "inferences": [
+        {
+          "parameter_name": "mesh",
+          "inferred_value": "C3D8R (size=2.5mm)",
+          "original_value": null,
+          "source": "geometry_feature_and_physics_reasoning",
+          "confidence": 0.88,
+          "risk_level": "MEDIUM",
+          "rationale": "Derived global mesh size 2.5 mm from intent prompt dimensions (10.0 to 100.0 mm), providing ~4 elements across thickness per standard solid structural discretization heuristics. Selected C3D8R reduced-integration brick elements with hourglass control."
+        }
+      ]
+    },
+    "metrics": {
+      "tip_displacement": 2.16584849357605,
+      "max_mises": 505.026702880859
+    },
+    "theory_cross_check": {
+      "theory_deflection_mm": 1.9047619047619047,
+      "fea_deflection_mm": 2.16584849357605,
+      "theory_stress_mpa": 600.0,
+      "fea_stress_mpa": 505.026702880859
+    },
+    "artifacts": {
+      "Job_P1_2_Reasoning_Golden.inp": {
+        "sha256": "ba687999d195beeb873d407c49d98be5f2c514a79fc7a04ee3e0bf7f3d919b0d",
+        "size_bytes": 88067,
+        "exists": true
+      },
+      "Job_P1_2_Reasoning_Golden.odb": {
+        "sha256": "e8a3787763a219aaaf4d7856445e0bd6ade88b8282781e33840bf8901ca02b74",
+        "size_bytes": 405264,
+        "exists": true
+      },
+      "Job_P1_2_Reasoning_Golden.sta": {
+        "sha256": "29af270d79c95125d35420fd385fca40c26fe9bbe6397551ea032f0ed2c4a20a",
+        "size_bytes": 443,
+        "exists": true
+      },
+      "Job_P1_2_Reasoning_Golden.msg": {
+        "sha256": "17a26fbe52f0f0a087c8c74a9cfc33cf79a373acc84ad396ead57c29469cbacf",
+        "size_bytes": 7996,
+        "exists": true
+      },
+      "Job_P1_2_Reasoning_Golden.dat": {
+        "sha256": "5e5a1998face2b2d2853b31ccd0b5f334e9b3a1d6c4ba4d0bf50bcf07226e210",
+        "size_bytes": 9998,
+        "exists": true
+      },
+      "Job_P1_2_Reasoning_Golden.log": {
+        "sha256": "e65b9dd7cee844bd7749a88b756e86614b6aae7225ae99eb6d41c2f47ab8913e",
+        "size_bytes": 691,
+        "exists": true
+      }
+    }
+  }
+}

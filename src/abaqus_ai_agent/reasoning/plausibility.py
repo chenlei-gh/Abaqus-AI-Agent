@@ -77,14 +77,18 @@ def _check_boundary_constraints(intent: EngineeringIntent) -> PlausibilityCheckR
     has_fixed_or_encastre = False
     for bc in bcs:
         if isinstance(bc, dict):
-            b_type = str(bc.get("type", "")).upper()
-            if b_type in ("ENCASTRE", "FIXED", "PINNED", "SYMMETRY"):
-                has_fixed_or_encastre = True
-                break
+            b_type = str(bc.get("type") or bc.get("bc_type", "")).upper()
             values = bc.get("values", {})
-            if isinstance(values, dict) and any(v == 0.0 for v in values.values()):
-                has_fixed_or_encastre = True
-                break
+        else:
+            b_type = str(getattr(bc, "bc_type", None) or getattr(bc, "type", "")).upper()
+            values = getattr(bc, "values", {})
+
+        if b_type in ("ENCASTRE", "FIXED", "PINNED", "SYMMETRY"):
+            has_fixed_or_encastre = True
+            break
+        if isinstance(values, dict) and any(v == 0.0 for v in values.values()):
+            has_fixed_or_encastre = True
+            break
 
     if not has_fixed_or_encastre:
         return PlausibilityCheckResult(
@@ -124,10 +128,13 @@ def _check_applied_loads(intent: EngineeringIntent) -> List[PlausibilityCheckRes
         return results
 
     for i, ld in enumerate(loads):
-        if not isinstance(ld, dict):
-            continue
-        mag = ld.get("magnitude")
-        l_type = ld.get("type", "concentrated_force")
+        if isinstance(ld, dict):
+            mag = ld.get("magnitude")
+            l_type = ld.get("type") or ld.get("load_type", "concentrated_force")
+        else:
+            mag = getattr(ld, "magnitude", None)
+            l_type = getattr(ld, "load_type", None) or getattr(ld, "type", "concentrated_force")
+
         if mag is None:
             results.append(
                 PlausibilityCheckResult(
@@ -222,17 +229,21 @@ def _check_stress_magnitude_plausibility(
     for ld in intent.loads or ():
         if isinstance(ld, dict):
             mag = ld.get("magnitude")
-            l_type = ld.get("type", "concentrated_force")
-            if mag is not None:
-                try:
-                    val = abs(float(mag))
-                    if l_type == "pressure":
-                        # Pressure (MPa) * Area (mm2) = Force (N)
-                        total_force_n += val * area_mm2
-                    else:
-                        total_force_n += val
-                except (ValueError, TypeError):
-                    pass
+            l_type = str(ld.get("type") or ld.get("load_type", "concentrated_force")).lower()
+        else:
+            mag = getattr(ld, "magnitude", None)
+            l_type = str(getattr(ld, "load_type", None) or getattr(ld, "type", "concentrated_force")).lower()
+
+        if mag is not None:
+            try:
+                val = abs(float(mag))
+                if l_type in ("pressure", "surface_traction"):
+                    # Pressure (MPa) * Area (mm2) = Force (N)
+                    total_force_n += val * area_mm2
+                else:
+                    total_force_n += val
+            except (ValueError, TypeError):
+                pass
 
     if area_mm2 <= 0 or total_force_n <= 0:
         return PlausibilityCheckResult(
@@ -326,12 +337,26 @@ def _check_unit_consistency(
 
 def _estimate_cross_section_area(geometry: Any, intent: EngineeringIntent) -> float:
     """Estimate a representative cross-sectional area (mm^2)."""
+    if geometry is None and intent.metadata and isinstance(intent.metadata, dict) and "geometry" in intent.metadata:
+        geometry = intent.metadata["geometry"]
+
+    if geometry is not None:
+        if hasattr(geometry, "width") and hasattr(geometry, "height"):
+            w = getattr(geometry, "width", None)
+            h = getattr(geometry, "height", None)
+            if w is not None and h is not None:
+                return float(w) * float(h)
+        if hasattr(geometry, "radius"):
+            r = getattr(geometry, "radius", None)
+            if r is not None:
+                return math.pi * (float(r) ** 2)
+
     # 1. From geometry dict
     if isinstance(geometry, dict):
-        if "box" in geometry and len(geometry["box"]) >= 2:
-            return float(geometry["box"][0]) * float(geometry["box"][1])
-        if "dimensions" in geometry and len(geometry["dimensions"]) >= 2:
-            return float(geometry["dimensions"][0]) * float(geometry["dimensions"][1])
+        if "box" in geometry and len(geometry["box"]) >= 3:
+            return float(geometry["box"][1]) * float(geometry["box"][2])
+        if "dimensions" in geometry and len(geometry["dimensions"]) >= 3:
+            return float(geometry["dimensions"][1]) * float(geometry["dimensions"][2])
 
     # 2. From metadata dimensions
     dims_data = intent.metadata.get("dimensions") if intent.metadata else None

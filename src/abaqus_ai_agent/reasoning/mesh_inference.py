@@ -51,15 +51,23 @@ def infer_mesh_specification(
         dims = sorted([d for d in (dx, dy, dz) if d > 0])
         if dims:
             min_dim = dims[0]
+            mid_dim = dims[1] if len(dims) > 1 else min_dim
             max_dim = dims[-1]
-            # Ensure at least 2 elements across the smallest dimension for bending resolution
-            suggested_size = max(min_dim / 8.0, max_dim / 100.0)
+            if min_dim <= 2.0:
+                div = 2.0
+            elif mid_dim >= 2.5 * min_dim:
+                # Plate-like / bracket geometry: higher thickness resolution
+                div = 6.0
+            else:
+                # Beam / slender bar compact section: balance resolution and point load singularity
+                div = 4.0
+            suggested_size = max(min_dim / div, max_dim / 100.0)
             # Bound within sensible engineering bounds
             char_size = round(max(suggested_size, 0.5), 2)
             rationale = (
                 f"Derived global mesh size {char_size} mm from geometry bounding dimensions "
-                f"({dx:.1f} x {dy:.1f} x {dz:.1f} mm), resolving smallest feature ({min_dim:.1f} mm) "
-                f"with ~8 elements across span."
+                f"({dx:.1f} x {dy:.1f} x {dz:.1f} mm), providing ~{div:.0f} elements across thickness "
+                f"({min_dim:.1f} mm) per standard solid structural discretization heuristics."
             )
             confidence = 0.92
         else:
@@ -70,13 +78,24 @@ def infer_mesh_specification(
         # Check prompt dimensions
         dims_from_meta = _extract_dims_from_metadata(intent)
         if dims_from_meta:
-            min_dim = min(dims_from_meta)
-            char_size = round(max(min_dim / 10.0, 0.5), 2)
+            dims = sorted([d for d in dims_from_meta if d > 0])
+            min_dim = dims[0]
+            mid_dim = dims[1] if len(dims) > 1 else min_dim
+            max_dim = dims[-1]
+            if min_dim <= 2.0:
+                div = 2.0
+            elif mid_dim >= 2.5 * min_dim:
+                div = 6.0
+            else:
+                div = 4.0
+            suggested_size = max(min_dim / div, max_dim / 100.0)
+            char_size = round(max(suggested_size, 0.5), 2)
             rationale = (
                 f"Derived global mesh size {char_size} mm from intent prompt dimensions "
-                f"(min span = {min_dim:.1f} mm)."
+                f"({min_dim:.1f} to {max_dim:.1f} mm), providing ~{div:.0f} elements across thickness "
+                f"per standard solid structural discretization heuristics."
             )
-            confidence = 0.85
+            confidence = 0.88
         else:
             char_size = 2.5
             rationale = "No explicit geometry or dimensions provided; applied default engineering heuristic size 2.5 mm."
@@ -121,8 +140,19 @@ def infer_mesh_specification(
 
 def _extract_bounding_box(geometry: Any, intent: EngineeringIntent) -> Optional[Tuple[float, float, float]]:
     """Extract (dx, dy, dz) from CadBoundingBox, GeometryModel, or dictionary."""
+    if geometry is None and intent.metadata and isinstance(intent.metadata, dict) and "geometry" in intent.metadata:
+        geometry = intent.metadata["geometry"]
+
     if geometry is None:
         return None
+
+    # IntentGeometrySpec or object with length/width/height
+    if hasattr(geometry, "length") and hasattr(geometry, "width") and hasattr(geometry, "height"):
+        l = getattr(geometry, "length", None)
+        w = getattr(geometry, "width", None)
+        h = getattr(geometry, "height", None)
+        if l is not None and w is not None and h is not None:
+            return (float(l), float(w), float(h))
 
     # CadBoundingBox or object with min/max attributes
     if hasattr(geometry, "min_x") and hasattr(geometry, "max_x"):
