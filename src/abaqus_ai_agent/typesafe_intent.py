@@ -450,9 +450,15 @@ class JevIntentRouter:
         loads = []
         for ld in params.get("loads", []):
             mag = ld["magnitude"]
-            if ld["unit"] == "KN":
+            u = ld["unit"]
+            if u == "KN" or u == "千牛":
                 mag *= 1000.0
-            loads.append({"type": "concentrated_force", "region": "TipFace", "magnitude": mag, "direction": "-Y"})
+                loads.append({"type": "concentrated_force", "region": "TipFace", "magnitude": mag, "direction": "-Y"})
+            elif u in ("N", "牛"):
+                loads.append({"type": "concentrated_force", "region": "TipFace", "magnitude": mag, "direction": "-Y"})
+            elif u in ("MPA", "KPA"):
+                if any(w in prompt.lower() for w in ("压力", "压强", "pressure")):
+                    loads.append({"type": "pressure", "region": "TopFace", "magnitude": mag})
 
         # Construct acceptance criteria tuple
         crit_list = []
@@ -476,6 +482,7 @@ class JevIntentRouter:
             loads=tuple(loads),
             acceptance_criteria=tuple(crit_list),
             metadata={
+                "dimensions": params.get("dimensions"),
                 "jev_source": bundle.source_model,
                 "confidence": bundle.physics_choice.confidence,
                 "completeness_score": bundle.completeness_score.score,

@@ -20,11 +20,17 @@ class AbaqusExecutor(ABC):
 
     def capture_viewport(self, path="abaqus_viewport.png"):
         from .inspection import capture_viewport
-        return capture_viewport(self)
+        return capture_viewport(self, path=path)
 
     def inspect_odb(self, path):
-        from .odb import inspect_odb
-        return inspect_odb(self)
+        code = ("from odbAccess import openOdb\n"
+                "from abaqusConstants import *\n"
+                "odb=openOdb(path=%r, readOnly=True)\n"
+                "result={'steps':list(odb.steps.keys()),"
+                "'instances':list(odb.rootAssembly.instances.keys())}\n"
+                "result['step_frames']={k:len(v.frames) for k,v in odb.steps.items()}\n"
+                "odb.close()\nprint(result)") % path
+        return self.execute(code)
 
     def snapshot(self):
         from .snapshot import read_model_snapshot

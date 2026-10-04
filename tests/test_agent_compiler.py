@@ -9,6 +9,7 @@ from abaqus_ai_agent.planning.compiler import (
     IntentStepSpec,
     IntentMeshSpec,
     compile_intent_to_actions,
+    compile_engineering_intent,
 )
 
 
@@ -584,3 +585,134 @@ def test_compile_comprehensive_multi_physics_plan():
     pre = preflight_plan(plan.actions)
     assert pre.passed is True
     assert len(pre.blockers) == 0
+
+
+def test_compile_engineering_intent_from_dict_intent():
+    """Verify compile_engineering_intent handles dictionary-based specifications (e.g. from JEV router)."""
+    from abaqus_ai_agent.contracts.intent import EngineeringIntent
+    from abaqus_ai_agent.validation.preflight import preflight_plan
+
+    intent = EngineeringIntent(
+        id="INTENT-STATIC-001",
+        kind="linear_static",
+        description="Cantilever beam under vertical tip load",
+        material={
+            "name": "Steel_Q235",
+            "elastic_modulus": 210000.0,
+            "poisson_ratio": 0.3,
+            "unit": "MPa",
+        },
+        boundary_conditions=(
+            {"type": "encastre", "region": "RootFace"},
+        ),
+        loads=(
+            {"type": "concentrated_force", "region": "TipFace", "magnitude": 1000.0, "direction": "-Y"},
+        ),
+        metadata={
+            "dimensions": {"shape": "cantilever_box", "length": 150.0, "width": 15.0, "height": 10.0},
+        },
+    )
+
+    plan = compile_engineering_intent(intent)
+    assert plan.model_name == "Model_INTENT_STATIC_001"
+    assert plan.part_name == "MainPart"
+    assert len(plan.actions) >= 8
+
+    # Verify CAE script contains encastre and force in -Y (CF2=-1000.0)
+    assert "EncastreBC" in plan.cae_script
+    assert "cf2=-1000.0" in plan.cae_script
+    assert "210000.0" in plan.cae_script
+
+    pre = preflight_plan(plan.actions)
+    assert pre.passed is True
+    assert len(pre.blockers) == 0
+
+
+def test_compile_engineering_intent_with_typed_specs():
+    """Verify compile_engineering_intent with explicitly typed specs."""
+    from abaqus_ai_agent.contracts.intent import EngineeringIntent
+    from abaqus_ai_agent.validation.preflight import preflight_plan
+
+    geom = IntentGeometrySpec(shape="cantilever_box", length=80.0, width=10.0, height=10.0)
+    mat = MaterialDefinition(
+        name="Alloy",
+        unit_system="MM_N_MPA",
+        elastic=ElasticProperties(youngs_modulus=72000.0, poisson_ratio=0.33),
+    )
+    bcs = (IntentBoundarySpec(name="FixedRoot", bc_type="ENCASTRE", region="RootFace"),)
+    loads = (IntentLoadSpec(name="PressureLoad", load_type="pressure", region="TopFace", magnitude=2.5),)
+
+    intent = EngineeringIntent(
+        id="INTENT-TYPED-002",
+        kind="linear_static",
+        description="Typed specs test",
+        boundary_conditions=bcs,
+        loads=loads,
+    )
+
+    plan = compile_engineering_intent(intent, geometry=geom, material=mat)
+    assert "Pressure" in plan.cae_script
+    assert "72000.0" in plan.cae_script
+    pre = preflight_plan(plan.actions)
+    assert pre.passed is True
+    assert len(pre.blockers) == 0
+
+
+def test_compile_engineering_intent_advanced_l4_passthrough():
+    """Verify compile_engineering_intent passes through advanced L4 domains (fatigue, connectors, fmbd)."""
+    from abaqus_ai_agent.contracts.intent import EngineeringIntent
+    from abaqus_ai_agent.contracts.fatigue import IntentFatigueSpec
+
+    fatigue_spec = IntentFatigueSpec(
+        target_cycles=1e6,
+        allowable_damage=1.0,
+        material_curve=((300.0, 1e4), (200.0, 1e6)),
+        ultimate_strength=310.0,
+    )
+
+    intent = EngineeringIntent(
+        id="INTENT-FATIGUE-003",
+        kind="fatigue_damage",
+        description="Fatigue evaluation",
+        material={"name": "Al6061", "elastic_modulus": 70000.0, "poisson_ratio": 0.33},
+        boundary_conditions=({"type": "encastre", "region": "RootFace"},),
+        loads=({"type": "concentrated_force", "region": "TipFace", "magnitude": 500.0, "direction": "-Y"},),
+        metadata={"dimensions": {"shape": "cantilever_box", "length": 100.0, "width": 10.0, "height": 10.0}},
+        fatigue=fatigue_spec,
+    )
+
+    plan = compile_engineering_intent(intent)
+    # Compiler ensures S field output is enabled in CAE script and fatigue is in intent summary
+    assert "fatigue" in plan.intent_summary
+    assert plan.intent_summary["fatigue"] is not None
+    assert "variables=('S', 'U', 'RF')" in plan.cae_script
+
+
+def test_compile_engineering_intent_fail_closed_missing_geometry():
+    """Verify compile_engineering_intent fails closed with ValueError when geometry is omitted."""
+    from abaqus_ai_agent.contracts.intent import EngineeringIntent
+
+    intent = EngineeringIntent(
+        id="INTENT-NOGEOM",
+        kind="linear_static",
+        description="Missing geometry test",
+        material={"name": "Steel", "elastic_modulus": 200000.0, "poisson_ratio": 0.3},
+    )
+
+    with pytest.raises(ValueError, match="missing geometry specification"):
+        compile_engineering_intent(intent)
+
+
+def test_compile_engineering_intent_fail_closed_missing_material():
+    """Verify compile_engineering_intent fails closed with ValueError when material is omitted."""
+    from abaqus_ai_agent.contracts.intent import EngineeringIntent
+
+    intent = EngineeringIntent(
+        id="INTENT-NOMAT",
+        kind="linear_static",
+        description="Missing material test",
+        metadata={"dimensions": {"shape": "cantilever_box", "length": 100.0, "width": 10.0, "height": 10.0}},
+    )
+
+    with pytest.raises(ValueError, match="missing material specification"):
+        compile_engineering_intent(intent)

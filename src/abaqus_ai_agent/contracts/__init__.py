@@ -32,7 +32,8 @@ from .material_resolver import (
     MaterialResolutionResult,
 )
 from .step import AnalysisStep
-from .capability import CapabilityStatus, CapabilityResult
+from .capability import CapabilityStatus, CapabilityResult, CapabilityResolution, resolve_capability
+from .task import TaskStatus, EngineeringTaskResult
 from .procedure import (
     BoltPretensionMethod,
     BoltPretensionLifecycleSpec,

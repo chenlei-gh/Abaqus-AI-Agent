@@ -23,7 +23,13 @@ from ..contracts.fmbd import (
     RigidBodySpec,
     FlexibleInterfaceSpec,
 )
-from ..contracts.material import MaterialDefinition
+from ..contracts.intent import EngineeringIntent
+from ..contracts.material import (
+    MaterialDefinition,
+    ElasticProperties,
+    PlasticProperties,
+    ThermalProperties,
+)
 from ..contracts.procedure import (
     BoltPretensionLifecycleSpec,
     BoltPretensionMethod,
@@ -1199,4 +1205,254 @@ def compile_intent_to_actions(
         actions=tuple(actions),
         cae_script=full_script,
         intent_summary=intent_summary,
+    )
+
+
+def compile_engineering_intent(
+    intent: EngineeringIntent,
+    model_name: Optional[str] = None,
+    part_name: Optional[str] = None,
+    job_name: Optional[str] = None,
+    geometry: Optional[IntentGeometrySpec] = None,
+    material: Optional[MaterialDefinition] = None,
+    mesh: Optional[IntentMeshSpec] = None,
+    grounded_regions: Optional[Dict[str, GroundedRegion]] = None,
+    submit_job: bool = False,
+) -> CompiledAgentPlan:
+    """Compile a high-level EngineeringIntent directly into a CompiledAgentPlan.
+
+    Bridges declarative, multi-source EngineeringIntent models (from natural language,
+    vision, or programmatic definitions) into canonical AbaqusActions, ensuring
+    strict fail-closed validation for missing geometry, material, or boundary definitions.
+    """
+    if not isinstance(intent, EngineeringIntent):
+        raise TypeError(f"Expected EngineeringIntent, got {type(intent).__name__}")
+
+    # 1. Resolved Names
+    safe_id = "".join(c if c.isalnum() or c == "_" else "_" for c in intent.id)
+    eff_model = model_name or intent.metadata.get("model_name") or f"Model_{safe_id}"
+    eff_part = part_name or intent.metadata.get("part_name") or "MainPart"
+    eff_job = job_name or intent.metadata.get("job_name") or f"Job_{safe_id}"
+
+    # 2. Geometry Resolution (Fail-closed on complete omission)
+    eff_geom = geometry
+    if eff_geom is None and "geometry" in intent.metadata:
+        raw_geom = intent.metadata["geometry"]
+        if isinstance(raw_geom, IntentGeometrySpec):
+            eff_geom = raw_geom
+        elif isinstance(raw_geom, dict):
+            eff_geom = IntentGeometrySpec(**raw_geom)
+    if eff_geom is None and "dimensions" in intent.metadata:
+        dims = intent.metadata["dimensions"]
+        if isinstance(dims, dict):
+            eff_geom = IntentGeometrySpec(
+                shape=dims.get("shape", "cantilever_box"),
+                length=float(dims.get("length", 100.0)),
+                width=float(dims.get("width", 10.0)),
+                height=float(dims.get("height", 10.0)),
+                radius=float(dims["radius"]) if "radius" in dims else None,
+                thickness=float(dims["thickness"]) if "thickness" in dims else None,
+                step_file_path=dims.get("step_file_path"),
+            )
+        elif isinstance(dims, (list, tuple)) and dims:
+            vals = [float(d["value"]) if isinstance(d, dict) and "value" in d else float(d) for d in dims]
+            l = vals[0] if len(vals) > 0 else 100.0
+            w = vals[1] if len(vals) > 1 else 10.0
+            h = vals[2] if len(vals) > 2 else 10.0
+            eff_geom = IntentGeometrySpec(shape="cantilever_box", length=l, width=w, height=h)
+
+    if eff_geom is None:
+        raise ValueError(
+            "Cannot compile engineering intent: missing geometry specification. "
+            "Provide geometry via intent.metadata['geometry'] or explicit geometry parameter."
+        )
+
+    # 3. Material Resolution (Fail-closed on complete omission)
+    eff_mat = material
+    if eff_mat is None and intent.material is not None:
+        if isinstance(intent.material, MaterialDefinition):
+            eff_mat = intent.material
+        elif isinstance(intent.material, dict):
+            m = intent.material
+            m_name = m.get("name", "DefaultMaterial")
+            u_sys = m.get("unit_system") or intent.unit_system or "MM_N_MPA"
+            youngs = m.get("elastic_modulus") or m.get("youngs_modulus") or m.get("E")
+            nu = m.get("poisson_ratio") if m.get("poisson_ratio") is not None else (m.get("nu") if m.get("nu") is not None else 0.3)
+            rho = m.get("density") or m.get("rho")
+            yield_str = m.get("yield_stress") or m.get("yield_strength")
+
+            elastic = None
+            if youngs is not None:
+                elastic = ElasticProperties(youngs_modulus=float(youngs), poisson_ratio=float(nu))
+            plastic = None
+            if yield_str is not None:
+                plastic = PlasticProperties(yield_stress=float(yield_str))
+
+            density_val = float(rho) if rho is not None else (7.85e-9 if "steel" in m_name.lower() or "q235" in m_name.lower() else (2.7e-9 if "al" in m_name.lower() else None))
+
+            eff_mat = MaterialDefinition(
+                name=m_name,
+                unit_system=u_sys,
+                elastic=elastic,
+                density=density_val,
+                plastic=plastic,
+            )
+
+    if eff_mat is None:
+        raise ValueError(
+            "Cannot compile engineering intent: missing material specification. "
+            "Provide material via intent.material or explicit material parameter."
+        )
+
+    # 4. Step & Procedure Resolution
+    eff_step = None
+    eff_steps = intent.metadata.get("steps")
+    eff_procedure = intent.metadata.get("procedure")
+
+    if eff_procedure is None and eff_steps is None:
+        raw_step = intent.metadata.get("step")
+        if isinstance(raw_step, IntentStepSpec):
+            eff_step = raw_step
+        elif isinstance(raw_step, dict):
+            eff_step = IntentStepSpec(**raw_step)
+        else:
+            analysis = str(intent.analysis_type or intent.kind or "linear_static").lower()
+            if analysis in ("nonlinear_static", "plasticity"):
+                eff_step = IntentStepSpec(name="Step-1", step_type="static_general", nlgeom=True)
+            elif analysis in ("steady_thermal", "thermal", "heat_transfer"):
+                eff_step = IntentStepSpec(name="Step-1", step_type="heat_transfer", nlgeom=False)
+            elif analysis in ("modal_frequency", "frequency", "modal"):
+                eff_step = IntentStepSpec(name="Step-1", step_type="frequency", nlgeom=False)
+            elif analysis in ("transient_dynamic", "implicit_dynamic", "dynamic"):
+                eff_step = IntentStepSpec(name="Step-1", step_type="implicit_dynamic", nlgeom=True)
+            elif analysis in ("explicit_dynamic", "explicit"):
+                eff_step = IntentStepSpec(name="Step-1", step_type="explicit_dynamic", nlgeom=True)
+            else:
+                eff_step = IntentStepSpec(name="Step-1", step_type="static_general", nlgeom=False)
+
+    # 5. Boundary Conditions Mapping
+    compiled_bcs: List[IntentBoundarySpec] = []
+    for idx, bc in enumerate(intent.boundary_conditions):
+        if isinstance(bc, IntentBoundarySpec):
+            compiled_bcs.append(bc)
+        elif isinstance(bc, dict):
+            b_type = str(bc.get("type", "ENCASTRE")).upper()
+            b_reg = str(bc.get("region", "RootFace"))
+            b_name = str(bc.get("name") or f"BC_{idx+1}_{b_type}")
+            b_vals = bc.get("values", {})
+            b_step = bc.get("step", "Initial")
+            b_plane = bc.get("plane")
+            b_mods = bc.get("step_modifications")
+            compiled_bcs.append(
+                IntentBoundarySpec(
+                    name=b_name,
+                    bc_type=b_type,
+                    region=b_reg,
+                    values=b_vals,
+                    step=b_step,
+                    plane=b_plane,
+                    step_modifications=b_mods,
+                )
+            )
+
+    # 6. Loads Mapping
+    compiled_loads: List[IntentLoadSpec] = []
+    for idx, ld in enumerate(intent.loads):
+        if isinstance(ld, IntentLoadSpec):
+            compiled_loads.append(ld)
+        elif isinstance(ld, dict):
+            l_type = str(ld.get("type", "concentrated_force"))
+            l_reg = str(ld.get("region", "TipFace"))
+            mag = float(ld.get("magnitude", 0.0))
+            raw_dir = str(ld.get("direction", "CF2")).upper()
+            if raw_dir in ("-Y", "Y-", "-CF2"):
+                dir_val = "CF2"
+                if mag > 0:
+                    mag = -mag
+            elif raw_dir in ("+Y", "Y+", "CF2"):
+                dir_val = "CF2"
+            elif raw_dir in ("-X", "X-", "-CF1"):
+                dir_val = "CF1"
+                if mag > 0:
+                    mag = -mag
+            elif raw_dir in ("+X", "X+", "CF1"):
+                dir_val = "CF1"
+            elif raw_dir in ("-Z", "Z-", "-CF3"):
+                dir_val = "CF3"
+                if mag > 0:
+                    mag = -mag
+            elif raw_dir in ("+Z", "Z+", "CF3"):
+                dir_val = "CF3"
+            else:
+                dir_val = raw_dir if raw_dir in ("CF1", "CF2", "CF3") else "CF2"
+
+            l_name = str(ld.get("name") or f"Load_{idx+1}_{l_type}")
+            l_step = ld.get("step")
+            l_field = ld.get("field")
+            l_dist = ld.get("distribution_type", "UNIFORM")
+            l_axis = ld.get("axis")
+            compiled_loads.append(
+                IntentLoadSpec(
+                    name=l_name,
+                    load_type=l_type,
+                    region=l_reg,
+                    magnitude=mag,
+                    direction=dir_val,
+                    step=l_step,
+                    field=l_field,
+                    distribution_type=l_dist,
+                    axis=l_axis,
+                )
+            )
+
+    # 7. Mesh Mapping
+    eff_mesh = mesh
+    if eff_mesh is None and intent.mesh_requirements:
+        if isinstance(intent.mesh_requirements, IntentMeshSpec):
+            eff_mesh = intent.mesh_requirements
+        elif isinstance(intent.mesh_requirements, dict):
+            m_req = intent.mesh_requirements
+            eff_mesh = IntentMeshSpec(
+                element_type=m_req.get("element_type", "C3D8R"),
+                global_size=float(m_req.get("global_size", 2.5)),
+                deviation_factor=float(m_req.get("deviation_factor", 0.1)),
+                element_library=m_req.get("element_library", "STANDARD"),
+            )
+    if eff_mesh is None:
+        eff_mesh = IntentMeshSpec()
+
+    # 8. Multi-domain special contracts
+    eff_grounded = grounded_regions or intent.metadata.get("grounded_regions")
+    eff_fields = intent.metadata.get("fields")
+    eff_bolts = intent.metadata.get("bolt_pretensions")
+    eff_moments = intent.metadata.get("moments")
+    eff_interactions = intent.contacts or intent.metadata.get("interactions")
+    eff_predefined = intent.metadata.get("predefined_fields")
+
+    eff_fatigue = intent.fatigue
+    eff_connectors = intent.connectors or None
+    eff_fmbd = intent.fmbd
+
+    return compile_intent_to_actions(
+        model_name=eff_model,
+        part_name=eff_part,
+        job_name=eff_job,
+        geometry=eff_geom,
+        material=eff_mat,
+        step=eff_step,
+        bcs=compiled_bcs,
+        loads=compiled_loads,
+        mesh=eff_mesh,
+        grounded_regions=eff_grounded,
+        steps=eff_steps,
+        procedure=eff_procedure,
+        fields=eff_fields,
+        bolt_pretensions=eff_bolts,
+        moments=eff_moments,
+        interactions=eff_interactions,
+        predefined_fields=eff_predefined,
+        fatigue=eff_fatigue,
+        connectors=eff_connectors,
+        fmbd=eff_fmbd,
+        submit_job=submit_job,
     )

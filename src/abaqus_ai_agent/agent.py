@@ -91,3 +91,202 @@ class AbaqusAIAgent:
     def inspect_odb(self, path):
         from .execution.odb import inspect_odb
         return summarize_odb(inspect_odb(self.executor, path))
+
+    def solve_requirement(
+        self,
+        requirement,
+        model_name=None,
+        part_name=None,
+        job_name=None,
+        geometry=None,
+        material=None,
+        mesh=None,
+        grounded_regions=None,
+        timeout=3600,
+        submit_job=True,
+        router_strict=False,
+        odb_path=None,
+        result_values=None,
+        **kwargs,
+    ):
+        """End-to-end engineering requirement solver (P1.0 Product Main Entry).
+
+        Takes natural language prompts or structured EngineeringIntent instances,
+        routes them deterministically through the 20-L4 physical capabilities,
+        compiles execution plans, applies preflight gates, executes through the canonical
+        AnalysisRunner, and produces an auditable EngineeringTaskResult with markdown report.
+        """
+        from .contracts.capability import resolve_capability
+        from .contracts.intent import EngineeringIntent
+        from .contracts.task import EngineeringTaskResult, TaskStatus
+        from .planning.compiler import compile_engineering_intent
+        from .reporting.renderer import render_markdown
+        from .typesafe_intent import JevIntentRouter
+        from .validation.preflight import preflight_plan
+
+        # 1. Natural Language or Structured Intent Routing
+        intent = None
+        if isinstance(requirement, str):
+            router = JevIntentRouter()
+            routing_res = router.route(requirement)
+            if routing_res.status == "NEEDS_CLARIFICATION":
+                return EngineeringTaskResult(
+                    status=TaskStatus.NEEDS_CLARIFICATION,
+                    clarification_prompt=routing_res.clarification_prompt,
+                    summary_card={
+                        "status": "NEEDS_CLARIFICATION",
+                        "missing_requirements": routing_res.missing_requirements,
+                        "clarification_prompt": routing_res.clarification_prompt,
+                    },
+                    metadata={"missing_requirements": routing_res.missing_requirements},
+                )
+            intent = routing_res.intent
+        elif isinstance(requirement, EngineeringIntent):
+            intent = requirement
+        else:
+            raise TypeError(
+                f"requirement must be str or EngineeringIntent, got {type(requirement).__name__}"
+            )
+
+        if intent is None:
+            return EngineeringTaskResult(
+                status=TaskStatus.FAILED,
+                errors=("Failed to extract or resolve engineering intent.",),
+            )
+
+        # 2. Capability Resolution & Physical Profile Association
+        capability = resolve_capability(intent)
+        if not capability.is_supported:
+            return EngineeringTaskResult(
+                status=TaskStatus.UNSUPPORTED,
+                intent=intent,
+                capability=capability,
+                errors=(capability.reason,),
+                summary_card={
+                    "status": "UNSUPPORTED",
+                    "capability_id": capability.capability_id,
+                    "reason": capability.reason,
+                },
+            )
+
+        # 3. Intent Compilation to Action Plan (Fail-closed on missing geometry/material)
+        try:
+            plan = compile_engineering_intent(
+                intent=intent,
+                model_name=model_name,
+                part_name=part_name,
+                job_name=job_name,
+                geometry=geometry,
+                material=material,
+                mesh=mesh,
+                grounded_regions=grounded_regions,
+                submit_job=submit_job,
+            )
+        except (ValueError, TypeError) as exc:
+            return EngineeringTaskResult(
+                status=TaskStatus.BLOCKED,
+                intent=intent,
+                capability=capability,
+                errors=(str(exc),),
+                summary_card={
+                    "status": "COMPILATION_BLOCKED",
+                    "error": str(exc),
+                },
+            )
+
+        # 4. Mandatory Preflight Gate
+        preflight_res = preflight_plan(plan.actions)
+        if not preflight_res.passed:
+            blocker_msgs = tuple(
+                b.message if hasattr(b, "message") else str(b)
+                for b in preflight_res.blockers
+            )
+            return EngineeringTaskResult(
+                status=TaskStatus.BLOCKED,
+                intent=intent,
+                capability=capability,
+                plan=plan,
+                errors=blocker_msgs,
+                summary_card={
+                    "status": "PREFLIGHT_BLOCKED",
+                    "blockers": list(blocker_msgs),
+                },
+            )
+
+        # 5. Apply Plan Actions to CAE Environment
+        self.apply_plan(plan)
+
+        # 6. Single Canonical Production Outlet: AnalysisRunner
+        criteria = intent.acceptance_criteria or ()
+        run = self.analysis_run(
+            model_name=plan.model_name,
+            job_name=plan.job_name,
+            odb_path=odb_path,
+            criteria=criteria,
+            result_values=result_values,
+            fatigue=intent.fatigue,
+            engineering_intent=intent,
+            postprocess_profile=capability.profile,
+            action_plan=plan.actions,
+            timeout=timeout,
+            **kwargs,
+        )
+
+        # 7. Summary Card & Markdown Engineering Report
+        metrics = getattr(run, "metrics", ()) or ()
+        acceptance = getattr(run, "acceptance", None)
+
+        report_title = f"Engineering Analysis Report: {intent.description or plan.model_name}"
+        report_data = self.build_report(
+            run,
+            title=report_title,
+            objective=intent.description or f"Automated analysis under {capability.capability_id}",
+        )
+        report_md = render_markdown(report_data)
+
+        eng_status = getattr(run, "engineering_status", "EXECUTED")
+        run_state = getattr(run, "state", None)
+        run_state_val = getattr(run_state, "value", str(run_state))
+        is_completed = (
+            run_state_val == "ACCEPTED"
+            or eng_status in ("ACCEPTED", "RESULT_VALID")
+        ) and bool(getattr(run, "acceptance_passed", False))
+        task_status = TaskStatus.COMPLETED if is_completed else TaskStatus.FAILED
+
+        metric_dict = {}
+        for m in metrics:
+            m_name = getattr(m, "name", None) or (m.get("name") if isinstance(m, dict) else str(m))
+            m_val = getattr(m, "value", None) if hasattr(m, "value") else (m.get("value") if isinstance(m, dict) else None)
+            if m_name:
+                metric_dict[m_name] = m_val
+            v_key = getattr(m, "value_key", None) or (m.get("value_key") if isinstance(m, dict) else None)
+            if not v_key:
+                m_meta = getattr(m, "metadata", {}) or (m.get("metadata", {}) if isinstance(m, dict) else {})
+                if isinstance(m_meta, dict):
+                    v_key = m_meta.get("value_key")
+            if v_key:
+                metric_dict[v_key] = m_val
+
+        summary_card = {
+            "status": task_status.value,
+            "model_name": plan.model_name,
+            "job_name": plan.job_name,
+            "capability_id": capability.capability_id,
+            "physics_domain": capability.physics_domain,
+            "engineering_status": eng_status,
+            "acceptance_passed": getattr(run, "acceptance_passed", False),
+            "metrics": metric_dict,
+        }
+
+        return EngineeringTaskResult(
+            status=task_status,
+            intent=intent,
+            capability=capability,
+            plan=plan,
+            run=run,
+            acceptance=acceptance,
+            metrics=metrics,
+            summary_card=summary_card,
+            report_markdown=report_md,
+            errors=() if is_completed else (f"Engineering status: {eng_status}",),
+        )
