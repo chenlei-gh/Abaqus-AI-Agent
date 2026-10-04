@@ -163,7 +163,25 @@ def compile_intent_to_actions(
         f"if '{model_name}' not in mdb.models:\n"
         f"    mdb.Model(name='{model_name}')\n"
     )
-    if geometry.shape == "plate_with_hole":
+    if geometry.shape == "l_bracket":
+        l_len = geometry.length if geometry.length > 0 else 100.0
+        l_h = geometry.height if geometry.height > 0 else 100.0
+        l_t = geometry.thickness if (geometry.thickness is not None and geometry.thickness > 0) else 10.0
+        l_w = geometry.width if geometry.width > 0 else 20.0
+        geo_code = (
+            model_init +
+            f"s = mdb.models['{model_name}'].ConstrainedSketch(name='__profile__', sheetSize=300.0)\n"
+            f"s.Line(point1=(0.0, 0.0), point2=({l_len}, 0.0))\n"
+            f"s.Line(point1=({l_len}, 0.0), point2=({l_len}, {l_t}))\n"
+            f"s.Line(point1=({l_len}, {l_t}), point2=({l_t}, {l_t}))\n"
+            f"s.Line(point1=({l_t}, {l_t}), point2=({l_t}, {l_h}))\n"
+            f"s.Line(point1=({l_t}, {l_h}), point2=(0.0, {l_h}))\n"
+            f"s.Line(point1=(0.0, {l_h}), point2=(0.0, 0.0))\n"
+            f"p = mdb.models['{model_name}'].Part(name='{part_name}', dimensionality=THREE_D, type=DEFORMABLE_BODY)\n"
+            f"p.BaseSolidExtrude(sketch=s, depth={l_w})\n"
+            f"del mdb.models['{model_name}'].sketches['__profile__']\n"
+        )
+    elif geometry.shape == "plate_with_hole":
         p_width = geometry.width if geometry.width > 0 else 100.0
         p_height = geometry.height if geometry.height > 20.0 else (geometry.length if geometry.length > 20.0 else 100.0)
         p_depth = geometry.thickness if geometry.thickness is not None else 20.0
@@ -943,10 +961,25 @@ def compile_intent_to_actions(
                 ))
             elif ld.load_type == "concentrated_force":
                 if gr.entity_type.lower() == "face":
-                    p_width = geometry.width if geometry.width > 0 else 100.0
-                    p_height = geometry.height if geometry.height > 20.0 else (geometry.length if geometry.length > 20.0 else 100.0)
-                    p_radius = geometry.radius if geometry.radius is not None else 10.0
-                    face_area = (p_width * p_height) - (math.pi * p_radius**2)
+                    if geometry.shape == "l_bracket":
+                        thick = geometry.thickness if geometry.thickness and geometry.thickness > 0 else 10.0
+                        wid = geometry.width if geometry.width and geometry.width > 0 else 20.0
+                        anch = gr.anchor_point if gr.anchor_point else (0.0, 0.0, 0.0)
+                        if abs(anch[1] - (geometry.height or 100.0)) < 1.0 or abs(anch[0] - (geometry.length or 100.0)) < 1.0:
+                            face_area = thick * wid
+                        else:
+                            face_area = (geometry.length or 100.0) * wid
+                    elif geometry.shape == "plate_with_hole":
+                        p_width = geometry.width if geometry.width > 0 else 100.0
+                        p_height = geometry.height if geometry.height > 20.0 else (geometry.length if geometry.length > 20.0 else 100.0)
+                        p_radius = geometry.radius if geometry.radius is not None else 10.0
+                        face_area = (p_width * p_height) - (math.pi * p_radius**2)
+                    elif geometry.shape == "cantilever_box":
+                        face_area = (geometry.width if geometry.width > 0 else 10.0) * (geometry.height if geometry.height > 0 else 10.0)
+                    else:
+                        face_area = (geometry.width if geometry.width > 0 else 10.0) * (geometry.height if geometry.height > 0 else 10.0)
+                    if face_area <= 0:
+                        face_area = 1.0
                     eq_pressure = abs(ld.magnitude) / face_area
                     load_code = (
                         f"# Total force {ld.magnitude} N on face converted to equivalent surface pressure: {eq_pressure:.6f} MPa\n"

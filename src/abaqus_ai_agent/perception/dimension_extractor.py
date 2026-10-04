@@ -46,7 +46,10 @@ class DimensionExtractor:
         callout_idx = 0
 
         # 1. Process explicit RawDimensionObservation instances
+        processed_texts = set()
         for obs in dimensions:
+            if obs.text:
+                processed_texts.add(obs.text.strip())
             x, y = obs.location
             # Fail-closed check: coordinates must be strictly within [0.0, 1.0]
             if not (0.0 <= x <= 1.0 and 0.0 <= y <= 1.0):
@@ -147,6 +150,8 @@ class DimensionExtractor:
         # Skip if text looks like load or boundary condition
         # 2. Extract dimensions from general text blocks matching dimension patterns
         for tb in text_blocks:
+            if tb.text.strip() in processed_texts:
+                continue
             lower = tb.text.lower()
             if any(
                 w in lower

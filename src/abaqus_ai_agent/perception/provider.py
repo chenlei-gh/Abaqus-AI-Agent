@@ -238,6 +238,16 @@ class RuleBasedVisionProvider(BaseVisionProvider):
             r"(?:[ØRΦ]\s*)?([-+]?[0-9]*\.?[0-9]+)\s*(?:±\s*([0-9]*\.?[0-9]+))?\s*([a-zA-Z]+)?"
         )
         for tb in text_blocks:
+            lower = tb.text.lower()
+            if any(
+                w in lower
+                for w in (
+                    "material", "mat:", "mat.", "steel", "aluminum", "alloy", "grade", "q235",
+                    "title", "scale", "sheet", "rev", "dwg", "fix", "encastre", "support",
+                    "load", "force", "moment", "press"
+                )
+            ):
+                continue
             match = dim_pattern.search(tb.text)
             if match and any(c.isdigit() for c in tb.text):
                 # Avoid matching pure load text like "1000 N" as dimension
@@ -262,3 +272,18 @@ class RuleBasedVisionProvider(BaseVisionProvider):
                 except (ValueError, TypeError):
                     pass
         return tuple(dims)
+
+
+class DrawingVisionProvider(RuleBasedVisionProvider):
+    """Production-ready engineering drawing perception provider.
+
+    Extracts textual and symbolic engineering annotations directly from
+    ingested drawing pages (vector PDF stream elements or OCR-extracted blocks).
+    Adheres strictly to the P1.1 Interface Freeze:
+    - Never generates solver scripts or Python code.
+    - Preserves immutable provenance and raw locations.
+    - Zero tolerance for invented direction vectors.
+    """
+
+    def __init__(self, provider_id: str = "drawing_vision_provider_v1"):
+        super().__init__(provider_id=provider_id)

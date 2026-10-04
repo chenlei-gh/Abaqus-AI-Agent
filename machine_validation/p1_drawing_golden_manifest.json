@@ -1,0 +1,58 @@
+{
+  "benchmark_id": "L_BRACKET_TIER1_VECTOR_PDF",
+  "blueprint_title": "L-Bracket Structural Blueprint",
+  "run_id": "run_p1_drawing_lbracket_live_2025",
+  "solver": "Abaqus 2025 (Live Execution)",
+  "timestamp": "2026-10-04T14:44:23.178809",
+  "perception_metrics": {
+    "overall_f1": 1.0,
+    "dimension_f1": 1.0,
+    "boundary_f1": 1.0,
+    "load_f1": 1.0,
+    "is_qualified": true
+  },
+  "simulation_results": {
+    "applied_load_n": 1000.0,
+    "total_reaction_rf_y_n": 999.9999951775717,
+    "equilibrium_error_percent": 4.822428309125826e-07,
+    "max_mises_mpa": 5.388445854187012,
+    "max_deflection_mm": 0.0029130475595593452,
+    "acceptance": "ACCEPTED"
+  },
+  "artifacts": {
+    "Job_P1_Drawing_LBracket.inp": {
+      "sha256": "6b403f386c94895601f68d7c1cc7d99be5187bebe91edc7ac5831fd4400a7767",
+      "size_bytes": 46077,
+      "exists": true
+    },
+    "Job_P1_Drawing_LBracket.odb": {
+      "sha256": "967bc09ef11ad6500ef608514c63863385e0a38493881cac5a1b0d4a185dcb3d",
+      "size_bytes": 303920,
+      "exists": true
+    },
+    "Job_P1_Drawing_LBracket.sta": {
+      "sha256": "3f75c960603fc66b8aed5601b55691fb31fbb4ab2de676e9c130e3c9849110ca",
+      "size_bytes": 443,
+      "exists": true
+    },
+    "Job_P1_Drawing_LBracket.msg": {
+      "sha256": "4a61f01cbddff6e1f13d8a212b0d1b9869dc8166a4045ff3af3f85bcbcd03ecf",
+      "size_bytes": 7996,
+      "exists": true
+    },
+    "Job_P1_Drawing_LBracket.dat": {
+      "sha256": "17e3dcccf35b94c4137dd95d1971e9da7a28be4e24bdcf282096ff2a9ac54d03",
+      "size_bytes": 10046,
+      "exists": true
+    },
+    "Job_P1_Drawing_LBracket.log": {
+      "sha256": "77c0fc814ba5ea43ed0c053c5a134080a2d5b4d41311c382c58e8a618d43052d",
+      "size_bytes": 687,
+      "exists": true
+    }
+  },
+  "probes": {
+    "probe_1_unconfirmed_hitl_block": "PASS",
+    "probe_2_evidence_tampering_block": "PASS"
+  }
+}

@@ -48,7 +48,10 @@ class BoundaryLoadExtractor:
         callout_idx = 0
 
         # 1. Process explicit RawSymbolObservation instances
+        processed_texts = set()
         for obs in symbols:
+            if obs.text_content:
+                processed_texts.add(obs.text_content.strip())
             x, y = obs.location
             # Fail-closed coordinate validation
             if not (0.0 <= x <= 1.0 and 0.0 <= y <= 1.0):
@@ -133,8 +136,11 @@ class BoundaryLoadExtractor:
 
         # 2. Extract load / support callouts from text blocks describing loads or boundary conditions
         for tb in text_blocks:
+            if tb.text.strip() in processed_texts:
+                continue
             lower = tb.text.lower()
             semantic = None
+            direction_vec = None
             callout_type = CalloutType.SYMBOL.value
 
             # Symmetry cues

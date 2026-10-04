@@ -1,0 +1,98 @@
+{
+  "drawing_id": "L_BRACKET_TIER3_SCREENSHOT",
+  "tier": "tier3_screenshot",
+  "file_path": "tier3_screenshot/l_bracket_screenshot.png",
+  "title": "L-Bracket Structural Blueprint",
+  "unit_system": "SI_MM",
+  "material": {
+    "material_name": "Q235",
+    "elastic_modulus": 210000.0,
+    "poisson_ratio": 0.3,
+    "yield_strength": 235.0,
+    "density": 7.85e-09
+  },
+  "dimensions": [
+    {
+      "dimension_id": "dim_length",
+      "nominal_value": 100.0,
+      "unit": "mm",
+      "tolerance_upper": 0.1,
+      "tolerance_lower": -0.1,
+      "text": "L = 100.0 mm",
+      "feature_name": "BaseArmLength",
+      "box": null
+    },
+    {
+      "dimension_id": "dim_height",
+      "nominal_value": 100.0,
+      "unit": "mm",
+      "tolerance_upper": 0.1,
+      "tolerance_lower": -0.1,
+      "text": "H = 100.0 mm",
+      "feature_name": "VerticalArmHeight",
+      "box": null
+    },
+    {
+      "dimension_id": "dim_thickness",
+      "nominal_value": 10.0,
+      "unit": "mm",
+      "tolerance_upper": 0.05,
+      "tolerance_lower": -0.05,
+      "text": "T = 10.0 mm",
+      "feature_name": "ArmThickness",
+      "box": null
+    },
+    {
+      "dimension_id": "dim_width",
+      "nominal_value": 20.0,
+      "unit": "mm",
+      "tolerance_upper": 0.1,
+      "tolerance_lower": -0.1,
+      "text": "W = 20.0 mm",
+      "feature_name": "BracketWidth",
+      "box": null
+    }
+  ],
+  "boundary_conditions": [
+    {
+      "boundary_id": "bc_base_fix",
+      "bc_type": "FIXED_SUPPORT",
+      "target_region": "BaseFace",
+      "location": [
+        0.4,
+        0.75
+      ],
+      "text": "Encastre fixed support at Base Face"
+    }
+  ],
+  "loads": [
+    {
+      "load_id": "load_tip_down",
+      "load_type": "CONCENTRATED_FORCE",
+      "magnitude": 1000.0,
+      "unit": "N",
+      "direction_vector": [
+        0.0,
+        -1.0
+      ],
+      "target_region": "TipFace",
+      "location": [
+        0.28,
+        0.2
+      ],
+      "text": "Downward concentrated force F = 1000 N at Tip Face"
+    }
+  ],
+  "verification": {
+    "expected_reaction_y": 1000.0,
+    "reaction_tolerance_ratio": 0.001,
+    "max_mises_min_mpa": 5.0,
+    "max_mises_max_mpa": 150.0,
+    "max_deflection_mm": 0.5
+  },
+  "notes": [
+    "Benchmark case for P1.1 Multimodal Drawing Ingestion",
+    "L-Bracket linear static analysis"
+  ],
+  "metadata": {}
+}
