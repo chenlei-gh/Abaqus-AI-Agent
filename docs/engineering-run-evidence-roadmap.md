@@ -1648,6 +1648,42 @@ In practical engineering practice, user requests do not arrive as pre-grounded A
   - Canonical compiler integration in `compile_intent_to_actions()`: automated Reference Point synthesis, native `rigid_body` constraints, native `coupling_constraint` (KINEMATIC/DISTRIBUTING), connector coupling, gravity loading, and automatic `S, U, UR, V, VR, CU, CTF, RF, RM` field output and `ALLIE, ALLKE, ALLWK, ALLSE, ETOTAL` history output injection.
   - Strict preflight lifecycle gate in `preflight_action()` and `preflight_plan()`: checks coupling control point and surface existence and distinctness, rigid body distinct regions, and connector sections with 0 blockers.
   - ODB result extraction and acceptance: Gate 14 `fmbd_dynamics` integrated into `evaluate_result_acceptance()` and `AnalysisRunner.run()`. Physics profile for `fmbd` enforcing required fields (`S, U, CU, CTF`), required metrics (`joint_drift, max_mises_stress, strain_energy_ratio, energy_dissipation_ratio`), and required gates.
+
+---
+
+### Phase P1 — Commercial Engineering Agent Productization (P1.0 ~ P1.5)
+
+With the foundational 20 physical engineering domains (20 L4 / 0 L3) completely closed on live Abaqus 2025, Phase P1 shifts focus to building the true autonomous engineering product: transitioning from low-level execution scripts to a reliable, human-grade AI engineering partner.
+
+#### P1.0: Agent Product Main Entry (`solve_requirement`) [CLOSED & QUALIFIED]
+- **API**: `AbaqusAIAgent.solve_requirement(requirement, geometry, material, ...)` returning strongly-typed `EngineeringTaskResult`.
+- **Lifecycle Gating**: Single-exit acceptance verification (`COMPLETED` iff `AnalysisRunState.ACCEPTED` and `acceptance_passed == True`).
+- **20 L4 Automated Matrix**: Full compatibility routing across all 20 L4 domains with automated Bolt Pretension step inference.
+- **Evidence**: `machine_validation/p1_product_solve_manifest.json` (Real Abaqus 2025).
+
+#### P1.1: Multimodal Engineering Perception & Drawing Ingestion [CLOSED & QUALIFIED]
+- **Document Ingestion**: Vector-first PDF parsing + multi-format raster image ingestion (PNG, JPEG, TIFF) with reversible coordinate mapping.
+- **Clean Extraction Funnel**: `DimensionExtractor` and `BoundaryLoadExtractor` yielding normalized `VisualCallout`.
+- **Engineering Grounding Bridge**: Canonical mapping to GA-2A CAD Grounding and GA-2B mandatory Human-in-the-Loop (HITL) review.
+- **Evidence**: `machine_validation/p1_drawing_golden_manifest.json` (Perception F1 = 1.0000, Reaction Balance Error = 0.0000%).
+
+#### P1.2: Engineering Intent Reasoning & Parameter Inference [CLOSED & QUALIFIED]
+- **Material Alias Normalization**: Autonomous resolution of standard trade names (Q235, Q345, 45#, 6061) to complete constitutive models.
+- **Mesh Heuristic Inference**: Aspect-ratio and geometry-aware mesh sizing with explicit evidence traceability.
+- **Physical Plausibility Screening**: Fail-closed detection of unconstrained mechanisms, extreme loads, and parameter conflicts before solver dispatch.
+- **Evidence**: `machine_validation/p1_intent_reasoning_manifest.json` (G1~G5 Golden Matrix Qualified).
+
+#### P1.3: Result Intelligence & Engineering Deliverable Delivery (R1~R6) [CLOSED & QUALIFIED]
+- **R1 General ODB Extraction**: Reliable tensor and vector field reading across continuum and structural elements (S, U, RF, CF).
+- **R2 History & Parametric Curves**: Deterministic extraction of complete time-history sequences (ALLSE, ALLIE, ALLKE, ETOTAL, U2, RF2) into `XYCurveData`.
+- **R3 Derived Physical Metrics**:
+  - Global static equilibrium balance (`ReactionForceBalance`: Applied Load vs Reaction Force Resultant, error $\le 0.01\%$).
+  - Numerical energy stability (`EnergyStability`: ETOTAL drift ratio and kinetic/internal energy checks).
+  - Structural factor of safety (`FactorOfSafetyMetric`: Nominal FoS and Margin of Safety relative to material yield, strictly preserved as derived engineering facts without hijacking the Acceptance Engine).
+- **R4 Spatial Hotspot Identification**: Top-$K$ localized stress/displacement peak concentration extraction with 3D spatial coordinates $(x,y,z)$, element labels, and node labels.
+- **R5 High-Fidelity Vector SVG Visualization**: Pure Python vector SVG rendering engine for XY response curves and hotspot distribution cards with cryptographic SHA-256 provenance (zero mandatory matplotlib/reportlab dependencies).
+- **R6 Unified Engineering Deliverable Generation**: Automated compilation of publication-grade Markdown and standalone HTML engineering reports embedded with Result Intelligence tables, executive summaries, and figure assets.
+- **Evidence**: `machine_validation/p1_3_result_delivery_manifest.json` (Real Abaqus 2025, Max Mises = 505.03 MPa, Deflection = 2.1658 mm, Reaction Balance Error = 0.0000%, 5 Hotspots, 4 SVG Curves, 10/10 Probes PASS).
   - Live Abaqus 2025 Standard execution in `tools/fmbd_l4_golden_e2e.py`: coupled rigid crank and flexible link under gravity; 336 frames; joint drift $3.13\times 10^{-10}\text{ mm} \le 10^{-3}\text{ mm}$, flexible link max Mises $0.0435\text{ MPa}$ (passed $\ge 0.01\text{ MPa}$ non-trivial flexible-response probe), peak strain energy activation ratio $\max(\text{ALLSE})/\max(\text{ALLIE}) = 0.9993 \ge 0.01$, total energy balance drift ratio $|\max(\text{ETOTAL})-\min(\text{ETOTAL})|/E_{\text{ref}} = 0.0056 \le 0.05$.
   - Formal Metric Definitions & Clarifications:
     * `strain_energy_ratio`: Defined as $\max(\text{ALLSE}) / \max(\text{ALLIE})$, functioning as a peak flexible strain energy activation probe confirming genuine dynamic structural deformation (rather than instantaneous point-to-point energy conservation).

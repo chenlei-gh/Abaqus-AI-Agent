@@ -41,6 +41,75 @@ def _render_custom_table_for_section(heading, value):
         if rows:
             lines += [_format_markdown_table(["Metric Name", "Value", "Unit", "Source"], rows), ""]
 
+    # 8b. Result Intelligence & Derived Metrics
+    elif heading.startswith("8b. Result Intelligence") and value is not None:
+        val_dict = value.to_dict() if hasattr(value, "to_dict") else (value if isinstance(value, dict) else {})
+        # 8b-1. Spatial Hotspots
+        hotspots = val_dict.get("hotspots") or ()
+        if hotspots:
+            h_rows = []
+            for h in hotspots:
+                r = f"#{h.get('rank', '-')}"
+                fld = f"{h.get('field_name', '-')}:{h.get('component', '-')}"
+                val_str = f"{float(h.get('value', 0.0)):.4g}"
+                u = h.get("unit", "")
+                elem = str(h.get("element_label") or "-")
+                node = str(h.get("node_label") or "-")
+                coords = h.get("coordinates") or [0.0, 0.0, 0.0]
+                coord_str = f"({coords[0]:.2f}, {coords[1]:.2f}, {coords[2]:.2f})" if len(coords) >= 3 else str(coords)
+                h_rows.append([r, fld, val_str, u, elem, node, coord_str])
+            lines += ["### Localized Spatial Field Hotspots (Top-K)", "", _format_markdown_table(["Rank", "Field:Component", "Peak Value", "Unit", "Element", "Node", "Coordinates (X,Y,Z)"], h_rows), ""]
+
+        # 8b-2. Derived Engineering Metrics
+        dm = val_dict.get("derived_metrics") or {}
+        if dm:
+            # Force Balance
+            fb = dm.get("force_balance")
+            if fb:
+                fb_rows = [[
+                    f"{float(fb.get('applied_magnitude', 0.0)):.4g} {fb.get('unit', 'N')}",
+                    f"{float(fb.get('reaction_magnitude', 0.0)):.4g} {fb.get('unit', 'N')}",
+                    f"{float(fb.get('balance_error_percent', 0.0)):.3f}%",
+                    "BALANCED" if fb.get("is_balanced") else "EQUILIBRIUM_DRIFT",
+                ]]
+                lines += ["### Global Static Equilibrium & Reaction Force Balance", "", _format_markdown_table(["Applied Resultant", "Reaction Resultant", "Balance Error", "Equilibrium Status"], fb_rows), ""]
+
+            # Energy Stability
+            es = dm.get("energy_stability")
+            if es:
+                es_rows = [
+                    ["Total Energy Drift Ratio", f"{float(es.get('total_energy_drift_ratio', 0.0)):.4%}", "Numerical ETOTAL Conservation"],
+                    ["Kinetic / Internal Energy", f"{float(es.get('kinetic_energy_ratio', 0.0)):.4%}" if es.get("kinetic_energy_ratio") is not None else "N/A", "Dynamic Energy Ratio"],
+                    ["Energy Stability Verdict", "STABLE" if es.get("is_stable") else "DRIFT_EXCEEDED", es.get("notes", "")],
+                ]
+                lines += ["### Energy Balance & Numerical Stability", "", _format_markdown_table(["Energy Dimension", "Evaluated Value", "Physical Annotation"], es_rows), ""]
+
+            # Factor of Safety
+            sf = dm.get("safety_factor")
+            if sf:
+                sf_rows = [[
+                    f"{sf.get('stress_component', 'Mises')} Stress",
+                    f"{float(sf.get('max_stress', 0.0)):.4g} {sf.get('unit', 'MPa')}",
+                    f"{float(sf.get('yield_strength', 0.0)):.4g} {sf.get('unit', 'MPa')} ({sf.get('material_name', 'Q235')})",
+                    f"{float(sf.get('factor_of_safety', 0.0)):.3f}",
+                    f"{float(sf.get('margin_of_safety', 0.0)):+.3f}",
+                ]]
+                lines += ["### Structural Factor of Safety (Derived Engineering Fact)", "", _format_markdown_table(["Evaluated Field", "Peak Stress", "Yield Strength", "Factor of Safety (FoS)", "Margin of Safety (MoS)"], sf_rows), ""]
+
+        # 8b-3. XY Response Curves
+        curves = val_dict.get("curves") or ()
+        if curves:
+            c_rows = []
+            for c in curves:
+                cname = c.get("curve_name", "-")
+                pts = c.get("point_count", 0)
+                min_v = f"{float(c.get('min_y', 0.0)):.4g}"
+                max_v = f"{float(c.get('max_y', 0.0)):.4g}"
+                peak_v = f"{float(c.get('peak_abs_y', 0.0)):.4g}"
+                u = c.get("y_unit", "")
+                c_rows.append([cname, str(pts), min_v, max_v, peak_v, u])
+            lines += ["### Parametric & Time-History Response Curves", "", _format_markdown_table(["Curve Name", "Points", "Min Y", "Max Y", "Peak |Y|", "Unit"], c_rows), ""]
+
     # 11. Acceptance Criteria -> Integrity Audit & Criteria Table
     elif heading.startswith("11. Acceptance") and value is not None:
         # 11a. Render Integrity & Gate Audit if available
@@ -178,6 +247,7 @@ def render_markdown(report):
         ("4. Boundary Conditions", report.boundary_conditions), ("5. Loads", report.loads),
         ("6. Solver / Analysis Procedure", report.solver), ("7. Mesh", report.mesh),
         ("8. Results", report.results),
+        ("8b. Result Intelligence & Derived Metrics", getattr(report, "result_intelligence", None)),
         ("9. Figures", report.figures), ("10. Engineering Checks", report.engineering_checks),
         ("11. Acceptance Criteria", report.acceptance),
         ("12. Sensitivity / Uncertainty", (report.sensitivity, report.uncertainty)),

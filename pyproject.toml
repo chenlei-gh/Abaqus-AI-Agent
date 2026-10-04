@@ -16,7 +16,7 @@ abaqus-ai-agent = "abaqus_ai_agent.cli:main"
 abaqus-agent = "abaqus_ai_agent.cli:main"
 
 [project.optional-dependencies]
-test = ["pytest>=7"]
+test = ["pytest>=7", "Pillow"]
 
 [tool.setuptools.packages.find]
 where = ["src"]

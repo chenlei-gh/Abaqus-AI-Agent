@@ -1,0 +1,354 @@
+{
+  "schema_version": "evidence_manifest_v2",
+  "case_id": "P1_3_RESULT_DELIVERY_GOLDEN",
+  "title": "P1.3 Result Intelligence & Engineering Report Deliverable Verification",
+  "target": "Abaqus 2025 Standard Implicit / Result Intelligence R1~R6",
+  "qualification_level": "QUALIFIED",
+  "status": "ACCEPTED",
+  "timestamp": "2026-10-04T15:23:44.974661",
+  "summary": {
+    "status": "COMPLETED",
+    "capability_id": "linear_static",
+    "physics_domain": "static",
+    "model_name": "Model_P1_3_Result_Delivery",
+    "job_name": "Job_P1_3_Result_Delivery",
+    "engineering_status": "RESULT_VALID",
+    "acceptance_passed": true,
+    "metrics": {
+      "tip_displacement": 2.16584849357605,
+      "max_mises": 505.026702880859
+    },
+    "report_md_length": 26545,
+    "report_html_length": 36524,
+    "has_result_intelligence": true,
+    "hotspot_count": 5,
+    "hotspots": [
+      {
+        "rank": 1,
+        "value": 505.026702880859,
+        "field_name": "S",
+        "component": "Mises",
+        "unit": "MPa",
+        "coordinates": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "instance": "MAINPART-1",
+        "element_label": 1,
+        "node_label": null,
+        "description": "Peak S Mises concentration #1",
+        "metadata": {}
+      },
+      {
+        "rank": 2,
+        "value": 472.827728271484,
+        "field_name": "S",
+        "component": "Mises",
+        "unit": "MPa",
+        "coordinates": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "instance": "MAINPART-1",
+        "element_label": 473,
+        "node_label": null,
+        "description": "Peak S Mises concentration #2",
+        "metadata": {}
+      },
+      {
+        "rank": 3,
+        "value": 472.800415039062,
+        "field_name": "S",
+        "component": "Mises",
+        "unit": "MPa",
+        "coordinates": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "instance": "MAINPART-1",
+        "element_label": 476,
+        "node_label": null,
+        "description": "Peak S Mises concentration #3",
+        "metadata": {}
+      },
+      {
+        "rank": 4,
+        "value": 471.421875,
+        "field_name": "S",
+        "component": "Mises",
+        "unit": "MPa",
+        "coordinates": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "instance": "MAINPART-1",
+        "element_label": 316,
+        "node_label": null,
+        "description": "Peak S Mises concentration #4",
+        "metadata": {}
+      },
+      {
+        "rank": 5,
+        "value": 471.395843505859,
+        "field_name": "S",
+        "component": "Mises",
+        "unit": "MPa",
+        "coordinates": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "instance": "MAINPART-1",
+        "element_label": 313,
+        "node_label": null,
+        "description": "Peak S Mises concentration #5",
+        "metadata": {}
+      }
+    ],
+    "curve_count": 4,
+    "curves": [
+      {
+        "curve_name": "ALLSE_History",
+        "x_label": "Time",
+        "y_label": "ALLSE",
+        "x_unit": "s",
+        "y_unit": "",
+        "point_count": 2,
+        "min_y": 0.0,
+        "max_y": 1047.90856933594,
+        "peak_abs_y": 1047.90856933594,
+        "points": [
+          [
+            0.0,
+            0.0
+          ],
+          [
+            1.0,
+            1047.90856933594
+          ]
+        ],
+        "metadata": {
+          "step": "Step-1",
+          "region": "Assembly ASSEMBLY",
+          "variable": "ALLSE",
+          "odb_path": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\legacy_job_artifacts\\P1_3_Result_Delivery_Golden\\Job_P1_3_Result_Delivery.odb"
+        }
+      },
+      {
+        "curve_name": "ALLIE_History",
+        "x_label": "Time",
+        "y_label": "ALLIE",
+        "x_unit": "s",
+        "y_unit": "",
+        "point_count": 2,
+        "min_y": 0.0,
+        "max_y": 1079.048828125,
+        "peak_abs_y": 1079.048828125,
+        "points": [
+          [
+            0.0,
+            0.0
+          ],
+          [
+            1.0,
+            1079.048828125
+          ]
+        ],
+        "metadata": {
+          "step": "Step-1",
+          "region": "Assembly ASSEMBLY",
+          "variable": "ALLIE",
+          "odb_path": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\legacy_job_artifacts\\P1_3_Result_Delivery_Golden\\Job_P1_3_Result_Delivery.odb"
+        }
+      },
+      {
+        "curve_name": "ETOTAL_History",
+        "x_label": "Time",
+        "y_label": "ETOTAL",
+        "x_unit": "s",
+        "y_unit": "",
+        "point_count": 2,
+        "min_y": -3.89516117138555e-08,
+        "max_y": 0.0,
+        "peak_abs_y": 3.89516117138555e-08,
+        "points": [
+          [
+            0.0,
+            0.0
+          ],
+          [
+            1.0,
+            -3.89516117138555e-08
+          ]
+        ],
+        "metadata": {
+          "step": "Step-1",
+          "region": "Assembly ASSEMBLY",
+          "variable": "ETOTAL",
+          "odb_path": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\legacy_job_artifacts\\P1_3_Result_Delivery_Golden\\Job_P1_3_Result_Delivery.odb"
+        }
+      },
+      {
+        "curve_name": "ALLKE_History",
+        "x_label": "Time",
+        "y_label": "ALLKE",
+        "x_unit": "s",
+        "y_unit": "",
+        "point_count": 2,
+        "min_y": 0.0,
+        "max_y": 0.0,
+        "peak_abs_y": 0.0,
+        "points": [
+          [
+            0.0,
+            0.0
+          ],
+          [
+            1.0,
+            0.0
+          ]
+        ],
+        "metadata": {
+          "step": "Step-1",
+          "region": "Assembly ASSEMBLY",
+          "variable": "ALLKE",
+          "odb_path": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\legacy_job_artifacts\\P1_3_Result_Delivery_Golden\\Job_P1_3_Result_Delivery.odb"
+        }
+      }
+    ],
+    "figure_paths": [
+      "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\legacy_job_artifacts\\P1_3_Result_Delivery_Golden\\Job_P1_3_Result_Delivery_hotspots.svg",
+      "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\legacy_job_artifacts\\P1_3_Result_Delivery_Golden\\Job_P1_3_Result_Delivery_ALLSE.svg",
+      "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\legacy_job_artifacts\\P1_3_Result_Delivery_Golden\\Job_P1_3_Result_Delivery_ALLIE.svg",
+      "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\legacy_job_artifacts\\P1_3_Result_Delivery_Golden\\Job_P1_3_Result_Delivery_ETOTAL.svg",
+      "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\legacy_job_artifacts\\P1_3_Result_Delivery_Golden\\Job_P1_3_Result_Delivery_ALLKE.svg"
+    ],
+    "derived_metrics": {
+      "force_balance": {
+        "applied_magnitude": 1000.0,
+        "reaction_magnitude": 999.9999928474426,
+        "balance_error_percent": 7.152557373046875e-07,
+        "is_balanced": true,
+        "applied_components": [
+          0.0,
+          1000.0,
+          0.0
+        ],
+        "reaction_components": [
+          0.0,
+          999.9999928474426,
+          0.0
+        ],
+        "unit": "N"
+      },
+      "energy_stability": {
+        "total_energy_drift_ratio": 3.609809926909372e-11,
+        "kinetic_energy_ratio": 0.0,
+        "is_stable": true,
+        "notes": "ETOTAL drift ratio is 0.0000% (tolerance: 5.0%). Peak KE/IE ratio: 0.0000%."
+      },
+      "safety_factor": {
+        "max_stress": 505.026702880859,
+        "yield_strength": 250.0,
+        "factor_of_safety": 0.4950233296059547,
+        "margin_of_safety": -0.5049766703940453,
+        "stress_component": "Mises",
+        "material_name": "Structural_Steel",
+        "unit": "MPa"
+      },
+      "metadata": {}
+    }
+  },
+  "physical_results": {
+    "max_mises_mpa": 505.026702880859,
+    "deflection_mm": 2.16584849357605,
+    "reaction_force_n": 999.9999928474426,
+    "force_balance_error_percent": 7.152557373046875e-07,
+    "hotspot_count": 5,
+    "curve_count": 4
+  },
+  "artifacts": {
+    "Job_P1_3_Result_Delivery.inp": {
+      "sha256": "4a6a07d2b9a0c4cbea87b0d3494d664a80c4a1be1d19986ce2a5a44e3c491122",
+      "size_bytes": 88065,
+      "exists": true
+    },
+    "Job_P1_3_Result_Delivery.odb": {
+      "sha256": "58189b12fdaa4ad9c2c4ab8746dcbebefff76aa3fc9da5163c7d81c9332c41b3",
+      "size_bytes": 405264,
+      "exists": true
+    },
+    "Job_P1_3_Result_Delivery.sta": {
+      "sha256": "35448c757565b16dbd5dd50a4d004f6a8c872d1680db3bfe19a5882e87cd9d3a",
+      "size_bytes": 443,
+      "exists": true
+    },
+    "Job_P1_3_Result_Delivery.msg": {
+      "sha256": "95865650ea936800643c037ce5e3424b9716eea237ea50b5efba1eeb60419bdc",
+      "size_bytes": 7995,
+      "exists": true
+    },
+    "Job_P1_3_Result_Delivery.dat": {
+      "sha256": "c1a1b376865160e85b94782d092734c09b85c2d501547f2667ceff43bc24f504",
+      "size_bytes": 9998,
+      "exists": true
+    },
+    "Job_P1_3_Result_Delivery.log": {
+      "sha256": "3a515ebbe9ef6c9b8430c60cc5be9e8500004df8ae7fa4f546183f57d8f3ba8a",
+      "size_bytes": 689,
+      "exists": true
+    },
+    "engineering_report.md": {
+      "sha256": "3aec9cf53566a4911f3c03dfc433e11f757064b7febe7ba38be19f437c07c0ed",
+      "size_bytes": 27548,
+      "exists": true
+    },
+    "engineering_report.html": {
+      "sha256": "4f7591ec5ed1c7578a4b4c1322424d8e4f9cec2b90d9cd109d1b715c540d4fc3",
+      "size_bytes": 37617,
+      "exists": true
+    },
+    "Job_P1_3_Result_Delivery_ALLIE.svg": {
+      "sha256": "aa28e01d9b22c04a7f8570772c31c3d99e8861915e17a97ec07632c7db64d35a",
+      "size_bytes": 3414,
+      "exists": true
+    },
+    "Job_P1_3_Result_Delivery_ALLKE.svg": {
+      "sha256": "27dc633237201d42e76cb0dc9d0000824fa6b37a9d4ecffd176757d2514f5501",
+      "size_bytes": 3410,
+      "exists": true
+    },
+    "Job_P1_3_Result_Delivery_ALLSE.svg": {
+      "sha256": "63175b42a240a86c054b59a28c473fb7fbca1a4804dc68af7b9906233c7b5950",
+      "size_bytes": 3413,
+      "exists": true
+    },
+    "Job_P1_3_Result_Delivery_ETOTAL.svg": {
+      "sha256": "2c57cbe22e8c303d79ec86953116d99d89c83e2f557a1257b807d1cab56b05f9",
+      "size_bytes": 3452,
+      "exists": true
+    },
+    "Job_P1_3_Result_Delivery_hotspots.svg": {
+      "sha256": "cbdfe842ca9a9eee10d80b596f6d83056125a6a9076f1b19e3cae3c548d8503e",
+      "size_bytes": 3618,
+      "exists": true
+    }
+  },
+  "probes": {
+    "p1_single_exit_completed": "PASS",
+    "p2_real_odb_generated": "PASS",
+    "p3_history_curve_extracted": "PASS",
+    "p4_spatial_hotspots_top_k": "PASS",
+    "p5_reaction_force_balanced": "PASS",
+    "p6_factor_of_safety_derived": "PASS",
+    "p7_svg_vector_charts_generated": "PASS",
+    "p8_report_markdown_rendered": "PASS",
+    "p9_report_html_rendered": "PASS",
+    "p10_no_secondary_acceptance_leak": "PASS"
+  },
+  "audit_signature": "05e84563c1c9112a83465f775755e3ea360c9751552cea798162b708d001e02a"
+}

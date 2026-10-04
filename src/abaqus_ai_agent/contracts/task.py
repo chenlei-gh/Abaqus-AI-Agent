@@ -34,6 +34,8 @@ class EngineeringTaskResult:
     metrics: Tuple[Any, ...] = ()
     summary_card: Dict[str, Any] = field(default_factory=dict)
     report_markdown: Optional[str] = None
+    report_html: Optional[str] = None
+    result_intelligence: Optional[Any] = None
     clarification_prompt: Optional[str] = None
     errors: Tuple[str, ...] = ()
     metadata: Dict[str, Any] = field(default_factory=dict)
@@ -55,6 +57,7 @@ class EngineeringTaskResult:
             "acceptance_passed": getattr(self.acceptance, "passed", False) if self.acceptance else False,
             "engineering_status": getattr(self.run, "engineering_status", None) if self.run else None,
             "summary_card": dict(self.summary_card),
+            "result_intelligence": self.result_intelligence.to_dict() if hasattr(self.result_intelligence, "to_dict") else None,
             "clarification_prompt": self.clarification_prompt,
             "errors": list(self.errors),
             "metadata": dict(self.metadata),

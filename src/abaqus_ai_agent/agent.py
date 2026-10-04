@@ -1,4 +1,6 @@
+import os
 from dataclasses import dataclass
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 from .actions.runner import execute
 from .evidence.result import summarize_odb
@@ -63,6 +65,200 @@ class AbaqusAIAgent:
         from .contracts.report import EngineeringReportData
         return EngineeringReportData.from_analysis(run, title=title, objective=objective, **sections)
 
+    def extract_result_intelligence(
+        self,
+        run: Any,
+        intent: Optional[Any] = None,
+        capability: Optional[Any] = None,
+        output_dir: Optional[str] = None,
+    ) -> Tuple[Any, Tuple[Any, ...]]:
+        """Extract spatial hotspots, response curves, and derived engineering metrics."""
+        from .contracts.result_intelligence import ResultIntelligenceBundle, SpatialHotspot, XYCurveData
+        from .results.derived_metrics import calculate_derived_metrics
+        from .results.history_extraction import extract_history_curve
+        from .results.spatial_hotspots import extract_spatial_hotspots
+        from .visualization.engine import render_hotspots_svg, render_xy_curve_svg, save_chart_figure
+
+        out_dir = output_dir or getattr(run, "work_dir", None) or os.getcwd()
+        os.makedirs(out_dir, exist_ok=True)
+
+        job_name = getattr(run, "job_name", "Job") or "Job"
+        metrics = getattr(run, "metrics", ()) or ()
+        primary_metrics: Dict[str, float] = {}
+        for m in metrics:
+            m_name = getattr(m, "name", None) or (m.get("name") if isinstance(m, dict) else str(m))
+            m_val = getattr(m, "value", None) if hasattr(m, "value") else (m.get("value") if isinstance(m, dict) else None)
+            if m_name and isinstance(m_val, (int, float)):
+                primary_metrics[m_name] = float(m_val)
+            v_key = getattr(m, "value_key", None) or (m.get("value_key") if isinstance(m, dict) else None)
+            if not v_key:
+                m_meta = getattr(m, "metadata", {}) or (m.get("metadata", {}) if isinstance(m, dict) else {})
+                if isinstance(m_meta, dict):
+                    v_key = m_meta.get("value_key")
+            if v_key and isinstance(m_val, (int, float)):
+                primary_metrics[v_key] = float(m_val)
+
+        # 1. Stress / Yield / Force extraction for derived metrics
+        max_stress = None
+        for k in ("max_mises", "S_Mises", "MISES", "max_stress", "S"):
+            if k in primary_metrics:
+                max_stress = primary_metrics[k]
+                break
+
+        yield_strength = None
+        material_name = "Steel"
+        mats = []
+        if intent:
+            if getattr(intent, "materials", None):
+                mats.extend(intent.materials)
+            if getattr(intent, "material", None):
+                mats.append(intent.material)
+
+        for mat in mats:
+            if isinstance(mat, dict):
+                mat_name = mat.get("name", "")
+                if mat_name:
+                    material_name = mat_name
+                props = mat.get("properties") or mat
+                if "yield_strength" in props:
+                    yield_strength = float(props["yield_strength"])
+                    break
+                elif "yield" in props:
+                    yield_strength = float(props["yield"])
+                    break
+            else:
+                mat_name = getattr(mat, "name", "")
+                if mat_name:
+                    material_name = mat_name
+                props = getattr(mat, "properties", {}) or {}
+                if "yield_strength" in props:
+                    yield_strength = float(props["yield_strength"])
+                    break
+                elif "yield" in props:
+                    yield_strength = float(props["yield"])
+                    break
+
+        if yield_strength is None and "235" in material_name:
+            yield_strength = 235.0
+        elif yield_strength is None and "345" in material_name:
+            yield_strength = 345.0
+
+        applied_force = None
+        if intent and getattr(intent, "loads", None):
+            tot_mag = 0.0
+            for ld in intent.loads:
+                if isinstance(ld, dict):
+                    mag = ld.get("magnitude", ld.get("value", 0.0)) or 0.0
+                else:
+                    mag = getattr(ld, "magnitude", getattr(ld, "value", 0.0)) or 0.0
+                tot_mag += abs(float(mag))
+            if tot_mag > 0:
+                applied_force = tot_mag
+
+        reaction_force = None
+        for k in ("RF2", "RF", "RF_mag", "reaction_force"):
+            if k in primary_metrics:
+                reaction_force = abs(primary_metrics[k])
+                break
+
+        # 2. ODB inspection for spatial hotspots, history curves, and reaction summation
+        odb_path = getattr(run, "odb_path", None)
+        if not odb_path and hasattr(run, "metadata") and isinstance(run.metadata, dict):
+            out_files = run.metadata.get("output_files") or {}
+            odb_path = out_files.get("odb") or run.metadata.get("odb_path")
+
+        if reaction_force is None and odb_path and os.path.exists(odb_path):
+            try:
+                from odbAccess import openOdb
+                _odb = openOdb(path=odb_path, readOnly=True)
+                _frame = _odb.steps.values()[-1].frames[-1]
+                if 'RF' in _frame.fieldOutputs:
+                    rf_fld = _frame.fieldOutputs['RF']
+                    tot_rf2 = sum(float(val.data[1]) for val in rf_fld.values if hasattr(val, 'data') and len(val.data) > 1)
+                    if abs(tot_rf2) > 1e-6:
+                        reaction_force = abs(tot_rf2)
+                        primary_metrics["RF2"] = tot_rf2
+                _odb.close()
+            except Exception:
+                pass
+
+        hotspots_list: List[SpatialHotspot] = []
+        curves_list: List[XYCurveData] = []
+        figures: List[Any] = []
+
+        if odb_path and os.path.exists(odb_path) and hasattr(self, "executor") and self.executor:
+            try:
+                hotspots = extract_spatial_hotspots(
+                    self.executor,
+                    odb_path=odb_path,
+                    field_name="S",
+                    component="Mises",
+                    top_k=5,
+                )
+                hotspots_list.extend(hotspots)
+                if hotspots_list:
+                    svg_h = render_hotspots_svg(hotspots_list)
+                    fig_h_path = os.path.join(out_dir, f"{job_name}_hotspots.svg")
+                    fig_h = save_chart_figure(
+                        svg_content=svg_h,
+                        output_path=fig_h_path,
+                        caption=f"Top-{len(hotspots_list)} Mises Stress Hotspots ({job_name})",
+                        kind="spatial_hotspots",
+                    )
+                    figures.append(fig_h)
+            except Exception:
+                pass
+
+            # Try extracting typical energy curves if available
+            for var in ("ALLSE", "ALLIE", "ETOTAL", "ALLKE"):
+                try:
+                    c = extract_history_curve(
+                        self.executor,
+                        odb_path=odb_path,
+                        variable_name=var,
+                    )
+                    if c.point_count > 0:
+                        curves_list.append(c)
+                        svg_c = render_xy_curve_svg(c)
+                        fig_c_path = os.path.join(out_dir, f"{job_name}_{var}.svg")
+                        fig_c = save_chart_figure(
+                            svg_content=svg_c,
+                            output_path=fig_c_path,
+                            caption=f"{var} Response History ({job_name})",
+                            kind="xy_curve",
+                        )
+                        figures.append(fig_c)
+                except Exception:
+                    pass
+
+        etotal_curve = next((c for c in curves_list if c.curve_name.startswith("ETOTAL")), None)
+        allie_curve = next((c for c in curves_list if c.curve_name.startswith("ALLIE")), None)
+        allke_curve = next((c for c in curves_list if c.curve_name.startswith("ALLKE")), None)
+
+        derived_metrics = calculate_derived_metrics(
+            applied_load=applied_force,
+            reaction_load=reaction_force,
+            etotal_data=etotal_curve,
+            allie_data=allie_curve,
+            allke_data=allke_curve,
+            max_stress=max_stress,
+            yield_strength=yield_strength,
+            material_name=material_name,
+        )
+
+        bundle = ResultIntelligenceBundle(
+            primary_metrics=primary_metrics,
+            hotspots=tuple(hotspots_list),
+            curves=tuple(curves_list),
+            derived_metrics=derived_metrics,
+            figure_paths=tuple(f.path for f in figures),
+            metadata={
+                "job_name": job_name,
+                "odb_path": odb_path,
+            },
+        )
+        return bundle, tuple(figures)
+
     def plan_outputs(self, criteria=(), outputs=(), postprocess_profile=None):
         from .planning.output import plan_outputs
         return plan_outputs(criteria, outputs, postprocess_profile=postprocess_profile)
@@ -121,7 +317,7 @@ class AbaqusAIAgent:
         from .contracts.task import EngineeringTaskResult, TaskStatus
         from .execution.analysis_run import AnalysisRunState
         from .planning.compiler import compile_engineering_intent
-        from .reporting.renderer import render_markdown
+        from .reporting.renderer import render_html, render_markdown
         from .typesafe_intent import JevIntentRouter
         from .validation.preflight import preflight_plan
 
@@ -309,13 +505,24 @@ class AbaqusAIAgent:
         metrics = getattr(run, "metrics", ()) or ()
         acceptance = getattr(run, "acceptance", None)
 
+        # 7a. Result Intelligence & Graphical Assets (P1.3 Delivery)
+        ri_bundle, generated_figures = self.extract_result_intelligence(
+            run=run,
+            intent=intent,
+            capability=capability,
+            output_dir=getattr(run, "work_dir", None) or os.getcwd(),
+        )
+
         report_title = f"Engineering Analysis Report: {intent.description or plan.model_name}"
         report_data = self.build_report(
             run,
             title=report_title,
             objective=intent.description or f"Automated analysis under {capability.capability_id}",
+            result_intelligence=ri_bundle,
+            figures=generated_figures,
         )
         report_md = render_markdown(report_data)
+        report_html_str = render_html(report_data)
 
         eng_status = getattr(run, "engineering_status", "EXECUTED")
         run_state = getattr(run, "state", None)
@@ -358,6 +565,12 @@ class AbaqusAIAgent:
             "metrics": metric_dict,
             "reasoning_status": reasoning_res.status.value,
             "inferences": [inf.to_dict() for inf in reasoning_res.inferences],
+            "result_intelligence": {
+                "hotspot_count": len(ri_bundle.hotspots),
+                "curve_count": len(ri_bundle.curves),
+                "figure_count": len(generated_figures),
+                "derived_metrics": ri_bundle.derived_metrics.to_dict() if ri_bundle.derived_metrics else None,
+            },
         }
 
         return EngineeringTaskResult(
@@ -370,5 +583,7 @@ class AbaqusAIAgent:
             metrics=metrics,
             summary_card=summary_card,
             report_markdown=report_md,
+            report_html=report_html_str,
+            result_intelligence=ri_bundle,
             errors=() if is_completed else (f"Engineering status: {eng_status}",),
         )

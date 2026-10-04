@@ -33,6 +33,7 @@ class EngineeringReportData:
     limitations: Tuple[str, ...] = ()
     evidence: Tuple[Any, ...] = ()
     provenance: Any = None
+    result_intelligence: Any = None
     metadata: Dict[str, Any] = field(default_factory=dict)
     @classmethod
     def from_analysis(cls, run, title=None, objective="", **sections):
@@ -83,10 +84,14 @@ class EngineeringReportData:
             mesh_convergence = tuple(x for x in run.evidence.items if getattr(x, "kind", None) == "mesh_convergence")
             if mesh_quality or mesh_convergence:
                 sections["mesh"] = dict(sections["mesh"], quality=mesh_quality, convergence=mesh_convergence)
+        ri = getattr(run, "result_intelligence", None) or metadata.get("result_intelligence") or sections.get("result_intelligence")
+        sections.setdefault("result_intelligence", ri)
         return cls(title or "Abaqus Engineering Analysis Report", objective=objective,
                    results=tuple(sections.pop("results", ()) or ()),
                    figures=tuple(sections.pop("figures", ()) or ()),
                    engineering_checks=tuple(sections.pop("engineering_checks", ()) or ()),
                    acceptance=sections.pop("acceptance", None),
                    evidence=tuple(sections.pop("evidence", tuple(getattr(getattr(run, "evidence", None), "items", ()) or ())) or ()),
-                   provenance=getattr(run, "provenance", None), metadata=dict(metadata, **sections.pop("metadata", {})), **sections)
+                   provenance=getattr(run, "provenance", None),
+                   result_intelligence=sections.pop("result_intelligence", None),
+                   metadata=dict(metadata, **sections.pop("metadata", {})), **sections)
