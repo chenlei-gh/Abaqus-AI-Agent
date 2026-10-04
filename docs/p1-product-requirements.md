@@ -69,14 +69,29 @@ MCP / UI / 部署 / Benchmark / Release
 - P1.4 求解器失败诊断与受控自愈：已完成实现与真实机 Golden E2E，作为 Phase 3「诊断 / 迭代」能力推进
 - 全项目继续遵守 Evidence V2、Single-Exit Acceptance、Fail-Closed、Zero Fabrication 与 Stated Scope Precision。
 
-### 0.3 Phase 2 的边界
+### 0.3 Phase 2 的边界与双工作包架构
 
-Phase 2 **不是重新堆叠大量 Abaqus 关键词或无限增加物理域**。已有 20 L4 物理域是底座。Phase 2 的重点是：
-1. 已有物理能力的真实工程场景深度；
-2. 多物理 / 多工况 / 组合工程问题；
-3. 更复杂几何、材料、载荷、边界与接触组合；
-4. 更高质量的真实机 Golden 案例矩阵；
-5. 工程可重复性、鲁棒性与边界覆盖。
+Phase 2 **不是重新堆叠大量 Abaqus 关键词或无限增加物理域**。已有 20 L4 物理域是底座。Phase 2 整体划分为两个边界明确的工作包：
+
+```text
+PHASE 2：工程能力深度与真实复杂工程实战
+│
+├── Package A：工程能力完善与组合验证
+│   ├── Fatigue / Connector / FMBD 核心能力收口
+│   ├── 20 L4 物理域交叉组合验证（Thermal→Structural, Preload→Static, Contact+Nonlinear 等）
+│   ├── Phase 2 Golden Matrix 矩阵（正负向、Fail-Closed、Evidence、Acceptance）
+│   └── 证明：“工程内核能力已经足够完整，而且能够自由组合”
+│
+└── Package B：10 个真实复杂工程项目正式实战
+    ├── 10 个公开经典工业问题包导入（Problem Import）
+    ├── Agent 需求意图建立与自动化模型编译（Intent → Compiler → Preflight）
+    ├── 真实 Abaqus 2025 真机求解与全套求解日志保留
+    ├── 独立 Result Intelligence 与 Single-Exit Acceptance 验收
+    ├── 独立交付级工程报告与可审计签名凭证（Report + Manifest）
+    └── 证明：“Agent 能真正接手工业级真实复杂工程问题并完成闭环交付”
+```
+
+**Phase 2 冻结准则：** `Package A (QUALIFIED) + Package B (10/10 QUALIFIED)` $\to$ **Phase 2 COMPLETE** $\to$ **Engineering Kernel FREEZE**。未完成前不得提前宣布冻结。
 
 ### 0.4 Phase 3 的边界
 
@@ -452,9 +467,28 @@ P1.0 产品主入口已彻底消除高层自然语言需求与底层 20 个 L4 �
 
 ---
 
-# 十一、Phase 2：工程能力深度需求清单
+# 十一、Phase 2：工程能力深度与真实复杂工程实战
 
-## REQ-P2-001：Fatigue 工程场景深度
+Phase 2 整体划分为两个边界清晰、串联收口的工程工作包：
+
+```text
+PHASE 2 架构
+├── Package A：工程能力完善与组合验证（REQ-P2-001 ~ REQ-P2-005）
+│   ├── 核心能力收口：Fatigue / Connector / FMBD 深度，20 L4 边界核查与补齐
+│   ├── 工程组合能力：Thermal→Structural, Preload→Static, Preload→Modal, Contact+Nonlinear 等
+│   └── Golden Matrix：单零件、Assembly、接触、预紧、多步、动态与正负向/Fail-Closed 闭环
+└── Package B：10 个真实复杂工程项目正式实战（REQ-P2-006 终验包）
+    ├── 问题导入 → Agent 意图/建模 → 真实 Abaqus 2025 → 单出口 Acceptance → 独立工程报告
+    └── 10/10 独立证据、真实机求解与参考对照闭环，完成 Engineering Kernel Freeze
+```
+
+---
+
+## 11.1 Package A：工程能力完善与组合验证
+
+目标：**把现有 Phase 2 能力补齐、强化，并证明它们可以自由组合使用。**
+
+### REQ-P2-001：Fatigue 工程场景深度
 **状态：🟢 L4 QUALIFIED；持续扩展真实工程场景。**
 
 在现有高周疲劳 L4 基础上，继续验证更真实的载荷历史、材料与几何组合。不得把单一 Golden 扩大解释为“覆盖全部 Abaqus 疲劳”。
@@ -465,40 +499,52 @@ P1.0 产品主入口已彻底消除高层自然语言需求与底层 20 个 L4 �
 - Rainflow / mean-stress / Miner 语义保持一致；
 - 失败与边界情况 Fail-Closed。
 
-## REQ-P2-002：Connector / Joint 工程场景深度
+### REQ-P2-002：Connector / Joint 工程场景深度
 **状态：🟢 L4 QUALIFIED；持续扩展真实机构场景。**
 
 重点扩展多连接器、不同方向、组合载荷与机构拓扑，而不是重写现有 Connector 内核。
 
-## REQ-P2-003：FMBD 工程场景深度
+### REQ-P2-003：FMBD 工程场景深度
 **状态：🟢 L4 QUALIFIED；持续扩展刚柔耦合与机构组合场景。**
 
 重点覆盖更多刚柔拓扑、闭环机构、连接器组合及动态响应验证。
 
-## REQ-P2-004：多物理与组合工程场景
-建立跨已有 L4 域的真实工程组合案例，例如：
+### REQ-P2-004：多物理与组合工程场景
+建立跨已有 L4 域的真实工程组合案例，重点验证真实组合工作流，而非孤立单项 Demo：
 - Thermal → Structural；
+- Preload → Static；
 - Preload → Modal；
 - Contact + Nonlinear；
-- Assembly + Connector；
-- 多步骤载荷历史；
-- 多工况结果比较。
+- Connector + Contact；
+- Connector + FMBD；
+- Multi-step + Fatigue；
+- Thermal + Fatigue；
+- Assembly + 多部件；
+- 多工况 / 多载荷历史对比。
 
 **目标不是新增“能力数量”，而是证明已有能力可以组合成真实工程工作流。**
 
-## REQ-P2-005：真实工程场景矩阵
-建立可持续扩展的 Golden Case Matrix：几何复杂度、材料复杂度、边界复杂度、接触/连接复杂度、多步骤、多工况、结果交付。
+### REQ-P2-005：真实工程场景矩阵与 Package A 最终收口
+建立可持续扩展的 Golden Case Matrix，覆盖：
+- 单零件、Assembly、Contact、Preload、Nonlinear、Multi-step、Thermal、Dynamic、Fatigue、Connector、FMBD；
+- 统一收口正向、负向、Fail-Closed、Evidence V2、Acceptance 与 Reproducibility；
+- **Package A 交付标准**：证明“工程内核能力已经足够完整，而且能够自由组合”。
 
-每个新增场景必须有明确工程目的、真实机证据和边界说明。
+---
 
-## REQ-P2-006：10 个真实复杂工程问题全链路实战验收
-**状态：🔴 Phase 2 收口必做；未完成前不得宣布 Phase 2 冻结。**
+## 11.2 Package B：10 个真实复杂工程项目正式实战
 
-Phase 2 必须从公开、可信的工程案例中筛选 **10 个具有真实工程背景且明显高于当前简单 Golden 的复杂问题**，正式走一遍完整的 Agent 工程闭环：
+### REQ-P2-006：10 个真实复杂工程问题全链路实战验收
+**状态：🔴 Phase 2 最终硬门槛与终验包；未完成前不得宣布 Phase 2 冻结。**
 
+目标：**不再测试单个功能，而是真正拿 10 个真实复杂工程问题，从问题导入一直做到最终工程报告。**
+
+标准全链路：
 `真实工程问题资料/模型导入 → 工程需求结构化 → EngineeringIntent → 参数/材料/边界/分析步骤建立 → Compiler → Preflight → Abaqus 2025 真机求解 → ODB/日志/Evidence → Result Intelligence → Acceptance → 独立工程报告`
 
 这 10 个案例不是“把官方 `.inp` 跑通”即可。每个案例都必须证明系统能够把**问题本身**导入现有工程闭环，并最终形成可审计的工程交付物。允许使用公开案例提供的输入文件、几何、材料和参考结果作为基准，但必须保留来源、输入证据、运行证据以及与参考结果的对照；不得直接把参考结果冒充 Agent 计算结果。
+
+**工程边界原则**：10 个案例不是为了逼项目新增 10 种全新冷门物理域，而是建立在现有 20 L4 物理底座之上；如果某个案例超出范围，应当换更契合的工程案例，绝不无限做横向扩张。
 
 ### 10 个正式验收案例
 
@@ -542,14 +588,15 @@ Phase 2 必须从公开、可信的工程案例中筛选 **10 个具有真实工
 
 ### Phase 2 最终收口条件
 
-**REQ-P2-006 是 Phase 2 冻结前的硬门槛。**
+**Package B (REQ-P2-006) 是 Phase 2 冻结前的硬门槛。**
 
-`REQ-P2-001~006 = QUALIFIED`
+`Package A (REQ-P2-001~005) = QUALIFIED`
++ `Package B (REQ-P2-006) = 10/10 QUALIFIED`
 + Phase 2 Golden Matrix 完成
-+ 10 个复杂真实工程案例 10/10 全链路通过
 + 全项目严格回归通过
 + 关键负向/Fail-Closed 矩阵通过
-+ 真实机证据与报告可追溯。
++ 真实机证据与报告可追溯
+$\implies$ **Phase 2 COMPLETE $\to$ Engineering Kernel FREEZE**。
 
 ---
 
@@ -632,11 +679,12 @@ Benchmark 必须区分软件回归与真实 Abaqus 物理验证。
 | Phase 1 | P1.1 感知 / Grounding | 🟢 QUALIFIED |
 | Phase 1 | P1.2 工程意图推理 | 🟢 QUALIFIED |
 | Phase 1 | P1.3 Result Intelligence / Report | 🟢 QUALIFIED |
-| Phase 2 | Fatigue 深度 | 🟢 L4 QUALIFIED / 持续扩展 |
-| Phase 2 | Connector 深度 | 🟢 L4 QUALIFIED / 持续扩展 |
-| Phase 2 | FMBD 深度 | 🟢 L4 QUALIFIED / 持续扩展 |
-| Phase 2 | 多物理 / 多工况组合 | 🟡 IN PROGRESS |
-| Phase 2 | 真实工程 Golden Matrix | 🟡 IN PROGRESS — 包含 REQ-P2-006 十案例实战 |
+| Phase 2 (Package A) | REQ-P2-001 Fatigue 工程场景深度 | 🟢 L4 QUALIFIED / 持续扩展 |
+| Phase 2 (Package A) | REQ-P2-002 Connector / Joint 工程场景深度 | 🟢 L4 QUALIFIED / 持续扩展 |
+| Phase 2 (Package A) | REQ-P2-003 FMBD 工程场景深度 | 🟢 L4 QUALIFIED / 持续扩展 |
+| Phase 2 (Package A) | REQ-P2-004 多物理 / 多工况组合验证 | 🟡 IN PROGRESS |
+| Phase 2 (Package A) | REQ-P2-005 Phase 2 组合 Golden Matrix 收口 | 🟡 IN PROGRESS |
+| Phase 2 (Package B) | REQ-P2-006 10 个真实复杂工程问题实战终验包 | 🔴 收口必做 (0/10) — 10/10 闭环后 Kernel Freeze |
 | Phase 3 | Planning | ⚪ POST-FREEZE ROADMAP |
 | Phase 3 | Clarification | ⚪ POST-FREEZE ROADMAP |
 | Phase 3 | Iteration | ⚪ POST-FREEZE ROADMAP |
