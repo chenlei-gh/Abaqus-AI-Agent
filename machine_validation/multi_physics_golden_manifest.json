@@ -48,7 +48,7 @@
         "gates": {
           "execution": "PASS",
           "odb": "PASS",
-          "evidence_sufficiency": "NOT_SPECIFIED",
+          "evidence_sufficiency": "PASS",
           "numerical_verification": "SKIPPED",
           "engineering_checks": "SKIPPED",
           "mesh_quality": "SKIPPED",
@@ -211,7 +211,7 @@
         "gates": {
           "execution": "PASS",
           "odb": "PASS",
-          "evidence_sufficiency": "NOT_SPECIFIED",
+          "evidence_sufficiency": "PASS",
           "numerical_verification": "SKIPPED",
           "engineering_checks": "SKIPPED",
           "mesh_quality": "SKIPPED",
@@ -347,7 +347,7 @@
         "gates": {
           "execution": "PASS",
           "odb": "PASS",
-          "evidence_sufficiency": "NOT_SPECIFIED",
+          "evidence_sufficiency": "PASS",
           "numerical_verification": "SKIPPED",
           "engineering_checks": "SKIPPED",
           "mesh_quality": "SKIPPED",
@@ -473,7 +473,7 @@
         "gates": {
           "execution": "PASS",
           "odb": "PASS",
-          "evidence_sufficiency": "NOT_SPECIFIED",
+          "evidence_sufficiency": "PASS",
           "numerical_verification": "SKIPPED",
           "engineering_checks": "SKIPPED",
           "mesh_quality": "SKIPPED",

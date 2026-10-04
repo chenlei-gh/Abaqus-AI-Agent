@@ -4,7 +4,7 @@
   "status": "QUALIFIED",
   "evidence_tier": "REAL_ABAQUS",
   "solver_version": "Abaqus 2025",
-  "timestamp": "2026-10-03T16:46:03.265047+00:00",
+  "timestamp": "2026-10-04T02:00:20.774672+00:00",
   "prompt": "\u5728\u53cc\u6b65\u5206\u6790\u6d41\u7a0b\u4e2d\uff1aStep 1\uff08\u9884\u7d27\u9636\u6bb5\uff09\u65bd\u52a0 5000 N \u87ba\u6813\u9884\u7d27\u529b\uff08APPLY_FORCE\uff09\uff1bStep 2\uff08\u5de5\u51b5\u9636\u6bb5\uff09\u9501\u5b9a\u87ba\u6813\u957f\u5ea6\uff08FIX_LENGTH\uff09\uff0c\u91ca\u653e\u9876\u9762\u8f74\u5411\u7ea6\u675f\u5e76\u65bd\u52a0 100000 N*mm \u5916\u8f7d\u626d\u77e9\uff08\u901a\u8fc7 RP \u8fd0\u52a8\u8026\u5408\uff09\u4e0e 2000 N \u5916\u8f7d\u62c9\u529b\uff1b\u9a8c\u8bc1\u591a\u6b65\u72b6\u6001\u7ee7\u627f\u3001\u9884\u7d27\u9501\u5b9a\u53ca\u5916\u8f7d\u53cd\u529b\u53cd\u529b\u77e9\u7269\u7406\u5e73\u8861\u3002",
   "preflight": {
     "status": "PASS",
@@ -52,7 +52,7 @@
       "mesh_element_type": "C3D8R"
     },
     "layer_5_evidence_traceability": {
-      "script_sha256": "556633a49739bd0efa2831b2a5358185dd1bfac9ba43344dc433b6f6c47a70da",
+      "script_sha256": "606333e7d54e16408884f331abc0ed781fd200e1dfc6f332e0a95a4c5e666987",
       "artifacts": {
         "GA263_Job.inp": {
           "sha256": "086c5ab1ca0ceead03b3bafabbc5a464e71bda326a6b4da989e7f47f36112bf8",
@@ -60,27 +60,27 @@
           "exists": true
         },
         "GA263_Job.odb": {
-          "sha256": "cdaa149d5bc365c8772169143ef6d2c82d85c7ea13eab4cb8966a2861d1b8276",
+          "sha256": "707062c7de59101f089a186ff1c6f68bc6e37f61e48842e38b1d4b6758e15a79",
           "size_bytes": 554992,
           "exists": true
         },
         "GA263_Job.sta": {
-          "sha256": "93c1d78fafcb654f76576ac76cbe0d29a4e32806c45782bf034e1b9489ca87cc",
+          "sha256": "f08e4eb88760e8f68fbfcb3d6c402b0047edfb5a80e15afa8a80182698bd9195",
           "size_bytes": 511,
           "exists": true
         },
         "GA263_Job.msg": {
-          "sha256": "a61b7db553161c5e7ec53994c612f40c707ff589d685bb726633a928e410b028",
+          "sha256": "5d58d3116fcd41e8618792f139c994c7808857ac72805b4946a0fef4cfecba7e",
           "size_bytes": 17978,
           "exists": true
         },
         "GA263_Job.dat": {
-          "sha256": "68a560b6b0940801f4731193e490cd4817ade542df180b10d00e0b0f6189cf00",
+          "sha256": "5fc8f8b63ee23c16ed548c9b32ce3c221ef713c0661777d17d9d11ad889d1f7b",
           "size_bytes": 16098,
           "exists": true
         },
         "GA263_Job.log": {
-          "sha256": "0a0661b9b46cc9fe508544fae324afa3e797c30db8fa3f1f8ca1157520bdb7b6",
+          "sha256": "e33ab4ebfd0f6cc9a86700846c9eb787c4de6704069c3a02023f9db67c5213e6",
           "size_bytes": 665,
           "exists": true
         }
@@ -92,11 +92,19 @@
   "acceptance": {
     "passed": true,
     "status": "PASS",
+    "result_validity": "VALID",
+    "audit_summary": "Solver: PASS | ODB: PASS | Required Result: PASS | Engineering Acceptance: PASS",
+    "odb_status": "valid",
+    "evidence_status": "VALID",
     "failures": [],
     "warnings": [],
     "blocked": [],
+    "missing_required_metrics": [],
+    "missing_required_gates": [],
+    "missing_required_fields": [],
     "gates": {
       "execution": "PASS",
+      "odb": "PASS",
       "evidence_sufficiency": "PASS",
       "numerical_verification": "SKIPPED",
       "engineering_checks": "SKIPPED",
@@ -104,8 +112,12 @@
       "convergence": "SKIPPED",
       "fatigue": "SKIPPED",
       "contact": "SKIPPED",
+      "procedure": "SKIPPED",
+      "thermal_balance": "SKIPPED",
+      "required_results": "NOT_SPECIFIED",
       "criteria": "PASS"
     },
+    "gate_justifications": {},
     "criteria": [
       {
         "name": "Preload_Equilibrium_Error",

@@ -376,6 +376,30 @@ def verify_evidence_integrity(
 
     current_validity = "VALID"
 
+    # Check for legacy schema or explicit deprecation for RC
+    is_legacy = False
+    if isinstance(manifest, dict):
+        if manifest.get("manifest_version") == "1.0":
+            is_legacy = True
+        elif manifest.get("schema_version") not in (None, "evidence_manifest_v2"):
+            is_legacy = True
+        if manifest.get("rc_evidence_eligible") is False:
+            is_legacy = True
+    else:
+        if getattr(manifest, "schema_version", "evidence_manifest_v2") != "evidence_manifest_v2":
+            is_legacy = True
+        if getattr(manifest, "rc_evidence_eligible", True) is False:
+            is_legacy = True
+
+    if is_legacy:
+        failures.append("unsupported_legacy_manifest:schema_v1_deprecated_for_rc")
+        return EvidenceVerificationReport(
+            valid=False,
+            validity="INCOMPLETE",
+            run_id=getattr(manifest_obj, "run_id", "") or (manifest.get("run_id", "") if isinstance(manifest, dict) else ""),
+            failures=tuple(failures),
+        )
+
     # Pre-declared validity check
     if manifest_obj.validity == "TAMPERED":
         failures.append("evidence_tampered:manifest_declared_tampered")

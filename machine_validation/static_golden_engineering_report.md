@@ -119,12 +119,13 @@ Verify the structural deflection and peak von Mises stress of a 100mm x 10mm x 1
 
 ### Verification Integrity & Audit Summary
 
-| Verification Dimension      | Actual State / Output          | Gate Verdict |
-|-----------------------------|--------------------------------|--------------|
-| Solver Execution            | completed                      | PASS         |
-| ODB Storage Artifact        | valid                          | PASS         |
-| Required Physical Outputs   | All Required Metrics Extracted | PASS         |
-| Engineering Result Validity | VALID                          | PASS         |
+| Verification Dimension        | Actual State / Output          | Gate Verdict  |
+|-------------------------------|--------------------------------|---------------|
+| Solver Execution              | completed                      | PASS          |
+| ODB Storage Artifact          | valid                          | PASS          |
+| Required Physical Outputs     | All Required Metrics Extracted | PASS          |
+| Engineering Result Validity   | VALID                          | PASS          |
+| Evidence & Artifact Integrity | FAIL (NOT_SPECIFIED)           | NOT_SPECIFIED |
 
 ### Verification Gates Detailed Audit
 
@@ -198,9 +199,11 @@ Verify the structural deflection and peak von Mises stress of a 100mm x 10mm x 1
   "gate_justifications": {},
   "missing_required_metrics": [],
   "missing_required_gates": [],
+  "missing_required_fields": [],
   "result_validity": "VALID",
   "audit_summary": "",
-  "odb_status": "valid"
+  "odb_status": "valid",
+  "evidence_status": "NOT_SPECIFIED"
 }
 ```
 
@@ -279,9 +282,11 @@ Verify the structural deflection and peak von Mises stress of a 100mm x 10mm x 1
       "gate_justifications": {},
       "missing_required_metrics": [],
       "missing_required_gates": [],
+      "missing_required_fields": [],
       "result_validity": "VALID",
       "audit_summary": "",
-      "odb_status": "valid"
+      "odb_status": "valid",
+      "evidence_status": "NOT_SPECIFIED"
     },
     "unit": "",
     "metadata": {}

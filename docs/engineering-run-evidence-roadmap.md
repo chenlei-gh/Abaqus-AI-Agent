@@ -1431,14 +1431,37 @@ ODB Tensor Extraction & Equilibrium Verification (RF vs Applied Error = 0.002%) 
   - [x] Proved across 5 domains (static, thermal, contact, modal, multi-step) that missing required outputs or gates fail closed.
   - [x] Proved on authentic Abaqus 2025 ODB (`Job_F4_MissingOutput.odb`) that solver exit 0 without displacement output fails closed as `RESULT_INVALID`.
 
-- [ ] **GA-CL.4: Evidence / Provenance Schema V2 & Baseline Freezing**
-  - [ ] Standardize all evidence manifests in `machine_validation/` under unified `ManifestV2` (Abaqus version, execution host, timestamp, `.inp/.odb/.sta/.msg/.dat/.log` SHA-256 hashes).
-  - [ ] Establish regression freeze guards to ensure test runs (`pytest`) execute in read-only mode and do not generate dirty timestamp diffs.
+- [x] **GA-CL.4: Evidence / Provenance Schema V2 & Cryptographic Contract [CLOSED & QUALIFIED]**
+  - [x] Standardize all evidence manifests under unified `EvidenceManifestV2` contract (`contracts/evidence.py`):
+    - Run Identity Binding: binds `run_id`, `case_id`, `created_at`, solver version (`Abaqus 2025`), intent hash, and required results into an immutable envelope.
+    - Live Artifact Integrity: hashes `.inp`, `.odb`, `.sta`, `.msg`, `.dat`, `.log` via SHA-256; verifies file existence and non-empty byte count.
+    - Anti-Stale Protection: detects run identity mismatches, case mismatches, or expired/stale artifact timestamps, failing closed as `EVIDENCE_STALE`.
+    - Tamper Protection: bit-level mutation detection on disk artifacts or digital signatures fails closed as `EVIDENCE_TAMPERED`.
+    - Incomplete Artifact Protection: missing required solver logs (.msg/.dat) fail closed as `EVIDENCE_INCOMPLETE`.
+  - [x] Acceptance Integration: upgraded `evaluate_result_acceptance` with mandatory `evidence_sufficiency` gate. Manifest validation failures strictly override solver exit codes and set `result_validity="RESULT_INVALID"` / status `BLOCKED`.
+  - [x] Executive Report Sync: synchronized `reporting/renderer.py` to display Evidence V2 Manifest ID, cryptographic integrity status, and provenance audit traces; prohibits unverified results from being rendered as valid engineering conclusions.
+  - [x] Live Real-Machine Validation: verified 7 vectors in `tools/evidence_v2_qualification_e2e.py` and persisted `machine_validation/evidence_v2_manifest.json` (Tier `REAL_ABAQUS`). 608/608 regression tests passing.
 
 - [x] **GA-CL.5: Engineering Report Cross-Physics Consistency & Unforgeable Audit [CLOSED & QUALIFIED]**
   - [x] Extend `src/abaqus_ai_agent/reporting/renderer.py` to render structured Verification Integrity & Audit Summary and Verification Gates Detailed Audit tables with engineering justifications.
   - [x] Deterministically format unforgeable audit summary line: `Solver: PASS | ODB: PASS | Required Result: FAIL | Engineering Acceptance: FAIL`.
   - [x] Explicitly reject engineering conclusion (`REJECTED (RESULT_INVALID)`) when required outputs or gates are missing, verified on real Abaqus 2025 ODB evidence.
+
+- [x] **GA-CL.6: RC Evidence Freeze & Legacy Manifest Isolation [CLOSED & QUALIFIED]**
+  - [x] Standardize all evidence manifests under unified cryptographic baseline freeze; isolated legacy Schema V1 (`golden_matrix_manifest.json`) marked as `DEPRECATED_V1` and archived in `machine_validation/legacy/`.
+  - [x] Enforce read-only test suite execution mode ensuring `pytest` never generates dirty working tree diffs or unstaged timestamp noise in tracked evidence.
+  - [x] Cryptographic verification (`verify_evidence_integrity`) strictly rejects legacy V1 manifests (`unsupported_legacy_manifest:schema_v1_deprecated_for_rc`).
+
+- [x] **GA-CL.7: Full Agent-Chain Integrity & Zero-Bypass Audit [CLOSED & QUALIFIED]**
+  - [x] End-to-end trace audit across all 14 pipeline stages:
+    $\text{User Prompt} \to \text{EngineeringIntent} \to \text{PhysicsDomain} \to \text{Grounding} \to \text{Material} \to \text{Mesh} \to \text{Step DAG} \to \text{BC/Load} \to \text{ActionPlan} \to \text{Preflight} \to \text{Abaqus 2025} \to \text{ODB} \to \text{Required Results} \to \text{Verification} \to \text{Acceptance} \to \text{Report}$.
+  - [x] Closed P0/P1 bypass vulnerabilities:
+    - **P0-1**: Acceptance without valid EvidenceManifest fails closed as `BLOCKED` with `RESULT_INVALID`.
+    - **P0-2**: Injected `external_input` results strictly cannot transition to `AnalysisRunState.ACCEPTED`; forced to `RESULTS_EXTRACTED` and `RESULT_SUSPICIOUS`.
+    - **P1-1**: Preflight hard gate enforced in `AnalysisRunner` prior to job creation/submission; blocking failures halt execution without starting an Abaqus job.
+    - **P1-2**: MP-1 ~ MP-4 Golden benchmarks formally bound to signed `EvidenceManifestV2`, verifying `evidence_sufficiency: PASS`.
+    - **P1-3**: Legacy schema V1 manifests deprecated and isolated from RC evidence qualification.
+  - [x] Validated across 8 mandatory fail-closed regression scenarios in `tests/test_rc_closure_bypasses.py`. Full test suite: 616/616 tests PASS.
 
 ---
 

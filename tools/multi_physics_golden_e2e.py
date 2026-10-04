@@ -53,6 +53,7 @@ if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
 from abaqus_ai_agent.acceptance import evaluate_result_acceptance
+from abaqus_ai_agent.contracts.evidence import build_evidence_manifest_v2, EvidenceManifestV2
 from abaqus_ai_agent.contracts.results import get_physics_result_profile
 from abaqus_ai_agent.execution.batch import resolve_default_launcher
 from abaqus_ai_agent.grounding.feature_grounding import GroundedRegion
@@ -260,7 +261,17 @@ with open("extract_mp1.json", "w") as f:
     rf_expected = 10080.0
     rf_error = abs(rf_actual - rf_expected) / rf_expected
 
-    # Deterministic Result Acceptance with ODB Field Gating
+    # Deterministic Result Acceptance with ODB Field Gating & Evidence Binding
+    manifest_filenames = [f for f in artifacts.keys() if (case_dir / f).is_file()]
+    manifest_mp1 = build_evidence_manifest_v2(
+        run_id=f"run_mp1_{case_dir.name}",
+        case_id="MP-1_Sequential_Thermal_Structural",
+        artifacts_dir=case_dir,
+        artifact_filenames=manifest_filenames,
+        intent_summary={"domain": "thermal_structural", "model": "Coupled_Bar"},
+        required_results={"fields": ["NT", "U", "S", "RF"]},
+    )
+
     acc_pos = evaluate_result_acceptance(
         result_status="completed",
         physics_domain="thermal_structural",
@@ -273,6 +284,8 @@ with open("extract_mp1.json", "w") as f:
             {"name": "peak_thermal_mises", "value_key": "max_mises", "operator": "<=", "limit": 200.0},
         ],
         thermal_balance=type("TB", (), {"passed": abs(extracted["reaction_equilibrium_sum"]) < 1e-2})(),
+        evidence_manifest=manifest_mp1,
+        require_evidence=True,
     )
 
     # Negative Probe: Intentionally omit required field output "NT" from ODB fields
@@ -437,6 +450,15 @@ odb.close()
         chatter_detected = False
         diagnostics = (type("Diag", (), {"status": "pass"})(),)
 
+    manifest_mp2 = build_evidence_manifest_v2(
+        run_id=f"run_mp2_{case_dir.name}",
+        case_id="MP-2_Frictional_Contact_Coulomb",
+        artifacts_dir=case_dir,
+        artifact_filenames=[f for f in artifacts.keys() if (case_dir / f).is_file()],
+        intent_summary={"domain": "contact", "model": "Block_On_Foundation"},
+        required_results={"fields": ["CPRESS", "CSHEAR", "RF"]},
+    )
+
     acc_pos = evaluate_result_acceptance(
         result_status="completed",
         physics_domain="contact",
@@ -449,6 +471,8 @@ odb.close()
             {"name": "normal_reaction_balance", "value_key": "reaction_force", "operator": ">=", "limit": 900.0},
         ],
         contact_diagnostics=ValidContactDiagnostics(),
+        evidence_manifest=manifest_mp2,
+        require_evidence=True,
     )
 
     # Negative Probe: Intentionally omit required field "CSHEAR1" from ODB fields
@@ -585,6 +609,15 @@ odb.close()
     # Target axial tension = 10000 N. Reaction = 9998.50 N (error < 0.02%).
     preload_error = abs(extracted["preload_reaction"] - 10000.0) / 10000.0
 
+    manifest_mp3 = build_evidence_manifest_v2(
+        run_id=f"run_mp3_{case_dir.name}",
+        case_id="MP-3_Preloaded_Modal_Dynamics",
+        artifacts_dir=case_dir,
+        artifact_filenames=[f for f in artifacts.keys() if (case_dir / f).is_file()],
+        intent_summary={"domain": "preloaded_modal", "model": "Preloaded_Tension_Beam"},
+        required_results={"fields": ["U", "S", "RF", "frequency"]},
+    )
+
     acc_pos = evaluate_result_acceptance(
         result_status="completed",
         physics_domain="preloaded_modal",
@@ -596,6 +629,8 @@ odb.close()
             {"name": "fundamental_frequency", "value_key": "frequency", "operator": ">=", "limit": 300.0},
         ],
         procedure_verification=type("PV", (), {"verified": True})(),
+        evidence_manifest=manifest_mp3,
+        require_evidence=True,
     )
 
     # Negative Probe: Intentionally omit required field output "RF"
@@ -737,6 +772,15 @@ odb.close()
     extracted = json.loads((case_dir / "extract_mp4.json").read_text(encoding="utf-8"))
     artifacts = _collect_artifacts(case_dir, [job_name])
 
+    manifest_mp4 = build_evidence_manifest_v2(
+        run_id=f"run_mp4_{case_dir.name}",
+        case_id="MP-4_Explicit_Dynamic_Impact_Energy",
+        artifacts_dir=case_dir,
+        artifact_filenames=[f for f in artifacts.keys() if (case_dir / f).is_file()],
+        intent_summary={"domain": "explicit_dynamic", "model": "Impact_C3D8R_Bar"},
+        required_results={"fields": ["U", "V", "S", "ALLKE", "ALLIE"]},
+    )
+
     acc_pos = evaluate_result_acceptance(
         result_status="completed",
         physics_domain="explicit_dynamic",
@@ -749,6 +793,8 @@ odb.close()
             {"name": "kinetic_energy_threshold", "value_key": "kinetic_energy", "operator": ">=", "limit": 10.0},
             {"name": "internal_energy_threshold", "value_key": "internal_energy", "operator": ">=", "limit": 50.0},
         ],
+        evidence_manifest=manifest_mp4,
+        require_evidence=True,
     )
 
     # Negative Probe: Intentionally omit required energy output "ALLKE"

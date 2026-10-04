@@ -238,39 +238,50 @@ def evaluate_result_acceptance(result_status, numerical=None, engineering=None,
             return True
         return False
 
-    if manifest_target is not None and _is_v2_manifest(manifest_target):
-        from .contracts.evidence import verify_evidence_integrity
-        m_roles = mandatory_roles if mandatory_roles is not None else ("inp", "odb", "msg", "dat", "sta", "log")
-        verif_rep = verify_evidence_integrity(
-            manifest_target,
-            base_dir=base_dir,
-            expected_run_id=expected_run_id,
-            max_age_seconds=max_age_seconds,
-            mandatory_roles=m_roles,
-        )
-        evidence_status = verif_rep.validity
-        if not verif_rep.valid:
+    if manifest_target is not None:
+        if _is_v2_manifest(manifest_target):
+            from .contracts.evidence import verify_evidence_integrity
+            m_roles = mandatory_roles if mandatory_roles is not None else ("inp", "odb", "msg", "dat", "sta", "log")
+            verif_rep = verify_evidence_integrity(
+                manifest_target,
+                base_dir=base_dir,
+                expected_run_id=expected_run_id,
+                max_age_seconds=max_age_seconds,
+                mandatory_roles=m_roles,
+            )
+            evidence_status = verif_rep.validity
+            if not verif_rep.valid:
+                gates["evidence_sufficiency"] = "FAIL"
+                failures.extend(verif_rep.failures)
+                blocked.extend(verif_rep.failures)
+            else:
+                gates["evidence_sufficiency"] = "PASS"
+        elif isinstance(manifest_target, dict) and (
+            manifest_target.get("manifest_version") == "1.0"
+            or manifest_target.get("rc_evidence_eligible") is False
+            or manifest_target.get("schema_version") == "golden_matrix_manifest_v1"
+        ):
+            from .contracts.evidence import verify_evidence_integrity
+            verif_rep = verify_evidence_integrity(manifest_target)
             gates["evidence_sufficiency"] = "FAIL"
-            failures.extend(verif_rep.failures)
-            blocked.extend(verif_rep.failures)
-        else:
+            rep_failures = verif_rep.failures or ("unsupported_legacy_manifest:schema_v1_deprecated_for_rc",)
+            failures.extend(rep_failures)
+            blocked.extend(rep_failures)
+            evidence_status = verif_rep.validity or "INVALID"
+        elif getattr(manifest_target, "validity", None) == "VALID":
             gates["evidence_sufficiency"] = "PASS"
-    elif require_evidence and not evidence and not evidence_manifest:
+            evidence_status = "VALID"
+        elif evidence or evidence_manifest:
+            gates["evidence_sufficiency"] = "PASS"
+            evidence_status = "VALID"
+    elif require_evidence or "evidence_sufficiency" in effective_required_gates:
         failures.append("missing_required_evidence")
         blocked.append("missing_required_evidence")
         gates["evidence_sufficiency"] = "BLOCKED"
-        evidence_status = "MISSING"
-    elif "evidence_sufficiency" in effective_required_gates and not evidence and not evidence_manifest:
-        failures.append("missing_mandatory_gate:evidence_sufficiency")
-        blocked.append("missing_mandatory_gate:evidence_sufficiency")
-        gates["evidence_sufficiency"] = "BLOCKED"
         missing_required_gates.append("evidence_sufficiency")
         evidence_status = "MISSING"
-    elif evidence or evidence_manifest:
-        gates["evidence_sufficiency"] = "PASS"
-        evidence_status = "VALID"
     else:
-        gates["evidence_sufficiency"] = "NOT_SPECIFIED"
+        gates["evidence_sufficiency"] = "SKIPPED"
 
     # Gate 4: Numerical Verification Gate
     if numerical is not None:
@@ -459,7 +470,7 @@ def evaluate_result_acceptance(result_status, numerical=None, engineering=None,
         warnings.append("no_explicit_acceptance_criteria")
 
     # Status & Result Validity Synthesis
-    if missing_required_metrics or missing_required_fields or missing_required_gates:
+    if missing_required_metrics or missing_required_fields or missing_required_gates or gates.get("evidence_sufficiency") in ("FAIL", "BLOCKED"):
         result_validity = "RESULT_INVALID"
     elif blocked:
         if result_status == "completed":
@@ -487,7 +498,7 @@ def evaluate_result_acceptance(result_status, numerical=None, engineering=None,
     # Deterministic Audit Summary Line
     s_part = "PASS" if result_status == "completed" else "FAIL"
     o_part = gates.get("odb", "PASS" if s_part == "PASS" else "FAIL")
-    r_part = "FAIL" if (missing_required_metrics or missing_required_fields or gates.get("required_results") == "BLOCKED") else "PASS"
+    r_part = "FAIL" if (missing_required_metrics or missing_required_fields or gates.get("required_results") == "BLOCKED" or gates.get("evidence_sufficiency") in ("FAIL", "BLOCKED")) else "PASS"
     e_part = "PASS" if passed else "FAIL"
     audit_summary = f"Solver: {s_part} | ODB: {o_part} | Required Result: {r_part} | Engineering Acceptance: {e_part}"
 

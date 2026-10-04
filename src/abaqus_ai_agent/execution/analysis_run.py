@@ -281,6 +281,30 @@ class AnalysisRunner:
             run_id, model_name, job_name, AnalysisRunState.PREFLIGHTED,
             provenance=provenance,
         )
+
+        # Preflight Plan Hard Gate (P1-1): Verify plan before job creation/submission
+        if action_plan:
+            from ..validation.preflight import preflight_plan
+            from ..contracts.action import AbaqusAction
+            actions_to_preflight = []
+            for act in action_plan:
+                if isinstance(act, dict):
+                    actions_to_preflight.append(AbaqusAction(
+                        action_type=act.get("action_type", ""),
+                        model_name=act.get("model_name", model_name),
+                        target=act.get("target"),
+                        parameters=act.get("parameters", {}),
+                    ))
+                else:
+                    actions_to_preflight.append(act)
+            preflight_res = preflight_plan(actions_to_preflight, snapshot=initial_snapshot)
+            if not preflight_res.passed:
+                return run.with_state(
+                    AnalysisRunState.FAILED,
+                    engineering_status=EngineeringStatus.EXECUTION_FAILED.value,
+                    diagnostics=tuple({"preflight_blocker": b} for b in preflight_res.blockers),
+                )
+
         jobs = JobController(self.executor)
         try:
             snapshot = initial_snapshot
@@ -413,6 +437,26 @@ class AnalysisRunner:
                 ),)
                 result_source = "external_input"
 
+            run_manifest = None
+            if result_source == "odb":
+                try:
+                    import os
+                    from ..contracts.evidence import build_evidence_manifest_v2
+                    art_dir = workdir or (os.path.dirname(os.path.abspath(path)) if path else ".")
+                    fnames = [os.path.basename(a.path) for a in artifacts if getattr(a, "exists", False) and getattr(a, "path", None)]
+                    if fnames:
+                        run_manifest = build_evidence_manifest_v2(
+                            run_id=run_id,
+                            case_id=job_name,
+                            artifacts_dir=art_dir,
+                            artifact_filenames=fnames,
+                            intent_summary={"model_name": model_name, "job_name": job_name},
+                            required_results={"criteria": [c if isinstance(c, dict) else str(c) for c in effective_criteria]},
+                            environment=runtime_environment,
+                        )
+                except Exception:
+                    run_manifest = None
+
             accepted = evaluate_result_acceptance(
                 result_status=status.state.value.lower(),
                 numerical=numerical_verification,
@@ -423,6 +467,9 @@ class AnalysisRunner:
                 contact_diagnostics=contact_diagnostics,
                 values=result_values,
                 criteria=effective_criteria,
+                evidence=result_evidence,
+                evidence_manifest=run_manifest,
+                require_evidence=True if result_source == "odb" else False,
             )
             verification_evidence = []
             if numerical_verification is not None:
@@ -465,13 +512,6 @@ class AnalysisRunner:
                     kind="uncertainty", source="analysis",
                     locator=job_name, value=uncertainty,
                 ))
-            status_value = (
-                EngineeringStatus.RESULT_VALID.value
-                if accepted.passed and result_source == "odb"
-                else EngineeringStatus.RESULT_SUSPICIOUS.value
-                if accepted.passed
-                else EngineeringStatus.RESULT_INVALID.value
-            )
             evidence = EvidenceBundle((Evidence(
                 kind="odb_summary", source="odb", locator=path, value=odb
             ), Evidence(
@@ -492,11 +532,23 @@ class AnalysisRunner:
             if contact_diagnostics is not None:
                 verification_map["contact_diagnostics"] = getattr(contact_diagnostics, "to_dict", lambda: str(contact_diagnostics))()
 
+            if result_source == "external_input":
+                final_state = AnalysisRunState.RESULTS_EXTRACTED
+                status_value = EngineeringStatus.RESULT_SUSPICIOUS.value
+                acceptance_passed = False
+            elif accepted.passed and result_source == "odb":
+                final_state = AnalysisRunState.ACCEPTED
+                status_value = EngineeringStatus.RESULT_VALID.value
+                acceptance_passed = True
+            else:
+                final_state = AnalysisRunState.RESULTS_EXTRACTED
+                status_value = EngineeringStatus.RESULT_INVALID.value
+                acceptance_passed = False
+
             return run.with_state(
-                AnalysisRunState.ACCEPTED if accepted.passed
-                else AnalysisRunState.RESULTS_EXTRACTED,
+                final_state,
                 engineering_status=status_value,
-                acceptance_passed=accepted.passed,
+                acceptance_passed=acceptance_passed,
                 acceptance=accepted,
                 intent=engineering_intent,
                 solver_selection=locals().get("selection"),

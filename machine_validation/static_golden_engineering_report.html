@@ -119,12 +119,13 @@ Verify the structural deflection and peak von Mises stress of a 100mm x 10mm x 1
 
 ### Verification Integrity &amp; Audit Summary
 
-| Verification Dimension      | Actual State / Output          | Gate Verdict |
-|-----------------------------|--------------------------------|--------------|
-| Solver Execution            | completed                      | PASS         |
-| ODB Storage Artifact        | valid                          | PASS         |
-| Required Physical Outputs   | All Required Metrics Extracted | PASS         |
-| Engineering Result Validity | VALID                          | PASS         |
+| Verification Dimension        | Actual State / Output          | Gate Verdict  |
+|-------------------------------|--------------------------------|---------------|
+| Solver Execution              | completed                      | PASS          |
+| ODB Storage Artifact          | valid                          | PASS          |
+| Required Physical Outputs     | All Required Metrics Extracted | PASS          |
+| Engineering Result Validity   | VALID                          | PASS          |
+| Evidence &amp; Artifact Integrity | FAIL (NOT_SPECIFIED)           | NOT_SPECIFIED |
 
 ### Verification Gates Detailed Audit
 
@@ -198,9 +199,11 @@ Verify the structural deflection and peak von Mises stress of a 100mm x 10mm x 1
   &quot;gate_justifications&quot;: {},
   &quot;missing_required_metrics&quot;: [],
   &quot;missing_required_gates&quot;: [],
+  &quot;missing_required_fields&quot;: [],
   &quot;result_validity&quot;: &quot;VALID&quot;,
   &quot;audit_summary&quot;: &quot;&quot;,
-  &quot;odb_status&quot;: &quot;valid&quot;
+  &quot;odb_status&quot;: &quot;valid&quot;,
+  &quot;evidence_status&quot;: &quot;NOT_SPECIFIED&quot;
 }
 ```
 
@@ -279,9 +282,11 @@ Verify the structural deflection and peak von Mises stress of a 100mm x 10mm x 1
       &quot;gate_justifications&quot;: {},
       &quot;missing_required_metrics&quot;: [],
       &quot;missing_required_gates&quot;: [],
+      &quot;missing_required_fields&quot;: [],
       &quot;result_validity&quot;: &quot;VALID&quot;,
       &quot;audit_summary&quot;: &quot;&quot;,
-      &quot;odb_status&quot;: &quot;valid&quot;
+      &quot;odb_status&quot;: &quot;valid&quot;,
+      &quot;evidence_status&quot;: &quot;NOT_SPECIFIED&quot;
     },
     &quot;unit&quot;: &quot;&quot;,
     &quot;metadata&quot;: {}
