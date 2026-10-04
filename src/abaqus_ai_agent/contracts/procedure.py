@@ -47,10 +47,6 @@ _ALLOWED_AST_NODES = (
     ast.UAdd,
 )
 
-# In Python 3.7/3.8 compatibility, Num is handled as Constant or Num
-if hasattr(ast, "Num"):
-    _ALLOWED_AST_NODES = _ALLOWED_AST_NODES + (ast.Num,)
-
 _ALLOWED_IDENTIFIERS = frozenset({"X", "Y", "Z", "x", "y", "z"})
 
 

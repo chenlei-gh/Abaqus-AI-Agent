@@ -1,6 +1,6 @@
 {
   "schema_version": "failure_path_matrix_v1",
-  "verified_at": "2026-10-04T01:59:28.507489+00:00",
+  "verified_at": "2026-10-04T05:59:35.328884+00:00",
   "total_states": 8,
   "verified_states": 8,
   "all_contracts_verified": true,
@@ -26,6 +26,8 @@
         "contact": "SKIPPED",
         "procedure": "SKIPPED",
         "thermal_balance": "SKIPPED",
+        "connector_kinematics": "SKIPPED",
+        "fmbd_dynamics": "SKIPPED",
         "required_results": "NOT_SPECIFIED",
         "criteria": "PASS"
       },
@@ -53,6 +55,8 @@
         "contact": "SKIPPED",
         "procedure": "SKIPPED",
         "thermal_balance": "SKIPPED",
+        "connector_kinematics": "SKIPPED",
+        "fmbd_dynamics": "SKIPPED",
         "required_results": "NOT_SPECIFIED",
         "criteria": "FAIL"
       },
@@ -83,6 +87,8 @@
         "contact": "SKIPPED",
         "procedure": "SKIPPED",
         "thermal_balance": "SKIPPED",
+        "connector_kinematics": "SKIPPED",
+        "fmbd_dynamics": "SKIPPED",
         "required_results": "NOT_SPECIFIED",
         "criteria": "BLOCKED"
       },
@@ -112,6 +118,8 @@
         "contact": "SKIPPED",
         "procedure": "SKIPPED",
         "thermal_balance": "SKIPPED",
+        "connector_kinematics": "SKIPPED",
+        "fmbd_dynamics": "SKIPPED",
         "required_results": "NOT_SPECIFIED",
         "criteria": "PASS"
       },
@@ -139,6 +147,8 @@
         "contact": "SKIPPED",
         "procedure": "SKIPPED",
         "thermal_balance": "SKIPPED",
+        "connector_kinematics": "SKIPPED",
+        "fmbd_dynamics": "SKIPPED",
         "required_results": "NOT_SPECIFIED",
         "criteria": "SKIPPED"
       },
@@ -168,6 +178,8 @@
         "contact": "SKIPPED",
         "procedure": "SKIPPED",
         "thermal_balance": "SKIPPED",
+        "connector_kinematics": "SKIPPED",
+        "fmbd_dynamics": "SKIPPED",
         "required_results": "NOT_SPECIFIED",
         "criteria": "SKIPPED"
       },
@@ -198,6 +210,8 @@
         "contact": "SKIPPED",
         "procedure": "SKIPPED",
         "thermal_balance": "SKIPPED",
+        "connector_kinematics": "SKIPPED",
+        "fmbd_dynamics": "SKIPPED",
         "required_results": "NOT_SPECIFIED",
         "criteria": "SKIPPED"
       },
@@ -227,6 +241,8 @@
         "contact": "SKIPPED",
         "procedure": "SKIPPED",
         "thermal_balance": "SKIPPED",
+        "connector_kinematics": "SKIPPED",
+        "fmbd_dynamics": "SKIPPED",
         "required_results": "NOT_SPECIFIED",
         "criteria": "FAIL"
       },
@@ -291,7 +307,7 @@
         ]
       },
       "is_live_subprocess": true,
-      "real_pid": 32796,
+      "real_pid": 11096,
       "real_exit_code": -9
     },
     {

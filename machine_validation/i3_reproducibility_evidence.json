@@ -1,6 +1,6 @@
 {
   "schema_version": "reproducibility_evidence_v1",
-  "verified_at": "2026-10-03T06:43:24.385444+00:00",
+  "verified_at": "2026-10-04T05:59:35.543658+00:00",
   "case_id": "static_cantilever",
   "run_a_source": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\machine_validation\\static_golden_e2e.json",
   "run_b_source": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\machine_validation\\static_golden_run_b.json",
@@ -8,7 +8,7 @@
   "structural_invariance": {
     "job_match": true,
     "solver_match": true,
-    "release_match": false,
+    "release_match": true,
     "intent_hash_a": "3d1704b16309a69360bfe3b30446fa6da44b4cdfed92cddff1c9cd7d5be242de",
     "intent_hash_b": "3d1704b16309a69360bfe3b30446fa6da44b4cdfed92cddff1c9cd7d5be242de",
     "intent_hash_match": true
