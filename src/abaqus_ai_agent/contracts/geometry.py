@@ -37,6 +37,9 @@ class ViewProjection:
     view_height: Optional[float] = None
     view_offset_x: float = 0.0
     view_offset_y: float = 0.0
+    perspective_angle: Optional[float] = None
+    near_plane: Optional[float] = None
+    far_plane: Optional[float] = None
 
 
 @dataclass(frozen=True)

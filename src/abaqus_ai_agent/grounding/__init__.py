@@ -8,3 +8,16 @@ from .feature_grounding import (
     GroundingAmbiguityError,
     resolve_feature_grounding,
 )
+from .projection import (
+    Ray3D,
+    PinholeCamera,
+    project_parallel,
+    project_perspective,
+    project_point,
+    unproject_point_to_ray,
+    ray_intersects_aabb,
+    ray_intersects_plane,
+    ray_point_distance,
+    select_geometry_by_ray,
+    grounded_region_from_ray_selection,
+)
