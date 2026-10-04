@@ -202,15 +202,13 @@ The following three tracks represent the ongoing evolution beyond `v1.0.0-rc1` d
 │      GA-CL.7 Zero-Bypass Integrity, GA-CL.8 20-Domain Audit                 │
 │      [ALL CLOSED & FROZEN at v1.0.0-rc1, 616/616 PASS].                     │
 ├─────────────────────────────────────────────────────────────────────────────┤
-│ Post-RC1 Active Track: Unified Engineering Grounding Layer & Physics Depth │
-│    - 🥇 Track GA-2A: 3D Viewport Spatial Grounding & Topology Disambiguation│
-│      (Perspective Camera Calibration, Raycast AABB, Depth Sorting) [CLOSED] │
-│    - 🥈 Track GA-F4: Fatigue L3 -> L4 Full-Chain Upgrade                    │
-│      (Declarative IntentFatigueSpec -> Compiler -> Rainflow/Goodman/Miner)  │
-│      [CLOSED - 18 L4 / 2 L3 achieved on live Abaqus 2025 solver]            │
-│    - 🥉 Track GA-2B: Multimodal Perception (Blueprints/Photos -> HITL)      │
-│      (Strict Observation -> User Confirmation -> Typed Intent; No Bypass)   │
-│    - ⏸️ Track GA-L3: Kinematic Connectors & FMBD [Stable L3 / Deferred]     │
+│ Post-RC1 Evolutionary Tracks: Grounding Layer & Full-Chain Promotion       │
+│    - 🥇 Track GA-2A: 3D Viewport Spatial Grounding & Topology [CLOSED]     │
+│    - 🥈 Track GA-F4: Fatigue L3 -> L4 Full-Chain Upgrade [CLOSED]          │
+│    - 🥉 Track GA-2B: Multimodal Perception Grounding & HITL Backend [CLOSED]│
+│    - 🏁 Track GA-C4: Kinematic Connectors L3 -> L4 [CLOSED]                │
+│    - 🏁 Track GA-M4: Flexible Multibody Dynamics (FMBD) L3 -> L4 [CLOSED]  │
+│    [ALL 20 PHYSICAL ENGINEERING DOMAINS QUALIFIED AT L4 - 20 L4 / 0 L3]     │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -306,11 +304,17 @@ To prevent capability drift and establish the empirical baseline before initiati
 | 13 | **Assembly & Kinematic Tie Constraints** | Golden Tie, General Contact | Multi-part surface tie constraints and master-slave pairing | `tie_contact_e2e.json` | Kinematic continuity across interface, displacement compatibility | Tier A | 🟢 **L4 (Agent Full-Chain)** |
 | 14 | **High-Cycle & Low-Cycle Fatigue** | Golden Fatigue E2E, `fatigue.py`, `IntentFatigueSpec` | Stress history $\to$ Rainflow counting $\to$ Goodman $\to$ Miner | `fatigue_l4_golden_manifest.json`, `fatigue_odb_golden_e2e.json` | Reversal extraction, rainflow cycle counts, damage accumulation, life prediction; live Abaqus 2025 full-chain PASS, Gate 8 PASS, 4 negative probes fail-closed | Tier A | 🟢 **L4 (Agent Full-Chain Qualified)** |
 | 15 | **Kinematic Connectors & Mechanism Joints** | Golden MBD, `IntentConnectorSpec`, `compiler.py`, Gate 13 | CONN3D2 HINGE/Standard, local DatumCsys, elasticity/damping behavior, CU/CTF extraction | `connector_l4_manifest.json`, `mbd2_revolute_golden_e2e.json` | Connector kinematics (CU, CTF), relative rotation (6.96°), joint drift (9.78e-6 mm <= 1e-3 mm), period error (0.54% <= 5%), energy loss (2.1% <= 3%), live Abaqus 2025 full-chain PASS, Gate 13 PASS, 9 negative probes fail-closed | Tier A | 🟢 **L4 (Agent Full-Chain Qualified, stated connector scope)** |
-| 16 | **Flexible Multibody Dynamics (FMBD)** | `fmbd_l4_golden_e2e.py`, `compiler.py`, `acceptance.py` | Rigid-flexible and flexible-to-flexible coupled systems | `fmbd_l4_manifest.json`, `fmbd4_rigid_flexible_golden_e2e.json` | Joint kinematic continuity (drift <= 1e-3 mm), flexible member stress, dynamic energy conservation (dissipation <= 5%) | Tier A | 🟢 **L4 (Agent Full-Chain Qualified)** |
+| 16 | **Flexible Multibody Dynamics (FMBD)** | `fmbd_l4_golden_e2e.py`, `compiler.py`, `acceptance.py` | Rigid-flexible and flexible-to-flexible coupled systems | `fmbd_l4_manifest.json`, `fmbd4_rigid_flexible_golden_e2e.json` | Joint kinematic continuity (drift $3.13\times 10^{-10}\text{ mm} \le 10^{-3}\text{ mm}$), non-trivial flexible response stress ($0.0435\text{ MPa} \ge 0.01\text{ MPa}$ probe), peak strain energy activation ratio ($\max(\text{ALLSE})/\max(\text{ALLIE}) = 0.9993 \ge 0.01$), numerical energy-balance drift ratio ($|\Delta E_{\text{total}}|/E_{\text{ref}} = 0.56\% \le 5\%$) | Tier A | 🟢 **L4 (Agent Full-Chain Qualified)** |
 | 17 | **Stability & Buckling** | J-Live B1–B2 | Linear eigenvalue buckling, post-buckling riks | `j_live_abaqus_evidence.json` | Euler critical load $P_{\text{cr}}$, bifurcation point, imperfection tracking | Tier A | 🟢 **L4 (Solver & Workflow Qualified)** |
 | 18 | **Mesh Quality & Convergence** | Mesh Convergence E2E, Mesh Gate, GA-1.4 | Richardson extrapolation, Roache GCI ($\le 1.5\%$), element metrics | `mesh_convergence_e2e.json`, `ga14_real_machine_evidence.json` | Asymptotic GCI, aspect ratio $\le 10$, distortion $\le 45^\circ$, Jacobians $> 0$ | Tier A/B | 🟢 **L4 (Agent Integrated & Qualified)** |
 | 19 | **Material Intelligence & Grounding** | Phase K, Phase L2, GA-2.2, GA-2.5 | CAMPUS/Datasheet $\to$ `MaterialRecord` $\to$ Resolver $\to$ Model | `tier4_material_evidence.json`, `ga2_golden_evidence.json` | Environmental matching, constitutive preflight, spatial feature grounding | Tier A/B | 🟢 **L4 (Agent Full-Chain)** |
 | 20 | **Acceptance & Unforgeable Evidence Reporting** | GA-CL.3 ~ GA-CL.7, Evidence V2 | Single exit gate, Evidence V2 tamper/stale protection, unforgeable report | `evidence_v2_manifest.json`, `real_failure_matrix_evidence.json` | Cryptographic SHA-256 provenance, 0 bypass paths, `ACCEPTED` locked to authentic ODB | Tier A/B/C | 🟢 **L4 (Agent Full-Chain)** |
+
+#### 3.3.4 Physical Clarifications on FMBD Metric Semantics
+To maintain complete scientific honesty and prevent over-claiming or misunderstanding during engineering audits:
+1. **`strain_energy_ratio`**: Computed strictly as $\max(\text{ALLSE}) / \max(\text{ALLIE}, 10^{-6})$, measuring the peak internal strain energy ratio over the entire dynamic run. It functions as an activity probe confirming that flexible body deformation is genuinely engaged during the motion, rather than an instantaneous time-point-by-time-point energy conservation ratio.
+2. **`energy_dissipation_ratio`**: Computed as $|\max(\text{ETOTAL}) - \min(\text{ETOTAL})| / E_{\text{ref}}$, where $E_{\text{ref}} = \max(\max(\text{ALLWK}), \max(\text{ALLKE}), 10^{-6})$. This represents the numerical drift of total energy over the reference dynamic energy scale (energy-balance drift ratio) to assess solver integration stability and numerical conservation, rather than measuring purely physical energy dissipation from friction or material damping.
+3. **`max_mises >= 0.01 MPa`**: This threshold serves as an activity probe (`non-trivial flexible-response probe`) designed specifically for benchmark verification to guard against false-PASS on trivial rigid-body modes without flexible deformation, rather than an arbitrary universal engineering stress limit.
 
 ---
 
@@ -320,9 +324,7 @@ The Abaqus-AI-Agent codebase conforms strictly to the **RC1 Baseline Freeze** cr
 Every claim is anchored in verifiable source code, 616/616 passing regression tests, cryptographic `EvidenceManifestV2` contracts, or genuine Abaqus 2025 binary output files.
 
 All 20 physical engineering domains are formally qualified:
-- **18 Domains**: **L4 (Agent Full-Chain Qualified)** — fully driven through `EngineeringIntent`, autonomous compiler, live Abaqus 2025 execution, ODB extraction, and deterministic single-exit acceptance.
-- **19 Domains**: **L4 (Agent Full-Chain Qualified, stated benchmark scope)** — Linear Static, Nonlinear Static, Contact & Friction, Bolt Pretension, Thermal, Sequential Thermal-Structural, Modal, Preloaded Modal, Explicit Dynamics, Implicit Dynamics, High-Cycle Fatigue, Multi-Step Procedure, Spatial Field Loading, Kinematic Connectors, Assembly & Tie, Mesh Quality & GCI, Material Constitutive, Boundary & Load Grounding, Result Acceptance & Report.
-- **20 Domains**: **L4 (Agent Full-Chain Qualified)** — All 20 physical engineering domains fully qualified across Intent, Compiler, Preflight, Live Solver, ODB extraction, EvidenceManifestV2 cryptographic binding, Deterministic Acceptance Gates, and Negative Fail-Closed Probes.
+- **20 Domains**: **L4 (Agent Full-Chain Qualified, stated benchmark scope)** — Linear Static, Nonlinear Static, Contact & Friction, Bolt Pretension, Thermal, Sequential Thermal-Structural, Modal, Preloaded Modal, Explicit Dynamics, Implicit Dynamics, High-Cycle Fatigue, Multi-Step Procedure, Spatial Field Loading, Kinematic Connectors, Flexible Multibody (FMBD), Assembly & Tie Interaction, Mesh Quality & GCI, Material Constitutive, Boundary & Load Grounding, Result Acceptance & Engineering Report.
 - **0 Domains remaining at L3**: 100% full-chain autonomous agent execution achieved across all declared domains.
 
 **Version**: `v1.0.0-rc1`  

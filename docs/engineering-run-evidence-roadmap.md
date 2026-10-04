@@ -1,9 +1,9 @@
 # Engineering Run / Evidence Closure Roadmap
 
 **Status:** 
-- **RC 1.0 Frozen Baseline**: `v1.0.0-rc1` **BASELINE FROZEN** — 20 physical engineering domains classified as **17 L4 Agent Full-Chain + 3 L3 Specialized Workflow** qualifications; 616/616 regression PASS; three-tier validation hierarchy enforced; production False-PASS bypasses = **0**. ✅
-- **GA Working Baseline**: Post-RC1 Strategic Pivot to **Unified Engineering Grounding Layer** (Track GA-2A 3D Viewport Grounding [ACTIVE 🥇] $\to$ Track GA-F4 Fatigue L3$\to$L4 Upgrade [🥈] $\to$ Track GA-2B Multimodal Perception with HITL [🥉]) 🚀
-**Version:** 2026-10-04 (Release Candidate 1.0 Baseline Frozen; Engineering Grounding Layer Ingestion)
+- **RC 1.0 Baseline (Historical)**: Initially frozen at 17 L4 + 3 L3; post-RC1 evolutionary tracks (GA-F4 Fatigue, GA-C4 Connectors, GA-M4 FMBD) have now formally promoted all remaining domains to **20 L4 / 0 L3 (100% Agent Full-Chain Qualified)** on live Abaqus 2025.
+- **Current Operational Baseline**: **20 L4 / 0 L3 Full-Chain Qualified**; Strategic focus permanently transitioned from solver domain expansion to **Commercial Productization & Engineering Grounding (P1)**. 🚀
+**Version:** 2026-10-04 (Full 20 L4 Physical Engineering Domains Qualified; Productization Transition)
 **Scope:** Abaqus-AI-Agent engineering architecture, foundational contracts, evidence chain, real-machine physics benchmarks, and material intelligence grounding
 
 ---
@@ -1166,21 +1166,22 @@ With the RC 1.0 foundation formally frozen and audited (`v1.0.0-rc1 — CONDITIO
        required_user_input: Optional[str] = None
        next_action: Optional[str] = None
    ```
-3. **Strict Implementation Sequencing (Post-RC1 Strategic Pivot)**:
-   $$\text{GA-3 (Runtime - P0 [CLOSED])} \longrightarrow \text{GA-1 (CAD/Mesh - P1 [FROZEN])} \longrightarrow \text{GA-CL (Multi-Physics - P0 [FROZEN])} \longrightarrow \text{Engineering Grounding Layer (ACTIVE)}$$
-   Post-RC1 priority ladder:
-   $$\text{Track GA-2A (3D Viewport Grounding - 🥇 P1)} \longrightarrow \text{Track GA-F4 (Fatigue L3}\to\text{L4 - 🥈 P1)} \longrightarrow \text{Track GA-2B (Multimodal Perception - 🥉 P2)}$$
-   *Connectors and FMBD remain qualified as L3 Specialized Workflows; no unvetted duplicate architectures.*
+3. **Strict Implementation Sequencing (Post-RC1 Strategic Pivot Completed)**:
+   $$\text{GA-3 (Runtime - P0 [CLOSED])} \longrightarrow \text{GA-1 (CAD/Mesh - P1 [FROZEN])} \longrightarrow \text{GA-CL (Multi-Physics - P0 [FROZEN])} \longrightarrow \text{Engineering Grounding Layer (CLOSED)}$$
+   Post-RC1 evolutionary progression (All Completed):
+   $$\text{Track GA-2A (3D Viewport Grounding [CLOSED])} \longrightarrow \text{Track GA-F4 (Fatigue L4 [CLOSED])} \longrightarrow \text{Track GA-2B (Multimodal Perception [CLOSED])}$$
+   $$\longrightarrow \text{Track GA-C4 (Connectors L4 [CLOSED])} \longrightarrow \text{Track GA-M4 (FMBD L4 [CLOSED])}$$
+   *All 20 physical engineering domains (including Connectors and FMBD) are formally promoted and verified at L4 Agent Full-Chain Qualified.*
 
 ```
                    Abaqus-AI-Agent Post-RC1 Architecture
                                     │
     ┌───────────────────────────────┴───────────────────────────────┐
     ▼                                                               ▼
-[ Engineering Grounding Layer (Input) ]                 [ Deep Physics Track (Post-RC1) ]
-- 3D Viewport Raycast & Picking (GA-2A) [🥇 P1]          - Fatigue L3 -> L4 (GA-F4) [🥈 P1]
-- Multimodal Blueprints/Photos (GA-2B)  [🥉 P2]          - Kinematic Connectors [L3 Stable]
-- Canonical Natural Language Text                       - Flexible Multibody (FMBD) [L3 Stable]
+[ Engineering Grounding Layer (Input) ]                 [ Deep Physics Track (20 L4 / 0 L3) ]
+- 3D Viewport Raycast & Picking (GA-2A) [CLOSED]         - Fatigue L4 (GA-F4) [CLOSED]
+- Multimodal Blueprints/Photos (GA-2B)  [CLOSED]         - Kinematic Connectors (GA-C4) [L4 Closed]
+- Canonical Natural Language Text                        - Flexible Multibody (GA-M4) [L4 Closed]
     │                                                               │
     └───────────────────────────────┬───────────────────────────────┘
                                     ▼
@@ -1646,7 +1647,11 @@ In practical engineering practice, user requests do not arrive as pre-grounded A
   - Canonical compiler integration in `compile_intent_to_actions()`: automated Reference Point synthesis, native `rigid_body` constraints, native `coupling_constraint` (KINEMATIC/DISTRIBUTING), connector coupling, gravity loading, and automatic `S, U, UR, V, VR, CU, CTF, RF, RM` field output and `ALLIE, ALLKE, ALLWK, ALLSE, ETOTAL` history output injection.
   - Strict preflight lifecycle gate in `preflight_action()` and `preflight_plan()`: checks coupling control point and surface existence and distinctness, rigid body distinct regions, and connector sections with 0 blockers.
   - ODB result extraction and acceptance: Gate 14 `fmbd_dynamics` integrated into `evaluate_result_acceptance()` and `AnalysisRunner.run()`. Physics profile for `fmbd` enforcing required fields (`S, U, CU, CTF`), required metrics (`joint_drift, max_mises_stress, strain_energy_ratio, energy_dissipation_ratio`), and required gates.
-  - Live Abaqus 2025 Standard execution in `tools/fmbd_l4_golden_e2e.py`: coupled rigid crank and flexible link under gravity; 336 frames; joint drift $3.13\times 10^{-10}\text{ mm} \le 10^{-3}\text{ mm}$, flexible link max Mises $0.0435\text{ MPa}$, strain energy ratio $0.9993 \ge 0.01$, energy dissipation ratio $0.0056 \le 0.05$.
+  - Live Abaqus 2025 Standard execution in `tools/fmbd_l4_golden_e2e.py`: coupled rigid crank and flexible link under gravity; 336 frames; joint drift $3.13\times 10^{-10}\text{ mm} \le 10^{-3}\text{ mm}$, flexible link max Mises $0.0435\text{ MPa}$ (passed $\ge 0.01\text{ MPa}$ non-trivial flexible-response probe), peak strain energy activation ratio $\max(\text{ALLSE})/\max(\text{ALLIE}) = 0.9993 \ge 0.01$, total energy balance drift ratio $|\max(\text{ETOTAL})-\min(\text{ETOTAL})|/E_{\text{ref}} = 0.0056 \le 0.05$.
+  - Formal Metric Definitions & Clarifications:
+    * `strain_energy_ratio`: Defined as $\max(\text{ALLSE}) / \max(\text{ALLIE})$, functioning as a peak flexible strain energy activation probe confirming genuine dynamic structural deformation (rather than instantaneous point-to-point energy conservation).
+    * `energy_dissipation_ratio`: Defined as $|\max(\text{ETOTAL}) - \min(\text{ETOTAL})| / E_{\text{ref}}$, functioning as a numerical energy-balance drift ratio evaluating solver integration stability and global conservation, rather than pure physical dissipation (friction/damping).
+    * `max_mises >= 0.01 MPa`: Configured as an activity probe (`non-trivial flexible-response probe`) to prevent false-PASS on trivial rigid-body modes without flexible deformation, rather than an arbitrary universal engineering stress limit.
   - 9 negative boundary probes verified fail-closed (missing coupling control point, missing surface, identical endpoints, undefined connector section, missing local orientation, missing mandatory gate, evidence tampering, rigid body self-tie, strict physical drift violation).
   - Persisted certified cryptographic manifest in `machine_validation/fmbd_l4_manifest.json` (Tier `REAL_ABAQUS`). Capability split: **20 L4 / 0 L3 (100% Agent Full-Chain Qualified across all 20 physical engineering domains)**.
 

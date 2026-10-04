@@ -98,7 +98,28 @@ class IntentFMBDSpec:
 
 @dataclass(frozen=True)
 class FMBDKinematicsVerification:
-    """Verification results extracted from live Abaqus ODB for FMBD dynamics."""
+    """Verification results extracted from live Abaqus ODB for FMBD dynamics.
+
+    Metric Definitions & Physical Interpretation:
+    1. strain_energy_ratio:
+       Defined as max(ALLSE) / max(ALLIE, 1e-6).
+       Represents the ratio of peak internal strain energy to peak internal energy
+       across the dynamic analysis. It serves as a heuristic activity probe confirming
+       that flexible body deformation is genuinely engaged during the motion, rather
+       than an instantaneous time-point-by-time-point energy ratio.
+    2. energy_dissipation_ratio:
+       Defined as abs(max(ETOTAL) - min(ETOTAL)) / ref_energy, where
+       ref_energy = max(peak_wk, peak_ke, 1e-6).
+       Represents the maximum drift of total energy over the reference dynamic energy
+       scale. It functions as a numerical energy-balance conservation and solver stability
+       drift ratio, assessing whether the numerical integration maintains global energy
+       balance, rather than capturing purely physical dissipation (damping/friction).
+    3. max_mises_stress_mpa:
+       Peak von Mises stress observed in the flexible components. In validation benchmarks,
+       evaluated against >= 0.01 MPa as a non-trivial flexible-response probe to ensure
+       the flexible body undergoes active deformation instead of trivial rigid-body motion,
+       rather than serving as a universal engineering stress threshold.
+    """
     status: str = "pass"
     joint_drift_max_mm: float = 0.0
     max_mises_stress_mpa: float = 0.0
