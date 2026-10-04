@@ -197,6 +197,51 @@ class AbaqusAIAgent:
                 },
             )
 
+        # 2.5. P1.2 Intent Reasoning, Parameter Completion & Engineering Plausibility Gate
+        from .contracts.intent_reasoning import ReasoningStatus
+        from .reasoning.engine import IntentReasoningEngine
+
+        reasoning_res = IntentReasoningEngine.reason(
+            intent=intent,
+            geometry=geometry,
+            material=material,
+            mesh=mesh,
+            grounded_regions=grounded_regions,
+            strict_hitl=kwargs.get("strict_hitl", True),
+        )
+
+        if not reasoning_res.is_executable:
+            reasoning_task_status = (
+                TaskStatus.NEEDS_CLARIFICATION
+                if reasoning_res.status == ReasoningStatus.NEEDS_CLARIFICATION
+                else TaskStatus.BLOCKED
+            )
+            card_status = reasoning_res.status.value
+            if any("missing geometry" in str(b) for b in reasoning_res.blockers):
+                card_status = "COMPILATION_BLOCKED"
+
+            return EngineeringTaskResult(
+                status=reasoning_task_status,
+                intent=intent,
+                capability=capability,
+                clarification_prompt=reasoning_res.clarification_prompt,
+                errors=reasoning_res.blockers,
+                summary_card={
+                    "status": card_status,
+                    "blockers": list(reasoning_res.blockers),
+                    "clarification_prompt": reasoning_res.clarification_prompt,
+                    "inferences": [inf.to_dict() for inf in reasoning_res.inferences],
+                    "plausibility_checks": [c.to_dict() for c in reasoning_res.plausibility_checks],
+                },
+                metadata={
+                    "reasoning_summary": reasoning_res.to_summary(),
+                },
+            )
+
+        intent = reasoning_res.enriched_intent or intent
+        effective_mesh = mesh or reasoning_res.inferred_mesh
+        effective_material = material or reasoning_res.inferred_material
+
         # 3. Intent Compilation to Action Plan (Fail-closed on missing geometry/material)
         try:
             plan = compile_engineering_intent(
@@ -205,8 +250,8 @@ class AbaqusAIAgent:
                 part_name=part_name,
                 job_name=job_name,
                 geometry=geometry,
-                material=material,
-                mesh=mesh,
+                material=effective_material,
+                mesh=effective_mesh,
                 grounded_regions=grounded_regions,
                 submit_job=submit_job,
             )
@@ -311,6 +356,8 @@ class AbaqusAIAgent:
             "engineering_status": eng_status,
             "acceptance_passed": getattr(run, "acceptance_passed", False),
             "metrics": metric_dict,
+            "reasoning_status": reasoning_res.status.value,
+            "inferences": [inf.to_dict() for inf in reasoning_res.inferences],
         }
 
         return EngineeringTaskResult(

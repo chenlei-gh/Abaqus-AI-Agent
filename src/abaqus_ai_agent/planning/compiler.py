@@ -1259,8 +1259,8 @@ def compile_engineering_intent(
     model_name: Optional[str] = None,
     part_name: Optional[str] = None,
     job_name: Optional[str] = None,
-    geometry: Optional[IntentGeometrySpec] = None,
-    material: Optional[MaterialDefinition] = None,
+    geometry: Optional[Union[IntentGeometrySpec, Dict[str, Any]]] = None,
+    material: Optional[Union[MaterialDefinition, Dict[str, Any]]] = None,
     mesh: Optional[IntentMeshSpec] = None,
     grounded_regions: Optional[Dict[str, GroundedRegion]] = None,
     submit_job: bool = False,
@@ -1282,6 +1282,27 @@ def compile_engineering_intent(
 
     # 2. Geometry Resolution (Fail-closed on complete omission)
     eff_geom = geometry
+    if isinstance(eff_geom, dict):
+        if "box" in eff_geom and isinstance(eff_geom["box"], (list, tuple)) and len(eff_geom["box"]) >= 3:
+            b = eff_geom["box"]
+            eff_geom = IntentGeometrySpec(
+                shape=str(eff_geom.get("shape", "cantilever_box")),
+                length=float(b[0]),
+                width=float(b[1]),
+                height=float(b[2]),
+            )
+        elif "shape" in eff_geom:
+            eff_geom = IntentGeometrySpec(**eff_geom)
+        else:
+            eff_geom = IntentGeometrySpec(
+                shape=str(eff_geom.get("shape", "cantilever_box")),
+                length=float(eff_geom.get("length", 100.0)),
+                width=float(eff_geom.get("width", 10.0)),
+                height=float(eff_geom.get("height", 10.0)),
+                radius=float(eff_geom["radius"]) if "radius" in eff_geom else None,
+                thickness=float(eff_geom["thickness"]) if "thickness" in eff_geom else None,
+                step_file_path=eff_geom.get("step_file_path"),
+            )
     if eff_geom is None and "geometry" in intent.metadata:
         raw_geom = intent.metadata["geometry"]
         if isinstance(raw_geom, IntentGeometrySpec):
@@ -1314,12 +1335,10 @@ def compile_engineering_intent(
         )
 
     # 3. Material Resolution (Fail-closed on complete omission)
-    eff_mat = material
-    if eff_mat is None and intent.material is not None:
-        if isinstance(intent.material, MaterialDefinition):
-            eff_mat = intent.material
-        elif isinstance(intent.material, dict):
-            m = intent.material
+    eff_mat = material if material is not None else intent.material
+    if eff_mat is not None and not isinstance(eff_mat, MaterialDefinition):
+        if isinstance(eff_mat, dict):
+            m = eff_mat
             m_name = m.get("name", "DefaultMaterial")
             u_sys = m.get("unit_system") or intent.unit_system or "MM_N_MPA"
             youngs = m.get("elastic_modulus") or m.get("youngs_modulus") or m.get("E")
