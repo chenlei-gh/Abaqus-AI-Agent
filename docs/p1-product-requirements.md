@@ -315,13 +315,13 @@ P1.0 产品主入口已彻底消除高层自然语言需求与底层 20 个 L4 �
 | **REQ-P1-004** | 内部验证防注水安全红线 | P1.0 | 入口参数 kwargs | `INJECTION_BLOCKED` | Tier B | 外部注水验证对象一律阻断 | 🟢 **QUALIFIED** |
 | **REQ-P1-005** | 六状态强一致性双向断言 | P1.0 | 任务执行全状态 | 严格等价布尔值 | Tier B | 任何状态去同步即判定 FAILED | 🟢 **QUALIFIED** |
 | **REQ-P1-006** | 真实求解器黄金案例复验 | P1.0 | 悬臂梁需求 | 真实 ODB 与 6 类工件 | Tier A | 7 项负向探针全部 fail-closed | 🟢 **QUALIFIED** |
-| **REQ-P1-010** | 多格式工程图纸图像摄入 | P1.1 | PDF/PNG/JPG 文件 | 矢量字符流/高DPI光栅瓦片与坐标 | Tier C | 损坏文件/不支持格式安全报错 | 🚧 **READY** |
-| **REQ-P1-011** | Provider-Neutral 工程 OCR | P1.1 | 图像/矢量文字块 | 强类型文本与材料标记候选 | Tier B | 低文字置信度进入待确认 | 🚧 **READY** |
-| **REQ-P1-012** | 尺寸标注线与公差解析 | P1.1 | 尺寸线与文字图像 | 尺寸数值、公差、跨度 (DIMENSION) | Tier B | 尺寸冲突或量纲缺失告警 | 🚧 **READY** |
-| **REQ-P1-013** | 载荷箭头与约束符号解析 | P1.1 | 箭头与约束图标 | 幅值、方向矢量、约束 (ARROW/SYMBOL)| Tier B | 方向歧义或多候选阻断 | 🚧 **READY** |
-| **REQ-P1-014** | 结构化 `VisualCallout` 输出 | P1.1 | 识别结果集 | `Tuple[VisualCallout]` (规范契约) | Tier B | 严格坐标[0,1]与非零矢量校验 | 🚧 **READY** |
-| **REQ-P1-015** | 多维置信度人机协同门禁 (HITL) | P1.1 | `VisualCallout` 候选 | `HITLConfirmationRequest` | Tier B | 多候选或多维置信度不达标阻断 | 🚧 **READY** |
-| **REQ-P1-016** | 视觉防伪与防幻觉红线 | P1.1 | 模型输出 | 结构化候选数据 | Tier B | 严禁 Vision 直出 Python 脚本 | 🚧 **READY** |
+| **REQ-P1-010** | 多格式工程图纸图像摄入 | P1.1 | PDF/PNG/JPG 文件 | 矢量字符流/高DPI光栅瓦片与坐标 | Tier C | 损坏文件/不支持格式安全报错 | 🟢 **QUALIFIED** |
+| **REQ-P1-011** | Provider-Neutral 工程 OCR | P1.1 | 图像/矢量文字块 | 强类型文本与材料标记候选 | Tier B | 低文字置信度进入待确认 | 🟢 **QUALIFIED** |
+| **REQ-P1-012** | 尺寸标注线与公差解析 | P1.1 | 尺寸线与文字图像 | 尺寸数值、公差、跨度 (DIMENSION) | Tier B | 尺寸冲突或量纲缺失告警 | 🟢 **QUALIFIED** |
+| **REQ-P1-013** | 载荷箭头与约束符号解析 | P1.1 | 箭头与约束图标 | 幅值、方向矢量、约束 (ARROW/SYMBOL)| Tier B | 方向歧义或多候选阻断 | 🟢 **QUALIFIED** |
+| **REQ-P1-014** | 结构化 `VisualCallout` 输出 | P1.1 | 识别结果集 | `Tuple[VisualCallout]` (规范契约) | Tier B | 严格坐标[0,1]与非零矢量校验 | 🟢 **QUALIFIED** |
+| **REQ-P1-015** | 多维置信度人机协同门禁 (HITL) | P1.1 | `VisualCallout` 候选 | `HITLConfirmationRequest` | Tier B | 多候选或多维置信度不达标阻断 | 🟢 **QUALIFIED** |
+| **REQ-P1-016** | 视觉防伪与防幻觉红线 | P1.1 | 模型输出 | 结构化候选数据 | Tier B | 严禁 Vision 直出 Python 脚本 | 🟢 **QUALIFIED** |
 | **REQ-P1-020** | 材料牌号匹配与环境超限预警 | P1.2 | 材料中文别名/工况 | 严格物性参数 / 超限告警 | Tier B | 未知材料拦截，高温超限确认 | 🚧 **READY** |
 | **REQ-P1-021** | 透明网格推荐与依据记录 | P1.2 | 几何特征尺寸 | 网格尺寸、单元类型、依据 | Tier B | 严禁无依据默认 5mm C3D8R | 🚧 **READY** |
 | **REQ-P1-022** | 载荷/约束边界歧义消除 | P1.2 | 约束与载荷集合 | 欠约束告警、对称面建议 | Tier B | 刚体机构未约束阻断求解 | 🚧 **READY** |

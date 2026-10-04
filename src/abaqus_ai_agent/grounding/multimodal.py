@@ -134,9 +134,12 @@ def correlate_callout_with_cad(
     semantic = target_semantic or callout.semantic_intent or "GROUNDED_TARGET"
 
     # Infer intent type from callout
-    intent_type = GroundingIntentType.LOAD.value
     if callout.semantic_intent in ("FIXED_SUPPORT", "PINNED_SUPPORT", "SYMMETRY_X", "SYMMETRY_Y", "SYMMETRY_Z", "SYMMETRY_PLANE"):
         intent_type = GroundingIntentType.BOUNDARY_CONDITION.value
+    elif callout.callout_type == CalloutType.DIMENSION.value or callout.semantic_intent in ("DIMENSION", "DIAMETER", "RADIUS"):
+        intent_type = GroundingIntentType.DIMENSION.value
+    else:
+        intent_type = GroundingIntentType.LOAD.value
 
     # Case A: Spatial Raycast via GA-2A if ViewProjection is available
     if view_projection is not None and candidates:
