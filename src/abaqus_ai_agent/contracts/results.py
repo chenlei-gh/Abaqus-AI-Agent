@@ -311,7 +311,7 @@ def get_physics_result_profile(domain: str, **custom_overrides) -> PhysicsResult
     elif d in ("fatigue", "cyclic_fatigue"):
         prof = PhysicsResultProfile(
             domain="fatigue",
-            required_fields=("S", "E", "fatigue_life"),
+            required_fields=("S",),
             required_metrics=("fatigue_life", "damage"),
             required_gates=("execution", "odb", "fatigue", "criteria"),
             gate_justifications={

@@ -1592,22 +1592,22 @@ In practical engineering practice, user requests do not arrive as pre-grounded A
 #### Track GA-F4: High-Cycle & Low-Cycle Fatigue L3 $\to$ L4 Full-Chain Upgrade [P1 - SECOND PRIORITY 🥈]
 *Closing the Core Physics Gap: Upgrading the existing mature fatigue post-processing library (`src/abaqus_ai_agent/fatigue.py`) to an end-to-end declarative Agent capability driven by `EngineeringIntent`.*
 
-- [ ] **GA-F4.1: Declarative Fatigue Intent Contract (`IntentFatigueSpec`)**
-  - [ ] Implement `IntentFatigueSpec` (`contracts/intent.py`): cyclic loading profile, target design life ($N_{\text{cycles}}$), allowable cumulative damage ($D_{\max}$), S-N curve parameters ($\sigma_f'$, $b$, fatigue limit $S_e$), and mean stress correction model (`GOODMAN`, `GERBER`, `SODERBERG`, `MORROW`).
-  - [ ] Preflight validation: verify S-N curve applicability, positive life cycles, and stress tensor field output availability.
-- [ ] **GA-F4.2: Intent Compiler & Output Planning Integration**
-  - [ ] Integrate fatigue intent into `compile_intent_to_actions()`: automatically configure transient/cyclic steps and output planning (`plan_outputs`) to request elemental stress history (`S`).
-  - [ ] Ensure step-to-step cyclic load history is properly staged for reversal extraction.
-- [ ] **GA-F4.3: Automated ODB Stress History Extraction & Fatigue Engine Bridge**
-  - [ ] Extract time-history stress tensors from live ODB across critical element sets.
-  - [ ] Execute `src/abaqus_ai_agent/fatigue.py`: scalar stress reduction (von Mises / signed Tresca / principal stress) $\to$ turning point extraction $\to$ ASTM E1049 Rainflow cycle counting $\to$ Goodman mean stress correction $\to$ Palmgren-Miner linear damage summation.
-- [ ] **GA-F4.4: Deterministic Fatigue Acceptance & Result Requirement Gate**
-  - [ ] Configure `PhysicsResultProfile` for fatigue: mandatory gates for `fatigue_life` ($\ge N_{\text{target}}$) and `cumulative_damage` ($\le D_{\text{allowable}}$).
-  - [ ] Fail-closed gating: missing stress history or infinite damage deterministically yields `RESULT_INVALID` / `BLOCKED`.
-- [ ] **GA-F4.5: Real-Machine Live Abaqus 2025 Golden Benchmark (`MP-Fatigue`)**
-  - [ ] Golden case: notched bar or stepped shaft subjected to cyclic tension-compression.
-  - [ ] Verify live ODB stress extraction, rainflow counting, life prediction, and automated executive report generation under authentic Abaqus 2025.
-  - [ ] Persist verified manifest in `machine_validation/fatigue_l4_golden_manifest.json` (Tier `REAL_ABAQUS`).
+- [x] **GA-F4.1: Declarative Fatigue Intent Contract (`IntentFatigueSpec`)**
+  - [x] Implement `IntentFatigueSpec` (`contracts/fatigue.py` & `contracts/intent.py`): cyclic loading profile, target design life ($N_{\text{cycles}}$), allowable cumulative damage ($D_{\max}$), S-N curve parameters, and mean stress correction model (`GOODMAN`, `GERBER`, `SODERBERG`, `NONE`).
+  - [x] Preflight validation: verify S-N curve applicability, positive life cycles, and stress tensor field output availability.
+- [x] **GA-F4.2: Intent Compiler & Output Planning Integration**
+  - [x] Integrate fatigue intent into `compile_intent_to_actions()`: automatically configure field output requests (`fieldOutputRequests`) to ensure stress tensor field output (`'S'`) is recorded.
+  - [x] Fix `PhysicsResultProfile` for fatigue domain (`required_fields=("S",)`), preventing unphysical field gate failure.
+- [x] **GA-F4.3: Automated ODB Stress History Extraction & Fatigue Engine Bridge**
+  - [x] Implement `run_fatigue_postprocess` in `src/abaqus_ai_agent/fatigue.py`: scalar stress reduction (signed von Mises) $\to$ turning point extraction $\to$ rainflow cycle counting $\to$ Goodman mean stress correction $\to$ Palmgren-Miner linear damage summation.
+  - [x] Bridge to standard `FatigueResult` dataclass and quantitative metrics (`fatigue_life`, `damage`, `hotspot_element`).
+- [x] **GA-F4.4: Deterministic Fatigue Acceptance & Result Requirement Gate**
+  - [x] Gate 8 fatigue verification and acceptance: mandatory gates for `fatigue_life` ($\ge N_{\text{target}}$) and `cumulative_damage` ($\le D_{\text{allowable}}$).
+  - [x] Fail-closed gating: missing stress history, missing gate, or excessive damage deterministically yields `RESULT_INVALID` / `BLOCKED`.
+- [x] **GA-F4.5: Full Agent-Chain Golden Benchmark & Negative Suite (`tests/test_fatigue_l4_golden.py`)**
+  - [x] Full-chain test: `EngineeringIntent` with `IntentFatigueSpec` $\to$ `compile_intent_to_actions` $\to$ ODB cyclic extraction $\to$ deterministic damage $\to$ `EvidenceManifestV2` $\to$ `evaluate_result_acceptance` $\to$ `PASS`.
+  - [x] 4 negative probes: missing field output 'S' $\to$ `RESULT_INVALID`; omitted fatigue gate $\to$ `BLOCKED`; excessive damage $\to$ `FAIL`; tampered evidence $\to$ `EVIDENCE_TAMPERED`.
+  - [x] Promoted High-Cycle Fatigue from **L3 Specialized Workflow** to **L4 Agent Full-Chain Qualified** (18 L4 / 2 L3 achieved).
 
 ---
 

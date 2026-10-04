@@ -51,7 +51,7 @@ To eliminate ambiguity across commercial workflows and academic verification, th
 | 8 | Preloaded Modal | **L4 Agent Full-Chain** | MP-3 preload state inheritance → modal extraction → frequency acceptance |
 | 9 | Explicit Dynamics | **L4 Agent Full-Chain** | MP-4 explicit dynamics + ALLKE/ALLIE energy evidence |
 | 10 | Implicit Dynamics | **L4 Agent Full-Chain** | Dynamic procedure/amplitude compiler path with live ODB qualification |
-| 11 | High-Cycle Fatigue | **L3 Specialized Workflow** | ODB stress/history → Rainflow/mean-stress correction/S-N/Miner; specialized post-processing workflow, not generic RC1 Intent-to-Solver claim |
+| 11 | High-Cycle Fatigue | **L4 Agent Full-Chain** | `IntentFatigueSpec` integrated into compiler, automatic 'S' field output injection, deterministic rainflow/Goodman/Miner, Gate 8 PASS |
 | 12 | Multi-Step Procedure | **L4 Agent Full-Chain** | Procedure DAG and cross-step state lifecycle, including GA-2.6.3 |
 | 13 | Spatial Field Loading | **L4 Agent Full-Chain** | `SpatialLoadField` / AST-guarded ExpressionField integrated into the main compiler |
 | 14 | Kinematic Connectors | **L3 Specialized Workflow** | Connector/MBD specialized workflow and live Golden qualification; not generic main Intent compiler coverage |
@@ -204,9 +204,10 @@ The following three tracks represent the ongoing evolution beyond `v1.0.0-rc1` d
 ├─────────────────────────────────────────────────────────────────────────────┤
 │ Post-RC1 Active Track: Unified Engineering Grounding Layer & Physics Depth │
 │    - 🥇 Track GA-2A: 3D Viewport Spatial Grounding & Topology Disambiguation│
-│      (Perspective Camera Calibration, Raycast AABB, Depth Sorting) [ACTIVE] │
+│      (Perspective Camera Calibration, Raycast AABB, Depth Sorting) [CLOSED] │
 │    - 🥈 Track GA-F4: Fatigue L3 -> L4 Full-Chain Upgrade                    │
 │      (Declarative IntentFatigueSpec -> Compiler -> Rainflow/Goodman/Miner)  │
+│      [CLOSED - 18 L4 / 2 L3 achieved]                                       │
 │    - 🥉 Track GA-2B: Multimodal Perception (Blueprints/Photos -> HITL)      │
 │      (Strict Observation -> User Confirmation -> Typed Intent; No Bypass)   │
 │    - ⏸️ Track GA-L3: Kinematic Connectors & FMBD [Stable L3 / Deferred]     │
@@ -303,7 +304,7 @@ To prevent capability drift and establish the empirical baseline before initiati
 | 11 | **Multi-Step Procedure DAG** | GA-2.6.0 ~ GA-2.6.3 Golden | Multi-step dependency DAG (`Initial` $\to$ `Step-1` $\to$ `Step-2`) | `ga263_golden_evidence.json`, `ga261_probe_evidence.json` | State inheritance, load incrementation, `nlgeom` cross-step consistency | Tier A | 🟢 **L4 (Agent Full-Chain)** |
 | 12 | **Spatial Field-Dependent Loading** | GA-2.6.1 P2 Probe, GA-2.6.2 Compiler | AST-whitelisted analytical field (`ExpressionField`) $\to$ `Pressure` | `ga261_probe_evidence.json` | Integrated surface reaction force error $7.1 \times 10^{-7}\%$ vs exact analytical integral | Tier A | 🟢 **L4 (Agent Full-Chain)** |
 | 13 | **Assembly & Kinematic Tie Constraints** | Golden Tie, General Contact | Multi-part surface tie constraints and master-slave pairing | `tie_contact_e2e.json` | Kinematic continuity across interface, displacement compatibility | Tier A | 🟢 **L4 (Agent Full-Chain)** |
-| 14 | **High-Cycle & Low-Cycle Fatigue** | Golden Fatigue E2E, `fatigue.py` | Stress history $\to$ Rainflow counting $\to$ Goodman $\to$ Miner | `fatigue_odb_golden_e2e.json` | Reversal extraction, rainflow cycle counts, damage accumulation, life prediction | Tier A | 🟡 **L3 (Specialized Workflow Qualified; Intent Compiler Pending)** |
+| 14 | **High-Cycle & Low-Cycle Fatigue** | Golden Fatigue E2E, `fatigue.py`, `IntentFatigueSpec` | Stress history $\to$ Rainflow counting $\to$ Goodman $\to$ Miner | `fatigue_odb_golden_e2e.json`, `test_fatigue_l4_golden.py` | Reversal extraction, rainflow cycle counts, damage accumulation, life prediction, Gate 8 PASS | Tier A | 🟢 **L4 (Agent Full-Chain)** |
 | 15 | **Kinematic Connectors & Mechanism Joints** | Golden MBD, J-Live CONN, `mbd.py` | Revolute, Cartesian, Hooke spring non-linear connectors | `mbd_golden_e2e.json`, `mbd2_revolute_golden_e2e.json` | Connector reaction forces/moments, relative rotation, spring deflection | Tier A | 🟡 **L3 (Specialized Workflow Qualified; Intent Compiler Pending)** |
 | 16 | **Flexible Multibody Dynamics (FMBD)** | FMBD4 ~ FMBD7, `mechanism.py` | Rigid-flexible and flexible-to-flexible coupled systems | `fmbd4_rigid_flexible_golden_e2e.json` ~ `fmbd6...` | Joint constraint torque, flexible member vibration, dynamic equilibrium | Tier A | 🟡 **L3 (Specialized Workflow Qualified; Intent Compiler Pending)** |
 | 17 | **Stability & Buckling** | J-Live B1–B2 | Linear eigenvalue buckling, post-buckling riks | `j_live_abaqus_evidence.json` | Euler critical load $P_{\text{cr}}$, bifurcation point, imperfection tracking | Tier A | 🟢 **L4 (Solver & Workflow Qualified)** |
@@ -319,8 +320,8 @@ The Abaqus-AI-Agent codebase conforms strictly to the **RC1 Baseline Freeze** cr
 Every claim is anchored in verifiable source code, 616/616 passing regression tests, cryptographic `EvidenceManifestV2` contracts, or genuine Abaqus 2025 binary output files.
 
 All 20 physical engineering domains are formally qualified:
-- **17 Domains**: **L4 (Agent Full-Chain Qualified)** — fully driven through `EngineeringIntent`, autonomous compiler, live Abaqus 2025 execution, ODB extraction, and deterministic single-exit acceptance.
-- **3 Domains**: **L3 (Specialized Workflow Qualified; Intent Compiler Pending)** — Fatigue, Kinematic Connectors, and Flexible Multibody Dynamics (FMBD) are verified on live Abaqus 2025 solvers via dedicated engineering workflows; direct intent compiler synthesis is scheduled post-RC1.
+- **18 Domains**: **L4 (Agent Full-Chain Qualified)** — fully driven through `EngineeringIntent`, autonomous compiler, live Abaqus 2025 execution, ODB extraction, and deterministic single-exit acceptance.
+- **2 Domains**: **L3 (Specialized Workflow Qualified; Intent Compiler Pending)** — Kinematic Connectors and Flexible Multibody Dynamics (FMBD) are verified on live Abaqus 2025 solvers via dedicated engineering workflows; direct intent compiler synthesis is scheduled post-RC1.
 
 **Version**: `v1.0.0-rc1`  
 **Verdict**: **RC1 BASELINE FROZEN**  

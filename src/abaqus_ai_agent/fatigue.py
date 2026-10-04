@@ -5,6 +5,8 @@ import os
 from math import exp, isfinite, log
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
 
+from .contracts.fatigue import FatigueResult, IntentFatigueSpec
+
 
 def stress_range_and_amplitude(stress_a: float, stress_b: float) -> Tuple[float, float]:
     a, b = float(stress_a), float(stress_b)
@@ -561,3 +563,93 @@ print("Acceptance Passed: %s | Strict Gate Failed (as designed): %s" % (
     not eval_result["strict_gate"]["passed"],
 ))
 '''
+
+
+def run_fatigue_postprocess(
+    odb_or_path: Any,
+    spec: IntentFatigueSpec,
+    output_json_path: Optional[str] = None,
+) -> Tuple[FatigueResult, Dict[str, Any]]:
+    """Execute fatigue postprocessing on an open ODB or ODB path given an IntentFatigueSpec.
+
+    Returns:
+        (FatigueResult, metrics_dict)
+    """
+    if not isinstance(spec, IntentFatigueSpec):
+        raise TypeError("spec must be an IntentFatigueSpec")
+
+    extracted = extract_stress_history_from_odb(
+        odb_or_path=odb_or_path,
+        step_name=spec.step_name,
+        element_label=spec.element_label,
+        measure=spec.measure,
+    )
+
+    eval_result = evaluate_fatigue_from_stress_history(
+        times=extracted["times"],
+        stresses=extracted["stresses"],
+        material_curve=spec.material_curve,
+        ultimate_strength=spec.ultimate_strength,
+        mean_stress_correction=spec.mean_stress_correction,
+        damage_allowable=spec.allowable_damage,
+        hotspot_info=extracted.get("hotspot"),
+    )
+
+    cycle_sum = eval_result["cycle_summary"]
+    life_blocks = cycle_sum.get("life_blocks", 0.0)
+    damage = cycle_sum.get("cumulative_damage", 0.0)
+
+    # Convert repeated blocks into total equivalent life cycles based on counted cycles
+    total_counted_cycles = max(cycle_sum.get("total_cycles_count", 1.0), 1.0)
+    if isfinite(life_blocks) and life_blocks > 0:
+        life_cycles = life_blocks * total_counted_cycles
+    else:
+        life_cycles = 1.0
+
+    # Determine status against IntentFatigueSpec
+    warnings: List[str] = []
+    if damage > spec.allowable_damage:
+        status = "fail"
+        warnings.append(f"cumulative_damage_{damage:.4e}_exceeds_allowable_{spec.allowable_damage}")
+    elif life_cycles < spec.target_cycles:
+        status = "fail"
+        warnings.append(f"life_cycles_{life_cycles:.1f}_below_target_{spec.target_cycles:.1f}")
+    elif not eval_result["passed"]:
+        status = "fail"
+    else:
+        status = "pass"
+
+    evidence_ids = ["fatigue_postprocess_direct"]
+    if output_json_path:
+        evidence_payload = {
+            "case_id": "fatigue_l4_evaluation",
+            "status": status,
+            "hotspot": extracted.get("hotspot"),
+            "cycle_summary": cycle_sum,
+            "acceptance": eval_result.get("acceptance"),
+            "target_cycles": spec.target_cycles,
+            "allowable_damage": spec.allowable_damage,
+            "life_cycles": life_cycles,
+        }
+        with open(output_json_path, "w", encoding="utf-8") as f:
+            json.dump(evidence_payload, f, indent=2)
+        evidence_ids.append(os.path.basename(output_json_path))
+
+    fatigue_res = FatigueResult(
+        status=status,
+        life_cycles=life_cycles,
+        damage=damage,
+        warnings=tuple(warnings),
+        evidence=tuple(evidence_ids),
+    )
+
+    metrics = {
+        "fatigue_life": life_cycles,
+        "damage": damage,
+        "max_stress_range": cycle_sum.get("max_stress_range", 0.0),
+        "mean_stress_average": cycle_sum.get("mean_stress_average", 0.0),
+        "total_cycles_count": cycle_sum.get("total_cycles_count", 0.0),
+        "hotspot_element": extracted.get("hotspot", {}).get("element_label"),
+    }
+
+    return fatigue_res, metrics

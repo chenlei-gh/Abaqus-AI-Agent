@@ -1,6 +1,7 @@
 from dataclasses import dataclass, field
 from typing import Any, Dict, Optional
 
+from .fatigue import IntentFatigueSpec
 from .geometry import ImagePoint
 
 
@@ -28,3 +29,4 @@ class EngineeringIntent:
     acceptance_criteria: tuple = ()
     unit_system: Optional[str] = None
     metadata: Dict[str, Any] = field(default_factory=dict)
+    fatigue: Optional[IntentFatigueSpec] = None

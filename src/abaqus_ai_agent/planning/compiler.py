@@ -10,6 +10,7 @@ from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 from ..contracts.action import AbaqusAction
+from ..contracts.fatigue import IntentFatigueSpec
 from ..contracts.material import MaterialDefinition
 from ..contracts.procedure import (
     BoltPretensionLifecycleSpec,
@@ -131,6 +132,7 @@ def compile_intent_to_actions(
     moments: Optional[Sequence[MomentLoadSpec]] = None,
     interactions: Optional[Sequence[IntentInteractionSpec]] = None,
     predefined_fields: Optional[Sequence[IntentPredefinedFieldSpec]] = None,
+    fatigue: Optional[IntentFatigueSpec] = None,
     submit_job: bool = False,
 ) -> CompiledAgentPlan:
     """Compile structured engineering intent into an ordered sequence of AbaqusActions."""
@@ -968,6 +970,16 @@ def compile_intent_to_actions(
         actions.append(builders.python_action(model_name, mesh_elem_code))
 
     # 12. Output Requests & Job Creation
+    if fatigue is not None:
+        fatigue_out_req = (
+            f"for _for_name in list(mdb.models['{model_name}'].fieldOutputRequests.keys()):\n"
+            f"    _cur_vars = list(mdb.models['{model_name}'].fieldOutputRequests[_for_name].variables)\n"
+            f"    if 'S' not in _cur_vars:\n"
+            f"        _cur_vars.append('S')\n"
+            f"    mdb.models['{model_name}'].fieldOutputRequests[_for_name].setValues(variables=tuple(_cur_vars))\n"
+        )
+        actions.append(builders.python_action(model_name, fatigue_out_req))
+
     if any("explicit" in s.lower() for s in defined_steps):
         out_req_code = (
             f"if 'F-Output-1' in mdb.models['{model_name}'].fieldOutputRequests:\n"
@@ -1021,6 +1033,7 @@ def compile_intent_to_actions(
         "moments_count": len(moments) if moments else 0,
         "interactions_count": len(interactions) if interactions else 0,
         "predefined_fields_count": len(predefined_fields) if predefined_fields else 0,
+        "fatigue": fatigue.to_dict() if fatigue else None,
     }
 
     return CompiledAgentPlan(
