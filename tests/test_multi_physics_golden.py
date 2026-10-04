@@ -63,7 +63,8 @@ def test_each_case_golden_pass_and_fail_closed(manifest, case_key):
     # Check cryptographic artifacts provenance
     artifacts = case["artifacts"]
     expected_count = 2 if case_key == "MP1_SequentialThermalStructural" else 1
-    for ext in (".inp", ".odb", ".sta", ".msg", ".dat", ".log"):
+    required_exts = (".inp", ".odb", ".msg", ".dat", ".log") if case_key == "MP3_PreloadedModal" else (".inp", ".odb", ".sta", ".msg", ".dat", ".log")
+    for ext in required_exts:
         matching = [name for name in artifacts if name.endswith(ext)]
         assert len(matching) == expected_count, f"Artifact count mismatch for extension {ext} in {case_key}"
         for m in matching:

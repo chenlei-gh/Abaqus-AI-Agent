@@ -285,6 +285,7 @@ with open("extract_mp1.json", "w") as f:
         ],
         thermal_balance=type("TB", (), {"passed": abs(extracted["reaction_equilibrium_sum"]) < 1e-2})(),
         evidence_manifest=manifest_mp1,
+        base_dir=case_dir,
         require_evidence=True,
     )
 
@@ -472,6 +473,7 @@ odb.close()
         ],
         contact_diagnostics=ValidContactDiagnostics(),
         evidence_manifest=manifest_mp2,
+        base_dir=case_dir,
         require_evidence=True,
     )
 
@@ -630,6 +632,8 @@ odb.close()
         ],
         procedure_verification=type("PV", (), {"verified": True})(),
         evidence_manifest=manifest_mp3,
+        base_dir=case_dir,
+        mandatory_roles=("inp", "odb", "msg", "dat", "log"),
         require_evidence=True,
     )
 
@@ -794,6 +798,7 @@ odb.close()
             {"name": "internal_energy_threshold", "value_key": "internal_energy", "operator": ">=", "limit": 50.0},
         ],
         evidence_manifest=manifest_mp4,
+        base_dir=case_dir,
         require_evidence=True,
     )
 

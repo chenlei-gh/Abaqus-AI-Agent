@@ -5,10 +5,11 @@
     "cae",
     "noGUI=D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\machine_validation\\static_golden_e2e_script.py"
   ],
-  "launcher": "abaqus",
+  "launcher": "C:\\SIMULIA\\Commands\\abaqus.bat",
   "process_succeeded": true,
   "report": {
     "acceptance": {
+      "audit_summary": "Solver: PASS | ODB: PASS | Required Result: PASS | Engineering Acceptance: PASS",
       "blocked": [],
       "criteria": [
         {
@@ -39,19 +40,30 @@
           "unit": "MPa"
         }
       ],
+      "evidence_status": "NOT_SPECIFIED",
       "failures": [],
+      "gate_justifications": {},
       "gates": {
         "contact": "SKIPPED",
         "convergence": "SKIPPED",
         "criteria": "PASS",
         "engineering_checks": "PASS",
-        "evidence_sufficiency": "NOT_SPECIFIED",
+        "evidence_sufficiency": "SKIPPED",
         "execution": "PASS",
         "fatigue": "SKIPPED",
         "mesh_quality": "SKIPPED",
-        "numerical_verification": "SKIPPED"
+        "numerical_verification": "SKIPPED",
+        "odb": "PASS",
+        "procedure": "SKIPPED",
+        "required_results": "NOT_SPECIFIED",
+        "thermal_balance": "SKIPPED"
       },
+      "missing_required_fields": [],
+      "missing_required_gates": [],
+      "missing_required_metrics": [],
+      "odb_status": "valid",
       "passed": true,
+      "result_validity": "VALID",
       "status": "PASS",
       "warnings": []
     },
@@ -289,7 +301,7 @@
       "model_name": "StaticGolden",
       "output_hash": null,
       "python_version": "3.10.5 (main, Jul 27 2024, 04:26:12) [MSC v.1934 64 bit (AMD64)]",
-      "run_id": "1b0d7283-c9d6-43d6-a3c8-83830b6db339"
+      "run_id": "6733d888-3749-4304-984b-d2e8b2afd310"
     },
     "results": {
       "evidence": {
@@ -321,6 +333,7 @@
             "source": "acceptance",
             "unit": "",
             "value": {
+              "audit_summary": "Solver: PASS | ODB: PASS | Required Result: PASS | Engineering Acceptance: PASS",
               "blocked": [],
               "criteria": [
                 {
@@ -351,19 +364,30 @@
                   "unit": "MPa"
                 }
               ],
+              "evidence_status": "VALID",
               "failures": [],
+              "gate_justifications": {},
               "gates": {
                 "contact": "SKIPPED",
                 "convergence": "SKIPPED",
                 "criteria": "PASS",
                 "engineering_checks": "SKIPPED",
-                "evidence_sufficiency": "NOT_SPECIFIED",
+                "evidence_sufficiency": "PASS",
                 "execution": "PASS",
                 "fatigue": "SKIPPED",
                 "mesh_quality": "SKIPPED",
-                "numerical_verification": "SKIPPED"
+                "numerical_verification": "SKIPPED",
+                "odb": "PASS",
+                "procedure": "SKIPPED",
+                "required_results": "NOT_SPECIFIED",
+                "thermal_balance": "SKIPPED"
               },
+              "missing_required_fields": [],
+              "missing_required_gates": [],
+              "missing_required_metrics": [],
+              "odb_status": "valid",
               "passed": true,
+              "result_validity": "VALID",
               "status": "PASS",
               "warnings": []
             }

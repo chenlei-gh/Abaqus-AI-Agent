@@ -119,13 +119,13 @@ Verify the structural deflection and peak von Mises stress of a 100mm x 10mm x 1
 
 ### Verification Integrity &amp; Audit Summary
 
-| Verification Dimension        | Actual State / Output          | Gate Verdict  |
-|-------------------------------|--------------------------------|---------------|
-| Solver Execution              | completed                      | PASS          |
-| ODB Storage Artifact          | valid                          | PASS          |
-| Required Physical Outputs     | All Required Metrics Extracted | PASS          |
-| Engineering Result Validity   | VALID                          | PASS          |
-| Evidence &amp; Artifact Integrity | FAIL (NOT_SPECIFIED)           | NOT_SPECIFIED |
+| Verification Dimension        | Actual State / Output          | Gate Verdict |
+|-------------------------------|--------------------------------|--------------|
+| Solver Execution              | completed                      | PASS         |
+| ODB Storage Artifact          | valid                          | PASS         |
+| Required Physical Outputs     | All Required Metrics Extracted | PASS         |
+| Engineering Result Validity   | VALID                          | PASS         |
+| Evidence &amp; Artifact Integrity | FAIL (SKIPPED)                 | SKIPPED      |
 
 ### Verification Gates Detailed Audit
 
@@ -135,11 +135,15 @@ Verify the structural deflection and peak von Mises stress of a 100mm x 10mm x 1
 | convergence            | SKIPPED       | Omitted / Not requested             |
 | criteria               | PASS          | Verified against physics contract   |
 | engineering_checks     | PASS          | Verified against physics contract   |
-| evidence_sufficiency   | NOT_SPECIFIED | Gate verification blocked or failed |
+| evidence_sufficiency   | SKIPPED       | Omitted / Not requested             |
 | execution              | PASS          | Verified against physics contract   |
 | fatigue                | SKIPPED       | Omitted / Not requested             |
 | mesh_quality           | SKIPPED       | Omitted / Not requested             |
 | numerical_verification | SKIPPED       | Omitted / Not requested             |
+| odb                    | PASS          | Verified against physics contract   |
+| procedure              | SKIPPED       | Omitted / Not requested             |
+| required_results       | NOT_SPECIFIED | Gate verification blocked or failed |
+| thermal_balance        | SKIPPED       | Omitted / Not requested             |
 
 ### Deterministic Criteria Evaluation
 
@@ -190,11 +194,15 @@ Verify the structural deflection and peak von Mises stress of a 100mm x 10mm x 1
     &quot;convergence&quot;: &quot;SKIPPED&quot;,
     &quot;criteria&quot;: &quot;PASS&quot;,
     &quot;engineering_checks&quot;: &quot;PASS&quot;,
-    &quot;evidence_sufficiency&quot;: &quot;NOT_SPECIFIED&quot;,
+    &quot;evidence_sufficiency&quot;: &quot;SKIPPED&quot;,
     &quot;execution&quot;: &quot;PASS&quot;,
     &quot;fatigue&quot;: &quot;SKIPPED&quot;,
     &quot;mesh_quality&quot;: &quot;SKIPPED&quot;,
-    &quot;numerical_verification&quot;: &quot;SKIPPED&quot;
+    &quot;numerical_verification&quot;: &quot;SKIPPED&quot;,
+    &quot;odb&quot;: &quot;PASS&quot;,
+    &quot;procedure&quot;: &quot;SKIPPED&quot;,
+    &quot;required_results&quot;: &quot;NOT_SPECIFIED&quot;,
+    &quot;thermal_balance&quot;: &quot;SKIPPED&quot;
   },
   &quot;gate_justifications&quot;: {},
   &quot;missing_required_metrics&quot;: [],
@@ -273,11 +281,15 @@ Verify the structural deflection and peak von Mises stress of a 100mm x 10mm x 1
         &quot;convergence&quot;: &quot;SKIPPED&quot;,
         &quot;criteria&quot;: &quot;PASS&quot;,
         &quot;engineering_checks&quot;: &quot;PASS&quot;,
-        &quot;evidence_sufficiency&quot;: &quot;NOT_SPECIFIED&quot;,
+        &quot;evidence_sufficiency&quot;: &quot;SKIPPED&quot;,
         &quot;execution&quot;: &quot;PASS&quot;,
         &quot;fatigue&quot;: &quot;SKIPPED&quot;,
         &quot;mesh_quality&quot;: &quot;SKIPPED&quot;,
-        &quot;numerical_verification&quot;: &quot;SKIPPED&quot;
+        &quot;numerical_verification&quot;: &quot;SKIPPED&quot;,
+        &quot;odb&quot;: &quot;PASS&quot;,
+        &quot;procedure&quot;: &quot;SKIPPED&quot;,
+        &quot;required_results&quot;: &quot;NOT_SPECIFIED&quot;,
+        &quot;thermal_balance&quot;: &quot;SKIPPED&quot;
       },
       &quot;gate_justifications&quot;: {},
       &quot;missing_required_metrics&quot;: [],
@@ -500,7 +512,7 @@ Verify the structural deflection and peak von Mises stress of a 100mm x 10mm x 1
     &quot;model_name&quot;: &quot;StaticGolden&quot;,
     &quot;output_hash&quot;: null,
     &quot;python_version&quot;: &quot;3.10.5 (main, Jul 27 2024, 04:26:12) [MSC v.1934 64 bit (AMD64)]&quot;,
-    &quot;run_id&quot;: &quot;1b0d7283-c9d6-43d6-a3c8-83830b6db339&quot;,
+    &quot;run_id&quot;: &quot;6733d888-3749-4304-984b-d2e8b2afd310&quot;,
     &quot;odb_path&quot;: &quot;machine_validation/StaticGoldenJob.odb&quot;
   }
 }

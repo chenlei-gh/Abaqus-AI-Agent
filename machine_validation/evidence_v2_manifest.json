@@ -1,7 +1,7 @@
 {
   "schema_version": "evidence_v2_manifest_v1",
   "milestone": "GA-CL.4",
-  "qualified_at": "2026-10-04T01:36:28.878809+00:00",
+  "qualified_at": "2026-10-04T02:04:55.546671+00:00",
   "qualification_tier": "REAL_ABAQUS_PROVENANCE_V2",
   "all_vectors_passed": true,
   "vectors_count": 7,
@@ -32,7 +32,7 @@
       "acceptance_status": "BLOCKED",
       "result_validity": "RESULT_INVALID",
       "evidence_gate": "FAIL",
-      "audit_summary": "Solver: PASS | ODB: PASS | Required Result: PASS | Engineering Acceptance: FAIL",
+      "audit_summary": "Solver: PASS | ODB: PASS | Required Result: FAIL | Engineering Acceptance: FAIL",
       "fail_closed": true
     },
     "V3_missing_critical_artifact": {
@@ -69,7 +69,7 @@
       "validity": "STALE",
       "stale": true,
       "failures": [
-        "evidence_stale:timestamp_expired:213240988.9s_exceeds_3600.0s"
+        "evidence_stale:timestamp_expired:213242695.6s_exceeds_3600.0s"
       ],
       "acceptance_passed": false,
       "acceptance_status": "BLOCKED",

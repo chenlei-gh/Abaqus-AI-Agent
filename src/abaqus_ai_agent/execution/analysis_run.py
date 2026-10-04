@@ -469,6 +469,8 @@ class AnalysisRunner:
                 criteria=effective_criteria,
                 evidence=result_evidence,
                 evidence_manifest=run_manifest,
+                base_dir=art_dir if result_source == "odb" else None,
+                expected_run_id=run_id if result_source == "odb" else None,
                 require_evidence=True if result_source == "odb" else False,
             )
             verification_evidence = []

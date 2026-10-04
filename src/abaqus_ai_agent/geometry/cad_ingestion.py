@@ -10,7 +10,7 @@ from datetime import datetime, timezone
 import hashlib
 import os
 import re
-from typing import List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 from ..capability_boundary import CapabilityBoundary, CapabilityStatus
 from .model import (

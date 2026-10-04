@@ -2,7 +2,7 @@
   "schema_version": "multi_physics_golden_v2",
   "evidence_tier": "REAL_ABAQUS",
   "solver_version": "Abaqus 2025",
-  "verified_at": "2026-10-03T17:48:00.460259+00:00",
+  "verified_at": "2026-10-04T02:09:32.128256+00:00",
   "compiler_chain_verified": true,
   "sequential_thermal_structural_verified": true,
   "all_golden_pass": true,
@@ -39,6 +39,7 @@
         "result_validity": "VALID",
         "audit_summary": "Solver: PASS | ODB: PASS | Required Result: PASS | Engineering Acceptance: PASS",
         "odb_status": "valid",
+        "evidence_status": "VALID",
         "failures": [],
         "warnings": [],
         "blocked": [],
@@ -115,28 +116,28 @@
           "exists": true
         },
         "Job_MP1_Thermal.odb": {
-          "sha256": "db2f67f5e02f3a81e82da9065209d46ce9a8c8c75d985260470fdd3cddefc3d2",
+          "sha256": "3c865165f81cb65c60624931d84a28efd184ea04531943691b2b2d7ed16dc513",
           "size_bytes": 181072,
           "exists": true
         },
         "Job_MP1_Thermal.sta": {
-          "sha256": "a15659e7cd1515cade22700692df0c903ff73d5332ba2827668ee154efc2cc39",
+          "sha256": "48d6dd4eae4fe90dacd20070921ae7cd5dc1928003bc7061b37b380592c26728",
           "size_bytes": 443,
           "exists": true
         },
         "Job_MP1_Thermal.msg": {
-          "sha256": "01367f42fb922a7eb5977715762a1842b13e5cc07510064f8ecced3909f342d4",
+          "sha256": "b8808f48c5b6b55c20ed9b5f2ad5527663137f7f89e836aa97efe6ba15f75ed5",
           "size_bytes": 7761,
           "exists": true
         },
         "Job_MP1_Thermal.dat": {
-          "sha256": "0bb0605103f87e1fa56a4ea883e70926e5273e42befc5be86280c7910dc9039e",
+          "sha256": "4f7042a8d3831ccc2cf9a22b0473bed575c7b84644a1b497819b575da7b63187",
           "size_bytes": 10308,
           "exists": true
         },
         "Job_MP1_Thermal.log": {
-          "sha256": "5b7241b189404fd9717d7e48cc1610baa73c1b5308f622b40383325aab03ad1f",
-          "size_bytes": 671,
+          "sha256": "c13167650853bac5705d3a0ded0ab1155df586523ab90fcc3557ef3b43751acc",
+          "size_bytes": 677,
           "exists": true
         },
         "Job_MP1_Structural.inp": {
@@ -145,28 +146,28 @@
           "exists": true
         },
         "Job_MP1_Structural.odb": {
-          "sha256": "9ae68c265cc29ca8847222f9199e5389c36934e33335e1b57a53a304652c7a79",
+          "sha256": "10a03282139822fc6742e858c4c0af33d387ec361b583dc953c5f1efb8610bca",
           "size_bytes": 223844,
           "exists": true
         },
         "Job_MP1_Structural.sta": {
-          "sha256": "9d35987d2c73fe337c975a5ef9b2de016fbbd654e3d76df0066c5d3520048d33",
+          "sha256": "c229c98452a5246dfe939b6533715f5da695f541237d0f2e68590383545429ef",
           "size_bytes": 443,
           "exists": true
         },
         "Job_MP1_Structural.msg": {
-          "sha256": "8b8286120143c23aacca23e5a506cc5b8d5b3f7a25aeac813eef195e48e799d9",
+          "sha256": "aae74299d897cc4b0dee7eaf841a23d728e6db0381676939263408df816fc7cd",
           "size_bytes": 7995,
           "exists": true
         },
         "Job_MP1_Structural.dat": {
-          "sha256": "8f08c00e21d568f10e6d812264054359189fcf1a046a148f0bdbbfdb1ae55bda",
+          "sha256": "a9fae255a49562c98a6f2bab0ba4d8f38380e14b53cf861705b471452739e2b5",
           "size_bytes": 10454,
           "exists": true
         },
         "Job_MP1_Structural.log": {
-          "sha256": "283340b84dc73061d3dfe8201bfd2942344c2ab2d67c1b5f57f6f0b1b8736d45",
-          "size_bytes": 677,
+          "sha256": "849dc97af3e4a6744fd762b8c4b62d96581d63a9b6e29d566a74f7af514205fc",
+          "size_bytes": 683,
           "exists": true
         }
       },
@@ -202,6 +203,7 @@
         "result_validity": "VALID",
         "audit_summary": "Solver: PASS | ODB: PASS | Required Result: PASS | Engineering Acceptance: PASS",
         "odb_status": "valid",
+        "evidence_status": "VALID",
         "failures": [],
         "warnings": [],
         "blocked": [],
@@ -277,28 +279,28 @@
           "exists": true
         },
         "Job_MP2_FrictionContact.odb": {
-          "sha256": "2b1f93832257843e0669cff68df0a38592bb83cea3d85e7ecc60a0e364a27679",
+          "sha256": "0f4814c4841e70b701e8cdce9c0436bf2494225b18a9860725c6a3fd62a1990f",
           "size_bytes": 413624,
           "exists": true
         },
         "Job_MP2_FrictionContact.sta": {
-          "sha256": "816c21e71ca81bceb823e75373c126025a375166ddb2e0b8c132fe186f3e04d8",
+          "sha256": "3730a5ffc69a6b653eecd17ab17f59995ca4f6c4c3e3d4479811464744153669",
           "size_bytes": 511,
           "exists": true
         },
         "Job_MP2_FrictionContact.msg": {
-          "sha256": "400140d1a6966d8af7c0fe95185728d6ecd5efdac2c3fa186004f22e7823d9c8",
-          "size_bytes": 23875,
+          "sha256": "a931f2ace3cf72f038c0ee601fc844eb7a12e837aa4e24bddf9b365b0f22e063",
+          "size_bytes": 23877,
           "exists": true
         },
         "Job_MP2_FrictionContact.dat": {
-          "sha256": "e5daf5b873521c70b8fc94b7c568779a6689f69eae62d3d2a34546dcb4aa53d2",
+          "sha256": "9b82b27d950d6f60def50bb435e0af9e100f22f047454c63cf071e6fdbac003c",
           "size_bytes": 16929,
           "exists": true
         },
         "Job_MP2_FrictionContact.log": {
-          "sha256": "4c918ba60ae56777faf0e11f549a884b0199d699fedbc3c5e9a84272ddac4c87",
-          "size_bytes": 687,
+          "sha256": "595551ea194186c64c0746539c100b174f710fe1743043daac822747bbdb28ce",
+          "size_bytes": 693,
           "exists": true
         }
       },
@@ -338,6 +340,7 @@
         "result_validity": "VALID",
         "audit_summary": "Solver: PASS | ODB: PASS | Required Result: PASS | Engineering Acceptance: PASS",
         "odb_status": "valid",
+        "evidence_status": "VALID",
         "failures": [],
         "warnings": [],
         "blocked": [],
@@ -405,28 +408,26 @@
           "exists": true
         },
         "Job_MP3_PreloadedModal.odb": {
-          "sha256": "414d4f320498cf0ca21839ccc9fe03685f6e63a8d8e534991febf2b212f75d4e",
-          "size_bytes": 280736,
+          "sha256": "75b846e02d6ad9d7555925eb9189c76315f8cad141619e66a89bfd313125a9f0",
+          "size_bytes": 176020,
           "exists": true
         },
         "Job_MP3_PreloadedModal.sta": {
-          "sha256": "86a35e0665c58d9ef48e73263e093d5e979e3bfa4b379fb683556e2e4c9fa7b5",
-          "size_bytes": 511,
-          "exists": true
+          "exists": false
         },
         "Job_MP3_PreloadedModal.msg": {
-          "sha256": "c84be3e30d64b39c9e5e37185202120438e93139008e43a640d135cbb25c1b09",
-          "size_bytes": 15504,
+          "sha256": "ee1a376ae2a9e163f0fbc1927511d6ac05c768439295f6e69e6a7d67f5572ed0",
+          "size_bytes": 466,
           "exists": true
         },
         "Job_MP3_PreloadedModal.dat": {
-          "sha256": "856af04db2a2afdacfd23618a62c8c80ef376780e4f0d4c5ebdc654a00477b31",
-          "size_bytes": 20767,
+          "sha256": "e43654de575ff29a02e43944745efc3a162a62ff929ce8435ae4b333b69e309d",
+          "size_bytes": 6801,
           "exists": true
         },
         "Job_MP3_PreloadedModal.log": {
-          "sha256": "3ee2320540fd8d1d381fc2023ec212a051a74eb3259796e57f9dc7a66a425c14",
-          "size_bytes": 685,
+          "sha256": "77f68a34f422f128d176bb6d9c44cbccc0e553e7328723af14415c850037b9aa",
+          "size_bytes": 2229,
           "exists": true
         }
       },
@@ -464,6 +465,7 @@
         "result_validity": "VALID",
         "audit_summary": "Solver: PASS | ODB: PASS | Required Result: PASS | Engineering Acceptance: PASS",
         "odb_status": "valid",
+        "evidence_status": "VALID",
         "failures": [],
         "warnings": [],
         "blocked": [],
@@ -549,12 +551,12 @@
           "exists": true
         },
         "Job_MP4_ExplicitDynamic.odb": {
-          "sha256": "d78ba012413c126e7a21247b3049a7f7990a872be6eed74b2c859fbfe8dbd2fd",
+          "sha256": "57ea915884c54d5b56ecaa6581d90b37cc623495a94af983a783af7b204a6437",
           "size_bytes": 357596,
           "exists": true
         },
         "Job_MP4_ExplicitDynamic.sta": {
-          "sha256": "427b6d8be6210de6fac0a9cb521cb948d7980d1fa98e0317b25d8ce143878d8f",
+          "sha256": "a54b719295819bbaee33d5ce7cd59d5ec93b66d2018f64347f5c1bba2782e92f",
           "size_bytes": 7401,
           "exists": true
         },
@@ -564,13 +566,13 @@
           "exists": true
         },
         "Job_MP4_ExplicitDynamic.dat": {
-          "sha256": "03994ce208d0c68b7dc84e978fec219a20453071de4ed8ed497358170f7ef949",
+          "sha256": "65986dc57b32f6e03500a8a2c14cd6857f226d079da43d759d21f1d5b389db7a",
           "size_bytes": 5965,
           "exists": true
         },
         "Job_MP4_ExplicitDynamic.log": {
-          "sha256": "05e3a54b307ebe7fdde11ac94c70af54f6cf07d17f1e8c3f48490971adaf2796",
-          "size_bytes": 766,
+          "sha256": "527fa297115877fe1ba95da4ae6657741ed5ddd5efde648e0cb9e2945f2cef85",
+          "size_bytes": 772,
           "exists": true
         }
       },

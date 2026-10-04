@@ -119,13 +119,13 @@ Verify the structural deflection and peak von Mises stress of a 100mm x 10mm x 1
 
 ### Verification Integrity & Audit Summary
 
-| Verification Dimension        | Actual State / Output          | Gate Verdict  |
-|-------------------------------|--------------------------------|---------------|
-| Solver Execution              | completed                      | PASS          |
-| ODB Storage Artifact          | valid                          | PASS          |
-| Required Physical Outputs     | All Required Metrics Extracted | PASS          |
-| Engineering Result Validity   | VALID                          | PASS          |
-| Evidence & Artifact Integrity | FAIL (NOT_SPECIFIED)           | NOT_SPECIFIED |
+| Verification Dimension        | Actual State / Output          | Gate Verdict |
+|-------------------------------|--------------------------------|--------------|
+| Solver Execution              | completed                      | PASS         |
+| ODB Storage Artifact          | valid                          | PASS         |
+| Required Physical Outputs     | All Required Metrics Extracted | PASS         |
+| Engineering Result Validity   | VALID                          | PASS         |
+| Evidence & Artifact Integrity | FAIL (SKIPPED)                 | SKIPPED      |
 
 ### Verification Gates Detailed Audit
 
@@ -135,11 +135,15 @@ Verify the structural deflection and peak von Mises stress of a 100mm x 10mm x 1
 | convergence            | SKIPPED       | Omitted / Not requested             |
 | criteria               | PASS          | Verified against physics contract   |
 | engineering_checks     | PASS          | Verified against physics contract   |
-| evidence_sufficiency   | NOT_SPECIFIED | Gate verification blocked or failed |
+| evidence_sufficiency   | SKIPPED       | Omitted / Not requested             |
 | execution              | PASS          | Verified against physics contract   |
 | fatigue                | SKIPPED       | Omitted / Not requested             |
 | mesh_quality           | SKIPPED       | Omitted / Not requested             |
 | numerical_verification | SKIPPED       | Omitted / Not requested             |
+| odb                    | PASS          | Verified against physics contract   |
+| procedure              | SKIPPED       | Omitted / Not requested             |
+| required_results       | NOT_SPECIFIED | Gate verification blocked or failed |
+| thermal_balance        | SKIPPED       | Omitted / Not requested             |
 
 ### Deterministic Criteria Evaluation
 
@@ -190,11 +194,15 @@ Verify the structural deflection and peak von Mises stress of a 100mm x 10mm x 1
     "convergence": "SKIPPED",
     "criteria": "PASS",
     "engineering_checks": "PASS",
-    "evidence_sufficiency": "NOT_SPECIFIED",
+    "evidence_sufficiency": "SKIPPED",
     "execution": "PASS",
     "fatigue": "SKIPPED",
     "mesh_quality": "SKIPPED",
-    "numerical_verification": "SKIPPED"
+    "numerical_verification": "SKIPPED",
+    "odb": "PASS",
+    "procedure": "SKIPPED",
+    "required_results": "NOT_SPECIFIED",
+    "thermal_balance": "SKIPPED"
   },
   "gate_justifications": {},
   "missing_required_metrics": [],
@@ -273,11 +281,15 @@ Verify the structural deflection and peak von Mises stress of a 100mm x 10mm x 1
         "convergence": "SKIPPED",
         "criteria": "PASS",
         "engineering_checks": "PASS",
-        "evidence_sufficiency": "NOT_SPECIFIED",
+        "evidence_sufficiency": "SKIPPED",
         "execution": "PASS",
         "fatigue": "SKIPPED",
         "mesh_quality": "SKIPPED",
-        "numerical_verification": "SKIPPED"
+        "numerical_verification": "SKIPPED",
+        "odb": "PASS",
+        "procedure": "SKIPPED",
+        "required_results": "NOT_SPECIFIED",
+        "thermal_balance": "SKIPPED"
       },
       "gate_justifications": {},
       "missing_required_metrics": [],
@@ -500,7 +512,7 @@ Verify the structural deflection and peak von Mises stress of a 100mm x 10mm x 1
     "model_name": "StaticGolden",
     "output_hash": null,
     "python_version": "3.10.5 (main, Jul 27 2024, 04:26:12) [MSC v.1934 64 bit (AMD64)]",
-    "run_id": "1b0d7283-c9d6-43d6-a3c8-83830b6db339",
+    "run_id": "6733d888-3749-4304-984b-d2e8b2afd310",
     "odb_path": "machine_validation/StaticGoldenJob.odb"
   }
 }
