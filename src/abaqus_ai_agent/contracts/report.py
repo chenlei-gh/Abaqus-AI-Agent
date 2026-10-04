@@ -34,6 +34,7 @@ class EngineeringReportData:
     evidence: Tuple[Any, ...] = ()
     provenance: Any = None
     result_intelligence: Any = None
+    self_healing: Any = None
     metadata: Dict[str, Any] = field(default_factory=dict)
     @classmethod
     def from_analysis(cls, run, title=None, objective="", **sections):
@@ -86,6 +87,8 @@ class EngineeringReportData:
                 sections["mesh"] = dict(sections["mesh"], quality=mesh_quality, convergence=mesh_convergence)
         ri = getattr(run, "result_intelligence", None) or metadata.get("result_intelligence") or sections.get("result_intelligence")
         sections.setdefault("result_intelligence", ri)
+        sh = getattr(run, "self_healing", None) or metadata.get("self_healing") or sections.get("self_healing")
+        sections.setdefault("self_healing", sh)
         return cls(title or "Abaqus Engineering Analysis Report", objective=objective,
                    results=tuple(sections.pop("results", ()) or ()),
                    figures=tuple(sections.pop("figures", ()) or ()),
@@ -94,4 +97,5 @@ class EngineeringReportData:
                    evidence=tuple(sections.pop("evidence", tuple(getattr(getattr(run, "evidence", None), "items", ()) or ())) or ()),
                    provenance=getattr(run, "provenance", None),
                    result_intelligence=sections.pop("result_intelligence", None),
+                   self_healing=sections.pop("self_healing", None),
                    metadata=dict(metadata, **sections.pop("metadata", {})), **sections)

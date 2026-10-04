@@ -303,6 +303,8 @@ class AbaqusAIAgent:
         router_strict=False,
         odb_path=None,
         result_values=None,
+        enable_self_healing=True,
+        max_healing_attempts=2,
         **kwargs,
     ):
         """End-to-end engineering requirement solver (P1.0 Product Main Entry).
@@ -501,6 +503,38 @@ class AbaqusAIAgent:
             **kwargs,
         )
 
+        # 6.5. P1.4 Automated Solver Failure Diagnostics & Controlled Self-Healing
+        run_state = getattr(run, "state", None)
+        run_state_val = getattr(run_state, "value", str(run_state))
+        initial_eng_status = getattr(run, "engineering_status", "EXECUTED")
+        initial_acc_passed = bool(getattr(run, "acceptance_passed", False))
+        initial_ok = (
+            (run_state == AnalysisRunState.ACCEPTED or str(run_state_val).lower() == "accepted")
+            and initial_eng_status in ("ACCEPTED", "RESULT_VALID")
+            and initial_acc_passed
+        )
+
+        healing_result = None
+        if not initial_ok and enable_self_healing and odb_path is None and result_values is None:
+            from .diagnostics.orchestrator import SelfHealingOrchestrator
+            run, healing_result = SelfHealingOrchestrator.attempt_healing(
+                agent=self,
+                failed_run=run,
+                intent=intent,
+                capability=capability,
+                plan=plan,
+                geometry=geometry,
+                material=effective_material,
+                mesh=effective_mesh,
+                grounded_regions=grounded_regions,
+                max_attempts=max_healing_attempts,
+                timeout=timeout,
+                workdir=getattr(run, "work_dir", None) or os.getcwd(),
+                criteria=criteria,
+                postprocess_profile=capability.profile,
+                **kwargs,
+            )
+
         # 7. Summary Card & Markdown Engineering Report
         metrics = getattr(run, "metrics", ()) or ()
         acceptance = getattr(run, "acceptance", None)
@@ -520,6 +554,7 @@ class AbaqusAIAgent:
             objective=intent.description or f"Automated analysis under {capability.capability_id}",
             result_intelligence=ri_bundle,
             figures=generated_figures,
+            self_healing=healing_result,
         )
         report_md = render_markdown(report_data)
         report_html_str = render_html(report_data)
@@ -571,6 +606,7 @@ class AbaqusAIAgent:
                 "figure_count": len(generated_figures),
                 "derived_metrics": ri_bundle.derived_metrics.to_dict() if ri_bundle.derived_metrics else None,
             },
+            "self_healing": healing_result.to_dict() if healing_result else None,
         }
 
         return EngineeringTaskResult(
@@ -586,4 +622,5 @@ class AbaqusAIAgent:
             report_html=report_html_str,
             result_intelligence=ri_bundle,
             errors=() if is_completed else (f"Engineering status: {eng_status}",),
+            metadata={"self_healing": healing_result.to_dict() if healing_result else None},
         )

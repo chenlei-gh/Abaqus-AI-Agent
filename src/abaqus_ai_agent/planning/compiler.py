@@ -89,6 +89,12 @@ class IntentStepSpec:
     nlgeom: bool = False
     time_period: float = 1.0
     previous: str = "Initial"
+    stabilization_method: Optional[str] = None
+    stabilization_magnitude: Optional[float] = None
+    max_num_inc: Optional[int] = None
+    initial_inc: Optional[float] = None
+    min_inc: Optional[float] = None
+    max_inc: Optional[float] = None
 
 
 @dataclass(frozen=True)
@@ -455,6 +461,12 @@ def compile_intent_to_actions(
                 previous=active_step.previous,
                 nlgeom=active_step.nlgeom,
                 time_period=active_step.time_period,
+                stabilization_method=active_step.stabilization_method or "NONE",
+                stabilization_magnitude=active_step.stabilization_magnitude,
+                max_num_inc=active_step.max_num_inc or 100,
+                initial_inc=active_step.initial_inc,
+                min_inc=active_step.min_inc,
+                max_inc=active_step.max_inc,
             ))
         elif active_step.step_type == "frequency":
             actions.append(builders.frequency_step(
@@ -1401,6 +1413,22 @@ def compile_engineering_intent(
                 eff_step = IntentStepSpec(name="Step-1", step_type="explicit_dynamic", nlgeom=True)
             else:
                 eff_step = IntentStepSpec(name="Step-1", step_type="static_general", nlgeom=False)
+
+        if eff_step is not None and intent.metadata.get("step_controls"):
+            sc = intent.metadata["step_controls"]
+            eff_step = IntentStepSpec(
+                name=eff_step.name,
+                step_type=eff_step.step_type,
+                nlgeom=eff_step.nlgeom,
+                time_period=eff_step.time_period,
+                previous=eff_step.previous,
+                stabilization_method=sc.get("stabilization_method", eff_step.stabilization_method),
+                stabilization_magnitude=sc.get("stabilization_magnitude", eff_step.stabilization_magnitude),
+                max_num_inc=sc.get("max_num_inc", eff_step.max_num_inc),
+                initial_inc=sc.get("initial_inc", eff_step.initial_inc),
+                min_inc=sc.get("min_inc", eff_step.min_inc),
+                max_inc=sc.get("max_inc", eff_step.max_inc),
+            )
 
     # 5. Boundary Conditions Mapping
     compiled_bcs: List[IntentBoundarySpec] = []

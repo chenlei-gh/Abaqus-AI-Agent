@@ -188,6 +188,55 @@ def _render_custom_table_for_section(heading, value):
         if rows:
             lines += [_format_markdown_table(["Fatigue Parameter", "Value"], rows), ""]
 
+    # 14b. Solver Diagnostics & Self-Healing Audit
+    elif heading.startswith("14b. Solver Diagnostics") and value is not None:
+        sh_dict = value.to_dict() if hasattr(value, "to_dict") else (value if isinstance(value, dict) else {})
+        healed_str = "YES (Self-Healed)" if sh_dict.get("healed") else "NO (Unresolved / Escalated)"
+        summary_rows = [
+            ["Self-Healing Outcome", healed_str],
+            ["Total Healing Attempts", str(sh_dict.get("total_attempts", 0))],
+            ["Initial Solver Status", str(sh_dict.get("initial_status", "-"))],
+            ["Final Engineering Status", str(sh_dict.get("final_status", "-"))],
+        ]
+        lines += ["### Self-Healing Lifecycle Summary", "", _format_markdown_table(["Attribute", "Value"], summary_rows), ""]
+
+        # Diagnosed Issues
+        issues = sh_dict.get("diagnosed_issues") or ()
+        if issues:
+            iss_rows = []
+            for iss in issues:
+                i_id = iss.get("diagnosis_id", "-")
+                sev = iss.get("severity", "-")
+                cause = iss.get("likely_cause", "-")
+                rem = iss.get("suggested_remediation", "-")
+                iss_rows.append([i_id, sev, cause, rem])
+            lines += ["### Diagnosed Solver Issues", "", _format_markdown_table(["Diagnosis ID", "Severity", "Likely Cause", "Suggested Remediation"], iss_rows), ""]
+
+        # Remediations Applied
+        remeds = sh_dict.get("remediations_applied") or ()
+        if remeds:
+            rem_rows = []
+            for r in remeds:
+                r_id = r.get("action_id", "-")
+                cat = r.get("category", "-")
+                desc = r.get("description", "-")
+                risk = r.get("risk_level", "-")
+                rem_rows.append([r_id, cat, desc, risk])
+            lines += ["### Remediations Applied & Model Mutations", "", _format_markdown_table(["Action ID", "Category", "Description", "Risk Level"], rem_rows), ""]
+
+        # Healing Attempts & RunDiff
+        attempts = sh_dict.get("attempts") or ()
+        if attempts:
+            att_rows = []
+            for a in attempts:
+                num = str(a.get("attempt_number", "-"))
+                trigs = ", ".join(a.get("trigger_issues", ()))
+                out = a.get("outcome", "-")
+                pre_id = a.get("pre_run_id", "-")
+                post_id = a.get("post_run_id", "-")
+                att_rows.append([num, trigs, f"{pre_id} -> {post_id}", out])
+            lines += ["### Iterative Healing Attempts", "", _format_markdown_table(["Attempt #", "Trigger Issues", "Run Transition", "Outcome"], att_rows), ""]
+
     # 15. Mechanism Kinematics & Topology -> Mechanism Summary Table
     elif heading.startswith("15. Mechanism") and isinstance(value, dict) and value:
         rows = [[k, str(v)] for k, v in value.items() if not isinstance(v, (dict, list, tuple))]
@@ -252,6 +301,7 @@ def render_markdown(report):
         ("11. Acceptance Criteria", report.acceptance),
         ("12. Sensitivity / Uncertainty", (report.sensitivity, report.uncertainty)),
         ("13. Fatigue", report.fatigue), ("14. Contact Diagnostics", report.contact_diagnostics),
+        ("14b. Solver Diagnostics & Self-Healing Audit", getattr(report, "self_healing", None)),
         ("15. Mechanism Kinematics & Topology", report.mechanism),
         ("16. Assumptions / Limitations", (report.assumptions, report.limitations)),
         ("17. Evidence", report.evidence), ("18. Provenance", report.provenance)]

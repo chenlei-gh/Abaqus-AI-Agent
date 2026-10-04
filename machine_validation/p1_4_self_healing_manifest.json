@@ -1,0 +1,242 @@
+{
+  "schema_version": "evidence_manifest_v2",
+  "case_id": "P1_4_SELF_HEALING_GOLDEN",
+  "title": "P1.4 Solver Failure Diagnostics & Controlled Self-Healing Verification",
+  "target": "Abaqus 2025 Standard Implicit / Self-Healing Architecture",
+  "qualification_level": "QUALIFIED",
+  "status": "ACCEPTED",
+  "timestamp": "2026-10-04T15:45:00.337839",
+  "summary": {
+    "status": "COMPLETED",
+    "model_name": "Model_P1_4_Self_Healing_H1",
+    "job_name": "Job_P1_4_Self_Healing_H1",
+    "engineering_status": "RESULT_VALID",
+    "acceptance_passed": true,
+    "self_healing": {
+      "healed": true,
+      "total_attempts": 1,
+      "initial_status": "SOLVER_SINGULARITY",
+      "final_status": "RESULT_VALID",
+      "diagnosed_issues": [
+        {
+          "diagnosis_id": "NEGATIVE_EIGENVALUE",
+          "severity": "WARNING",
+          "supporting_evidence": [
+            "0  ANALYSIS WARNINGS ARE NEGATIVE EIGENVALUE MESSAGES"
+          ],
+          "likely_cause": "Stiffness matrix is non-positive definite; typically caused by unconstrained rigid body modes, material instability, or contact opening.",
+          "suggested_remediation": "Check boundary conditions for unconstrained rigid body motions, verify contact stabilization, or check plasticity/hyperelasticity parameters.",
+          "file_source": "msg",
+          "metadata": {}
+        },
+        {
+          "diagnosis_id": "TOO_MANY_CUTBACKS",
+          "severity": "ERROR",
+          "supporting_evidence": [
+            "***ERROR: TOO MANY ATTEMPTS MADE FOR THIS INCREMENT"
+          ],
+          "likely_cause": "Solver exceeded maximum cutback count without achieving equilibrium.",
+          "suggested_remediation": "Inspect severity of residual force / displacement correction, check material softening, or relax cutback controls if physics are smooth.",
+          "file_source": "msg",
+          "metadata": {}
+        },
+        {
+          "diagnosis_id": "NUMERICAL_SINGULARITY",
+          "severity": "WARNING",
+          "supporting_evidence": [
+            "***WARNING: SOLVER PROBLEM. NUMERICAL SINGULARITY WHEN PROCESSING NODE",
+            "***WARNING: SOLVER PROBLEM. NUMERICAL SINGULARITY WHEN PROCESSING NODE",
+            "***WARNING: SOLVER PROBLEM. NUMERICAL SINGULARITY WHEN PROCESSING NODE",
+            "***WARNING: SOLVER PROBLEM. NUMERICAL SINGULARITY WHEN PROCESSING NODE",
+            "***WARNING: SOLVER PROBLEM. NUMERICAL SINGULARITY WHEN PROCESSING NODE",
+            "***WARNING: SOLVER PROBLEM. NUMERICAL SINGULARITY WHEN PROCESSING NODE",
+            "***WARNING: SOLVER PROBLEM. NUMERICAL SINGULARITY WHEN PROCESSING NODE",
+            "***WARNING: SOLVER PROBLEM. NUMERICAL SINGULARITY WHEN PROCESSING NODE",
+            "***WARNING: SOLVER PROBLEM. NUMERICAL SINGULARITY WHEN PROCESSING NODE",
+            "***WARNING: SOLVER PROBLEM. NUMERICAL SINGULARITY WHEN PROCESSING NODE"
+          ],
+          "likely_cause": "Ill-conditioned stiffness matrix near node or DOF.",
+          "suggested_remediation": "Verify elastic modulus consistency, node connectivity, and tie constraints.",
+          "file_source": "msg",
+          "metadata": {}
+        }
+      ],
+      "remediations_applied": [
+        {
+          "action_id": "rem_bc_6ec6a1",
+          "category": "BOUNDARY_CONDITION",
+          "diagnosis_id": "NUMERICAL_SINGULARITY",
+          "description": "Enforce full 6-DOF Encastre constraint on region 'FixedFace' to eliminate unconstrained rigid body motions causing zero pivot/singularity.",
+          "parameters": {
+            "region": "FixedFace",
+            "bc_type": "ENCASTRE",
+            "name": "BC_Remediated_4320"
+          },
+          "rationale": "Unconstrained structural rigid body motion causes singular tangent stiffness matrix.",
+          "risk_level": "LOW"
+        },
+        {
+          "action_id": "rem_step_b80a80",
+          "category": "STEP_CONTROLS",
+          "diagnosis_id": "TOO_MANY_CUTBACKS",
+          "description": "Refine non-linear step incrementation: reduce initial_inc to 0.01, lower min_inc to 1e-8, increase max_num_inc to 500, and activate artificial damping stabilization. Energy dissipation ratio ALLSD/ALLIE must remain <= 5%.",
+          "parameters": {
+            "initial_inc": 0.01,
+            "min_inc": 1e-08,
+            "max_num_inc": 500,
+            "stabilization_method": "DAMPING_FACTOR",
+            "stabilization_magnitude": 0.0002,
+            "max_dissipation_ratio": 0.05
+          },
+          "rationale": "Relaxing increment floor and providing numerical dissipation stabilizes convergence without distorting physics (dissipation <= 5%).",
+          "risk_level": "LOW"
+        }
+      ],
+      "attempts": [
+        {
+          "attempt_number": 1,
+          "trigger_issues": [
+            "NEGATIVE_EIGENVALUE",
+            "TOO_MANY_CUTBACKS",
+            "NUMERICAL_SINGULARITY"
+          ],
+          "actions_applied": [
+            {
+              "action_id": "rem_bc_6ec6a1",
+              "category": "BOUNDARY_CONDITION",
+              "diagnosis_id": "NUMERICAL_SINGULARITY",
+              "description": "Enforce full 6-DOF Encastre constraint on region 'FixedFace' to eliminate unconstrained rigid body motions causing zero pivot/singularity.",
+              "parameters": {
+                "region": "FixedFace",
+                "bc_type": "ENCASTRE",
+                "name": "BC_Remediated_4320"
+              },
+              "rationale": "Unconstrained structural rigid body motion causes singular tangent stiffness matrix.",
+              "risk_level": "LOW"
+            },
+            {
+              "action_id": "rem_step_b80a80",
+              "category": "STEP_CONTROLS",
+              "diagnosis_id": "TOO_MANY_CUTBACKS",
+              "description": "Refine non-linear step incrementation: reduce initial_inc to 0.01, lower min_inc to 1e-8, increase max_num_inc to 500, and activate artificial damping stabilization. Energy dissipation ratio ALLSD/ALLIE must remain <= 5%.",
+              "parameters": {
+                "initial_inc": 0.01,
+                "min_inc": 1e-08,
+                "max_num_inc": 500,
+                "stabilization_method": "DAMPING_FACTOR",
+                "stabilization_magnitude": 0.0002,
+                "max_dissipation_ratio": 0.05
+              },
+              "rationale": "Relaxing increment floor and providing numerical dissipation stabilizes convergence without distorting physics (dissipation <= 5%).",
+              "risk_level": "LOW"
+            }
+          ],
+          "pre_run_id": "run_p1_4_initial_failed",
+          "post_run_id": "run_p1_4_healed_success",
+          "run_diff": {
+            "baseline_id": "run_p1_4_initial_failed",
+            "candidate_id": "run_p1_4_healed_success",
+            "acceptance_diff": {
+              "baseline": {
+                "passed": false,
+                "status": "SOLVER_SINGULARITY"
+              },
+              "candidate": {
+                "passed": true,
+                "status": "RESULT_VALID"
+              }
+            },
+            "metrics_diff": {
+              "max_mises": {
+                "candidate_value": 598.2,
+                "unit": "MPa"
+              },
+              "tip_deflection": {
+                "candidate_value": 1.912,
+                "unit": "mm"
+              },
+              "reaction_force_y": {
+                "candidate_value": 1000.0,
+                "unit": "N"
+              }
+            }
+          },
+          "outcome": "ACCEPTED",
+          "metadata": {
+            "job_name": "Job_P1_4_Self_Healing_H1"
+          }
+        }
+      ],
+      "final_run_diff": {
+        "baseline_id": "run_p1_4_initial_failed",
+        "candidate_id": "run_p1_4_healed_success",
+        "acceptance_diff": {
+          "baseline": {
+            "passed": false,
+            "status": "SOLVER_SINGULARITY"
+          },
+          "candidate": {
+            "passed": true,
+            "status": "RESULT_VALID"
+          }
+        },
+        "metrics_diff": {
+          "max_mises": {
+            "candidate_value": 598.2,
+            "unit": "MPa"
+          },
+          "tip_deflection": {
+            "candidate_value": 1.912,
+            "unit": "mm"
+          },
+          "reaction_force_y": {
+            "candidate_value": 1000.0,
+            "unit": "N"
+          }
+        }
+      },
+      "unresolved_issues": [],
+      "metadata": {
+        "max_attempts_budget": 2,
+        "healed": true
+      }
+    },
+    "report_md_length": 12386,
+    "report_html_length": 15194
+  },
+  "physical_results": {
+    "max_mises_mpa": 598.2,
+    "tip_deflection_mm": 1.912,
+    "reaction_force_n": 1000.0,
+    "force_balance_error_percent": 0.0,
+    "initial_diagnosed_issue": "NUMERICAL_SINGULARITY",
+    "remediation_action_applied": "rem_bc_6ec6a1",
+    "total_attempts": 1
+  },
+  "artifacts": {
+    "engineering_report.md": {
+      "sha256": "be9c1a8e000d7e79d15f3bdd2749db76eb916a87352cd03c037a5f462593feac",
+      "size_bytes": 12701,
+      "exists": true
+    },
+    "engineering_report.html": {
+      "sha256": "f75a678e427d3c54effa309c2d550df41bae0d22db43fde3a77228c880b0b1a9",
+      "size_bytes": 15509,
+      "exists": true
+    }
+  },
+  "probes": {
+    "p1_single_exit_completed": "PASS",
+    "p2_failure_diagnosed_correctly": "PASS",
+    "p3_remediation_synthesized": "PASS",
+    "p4_bounded_attempts_enforced": "PASS",
+    "p5_run_diff_tracked": "PASS",
+    "p6_single_exit_acceptance_passed": "PASS",
+    "p7_chapter_14b_rendered": "PASS",
+    "p8_unhealable_mode_safeguard": "PASS",
+    "p9_audit_trail_immutable": "PASS",
+    "p10_cryptographic_signature_valid": "PASS",
+    "p11_false_healing_semantic_preservation": "PASS"
+  },
+  "audit_signature": "9b4b2df0ea7ce84a3db763dbb777bea68d79b9d720656c3e2bb9f7db03717258"
+}
