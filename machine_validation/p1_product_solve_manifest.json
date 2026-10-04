@@ -1,0 +1,94 @@
+{
+  "schema_version": "p1_product_solve_golden_v1",
+  "case_id": "P1_0_Product_Solve_Golden",
+  "evidence_tier": "REAL_ABAQUS",
+  "solver": "Abaqus 2025",
+  "verified_at": "2026-10-04T05:28:27.956855+00:00",
+  "status": "QUALIFIED",
+  "requirement_prompt": "\u5bf9\u957f100mm\u5bbd10mm\u9ad810mm\u60ac\u81c2\u6881\u6839\u90e8\u56fa\u5b9a\uff0c\u7aef\u90e8\u65bd\u52a01000N\u5411\u4e0b\u8f7d\u8377\uff0c\u6750\u6599Q235\uff0c\u8ba1\u7b97\u5e94\u529b\u548c\u4f4d\u79fb",
+  "run_id": "run_p1_product_solve_20261004_132827",
+  "workflow": {
+    "natural_language_routing": "PASS",
+    "capability_resolution_20_l4": "PASS",
+    "canonical_compiler": "PASS",
+    "preflight_checks": "PASS",
+    "live_solver_execution": "PASS",
+    "odb_extraction": "PASS",
+    "evidence_v2_manifest": "PASS",
+    "single_exit_acceptance": "PASS",
+    "task_result_contract": "PASS",
+    "markdown_report_generation": "PASS"
+  },
+  "negative_probes": {
+    "probe_1_vague_prompt_clarification": "PASS",
+    "probe_2_unsupported_domain": "PASS",
+    "probe_3_missing_geometry_blocked": "PASS",
+    "probe_4_missing_material_blocked": "PASS",
+    "probe_5_external_input_anti_fabrication": "PASS",
+    "probe_6_preflight_blocker": "PASS"
+  },
+  "metrics": {
+    "tip_displacement": 2.16584849357605,
+    "max_mises": 505.026702880859
+  },
+  "artifacts": {
+    "Job_P1_Product_Solve.inp": {
+      "sha256": "5f224302c07b563dc0d9473dccd0032eff110377bf49f93d80dc3e020fa67752",
+      "size_bytes": 88057,
+      "exists": true
+    },
+    "Job_P1_Product_Solve.odb": {
+      "sha256": "6249ebc12c50b021ffcb07a41151d3b72449af2196c7a1140eaa593daff1bbd0",
+      "size_bytes": 405264,
+      "exists": true
+    },
+    "Job_P1_Product_Solve.sta": {
+      "sha256": "42ac1686834bc310e196472135417dca98c65a846f9cb5c3bae978f5a03013bd",
+      "size_bytes": 443,
+      "exists": true
+    },
+    "Job_P1_Product_Solve.msg": {
+      "sha256": "4202f2b6c53c5207d44266bd72cf8681cc67ebe7349aefb59bac341a062a2aae",
+      "size_bytes": 7996,
+      "exists": true
+    },
+    "Job_P1_Product_Solve.dat": {
+      "sha256": "81df41f5f9c98711e66f9f6ce441dcd6f893e5266f288a4599c6fc96fbf2a1d1",
+      "size_bytes": 9998,
+      "exists": true
+    },
+    "Job_P1_Product_Solve.log": {
+      "sha256": "3880044e6b5eedb9de700599fce50fe64a401971ffef36e0968f2100e2366ed5",
+      "size_bytes": 681,
+      "exists": true
+    }
+  },
+  "summary": {
+    "task_status": "COMPLETED",
+    "run_state": "accepted",
+    "engineering_status": "RESULT_VALID",
+    "acceptance_passed": true,
+    "model_name": "Model_P1_Product_Solve",
+    "job_name": "Job_P1_Product_Solve",
+    "metrics": {
+      "tip_displacement": 2.16584849357605,
+      "max_mises": 505.026702880859
+    },
+    "diagnostics": [],
+    "summary_card": {
+      "status": "COMPLETED",
+      "model_name": "Model_P1_Product_Solve",
+      "job_name": "Job_P1_Product_Solve",
+      "capability_id": "linear_static",
+      "physics_domain": "static",
+      "engineering_status": "RESULT_VALID",
+      "acceptance_passed": true,
+      "metrics": {
+        "tip_displacement": 2.16584849357605,
+        "max_mises": 505.026702880859
+      }
+    },
+    "report_markdown_length": 16888,
+    "errors": []
+  }
+}

@@ -104,6 +104,8 @@ _RESULT_QUANTITIES = {
     "fmbd_drift": "displacement",
     "relative_articulation": "angle",
     "max_mises_stress": "stress",
+    "tip_displacement": "displacement",
+    "tip_deflection": "displacement",
     "strain_energy_ratio": "energy",
     "energy_dissipation_ratio": "energy",
 }
@@ -146,6 +148,8 @@ _FIELD_ALIASES = {
     "max_reaction_force": ("RF", "MAGNITUDE"),
     "max_rf": ("RF", "MAGNITUDE"),
     "max_mises_stress": ("S", "MISES"),
+    "tip_displacement": ("U", "MAGNITUDE"),
+    "tip_deflection": ("U", "MAGNITUDE"),
     "connector_relative_motion": ("CU", "MAGNITUDE"),
     "connector_relative_displacement": ("CU", "MAGNITUDE"),
     "connector_force": ("CTF", "MAGNITUDE"),

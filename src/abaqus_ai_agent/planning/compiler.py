@@ -159,12 +159,17 @@ def compile_intent_to_actions(
     actions: List[AbaqusAction] = []
 
     # 1. Geometry Construction (Native Python CAE Action)
+    model_init = (
+        f"if '{model_name}' not in mdb.models:\n"
+        f"    mdb.Model(name='{model_name}')\n"
+    )
     if geometry.shape == "plate_with_hole":
         p_width = geometry.width if geometry.width > 0 else 100.0
         p_height = geometry.height if geometry.height > 20.0 else (geometry.length if geometry.length > 20.0 else 100.0)
         p_depth = geometry.thickness if geometry.thickness is not None else 20.0
         p_radius = geometry.radius if geometry.radius is not None else 10.0
         geo_code = (
+            model_init +
             f"s = mdb.models['{model_name}'].ConstrainedSketch(name='__profile__', sheetSize=200.0)\n"
             f"s.rectangle(point1=(0.0, 0.0), point2=({p_width}, {p_height}))\n"
             f"s.CircleByCenterPerimeter(center=({p_width/2.0}, {p_height/2.0}), "
@@ -178,6 +183,7 @@ def compile_intent_to_actions(
         base_h = geometry.height if geometry.height > 0 else 20.0
         base_l = geometry.length if geometry.length > 0 else 10.0
         geo_code = (
+            model_init +
             f"s1 = mdb.models['{model_name}'].ConstrainedSketch(name='__profile_base__', sheetSize=200.0)\n"
             f"s1.rectangle(point1=(0.0, 0.0), point2=({base_w}, {base_h}))\n"
             f"p_base = mdb.models['{model_name}'].Part(name='Base', dimensionality=THREE_D, type=DEFORMABLE_BODY)\n"
@@ -191,6 +197,7 @@ def compile_intent_to_actions(
         )
     elif geometry.shape == "cantilever_box":
         geo_code = (
+            model_init +
             f"s = mdb.models['{model_name}'].ConstrainedSketch(name='__profile__', sheetSize=200.0)\n"
             f"s.rectangle(point1=(0.0, 0.0), point2=({geometry.width}, {geometry.height}))\n"
             f"p = mdb.models['{model_name}'].Part(name='{part_name}', dimensionality=THREE_D, type=DEFORMABLE_BODY)\n"
@@ -199,6 +206,7 @@ def compile_intent_to_actions(
         )
     else:
         geo_code = (
+            model_init +
             f"s = mdb.models['{model_name}'].ConstrainedSketch(name='__profile__', sheetSize=200.0)\n"
             f"s.rectangle(point1=(0.0, 0.0), point2=({geometry.width}, {geometry.height}))\n"
             f"p = mdb.models['{model_name}'].Part(name='{part_name}', dimensionality=THREE_D, type=DEFORMABLE_BODY)\n"
@@ -1010,7 +1018,7 @@ def compile_intent_to_actions(
                     f"region = a.Set(vertices=tip_verts, name='{ld.region}')\n"
                     f"cf_val = {ld.magnitude}\n"
                     f"mdb.models['{model_name}'].ConcentratedForce(name='{ld.name}', createStepName='{target_step}', "
-                    f"region=region, {ld.direction}=cf_val)\n"
+                    f"region=region, {ld.direction.lower()}=cf_val)\n"
                 )
                 actions.append(builders.python_action(model_name, load_code))
                 cf_args = {ld.direction.lower(): ld.magnitude}
@@ -1074,6 +1082,7 @@ def compile_intent_to_actions(
     # 11. Mesh Generation Actions
     if geometry.shape == "two_blocks_contact":
         mesh_elem_code = (
+            f"import mesh\nfrom abaqusConstants import *\n"
             f"p_base = mdb.models['{model_name}'].parts['Base']\n"
             f"p_slider = mdb.models['{model_name}'].parts['Slider']\n"
             f"p_base.seedPart(size={mesh.global_size}, deviationFactor={mesh.deviation_factor})\n"
@@ -1094,6 +1103,7 @@ def compile_intent_to_actions(
         ))
         if mesh.element_type.startswith("C3D10") or mesh.element_type.startswith("C3D4"):
             mesh_elem_code = (
+                f"import mesh\nfrom abaqusConstants import *\n"
                 f"p = mdb.models['{model_name}'].parts['{part_name}']\n"
                 f"p.setMeshControls(regions=p.cells, elemShape=TET, technique=FREE)\n"
                 f"elemType1 = mesh.ElemType(elemCode={mesh.element_type}, elemLibrary={mesh.element_library})\n"
@@ -1102,6 +1112,7 @@ def compile_intent_to_actions(
             )
         else:
             mesh_elem_code = (
+                f"import mesh\nfrom abaqusConstants import *\n"
                 f"p = mdb.models['{model_name}'].parts['{part_name}']\n"
                 f"elemType1 = mesh.ElemType(elemCode={mesh.element_type}, elemLibrary={mesh.element_library})\n"
                 f"p.setElementType(regions=(p.cells,), elemTypes=(elemType1,))\n"

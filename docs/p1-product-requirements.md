@@ -33,32 +33,38 @@ Phase P1 严格按照系统层解耦、执行层渐进、真实工程可验证�
 
 | 需求代号 | 需求模块名称 | 核心目标 | 优先级 | 当前状态 |
 |:---|:---|:---|:---:|:---:|
-| **P1.0** | **Agent 产品主入口** | 自然语言/结构化工程需求输入 $\to$ 声明式意图编译 $\to$ 20 域能力解析 $\to$ 统一任务结果承载 | **P0 (已完成)** | ✅ **DONE / QUALIFIED** |
-| **P1.1** | **真实工程多模态感知** | 真实工程图/照片/截图（PNG/JPG/PDF）OCR 识别、尺寸与载荷提取 $\to$ `VisualCallout` $\to$ HITL 门禁 | **P0 (下一主线)** | 🚧 **READY TO EXECUTE** |
-| **P1.2** | **工程参数推理与交互补全** | 缺失参数自动检测、材料/网格智能推荐（附带工程依据）、歧义澄清交互（严守 fail-closed） | **P1** | 📋 **PLANNED** |
+| **P1.0** | **Agent 产品主入口** | 自然语言/结构化工程需求输入 $\to$ 声明式意图编译 $\to$ 20 域能力解析 $\to$ 真实机全链验证 $\to$ 统一任务结果承载 | **P0 (已收口)** | 🏆 **QUALIFIED (Real Abaqus 2025)** |
+| **P1.1** | **真实工程多模态感知** | 真实工程图/照片/截图（PNG/JPG/PDF）OCR 识别、尺寸与载荷提取 $\to$ `VisualCallout` $\to$ HITL 门禁 | **P0 (并重协同)** | 🚧 **READY TO EXECUTE** |
+| **P1.2** | **工程参数推理与交互补全** | 缺失参数检测、推荐依据记录、HITL 双向确认、严守 fail-closed（不猜测黑盒参数） | **P0 (并重协同)** | 🚧 **READY TO EXECUTE** |
 | **P1.3** | **交付级多维结果可视化** | ODB 应力/位移云图无头渲染提取、历程曲线、能量平衡监测看板、交互式工程报告 | **P1** | 📋 **PLANNED** |
 | **P1.4** | **求解故障智能诊断与自愈** | 截获 `.msg`/`.sta` 发散特征 $\to$ 根因诊断 $\to$ 生成受控松弛/网格细化修复策略 $\to$ 自动重算与 Diff 对比 | **P2** | 📋 **PLANNED** |
-| **P1.5** | **商业级工程工作台 (UI/UX)** | Web 协同界面、3D 模型与视口交互拾取、HITL 确认卡片、任务历史与审计追溯、企业多租户支持 | **P2** | 📋 **PLANNED** |
+| **P1.5** | **商业级工程工作台 (UI/UX)** | Web 协同界面、3D 模型与视口交互拾取、HITL 确认卡片、任务历史与审计追溯（前序能力成熟后再做） | **P2** | 📋 **PLANNED** |
 
 ---
 
 ## 三、P1.0 Agent 产品主入口（已完成）
 
-### 3.1 核心交付成果
-在 Commit `bf549d0` 中，P1.0 基础设施已正式并入主线并通过 695/695 项回归测试：
+### 3.1 核心交付与真实机审计收口
+P1.0 基础设施与产品主入口已全面完成代码加固、Fail-Closed 防伪门禁与真实 Abaqus 2025 黄金案例闭环认证，项目全量测试达到 **704/704 PASS**：
 1. **统一高层调用 API (`AbaqusAIAgent.solve_requirement`)**：
-   - 接受自然语言文本字符串或预解析意图字典；
+   - 接受自然语言文本字符串或结构化意图对象；
    - 自动完成需求澄清检测；如果缺失关键物理定义或存在歧义，返回 `status=NEEDS_CLARIFICATION`，清晰告知工程师缺失的参数项；
    - 若参数完备，自动完成端到端求解并输出结构化结果。
 2. **声明式编译适配层 (`compile_engineering_intent`)**：
    - 将高层 `EngineeringIntent` 转换为经过严格量纲、拓扑检查的 `ActionPlan`；
-   - 严格保证向后兼容性，彻底消除手写动作脚本与底层求解器之间的鸿沟。
+   - 自动补全模型初始化 (`mdb.Model`) 与网格模块环境，彻底消除手写动作脚本与底层求解器之间的鸿沟。
 3. **能力注册与物理配置解耦 (`resolve_capability`)**：
    - 覆盖全部 **20 个 L4 物理工程领域**；
    - 根据意图自动匹配对应的 `PhysicsResultProfile`，提取对应的必需字段（如 S, U, RF, TEMP, CU, CTF 等）与物理验收门禁（Gates 1~14）。
-4. **统一高阶结果载体 (`EngineeringTaskResult`)**：
-   - 统一封装 `status` (`COMPLETED`, `NEEDS_CLARIFICATION`, `FAILED`, `UNSUPPORTED`)；
-   - 包含完整的 `intent`、`run` (AnalysisRun)、`acceptance` (AcceptanceResult)、`metrics` (物理指标字典)、`summary` (工程结论卡片) 与 `report` (工程分析报告)。
+4. **严格防伪与单一出口判定 (Single-Exit Acceptance)**：
+   - `TaskStatus.COMPLETED` 判定要求 `run.state == AnalysisRunState.ACCEPTED`、`run.engineering_status in ("ACCEPTED", "RESULT_VALID")` 且 `run.acceptance_passed is True`；
+   - 严禁任何 `external_input` 或未通过 ODB 真实凭证验签的运行伪造为 `COMPLETED`。
+5. **真实 Abaqus 2025 黄金算例闭环 (`tools/p1_product_solve_golden_e2e.py`)**：
+   - 运行链路：自然语言需求 $\to$ `solve_requirement()` $\to$ 意图编译 $\to$ Preflight $\to$ Abaqus 2025 求解 $\to$ ODB 提取 $\to$ Evidence V2 $\to$ Acceptance $\to$ TaskResult $\to$ 工程报告；
+   - 真实位移 2.166 mm、Mises 应力 505.03 MPa，全数满足理论解；
+   - 完整采集并签署 6 类物理工件（`.inp`, `.odb`, `.sta`, `.msg`, `.dat`, `.log`）SHA-256；
+   - 6 项负向探针（模糊提示澄清、不支持物理域拦截、缺几何拦截、缺材料拦截、外部伪造防篡改、Preflight 阻断）100% fail-closed；
+   - 凭证已固化于 `machine_validation/p1_product_solve_manifest.json`。
 
 ---
 

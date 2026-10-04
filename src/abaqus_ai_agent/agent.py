@@ -119,6 +119,7 @@ class AbaqusAIAgent:
         from .contracts.capability import resolve_capability
         from .contracts.intent import EngineeringIntent
         from .contracts.task import EngineeringTaskResult, TaskStatus
+        from .execution.analysis_run import AnalysisRunState
         from .planning.compiler import compile_engineering_intent
         from .reporting.renderer import render_markdown
         from .typesafe_intent import JevIntentRouter
@@ -217,7 +218,7 @@ class AbaqusAIAgent:
         self.apply_plan(plan)
 
         # 6. Single Canonical Production Outlet: AnalysisRunner
-        criteria = intent.acceptance_criteria or ()
+        criteria = kwargs.pop("criteria", None) or intent.acceptance_criteria or ()
         run = self.analysis_run(
             model_name=plan.model_name,
             job_name=plan.job_name,
@@ -247,10 +248,17 @@ class AbaqusAIAgent:
         eng_status = getattr(run, "engineering_status", "EXECUTED")
         run_state = getattr(run, "state", None)
         run_state_val = getattr(run_state, "value", str(run_state))
+        # Strict single-exit acceptance contract:
+        # TaskStatus is COMPLETED if and only if:
+        # 1. run.state == AnalysisRunState.ACCEPTED
+        # 2. run.engineering_status in ("ACCEPTED", "RESULT_VALID")
+        # 3. run.acceptance_passed is True
+        # This strictly prevents external_input, missing ODB, or unverified runs from ever reaching COMPLETED.
         is_completed = (
-            run_state_val == "ACCEPTED"
-            or eng_status in ("ACCEPTED", "RESULT_VALID")
-        ) and bool(getattr(run, "acceptance_passed", False))
+            (run_state == AnalysisRunState.ACCEPTED or str(run_state_val).lower() == "accepted")
+            and eng_status in ("ACCEPTED", "RESULT_VALID")
+            and bool(getattr(run, "acceptance_passed", False))
+        )
         task_status = TaskStatus.COMPLETED if is_completed else TaskStatus.FAILED
 
         metric_dict = {}
