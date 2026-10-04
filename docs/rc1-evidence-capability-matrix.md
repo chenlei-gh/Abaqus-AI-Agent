@@ -21,6 +21,60 @@ To eliminate ambiguity across commercial workflows and academic verification, th
 
 ---
 
+## RC1 Frozen Capability Classification — 20 Physical Engineering Domains
+
+**Release:** `v1.0.0-rc1`  
+**Baseline:** RC1 frozen after Post-Fix qualification  
+**Regression:** 616/616 PASS  
+**False-PASS / secondary Acceptance bypasses:** 0 identified  
+**Classification rule:** the domain classification below is the product-level RC1 claim. L4 requires an Agent Full-Chain qualification; L3 is a deliberately bounded Specialized Workflow qualification and must not be advertised as generic Intent-to-Solver coverage.
+
+### Three-tier validation hierarchy
+
+| Tier | Gate | Required evidence | RC1 rule |
+|---|---|---|---|
+| **Tier A — Real-Machine Physics** | Solver / ODB / physical result | Authentic Abaqus 2025 execution, real ODB, physics-specific result evidence | Required for physical-domain qualification |
+| **Tier B — Engineering Trust** | Preflight / Verification / Acceptance / Evidence | Deterministic gates, Evidence V2, SHA-256 provenance, fail-closed negative paths | Required before an engineering result can become accepted |
+| **Tier C — Product Delivery** | Agent workflow / report / reproducibility | Intent routing, compiler path, AnalysisRun, report and traceability | Required for L4; L3 may use a bounded specialized workflow |
+
+### Frozen 20-domain classification
+
+| # | Physical engineering domain | RC1 level | Qualification boundary / canonical evidence |
+|---:|---|:---:|---|
+| 1 | Linear Static | **L4 Agent Full-Chain** | Natural-language/Intent → compiler → Abaqus 2025 → ODB → acceptance; Static Golden |
+| 2 | Nonlinear Static | **L4 Agent Full-Chain** | Nonlinear solver/material/contact paths covered by live qualification; bounded to implemented nonlinear procedures |
+| 3 | Contact & Friction | **L4 Agent Full-Chain** | MP-2 real Abaqus friction/contact + CPRESS/CSHEAR/RF acceptance |
+| 4 | Bolt Pretension | **L4 Agent Full-Chain** | GA-2.6.3 APPLY_FORCE → FIX_LENGTH → service loading |
+| 5 | Thermal | **L4 Agent Full-Chain** | MP-1 thermal phase with real NT11/HFL evidence |
+| 6 | Sequential Thermal-Structural | **L4 Agent Full-Chain** | MP-1 thermal ODB → structural predefined-field import → acceptance |
+| 7 | Modal / Frequency | **L4 Agent Full-Chain** | Live frequency procedure and ODB qualification |
+| 8 | Preloaded Modal | **L4 Agent Full-Chain** | MP-3 preload state inheritance → modal extraction → frequency acceptance |
+| 9 | Explicit Dynamics | **L4 Agent Full-Chain** | MP-4 explicit dynamics + ALLKE/ALLIE energy evidence |
+| 10 | Implicit Dynamics | **L4 Agent Full-Chain** | Dynamic procedure/amplitude compiler path with live ODB qualification |
+| 11 | High-Cycle Fatigue | **L3 Specialized Workflow** | ODB stress/history → Rainflow/mean-stress correction/S-N/Miner; specialized post-processing workflow, not generic RC1 Intent-to-Solver claim |
+| 12 | Multi-Step Procedure | **L4 Agent Full-Chain** | Procedure DAG and cross-step state lifecycle, including GA-2.6.3 |
+| 13 | Spatial Field Loading | **L4 Agent Full-Chain** | `SpatialLoadField` / AST-guarded ExpressionField integrated into the main compiler |
+| 14 | Kinematic Connectors | **L3 Specialized Workflow** | Connector/MBD specialized workflow and live Golden qualification; not generic main Intent compiler coverage |
+| 15 | Flexible Multibody (FMBD) | **L3 Specialized Workflow** | Dedicated FMBD Golden workflow with live Abaqus evidence; bounded specialized entry point |
+| 16 | Assembly & Tie Interaction | **L4 Agent Full-Chain** | Assembly/interaction actions through the canonical compiler and live qualification |
+| 17 | Mesh Quality & GCI | **L4 Agent Full-Chain** | Mesh planning → live Abaqus mesh → quality gate / GCI evidence |
+| 18 | Material Constitutive | **L4 Agent Full-Chain** | MaterialDefinition → native material actions → solver/ODB for the implemented material families |
+| 19 | Boundary & Load Grounding | **L4 Agent Full-Chain** | Feature/viewport grounding → RegionResolver → native BC/load → live equilibrium |
+| 20 | Result Acceptance & Engineering Report | **L4 Agent Full-Chain** | ODB → Evidence V2 → unique Acceptance → engineering status → report; false-pass bypass count = 0 |
+
+**RC1 claim boundary:** L4 means the complete canonical Agent path is qualified for the stated domain and benchmark scope; it does **not** mean arbitrary Abaqus models or every keyword in that physics family are supported. L3 means a real, evidence-backed specialized workflow is qualified, but the capability is intentionally not promoted as generic main-entry Agent Full-Chain support.
+
+### RC1 false-pass closure
+
+The RC1 baseline records **zero production False-PASS bypasses**:
+
+- `ACCEPTED` is reached only from a passing acceptance result whose source is real ODB.
+- `external_input` cannot reach `ACCEPTED`.
+- Required Evidence V2 is mandatory on the canonical ODB acceptance path.
+- Preflight is enforced before Job creation/submission.
+- Tampered, stale, incomplete, or run-ID-mismatched evidence fails closed.
+- No second production Acceptance state machine was identified in the code audit.
+
 ## 2. Core Capabilities Evidence Matrix
 
 ### 2.1 Engineering Contracts & Data Model
