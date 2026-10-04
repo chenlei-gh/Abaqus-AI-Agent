@@ -74,6 +74,34 @@ def test_region_resolver_dict_and_fail_closed():
     assert empty_ref.is_empty is True
 
 
+def test_region_resolver_grounded_region():
+    from abaqus_ai_agent.grounding.feature_grounding import GroundedRegion
+
+    gr = GroundedRegion(
+        target_semantic="TOP_SURFACE",
+        entity_type="Face",
+        entity_ids=("F_101",),
+        anchor_point=(10.0, 20.0, 30.0),
+        status="RESOLVED",
+        confidence=0.95,
+    )
+    r = resolve_region(gr, instance_name="Part-1-1")
+    assert r.kind == "grounded_region"
+    assert r.name == "TOP_SURFACE"
+    assert r.expression == "a.instances['Part-1-1'].faces.findAt(((10.0, 20.0, 30.0),))"
+
+    # Fail closed on non-RESOLVED status
+    gr_ambig = GroundedRegion(
+        target_semantic="SIDE",
+        entity_type="Face",
+        entity_ids=("F_1", "F_2"),
+        anchor_point=(0.0, 0.0, 0.0),
+        status="AMBIGUOUS",
+    )
+    with pytest.raises(ValueError, match="non-RESOLVED status"):
+        resolve_region(gr_ambig, fail_closed=True)
+
+
 def test_preflight_bc_dof_and_component_checks():
     # Valid fixed BC
     act_valid = AbaqusAction(

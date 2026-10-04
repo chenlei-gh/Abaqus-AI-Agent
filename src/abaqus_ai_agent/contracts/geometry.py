@@ -237,6 +237,31 @@ def resolve_region(
         )
         return resolve_region(binding, assembly_var=assembly_var, instance_name=instance_name, fail_closed=fail_closed)
 
+    if hasattr(target, "anchor_point") and hasattr(target, "entity_type") and hasattr(target, "status"):
+        if getattr(target, "status", None) != "RESOLVED" and fail_closed:
+            raise ValueError(f"cannot resolve GroundedRegion with non-RESOLVED status: {getattr(target, 'status', None)}")
+        pts = getattr(target, "anchor_points", None) or (target.anchor_point,)
+        if not pts:
+            if fail_closed:
+                raise ValueError("GroundedRegion contains no anchor points")
+            return RegionReference(expression="", is_empty=True)
+        inst = instance_name or getattr(target, "instance_name", None)
+        var_prefix = f"{assembly_var}.instances['{inst}']" if inst else assembly_var
+        repo = {"Face": "faces", "Edge": "edges", "Vertex": "vertices"}.get(target.entity_type, "faces")
+        args = ", ".join(repr((tuple(p),)) for p in pts)
+        expr = f"{var_prefix}.{repo}.findAt({args})"
+        return RegionReference(
+            expression=expr,
+            kind="grounded_region",
+            name=getattr(target, "target_semantic", None),
+            entity_type=target.entity_type,
+            metadata=(
+                ("target_semantic", getattr(target, "target_semantic", "")),
+                ("confidence", str(getattr(target, "confidence", 1.0))),
+                ("status", getattr(target, "status", "RESOLVED")),
+            ),
+        )
+
     if isinstance(target, dict):
         if "region_expression" in target:
             return resolve_region(target["region_expression"], assembly_var=assembly_var, instance_name=instance_name, fail_closed=fail_closed)
