@@ -2,8 +2,8 @@
 
 **Status:** 
 - **RC 1.0 Frozen Baseline**: `v1.0.0-rc1` **BASELINE FROZEN** — 20 physical engineering domains classified as **17 L4 Agent Full-Chain + 3 L3 Specialized Workflow** qualifications; 616/616 regression PASS; three-tier validation hierarchy enforced; production False-PASS bypasses = **0**. ✅
-- **GA Working Baseline**: `origin/main` QUALIFIED; GA-2A Perspective Viewport and GA-2B Multimodal Perception remain explicitly post-RC1 evolution tracks. 🚀
-**Version:** 2026-10-04 (Release Candidate 1.0 Baseline Frozen)  
+- **GA Working Baseline**: Post-RC1 Strategic Pivot to **Unified Engineering Grounding Layer** (Track GA-2A 3D Viewport Grounding [ACTIVE 🥇] $\to$ Track GA-F4 Fatigue L3$\to$L4 Upgrade [🥈] $\to$ Track GA-2B Multimodal Perception with HITL [🥉]) 🚀
+**Version:** 2026-10-04 (Release Candidate 1.0 Baseline Frozen; Engineering Grounding Layer Ingestion)
 **Scope:** Abaqus-AI-Agent engineering architecture, foundational contracts, evidence chain, real-machine physics benchmarks, and material intelligence grounding
 
 ---
@@ -1166,30 +1166,37 @@ With the RC 1.0 foundation formally frozen and audited (`v1.0.0-rc1 — CONDITIO
        required_user_input: Optional[str] = None
        next_action: Optional[str] = None
    ```
-3. **Strict Implementation Sequencing**:
-   $$\text{GA-3 (Runtime Infra - P0)} \longrightarrow \text{GA-1 (CAD Ingestion & Meshability - P1 [FROZEN])} \longrightarrow \text{GA-2 (Physical Grounding & E2E Intent - P1 [ACTIVE])}$$
-   *No fourth GA track shall be introduced.*
+3. **Strict Implementation Sequencing (Post-RC1 Strategic Pivot)**:
+   $$\text{GA-3 (Runtime - P0 [CLOSED])} \longrightarrow \text{GA-1 (CAD/Mesh - P1 [FROZEN])} \longrightarrow \text{GA-CL (Multi-Physics - P0 [FROZEN])} \longrightarrow \text{Engineering Grounding Layer (ACTIVE)}$$
+   Post-RC1 priority ladder:
+   $$\text{Track GA-2A (3D Viewport Grounding - 🥇 P1)} \longrightarrow \text{Track GA-F4 (Fatigue L3}\to\text{L4 - 🥈 P1)} \longrightarrow \text{Track GA-2B (Multimodal Perception - 🥉 P2)}$$
+   *Connectors and FMBD remain qualified as L3 Specialized Workflows; no unvetted duplicate architectures.*
 
 ```
-                   Abaqus-AI-Agent GA Evolution Matrix
+                   Abaqus-AI-Agent Post-RC1 Architecture
                                     │
-       ┌────────────────────────────┼────────────────────────────┐
-       ▼                            ▼                            ▼
-   Track GA-3                   Track GA-1                   Track GA-2
-Runtime Infrastructure      Complex CAD & Meshing       Physical Grounding & Intent
- [P0 Core Priority]          [P1 Frozen Baseline]         [P1 Active Engineering]
-       │                            │                            │
- ┌─────┼─────┐               ┌──────┼──────┐              ┌──────┴──────┐
- │     │     │               │      │      │              │             │
-Queue Lic. Recovery         STEP Meshability Gate       Feature Grounding  Compiler E2E
-       │                            │                            │
-       └────────────────────────────┼────────────────────────────┘
-                                    ↓
-                         Canonical AnalysisRun
-                                    ↓
-                           Abaqus 2025 Runtime
-                                    ↓
-                         ODB / Evidence / Report
+    ┌───────────────────────────────┴───────────────────────────────┐
+    ▼                                                               ▼
+[ Engineering Grounding Layer (Input) ]                 [ Deep Physics Track (Post-RC1) ]
+- 3D Viewport Raycast & Picking (GA-2A) [🥇 P1]          - Fatigue L3 -> L4 (GA-F4) [🥈 P1]
+- Multimodal Blueprints/Photos (GA-2B)  [🥉 P2]          - Kinematic Connectors [L3 Stable]
+- Canonical Natural Language Text                       - Flexible Multibody (FMBD) [L3 Stable]
+    │                                                               │
+    └───────────────────────────────┬───────────────────────────────┘
+                                    ▼
+                          GroundingObservation
+                                    ▼
+                         HITL / Confidence Gate
+                                    ▼
+                         Typed EngineeringIntent
+                                    ▼
+               ┌─────────────────────────────────────────┐
+               │    RC1 Frozen Canonical Backend Core    │
+               │                                         │
+               │  Compiler -> Preflight -> Abaqus 2025   │
+               │  ODB -> Evidence V2 -> Acceptance       │
+               │  Engineering Report (Single Exit Gate)  │
+               └─────────────────────────────────────────┘
 ```
 
 ---
@@ -1506,37 +1513,128 @@ ODB Tensor Extraction & Equilibrium Verification (RF vs Applied Error = 0.002%) 
     - 17 Domains qualified at **L4 (Agent Full-Chain Qualified)** (`Intent -> compile_intent_to_actions -> Preflight -> Abaqus 2025 -> ODB -> Required Results -> Evidence V2 -> Acceptance -> Report`).
     - 3 Domains qualified at **L3 (Specialized Workflow Qualified; Intent Compiler Pending)**: High-Cycle & Low-Cycle Fatigue (`fatigue.py`), Kinematic Connectors (`mbd.py`), and Flexible Multibody Dynamics (`mechanism.py`). Live solver and physical ODB results proven on Abaqus 2025; direct intent compilation scheduled post-RC1.
   - [x] Confirmed single-exit acceptance gate architecture: zero bypass paths from `external_input` to `ACCEPTED`, mandatory `EvidenceManifestV2` verification, and fail-closed state transitions.
-  - [x] Release Candidate 1.0 formally declared as **`RC1 BASELINE FROZEN` (`v1.0.0-rc1`)** at Commit `816872c`+ with 616/616 regression tests passing.
+  - [x] Release Candidate 1.0 formally declared as **`RC1 BASELINE FROZEN` (`v1.0.0-rc1`)** at Commit `41f0c63` with 616/616 regression tests passing.
 
 ---
 
-#### Track GA-2A: Perspective Viewport Grounding [P1 EXTENSION - GATED BEHIND GA-CL]
-*Deterministic Viewport Projection: Direct mathematical extension of Phase L4, upgrading parallel CAE viewports to calibrated perspective viewpoints while fully reusing existing Grounding data contracts.*
+### Post-RC1 Strategic Track: The Unified Engineering Grounding Layer
+
+With the RC1 backend execution, solver closure, Evidence V2, and single-exit acceptance engine formally frozen, the strategic bottleneck of the Abaqus AI Agent transitions from "solver capability expansion" to "engineering intent ingestion".
+
+In practical engineering practice, user requests do not arrive as pre-grounded API regions. They arrive as 3D viewport selections, marked-up technical drawings, photographs with load arrows, and natural language descriptions.
+
+#### Core Architectural Grounding Rules (The Three Laws of Grounding)
+1. **Zero Invented Geometry**: The Agent shall **never** hallucinate or invent geometric region names (e.g. guessing `"Face-17"` or fabricated bounding boxes). Boundary conditions and loads are permitted to compile if and only if anchored to verified geometric entities via canonical `GroundedRegion`.
+2. **Direct Reuse of Canonical Region Contracts**: No duplicate `VisualRegion`, `CADRegion`, or parallel spatial data structures shall be introduced. All grounding channels (3D viewport picking, 2D blueprints, external photos) compile into canonical `GroundedRegion` (`contracts/geometry.py`), resolved via `RegionResolver` (`grounding/resolver.py`), and consumed by `compile_intent_to_actions()` (`planning/compiler.py`).
+3. **Mandatory Human-in-the-Loop (HITL) on Multimodal Vision**: Vision models (GA-2B) are strictly forbidden from directly outputting executable CAE Python scripts or bypassing preflight. They must output a structured `GroundingObservation`, pass confidence thresholds, receive explicit user/engineer confirmation (HITL), and synthesize typed `EngineeringIntent` before touching the solver backend.
+
+```
+                         Unified Engineering Grounding Layer
+                                          │
+         ┌────────────────────────────────┼────────────────────────────────┐
+         ▼                                ▼                                ▼
+3D Viewport Picking (GA-2A)     Multimodal Vision (GA-2B)          Textual Intent
+  - Perspective Raycasting         - Engineering Blueprints           - Canonical NLP
+  - Depth Disambiguation           - Marked Photos & Annotations      - Feature Matching
+  - Surface Normal Culling         - Spatial Callouts                 - JEV Router
+         │                                │                                │
+         └────────────────────────────────┼────────────────────────────────┘
+                                          ▼
+                                GroundingObservation
+                       (Entity Candidates, Confidence, Anchor)
+                                          │
+                                          ▼
+                              Confidence / HITL Gate
+                       (User Confirmation if Ambiguous)
+                                          │
+                                          ▼
+                              Canonical GroundedRegion
+                             (x, y, z, findAt Syntax)
+                                          │
+                                          ▼
+                                  EngineeringIntent
+                                          │
+                                          ▼
+                       ┌─────────────────────────────────────┐
+                       │  RC1 Frozen Canonical Backend Core  │
+                       │                                     │
+                       │  Compiler -> Preflight -> Abaqus    │
+                       │  ODB -> Evidence V2 -> Acceptance   │
+                       │  Engineering Report (Single Exit)   │
+                       └─────────────────────────────────────┘
+```
+
+---
+
+#### Track GA-2A: 3D Viewport Spatial Grounding & Topology Disambiguation [P1 - HIGHEST PRIORITY 🥇]
+*Deterministic Viewport Projection: Connecting interactive user viewport clicks to authentic 3D CAD topology and native Abaqus constraints via calibrated perspective camera geometry and spatial raycasting.*
 
 - [ ] **GA-2A.1: Perspective Camera Model & Projection Matrix Calibration**
-  - [ ] Implement full pinhole camera model supporting focal length, principal point, and $4\times 4$ camera extrinsic/intrinsic matrix ($[R|T]$).
-  - [ ] Support automated extraction of Abaqus CAE viewport camera parameters (`cameraPosition`, `cameraTarget`, `cameraUpVector`, `perspectiveAngle`).
-- [ ] **GA-2A.2: Perspective Raycasting & Depth Disambiguation**
-  - [ ] Extend 2D-to-3D projection from parallel rays to diverging perspective rays originating from the camera optical center.
-  - [ ] Implement multi-surface ray penetration with $Z$-buffer depth sorting and surface normal dot-product filtering to deterministically select front-facing visible surfaces.
-- [ ] **GA-2A.3: Deterministic Topological Region Grounding (Existing Contract Reuse)**
-  - [ ] Map 2D viewport coordinates $(u, v)$ to precise 3D intersection points; directly populate existing `GeometryCandidate` and `GroundingResult`.
-  - [ ] Feed through existing `resolve_region()` to synthesize native Abaqus `findAt(...)` expressions and native Set/Surface objects under live Abaqus validation.
+  - [ ] Implement robust `PinholeCamera` model (`src/abaqus_ai_agent/grounding/projection.py`) supporting focal length, principal point, aspect ratio, near/far clipping planes, and $4\times 4$ camera extrinsic/intrinsic matrix ($[R|T]$).
+  - [ ] Calibrate against Abaqus CAE viewport camera parameters (`cameraPosition`, `cameraTarget`, `cameraUpVector`, `perspectiveAngle`).
+  - [ ] Backward compatibility: preserve existing parallel projection (`OrthographicCamera`) accuracy without breaking existing tests.
+- [ ] **GA-2A.2: Perspective Raycasting & Spatial Bounding Box Intersection**
+  - [ ] Implement 2D-to-3D back-projection: map screen normalized device coordinates $(u, v) \in [0, 1]$ to diverging 3D rays originating from the camera optical center $\vec{O}_{\text{cam}}$ along direction $\vec{d}$.
+  - [ ] Implement fast ray-AABB (Axis-Aligned Bounding Box) spatial screening against candidate geometry parts and topological cells.
+- [ ] **GA-2A.3: Depth Disambiguation, Z-Buffer & Surface Normal Backface Culling**
+  - [ ] Deterministic front-surface isolation: filter out back-facing surfaces via ray-normal dot product ($\vec{n} \cdot \vec{d} < 0$).
+  - [ ] Multi-surface ray penetration: implement $Z$-buffer parametric distance sorting ($t_{\min} = \arg\min t$) to resolve occluded geometry and select the nearest visible entity.
+  - [ ] Fallback to top-$K$ candidates with explicit confidence scores when intersection falls near geometric edges or sliver regions.
+- [ ] **GA-2A.4: Direct RegionResolver & Canonical GroundedRegion Bridge**
+  - [ ] Convert ray intersection 3D coordinates $(x, y, z)$ into canonical `GroundedRegion` (`contracts/geometry.py`).
+  - [ ] Pass directly into `RegionResolver` (`grounding/resolver.py`) to synthesize native Abaqus `findAt(((x, y, z),))` expressions without inventing duplicate region representations.
+- [ ] **GA-2A.5: Real-Machine E2E Golden Verification on Abaqus 2025**
+  - [ ] Execute complete autonomous loop: Viewport screen click $(u, v) \to$ Raycast $\to$ `GroundedRegion` $\to$ `compile_intent_to_actions` $\to$ Preflight $\to$ Abaqus 2025 $\to$ ODB $\to$ Evidence V2 $\to$ Acceptance $\to$ Report.
+  - [ ] Validate reaction force equilibrium and stress results against analytical references; persist SHA-256 evidence manifest in `machine_validation/ga2a_viewport_golden_evidence.json`.
 
 ---
 
-#### Track GA-2B: Multimodal Photo & Engineering Drawing Understanding [P2 PERCEPTION EXTENSION]
+#### Track GA-F4: High-Cycle & Low-Cycle Fatigue L3 $\to$ L4 Full-Chain Upgrade [P1 - SECOND PRIORITY 🥈]
+*Closing the Core Physics Gap: Upgrading the existing mature fatigue post-processing library (`src/abaqus_ai_agent/fatigue.py`) to an end-to-end declarative Agent capability driven by `EngineeringIntent`.*
+
+- [ ] **GA-F4.1: Declarative Fatigue Intent Contract (`IntentFatigueSpec`)**
+  - [ ] Implement `IntentFatigueSpec` (`contracts/intent.py`): cyclic loading profile, target design life ($N_{\text{cycles}}$), allowable cumulative damage ($D_{\max}$), S-N curve parameters ($\sigma_f'$, $b$, fatigue limit $S_e$), and mean stress correction model (`GOODMAN`, `GERBER`, `SODERBERG`, `MORROW`).
+  - [ ] Preflight validation: verify S-N curve applicability, positive life cycles, and stress tensor field output availability.
+- [ ] **GA-F4.2: Intent Compiler & Output Planning Integration**
+  - [ ] Integrate fatigue intent into `compile_intent_to_actions()`: automatically configure transient/cyclic steps and output planning (`plan_outputs`) to request elemental stress history (`S`).
+  - [ ] Ensure step-to-step cyclic load history is properly staged for reversal extraction.
+- [ ] **GA-F4.3: Automated ODB Stress History Extraction & Fatigue Engine Bridge**
+  - [ ] Extract time-history stress tensors from live ODB across critical element sets.
+  - [ ] Execute `src/abaqus_ai_agent/fatigue.py`: scalar stress reduction (von Mises / signed Tresca / principal stress) $\to$ turning point extraction $\to$ ASTM E1049 Rainflow cycle counting $\to$ Goodman mean stress correction $\to$ Palmgren-Miner linear damage summation.
+- [ ] **GA-F4.4: Deterministic Fatigue Acceptance & Result Requirement Gate**
+  - [ ] Configure `PhysicsResultProfile` for fatigue: mandatory gates for `fatigue_life` ($\ge N_{\text{target}}$) and `cumulative_damage` ($\le D_{\text{allowable}}$).
+  - [ ] Fail-closed gating: missing stress history or infinite damage deterministically yields `RESULT_INVALID` / `BLOCKED`.
+- [ ] **GA-F4.5: Real-Machine Live Abaqus 2025 Golden Benchmark (`MP-Fatigue`)**
+  - [ ] Golden case: notched bar or stepped shaft subjected to cyclic tension-compression.
+  - [ ] Verify live ODB stress extraction, rainflow counting, life prediction, and automated executive report generation under authentic Abaqus 2025.
+  - [ ] Persist verified manifest in `machine_validation/fatigue_l4_golden_manifest.json` (Tier `REAL_ABAQUS`).
+
+---
+
+#### Track GA-2B: Multimodal Perception & Intent Ingestion (Drawings, Blueprints, Photos) [P2 - THIRD PRIORITY 🥉]
 *Open-World Engineering Context: Associating real-world photos and standard 2D blueprints with 3D CAD models under mandatory Human-in-the-Loop review.*
 
 - [ ] **GA-2B.1: 2D Engineering Drawing Feature & Annotation Parsing**
   - [ ] Ingest standard 2D mechanical engineering blueprints (orthographic multi-view projections, section views, datum lines).
   - [ ] Parse text and dimension callouts (e.g. *"Fixed constraint at face A"*, *"Apply 5000N bearing load"*, *"Fillet weld R=5"*).
-- [ ] **GA-2B.2: 2D-to-3D CAD Topological Semantic Mapping**
-  - [ ] Correlate 2D drawing views and feature callouts with 3D CAD topological faces/edges.
-  - [ ] Automatically translate drawing engineering intent into strongly-typed `RegionBinding` and `BoundaryCondition` / `Load` action candidates.
-- [ ] **GA-2B.3: External Photo Visual Perspective Registration & Human-in-the-Loop Gate**
-  - [ ] Support interactive or keypoint-based registration of external camera photos to 3D CAD geometry.
-  - [ ] **Mandatory Human-in-the-Loop (HITL) Gate**: External image interpretations require explicit user confirmation before applying boundary conditions or loads to the live solver model; autonomous unconfirmed execution is strictly prohibited.
+- [ ] **GA-2B.2: Grounding Observation Schema & Candidate Correlation**
+  - [ ] Formulate `GroundingObservation` contract: maps detected visual callouts to candidate CAD topological faces/edges with geometric bounding box, feature type, and probability confidence.
+  - [ ] Correlate 2D drawing views with 3D CAD topological faces/edges via project-relative bounding box alignment.
+- [ ] **GA-2B.3: Mandatory Human-in-the-Loop (HITL) & Confidence Gate**
+  - [ ] **Zero Direct Code Generation**: Vision models are strictly prohibited from generating executable Abaqus CAE/Python scripts.
+  - [ ] Visual interpretations synthesize candidate `EngineeringIntent` and present annotated viewports for explicit human confirmation.
+  - [ ] Execution halts in `NEEDS_CONFIRMATION` until the engineer accepts or refines the grounding candidate.
+- [ ] **GA-2B.4: Real-Machine Physical Verification**
+  - [ ] Verify confirmed multimodal intent feeds cleanly into the frozen RC1 backend (`Preflight -> Abaqus -> ODB -> Evidence V2 -> Acceptance -> Report`).
+
+---
+
+#### Track GA-L3: Kinematic Connectors & FMBD Specialized Workflows [STABLE L3 / DEFERRED]
+*Specialized Engineering Workflows: Maintaining high-fidelity multibody and connector capabilities as dedicated engineering workflows without diluting core agent intent resources.*
+
+- [x] **Connectors & Mechanism Joints**: Qualified at L3 via `src/abaqus_ai_agent/workflow/mbd.py` (Revolute, Cartesian, Spring/Dashpot). Proven on Abaqus 2025 (`mbd_golden_e2e.json`).
+- [x] **Flexible Multibody Dynamics (FMBD)**: Qualified at L3 via `src/abaqus_ai_agent/planning/mechanism.py` (Rigid-flexible coupling, flexible links). Proven on Abaqus 2025 (`fmbd4_rigid_flexible_golden_e2e.json`).
+- [ ] **Deferred Post-GA-2A/GA-F4**: Full natural-language `IntentConnectorSpec` compilation to be staged after GA-2A and Fatigue L4 have concluded.
 
 ---
 

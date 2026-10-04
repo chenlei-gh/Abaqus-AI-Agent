@@ -1,7 +1,7 @@
 # RC 1.0 Evidence & Capability Matrix
 
 **Release Baseline**: `v1.0.0-rc1` (Branch: `origin/main`)  
-**Audit Status**: **RC1 BASELINE FROZEN** (Commit `816872c`+, 616/616 Regression Suite PASS)  
+**Audit Status**: **RC1 BASELINE FROZEN** (Tag: `v1.0.0-rc1` at Commit `41f0c63`, 616/616 Regression Suite PASS)  
 **Specification Protocol**: Six-tuple Audit Schema  
 $$\text{Requirement} \longrightarrow \text{Implementation} \longrightarrow \text{Test} \longrightarrow \text{Real-Machine Evidence} \longrightarrow \text{Evidence Level} \longrightarrow \text{Capability Boundary}$$
 
@@ -195,14 +195,21 @@ The following three tracks represent the ongoing evolution beyond `v1.0.0-rc1` d
 │      GA-2.6.3 multi-step bolt preload + service torque equilibrium error    │
 │      < 0.0001% (axial error 3.8e-9, torque error 9.2e-9, net drift 2.3e-13).│
 ├─────────────────────────────────────────────────────────────────────────────┤
-│ Track GA-CL: Full-Chain Multi-Physics Closure & Failure Hardening [ACTIVE]  │
+│ Track GA-CL: Full-Chain Multi-Physics Closure & Failure Hardening [FROZEN]  │
 │    - Status: GA-CL.1 Multi-Physics Golden, GA-CL.2 Real Failure Matrix,     │
 │      GA-CL.3 Acceptance Gate Closure, GA-CL.4 Evidence V2 Contract,         │
-│      GA-CL.5 Cross-Physics Report Verification [ALL CLOSED & QUALIFIED].    │
-│    - Active Gates: GA-CL.6 RC Evidence Freeze & Read-Only Baseline,         │
-│      GA-CL.7 Full Agent-Chain Integrity & Zero-Bypass Audit.                │
-│    - Next: Track GA-2A Perspective Viewport (P1), Track GA-2B Multimodal    │
-│      Perception (P2 HITL) [Strictly gated behind Track GA-CL].              │
+│      GA-CL.5 Cross-Physics Report Verification, GA-CL.6 RC Evidence Freeze, │
+│      GA-CL.7 Zero-Bypass Integrity, GA-CL.8 20-Domain Audit                 │
+│      [ALL CLOSED & FROZEN at v1.0.0-rc1, 616/616 PASS].                     │
+├─────────────────────────────────────────────────────────────────────────────┤
+│ Post-RC1 Active Track: Unified Engineering Grounding Layer & Physics Depth │
+│    - 🥇 Track GA-2A: 3D Viewport Spatial Grounding & Topology Disambiguation│
+│      (Perspective Camera Calibration, Raycast AABB, Depth Sorting) [ACTIVE] │
+│    - 🥈 Track GA-F4: Fatigue L3 -> L4 Full-Chain Upgrade                    │
+│      (Declarative IntentFatigueSpec -> Compiler -> Rainflow/Goodman/Miner)  │
+│    - 🥉 Track GA-2B: Multimodal Perception (Blueprints/Photos -> HITL)      │
+│      (Strict Observation -> User Confirmation -> Typed Intent; No Bypass)   │
+│    - ⏸️ Track GA-L3: Kinematic Connectors & FMBD [Stable L3 / Deferred]     │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
