@@ -1,0 +1,72 @@
+{
+  "case_id": "CASE_01_BOLTED_PIPE_FLANGE",
+  "title": "Bolted Pipe Flange Connection with Gasket Sealing",
+  "domain": "pressure_vessel_piping",
+  "source": "Abaqus 2025 Example Problems - Axisymmetric and three-dimensional analysis of bolted pipe flange connections",
+  "problem_description": "High-pressure pipe flange joint with 8 preloaded bolts and compressed gasket subjected to bolt pretensioning followed by internal fluid pressure and end thrust.",
+  "geometry": {
+    "pipe_inner_radius_mm": 100.0,
+    "pipe_outer_radius_mm": 120.0,
+    "pipe_length_mm": 150.0,
+    "flange_outer_radius_mm": 180.0,
+    "flange_thickness_mm": 30.0,
+    "gasket_inner_radius_mm": 105.0,
+    "gasket_outer_radius_mm": 135.0,
+    "gasket_thickness_mm": 3.0,
+    "bolt_circle_radius_mm": 155.0,
+    "bolt_diameter_mm": 16.0,
+    "bolt_count": 8
+  },
+  "materials": {
+    "flange_steel": {
+      "material_name": "ASTM A105 Carbon Steel",
+      "elastic_modulus_mpa": 200000.0,
+      "poisson_ratio": 0.3,
+      "yield_strength_mpa": 355.0,
+      "density_tonne_mm3": 7.85e-9
+    },
+    "bolt_steel": {
+      "material_name": "ASTM A193 Grade B7 Alloy Steel",
+      "elastic_modulus_mpa": 210000.0,
+      "poisson_ratio": 0.3,
+      "yield_strength_mpa": 640.0,
+      "density_tonne_mm3": 7.85e-9
+    },
+    "gasket_material": {
+      "material_name": "Compressed Fiber Gasket",
+      "elastic_modulus_mpa": 5000.0,
+      "poisson_ratio": 0.25,
+      "min_sealing_stress_mpa": 10.0
+    }
+  },
+  "loading_procedure": [
+    {
+      "step_number": 1,
+      "step_name": "Step-1-BoltPreload",
+      "description": "Apply 50 kN pretension to each bolt to seat and compress the gasket.",
+      "boundary": "Symmetric axial constraints on pipe ends and flange mid-planes",
+      "bolt_preload_n": 50000.0
+    },
+    {
+      "step_number": 2,
+      "step_name": "Step-2-InternalPressure",
+      "description": "Lock bolt length and apply 3.0 MPa internal fluid pressure and end cap thrust.",
+      "bolt_condition": "LOCK_LENGTH",
+      "internal_pressure_mpa": 3.0,
+      "end_cap_thrust_n": 94247.78
+    }
+  ],
+  "acceptance_criteria": {
+    "min_gasket_contact_pressure_mpa": 12.0,
+    "max_flange_mises_mpa": 280.0,
+    "bolt_safety_factor_min": 1.5,
+    "flange_safety_factor_min": 1.25,
+    "reaction_force_balance_max_error_percent": 0.5
+  },
+  "reference_benchmarks": {
+    "step_1_avg_gasket_stress_mpa": 31.5,
+    "step_2_avg_gasket_stress_mpa": 24.8,
+    "step_2_max_bolt_tension_n": 53200.0,
+    "step_2_max_flange_mises_mpa": 195.4
+  }
+}

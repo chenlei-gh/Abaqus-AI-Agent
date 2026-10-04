@@ -1,0 +1,73 @@
+{
+  "audit_signature": "84e7eb4eaef95fc907a057f0052f61ea70f635a718b2afc72547e741b46ca99e",
+  "case_id": "PHASE_2_PACKAGE_A_GOLDEN_MATRIX",
+  "probes": {
+    "probe_1_fatigue_missing_field_s": "PASS",
+    "probe_2_connector_missing_fields": "PASS",
+    "probe_3_fmbd_mandatory_gate_block": "PASS",
+    "probe_4_failed_solver_block": "PASS",
+    "probe_5_tampered_manifest_block": "PASS"
+  },
+  "qualification_level": "QUALIFIED",
+  "scenarios": {
+    "case_01_fatigue_cyclic": {
+      "cycles_to_failure": 125000,
+      "damage_ratio": 0.08,
+      "evidence_v2": "PASS",
+      "gate_8_fatigue": "PASS",
+      "rainflow_pairs": 1,
+      "solver": "Abaqus 2025",
+      "status": "QUALIFIED"
+    },
+    "case_02_connector_joint": {
+      "evidence_v2": "PASS",
+      "gate_13_connector": "PASS",
+      "max_joint_drift_mm": 9.78406080260905e-06,
+      "max_rotation_deg": 6.9613221853312375,
+      "period_error_percent": 0.5372665676142908,
+      "solver": "Abaqus 2025",
+      "status": "QUALIFIED"
+    },
+    "case_03_fmbd_dynamics": {
+      "energy_dissipation_ratio": 0.0055582571796292555,
+      "evidence_v2": "PASS",
+      "gate_14_fmbd": "PASS",
+      "max_joint_drift_mm": 3.134578470568233e-10,
+      "overall_max_mises_mpa": 0.0435313880443573,
+      "solver": "Abaqus 2025",
+      "status": "QUALIFIED"
+    },
+    "case_04_thermal_structural": {
+      "evidence_v2": "PASS",
+      "max_mises_mpa": 170.79849243164062,
+      "max_temperature": 100.0,
+      "min_temperature": 20.0,
+      "reaction_force_n": 15159.5322265625,
+      "solver": "Abaqus 2025",
+      "status": "QUALIFIED",
+      "thermal_balance_gate": "PASS"
+    },
+    "case_05_preload_modal_contact": {
+      "contact_and_procedure_gates": "PASS",
+      "evidence_v2": "PASS",
+      "frequency_stiffening_ratio": 1.098,
+      "friction_contact_normal_rf_n": 5000.0,
+      "friction_contact_shear_rf_n": 1250.0,
+      "friction_ratio": 0.25,
+      "preloaded_fundamental_freq_hz": 82.5,
+      "solver": "Abaqus 2025",
+      "status": "QUALIFIED",
+      "unpreloaded_fundamental_freq_hz": 75.1
+    }
+  },
+  "schema_version": "package_a_matrix_v1",
+  "status": "ACCEPTED",
+  "summary": {
+    "acceptance_passed": true,
+    "engineering_status": "RESULT_VALID",
+    "status": "COMPLETED",
+    "total_probes": 5,
+    "total_scenarios": 5
+  },
+  "verified_at": "2026-10-04T08:05:02.181781+00:00"
+}

@@ -120,3 +120,17 @@ def test_acceptance_result_to_dict():
     assert d["criteria"][0]["actual"] == 120.0
     assert d["gates"]["execution"] == "PASS"
     assert d["gates"]["criteria"] == "PASS"
+
+
+def test_canonical_gate_order_in_acceptance_result():
+    from abaqus_ai_agent.acceptance import CANONICAL_GATE_ORDER
+    res = evaluate_result_acceptance(
+        result_status="completed",
+        values={"stress": 120.0},
+        criteria=[{"name": "stress", "value_key": "stress", "operator": "<", "limit": 200.0}],
+    )
+    keys = list(res.gates.keys())
+    # Verify that the keys present follow CANONICAL_GATE_ORDER monotonically
+    order_map = {name: idx for idx, name in enumerate(CANONICAL_GATE_ORDER)}
+    indices = [order_map[k] for k in keys if k in order_map]
+    assert indices == sorted(indices), f"Gate keys {keys} do not respect CANONICAL_GATE_ORDER"

@@ -1,0 +1,85 @@
+{
+  "case_id": "CASE_02_REACTOR_PRESSURE_VESSEL_CLOSURE",
+  "title": "Nuclear Reactor Pressure Vessel (RPV) Bolted Closure Head Joint",
+  "domain": "nuclear_pressure_vessel_closure",
+  "source": "Abaqus 2025 Example Problems - Axisymmetric and 3D Analysis of a Reactor Pressure Vessel Bolted Closure Joint; ASME BPVC Section III Division 1 Subsection NB",
+  "problem_description": "Massive pressurized water reactor (PWR) vessel closure joint featuring 54 large-diameter preloaded stud bolts and a metallic double-cone seal ring subjected to simultaneous bolt pre-tensioning and high-pressure operational loading (17.5 MPa).",
+  "geometry": {
+    "vessel_inner_radius_mm": 2000.0,
+    "vessel_wall_thickness_mm": 220.0,
+    "vessel_flange_outer_radius_mm": 2500.0,
+    "flange_height_mm": 600.0,
+    "head_wall_thickness_mm": 150.0,
+    "bolt_circle_radius_mm": 2320.0,
+    "bolt_nominal_diameter_mm": 180.0,
+    "bolt_effective_tensile_area_mm2": 21700.0,
+    "bolt_count": 54,
+    "seal_ring_inner_radius_mm": 2060.0,
+    "seal_ring_outer_radius_mm": 2120.0,
+    "seal_ring_contact_width_mm": 60.0,
+    "seal_taper_angle_deg": 15.0
+  },
+  "materials": {
+    "vessel_and_head_forging": {
+      "material_name": "ASME SA-508 Grade 3 Class 1 Low Alloy Forging Steel",
+      "elastic_modulus_mpa": 200000.0,
+      "poisson_ratio": 0.3,
+      "yield_strength_mpa": 345.0,
+      "ultimate_tensile_strength_mpa": 550.0,
+      "design_stress_intensity_sm_mpa": 184.0,
+      "allowable_primary_membrane_plus_bending_1_5sm_mpa": 276.0,
+      "density_tonne_mm3": 7.85e-9
+    },
+    "stud_bolt_alloy": {
+      "material_name": "ASME SA-540 Grade B23/B24 High Strength Stud Alloy",
+      "elastic_modulus_mpa": 206000.0,
+      "poisson_ratio": 0.3,
+      "yield_strength_mpa": 895.0,
+      "ultimate_tensile_strength_mpa": 1070.0,
+      "design_stress_intensity_sm_mpa": 298.0,
+      "max_allowable_bolt_stress_2sm_mpa": 596.0,
+      "density_tonne_mm3": 7.85e-9
+    },
+    "metallic_seal_ring": {
+      "material_name": "Inconel 718 / Silver-Plated Austenitic Stainless Steel",
+      "elastic_modulus_mpa": 195000.0,
+      "poisson_ratio": 0.3,
+      "min_allowable_sealing_cpress_mpa": 75.0
+    }
+  },
+  "loading_procedure": [
+    {
+      "step_number": 1,
+      "step_name": "Step-1-StudPretension",
+      "description": "Uniform hydraulic tensioning of 54 stud bolts to 6.50 MN per bolt (351 MN total pre-clamp load) to seat the double-cone metallic gasket.",
+      "boundary": "Rigid vertical restraint at vessel support skirt ledge; circumferential symmetry",
+      "bolt_preload_n": 6500000.0,
+      "total_preload_all_bolts_n": 351000000.0
+    },
+    {
+      "step_number": 2,
+      "step_name": "Step-2-DesignInternalPressure",
+      "description": "Lock stud bolt elongation (LOCK_LENGTH) and apply design operational pressure of 17.5 MPa (175 bar) to the inner cavity and closure head dome. Baseline end-thrust of 219.91 MN is integrated across vessel inner radius Ri = 2000 mm; with fluid penetration up to seal inner radius R_seal = 2060 mm, effective thrust reaches 233.30 MN.",
+      "bolt_condition": "LOCK_LENGTH",
+      "internal_pressure_mpa": 17.5,
+      "end_cap_thrust_n": 219911485.75,
+      "end_cap_thrust_with_seal_penetration_n": 233306174.65
+    }
+  ],
+  "acceptance_criteria": {
+    "min_metallic_seal_design_cpress_mpa": 75.0,
+    "max_asme_linearized_pl_pb_stress_intensity_mpa": 276.0,
+    "max_operating_bolt_stress_mpa": 596.0,
+    "bolt_asme_margin_ratio_min": 1.5,
+    "bolt_yield_safety_factor_min": 2.0,
+    "flange_asme_pl_pb_margin_ratio_min": 1.1,
+    "reaction_force_balance_max_error_percent": 0.1
+  },
+  "reference_benchmarks": {
+    "step_1_avg_seal_contact_pressure_mpa": 145.2,
+    "step_2_avg_seal_contact_pressure_mpa": 98.6,
+    "step_2_stud_bolt_operating_tension_n": 6780000.0,
+    "step_2_asme_linearized_pl_pb_stress_intensity_mpa": 238.5,
+    "step_2_stud_bolt_stress_mpa": 312.44
+  }
+}

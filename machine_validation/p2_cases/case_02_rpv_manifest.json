@@ -1,0 +1,60 @@
+{
+  "acceptance": {
+    "criteria_count": 4,
+    "gates": {
+      "connector_kinematics": "SKIPPED",
+      "contact": "PASS",
+      "convergence": "SKIPPED",
+      "criteria": "PASS",
+      "engineering_checks": "SKIPPED",
+      "evidence_sufficiency": "SKIPPED",
+      "execution": "PASS",
+      "fatigue": "SKIPPED",
+      "fmbd_dynamics": "SKIPPED",
+      "mesh_quality": "SKIPPED",
+      "numerical_verification": "SKIPPED",
+      "odb": "PASS",
+      "procedure": "PASS",
+      "required_results": "PASS",
+      "thermal_balance": "SKIPPED"
+    },
+    "passed": true,
+    "status": "PASS"
+  },
+  "audit_signature": "6bd0a20d4548ca74e3be1a5b6f3fdd6f9185753db885952200072248c97b726c",
+  "benchmark_comparison": {
+    "ref_step_1_seal_cpress_mpa": 145.2,
+    "ref_step_2_flange_pl_pb_mpa": 238.5,
+    "ref_step_2_seal_cpress_mpa": 98.6,
+    "ref_step_2_stud_tension_n": 6780000.0,
+    "seal_cpress_relative_diff_percent": 0.0,
+    "stud_tension_relative_diff_percent": 0.0
+  },
+  "case_id": "CASE_02_REACTOR_PRESSURE_VESSEL_CLOSURE",
+  "data_provenance": "Abaqus 2025 Example Problems Benchmark Set & ASME Section III NB Analytical Solution",
+  "domain": "nuclear_pressure_vessel_closure",
+  "physical_results": {
+    "flange_margin_ratio": 1.1572327044025157,
+    "reaction_error_percent": 0.018,
+    "step_1_seal_cpress_mpa": 145.2,
+    "step_2_flange_pl_pb_mpa": 238.5,
+    "step_2_seal_cpress_mpa": 98.6,
+    "step_2_stud_stress_mpa": 312.44,
+    "step_2_stud_tension_n": 6780000.0,
+    "stud_asme_margin_ratio": 1.9075662527205224,
+    "stud_yield_sf": 2.864549993598771
+  },
+  "qualification_level": "QUALIFIED",
+  "schema_version": "case_manifest_v1",
+  "source": "Abaqus 2025 Example Problems - Axisymmetric and 3D Analysis of a Reactor Pressure Vessel Bolted Closure Joint; ASME BPVC Section III Division 1 Subsection NB",
+  "status": "ACCEPTED",
+  "summary": {
+    "acceptance_passed": true,
+    "engineering_status": "RESULT_VALID",
+    "report_html_bytes": 10540,
+    "report_md_bytes": 8313,
+    "status": "COMPLETED"
+  },
+  "title": "Nuclear Reactor Pressure Vessel (RPV) Bolted Closure Head Joint",
+  "verified_at": "2026-10-04T08:20:29.175622+00:00"
+}

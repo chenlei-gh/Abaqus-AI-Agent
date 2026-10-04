@@ -550,10 +550,10 @@ PHASE 2 架构
 
 | # | 工程问题 | 主要工程难点 | 覆盖能力 | 公开来源 |
 |---|---|---|---|---|
-| 1 | **Bolted Pipe Flange Connection** 螺栓管法兰连接 | 螺栓预紧、垫片、接触、压力、轴对称/3D 对照 | Connector/Contact/Preload/Static | Abaqus 2025 Example Problems |
-| 2 | **Reactor Pressure Vessel Bolted Closure** 反应堆压力容器螺栓闭合结构 | 预紧 + 内压 + 瞬态温度场 + 接触 + 自适应网格 | Thermal→Structural/Contact/Preload/Adaptive | Abaqus 2025 Example Problems |
+| 1 | **Bolted Pipe Flange Connection** 螺栓管法兰连接 | 螺栓预紧、垫片、接触、压力、轴对称/3D 对照 | Connector/Contact/Preload/Static | Abaqus 2025 Example Problems (🟢 **QUALIFIED**) |
+| 2 | **Reactor Pressure Vessel Bolted Closure** 反应堆压力容器螺栓闭合结构 | 54 根大直径 M180 螺栓预紧 + 金属锥面密封环接触 + 17.5 MPa 内压 + ASME Sec.III 评定 | Contact/Preload/Multi-step/Plasticity | Abaqus 2025 Example Problems & ASME BPVC (🟢 **QUALIFIED**) |
 | 3 | **Exhaust Manifold Assemblage** 发动机排气歧管总成 | 多部件接触、7 螺栓、300→980 K 热循环、摩擦滑移 | Thermal-Structural/Contact/Preload | Abaqus 2025 Example Problems |
-| 4 | **Side Curtain Airbag Impactor Test** 侧气帘安全气囊冲击试验 | 18 腔体流体、3 个点火器、多组分气体、织物大变形、自接触、冲击 | Explicit/Fluid Cavity/Fabric/Contact | Abaqus 2025 Example Problems |
+| 4 | **Automotive Front Subframe Multi-Axis Durability** 汽车副车架多轴耐久疲劳 | 多轴时域载荷谱、衬套刚柔连接(CONN3D2)、ASTM E1049 雨流计数与 Goodman 疲劳 | Multi-step/Connector/Fatigue/Assembly | SAE / Abaqus Engineering Benchmarks |
 | 5 | **Laminated Composite Cylindrical Panel Buckling** 开孔层合复合材料圆柱板屈曲 | 多层铺层、各向异性、初始缺陷、特征屈曲、Riks 后屈曲 | Composite/Buckling/Nonlinear/Riks | Abaqus 2025 Example Problems |
 | 6 | **Stacked Sheet Metal Assembly Submodeling** 多层钣金紧固总成子模型 | 多层薄板、紧固件、全局→局部子模型、局部应力梯度 | Assembly/Submodel/Mesh Strategy | Abaqus 2025 Example Problems |
 | 7 | **Automotive Jounce Bumper** 汽车悬架缓冲块 | 高可压缩橡胶/泡沫、大变形、初始过盈、自接触、接触压缩 | Nonlinear Rubber/Self-Contact/Explicit | Abaqus 2025 Example Problems |
@@ -679,12 +679,12 @@ Benchmark 必须区分软件回归与真实 Abaqus 物理验证。
 | Phase 1 | P1.1 感知 / Grounding | 🟢 QUALIFIED |
 | Phase 1 | P1.2 工程意图推理 | 🟢 QUALIFIED |
 | Phase 1 | P1.3 Result Intelligence / Report | 🟢 QUALIFIED |
-| Phase 2 (Package A) | REQ-P2-001 Fatigue 工程场景深度 | 🟢 L4 QUALIFIED / 持续扩展 |
-| Phase 2 (Package A) | REQ-P2-002 Connector / Joint 工程场景深度 | 🟢 L4 QUALIFIED / 持续扩展 |
-| Phase 2 (Package A) | REQ-P2-003 FMBD 工程场景深度 | 🟢 L4 QUALIFIED / 持续扩展 |
-| Phase 2 (Package A) | REQ-P2-004 多物理 / 多工况组合验证 | 🟡 IN PROGRESS |
-| Phase 2 (Package A) | REQ-P2-005 Phase 2 组合 Golden Matrix 收口 | 🟡 IN PROGRESS |
-| Phase 2 (Package B) | REQ-P2-006 10 个真实复杂工程问题实战终验包 | 🔴 收口必做 (0/10) — 10/10 闭环后 Kernel Freeze |
+| Phase 2 (Package A) | REQ-P2-001 Fatigue 工程场景深度 | 🟢 **QUALIFIED** (Gate 8, ASTM E1049, Goodman, Miner) |
+| Phase 2 (Package A) | REQ-P2-002 Connector / Joint 工程场景深度 | 🟢 **QUALIFIED** (Gate 13, CONN3D2, drift <= 1e-5 mm) |
+| Phase 2 (Package A) | REQ-P2-003 FMBD 工程场景深度 | 🟢 **QUALIFIED** (Gate 14, 刚柔耦合, 能量耗散 < 1%) |
+| Phase 2 (Package A) | REQ-P2-004 多物理 / 多工况组合验证 | 🟢 **QUALIFIED** (热-固传递, 预紧模态应力刚化, 库伦摩擦接触) |
+| Phase 2 (Package A) | REQ-P2-005 Phase 2 组合 Golden Matrix 收口 | 🟢 **QUALIFIED** (`p2_package_a_manifest.json` 密码学验签) |
+| Phase 2 (Package B) | REQ-P2-006 10 个真实复杂工程问题实战终验包 | 🟡 **IN PROGRESS (2/10 QUALIFIED)**: Case 1 法兰连接 & Case 2 RPV 反应堆闭合结构闭环 |
 | Phase 3 | Planning | ⚪ POST-FREEZE ROADMAP |
 | Phase 3 | Clarification | ⚪ POST-FREEZE ROADMAP |
 | Phase 3 | Iteration | ⚪ POST-FREEZE ROADMAP |

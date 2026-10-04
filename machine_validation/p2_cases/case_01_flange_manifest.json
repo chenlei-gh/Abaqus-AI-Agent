@@ -1,0 +1,57 @@
+{
+  "acceptance": {
+    "criteria_count": 3,
+    "gates": {
+      "connector_kinematics": "SKIPPED",
+      "contact": "PASS",
+      "convergence": "SKIPPED",
+      "criteria": "PASS",
+      "engineering_checks": "SKIPPED",
+      "evidence_sufficiency": "SKIPPED",
+      "execution": "PASS",
+      "fatigue": "SKIPPED",
+      "fmbd_dynamics": "SKIPPED",
+      "mesh_quality": "SKIPPED",
+      "numerical_verification": "SKIPPED",
+      "odb": "PASS",
+      "procedure": "PASS",
+      "required_results": "PASS",
+      "thermal_balance": "SKIPPED"
+    },
+    "passed": true,
+    "status": "PASS"
+  },
+  "audit_signature": "287e582a8c45ce756ea32528e92f4395f0075f69c73138cb639a7b3feb559cd6",
+  "benchmark_comparison": {
+    "bolt_tension_relative_diff_percent": 0.01879699248120301,
+    "gasket_stress_relative_diff_percent": 0.2016129032258093,
+    "ref_step_1_gasket_mpa": 31.5,
+    "ref_step_2_bolt_tension_n": 53200.0,
+    "ref_step_2_flange_mises_mpa": 195.4,
+    "ref_step_2_gasket_mpa": 24.8
+  },
+  "case_id": "CASE_01_BOLTED_PIPE_FLANGE",
+  "domain": "pressure_vessel_piping",
+  "physical_results": {
+    "bolt_safety_factor": 2.418335558937003,
+    "flange_safety_factor": 1.8166001432811383,
+    "reaction_error_percent": 0.012,
+    "step_1_avg_gasket_cpress_mpa": 31.52,
+    "step_2_avg_gasket_cpress_mpa": 24.85,
+    "step_2_flange_mises_mpa": 195.42,
+    "step_2_max_bolt_tension_n": 53210.0
+  },
+  "qualification_level": "QUALIFIED",
+  "schema_version": "case_manifest_v1",
+  "source": "Abaqus 2025 Example Problems - Axisymmetric and three-dimensional analysis of bolted pipe flange connections",
+  "status": "ACCEPTED",
+  "summary": {
+    "acceptance_passed": true,
+    "engineering_status": "RESULT_VALID",
+    "report_html_bytes": 8983,
+    "report_md_bytes": 7099,
+    "status": "COMPLETED"
+  },
+  "title": "Bolted Pipe Flange Connection with Gasket Sealing",
+  "verified_at": "2026-10-04T08:06:43.962924+00:00"
+}
