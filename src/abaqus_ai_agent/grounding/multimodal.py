@@ -79,11 +79,13 @@ def parse_drawing_callout(
                 semantic_intent = "SYMMETRY_Z"
             else:
                 semantic_intent = "SYMMETRY_PLANE"
-        # Boundary condition cues
-        elif any(w in lower for w in ("fix", "encastre", "clamp", "fixed", "constraint", "support", "固定", "固支", "约束")):
-            semantic_intent = "FIXED_SUPPORT"
+        # Boundary condition cues: check specific supports before generic constraint/support words
+        elif any(w in lower for w in ("roller", "滚支")):
+            semantic_intent = "ROLLER_SUPPORT"
         elif any(w in lower for w in ("pin", "pinned", "铰支", "简支")):
             semantic_intent = "PINNED_SUPPORT"
+        elif any(w in lower for w in ("fix", "encastre", "clamp", "fixed", "constraint", "support", "固定", "固支", "约束")):
+            semantic_intent = "FIXED_SUPPORT"
 
         # Load cues
         elif any(w in lower for w in ("pressure", "press", "压强", "压力")):
@@ -134,7 +136,7 @@ def correlate_callout_with_cad(
     semantic = target_semantic or callout.semantic_intent or "GROUNDED_TARGET"
 
     # Infer intent type from callout
-    if callout.semantic_intent in ("FIXED_SUPPORT", "PINNED_SUPPORT", "SYMMETRY_X", "SYMMETRY_Y", "SYMMETRY_Z", "SYMMETRY_PLANE"):
+    if callout.semantic_intent in ("FIXED_SUPPORT", "PINNED_SUPPORT", "ROLLER_SUPPORT", "SYMMETRY_X", "SYMMETRY_Y", "SYMMETRY_Z", "SYMMETRY_PLANE"):
         intent_type = GroundingIntentType.BOUNDARY_CONDITION.value
     elif callout.callout_type == CalloutType.DIMENSION.value or callout.semantic_intent in ("DIMENSION", "DIAMETER", "RADIUS"):
         intent_type = GroundingIntentType.DIMENSION.value
@@ -194,6 +196,14 @@ def correlate_callout_with_cad(
         confidence = float(cand_conf) if cand_conf is not None else 0.92
         requires_confirmation = confidence < 0.85
         status = HITLStatus.NEEDS_CONFIRMATION.value if requires_confirmation else HITLStatus.PENDING.value
+
+    # Assess direction certainty for concentrated forces
+    if intent_type == GroundingIntentType.LOAD.value and callout.semantic_intent == "CONCENTRATED_FORCE":
+        if callout.direction_vector is None:
+            uncertainty_reasons.append("FORCE_DIRECTION_UNKNOWN")
+            confidence = min(confidence, 0.70)
+            requires_confirmation = True
+            status = HITLStatus.NEEDS_CONFIRMATION.value
 
     return GroundingObservation(
         observation_id=obs_id,
@@ -280,6 +290,10 @@ class MultimodalHITLWorkflow:
             u = decision.override_unit if decision.override_unit is not None else obs.callout.unit
             updated_callout = replace(obs.callout, magnitude=mag, unit=u)
 
+        meta = dict(obs.metadata)
+        if decision.override_direction is not None:
+            meta["direction"] = decision.override_direction
+
         updated = replace(
             obs,
             callout=updated_callout,
@@ -287,6 +301,7 @@ class MultimodalHITLWorkflow:
             status=HITLStatus.CONFIRMED.value,
             requires_confirmation=False,
             confirmed_by=decision.confirmed_by,
+            metadata=meta,
         )
         self._observations[updated.observation_id] = updated
         self._decisions[decision.observation_id] = decision
@@ -347,29 +362,62 @@ class MultimodalHITLWorkflow:
             callout = obs.callout
             if obs.detected_intent_type == GroundingIntentType.BOUNDARY_CONDITION.value:
                 bc_type = "ENCASTRE"
+                bc_values = {}
                 if callout.semantic_intent in ("SYMMETRY_X", "SYMMETRY_Y", "SYMMETRY_Z", "SYMMETRY_PLANE"):
                     bc_type = "SYMMETRY"
                 elif callout.semantic_intent == "PINNED_SUPPORT":
                     bc_type = "PINNED"
+                elif callout.semantic_intent == "ROLLER_SUPPORT":
+                    bc_type = "DISPLACEMENT"
+                    # Roller support: restricts normal displacement (U2=0), frees tangential movement
+                    bc_values = {"u2": 0.0}
 
                 bcs.append(
                     IntentBoundarySpec(
                         name=f"BC_{obs.observation_id}",
                         bc_type=bc_type,
                         region=region_name,
+                        values=bc_values,
                         plane=callout.semantic_intent.split("_")[-1] if "SYMMETRY_" in (callout.semantic_intent or "") else None,
                     )
                 )
             elif obs.detected_intent_type == GroundingIntentType.LOAD.value:
-                load_type = "pressure" if callout.semantic_intent == "PRESSURE" else "concentrated_force"
                 mag = callout.magnitude if callout.magnitude is not None else 1000.0
+                if callout.semantic_intent == "PRESSURE":
+                    load_type = "pressure"
+                    load_dir = "NORMAL"
+                elif callout.semantic_intent == "MOMENT":
+                    load_type = "moment"
+                    load_dir = obs.metadata.get("direction", "CM3")
+                else:
+                    load_type = "concentrated_force"
+                    # Determine directional degree of freedom
+                    if obs.metadata.get("direction"):
+                        load_dir = obs.metadata["direction"]
+                    elif callout.direction_vector is not None:
+                        dx, dy = callout.direction_vector
+                        if abs(dx) > abs(dy):
+                            load_dir = "CF1"
+                            if dx < 0:
+                                mag = -abs(mag)
+                            else:
+                                mag = abs(mag)
+                        else:
+                            load_dir = "CF2"
+                            if dy < 0:
+                                mag = -abs(mag)
+                            else:
+                                mag = abs(mag)
+                    else:
+                        load_dir = "CF2"
+
                 loads.append(
                     IntentLoadSpec(
                         name=f"Load_{obs.observation_id}",
                         load_type=load_type,
                         region=region_name,
                         magnitude=mag,
-                        direction="CF3" if callout.direction_vector and callout.direction_vector[1] < 0 else "CF2",
+                        direction=load_dir,
                     )
                 )
 

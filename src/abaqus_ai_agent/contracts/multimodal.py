@@ -128,4 +128,5 @@ class HITLConfirmationDecision:
     selected_anchor_point: Optional[Tuple[float, float, float]] = None
     override_magnitude: Optional[float] = None
     override_unit: Optional[str] = None
+    override_direction: Optional[str] = None  # e.g. "CF1", "CF2", "CF3", "CM3"
     notes: Optional[str] = None

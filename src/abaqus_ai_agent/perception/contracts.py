@@ -42,11 +42,15 @@ class ObservationProvenance:
 
 @dataclass(frozen=True)
 class PerceptionConfidence:
-    """Multidimensional perception confidence evaluation."""
+    """Multidimensional perception confidence evaluation.
+
+    Supports explicit unassessed dimensions (None) to avoid fabricating high
+    confidence when units or spatial alignment have not been evaluated.
+    """
     text_confidence: float = 1.0
     symbol_confidence: float = 1.0
-    unit_confidence: float = 1.0
-    spatial_confidence: float = 1.0
+    unit_confidence: Optional[float] = None  # None = NOT_ASSESSED
+    spatial_confidence: Optional[float] = None  # None = NOT_ASSESSED
     has_ambiguous_candidates: bool = False
     ambiguity_reasons: Tuple[str, ...] = ()
 
@@ -57,18 +61,32 @@ class PerceptionConfidence:
             ("unit_confidence", self.unit_confidence),
             ("spatial_confidence", self.spatial_confidence),
         ):
-            if not (0.0 <= val <= 1.0):
+            if val is not None and not (0.0 <= val <= 1.0):
                 raise ValueError(f"{name} must be in [0.0, 1.0], got {val}")
+
+    @property
+    def is_unit_assessed(self) -> bool:
+        """Indicates whether unit confidence has been explicitly evaluated."""
+        return self.unit_confidence is not None
+
+    @property
+    def is_spatial_assessed(self) -> bool:
+        """Indicates whether spatial/CAD alignment confidence has been explicitly evaluated."""
+        return self.spatial_confidence is not None
 
     @property
     def overall_confidence(self) -> float:
         """Conservative aggregate confidence (minimum across all evaluated dimensions)."""
-        return min(
-            self.text_confidence,
-            self.symbol_confidence,
-            self.unit_confidence,
-            self.spatial_confidence,
-        )
+        assessed = [
+            c for c in (
+                self.text_confidence,
+                self.symbol_confidence,
+                self.unit_confidence,
+                self.spatial_confidence,
+            )
+            if c is not None
+        ]
+        return min(assessed) if assessed else 1.0
 
     @property
     def requires_human_confirmation(self) -> bool:

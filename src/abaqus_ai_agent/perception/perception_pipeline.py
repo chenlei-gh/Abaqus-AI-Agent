@@ -126,11 +126,50 @@ class PerceptionPipeline:
         if all_rejected:
             ambiguity_reasons.append(f"{len(all_rejected)}_OBSERVATIONS_REJECTED")
 
+        # Evaluate unit confidence strictly across all callouts with numeric magnitude
+        valid_units = {
+            "mm", "m", "cm", "in", "ft",
+            "n", "kn", "mn", "lbf",
+            "pa", "kpa", "mpa", "gpa", "bar", "psi",
+            "n*m", "n*mm", "kn*m", "lbf*in", "lbf*ft",
+            "deg", "rad", "°", "%",
+        }
+        numeric_callouts = [c for c in all_callouts if c.magnitude is not None]
+        if not numeric_callouts:
+            unit_conf: Optional[float] = None  # NOT_ASSESSED
+        else:
+            has_invalid_unit = False
+            has_missing_unit = False
+            for c in numeric_callouts:
+                if c.unit is None:
+                    has_missing_unit = True
+                else:
+                    norm_unit = c.unit.strip().lower()
+                    if norm_unit not in valid_units:
+                        has_invalid_unit = True
+
+            if has_invalid_unit:
+                unit_conf = 0.0
+                ambiguity_reasons.append("INVALID_UNIT_IN_OBSERVATIONS")
+            elif has_missing_unit:
+                unit_conf = 0.5
+                ambiguity_reasons.append("MISSING_UNIT_IN_OBSERVATIONS")
+            else:
+                unit_conf = 1.0
+
+        # Check for forces without clear direction vectors
+        for c in all_callouts:
+            if c.semantic_intent == "CONCENTRATED_FORCE" and c.direction_vector is None:
+                ambiguity_reasons.append("FORCE_DIRECTION_UNKNOWN")
+
+        # In 2D perception stage, 3D spatial alignment is NOT_ASSESSED (None)
+        spatial_conf: Optional[float] = None
+
         confidence = PerceptionConfidence(
             text_confidence=text_conf,
             symbol_confidence=min(sym_conf, dim_conf),
-            unit_confidence=1.0,
-            spatial_confidence=1.0,
+            unit_confidence=unit_conf,
+            spatial_confidence=spatial_conf,
             has_ambiguous_candidates=bool(ambiguity_reasons),
             ambiguity_reasons=tuple(ambiguity_reasons),
         )

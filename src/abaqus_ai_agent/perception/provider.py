@@ -179,14 +179,30 @@ class RuleBasedVisionProvider(BaseVisionProvider):
 
             if any(w in lower for w in ("fix", "encastre", "clamp", "fixed", "固定", "固支")):
                 sym_type = "FIXED"
+            elif any(w in lower for w in ("roller", "滚支")):
+                sym_type = "ROLLER"
             elif any(w in lower for w in ("pin", "pinned", "铰支", "简支")):
                 sym_type = "PINNED"
+            elif any(w in lower for w in ("moment", "torque", "扭矩", "力矩")):
+                sym_type = "MOMENT"
             elif any(w in lower for w in ("pressure", "压强", "压力")):
                 sym_type = "PRESSURE"
-                direction = (0.0, -1.0)
+                # Do NOT fabricate default downward direction; leave None unless explicitly stated
+                if any(w in lower for w in ("downward", "down", "向下")):
+                    direction = (0.0, -1.0)
+                elif any(w in lower for w in ("upward", "up", "向上")):
+                    direction = (0.0, 1.0)
             elif any(w in lower for w in ("force", "load", "集中力", "载荷", "拉力", "推力")):
                 sym_type = "ARROW"
-                direction = (0.0, -1.0)  # Downward default in 2D drawing unless specified
+                # Direction MUST be explicitly stated; no silent downward default
+                if any(w in lower for w in ("downward", "down", "向下")):
+                    direction = (0.0, -1.0)
+                elif any(w in lower for w in ("upward", "up", "向上")):
+                    direction = (0.0, 1.0)
+                elif any(w in lower for w in ("rightward", "right", "向右")):
+                    direction = (1.0, 0.0)
+                elif any(w in lower for w in ("leftward", "left", "向左")):
+                    direction = (-1.0, 0.0)
             elif any(w in lower for w in ("symm", "symmetry", "对称")):
                 if "x" in lower:
                     sym_type = "SYMMETRY_X"

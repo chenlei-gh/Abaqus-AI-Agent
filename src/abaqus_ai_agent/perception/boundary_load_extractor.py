@@ -81,6 +81,17 @@ class BoundaryLoadExtractor:
 
             # Determine semantic intent
             semantic, default_type = self._map_symbol_type(obs.symbol_type, obs.text_content)
+            if semantic == "UNKNOWN_SYMBOL":
+                rejected.append(
+                    RejectedObservation(
+                        raw_observation=obs,
+                        reason="UNKNOWN_SYMBOL_TYPE",
+                        detail=f"Unrecognized symbol type '{obs.symbol_type}' cannot be converted to engineering intent; guessing as force is forbidden",
+                        provenance=obs.provenance,
+                    )
+                )
+                continue
+
             callout_type = (
                 CalloutType.ARROW.value if norm_direction is not None else default_type
             )
@@ -100,6 +111,8 @@ class BoundaryLoadExtractor:
                 "confidence": obs.confidence,
                 "raw_symbol_type": obs.symbol_type,
             }
+            if norm_direction is None and semantic == "CONCENTRATED_FORCE":
+                meta["direction_status"] = "UNKNOWN"
             if obs.provenance:
                 meta["provenance"] = obs.provenance
 
@@ -134,13 +147,13 @@ class BoundaryLoadExtractor:
                     semantic = "SYMMETRY_Z"
                 else:
                     semantic = "SYMMETRY_PLANE"
-            # Support cues
-            elif any(w in lower for w in ("fix", "encastre", "clamp", "fixed", "固定", "固支")):
-                semantic = "FIXED_SUPPORT"
-            elif any(w in lower for w in ("pin", "pinned", "铰支", "简支")):
-                semantic = "PINNED_SUPPORT"
+            # Support cues: specific types first
             elif any(w in lower for w in ("roller", "滚支")):
                 semantic = "ROLLER_SUPPORT"
+            elif any(w in lower for w in ("pin", "pinned", "铰支", "简支")):
+                semantic = "PINNED_SUPPORT"
+            elif any(w in lower for w in ("fix", "encastre", "clamp", "fixed", "固定", "固支", "constraint", "support", "约束")):
+                semantic = "FIXED_SUPPORT"
             # Load cues
             elif any(w in lower for w in ("pressure", "press", "压强", "压力")):
                 semantic = "PRESSURE"
@@ -163,10 +176,14 @@ class BoundaryLoadExtractor:
                 )
             ):
                 semantic = "CONCENTRATED_FORCE"
-                if "downward" in lower or "down" in lower:
+                if "downward" in lower or "down" in lower or "向下" in lower:
                     direction_vec = (0.0, -1.0)
-                elif "upward" in lower or "up" in lower:
+                elif "upward" in lower or "up" in lower or "向上" in lower:
                     direction_vec = (0.0, 1.0)
+                elif "rightward" in lower or "right" in lower or "向右" in lower:
+                    direction_vec = (1.0, 0.0)
+                elif "leftward" in lower or "left" in lower or "向左" in lower:
+                    direction_vec = (-1.0, 0.0)
                 else:
                     direction_vec = None
             elif any(w in lower for w in ("moment", "torque", "扭矩", "力矩")):
@@ -206,6 +223,8 @@ class BoundaryLoadExtractor:
                 "confidence": tb.confidence,
                 "is_vector": tb.is_vector,
             }
+            if direction_vec is None and semantic == "CONCENTRATED_FORCE":
+                meta["direction_status"] = "UNKNOWN"
             if tb.provenance:
                 meta["provenance"] = tb.provenance
 
@@ -245,7 +264,7 @@ class BoundaryLoadExtractor:
             return ("SYMMETRY_PLANE", CalloutType.SYMBOL.value)
         if "PRESSURE" in upper:
             return ("PRESSURE", CalloutType.SYMBOL.value)
-        if "MOMENT" in upper:
+        if "MOMENT" in upper or "TORQUE" in upper:
             return ("MOMENT", CalloutType.SYMBOL.value)
         if "ARROW" in upper or "FORCE" in upper or "LOAD" in upper:
             return ("CONCENTRATED_FORCE", CalloutType.ARROW.value)
@@ -255,10 +274,18 @@ class BoundaryLoadExtractor:
             lower = text.lower()
             if any(w in lower for w in ("fix", "固定")):
                 return ("FIXED_SUPPORT", CalloutType.SYMBOL.value)
-            if any(w in lower for w in ("press", "压力")):
+            if any(w in lower for w in ("pin", "铰支", "简支")):
+                return ("PINNED_SUPPORT", CalloutType.SYMBOL.value)
+            if any(w in lower for w in ("roller", "滚支")):
+                return ("ROLLER_SUPPORT", CalloutType.SYMBOL.value)
+            if any(w in lower for w in ("moment", "torque", "扭矩", "力矩")):
+                return ("MOMENT", CalloutType.SYMBOL.value)
+            if any(w in lower for w in ("press", "压力", "压强")):
                 return ("PRESSURE", CalloutType.SYMBOL.value)
+            if any(w in lower for w in ("force", "load", "集中力", "载荷")):
+                return ("CONCENTRATED_FORCE", CalloutType.ARROW.value)
 
-        return ("CONCENTRATED_FORCE", CalloutType.SYMBOL.value)
+        return ("UNKNOWN_SYMBOL", CalloutType.SYMBOL.value)
 
     def _parse_magnitude_unit(self, text: str) -> Tuple[Optional[float], Optional[str]]:
         """Parses numeric magnitude and engineering unit from text."""
