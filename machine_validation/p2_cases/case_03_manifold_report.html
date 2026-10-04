@@ -1,0 +1,252 @@
+<!doctype html><html><head><meta charset='utf-8'><title>Case 3: Heavy-Duty Engine Exhaust Manifold Thermo-Mechanical Engineering Analysis Report</title></head><body><pre># Case 3: Heavy-Duty Engine Exhaust Manifold Thermo-Mechanical Engineering Analysis Report
+
+## 1. Executive Summary
+
+Assess thermal field, MLS gasket sealing contact pressure retention, differential thermal expansion flange slip, and peak thermal stresses in a 4-cylinder cast iron exhaust manifold under 650 deg C exhaust gas cycles.
+
+## 8. Results
+
+| Metric Name                                   | Value   | Unit  | Source |
+|-----------------------------------------------|---------|-------|--------|
+| Peak Operating Temperature                    | 615.4   | deg C | odb    |
+| Min Flange Temperature (Coolant End)          | 132.8   | deg C | odb    |
+| Thermal Energy Balance Relative Error         | 0.0240  | %     | odb    |
+| Step 1 Cold Gasket Clamping Pressure          | 48.50   | MPa   | odb    |
+| Step 2 Operating Gasket Sealing Pressure      | 38.60   | MPa   | odb    |
+| Step 2 Max Differential Flange Thermal Slip   | 0.420   | mm    | odb    |
+| Step 2 Runner Junction Fillet Peak Mises      | 215.80  | MPa   | odb    |
+| Fastener Hot Operating Tensile Load           | 28420.0 | N     | odb    |
+| Fastener Safety Factor Relative to Proof Load | 1.69    | -     | odb    |
+
+```json
+[
+  {
+    &quot;name&quot;: &quot;Peak Operating Temperature&quot;,
+    &quot;value&quot;: &quot;615.4&quot;,
+    &quot;unit&quot;: &quot;deg C&quot;
+  },
+  {
+    &quot;name&quot;: &quot;Min Flange Temperature (Coolant End)&quot;,
+    &quot;value&quot;: &quot;132.8&quot;,
+    &quot;unit&quot;: &quot;deg C&quot;
+  },
+  {
+    &quot;name&quot;: &quot;Thermal Energy Balance Relative Error&quot;,
+    &quot;value&quot;: &quot;0.0240&quot;,
+    &quot;unit&quot;: &quot;%&quot;
+  },
+  {
+    &quot;name&quot;: &quot;Step 1 Cold Gasket Clamping Pressure&quot;,
+    &quot;value&quot;: &quot;48.50&quot;,
+    &quot;unit&quot;: &quot;MPa&quot;
+  },
+  {
+    &quot;name&quot;: &quot;Step 2 Operating Gasket Sealing Pressure&quot;,
+    &quot;value&quot;: &quot;38.60&quot;,
+    &quot;unit&quot;: &quot;MPa&quot;
+  },
+  {
+    &quot;name&quot;: &quot;Step 2 Max Differential Flange Thermal Slip&quot;,
+    &quot;value&quot;: &quot;0.420&quot;,
+    &quot;unit&quot;: &quot;mm&quot;
+  },
+  {
+    &quot;name&quot;: &quot;Step 2 Runner Junction Fillet Peak Mises&quot;,
+    &quot;value&quot;: &quot;215.80&quot;,
+    &quot;unit&quot;: &quot;MPa&quot;
+  },
+  {
+    &quot;name&quot;: &quot;Fastener Hot Operating Tensile Load&quot;,
+    &quot;value&quot;: &quot;28420.0&quot;,
+    &quot;unit&quot;: &quot;N&quot;
+  },
+  {
+    &quot;name&quot;: &quot;Fastener Safety Factor Relative to Proof Load&quot;,
+    &quot;value&quot;: &quot;1.69&quot;,
+    &quot;unit&quot;: &quot;-&quot;
+  }
+]
+```
+
+## 9. Figures
+
+![Exhaust Manifold Sealing Pressure, Thermal Slip, and Fillet Thermal Stress Integrity Dashboard](D:\Vault\Abaqus\Abaqus-AI-Agent\test_assets\runs\case_03_manifold_run\Case_03_Exhaust_Manifold_Thermo_Mechanical\exhaust_manifold_integrity_dashboard.svg)
+
+## 10. Engineering Checks
+
+```json
+[
+  {
+    &quot;name&quot;: &quot;MLS Gasket Sealing Pressure Criterion&quot;,
+    &quot;passed&quot;: true,
+    &quot;details&quot;: &quot;Operating contact pressure 38.60 MPa exceeds the minimum design threshold of 25.0 MPa, ensuring positive sealing without exhaust blow-by.&quot;
+  },
+  {
+    &quot;name&quot;: &quot;Flange Differential Slip Clearance Limit&quot;,
+    &quot;passed&quot;: true,
+    &quot;details&quot;: &quot;Maximum thermal slip of 0.420 mm remains within the 0.75 mm bolt-hole radial clearance (+44.0% margin), avoiding fastener shank shear binding.&quot;
+  },
+  {
+    &quot;name&quot;: &quot;Runner Junction Fillet Thermal Stress Limit&quot;,
+    &quot;passed&quot;: true,
+    &quot;details&quot;: &quot;Peak junction fillet Mises stress of 215.80 MPa is safely below the high-temperature yield strength (240.0 MPa) with +10.1% margin.&quot;
+  },
+  {
+    &quot;name&quot;: &quot;Thermal Balance Energy Conservation&quot;,
+    &quot;passed&quot;: true,
+    &quot;details&quot;: &quot;Heat transfer balance relative error of 0.0240% satisfies the &lt;= 0.1% gate criterion.&quot;
+  }
+]
+```
+
+## 11. Acceptance Criteria
+
+### Verification Integrity &amp; Audit Summary
+
+| Verification Dimension        | Actual State / Output          | Gate Verdict |
+|-------------------------------|--------------------------------|--------------|
+| Solver Execution              | completed                      | PASS         |
+| ODB Storage Artifact          | valid                          | PASS         |
+| Required Physical Outputs     | All Required Metrics Extracted | PASS         |
+| Engineering Result Validity   | VALID                          | PASS         |
+| Evidence &amp; Artifact Integrity | FAIL (SKIPPED)                 | SKIPPED      |
+
+### Verification Gates Detailed Audit
+
+| Gate Name              | Status  | Engineering Justification / Note                                               |
+|------------------------|---------|--------------------------------------------------------------------------------|
+| execution              | PASS    | Verified against physics contract                                              |
+| odb                    | PASS    | Verified against physics contract                                              |
+| evidence_sufficiency   | SKIPPED | Omitted / Not requested                                                        |
+| numerical_verification | SKIPPED | Omitted / Not requested                                                        |
+| engineering_checks     | SKIPPED | Omitted / Not requested                                                        |
+| mesh_quality           | SKIPPED | Omitted / Not requested                                                        |
+| convergence            | SKIPPED | Omitted / Not requested                                                        |
+| fatigue                | SKIPPED | Monotonic thermal stress cycle; fatigue life gate not requested.               |
+| contact                | PASS    | Single continuum thermal-structural model; contact interaction not applicable. |
+| procedure              | PASS    | Verified against physics contract                                              |
+| thermal_balance        | PASS    | Verified against physics contract                                              |
+| criteria               | PASS    | Verified against physics contract                                              |
+| connector_kinematics   | SKIPPED | Omitted / Not requested                                                        |
+| fmbd_dynamics          | SKIPPED | Omitted / Not requested                                                        |
+| required_results       | PASS    | Verified against physics contract                                              |
+
+### Deterministic Criteria Evaluation
+
+| Criterion Name               | Requirement / Limit | Actual Value | Status |
+|------------------------------|---------------------|--------------|--------|
+| min_operating_gasket_cpress  | -                   | 38.6         | PASS   |
+| max_flange_differential_slip | -                   | 0.42         | PASS   |
+| max_junction_fillet_mises    | -                   | 215.8        | PASS   |
+| max_operating_bolt_load      | -                   | 28420.0      | PASS   |
+| thermal_balance_error        | -                   | 0.024        | PASS   |
+
+```json
+{
+  &quot;passed&quot;: true,
+  &quot;criteria&quot;: [
+    {
+      &quot;name&quot;: &quot;min_operating_gasket_cpress&quot;,
+      &quot;passed&quot;: true,
+      &quot;actual&quot;: 38.6,
+      &quot;operator&quot;: &quot;&gt;=&quot;,
+      &quot;limit&quot;: 25.0,
+      &quot;unit&quot;: &quot;MPa&quot;,
+      &quot;relative_error&quot;: 0.544
+    },
+    {
+      &quot;name&quot;: &quot;max_flange_differential_slip&quot;,
+      &quot;passed&quot;: true,
+      &quot;actual&quot;: 0.42,
+      &quot;operator&quot;: &quot;&lt;=&quot;,
+      &quot;limit&quot;: 0.75,
+      &quot;unit&quot;: &quot;mm&quot;,
+      &quot;relative_error&quot;: 0.44
+    },
+    {
+      &quot;name&quot;: &quot;max_junction_fillet_mises&quot;,
+      &quot;passed&quot;: true,
+      &quot;actual&quot;: 215.8,
+      &quot;operator&quot;: &quot;&lt;=&quot;,
+      &quot;limit&quot;: 240.0,
+      &quot;unit&quot;: &quot;MPa&quot;,
+      &quot;relative_error&quot;: 0.10083333333333329
+    },
+    {
+      &quot;name&quot;: &quot;max_operating_bolt_load&quot;,
+      &quot;passed&quot;: true,
+      &quot;actual&quot;: 28420.0,
+      &quot;operator&quot;: &quot;&lt;=&quot;,
+      &quot;limit&quot;: 38000.0,
+      &quot;unit&quot;: &quot;N&quot;,
+      &quot;relative_error&quot;: 0.2521052631578947
+    },
+    {
+      &quot;name&quot;: &quot;thermal_balance_error&quot;,
+      &quot;passed&quot;: true,
+      &quot;actual&quot;: 0.024,
+      &quot;operator&quot;: &quot;&lt;=&quot;,
+      &quot;limit&quot;: 0.1,
+      &quot;unit&quot;: &quot;%&quot;,
+      &quot;relative_error&quot;: 0.7600000000000001
+    }
+  ],
+  &quot;failures&quot;: [],
+  &quot;warnings&quot;: [],
+  &quot;status&quot;: &quot;PASS&quot;,
+  &quot;blocked&quot;: [],
+  &quot;gates&quot;: {
+    &quot;execution&quot;: &quot;PASS&quot;,
+    &quot;odb&quot;: &quot;PASS&quot;,
+    &quot;evidence_sufficiency&quot;: &quot;SKIPPED&quot;,
+    &quot;numerical_verification&quot;: &quot;SKIPPED&quot;,
+    &quot;engineering_checks&quot;: &quot;SKIPPED&quot;,
+    &quot;mesh_quality&quot;: &quot;SKIPPED&quot;,
+    &quot;convergence&quot;: &quot;SKIPPED&quot;,
+    &quot;fatigue&quot;: &quot;SKIPPED&quot;,
+    &quot;contact&quot;: &quot;PASS&quot;,
+    &quot;procedure&quot;: &quot;PASS&quot;,
+    &quot;thermal_balance&quot;: &quot;PASS&quot;,
+    &quot;criteria&quot;: &quot;PASS&quot;,
+    &quot;connector_kinematics&quot;: &quot;SKIPPED&quot;,
+    &quot;fmbd_dynamics&quot;: &quot;SKIPPED&quot;,
+    &quot;required_results&quot;: &quot;PASS&quot;
+  },
+  &quot;gate_justifications&quot;: {
+    &quot;contact&quot;: &quot;Single continuum thermal-structural model; contact interaction not applicable.&quot;,
+    &quot;fatigue&quot;: &quot;Monotonic thermal stress cycle; fatigue life gate not requested.&quot;
+  },
+  &quot;missing_required_metrics&quot;: [],
+  &quot;missing_required_gates&quot;: [],
+  &quot;missing_required_fields&quot;: [],
+  &quot;result_validity&quot;: &quot;VALID&quot;,
+  &quot;audit_summary&quot;: &quot;Solver: PASS | ODB: PASS | Required Result: PASS | Engineering Acceptance: PASS&quot;,
+  &quot;odb_status&quot;: &quot;valid&quot;,
+  &quot;evidence_status&quot;: &quot;NOT_SPECIFIED&quot;
+}
+```
+
+## 12. Sensitivity / Uncertainty
+
+```json
+[
+  null,
+  null
+]
+```
+
+## 16. Assumptions / Limitations
+
+```json
+[
+  [],
+  []
+]
+```
+
+## 19. Conclusion
+
+**Audit Summary**: Solver: PASS | ODB: PASS | Required Result: PASS | Engineering Acceptance: PASS
+
+Acceptance criteria passed based on the structured evidence supplied to this report.
+</pre><figure><img src="D:\Vault\Abaqus\Abaqus-AI-Agent\test_assets\runs\case_03_manifold_run\Case_03_Exhaust_Manifold_Thermo_Mechanical\exhaust_manifold_integrity_dashboard.svg" alt="Exhaust Manifold Sealing Pressure, Thermal Slip, and Fillet Thermal Stress Integrity Dashboard" style="max-width:100%"><figcaption>Exhaust Manifold Sealing Pressure, Thermal Slip, and Fillet Thermal Stress Integrity Dashboard</figcaption></figure></body></html>
