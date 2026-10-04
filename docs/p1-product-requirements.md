@@ -20,9 +20,20 @@ P1.0 ─ P1.3
 Phase 2：工程能力深度
 Fatigue / Connector / FMBD
 + 更多真实工程场景
++ 10 个复杂真实工程问题全链路实战
         ↓
 “能处理足够多的真实问题”
-        🔄 IN PROGRESS
+        🎯 CURRENT FINAL TARGET
+
+==============================
+Phase 2 完成后 → Engineering Kernel Freeze
+==============================
+
+Phase 3：Agent 自主性
+        📋 POST-FREEZE ROADMAP
+
+Phase 4：产品化
+        📋 POST-FREEZE ROADMAP
 
 Phase 3：Agent 自主性
 规划 / 澄清 / 迭代 / 诊断 / 对比 / 优化
@@ -43,8 +54,8 @@ MCP / UI / 部署 / Benchmark / Release
 |---|---|---|---|
 | **Phase 1** | 从需求做到可信结果 | P1.0 / P1.1 / P1.2 / P1.3 | 🟢 **COMPLETED** |
 | **Phase 2** | 扩大真实工程问题覆盖与组合深度 | Fatigue / Connector / FMBD / 更多真实工程场景 | 🟡 **IN PROGRESS** |
-| **Phase 3** | 让 Agent 能自主规划、执行、诊断、迭代与比较 | 规划 / 澄清 / 迭代 / P1.4 诊断自愈 / 对比 / 优化 | 🟡 **STARTED** |
-| **Phase 4** | 让工程师能够稳定、方便地实际使用 | MCP / UI / 部署 / Benchmark / Release | ⚪ **PLANNED** |
+| **Phase 3** | 让 Agent 能自主规划、执行、诊断、迭代与比较 | 规划 / 澄清 / 迭代 / P1.4 诊断自愈 / 对比 / 优化 | ⚪ **POST-FREEZE ROADMAP** |
+| **Phase 4** | 让工程师能够稳定、方便地实际使用 | MCP / UI / 部署 / Benchmark / Release | ⚪ **POST-FREEZE ROADMAP** |
 
 ### 0.2 当前已正式闭环的能力
 
@@ -480,6 +491,66 @@ P1.0 产品主入口已彻底消除高层自然语言需求与底层 20 个 L4 �
 
 每个新增场景必须有明确工程目的、真实机证据和边界说明。
 
+## REQ-P2-006：10 个真实复杂工程问题全链路实战验收
+**状态：🔴 Phase 2 收口必做；未完成前不得宣布 Phase 2 冻结。**
+
+Phase 2 必须从公开、可信的工程案例中筛选 **10 个具有真实工程背景且明显高于当前简单 Golden 的复杂问题**，正式走一遍完整的 Agent 工程闭环：
+
+`真实工程问题资料/模型导入 → 工程需求结构化 → EngineeringIntent → 参数/材料/边界/分析步骤建立 → Compiler → Preflight → Abaqus 2025 真机求解 → ODB/日志/Evidence → Result Intelligence → Acceptance → 独立工程报告`
+
+这 10 个案例不是“把官方 `.inp` 跑通”即可。每个案例都必须证明系统能够把**问题本身**导入现有工程闭环，并最终形成可审计的工程交付物。允许使用公开案例提供的输入文件、几何、材料和参考结果作为基准，但必须保留来源、输入证据、运行证据以及与参考结果的对照；不得直接把参考结果冒充 Agent 计算结果。
+
+### 10 个正式验收案例
+
+| # | 工程问题 | 主要工程难点 | 覆盖能力 | 公开来源 |
+|---|---|---|---|---|
+| 1 | **Bolted Pipe Flange Connection** 螺栓管法兰连接 | 螺栓预紧、垫片、接触、压力、轴对称/3D 对照 | Connector/Contact/Preload/Static | Abaqus 2025 Example Problems |
+| 2 | **Reactor Pressure Vessel Bolted Closure** 反应堆压力容器螺栓闭合结构 | 预紧 + 内压 + 瞬态温度场 + 接触 + 自适应网格 | Thermal→Structural/Contact/Preload/Adaptive | Abaqus 2025 Example Problems |
+| 3 | **Exhaust Manifold Assemblage** 发动机排气歧管总成 | 多部件接触、7 螺栓、300→980 K 热循环、摩擦滑移 | Thermal-Structural/Contact/Preload | Abaqus 2025 Example Problems |
+| 4 | **Side Curtain Airbag Impactor Test** 侧气帘安全气囊冲击试验 | 18 腔体流体、3 个点火器、多组分气体、织物大变形、自接触、冲击 | Explicit/Fluid Cavity/Fabric/Contact | Abaqus 2025 Example Problems |
+| 5 | **Laminated Composite Cylindrical Panel Buckling** 开孔层合复合材料圆柱板屈曲 | 多层铺层、各向异性、初始缺陷、特征屈曲、Riks 后屈曲 | Composite/Buckling/Nonlinear/Riks | Abaqus 2025 Example Problems |
+| 6 | **Stacked Sheet Metal Assembly Submodeling** 多层钣金紧固总成子模型 | 多层薄板、紧固件、全局→局部子模型、局部应力梯度 | Assembly/Submodel/Mesh Strategy | Abaqus 2025 Example Problems |
+| 7 | **Automotive Jounce Bumper** 汽车悬架缓冲块 | 高可压缩橡胶/泡沫、大变形、初始过盈、自接触、接触压缩 | Nonlinear Rubber/Self-Contact/Explicit | Abaqus 2025 Example Problems |
+| 8 | **Axisymmetric Threaded Connection** 轴对称螺纹连接 | 螺纹接触、过盈/缩径、压力渗透、轴向/弯曲/内压工况 | Contact/Connector/Pressure Penetration | Abaqus 2025 Example Problems |
+| 9 | **Cylinder Head Thermomechanical Direct Cyclic Analysis** 气缸盖热机械循环 | 周期热载荷、结构约束、循环响应、热机械疲劳相关结果 | Thermal-Structural/Direct Cyclic/Fatigue Context | Abaqus 2025 Example Problems |
+| 10 | **Thin-Walled Elbow Elastic-Plastic Collapse** 薄壁弯头弹塑性失稳 | 内压 + 面内弯曲、几何非线性、材料塑性、极限承载能力 | Nonlinear/Plasticity/Structural Collapse | Abaqus 2025 Example Problems |
+
+### 案例来源与选择原则
+
+上述案例优先取自 **Abaqus 2025 官方 Example Problems**，并要求每个案例具有明确工程应用背景、可获得的输入模型/参数/参考结果或实验对照。官方案例库覆盖法兰连接、压力容器、排气歧管、复合材料屈曲、钣金子模型、橡胶自接触、螺纹连接、气囊冲击等复杂工程问题；其中部分案例明确引用实验研究或工业模型。
+
+### 每个案例的强制交付物
+
+1. **Problem Package**：来源、工程问题描述、几何/模型文件、材料、单位制、载荷、边界、分析步骤、预期输出、参考结果。
+2. **Agent Input**：以自然语言或结构化工程需求正式导入，不允许只执行预制 `.inp`。
+3. **Compiled Model**：由项目现有 Intent → Compiler → Preflight 链路生成/整理实际求解模型。
+4. **Real Abaqus 2025 Run**：真实机求解，保留 `.inp/.odb/.sta/.msg/.dat/.log` 等可审计工件。
+5. **Verification & Acceptance**：必须经过现有 Evidence V2 + Single-Exit Acceptance；任何缺证据、求解失败或结果异常均不得伪装为成功。
+6. **Result Intelligence**：提取该案例真正有工程意义的关键指标，而不是只输出最大 Mises。
+7. **Engineering Report**：生成可独立交付的 Markdown/HTML 工程报告，包含问题复述、模型假设、材料/边界、网格、求解状态、关键结果、参考结果对照、限制与结论。
+8. **Reproducibility Manifest**：记录来源、运行参数、Abaqus 版本、工件 SHA-256、运行 ID 和最终 Acceptance 状态。
+
+### 10 案例的统一验收门槛
+
+- **10/10 真机完成**：必须在 Abaqus 2025 真实机执行，不得以 pytest 或静态 INP 检查替代。
+- **10/10 闭环完成**：问题导入 → 求解 → 结果 → Acceptance → 报告全部贯通。
+- **10/10 有证据**：每个案例都有独立 Evidence/Manifest，不能用一个 Golden 代表全部。
+- **10/10 有参考对照**：能够获得参考结果的案例必须进行数值/趋势/关键响应对照，并记录误差或差异解释；没有公开数值答案的案例必须明确写出可验证的工程判据。
+- **复杂度覆盖合格**：10 个案例整体覆盖静力非线性、接触/预紧、热-结构、多步骤、动态/Explicit、大变形、自接触、复合材料/屈曲、子模型/局部精细化、塑性失稳等不同工程类别。
+- **报告可交付**：报告不能只是程序日志，必须形成工程师可以审阅的结果说明。
+- **失败也必须闭环**：若某案例因输入不足、能力边界或求解器问题无法完成，必须输出 `BLOCKED/NEEDS_CLARIFICATION/RESULT_INVALID` 及完整失败证据；但 Phase 2 最终验收仍要求这 10 个预先选定案例全部达到可解释的最终闭环状态。
+
+### Phase 2 最终收口条件
+
+**REQ-P2-006 是 Phase 2 冻结前的硬门槛。**
+
+`REQ-P2-001~006 = QUALIFIED`
++ Phase 2 Golden Matrix 完成
++ 10 个复杂真实工程案例 10/10 全链路通过
++ 全项目严格回归通过
++ 关键负向/Fail-Closed 矩阵通过
++ 真实机证据与报告可追溯。
+
 ---
 
 # 十二、Phase 3：Agent 自主性需求清单
@@ -565,18 +636,18 @@ Benchmark 必须区分软件回归与真实 Abaqus 物理验证。
 | Phase 2 | Connector 深度 | 🟢 L4 QUALIFIED / 持续扩展 |
 | Phase 2 | FMBD 深度 | 🟢 L4 QUALIFIED / 持续扩展 |
 | Phase 2 | 多物理 / 多工况组合 | 🟡 IN PROGRESS |
-| Phase 2 | 真实工程 Golden Matrix | 🟡 IN PROGRESS |
-| Phase 3 | Planning | ⚪ TODO |
-| Phase 3 | Clarification | 🟡 基础能力已有，Agent 主动闭环 TODO |
-| Phase 3 | Iteration | 🟡 P1.4 已建立受控迭代基础，完整自主闭环 TODO |
-| Phase 3 | Diagnosis / Self-Healing | 🟢 P1.4 QUALIFIED |
-| Phase 3 | Comparison | 🟡 RunDiff 已有，Agent 级比较 TODO |
-| Phase 3 | Optimization | ⚪ TODO |
-| Phase 3 | Full Agent Autonomous Loop | ⚪ TODO |
-| Phase 4 | MCP | ⚪ TODO |
-| Phase 4 | UI / HITL Workbench | ⚪ TODO |
-| Phase 4 | Deployment | ⚪ TODO |
-| Phase 4 | Benchmark | ⚪ TODO |
-| Phase 4 | Release | ⚪ TODO |
+| Phase 2 | 真实工程 Golden Matrix | 🟡 IN PROGRESS — 包含 REQ-P2-006 十案例实战 |
+| Phase 3 | Planning | ⚪ POST-FREEZE ROADMAP |
+| Phase 3 | Clarification | ⚪ POST-FREEZE ROADMAP |
+| Phase 3 | Iteration | ⚪ POST-FREEZE ROADMAP |
+| Phase 3 | Diagnosis / Self-Healing | 🟢 P1.4 已实现；后续扩展留待冻结后 |
+| Phase 3 | Comparison | ⚪ POST-FREEZE ROADMAP |
+| Phase 3 | Optimization | ⚪ POST-FREEZE ROADMAP |
+| Phase 3 | Full Agent Autonomous Loop | ⚪ POST-FREEZE ROADMAP |
+| Phase 4 | MCP | ⚪ POST-FREEZE ROADMAP |
+| Phase 4 | UI / HITL Workbench | ⚪ POST-FREEZE ROADMAP |
+| Phase 4 | Deployment | ⚪ POST-FREEZE ROADMAP |
+| Phase 4 | Benchmark | ⚪ POST-FREEZE ROADMAP |
+| Phase 4 | Release | ⚪ POST-FREEZE ROADMAP |
 
 > **冻结规则：** 后续开发必须先在本表归属需求；不得因为发现单个功能缺口而重新发明 Phase 或改变总体路线。已有能力优先复用；只有真实缺口才新增代码。
