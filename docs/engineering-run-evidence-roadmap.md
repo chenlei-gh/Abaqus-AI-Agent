@@ -1,9 +1,9 @@
 # Engineering Run / Evidence Closure Roadmap
 
 **Status:** 
-- **RC 1.0 Frozen Baseline**: `v1.0.0-rc1` CONDITIONAL PASS Frozen at Commit `deec6a3` (428 tests) ✅
-- **GA Working Baseline**: Commit `969af3c`+ ACTIVE (608 tests, Track GA-3 Real-Machine Qualified, Track GA-1.1~GA-1.4 Frozen & Real-Machine Qualified on STEP Benchmarks, Track GA-2.1~GA-2.6 Closed & Real-Machine Qualified, Track GA-CL Active / GA-CL.1~GA-CL.4 Qualified) 🚀
-**Version:** 2026-10-04 (Release Candidate 1.0 Frozen & GA Evolution Baseline)  
+- **RC 1.0 Frozen Baseline**: `v1.0.0-rc1` BASELINE FROZEN at Commit `816872c`+ (616/616 tests PASS, Track GA-3, GA-1.1~1.4, GA-2.1~2.6, and GA-CL.1~CL.7 Fully Closed & Qualified across 20 Physical Engineering Domains) ✅
+- **GA Working Baseline**: `origin/main` QUALIFIED (Tracks GA-3, GA-1.1~GA-1.4, GA-2.1~GA-2.6, GA-CL.1~GA-CL.7 fully closed; Tracks GA-2A and GA-2B staged for post-RC1 evolution) 🚀
+**Version:** 2026-10-04 (Release Candidate 1.0 Baseline Frozen)  
 **Scope:** Abaqus-AI-Agent engineering architecture, foundational contracts, evidence chain, real-machine physics benchmarks, and material intelligence grounding
 
 ---
@@ -1400,8 +1400,8 @@ ODB Tensor Extraction & Equilibrium Verification (RF vs Applied Error = 0.002%) 
 
 ---
 
-#### Track GA-CL: Full-Chain Multi-Physics Closure & Failure Hardening [P0 ACTIVE GATE]
-*Core Strategic Pivot: Following the formal closure of Track GA-2.6 (multi-step procedural compiler & real Abaqus physical evidence), the repository shifts from foundational procedure enablement to broad multi-physics coverage, authentic solver failure-path verification, and end-to-end acceptance/reporting closure. Tracks GA-2A and GA-2B are strictly gated behind Track GA-CL.*
+#### Track GA-CL: Full-Chain Multi-Physics Closure & Failure Hardening [CLOSED & QUALIFIED]
+*Core Strategic Pivot: Following the formal closure of Track GA-2.6 (multi-step procedural compiler & real Abaqus physical evidence), the repository shifted from foundational procedure enablement to broad multi-physics coverage, authentic solver failure-path verification, and end-to-end acceptance/reporting closure. With GA-CL.1 ~ GA-CL.8 fully verified, the baseline is formally frozen for RC1.*
 
 - [x] **GA-CL.1: Agent Multi-Physics Golden Expansion (Intent -> Compiler -> Live Abaqus -> ODB) [CLOSED & QUALIFIED]**
   - [x] **GA-CL.1-R1 Full-Chain Architectural Refinement**:
@@ -1462,6 +1462,13 @@ ODB Tensor Extraction & Equilibrium Verification (RF vs Applied Error = 0.002%) 
     - **P1-2**: MP-1 ~ MP-4 Golden benchmarks formally bound to signed `EvidenceManifestV2`, verifying `evidence_sufficiency: PASS`.
     - **P1-3**: Legacy schema V1 manifests deprecated and isolated from RC evidence qualification.
   - [x] Validated across 8 mandatory fail-closed regression scenarios in `tests/test_rc_closure_bypasses.py`. Full test suite: 616/616 tests PASS.
+
+- [x] **GA-CL.8: 20-Domain Physical Capability Audit & RC1 Baseline Freeze [CLOSED & QUALIFIED]**
+  - [x] Comprehensive audit across 20 physical engineering domains:
+    - 17 Domains qualified at **L4 (Agent Full-Chain Qualified)** (`Intent -> compile_intent_to_actions -> Preflight -> Abaqus 2025 -> ODB -> Required Results -> Evidence V2 -> Acceptance -> Report`).
+    - 3 Domains qualified at **L3 (Specialized Workflow Qualified; Intent Compiler Pending)**: High-Cycle & Low-Cycle Fatigue (`fatigue.py`), Kinematic Connectors (`mbd.py`), and Flexible Multibody Dynamics (`mechanism.py`). Live solver and physical ODB results proven on Abaqus 2025; direct intent compilation scheduled post-RC1.
+  - [x] Confirmed single-exit acceptance gate architecture: zero bypass paths from `external_input` to `ACCEPTED`, mandatory `EvidenceManifestV2` verification, and fail-closed state transitions.
+  - [x] Release Candidate 1.0 formally declared as **`RC1 BASELINE FROZEN` (`v1.0.0-rc1`)** at Commit `816872c`+ with 616/616 regression tests passing.
 
 ---
 

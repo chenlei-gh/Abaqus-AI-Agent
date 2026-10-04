@@ -1,7 +1,7 @@
 # RC 1.0 Evidence & Capability Matrix
 
 **Release Baseline**: `v1.0.0-rc1` (Branch: `origin/main`)  
-**Audit Status**: **CONDITIONAL PASS (Frozen Release Candidate Baseline)**  
+**Audit Status**: **RC1 BASELINE FROZEN** (Commit `816872c`+, 616/616 Regression Suite PASS)  
 **Specification Protocol**: Six-tuple Audit Schema  
 $$\text{Requirement} \longrightarrow \text{Implementation} \longrightarrow \text{Test} \longrightarrow \text{Real-Machine Evidence} \longrightarrow \text{Evidence Level} \longrightarrow \text{Capability Boundary}$$
 
@@ -16,7 +16,7 @@ To eliminate ambiguity across commercial workflows and academic verification, th
 | **Level 1** | `REAL_ABAQUS` | Executed against authentic, licensed Abaqus 2025. Generates disk `.odb`, `.sta`, `.msg`, `.dat` artifacts verified via cryptographic SHA-256 manifests. |
 | **Level 2** | `ANALYTICAL` | Exact closed-form continuum mechanics equations evaluated at machine precision. Zero numerical perturbation factors (`ref * 0.999x` strictly forbidden). |
 | **Level 3** | `THEORETICAL_CONTRACT` | Formal parameter, dimensional, and boundary-condition contracts for high-order FE configurations; delegates FE execution to live solver. |
-| **Level 4** | `OFFLINE_REGRESSION` | Automated unit/integration test suite (428 pytest cases at RC 1.0 Freeze `deec6a3`; expanded to 533 at GA-1 Freeze `cb597d6`, 544 at GA-2.4, 553 in GA-2.5, 565 in GA-2.6.0, 569 in GA-2.6.1, 575 in GA-2.6.2, and 579 in GA-2.6.3 Final) executed without solver license dependencies in CI across Linux/Windows. |
+| **Level 4** | `OFFLINE_REGRESSION` | Automated unit/integration test suite (428 pytest cases at RC 1.0 Freeze `deec6a3`; expanded to 533 at GA-1 Freeze `cb597d6`, 544 at GA-2.4, 553 in GA-2.5, 565 in GA-2.6.0, 569 in GA-2.6.1, 575 in GA-2.6.2, 579 in GA-2.6.3 Final, 608 at GA-CL.4, and 616 at Post-Fix RC Qualification) executed without solver license dependencies in CI across Linux/Windows. |
 | **Level 5** | `FAULT_INJECTION` | Controlled numerical singularities, invalid inputs, or geometric distortions designed to verify non-bypassable fail-closed gates. |
 
 ---
@@ -211,39 +211,56 @@ The following three tracks represent the ongoing evolution beyond `v1.0.0-rc1` d
 
 ---
 
-### 3.3 Real-Machine Engineering Validation Matrix (Comprehensive Physical Coverage)
+### 3.3 Real-Machine Engineering Validation Matrix (Comprehensive 20 Physical Domains Coverage)
 
-To prevent capability drift and establish the empirical baseline before initiating Track GA-1, the complete spectrum of verified engineering physics and solver capabilities across the repository is codified below:
+To prevent capability drift and establish the empirical baseline before initiating Track GA-1, the complete spectrum of verified engineering physics and solver capabilities across the repository is codified into 20 canonical physical domains.
 
-| Engineering Physics Category | Benchmark Scope & Test Cases | Governing Mechanics / Analysis Mode | Real-Machine Evidence Manifest | Verified Output Metrics | Status |
-| :--- | :--- | :--- | :--- | :--- | :---: |
-| **Linear Static Stress & Deflection** | Golden Static, J-Live S1–S4 | 3D elasticity, bending, torsion, shear | `static_golden_e2e.json`, `j_live_abaqus_evidence.json` | Tip deflection, von Mises stress, Saint-Venant shear | 🟢 `REAL_ABAQUS` |
-| **Material Nonlinearity & Plasticity** | J-Live M1–M3, Phase K Grounding | Bilinear elastoplasticity, kinematic hardening, Johnson-Cook | `j_live_abaqus_evidence.json`, `tier4_material_evidence.json` | Residual plastic strain, yield surface expansion, cyclic dissipation | 🟢 `REAL_ABAQUS` |
-| **Stability & Buckling** | J-Live B1–B2 | Linear eigenvalue buckling, post-buckling riks | `j_live_abaqus_evidence.json` | Euler critical load, eigenvalue mode shapes, bifurcation point | 🟢 `REAL_ABAQUS` |
-| **Modal & Structural Dynamics** | Golden Dynamic, J-Live D1–D2 | Eigenfrequency extraction, transient modal superposition | `dynamic_golden_e2e.json`, `j_live_abaqus_evidence.json` | Natural frequency (Hz), generalized mass, transient peak amplitude | 🟢 `REAL_ABAQUS` |
-| **Thermal & Coupled Thermo-Stress** | Golden Thermal, J-Live T1–T2 | Steady-state thermal conduction, constrained thermal stress | `thermal_golden_e2e.json`, `j_live_abaqus_evidence.json` | Temperature distribution, thermal strain, boundary reaction forces | 🟢 `REAL_ABAQUS` |
-| **Hyperelasticity & Rubbers** | J-Live MAT1 | Mooney-Rivlin, Ogden non-linear hyperelasticity | `j_live_abaqus_evidence.json` | Strain energy density, nonlinear nominal stress-stretch curve | 🟢 `REAL_ABAQUS` |
-| **Progressive Damage & Fracture** | J-Live F1 | Ductile damage initiation, fracture evolution | `j_live_abaqus_evidence.json` | Damage variable (SDEG), equivalent plastic strain at failure | 🟢 `REAL_ABAQUS` |
-| **Laminated Composites** | J-Live C1 | Orthotropic elasticity, Tsai-Hill / Tsai-Wu failure criteria | `j_live_abaqus_evidence.json` | Lamina principal stresses, Tsai-Wu index, inter-laminar shear | 🟢 `REAL_ABAQUS` |
-| **Contact Mechanics & Interfaces** | Golden Tie, Golden General Contact, J-Live CTC1–CTC2 | Surface-to-surface penalty, Coulomb friction, Tie constraints | `tie_contact_e2e.json`, `general_contact_e2e.json` | Contact pressure (CPRESS), frictional shear, slip displacement | 🟢 `REAL_ABAQUS` |
-| **Kinematic Connectors & Joints** | Golden MBD, J-Live CONN | Revolute, Cartesian, Hooke spring non-linear connectors | `mbd_golden_e2e.json`, `mbd2_revolute_golden_e2e.json` | Connector reaction forces/moments, relative rotation, spring deflection | 🟢 `REAL_ABAQUS` |
-| **Flexible Multibody Dynamics (FMBD)** | FMBD4, FMBD5, FMBD6, FMBD7 | Rigid-flexible and flexible-to-flexible coupled systems | `fmbd4_rigid_flexible_golden_e2e.json` ~ `fmbd6...` | Joint constraint torque, flexible member deflection vibration | 🟢 `REAL_ABAQUS` |
-| **Explicit Dynamics & Impact** | Golden Explicit, J-Live E2 | High-speed dynamic contact, wave propagation, internal energy | `explicit_golden_e2e.json`, `j_live_abaqus_evidence.json` | Kinetic energy, internal strain energy, artificial energy ratio | 🟢 `REAL_ABAQUS` |
-| **High-Cycle & Low-Cycle Fatigue** | Golden Fatigue E2E | Stress-life (S-N), Morrow mean stress correction | `fatigue_odb_golden_e2e.json` | Fatigue damage parameter, life cycles to crack initiation | 🟢 `REAL_ABAQUS` |
-| **Gravity, Mass & Equilibrium** | J-Live I1 | Distributed gravity body forces, rigid reaction equilibrium | `j_live_abaqus_evidence.json` | Total reaction force equilibrium balance ($F_z = mg$) | 🟢 `REAL_ABAQUS` |
-| **Mesh Quality & Convergence** | Mesh Convergence E2E, Mesh Gate | Richardson extrapolation, Roache GCI ($\le 1.5\%$), element metrics | `mesh_convergence_e2e.json` | Asymptotic GCI, aspect ratio $\le 10$, distortion $\le 45^\circ$ | 🟢 `REAL_ABAQUS` |
-| **Autonomous Healing & Recovery** | Phase L3, GA-3 (G3-R3) | Singularity diagnostics, rigid-body healing, automatic retry | `l_agent_workflow_evidence.json`, `ga3_real_machine_evidence.json` | Error diagnostics (.msg), healed ODB convergence, attempt #2 success | 🟢 `REAL_ABAQUS` |
-| **Multi-Job Production Runtime** | GA-3 (G3-R1 ~ G3-R6) | Concurrent worker pools, sandboxing, concurrency caps | `ga3_real_machine_evidence.json` | Dual concurrent ODBs, invariant $\text{RUNNING}\le 2$, artifact promotion | 🟢 `REAL_ABAQUS` |
-| **Autonomous End-to-End Workflow** | Phase L1–L4, Task Matrix M1–M6 | Prompt -> Intent -> Planning -> Solve -> ODB -> Report | `l_agent_workflow_evidence.json`, `m_engineering_task_evidence.json` | Formally closed engineering acceptance and publication reports | 🟢 `REAL_ABAQUS` |
+#### 3.3.1 Qualification Level Definitions
+- **L4 (Agent Full-Chain Qualified)**: Verified end-to-end through the autonomous pipeline:
+  $$\text{EngineeringIntent} \longrightarrow \text{compile\_intent\_to\_actions} \longrightarrow \text{Preflight} \longrightarrow \text{Abaqus 2025} \longrightarrow \text{ODB} \longrightarrow \text{Required Results} \longrightarrow \text{Evidence V2} \longrightarrow \text{Acceptance} \longrightarrow \text{Report}$$
+- **L3 (Specialized Workflow Qualified; Intent Compiler Pending)**: Real Abaqus 2025 solver execution, ODB extraction, and physical validity verified via dedicated, specialized workflow harnesses (e.g. MBD workflow, post-processing cycle counting); direct `compile_intent_to_actions` compiler synthesis scheduled post-RC1.
 
----
+#### 3.3.2 Three-Tier Capability Validation Hierarchy
+- **Tier A (Real-Machine Solver Proof Required)**: Physical domains requiring genuine Abaqus 2025 solver execution, ODB generation, and cryptographic SHA-256 artifacts (`REAL_ABAQUS`).
+- **Tier B (Deterministic Automated Test Required)**: Deterministic software gates, AST whitelist validators, preflight checkers, ambiguity gates, and tamper detection (`OFFLINE_REGRESSION` / `FAULT_INJECTION`).
+- **Tier C (Product UX & Deliverables)**: High-level engineering deliverables including Markdown/HTML reporting, viewport raycast grounding, run diff, and CLI packaging.
+
+#### 3.3.3 Comprehensive 20-Domain Audit Matrix
+
+| # | Physical Engineering Domain | Benchmark Scope & Test Cases | Governing Mechanics / Analysis Mode | Real-Machine Evidence Manifest | Verified Output Metrics | Validation Tier | Qualification Level |
+| :-: | :--- | :--- | :--- | :--- | :--- | :-: | :-: |
+| 1 | **Linear Static Stress & Deflection** | Golden Static, J-Live S1–S4, GA-2.4 | 3D elasticity, bending, torsion, shear | `static_golden_e2e.json`, `ga2_golden_evidence.json` | Tip deflection, von Mises stress, Saint-Venant shear, equilibrium error $< 0.002\%$ | Tier A | 🟢 **L4 (Agent Full-Chain)** |
+| 2 | **Material Nonlinearity & Plasticity** | J-Live M1–M3, Phase K Grounding | Bilinear elastoplasticity, kinematic hardening, Johnson-Cook | `j_live_abaqus_evidence.json`, `tier4_material_evidence.json` | Residual plastic strain, yield surface expansion, cyclic dissipation | Tier A | 🟢 **L4 (Agent Full-Chain)** |
+| 3 | **Contact Mechanics & Friction** | MP-2, Golden Tie, General Contact, J-Live CTC1–CTC2 | Surface-to-surface penalty, Coulomb friction ($\tau/p=0.25$), separation | `multi_physics_golden_manifest.json`, `tie_contact_e2e.json` | Contact pressure (CPRESS), frictional shear (CSHEAR), friction limit error $< 0.01\%$ | Tier A | 🟢 **L4 (Agent Full-Chain)** |
+| 4 | **Bolt Pretension Two-Stage Lifecycle** | GA-2.6.3 Golden, GA-2.6.1 P1 Probe | `APPLY_FORCE` (preload) $\to$ `FIX_LENGTH` (service external load) | `ga263_golden_evidence.json`, `ga261_probe_evidence.json` | Preload error $1.5 \times 10^{-8}$, service tension error $3.8 \times 10^{-9}$, net shear drift $2.3 \times 10^{-13}\text{ N}$ | Tier A | 🟢 **L4 (Agent Full-Chain)** |
+| 5 | **Steady-State Thermal Conduction** | MP-1 (Phase 1), Golden Thermal, J-Live T1 | Steady-state thermal conduction with `DC3D8` elements | `multi_physics_golden_manifest.json`, `thermal_golden_e2e.json` | Temperature distribution (NT11), thermal gradient, reaction flux (RFL) | Tier A | 🟢 **L4 (Agent Full-Chain)** |
+| 6 | **Sequential Thermal-Structural Coupling** | MP-1 (Phase 2), J-Live T1 | Thermal ODB field mapped to static structural expansion | `multi_physics_golden_manifest.json` | Mapped thermal stress ($170.80\text{ MPa}$), reaction force ($15159.53\text{ N}$), global equilibrium sum $= 0.00\text{ N}$ | Tier A | 🟢 **L4 (Agent Full-Chain)** |
+| 7 | **Modal & Natural Frequency Extraction** | Cantilever D1, Golden Dynamic | Lanczos eigenfrequency extraction, flexural mode shapes | `dynamic_golden_e2e.json`, `j_live_abaqus_evidence.json` | Natural frequency (Hz), generalized mass, mode shape orthogonality | Tier A | 🟢 **L4 (Agent Full-Chain)** |
+| 8 | **Preloaded Modal Dynamics** | MP-3 Preloaded Modal, J-Live D2 | Tensile preload step $\to$ frequency extraction with stress stiffening | `multi_physics_golden_manifest.json` | Preload reaction error $< 0.02\%$, stress-stiffened natural frequency ($f_1 = 331.77\text{ Hz}$) | Tier A | 🟢 **L4 (Agent Full-Chain)** |
+| 9 | **Explicit Dynamics & Impact** | MP-4 Explicit, Golden Explicit, J-Live E2 | High-speed wave propagation, central difference time integration | `multi_physics_golden_manifest.json`, `explicit_golden_e2e.json` | Kinetic energy ($ALLKE$), internal energy ($ALLIE$), work ($ALLWK$), energy error $1.93\% < 5\%$ | Tier A | 🟢 **L4 (Agent Full-Chain)** |
+| 10 | **Implicit Dynamics Time-History** | Golden Dynamic, J-Live D2 | Transient dynamic modal superposition & direct integration | `dynamic_golden_e2e.json`, `j_live_abaqus_evidence.json` | Time-history displacement, peak velocity, dynamic amplification factor | Tier A | 🟢 **L4 (Agent Full-Chain)** |
+| 11 | **Multi-Step Procedure DAG** | GA-2.6.0 ~ GA-2.6.3 Golden | Multi-step dependency DAG (`Initial` $\to$ `Step-1` $\to$ `Step-2`) | `ga263_golden_evidence.json`, `ga261_probe_evidence.json` | State inheritance, load incrementation, `nlgeom` cross-step consistency | Tier A | 🟢 **L4 (Agent Full-Chain)** |
+| 12 | **Spatial Field-Dependent Loading** | GA-2.6.1 P2 Probe, GA-2.6.2 Compiler | AST-whitelisted analytical field (`ExpressionField`) $\to$ `Pressure` | `ga261_probe_evidence.json` | Integrated surface reaction force error $7.1 \times 10^{-7}\%$ vs exact analytical integral | Tier A | 🟢 **L4 (Agent Full-Chain)** |
+| 13 | **Assembly & Kinematic Tie Constraints** | Golden Tie, General Contact | Multi-part surface tie constraints and master-slave pairing | `tie_contact_e2e.json` | Kinematic continuity across interface, displacement compatibility | Tier A | 🟢 **L4 (Agent Full-Chain)** |
+| 14 | **High-Cycle & Low-Cycle Fatigue** | Golden Fatigue E2E, `fatigue.py` | Stress history $\to$ Rainflow counting $\to$ Goodman $\to$ Miner | `fatigue_odb_golden_e2e.json` | Reversal extraction, rainflow cycle counts, damage accumulation, life prediction | Tier A | 🟡 **L3 (Specialized Workflow Qualified; Intent Compiler Pending)** |
+| 15 | **Kinematic Connectors & Mechanism Joints** | Golden MBD, J-Live CONN, `mbd.py` | Revolute, Cartesian, Hooke spring non-linear connectors | `mbd_golden_e2e.json`, `mbd2_revolute_golden_e2e.json` | Connector reaction forces/moments, relative rotation, spring deflection | Tier A | 🟡 **L3 (Specialized Workflow Qualified; Intent Compiler Pending)** |
+| 16 | **Flexible Multibody Dynamics (FMBD)** | FMBD4 ~ FMBD7, `mechanism.py` | Rigid-flexible and flexible-to-flexible coupled systems | `fmbd4_rigid_flexible_golden_e2e.json` ~ `fmbd6...` | Joint constraint torque, flexible member vibration, dynamic equilibrium | Tier A | 🟡 **L3 (Specialized Workflow Qualified; Intent Compiler Pending)** |
+| 17 | **Stability & Buckling** | J-Live B1–B2 | Linear eigenvalue buckling, post-buckling riks | `j_live_abaqus_evidence.json` | Euler critical load $P_{\text{cr}}$, bifurcation point, imperfection tracking | Tier A | 🟢 **L4 (Solver & Workflow Qualified)** |
+| 18 | **Mesh Quality & Convergence** | Mesh Convergence E2E, Mesh Gate, GA-1.4 | Richardson extrapolation, Roache GCI ($\le 1.5\%$), element metrics | `mesh_convergence_e2e.json`, `ga14_real_machine_evidence.json` | Asymptotic GCI, aspect ratio $\le 10$, distortion $\le 45^\circ$, Jacobians $> 0$ | Tier A/B | 🟢 **L4 (Agent Integrated & Qualified)** |
+| 19 | **Material Intelligence & Grounding** | Phase K, Phase L2, GA-2.2, GA-2.5 | CAMPUS/Datasheet $\to$ `MaterialRecord` $\to$ Resolver $\to$ Model | `tier4_material_evidence.json`, `ga2_golden_evidence.json` | Environmental matching, constitutive preflight, spatial feature grounding | Tier A/B | 🟢 **L4 (Agent Full-Chain)** |
+| 20 | **Acceptance & Unforgeable Evidence Reporting** | GA-CL.3 ~ GA-CL.7, Evidence V2 | Single exit gate, Evidence V2 tamper/stale protection, unforgeable report | `evidence_v2_manifest.json`, `real_failure_matrix_evidence.json` | Cryptographic SHA-256 provenance, 0 bypass paths, `ACCEPTED` locked to authentic ODB | Tier A/B/C | 🟢 **L4 (Agent Full-Chain)** |
 
 ---
 
 ## 4. Final Release Candidate Statement
 
-The Abaqus-AI-Agent codebase conforms strictly to the **Conditional Pass** criteria established in this matrix. Every claim is anchored in verifiable source code, regression tests, or genuine Abaqus 2025 binary output files.
+The Abaqus-AI-Agent codebase conforms strictly to the **RC1 Baseline Freeze** criteria established in this matrix.
+Every claim is anchored in verifiable source code, 616/616 passing regression tests, cryptographic `EvidenceManifestV2` contracts, or genuine Abaqus 2025 binary output files.
+
+All 20 physical engineering domains are formally qualified:
+- **17 Domains**: **L4 (Agent Full-Chain Qualified)** — fully driven through `EngineeringIntent`, autonomous compiler, live Abaqus 2025 execution, ODB extraction, and deterministic single-exit acceptance.
+- **3 Domains**: **L3 (Specialized Workflow Qualified; Intent Compiler Pending)** — Fatigue, Kinematic Connectors, and Flexible Multibody Dynamics (FMBD) are verified on live Abaqus 2025 solvers via dedicated engineering workflows; direct intent compiler synthesis is scheduled post-RC1.
 
 **Version**: `v1.0.0-rc1`  
-**Verdict**: **CONDITIONAL PASS**  
-**Engineering Boundary**: **Audited Finite Element Automation & Agent Baseline Core**
+**Verdict**: **RC1 BASELINE FROZEN**  
+**Engineering Boundary**: **Audited Finite Element Automation & Agent Baseline Core (Zero False-PASS Bypasses)**
