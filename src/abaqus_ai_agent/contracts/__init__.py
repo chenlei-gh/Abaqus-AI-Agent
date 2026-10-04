@@ -51,3 +51,13 @@ from .evidence import (
     compute_file_sha256,
     verify_evidence_integrity,
 )
+from .multimodal import (
+    CalloutType,
+    MultimodalSourceType,
+    GroundingIntentType,
+    HITLStatus,
+    VisualCallout,
+    BlueprintView,
+    GroundingObservation,
+    HITLConfirmationDecision,
+)

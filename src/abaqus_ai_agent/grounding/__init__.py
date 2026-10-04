@@ -21,3 +21,10 @@ from .projection import (
     select_geometry_by_ray,
     grounded_region_from_ray_selection,
 )
+from .multimodal import (
+    MultimodalGroundingError,
+    HITLBlockedError,
+    parse_drawing_callout,
+    correlate_callout_with_cad,
+    MultimodalHITLWorkflow,
+)

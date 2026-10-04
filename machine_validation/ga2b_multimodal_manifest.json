@@ -1,0 +1,67 @@
+{
+  "benchmark": "Track GA-2B: Multimodal Perception & Grounding Real Abaqus 2025 Golden",
+  "case_id": "GA2B_Multimodal_Golden",
+  "status": "QUALIFIED",
+  "evidence_tier": "REAL_ABAQUS",
+  "timestamp": "2026-10-04T04:11:10.738974+00:00",
+  "run_id": "run_ga2b_20261004_121110",
+  "solver": "Abaqus 2025",
+  "workflow": {
+    "2d_callout_parsing": "PASS",
+    "topological_candidate_correlation": "PASS",
+    "mandatory_hitl_gate": "PASS",
+    "intent_compiler_actions": "PASS",
+    "preflight_checks": "PASS",
+    "live_solver_execution": "PASS",
+    "odb_extraction": "PASS",
+    "equilibrium_balance": "PASS",
+    "evidence_v2_acceptance": "PASS",
+    "negative_probes": {
+      "unconfirmed_hitl_blocked": "PASS",
+      "observation_rejection_fail_closed": "PASS",
+      "missing_required_results_blocked": "PASS",
+      "tampered_evidence_blocked": "PASS"
+    }
+  },
+  "metrics": {
+    "applied_force_N": 1000.0,
+    "measured_reaction_force_N": 1000.0000076293945,
+    "equilibrium_error_percent": 7.62939453125e-07,
+    "max_mises_MPa": 5.289095878601074,
+    "max_displacement_mm": 0.0023747384548187256,
+    "num_elements": 160,
+    "num_nodes": 315
+  },
+  "artifacts": {
+    "Job_GA2B_Multimodal.inp": {
+      "sha256": "a75d514794681b10d2aa564123f3ae9e56abece415ff01517dab369e73cc0818",
+      "size_bytes": 24988,
+      "exists": true
+    },
+    "Job_GA2B_Multimodal.odb": {
+      "sha256": "956ac5a5c83fb8c2997389184959d2d2a41dc009da2e8811c48eb838f5e1d29b",
+      "size_bytes": 261872,
+      "exists": true
+    },
+    "Job_GA2B_Multimodal.sta": {
+      "sha256": "edaf092562099465fc79101db196dbdf751a854a1513d8545f90cc1a2032daaa",
+      "size_bytes": 443,
+      "exists": true
+    },
+    "Job_GA2B_Multimodal.msg": {
+      "sha256": "5fca86f9206029b12c15b407326a7d5c964dd5b24660b45727707023571a90c0",
+      "size_bytes": 7995,
+      "exists": true
+    },
+    "Job_GA2B_Multimodal.dat": {
+      "sha256": "85a8248a11fb9f6ce1bc6522bb9590f6da1869c33ecc9da008e62ff70b15f23f",
+      "size_bytes": 10062,
+      "exists": true
+    },
+    "Job_GA2B_Multimodal.log": {
+      "sha256": "5d319d3353b6f9de68d1836c3937a9ae8d7f15b5e4a275552e04576f188f946e",
+      "size_bytes": 685,
+      "exists": true
+    }
+  }
+}

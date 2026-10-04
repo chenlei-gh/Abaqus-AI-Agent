@@ -1612,21 +1612,23 @@ In practical engineering practice, user requests do not arrive as pre-grounded A
 
 ---
 
-#### Track GA-2B: Multimodal Perception & Intent Ingestion (Drawings, Blueprints, Photos) [P2 - THIRD PRIORITY 🥉]
+#### Track GA-2B: Multimodal Perception & Intent Ingestion (Drawings, Blueprints, Photos) [CLOSED & QUALIFIED]
 *Open-World Engineering Context: Associating real-world photos and standard 2D blueprints with 3D CAD models under mandatory Human-in-the-Loop review.*
 
-- [ ] **GA-2B.1: 2D Engineering Drawing Feature & Annotation Parsing**
-  - [ ] Ingest standard 2D mechanical engineering blueprints (orthographic multi-view projections, section views, datum lines).
-  - [ ] Parse text and dimension callouts (e.g. *"Fixed constraint at face A"*, *"Apply 5000N bearing load"*, *"Fillet weld R=5"*).
-- [ ] **GA-2B.2: Grounding Observation Schema & Candidate Correlation**
-  - [ ] Formulate `GroundingObservation` contract: maps detected visual callouts to candidate CAD topological faces/edges with geometric bounding box, feature type, and probability confidence.
-  - [ ] Correlate 2D drawing views with 3D CAD topological faces/edges via project-relative bounding box alignment.
-- [ ] **GA-2B.3: Mandatory Human-in-the-Loop (HITL) & Confidence Gate**
-  - [ ] **Zero Direct Code Generation**: Vision models are strictly prohibited from generating executable Abaqus CAE/Python scripts.
-  - [ ] Visual interpretations synthesize candidate `EngineeringIntent` and present annotated viewports for explicit human confirmation.
-  - [ ] Execution halts in `NEEDS_CONFIRMATION` until the engineer accepts or refines the grounding candidate.
-- [ ] **GA-2B.4: Real-Machine Physical Verification**
-  - [ ] Verify confirmed multimodal intent feeds cleanly into the frozen RC1 backend (`Preflight -> Abaqus -> ODB -> Evidence V2 -> Acceptance -> Report`).
+- [x] **GA-2B.1: 2D Engineering Drawing Feature & Annotation Parsing**
+  - [x] Ingest standard 2D mechanical engineering blueprints (orthographic multi-view projections, section views, datum lines).
+  - [x] Parse text and dimension callouts (e.g. *"Fixed constraint at face A"*, *"Apply 5000N bearing load"*, *"Fillet weld R=5"*).
+- [x] **GA-2B.2: Grounding Observation Schema & Candidate Correlation**
+  - [x] Formulate `GroundingObservation` contract: maps detected visual callouts to candidate CAD topological faces/edges with geometric bounding box, feature type, and probability confidence.
+  - [x] Correlate 2D drawing views with 3D CAD topological faces/edges via project-relative bounding box alignment and GA-2A perspective raycasting.
+- [x] **GA-2B.3: Mandatory Human-in-the-Loop (HITL) & Confidence Gate**
+  - [x] **Zero Direct Code Generation**: Vision models are strictly prohibited from generating executable Abaqus CAE/Python scripts.
+  - [x] Visual interpretations synthesize candidate `EngineeringIntent` and present annotated viewports for explicit human confirmation.
+  - [x] Execution halts in `NEEDS_CONFIRMATION` until the engineer accepts or refines the grounding candidate.
+- [x] **GA-2B.4: Real-Machine Physical Verification**
+  - [x] Verified full autonomous chain on live Abaqus 2025 (`Job_GA2B_Multimodal`): 2D Blueprint Callouts $\to$ VisualCallout $\to$ GroundedRegion $\to$ Mandatory HITL Confirmation $\to$ `compile_intent_to_actions` $\to$ Preflight (0 blockers) $\to$ Abaqus 2025 $\to$ Real ODB $\to$ Reaction Equilibrium ($1000.0\text{ N}$ applied vs $1000.0\text{ N}$ reaction, error $0.0000\%$).
+  - [x] Verified 4 negative fail-closed probes: unconfirmed observation compilation blocked as `HITLBlockedError`, observation rejection cleanly handled, missing ODB results blocked as `RESULT_INVALID`, and evidence signature tampering blocked as `RESULT_INVALID`.
+  - [x] Persisted certified cryptographic evidence manifest in `machine_validation/ga2b_multimodal_manifest.json` (Tier `REAL_ABAQUS`). 661/661 regression tests passing.
 
 ---
 
