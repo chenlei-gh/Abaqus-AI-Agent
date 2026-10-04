@@ -239,9 +239,10 @@ class AnalysisRunner:
 
     def run(self, model_name, job_name, odb_path=None, criteria=(),
             result_values=None, numerical_verification=None, engineering_checks=None,
-            mesh_quality=None, mesh_convergence=None, fatigue=None, contact_diagnostics=None, sensitivity=None, uncertainty=None,
+            mesh_quality=None, mesh_convergence=None, fatigue=None, contact_diagnostics=None,
+            connector_kinematics=None, sensitivity=None, uncertainty=None,
             timeout=3600, action_plan=(), environment=None, engineering_intent=None,
-            postprocess_profile=None, workdir=None):
+            postprocess_profile=None, workdir=None, physics_domain=None):
         run_id = str(uuid.uuid4())
         orig_executor_workdir = getattr(self.executor, "workdir", None)
         if workdir and hasattr(self.executor, "workdir"):
@@ -419,7 +420,7 @@ class AnalysisRunner:
                 fatigue if isinstance(fatigue, IntentFatigueSpec) else None
             )
 
-            if not effective_criteria and numerical_verification is None and engineering_checks is None and mesh_quality is None and mesh_convergence is None and fatigue is None and fatigue_spec is None and contact_diagnostics is None and sensitivity is None and uncertainty is None:
+            if not effective_criteria and numerical_verification is None and engineering_checks is None and mesh_quality is None and mesh_convergence is None and fatigue is None and fatigue_spec is None and contact_diagnostics is None and connector_kinematics is None and not getattr(engineering_intent, "connectors", None) and sensitivity is None and uncertainty is None:
                 return run.with_state(AnalysisRunState.ODB_VALIDATED)
 
             if result_values is None:
@@ -557,7 +558,15 @@ class AnalysisRunner:
                 except Exception:
                     run_manifest = None
 
-            domain_to_eval = "fatigue" if fatigue_spec is not None else None
+            if physics_domain is not None:
+                domain_to_eval = physics_domain
+            elif fatigue_spec is not None:
+                domain_to_eval = "fatigue"
+            elif getattr(engineering_intent, "connectors", None) or connector_kinematics is not None:
+                domain_to_eval = "connector"
+            else:
+                domain_to_eval = None
+
             accepted = evaluate_result_acceptance(
                 result_status=status.state.value.lower(),
                 numerical=numerical_verification,
@@ -566,6 +575,7 @@ class AnalysisRunner:
                 convergence=mesh_convergence,
                 fatigue=fatigue,
                 contact_diagnostics=contact_diagnostics,
+                connector_kinematics=connector_kinematics,
                 values=result_values,
                 criteria=effective_criteria,
                 evidence=result_evidence,
@@ -605,6 +615,11 @@ class AnalysisRunner:
                 verification_evidence.append(Evidence(
                     kind="contact_diagnostics", source="verification",
                     locator=job_name, value=contact_diagnostics,
+                ))
+            if connector_kinematics is not None:
+                verification_evidence.append(Evidence(
+                    kind="connector_kinematics", source="verification",
+                    locator=job_name, value=connector_kinematics,
                 ))
             if sensitivity is not None:
                 verification_evidence.append(Evidence(

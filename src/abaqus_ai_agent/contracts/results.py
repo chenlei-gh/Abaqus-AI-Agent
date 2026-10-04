@@ -92,6 +92,16 @@ _RESULT_QUANTITIES = {
     "max_reaction_force": "force",
     "max_rf": "force",
     "frequency": "frequency",
+    "connector_relative_motion": "displacement",
+    "connector_relative_displacement": "displacement",
+    "connector_relative_rotation": "angle",
+    "connector_force": "force",
+    "connector_total_force": "force",
+    "connector_moment": "moment",
+    "connector_position": "displacement",
+    "joint_drift": "displacement",
+    "revolute_joint_drift": "displacement",
+    "relative_articulation": "angle",
 }
 
 
@@ -107,6 +117,12 @@ def _infer_quantity(key, field=None, history_variable=None, output_kind="field")
         return "force"
     if field == "NT11":
         return "temperature"
+    if field in ("CU", "CUE", "CP"):
+        return "displacement"
+    if field in ("CTF", "CEF", "CRF"):
+        return "force"
+    if field in ("CTM",):
+        return "moment"
     if output_kind == "history" and history_variable:
         if str(history_variable).startswith("ALL"):
             return "energy"
@@ -125,6 +141,10 @@ _FIELD_ALIASES = {
     "max_strain": ("E", "MISES"),
     "max_reaction_force": ("RF", "MAGNITUDE"),
     "max_rf": ("RF", "MAGNITUDE"),
+    "connector_relative_motion": ("CU", "MAGNITUDE"),
+    "connector_relative_displacement": ("CU", "MAGNITUDE"),
+    "connector_force": ("CTF", "MAGNITUDE"),
+    "connector_position": ("CU", "MAGNITUDE"),
 }
 
 
@@ -316,6 +336,17 @@ def get_physics_result_profile(domain: str, **custom_overrides) -> PhysicsResult
             required_gates=("execution", "odb", "fatigue", "criteria"),
             gate_justifications={
                 "contact": "Fatigue coupon model; contact interaction not applicable.",
+            },
+        )
+    elif d in ("connector", "kinematic_connector", "connector_kinematics", "mechanism_connector"):
+        prof = PhysicsResultProfile(
+            domain="connector",
+            required_fields=("CU", "CTF"),
+            required_metrics=("connector_relative_motion", "connector_force"),
+            required_gates=("execution", "odb", "connector_kinematics", "criteria"),
+            gate_justifications={
+                "contact": "Discrete kinematic connector elements; continuous contact diagnostics not applicable.",
+                "fatigue": "Kinematic mechanism motion; high-cycle fatigue not requested.",
             },
         )
     elif d in ("multi_step", "bolt_service", "bolt_pretension"):

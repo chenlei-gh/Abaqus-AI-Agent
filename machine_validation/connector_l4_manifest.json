@@ -1,0 +1,96 @@
+{
+  "schema_version": "connector_l4_golden_v1",
+  "case_id": "MP_Connector_L4_Golden",
+  "evidence_tier": "REAL_ABAQUS",
+  "solver": "Abaqus 2025",
+  "verified_at": "2026-10-04T04:31:43.301658+00:00",
+  "status": "QUALIFIED",
+  "compiler_chain_verified": true,
+  "run_id": "run_connector_l4_real_20261004_123143",
+  "workflow": {
+    "intent_connector_contract": "PASS",
+    "canonical_compiler": "PASS",
+    "preflight_checks": "PASS",
+    "live_solver_execution": "PASS",
+    "odb_extraction": "PASS",
+    "connector_kinematics_gate": "PASS",
+    "evidence_v2_manifest": "PASS",
+    "acceptance": "PASS"
+  },
+  "negative_probes": {
+    "probe_1_missing_endpoint_a": "PASS",
+    "probe_2_self_connection": "PASS",
+    "probe_3_undefined_section": "PASS",
+    "probe_4_missing_orientation": "PASS",
+    "probe_5_invalid_connector_type": "PASS",
+    "probe_6_missing_required_odb_fields": "PASS",
+    "probe_7_evidence_tampering": "PASS",
+    "probe_8_semantic_type_tampering": "PASS",
+    "probe_9_physical_criteria_violation": "PASS"
+  },
+  "metrics": {
+    "max_joint_drift_mm": 9.78406080260905e-06,
+    "max_relative_rotation_rad": 0.121497992426157,
+    "max_relative_rotation_deg": 6.9613221853312375,
+    "measured_period_s": 1.27737588005213,
+    "theoretical_period_s": 1.284275864910232,
+    "period_error_percent": 0.5372665676142908,
+    "energy_loss_ratio": 0.02134132671134906,
+    "frame_count": 154
+  },
+  "artifacts": {
+    "Job_Connector_L4.inp": {
+      "sha256": "ef2214ab05e8ba427e9b769ea28425bf87d55d3a5a44d9682bb2df0fc4ab1ab3",
+      "size_bytes": 8194,
+      "exists": true
+    },
+    "Job_Connector_L4.odb": {
+      "sha256": "0085043c01dd46e3a411eb5dc87dcbbad2cfa7add8224a287e70a67fb2489877",
+      "size_bytes": 4200780,
+      "exists": true
+    },
+    "Job_Connector_L4.sta": {
+      "sha256": "1d98e7b0a774417b3c37a3b636d0e748970d84d5c852af374bdfa9cbc730f072",
+      "size_bytes": 10779,
+      "exists": true
+    },
+    "Job_Connector_L4.msg": {
+      "sha256": "32577d363827a055ba89700f58b18ee14f29506c8163b64df2ec9d7d5025f27f",
+      "size_bytes": 676344,
+      "exists": true
+    },
+    "Job_Connector_L4.dat": {
+      "sha256": "5ae4566593eb71d0b4c5eca203749474b4a8bef602fad1a95c3a5f4730924661",
+      "size_bytes": 18437,
+      "exists": true
+    },
+    "Job_Connector_L4.log": {
+      "sha256": "9f603ffe3a956f812102f1a47080c78948bd4623cefad4032f9576f7f98d3ee9",
+      "size_bytes": 679,
+      "exists": true
+    }
+  },
+  "acceptance": {
+    "passed": true,
+    "status": "PASS",
+    "result_validity": "VALID",
+    "gates": {
+      "execution": "PASS",
+      "odb": "PASS",
+      "evidence_sufficiency": "PASS",
+      "numerical_verification": "SKIPPED",
+      "engineering_checks": "SKIPPED",
+      "mesh_quality": "SKIPPED",
+      "convergence": "SKIPPED",
+      "fatigue": "SKIPPED",
+      "contact": "SKIPPED",
+      "procedure": "SKIPPED",
+      "thermal_balance": "SKIPPED",
+      "connector_kinematics": "PASS",
+      "required_results": "PASS",
+      "criteria": "PASS"
+    },
+    "failures": [],
+    "blocked": []
+  }
+}

@@ -14,8 +14,8 @@ RC1 freezes the existing engineering capability boundary rather than expanding t
 
 ### 20-domain qualification split
 
-- **17 L4 Agent Full-Chain domains:** Linear Static; Nonlinear Static; Contact & Friction; Bolt Pretension; Thermal; Sequential Thermal-Structural; Modal/Frequency; Preloaded Modal; Explicit Dynamics; Implicit Dynamics; Multi-Step Procedure; Spatial Field Loading; Assembly & Tie Interaction; Mesh Quality & GCI; Material Constitutive; Boundary & Load Grounding; Result Acceptance & Engineering Report.
-- **3 L3 Specialized Workflow domains:** High-Cycle Fatigue; Kinematic Connectors; Flexible Multibody (FMBD).
+- **19 L4 Agent Full-Chain domains:** Linear Static; Nonlinear Static; Contact & Friction; Bolt Pretension; Thermal; Sequential Thermal-Structural; Modal/Frequency; Preloaded Modal; Explicit Dynamics; Implicit Dynamics; High-Cycle Fatigue; Multi-Step Procedure; Spatial Field Loading; Kinematic Connectors; Assembly & Tie Interaction; Mesh Quality & GCI; Material Constitutive; Boundary & Load Grounding; Result Acceptance & Engineering Report.
+- **1 L3 Specialized Workflow domain:** Flexible Multibody (FMBD).
 
 L4 requires the canonical path:
 
@@ -1632,12 +1632,15 @@ In practical engineering practice, user requests do not arrive as pre-grounded A
 
 ---
 
-#### Track GA-L3: Kinematic Connectors & FMBD Specialized Workflows [STABLE L3 / DEFERRED]
-*Specialized Engineering Workflows: Maintaining high-fidelity multibody and connector capabilities as dedicated engineering workflows without diluting core agent intent resources.*
+#### Track GA-C4: Kinematic Connectors & Mechanism Joints [CLOSED & QUALIFIED AT L4]
+*Full Agent-Chain Qualification: Integrated into the canonical EngineeringIntent and compiler architecture with live Abaqus 2025 multi-body dynamics verification.*
 
-- [x] **Connectors & Mechanism Joints**: Qualified at L3 via `src/abaqus_ai_agent/workflow/mbd.py` (Revolute, Cartesian, Spring/Dashpot). Proven on Abaqus 2025 (`mbd_golden_e2e.json`).
-- [x] **Flexible Multibody Dynamics (FMBD)**: Qualified at L3 via `src/abaqus_ai_agent/planning/mechanism.py` (Rigid-flexible coupling, flexible links). Proven on Abaqus 2025 (`fmbd4_rigid_flexible_golden_e2e.json`).
-- [ ] **Deferred Post-GA-2A/GA-F4**: Full natural-language `IntentConnectorSpec` compilation to be staged after GA-2A and Fatigue L4 have concluded.
+- [x] **Connectors & Mechanism Joints**: Promoted to **L4 (Agent Full-Chain Qualified, stated connector scope)**.
+  - Full canonical chain: `EngineeringIntent(connectors=(IntentConnectorSpec(...),))` $\to$ `compile_intent_to_actions` (automatic RP, DatumCsys, ConnectorSection, WireConnector, and CU/CTF extraction injection) $\to$ `preflight_plan` (0 blockers) $\to$ live Abaqus 2025 Standard solver $\to$ real ODB $\to$ `ConnectorKinematicsVerification` $\to$ Gate 13 (`connector_kinematics`) $\to$ `ACCEPTED` & `RESULT_VALID`.
+  - Stated scope: CONN3D2, HINGE / standard connection types, DatumCsys orientation, elasticity/damping behavior, ODB CU/CTF extraction, double pendulum benchmark ($T_1$ error 0.54%, joint drift $9.78\times 10^{-6}$ mm $\le 10^{-3}$ mm, relative rotation $6.96^\circ \ge 2^\circ$, energy dissipation $2.13\% \le 3\%$).
+  - Verified 9 negative fail-closed probes (missing endpoints, self-connection, undefined section, missing orientation, invalid types, missing required ODB fields, evidence tampering, semantic tampering, physical criteria violation).
+  - Persisted certified cryptographic manifest in `machine_validation/connector_l4_manifest.json` (Tier `REAL_ABAQUS`). Capability split: **19 L4 + 1 L3** (FMBD remains the sole L3).
+- [ ] **Track GA-M3: Flexible Multibody Dynamics (FMBD)** [L3 Stable / Next Milestone]: Dedicated FMBD Golden workflow with live Abaqus evidence; direct compiler synthesis scheduled post-Connector L4.
 
 ---
 

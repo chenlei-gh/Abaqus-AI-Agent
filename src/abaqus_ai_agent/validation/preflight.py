@@ -4,6 +4,7 @@ from typing import Sequence, Optional
 from ..contracts.geometry import resolve_region
 from ..contracts.units import validate_action_quantities
 from ..contracts.procedure import validate_field_expression
+from ..contracts.connector import CONNECTOR_TYPES_REQUIRING_ORIENTATION
 from .actions import (
     VALID_CONNECTOR_ASSEMBLED_TYPES,
     VALID_CONNECTOR_TRANSLATIONAL_TYPES,
@@ -192,9 +193,11 @@ def preflight_action(action, snapshot=None):
     if action.action_type == "wire_connector":
         check("name", bool(action.parameters.get("name")))
         check("section_name", bool(action.parameters.get("section_name")))
-        has_p1 = bool(action.parameters.get("point1_name") or action.parameters.get("point1_expression"))
-        has_p2 = bool(action.parameters.get("point2_name") or action.parameters.get("point2_expression"))
-        check("endpoints", bool(has_p1 and has_p2))
+        p1 = action.parameters.get("point1_name") or action.parameters.get("point1_expression") or action.parameters.get("point1")
+        p2 = action.parameters.get("point2_name") or action.parameters.get("point2_expression") or action.parameters.get("point2")
+        check("endpoints", bool(p1 and p2))
+        if p1 and p2:
+            check("endpoints_distinct", str(p1).strip() != str(p2).strip(), f"self-connection detected: {p1} == {p2}")
 
     if action.action_type in ("instance_translate", "instance_rotate"):
         instances = getattr(snapshot, "instances", ()) if snapshot is not None and not isinstance(snapshot, dict) else ((snapshot or {}).get("instances", ()) if isinstance(snapshot, dict) else ())
@@ -247,6 +250,8 @@ def preflight_plan(actions: Sequence, snapshot=None) -> PlanPreflightResult:
     constrained_regions = set()
     nlgeom_enabled_steps = set()
     bolt_registry = {}
+    connector_sections = {}
+    defined_reference_points = {}
 
     for idx, action in enumerate(actions):
         res = preflight_action(action, snapshot=snapshot)
@@ -260,6 +265,62 @@ def preflight_plan(actions: Sequence, snapshot=None) -> PlanPreflightResult:
             item["action_index"] = idx
             item["action_type"] = action.action_type
             all_blockers.append(item)
+
+        if action.action_type == "reference_point":
+            rp_name = action.parameters.get("name")
+            coords = action.parameters.get("coordinates")
+            if rp_name and coords:
+                defined_reference_points[rp_name] = coords
+
+        if action.action_type == "connector_section":
+            c_name = action.parameters.get("name")
+            if c_name:
+                connector_sections[c_name] = action
+
+        if action.action_type == "wire_connector":
+            w_name = action.parameters.get("name")
+            sec_name = action.parameters.get("section_name")
+            if sec_name not in connector_sections:
+                item = {
+                    "name": "connector_section_defined",
+                    "ok": False,
+                    "detail": f"Wire connector '{w_name}' references undefined connector section '{sec_name}'",
+                    "action_index": idx,
+                    "action_type": action.action_type,
+                }
+                all_checks.append(item)
+                all_blockers.append(item)
+            else:
+                sec_act = connector_sections[sec_name]
+                asmb = (sec_act.parameters.get("assembled_type") or "").upper()
+                trans = (sec_act.parameters.get("translational_type") or "").upper()
+                rot = (sec_act.parameters.get("rotational_type") or "").upper()
+                active_types = {asmb, trans, rot}
+                requires_orient = bool(active_types & CONNECTOR_TYPES_REQUIRING_ORIENTATION)
+                orient_val = action.parameters.get("orientation")
+                if requires_orient and (orient_val is None or orient_val is False):
+                    item = {
+                        "name": "connector_orientation_required",
+                        "ok": False,
+                        "detail": f"Connector '{w_name}' (section '{sec_name}', types={active_types}) requires local coordinate system orientation",
+                        "action_index": idx,
+                        "action_type": action.action_type,
+                    }
+                    all_checks.append(item)
+                    all_blockers.append(item)
+
+            p1 = action.parameters.get("point1_name") or action.parameters.get("point1_expression") or action.parameters.get("point1")
+            p2 = action.parameters.get("point2_name") or action.parameters.get("point2_expression") or action.parameters.get("point2")
+            if p1 and p2 and str(p1).strip() == str(p2).strip():
+                item = {
+                    "name": "connector_not_self_connected",
+                    "ok": False,
+                    "detail": f"Wire connector '{w_name}' connects identical endpoint '{p1}'",
+                    "action_index": idx,
+                    "action_type": action.action_type,
+                }
+                all_checks.append(item)
+                all_blockers.append(item)
 
         # Track steps defined in this plan
         if action.action_type.endswith("_step"):

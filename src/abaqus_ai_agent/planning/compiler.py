@@ -11,6 +11,13 @@ from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 from ..contracts.action import AbaqusAction
 from ..contracts.fatigue import IntentFatigueSpec
+from ..contracts.connector import (
+    IntentConnectorSpec,
+    ConnectorEndpointSpec,
+    ConnectorOrientationSpec,
+    ConnectorBehaviorSpec,
+    CONNECTOR_TYPES_REQUIRING_ORIENTATION,
+)
 from ..contracts.material import MaterialDefinition
 from ..contracts.procedure import (
     BoltPretensionLifecycleSpec,
@@ -133,6 +140,7 @@ def compile_intent_to_actions(
     interactions: Optional[Sequence[IntentInteractionSpec]] = None,
     predefined_fields: Optional[Sequence[IntentPredefinedFieldSpec]] = None,
     fatigue: Optional[IntentFatigueSpec] = None,
+    connectors: Optional[Sequence[IntentConnectorSpec]] = None,
     submit_job: bool = False,
 ) -> CompiledAgentPlan:
     """Compile structured engineering intent into an ordered sequence of AbaqusActions."""
@@ -478,6 +486,80 @@ def compile_intent_to_actions(
                         f"region=reg, distributionType=UNIFORM, magnitudes=({pf.magnitudes},))\n"
                     )
                 actions.append(builders.python_action(model_name, pf_code))
+
+    # 6d. Kinematic Connectors & Joints
+    if connectors:
+        for c_spec in connectors:
+            p1_name = c_spec.endpoint_a.reference_point_name or c_spec.endpoint_a.semantic_region or f"{c_spec.name}_RP_A"
+            p2_name = c_spec.endpoint_b.reference_point_name or c_spec.endpoint_b.semantic_region or f"{c_spec.name}_RP_B"
+
+            if c_spec.endpoint_a.point_coords is not None:
+                pt1 = c_spec.endpoint_a.point_coords
+                actions.append(builders.reference_point(model=model_name, name=p1_name, coordinates=pt1))
+            if c_spec.endpoint_b.point_coords is not None:
+                pt2 = c_spec.endpoint_b.point_coords
+                actions.append(builders.reference_point(model=model_name, name=p2_name, coordinates=pt2))
+
+            orient_ref = None
+            conn_init_lines = [f"a = mdb.models['{model_name}'].rootAssembly"]
+            has_init_code = False
+
+            if c_spec.orientation is not None:
+                cs = c_spec.orientation
+                csys_name = cs.name or f"Csys_{c_spec.name}"
+                conn_init_lines.append(
+                    f"d_csys_{c_spec.name} = a.DatumCsysByThreePoints(\n"
+                    f"    name='{csys_name}',\n"
+                    f"    coordSysType=CARTESIAN,\n"
+                    f"    origin=({cs.origin[0]}, {cs.origin[1]}, {cs.origin[2]}),\n"
+                    f"    point1=({cs.point1[0]}, {cs.point1[1]}, {cs.point1[2]}),\n"
+                    f"    point2=({cs.point2[0]}, {cs.point2[1]}, {cs.point2[2]}),\n"
+                    f")"
+                )
+                orient_ref = csys_name
+                has_init_code = True
+
+            if has_init_code:
+                actions.append(builders.python_action(model_name, "\n".join(conn_init_lines) + "\n"))
+
+            actions.append(builders.connector_section(
+                model=model_name,
+                name=c_spec.section_name,
+                assembled_type=c_spec.connector_type,
+            ))
+
+            if c_spec.behavior is not None:
+                bs = c_spec.behavior
+                behavior_opts = []
+                if bs.elasticity is not None:
+                    el = bs.elasticity
+                    comp_str = f"components={tuple(el.components)}" if len(el.components) > 1 else f"components=({el.components[0]},)"
+                    stiff_str = f"table=(({', '.join(str(s) for s in el.stiffness)},),)"
+                    behavior_opts.append(f"connectorBehavior.ConnectorElasticity({comp_str}, {stiff_str})")
+                if bs.damping is not None:
+                    damp = bs.damping
+                    comp_str = f"components={tuple(damp.components)}" if len(damp.components) > 1 else f"components=({damp.components[0]},)"
+                    damp_str = f"table=(({', '.join(str(d) for d in damp.damping_coefficient)},),)"
+                    behavior_opts.append(f"connectorBehavior.ConnectorDamping({comp_str}, {damp_str})")
+                if behavior_opts:
+                    behav_code = (
+                        f"import connectorBehavior\n"
+                        f"mdb.models['{model_name}'].sections['{c_spec.section_name}'].setValues(\n"
+                        f"    behaviorOptions=({', '.join(behavior_opts)},)\n"
+                        f")\n"
+                    )
+                    actions.append(builders.python_action(model_name, behav_code))
+
+            actions.append(builders.wire_connector(
+                model=model_name,
+                name=c_spec.name,
+                section_name=c_spec.section_name,
+                point1_name=p1_name,
+                point2_name=p2_name,
+                orientation=orient_ref,
+                wire_feature_name=c_spec.wire_feature_name,
+                wire_set_name=c_spec.wire_set_name,
+            ))
 
     # 7. Moment / Torque & Coupling Actions (defined before BCs so BCs can attach to RP if coupled)
     if moments:
@@ -978,6 +1060,14 @@ def compile_intent_to_actions(
         )
         actions.append(builders.python_action(model_name, fatigue_out_req))
 
+    if connectors:
+        conn_out_req = (
+            f"import step\n"
+            f"for _for_name in list(mdb.models['{model_name}'].fieldOutputRequests.keys()):\n"
+            f"    mdb.models['{model_name}'].fieldOutputRequests[_for_name].setValues(variables=('CU', 'CTF', 'U', 'UR', 'RF', 'RM'))\n"
+        )
+        actions.append(builders.python_action(model_name, conn_out_req))
+
     if any("explicit" in s.lower() for s in defined_steps):
         out_req_code = (
             f"if 'F-Output-1' in mdb.models['{model_name}'].fieldOutputRequests:\n"
@@ -1031,6 +1121,7 @@ def compile_intent_to_actions(
         "moments_count": len(moments) if moments else 0,
         "interactions_count": len(interactions) if interactions else 0,
         "predefined_fields_count": len(predefined_fields) if predefined_fields else 0,
+        "connectors_count": len(connectors) if connectors else 0,
         "fatigue": fatigue.to_dict() if fatigue else None,
     }
 

@@ -143,7 +143,7 @@ def evaluate_result_acceptance(result_status, numerical=None, engineering=None,
                                require_evidence=False,
                                required_gates=None, physics_domain=None, result_requirements=None,
                                odb_status=None, gate_justifications=None, procedure_verification=None,
-                               thermal_balance=None, odb_fields=None, required_fields=None,
+                               thermal_balance=None, connector_kinematics=None, odb_fields=None, required_fields=None,
                                evidence_manifest=None, expected_run_id=None, base_dir=None,
                                max_age_seconds=None, mandatory_roles=None):
     """Combine execution/result evidence with deterministic acceptance criteria.
@@ -420,6 +420,39 @@ def evaluate_result_acceptance(result_status, numerical=None, engineering=None,
         missing_required_gates.append("thermal_balance")
     else:
         gates["thermal_balance"] = "SKIPPED"
+
+    # Gate 13: Connector Kinematics Gate
+    if connector_kinematics is not None:
+        conn_ok = False
+        conn_status = None
+        if isinstance(connector_kinematics, bool):
+            conn_ok = connector_kinematics
+            conn_status = "pass" if conn_ok else "fail"
+        elif isinstance(connector_kinematics, dict):
+            conn_status = connector_kinematics.get("status")
+            conn_ok = conn_status == "pass" or connector_kinematics.get("passed", False) is True
+            warnings.extend(tuple(connector_kinematics.get("warnings", ()) or ()))
+            failures.extend(tuple(connector_kinematics.get("failures", ()) or ()))
+        else:
+            conn_status = getattr(connector_kinematics, "status", None)
+            conn_ok = conn_status == "pass" or getattr(connector_kinematics, "passed", False) is True
+            warnings.extend(tuple(getattr(connector_kinematics, "warnings", ()) or ()))
+            failures.extend(tuple(getattr(connector_kinematics, "failures", ()) or ()))
+
+        if conn_ok:
+            gates["connector_kinematics"] = "PASS"
+        else:
+            failures.append("connector_kinematics_failed")
+            gates["connector_kinematics"] = "FAIL"
+            if conn_status == "warning":
+                warnings.append("connector_kinematics_warning")
+    elif "connector_kinematics" in effective_required_gates:
+        gates["connector_kinematics"] = "BLOCKED"
+        failures.append("missing_mandatory_gate:connector_kinematics")
+        blocked.append("missing_mandatory_gate:connector_kinematics")
+        missing_required_gates.append("connector_kinematics")
+    else:
+        gates["connector_kinematics"] = "SKIPPED"
 
     # Required Metrics Evaluation against Values Map
     values_map = values or {}

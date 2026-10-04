@@ -1,6 +1,16 @@
 from dataclasses import dataclass, field
 from typing import Any, Dict, Optional
 
+from .connector import (
+    ConnectorType,
+    ConnectorEndpointSpec,
+    ConnectorOrientationSpec,
+    ConnectorElasticitySpec,
+    ConnectorDampingSpec,
+    ConnectorBehaviorSpec,
+    IntentConnectorSpec,
+    CONNECTOR_TYPES_REQUIRING_ORIENTATION,
+)
 from .fatigue import IntentFatigueSpec
 from .geometry import ImagePoint
 
@@ -30,3 +40,4 @@ class EngineeringIntent:
     unit_system: Optional[str] = None
     metadata: Dict[str, Any] = field(default_factory=dict)
     fatigue: Optional[IntentFatigueSpec] = None
+    connectors: tuple = ()

@@ -61,3 +61,14 @@ from .multimodal import (
     GroundingObservation,
     HITLConfirmationDecision,
 )
+from .connector import (
+    ConnectorType,
+    ConnectorEndpointSpec,
+    ConnectorOrientationSpec,
+    ConnectorElasticitySpec,
+    ConnectorDampingSpec,
+    ConnectorBehaviorSpec,
+    IntentConnectorSpec,
+    ConnectorKinematicsVerification,
+    CONNECTOR_TYPES_REQUIRING_ORIENTATION,
+)
