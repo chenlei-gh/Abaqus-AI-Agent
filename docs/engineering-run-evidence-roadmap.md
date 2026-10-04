@@ -1511,8 +1511,8 @@ ODB Tensor Extraction & Equilibrium Verification (RF vs Applied Error = 0.002%) 
 
 - [x] **GA-CL.8: 20-Domain Physical Capability Audit & RC1 Baseline Freeze [CLOSED & QUALIFIED]**
   - [x] Comprehensive audit across 20 physical engineering domains:
-    - 17 Domains qualified at **L4 (Agent Full-Chain Qualified)** (`Intent -> compile_intent_to_actions -> Preflight -> Abaqus 2025 -> ODB -> Required Results -> Evidence V2 -> Acceptance -> Report`).
-    - 3 Domains qualified at **L3 (Specialized Workflow Qualified; Intent Compiler Pending)**: High-Cycle & Low-Cycle Fatigue (`fatigue.py`), Kinematic Connectors (`mbd.py`), and Flexible Multibody Dynamics (`mechanism.py`). Live solver and physical ODB results proven on Abaqus 2025; direct intent compilation scheduled post-RC1.
+    - Historical RC1 Status: 17 Domains initially qualified at **L4 (Agent Full-Chain Qualified)** and 3 Domains at **L3 (Specialized Workflow Qualified)** (Fatigue, Connectors, FMBD).
+    - Post-RC1 Closure Update: All 3 remaining specialized domains have completed their full-chain compiler, runner, Evidence V2, and live Abaqus 2025 golden qualifications (Track GA-F4, GA-C4, GA-M4). **Current baseline is 100% closed at 20 L4 / 0 L3**.
   - [x] Confirmed single-exit acceptance gate architecture: zero bypass paths from `external_input` to `ACCEPTED`, mandatory `EvidenceManifestV2` verification, and fail-closed state transitions.
   - [x] Release Candidate 1.0 formally declared as **`RC1 BASELINE FROZEN` (`v1.0.0-rc1`)** at Commit `41f0c63` with 616/616 regression tests passing.
 

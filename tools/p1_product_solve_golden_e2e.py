@@ -350,6 +350,25 @@ print("AIAgent_P1_SOLVE_SUCCESS")
     finally:
         pf_mod.preflight_plan = orig_pf
 
+    # Probe 7: Direct internal verification injection interception
+    p7_intent = EngineeringIntent(
+        id="inject-block",
+        kind="linear_static",
+        description="Injection Defense",
+        analysis_type="linear_static",
+        unit_system="MM_N_MPA",
+        material={"name": "Steel", "youngs_modulus": 210000.0, "poisson_ratio": 0.3},
+        metadata={"geometry": IntentGeometrySpec(shape="cantilever_box", length=100.0, width=10.0, height=10.0)},
+    )
+    p7_res = host_agent.solve_requirement(
+        p7_intent,
+        numerical_verification={"dummy": 1.0},
+        contact_diagnostics={"penetration": 0.0},
+    )
+    probes["probe_7_internal_injection_defense"] = (
+        "PASS" if p7_res.status == TaskStatus.BLOCKED and p7_res.summary_card.get("status") == "INJECTION_BLOCKED" else "FAIL"
+    )
+
     for probe_name, p_status in probes.items():
         print(f"  {probe_name}: {p_status}")
 

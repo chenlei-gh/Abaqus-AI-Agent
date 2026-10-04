@@ -4,11 +4,11 @@
   "status": "QUALIFIED",
   "evidence_tier": "REAL_ABAQUS",
   "solver_version": "Abaqus 2025",
-  "timestamp": "2026-10-04T02:12:09.242537+00:00",
+  "timestamp": "2026-10-04T05:53:28.665702+00:00",
   "prompt": "\u5728\u53cc\u6b65\u5206\u6790\u6d41\u7a0b\u4e2d\uff1aStep 1\uff08\u9884\u7d27\u9636\u6bb5\uff09\u65bd\u52a0 5000 N \u87ba\u6813\u9884\u7d27\u529b\uff08APPLY_FORCE\uff09\uff1bStep 2\uff08\u5de5\u51b5\u9636\u6bb5\uff09\u9501\u5b9a\u87ba\u6813\u957f\u5ea6\uff08FIX_LENGTH\uff09\uff0c\u91ca\u653e\u9876\u9762\u8f74\u5411\u7ea6\u675f\u5e76\u65bd\u52a0 100000 N*mm \u5916\u8f7d\u626d\u77e9\uff08\u901a\u8fc7 RP \u8fd0\u52a8\u8026\u5408\uff09\u4e0e 2000 N \u5916\u8f7d\u62c9\u529b\uff1b\u9a8c\u8bc1\u591a\u6b65\u72b6\u6001\u7ee7\u627f\u3001\u9884\u7d27\u9501\u5b9a\u53ca\u5916\u8f7d\u53cd\u529b\u53cd\u529b\u77e9\u7269\u7406\u5e73\u8861\u3002",
   "preflight": {
     "status": "PASS",
-    "checks_count": 76,
+    "checks_count": 80,
     "blockers_count": 0
   },
   "five_layers_verification": {
@@ -52,7 +52,7 @@
       "mesh_element_type": "C3D8R"
     },
     "layer_5_evidence_traceability": {
-      "script_sha256": "606333e7d54e16408884f331abc0ed781fd200e1dfc6f332e0a95a4c5e666987",
+      "script_sha256": "c238d45cc63f4ecbf50affcfc7bdb99f309cc0b3c009d77bea6275ec1cf62d1a",
       "artifacts": {
         "GA263_Job.inp": {
           "sha256": "086c5ab1ca0ceead03b3bafabbc5a464e71bda326a6b4da989e7f47f36112bf8",
@@ -60,28 +60,28 @@
           "exists": true
         },
         "GA263_Job.odb": {
-          "sha256": "86c417b4c96255adbc26c5c59a4c309d111a48ac459dcfa5568185dd30910c99",
+          "sha256": "b54c28959c1150ff533c1a5774c76f34b825baf2d0623fa1623df1f331403e1f",
           "size_bytes": 554992,
           "exists": true
         },
         "GA263_Job.sta": {
-          "sha256": "fb24c94c8ac371d1f94956bf37cbc829abffa0cd229b4e18ea5acbb65897760e",
+          "sha256": "a01371a8946d19419cf396b4918fe763a26d4fdf8c4ab0c24afa67e521b1ec1d",
           "size_bytes": 511,
           "exists": true
         },
         "GA263_Job.msg": {
-          "sha256": "60fe5571845c653dc515675d1ee015a5a11cab6b44c795babe886a9282437908",
-          "size_bytes": 17978,
+          "sha256": "d84595985befccc4b88680b8cb8f4837464594310ee66d3ad72297431b63fff6",
+          "size_bytes": 17977,
           "exists": true
         },
         "GA263_Job.dat": {
-          "sha256": "ec60ddf0744085a5ab923403dbe0eaf8bc6558bb978144d796c2af3aa8e6e63e",
+          "sha256": "a81fc9e6dc5a00bb7f0d33e572ef8dcf71262f4fb9b43b7b1c59582af49a97e0",
           "size_bytes": 16098,
           "exists": true
         },
         "GA263_Job.log": {
-          "sha256": "10ce8241949b11e5e9e04756e25bd7d15e70ea99060fd930ce84c3698b763474",
-          "size_bytes": 665,
+          "sha256": "067c0c5457ec77a1d0570fcd4db59005fb7a55968ec503f166812ef49134e064",
+          "size_bytes": 659,
           "exists": true
         }
       },
@@ -114,6 +114,8 @@
       "contact": "SKIPPED",
       "procedure": "SKIPPED",
       "thermal_balance": "SKIPPED",
+      "connector_kinematics": "SKIPPED",
+      "fmbd_dynamics": "SKIPPED",
       "required_results": "NOT_SPECIFIED",
       "criteria": "PASS"
     },

@@ -1,6 +1,6 @@
 {
   "schema_version": "jev_intent_routing_v1",
-  "verified_at": "2026-10-04T02:12:28.804115+00:00",
+  "verified_at": "2026-10-04T05:53:47.740513+00:00",
   "total_prompts": 3,
   "passed_prompts": 3,
   "all_passed": true,
@@ -22,7 +22,7 @@
         "unit": "MPa"
       },
       "boundary_conditions_count": 1,
-      "loads_count": 2,
+      "loads_count": 1,
       "acceptance_criteria_count": 2,
       "bundle": {
         "source_model": "jev-offline-engine-v1",

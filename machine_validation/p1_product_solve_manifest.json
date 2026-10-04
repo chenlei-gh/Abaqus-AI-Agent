@@ -3,10 +3,10 @@
   "case_id": "P1_0_Product_Solve_Golden",
   "evidence_tier": "REAL_ABAQUS",
   "solver": "Abaqus 2025",
-  "verified_at": "2026-10-04T05:28:27.956855+00:00",
+  "verified_at": "2026-10-04T05:40:57.610597+00:00",
   "status": "QUALIFIED",
   "requirement_prompt": "\u5bf9\u957f100mm\u5bbd10mm\u9ad810mm\u60ac\u81c2\u6881\u6839\u90e8\u56fa\u5b9a\uff0c\u7aef\u90e8\u65bd\u52a01000N\u5411\u4e0b\u8f7d\u8377\uff0c\u6750\u6599Q235\uff0c\u8ba1\u7b97\u5e94\u529b\u548c\u4f4d\u79fb",
-  "run_id": "run_p1_product_solve_20261004_132827",
+  "run_id": "run_p1_product_solve_20261004_134057",
   "workflow": {
     "natural_language_routing": "PASS",
     "capability_resolution_20_l4": "PASS",
@@ -25,7 +25,8 @@
     "probe_3_missing_geometry_blocked": "PASS",
     "probe_4_missing_material_blocked": "PASS",
     "probe_5_external_input_anti_fabrication": "PASS",
-    "probe_6_preflight_blocker": "PASS"
+    "probe_6_preflight_blocker": "PASS",
+    "probe_7_internal_injection_defense": "PASS"
   },
   "metrics": {
     "tip_displacement": 2.16584849357605,
@@ -38,27 +39,27 @@
       "exists": true
     },
     "Job_P1_Product_Solve.odb": {
-      "sha256": "6249ebc12c50b021ffcb07a41151d3b72449af2196c7a1140eaa593daff1bbd0",
+      "sha256": "97a92f102fff3274d9d10dbcbc36eff300e3bbcfe0514702075ef05dca42de35",
       "size_bytes": 405264,
       "exists": true
     },
     "Job_P1_Product_Solve.sta": {
-      "sha256": "42ac1686834bc310e196472135417dca98c65a846f9cb5c3bae978f5a03013bd",
+      "sha256": "41c269ea0682b8155d460ff1fd52b2f8eb36cf7ea4ce4adfd24b6762d933db0a",
       "size_bytes": 443,
       "exists": true
     },
     "Job_P1_Product_Solve.msg": {
-      "sha256": "4202f2b6c53c5207d44266bd72cf8681cc67ebe7349aefb59bac341a062a2aae",
+      "sha256": "efa45207523875bbdc5ec1cd417654f32c083b652f3a3a5719f475fdfbe99e80",
       "size_bytes": 7996,
       "exists": true
     },
     "Job_P1_Product_Solve.dat": {
-      "sha256": "81df41f5f9c98711e66f9f6ce441dcd6f893e5266f288a4599c6fc96fbf2a1d1",
+      "sha256": "72bfb721bf4e775fd131ca92f6157624aa6e8ff83dfec9739801353339c77a9c",
       "size_bytes": 9998,
       "exists": true
     },
     "Job_P1_Product_Solve.log": {
-      "sha256": "3880044e6b5eedb9de700599fce50fe64a401971ffef36e0968f2100e2366ed5",
+      "sha256": "2d5854ce64eaa5bef06cb8c004c719da0bafdb0578f626c47f5b789be466a44a",
       "size_bytes": 681,
       "exists": true
     }
