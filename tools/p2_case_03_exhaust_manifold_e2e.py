@@ -326,7 +326,7 @@ def run_case_03_exhaust_manifold(workdir: Path, launcher: Optional[str] = None) 
             {"name": "Fastener Safety Factor Relative to Proof Load", "value": f"{bolt_safety_factor:.2f}", "unit": "-"},
         ),
         figures=(
-            ReportFigure(kind="chart", path=str(chart_file), caption="Exhaust Manifold Sealing Pressure, Thermal Slip, and Fillet Thermal Stress Integrity Dashboard"),
+            ReportFigure(kind="chart", path=chart_file.name, caption="Exhaust Manifold Sealing Pressure, Thermal Slip, and Fillet Thermal Stress Integrity Dashboard"),
         ),
         engineering_checks=(
             {"name": "MLS Gasket Sealing Pressure Criterion", "passed": True, "details": f"Operating contact pressure {step_2_operating_cpress:.2f} MPa exceeds the minimum design threshold of 25.0 MPa, ensuring positive sealing without exhaust blow-by."},

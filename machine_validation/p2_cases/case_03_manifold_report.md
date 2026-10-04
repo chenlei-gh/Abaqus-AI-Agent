@@ -70,7 +70,7 @@ Assess thermal field, MLS gasket sealing contact pressure retention, differentia
 
 ## 9. Figures
 
-![Exhaust Manifold Sealing Pressure, Thermal Slip, and Fillet Thermal Stress Integrity Dashboard](D:\Vault\Abaqus\Abaqus-AI-Agent\test_assets\runs\case_03_manifold_run\Case_03_Exhaust_Manifold_Thermo_Mechanical\exhaust_manifold_integrity_dashboard.svg)
+![Exhaust Manifold Sealing Pressure, Thermal Slip, and Fillet Thermal Stress Integrity Dashboard](exhaust_manifold_integrity_dashboard.svg)
 
 ## 10. Engineering Checks
 
