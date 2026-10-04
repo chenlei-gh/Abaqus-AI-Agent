@@ -1604,10 +1604,11 @@ In practical engineering practice, user requests do not arrive as pre-grounded A
 - [x] **GA-F4.4: Deterministic Fatigue Acceptance & Result Requirement Gate**
   - [x] Gate 8 fatigue verification and acceptance: mandatory gates for `fatigue_life` ($\ge N_{\text{target}}$) and `cumulative_damage` ($\le D_{\text{allowable}}$).
   - [x] Fail-closed gating: missing stress history, missing gate, or excessive damage deterministically yields `RESULT_INVALID` / `BLOCKED`.
-- [x] **GA-F4.5: Full Agent-Chain Golden Benchmark & Negative Suite (`tests/test_fatigue_l4_golden.py`)**
-  - [x] Full-chain test: `EngineeringIntent` with `IntentFatigueSpec` $\to$ `compile_intent_to_actions` $\to$ ODB cyclic extraction $\to$ deterministic damage $\to$ `EvidenceManifestV2` $\to$ `evaluate_result_acceptance` $\to$ `PASS`.
-  - [x] 4 negative probes: missing field output 'S' $\to$ `RESULT_INVALID`; omitted fatigue gate $\to$ `BLOCKED`; excessive damage $\to$ `FAIL`; tampered evidence $\to$ `EVIDENCE_TAMPERED`.
-  - [x] Promoted High-Cycle Fatigue from **L3 Specialized Workflow** to **L4 Agent Full-Chain Qualified** (18 L4 / 2 L3 achieved).
+- [x] **GA-F4.5: Full Agent-Chain Golden Benchmark & Negative Suite (`tools/fatigue_l4_golden_e2e.py` & `tests/test_fatigue_l4_real_machine.py`)**
+  - [x] Full-chain live Abaqus 2025 execution: `EngineeringIntent` with `IntentFatigueSpec` $\to$ `compile_intent_to_actions` $\to$ multi-step cyclic solve on Abaqus 2025 $\to$ real ODB extraction $\to$ deterministic rainflow + Goodman + Miner $\to$ `EvidenceManifestV2` $\to$ `evaluate_result_acceptance` $\to$ `PASS`.
+  - [x] 4 negative probes verified fail-closed on live artifacts: missing field output 'S' $\to$ `RESULT_INVALID`; omitted fatigue gate $\to$ `BLOCKED`; excessive damage $\to$ `FAIL`; tampered evidence $\to$ `EVIDENCE_TAMPERED`.
+  - [x] Persisted authentic cryptographic evidence in `machine_validation/fatigue_l4_golden_manifest.json`.
+  - [x] Promoted High-Cycle Fatigue from **L3 Specialized Workflow** to **L4 Agent Full-Chain Qualified** (18 L4 / 2 L3 achieved on live Abaqus 2025).
 
 ---
 

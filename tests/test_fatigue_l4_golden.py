@@ -358,3 +358,67 @@ def test_fatigue_l4_negative_probe_tampered_evidence(tmp_path):
     assert acceptance.passed is False
     assert acceptance.gates["evidence_sufficiency"] == "FAIL"
     assert any("hash_mismatch" in f for f in acceptance.failures)
+
+
+def test_analysis_runner_fatigue_auto_bridge(tmp_path):
+    """Verify AnalysisRunner automatically invokes fatigue postprocessing when intent has fatigue."""
+    from abaqus_ai_agent.execution.analysis_run import AnalysisRunner, AnalysisRunState
+
+    class MockFatigueExecutor:
+        def __init__(self, mock_odb):
+            self.mock_odb = mock_odb
+
+        def snapshot(self):
+            return None
+
+        def execute(self, code, timeout=120):
+            if "status" in code and "mdb.jobs" in code:
+                return "COMPLETED"
+            return {"status": "COMPLETED"}
+
+        def inspect_odb(self, path):
+            return self.mock_odb
+
+    sn_curve = (
+        (100.0, 1.0e7),
+        (250.0, 1.0e6),
+    )
+    fatigue_spec = IntentFatigueSpec(
+        target_cycles=1.0e5,
+        allowable_damage=0.5,
+        material_curve=sn_curve,
+        ultimate_strength=800.0,
+        mean_stress_correction="GOODMAN",
+        measure="signed_mises",
+    )
+    intent = EngineeringIntent(
+        id="intent_runner_fatigue",
+        kind="structural_fatigue",
+        description="Auto fatigue verification",
+        analysis_type="cyclic_fatigue",
+        fatigue=fatigue_spec,
+    )
+
+    mock_odb = _create_cyclic_mock_odb()
+    executor = MockFatigueExecutor(mock_odb)
+    runner = AnalysisRunner(executor)
+
+    # Create dummy artifacts so evidence manifest v2 builds cleanly
+    for ext in ("inp", "odb", "sta", "msg", "dat", "log"):
+        (tmp_path / f"Job-AutoFatigue.{ext}").write_text(f"dummy content for {ext}", encoding="utf-8")
+
+    run = runner.run(
+        model_name="Model-1",
+        job_name="Job-AutoFatigue",
+        odb_path=str(tmp_path / "Job-AutoFatigue.odb"),
+        engineering_intent=intent,
+        workdir=str(tmp_path),
+    )
+
+    assert run.state == AnalysisRunState.ACCEPTED
+    assert run.acceptance_passed is True
+    assert run.get_metric("fatigue_life") is not None
+    assert run.get_metric("damage") is not None
+    assert run.acceptance.gates["fatigue"] == "PASS"
+    assert run.acceptance.gates["execution"] == "PASS"
+    assert run.acceptance.gates["odb"] == "PASS"

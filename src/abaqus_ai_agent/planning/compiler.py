@@ -972,11 +972,9 @@ def compile_intent_to_actions(
     # 12. Output Requests & Job Creation
     if fatigue is not None:
         fatigue_out_req = (
+            f"import step\n"
             f"for _for_name in list(mdb.models['{model_name}'].fieldOutputRequests.keys()):\n"
-            f"    _cur_vars = list(mdb.models['{model_name}'].fieldOutputRequests[_for_name].variables)\n"
-            f"    if 'S' not in _cur_vars:\n"
-            f"        _cur_vars.append('S')\n"
-            f"    mdb.models['{model_name}'].fieldOutputRequests[_for_name].setValues(variables=tuple(_cur_vars))\n"
+            f"    mdb.models['{model_name}'].fieldOutputRequests[_for_name].setValues(variables=('S', 'U', 'RF'))\n"
         )
         actions.append(builders.python_action(model_name, fatigue_out_req))
 

@@ -303,10 +303,14 @@ def extract_stress_history_from_odb(
         steps = odb.steps
         if not steps:
             raise ValueError("ODB has no analysis steps")
-        st_name = step_name or list(steps.keys())[-1]
-        if st_name not in steps:
-            raise ValueError(f"Step '{st_name}' not found in ODB steps: {list(steps.keys())}")
-        step = steps[st_name]
+        if step_name and step_name != "ALL":
+            if step_name not in steps:
+                raise ValueError(f"Step '{step_name}' not found in ODB steps: {list(steps.keys())}")
+            target_steps = [(step_name, steps[step_name])]
+            st_name = step_name
+        else:
+            target_steps = list(steps.items())
+            st_name = "ALL" if len(target_steps) > 1 else target_steps[0][0]
 
         # 1. Hotspot identification if element_label is omitted
         hot_elem = element_label
@@ -315,62 +319,67 @@ def extract_stress_history_from_odb(
         max_mises = -1.0
 
         if hot_elem is None:
-            for frame in step.frames:
-                if "S" not in frame.fieldOutputs:
-                    continue
-                s_field = frame.fieldOutputs["S"]
-                for val in s_field.values:
-                    vm = getattr(val, "mises", None)
-                    if vm is not None and float(vm) > max_mises:
-                        max_mises = float(vm)
-                        hot_elem = getattr(val, "elementLabel", None)
-                        hot_ip = getattr(val, "integrationPoint", 1)
-                        inst = getattr(val, "instance", None)
-                        hot_inst = getattr(inst, "name", None) if inst else None
+            for _, step in target_steps:
+                for frame in step.frames:
+                    if "S" not in frame.fieldOutputs:
+                        continue
+                    s_field = frame.fieldOutputs["S"]
+                    for val in s_field.values:
+                        vm = getattr(val, "mises", None)
+                        if vm is not None and float(vm) > max_mises:
+                            max_mises = float(vm)
+                            hot_elem = getattr(val, "elementLabel", None)
+                            hot_ip = getattr(val, "integrationPoint", 1)
+                            inst = getattr(val, "instance", None)
+                            hot_inst = getattr(inst, "name", None) if inst else None
 
         if hot_elem is None:
-            raise ValueError(f"No stress field 'S' found in step '{st_name}' to establish hotspot")
+            raise ValueError(f"No stress field 'S' found in step(s) to establish hotspot")
 
         # 2. Extract multi-frame history for this hotspot
         history_points = []
         raw_stresses = []
         times = []
+        cumulative_time = 0.0
 
-        for frame in step.frames:
-            t = float(getattr(frame, "frameValue", 0.0))
-            if "S" not in frame.fieldOutputs:
-                continue
-            s_field = frame.fieldOutputs["S"]
-            matched_val = None
-            for val in s_field.values:
-                el = getattr(val, "elementLabel", None)
-                ip = getattr(val, "integrationPoint", 1)
-                inst = getattr(val, "instance", None)
-                inst_name = getattr(inst, "name", None) if inst else None
-                if el == hot_elem:
-                    if hot_ip is not None and ip != hot_ip:
-                        continue
-                    if hot_inst is not None and inst_name != hot_inst:
-                        continue
-                    matched_val = val
-                    break
+        for _, step in target_steps:
+            for frame in step.frames:
+                t = cumulative_time + float(getattr(frame, "frameValue", 0.0))
+                if "S" not in frame.fieldOutputs:
+                    continue
+                s_field = frame.fieldOutputs["S"]
+                matched_val = None
+                for val in s_field.values:
+                    el = getattr(val, "elementLabel", None)
+                    ip = getattr(val, "integrationPoint", 1)
+                    inst = getattr(val, "instance", None)
+                    inst_name = getattr(inst, "name", None) if inst else None
+                    if el == hot_elem:
+                        if hot_ip is not None and ip != hot_ip:
+                            continue
+                        if hot_inst is not None and inst_name != hot_inst:
+                            continue
+                        matched_val = val
+                        break
 
-            if matched_val is not None:
-                record = {
-                    "mises": getattr(matched_val, "mises", None),
-                    "maxPrincipal": getattr(matched_val, "maxPrincipal", None),
-                    "tresca": getattr(matched_val, "tresca", None),
-                    "data": list(matched_val.data) if hasattr(matched_val.data, "__iter__") else [matched_val.data],
-                }
-                scalar_val = compute_scalar_stress(record, measure=measure)
-                times.append(t)
-                raw_stresses.append(scalar_val)
-                history_points.append({
-                    "time": t,
-                    "scalar_stress": scalar_val,
-                    "mises": float(record["mises"]) if record["mises"] is not None else None,
-                    "data": [float(x) for x in record["data"]],
-                })
+                if matched_val is not None:
+                    record = {
+                        "mises": getattr(matched_val, "mises", None),
+                        "maxPrincipal": getattr(matched_val, "maxPrincipal", None),
+                        "tresca": getattr(matched_val, "tresca", None),
+                        "data": list(matched_val.data) if hasattr(matched_val.data, "__iter__") else [matched_val.data],
+                    }
+                    scalar_val = compute_scalar_stress(record, measure=measure)
+                    times.append(t)
+                    raw_stresses.append(scalar_val)
+                    history_points.append({
+                        "time": t,
+                        "scalar_stress": scalar_val,
+                        "mises": float(record["mises"]) if record["mises"] is not None else None,
+                        "data": [float(x) for x in record["data"]],
+                    })
+            if step.frames:
+                cumulative_time += float(getattr(step.frames[-1], "frameValue", 0.0))
 
         return {
             "step_name": st_name,
@@ -602,9 +611,9 @@ def run_fatigue_postprocess(
     # Convert repeated blocks into total equivalent life cycles based on counted cycles
     total_counted_cycles = max(cycle_sum.get("total_cycles_count", 1.0), 1.0)
     if isfinite(life_blocks) and life_blocks > 0:
-        life_cycles = life_blocks * total_counted_cycles
+        life_cycles = min(life_blocks * total_counted_cycles, 1.0e8)
     else:
-        life_cycles = 1.0
+        life_cycles = 1.0e8
 
     # Determine status against IntentFatigueSpec
     warnings: List[str] = []

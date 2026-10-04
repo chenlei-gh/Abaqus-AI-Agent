@@ -414,7 +414,12 @@ class AnalysisRunner:
                 engineering_status=EngineeringStatus.RESULT_SUSPICIOUS.value,
                 evidence=EvidenceBundle((Evidence(kind="odb_summary", source="odb", locator=path, value=odb),)), artifacts=artifacts)
 
-            if not effective_criteria and numerical_verification is None and engineering_checks is None and mesh_quality is None and mesh_convergence is None and fatigue is None and contact_diagnostics is None and sensitivity is None and uncertainty is None:
+            from ..contracts.fatigue import IntentFatigueSpec, FatigueResult
+            fatigue_spec = getattr(engineering_intent, "fatigue", None) or (
+                fatigue if isinstance(fatigue, IntentFatigueSpec) else None
+            )
+
+            if not effective_criteria and numerical_verification is None and engineering_checks is None and mesh_quality is None and mesh_convergence is None and fatigue is None and fatigue_spec is None and contact_diagnostics is None and sensitivity is None and uncertainty is None:
                 return run.with_state(AnalysisRunState.ODB_VALIDATED)
 
             if result_values is None:
@@ -437,6 +442,101 @@ class AnalysisRunner:
                 ),)
                 result_source = "external_input"
 
+            if fatigue_spec is not None and result_source == "odb":
+                from ..fatigue import run_fatigue_postprocess
+                computed_fatigue_res = None
+                fatigue_metrics = {}
+                try:
+                    target_odb = raw_odb if (raw_odb is not None and hasattr(raw_odb, "steps")) else path
+                    computed_fatigue_res, fatigue_metrics = run_fatigue_postprocess(target_odb, fatigue_spec)
+                except Exception:
+                    try:
+                        import tempfile
+                        import json
+                        import os
+                        from ..fatigue import build_odb_fatigue_postprocess_script
+                        with tempfile.NamedTemporaryFile(suffix=".json", delete=False) as tf:
+                            out_json_path = tf.name
+                        post_script = build_odb_fatigue_postprocess_script(
+                            odb_path=path,
+                            output_json=out_json_path,
+                            material_curve=fatigue_spec.material_curve,
+                            ultimate_strength=fatigue_spec.ultimate_strength,
+                            mean_stress_correction=fatigue_spec.mean_stress_correction,
+                            measure=fatigue_spec.measure,
+                            step_name=fatigue_spec.step_name,
+                            element_label=fatigue_spec.element_label,
+                        )
+                        self.executor.execute(post_script)
+                        if os.path.exists(out_json_path):
+                            with open(out_json_path, "r", encoding="utf-8") as f:
+                                fatigue_data = json.load(f)
+                            try:
+                                os.remove(out_json_path)
+                            except Exception:
+                                pass
+                            c_sum = fatigue_data.get("cycle_summary", {})
+                            damage_val = c_sum.get("cumulative_damage", 0.0)
+                            total_cnt = max(c_sum.get("total_cycles_count", 1.0), 1.0)
+                            life_val = c_sum.get("life_blocks", 0.0) * total_cnt
+                            status_val = fatigue_data.get("status", "fail")
+                            computed_fatigue_res = FatigueResult(
+                                status=status_val,
+                                life_cycles=life_val,
+                                damage=damage_val,
+                                evidence=tuple(fatigue_data.get("evidence", ("fatigue_postprocess_script",))),
+                            )
+                            fatigue_metrics = {
+                                "fatigue_life": life_val,
+                                "damage": damage_val,
+                                "max_stress_range": c_sum.get("max_stress_range", 0.0),
+                                "mean_stress_average": c_sum.get("mean_stress_average", 0.0),
+                                "total_cycles_count": c_sum.get("total_cycles_count", 0.0),
+                                "hotspot_element": fatigue_data.get("hotspot", {}).get("element_label"),
+                            }
+                    except Exception:
+                        pass
+
+                if computed_fatigue_res is not None:
+                    fatigue = computed_fatigue_res
+                    if fatigue_metrics:
+                        result_values.update(fatigue_metrics)
+                        from ..contracts.metrics import EngineeringMetric
+                        f_metrics = [
+                            EngineeringMetric(
+                                name=k,
+                                value=v,
+                                unit="cycles" if "life" in k or "cycles" in k else ("MPa" if "stress" in k else ""),
+                                source="odb",
+                                quantity="fatigue",
+                            )
+                            for k, v in fatigue_metrics.items() if isinstance(v, (int, float))
+                        ]
+                        run_metrics = tuple(locals().get("run_metrics", ())) + tuple(f_metrics)
+
+                existing_keys = {c.get("value_key") for c in effective_criteria if isinstance(c, dict)}
+                added_crit = []
+                if "fatigue_life" not in existing_keys:
+                    added_crit.append({
+                        "name": "fatigue_life_gate",
+                        "value_key": "fatigue_life",
+                        "operator": ">=",
+                        "limit": float(fatigue_spec.target_cycles),
+                        "unit": "cycles",
+                        "required": True,
+                    })
+                if "damage" not in existing_keys:
+                    added_crit.append({
+                        "name": "fatigue_damage_gate",
+                        "value_key": "damage",
+                        "operator": "<=",
+                        "limit": float(fatigue_spec.allowable_damage),
+                        "unit": "",
+                        "required": True,
+                    })
+                if added_crit:
+                    effective_criteria = tuple(effective_criteria) + tuple(added_crit)
+
             run_manifest = None
             if result_source == "odb":
                 try:
@@ -457,6 +557,7 @@ class AnalysisRunner:
                 except Exception:
                     run_manifest = None
 
+            domain_to_eval = "fatigue" if fatigue_spec is not None else None
             accepted = evaluate_result_acceptance(
                 result_status=status.state.value.lower(),
                 numerical=numerical_verification,
@@ -472,6 +573,7 @@ class AnalysisRunner:
                 base_dir=art_dir if result_source == "odb" else None,
                 expected_run_id=run_id if result_source == "odb" else None,
                 require_evidence=True if result_source == "odb" else False,
+                physics_domain=domain_to_eval,
             )
             verification_evidence = []
             if numerical_verification is not None:

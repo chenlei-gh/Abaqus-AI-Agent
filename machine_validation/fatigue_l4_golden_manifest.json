@@ -1,0 +1,119 @@
+{
+  "schema_version": "fatigue_l4_golden_v1",
+  "evidence_tier": "REAL_ABAQUS",
+  "solver_version": "Abaqus 2025",
+  "verified_at": "2026-10-04T03:55:57.593792+00:00",
+  "compiler_chain_verified": true,
+  "run_id": "run_fatigue_l4_real_20261004_035557",
+  "case_id": "MP_Fatigue_L4_Golden",
+  "golden_pass": true,
+  "all_negative_probes_fail_closed": true,
+  "physical_metrics": {
+    "hotspot_element": 37,
+    "peak_mises": 251.91973876953125,
+    "max_stress_range": 255.20190525054932,
+    "mean_stress_average": 124.31878614425659,
+    "total_cycles_count": 0.5,
+    "fatigue_life": 3940651.6115584443,
+    "cumulative_damage": 2.5376513799567306e-07,
+    "available_fields": [
+      "S",
+      "U",
+      "RF"
+    ]
+  },
+  "artifacts": {
+    "Job_Fatigue_L4.inp": {
+      "sha256": "1fd3daf558f0e36c38ca02c50bff603b0c903f89b2d0c30de954a4bb929928f2",
+      "size_bytes": 16037,
+      "exists": true
+    },
+    "Job_Fatigue_L4.odb": {
+      "sha256": "54511561cc07c6ae30c90bb651e5704397e57ee58bfb9199329b0612cf79d0aa",
+      "size_bytes": 329328,
+      "exists": true
+    },
+    "Job_Fatigue_L4.sta": {
+      "sha256": "fe0baea092a2edf3ea3e317ae2b4f6680e8bf8051b85d6afda0358cc60709142",
+      "size_bytes": 1055,
+      "exists": true
+    },
+    "Job_Fatigue_L4.msg": {
+      "sha256": "fb6088138141e25b5ca0a19ba592d1cd16633e5a0882c2e5654428090f6c01d0",
+      "size_bytes": 31357,
+      "exists": true
+    },
+    "Job_Fatigue_L4.dat": {
+      "sha256": "369dd2d629a1c1f3a9ac690ea66d4de2a42521dc6abdfa8d21b86407b2cc0d42",
+      "size_bytes": 19912,
+      "exists": true
+    },
+    "Job_Fatigue_L4.log": {
+      "sha256": "331b067087b3cea4a756f6d2d2b25283c15f5d0431958fa636efffded944f5f7",
+      "size_bytes": 675,
+      "exists": true
+    }
+  },
+  "acceptance": {
+    "passed": true,
+    "status": "PASS",
+    "result_validity": "VALID",
+    "audit_summary": "Solver: PASS | ODB: PASS | Required Result: PASS | Engineering Acceptance: PASS",
+    "gates": {
+      "execution": "PASS",
+      "odb": "PASS",
+      "evidence_sufficiency": "PASS",
+      "numerical_verification": "SKIPPED",
+      "engineering_checks": "SKIPPED",
+      "mesh_quality": "SKIPPED",
+      "convergence": "SKIPPED",
+      "fatigue": "PASS",
+      "contact": "SKIPPED",
+      "procedure": "SKIPPED",
+      "thermal_balance": "SKIPPED",
+      "required_results": "PASS",
+      "criteria": "PASS"
+    },
+    "failures": [],
+    "blocked": []
+  },
+  "negative_probes": {
+    "probe_1_missing_required_s": {
+      "fail_closed": true,
+      "passed": false,
+      "status": "BLOCKED",
+      "result_validity": "RESULT_INVALID",
+      "failures": [
+        "missing_required_field:S"
+      ]
+    },
+    "probe_2_life_damage_violation": {
+      "fail_closed": true,
+      "passed": false,
+      "status": "FAIL",
+      "failures": [
+        "fatigue_verification_failed",
+        "criterion:min_life_gate",
+        "criterion:max_damage_gate"
+      ]
+    },
+    "probe_3_tampered_manifest": {
+      "fail_closed": true,
+      "passed": false,
+      "status": "BLOCKED",
+      "failures": [
+        "evidence_tampered:manifest_signature_mismatch",
+        "evidence_tampered:hash_mismatch:Job_Fatigue_L4.odb",
+        "evidence_incomplete:missing_mandatory_role:odb"
+      ]
+    },
+    "probe_4_missing_gate_fatigue": {
+      "fail_closed": true,
+      "passed": false,
+      "status": "BLOCKED",
+      "failures": [
+        "missing_mandatory_gate:fatigue"
+      ]
+    }
+  }
+}

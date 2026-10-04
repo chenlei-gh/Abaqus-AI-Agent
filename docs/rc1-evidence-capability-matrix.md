@@ -51,7 +51,7 @@ To eliminate ambiguity across commercial workflows and academic verification, th
 | 8 | Preloaded Modal | **L4 Agent Full-Chain** | MP-3 preload state inheritance → modal extraction → frequency acceptance |
 | 9 | Explicit Dynamics | **L4 Agent Full-Chain** | MP-4 explicit dynamics + ALLKE/ALLIE energy evidence |
 | 10 | Implicit Dynamics | **L4 Agent Full-Chain** | Dynamic procedure/amplitude compiler path with live ODB qualification |
-| 11 | High-Cycle Fatigue | **L4 Agent Full-Chain** | `IntentFatigueSpec` integrated into compiler, automatic 'S' field output injection, deterministic rainflow/Goodman/Miner, Gate 8 PASS |
+| 11 | High-Cycle Fatigue | **L4 Agent Full-Chain** | `IntentFatigueSpec` integrated into compiler, automatic 'S' field output injection, live Abaqus 2025 multi-step cyclic solve, deterministic rainflow/Goodman/Miner, Gate 8 PASS, real machine golden qualified (`fatigue_l4_golden_manifest.json`) |
 | 12 | Multi-Step Procedure | **L4 Agent Full-Chain** | Procedure DAG and cross-step state lifecycle, including GA-2.6.3 |
 | 13 | Spatial Field Loading | **L4 Agent Full-Chain** | `SpatialLoadField` / AST-guarded ExpressionField integrated into the main compiler |
 | 14 | Kinematic Connectors | **L3 Specialized Workflow** | Connector/MBD specialized workflow and live Golden qualification; not generic main Intent compiler coverage |
@@ -207,7 +207,7 @@ The following three tracks represent the ongoing evolution beyond `v1.0.0-rc1` d
 │      (Perspective Camera Calibration, Raycast AABB, Depth Sorting) [CLOSED] │
 │    - 🥈 Track GA-F4: Fatigue L3 -> L4 Full-Chain Upgrade                    │
 │      (Declarative IntentFatigueSpec -> Compiler -> Rainflow/Goodman/Miner)  │
-│      [CLOSED - 18 L4 / 2 L3 achieved]                                       │
+│      [CLOSED - 18 L4 / 2 L3 achieved on live Abaqus 2025 solver]            │
 │    - 🥉 Track GA-2B: Multimodal Perception (Blueprints/Photos -> HITL)      │
 │      (Strict Observation -> User Confirmation -> Typed Intent; No Bypass)   │
 │    - ⏸️ Track GA-L3: Kinematic Connectors & FMBD [Stable L3 / Deferred]     │
@@ -304,7 +304,7 @@ To prevent capability drift and establish the empirical baseline before initiati
 | 11 | **Multi-Step Procedure DAG** | GA-2.6.0 ~ GA-2.6.3 Golden | Multi-step dependency DAG (`Initial` $\to$ `Step-1` $\to$ `Step-2`) | `ga263_golden_evidence.json`, `ga261_probe_evidence.json` | State inheritance, load incrementation, `nlgeom` cross-step consistency | Tier A | 🟢 **L4 (Agent Full-Chain)** |
 | 12 | **Spatial Field-Dependent Loading** | GA-2.6.1 P2 Probe, GA-2.6.2 Compiler | AST-whitelisted analytical field (`ExpressionField`) $\to$ `Pressure` | `ga261_probe_evidence.json` | Integrated surface reaction force error $7.1 \times 10^{-7}\%$ vs exact analytical integral | Tier A | 🟢 **L4 (Agent Full-Chain)** |
 | 13 | **Assembly & Kinematic Tie Constraints** | Golden Tie, General Contact | Multi-part surface tie constraints and master-slave pairing | `tie_contact_e2e.json` | Kinematic continuity across interface, displacement compatibility | Tier A | 🟢 **L4 (Agent Full-Chain)** |
-| 14 | **High-Cycle & Low-Cycle Fatigue** | Golden Fatigue E2E, `fatigue.py`, `IntentFatigueSpec` | Stress history $\to$ Rainflow counting $\to$ Goodman $\to$ Miner | `fatigue_odb_golden_e2e.json`, `test_fatigue_l4_golden.py` | Reversal extraction, rainflow cycle counts, damage accumulation, life prediction, Gate 8 PASS | Tier A | 🟢 **L4 (Agent Full-Chain)** |
+| 14 | **High-Cycle & Low-Cycle Fatigue** | Golden Fatigue E2E, `fatigue.py`, `IntentFatigueSpec` | Stress history $\to$ Rainflow counting $\to$ Goodman $\to$ Miner | `fatigue_l4_golden_manifest.json`, `fatigue_odb_golden_e2e.json` | Reversal extraction, rainflow cycle counts, damage accumulation, life prediction; live Abaqus 2025 full-chain PASS, Gate 8 PASS, 4 negative probes fail-closed | Tier A | 🟢 **L4 (Agent Full-Chain Qualified)** |
 | 15 | **Kinematic Connectors & Mechanism Joints** | Golden MBD, J-Live CONN, `mbd.py` | Revolute, Cartesian, Hooke spring non-linear connectors | `mbd_golden_e2e.json`, `mbd2_revolute_golden_e2e.json` | Connector reaction forces/moments, relative rotation, spring deflection | Tier A | 🟡 **L3 (Specialized Workflow Qualified; Intent Compiler Pending)** |
 | 16 | **Flexible Multibody Dynamics (FMBD)** | FMBD4 ~ FMBD7, `mechanism.py` | Rigid-flexible and flexible-to-flexible coupled systems | `fmbd4_rigid_flexible_golden_e2e.json` ~ `fmbd6...` | Joint constraint torque, flexible member vibration, dynamic equilibrium | Tier A | 🟡 **L3 (Specialized Workflow Qualified; Intent Compiler Pending)** |
 | 17 | **Stability & Buckling** | J-Live B1–B2 | Linear eigenvalue buckling, post-buckling riks | `j_live_abaqus_evidence.json` | Euler critical load $P_{\text{cr}}$, bifurcation point, imperfection tracking | Tier A | 🟢 **L4 (Solver & Workflow Qualified)** |
