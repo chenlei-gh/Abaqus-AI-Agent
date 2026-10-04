@@ -1569,20 +1569,20 @@ In practical engineering practice, user requests do not arrive as pre-grounded A
 #### Track GA-2A: 3D Viewport Spatial Grounding & Topology Disambiguation [P1 - HIGHEST PRIORITY 🥇]
 *Deterministic Viewport Projection: Connecting interactive user viewport clicks to authentic 3D CAD topology and native Abaqus constraints via calibrated perspective camera geometry and spatial raycasting.*
 
-- [ ] **GA-2A.1: Perspective Camera Model & Projection Matrix Calibration**
-  - [ ] Implement robust `PinholeCamera` model (`src/abaqus_ai_agent/grounding/projection.py`) supporting focal length, principal point, aspect ratio, near/far clipping planes, and $4\times 4$ camera extrinsic/intrinsic matrix ($[R|T]$).
-  - [ ] Calibrate against Abaqus CAE viewport camera parameters (`cameraPosition`, `cameraTarget`, `cameraUpVector`, `perspectiveAngle`).
-  - [ ] Backward compatibility: preserve existing parallel projection (`OrthographicCamera`) accuracy without breaking existing tests.
-- [ ] **GA-2A.2: Perspective Raycasting & Spatial Bounding Box Intersection**
-  - [ ] Implement 2D-to-3D back-projection: map screen normalized device coordinates $(u, v) \in [0, 1]$ to diverging 3D rays originating from the camera optical center $\vec{O}_{\text{cam}}$ along direction $\vec{d}$.
-  - [ ] Implement fast ray-AABB (Axis-Aligned Bounding Box) spatial screening against candidate geometry parts and topological cells.
-- [ ] **GA-2A.3: Depth Disambiguation, Z-Buffer & Surface Normal Backface Culling**
-  - [ ] Deterministic front-surface isolation: filter out back-facing surfaces via ray-normal dot product ($\vec{n} \cdot \vec{d} < 0$).
-  - [ ] Multi-surface ray penetration: implement $Z$-buffer parametric distance sorting ($t_{\min} = \arg\min t$) to resolve occluded geometry and select the nearest visible entity.
-  - [ ] Fallback to top-$K$ candidates with explicit confidence scores when intersection falls near geometric edges or sliver regions.
-- [ ] **GA-2A.4: Direct RegionResolver & Canonical GroundedRegion Bridge**
-  - [ ] Convert ray intersection 3D coordinates $(x, y, z)$ into canonical `GroundedRegion` (`contracts/geometry.py`).
-  - [ ] Pass directly into `RegionResolver` (`grounding/resolver.py`) to synthesize native Abaqus `findAt(((x, y, z),))` expressions without inventing duplicate region representations.
+- [x] **GA-2A.1: Perspective Camera Model & Projection Matrix Calibration**
+  - [x] Implement robust `PinholeCamera` model (`src/abaqus_ai_agent/grounding/projection.py`) supporting focal length, principal point, aspect ratio, near/far clipping planes, and $4\times 4$ camera extrinsic/intrinsic matrix ($[R|T]$).
+  - [x] Calibrate against Abaqus CAE viewport camera parameters (`cameraPosition`, `cameraTarget`, `cameraUpVector`, `perspectiveAngle`).
+  - [x] Backward compatibility: preserve existing parallel projection (`OrthographicCamera`) accuracy without breaking existing tests.
+- [x] **GA-2A.2: Perspective Raycasting & Spatial Bounding Box Intersection**
+  - [x] Implement 2D-to-3D back-projection: map screen normalized device coordinates $(u, v) \in [0, 1]$ to diverging 3D rays originating from the camera optical center $\vec{O}_{\text{cam}}$ along direction $\vec{d}$.
+  - [x] Implement fast ray-AABB (Axis-Aligned Bounding Box) spatial screening against candidate geometry parts and topological cells.
+- [x] **GA-2A.3: Depth Disambiguation, Z-Buffer & Surface Normal Backface Culling**
+  - [x] Deterministic front-surface isolation: filter out back-facing surfaces via ray-normal dot product ($\vec{n} \cdot \vec{d} < 0$).
+  - [x] Multi-surface ray penetration: implement $Z$-buffer parametric distance sorting ($t_{\min} = \arg\min t$) to resolve occluded geometry and select the nearest visible entity.
+  - [x] Fallback to top-$K$ candidates with explicit confidence scores when intersection falls near geometric edges or sliver regions.
+- [x] **GA-2A.4: Direct RegionResolver & Canonical GroundedRegion Bridge**
+  - [x] Convert ray intersection 3D coordinates $(x, y, z)$ into canonical `GroundedRegion` (`contracts/geometry.py`).
+  - [x] Pass directly into `RegionResolver` (`grounding/resolver.py` and `contracts/geometry.py`) to synthesize native Abaqus `findAt(((x, y, z),))` expressions without inventing duplicate region representations.
 - [ ] **GA-2A.5: Real-Machine E2E Golden Verification on Abaqus 2025**
   - [ ] Execute complete autonomous loop: Viewport screen click $(u, v) \to$ Raycast $\to$ `GroundedRegion` $\to$ `compile_intent_to_actions` $\to$ Preflight $\to$ Abaqus 2025 $\to$ ODB $\to$ Evidence V2 $\to$ Acceptance $\to$ Report.
   - [ ] Validate reaction force equilibrium and stress results against analytical references; persist SHA-256 evidence manifest in `machine_validation/ga2a_viewport_golden_evidence.json`.
