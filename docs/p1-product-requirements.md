@@ -1,3 +1,91 @@
+# Abaqus-AI-Agent 产品需求总清单与阶段路线
+
+**版本:** 2026-10-04  
+**战略定位:** 面向 AI Agent 的工程仿真执行、验证与结果交付基础设施，并逐步演进为可自主完成工程分析任务的 Abaqus Engineering Agent
+
+> **本文件为项目产品需求总清单。** 旧有 P1.x 编号继续作为功能模块编号，但不再与 Phase 1/2/3/4 一一对应。
+> **Phase 表示产品成熟度阶段；P1.x 表示功能模块/交付批次。** 因此 P1.4（求解诊断与受控自愈）属于 Phase 3，P1.5（工作台/UI）属于 Phase 4。
+
+---
+
+## 0. 总体产品路线（冻结版）
+
+```text
+Phase 1：工程闭环
+P1.0 ─ P1.3
+        ↓
+“能从需求做到可信结果”
+        ✅ COMPLETED
+
+Phase 2：工程能力深度
+Fatigue / Connector / FMBD
++ 更多真实工程场景
+        ↓
+“能处理足够多的真实问题”
+        🔄 IN PROGRESS
+
+Phase 3：Agent 自主性
+规划 / 澄清 / 迭代 / 诊断 / 对比 / 优化
+        ↓
+“工程师可以把任务交给它”
+        🔄 STARTED
+
+Phase 4：产品化
+MCP / UI / 部署 / Benchmark / Release
+        ↓
+“真正成为可使用的产品”
+        📋 PLANNED
+```
+
+### 0.1 Phase 与功能模块的关系
+
+| Phase | 产品目标 | 当前核心模块 | 状态 |
+|---|---|---|---|
+| **Phase 1** | 从需求做到可信结果 | P1.0 / P1.1 / P1.2 / P1.3 | 🟢 **COMPLETED** |
+| **Phase 2** | 扩大真实工程问题覆盖与组合深度 | Fatigue / Connector / FMBD / 更多真实工程场景 | 🟡 **IN PROGRESS** |
+| **Phase 3** | 让 Agent 能自主规划、执行、诊断、迭代与比较 | 规划 / 澄清 / 迭代 / P1.4 诊断自愈 / 对比 / 优化 | 🟡 **STARTED** |
+| **Phase 4** | 让工程师能够稳定、方便地实际使用 | MCP / UI / 部署 / Benchmark / Release | ⚪ **PLANNED** |
+
+### 0.2 当前已正式闭环的能力
+
+- P1.0 Agent 统一工程入口：QUALIFIED
+- P1.1 工程多模态感知与 Grounding：QUALIFIED；Provider-Neutral 架构保持不变，真正外部 Vision/OCR 商用模型适配属于后续扩展边界
+- P1.2 工程意图推理与参数补全：QUALIFIED
+- P1.3 Result Intelligence 与工程报告交付：QUALIFIED
+- Fatigue：L4 QUALIFIED
+- Connector：L4 QUALIFIED
+- FMBD：L4 QUALIFIED
+- P1.4 求解器失败诊断与受控自愈：已完成实现与真实机 Golden E2E，作为 Phase 3「诊断 / 迭代」能力推进
+- 全项目继续遵守 Evidence V2、Single-Exit Acceptance、Fail-Closed、Zero Fabrication 与 Stated Scope Precision。
+
+### 0.3 Phase 2 的边界
+
+Phase 2 **不是重新堆叠大量 Abaqus 关键词或无限增加物理域**。已有 20 L4 物理域是底座。Phase 2 的重点是：
+1. 已有物理能力的真实工程场景深度；
+2. 多物理 / 多工况 / 组合工程问题；
+3. 更复杂几何、材料、载荷、边界与接触组合；
+4. 更高质量的真实机 Golden 案例矩阵；
+5. 工程可重复性、鲁棒性与边界覆盖。
+
+### 0.4 Phase 3 的边界
+
+Phase 3 的核心不是再增加底层 Abaqus API，而是让 Agent 能完成闭环任务：
+
+```text
+工程师需求 → 需求规划 → 缺失信息识别/主动澄清 → 分析计划 → 执行
+→ 结果检查 → 失败诊断/受控迭代 → 多方案比较 → 必要时优化
+→ 重新验证 → 工程交付
+```
+
+P1.4 属于其中的**诊断 / 迭代**能力。
+
+### 0.5 Phase 4 的边界
+
+Phase 4 才开始正式产品化：MCP / Agent Tool、UI / HITL 工作台、部署、Benchmark、Release。
+
+**在 Phase 4 前不提前堆叠 UI。**
+
+---
 # P1 阶段商业产品化与工程 Agent 需求规范与需求清单 (Product Requirements & Backlog)
 
 **版本:** 2026-10-04  
@@ -43,16 +131,16 @@
 
 ### 1.4 现有能力复用与防重复建设审计原则 (Capability Reuse Matrix)
 在启动 P1.1 及后续研发前，全量审计了当前代码库在 Phase A~M 及 Post-RC1 沉淀的大量高成熟度资产（详细审计详见专报 [`docs/p1-capability-reuse-audit.md`](p1-capability-reuse-audit.md)）：
-* **P1.1 多模态层**：严禁重写 `VisualCallout`、`GroundingObservation` 及 `MultimodalHITLWorkflow` 状态机；严禁重写 3D 射线拾取与几何候选算法（复用 GA-2A 与 H.6 真实机已验证资产）；**P1.1 唯一任务是补齐最前端的图像/图纸 OCR 与符号提取适配器**。
-* **P1.2 推理补全层**：严禁重写 `MaterialResolver` 的单位转换与温度外推阻断逻辑；严禁重构 `JevIntentRouter`；严禁重写网格指标与 GCI 算法；**P1.2 唯一任务是建立常用材料别名字典与网格透明推荐依据记录器**。
-* **P1.3 可视化与报告层**：严禁重构 `EngineeringReportData` 与 HTML 报告渲染器；**仅补齐无头 ODB 云图导出脚本与 Matplotlib 动力学能量曲线生成器**。
-* **P1.4 求解医生层**：严禁重写发散模式正则库与两次 Run 的物理对比算法（复用 `PATTERNS` 与 `AnalysisRunDiff`）；**仅补齐自愈调度闭环编排器**。
+* **P1.1 多模态层（Phase 1）**：严禁重写 `VisualCallout`、`GroundingObservation` 及 `MultimodalHITLWorkflow` 状态机；严禁重写 3D 射线拾取与几何候选算法（复用 GA-2A 与 H.6 真实机已验证资产）；**P1.1 唯一任务是补齐最前端的图像/图纸 OCR 与符号提取适配器**。
+* **P1.2 推理补全层（Phase 1）**：严禁重写 `MaterialResolver` 的单位转换与温度外推阻断逻辑；严禁重构 `JevIntentRouter`；严禁重写网格指标与 GCI 算法；**P1.2 唯一任务是建立常用材料别名字典与网格透明推荐依据记录器**。
+* **P1.3 可视化与报告层（Phase 1）**：严禁重构 `EngineeringReportData` 与 HTML 报告渲染器；**仅补齐无头 ODB 云图导出脚本与 Matplotlib 动力学能量曲线生成器**。
+* **P1.4 求解医生层（Phase 3：诊断 / 迭代）**：严禁重写发散模式正则库与两次 Run 的物理对比算法（复用 `PATTERNS` 与 `AnalysisRunDiff`）；**仅补齐自愈调度闭环编排器**。
 
 ---
 
 ## 二、P1 产品需求总矩阵与执行看板
 
-Phase P1 商业产品化采用“系统层解耦、执行层渐进、真实工程可验证”的阶梯推进路线：
+当前 P1.x 仍作为功能模块编号；产品成熟度阶段以第 0 章 Phase 1~4 总路线为准。P1.x 详细需求继续采用“系统层解耦、执行层渐进、真实工程可验证”的方式维护：
 
 ```text
                Phase P1: Commercial Productization & Engineering Grounding
@@ -95,11 +183,11 @@ Phase P1 商业产品化采用“系统层解耦、执行层渐进、真实工�
 | 需求代号 | 需求模块名称 | 核心工程目标 | 优先级 | 当前状态 | 牵引测试 / 凭证 |
 |:---|:---|:---|:---:|:---:|:---|
 | **P1.0** | **Agent 产品主入口** | 自然语言需求 $\to$ 意图编译 $\to$ 20 域能力解析 $\to$ 真实求解 $\to$ 单一出口验收 | **P0 (已收口)** | 🏆 **QUALIFIED** | `tools/p1_product_solve_golden_e2e.py`<br>`tests/test_p1_product_entry_audit.py` (726 PASS) |
-| **P1.1** | **真实工程多模态感知** | 工程图纸/现场照片/截图 OCR $\to$ 尺寸/公差/载荷箭头提取 $\to$ `VisualCallout` $\to$ HITL 门禁 | **P0 (当前主线)** | 🚧 **READY TO EXECUTE** | `tests/test_p1_multimodal_ingestion.py`<br>`machine_validation/p1_vision_manifest.json` |
-| **P1.2** | **工程参数智能推理** | 缺参识别、材料别名匹配、网格推荐透明化、边界歧义消除、Fail-Closed 澄清交互 | **P0 (当前主线)** | 🚧 **READY TO EXECUTE** | `tests/test_p1_parameter_inference.py` |
-| **P1.3** | **交付级多维结果可视化** | 无头 ODB 云图渲染 (S/U/CPRESS/TEMP)、能量曲线、独立 HTML 工程报告与 Evidence V2 徽章 | **P1 (下一阶段)** | 📋 **PLANNED** | `tests/test_p1_headless_visualization.py`<br>`tests/test_p1_report_deliverable.py` |
-| **P1.4** | **求解故障智能自愈** | `.msg`/`.sta` 发散解析 (奇异, SDI, Cutback) $\to$ 受控自愈策略 $\to$ Diff 对比与守恒检验 | **P2** | 📋 **PLANNED** | `tests/test_p1_solver_doctor.py` |
-| **P1.5** | **商业级工程工作台** | 3D WebGL 视口、HITL 协同卡片、作业队列调度与案例库 (排在最后，不做提前堆砌) | **P2** | 📋 **PLANNED** | 远期规划 |
+| **P1.1** | **真实工程多模态感知** | 工程图纸/现场照片/截图感知 → Grounding → HITL | **P0 (Phase 1)** | 🟢 **QUALIFIED** | `tools/p1_drawing_to_odb_golden_e2e.py`<br>756+ 严格回归 |
+| **P1.2** | **工程参数智能推理** | 缺参识别、材料别名、网格推荐、边界合理性、HITL | **P0 (Phase 1)** | 🟢 **QUALIFIED** | `tools/p1_2_reasoning_qualification_e2e.py`<br>791 严格回归 |
+| **P1.3** | **Result Intelligence 与工程报告** | ODB 结果、曲线、派生指标、热点、SVG、HTML/MD 报告 | **P0 (Phase 1)** | 🟢 **QUALIFIED** | `tools/p1_3_result_delivery_golden_e2e.py`<br>804 严格回归 |
+| **P1.4** | **求解故障诊断与受控自愈** | 诊断 → 有界 remediation → 重算 → RunDiff → Acceptance | **P0 (Phase 3)** | 🟢 **QUALIFIED / Phase 3 STARTED** | `tools/p1_4_self_healing_golden_e2e.py`<br>820 严格回归 |
+| **P1.5** | **商业级工程工作台** | 3D 视口、HITL 卡片、作业与资产管理 | **Phase 4** | ⚪ **PLANNED** | 远期产品化需求 |
 
 ---
 
@@ -350,3 +438,145 @@ P1.0 产品主入口已彻底消除高层自然语言需求与底层 20 个 L4 �
    外部输入、模型修饰、非标准动作脚本严禁直接触碰 `ACCEPTED` 状态。只有经由 `AnalysisRunner` $\to$ `preflight` $\to$ 真实 Abaqus 求解 $\to$ ODB 提取 $\to$ `EvidenceManifestV2` 验签 $\to$ `evaluate_result_acceptance`，才是通往工程合格裁决的唯一合法路径。
 4. **范围诚实原则 (Stated Scope Precision)**：
    如实陈述已验证的边界。宣称“20 个物理领域 L4 认证”是指在各领域已声明的物理基准和工程契约范围内达到全链路闭环，严禁夸大为“无限制支持 Abaqus 全部几十万个关键词或任意复杂拓扑”。
+
+---
+
+# 十一、Phase 2：工程能力深度需求清单
+
+## REQ-P2-001：Fatigue 工程场景深度
+**状态：🟢 L4 QUALIFIED；持续扩展真实工程场景。**
+
+在现有高周疲劳 L4 基础上，继续验证更真实的载荷历史、材料与几何组合。不得把单一 Golden 扩大解释为“覆盖全部 Abaqus 疲劳”。
+
+验收要求：
+- 真实 Abaqus ODB；
+- Evidence V2；
+- Rainflow / mean-stress / Miner 语义保持一致；
+- 失败与边界情况 Fail-Closed。
+
+## REQ-P2-002：Connector / Joint 工程场景深度
+**状态：🟢 L4 QUALIFIED；持续扩展真实机构场景。**
+
+重点扩展多连接器、不同方向、组合载荷与机构拓扑，而不是重写现有 Connector 内核。
+
+## REQ-P2-003：FMBD 工程场景深度
+**状态：🟢 L4 QUALIFIED；持续扩展刚柔耦合与机构组合场景。**
+
+重点覆盖更多刚柔拓扑、闭环机构、连接器组合及动态响应验证。
+
+## REQ-P2-004：多物理与组合工程场景
+建立跨已有 L4 域的真实工程组合案例，例如：
+- Thermal → Structural；
+- Preload → Modal；
+- Contact + Nonlinear；
+- Assembly + Connector；
+- 多步骤载荷历史；
+- 多工况结果比较。
+
+**目标不是新增“能力数量”，而是证明已有能力可以组合成真实工程工作流。**
+
+## REQ-P2-005：真实工程场景矩阵
+建立可持续扩展的 Golden Case Matrix：几何复杂度、材料复杂度、边界复杂度、接触/连接复杂度、多步骤、多工况、结果交付。
+
+每个新增场景必须有明确工程目的、真实机证据和边界说明。
+
+---
+
+# 十二、Phase 3：Agent 自主性需求清单
+
+## REQ-P3-001：工程任务规划（Planning）
+Agent 根据自然语言工程目标生成分析类型、所需输入、材料与边界、网格策略、求解步骤、结果需求、验收目标。
+
+规划必须输出结构化计划，不能直接由模型生成 Abaqus 执行脚本绕过现有 Compiler / Preflight。
+
+## REQ-P3-002：主动澄清（Clarification）
+当信息不足、存在歧义或存在高风险假设时：自动识别缺失项、说明影响、给出选项、请求工程师确认；未确认不得静默执行。
+
+复用 P1.1 HITL 与 P1.2 NEEDS_CLARIFICATION 契约，不建立第二套 HITL 状态机。
+
+## REQ-P3-003：受控迭代（Iteration）
+Agent 可以根据真实求解结果判断是否需要重新计算，修改有限且可解释的参数，重新 Preflight、重新求解、比较前后结果，并保留完整运行历史。
+
+所有迭代必须经过现有 Acceptance 单一出口。
+
+## REQ-P3-004：求解失败诊断与受控自愈
+**对应 P1.4；状态：🟢 QUALIFIED / Phase 3 已启动。**
+
+要求：.msg/.sta/.dat 诊断、有界尝试次数、不可自愈故障立即阻断、RunDiff 保留前后轨迹、自愈不能绕过 Preflight / Acceptance、自愈失败必须保留原始失败证据。
+
+**重要工程红线：** 自愈策略不得为了“让求解器跑通”而未经证据改变工程问题本身；高风险 remediation 必须进入 Assisted/HITL 或 BLOCKED。
+
+## REQ-P3-005：工程结果对比（Comparison）
+支持两次 Run 对比、参数方案对比、结果指标对比、ODB / Evidence 对比及工程结论差异说明。
+
+复用现有 AnalysisRunDiff，不得重新建立第二套 Run 状态体系。
+
+## REQ-P3-006：工程方案优化（Optimization）
+在已有求解、结果与 Acceptance 能力之上，支持受约束的参数优化：明确设计变量、目标、约束；生成候选方案；运行真实 Abaqus；对候选方案进行 Acceptance；输出 Pareto / 最优候选及证据。
+
+优化器不得直接修改工程模型后宣称结果有效，所有候选均必须经过真实求解与验收。
+
+## REQ-P3-007：Agent 全任务自主闭环
+
+```text
+Requirement → Planning → Clarification → Execution → Result Inspection
+→ Diagnosis → Controlled Iteration → Comparison → Optimization
+→ Verification → Engineering Deliverable
+```
+
+这是 Phase 3 的最终目标：**工程师可以把完整分析任务交给 Agent，而不是只能逐条调用工具。**
+
+---
+
+# 十三、Phase 4：产品化需求清单
+
+## REQ-P4-001：MCP / Agent Tool 接入
+提供稳定、版本化、Fail-Closed 的工具接口，使外部 Agent 能调用需求入口、模型检查、规划、求解、结果、报告、诊断与历史 Run。
+
+不得允许外部 Agent 绕过核心 Acceptance。
+
+## REQ-P4-002：工程师 UI / HITL 工作台
+在 Phase 3 能力稳定后建设 3D 视口、Grounding 候选、HITL 确认、求解进度、诊断与自愈轨迹、结果云图/曲线、Run 对比与工程报告。
+
+UI 只是核心后端的消费者，不得在 UI 层重新实现物理或 Acceptance。
+
+## REQ-P4-003：部署与运行环境
+覆盖 Windows + Abaqus 2025、许可证能力探测、headless 执行、环境诊断、日志、任务目录与工件管理、安装与升级。
+
+## REQ-P4-004：Benchmark
+建立公开、可复现、可审计的 Benchmark：工程任务、物理结果、失败任务、澄清任务、自愈任务、多方案比较、报告交付。
+
+Benchmark 必须区分软件回归与真实 Abaqus 物理验证。
+
+## REQ-P4-005：Release / 产品交付
+建立版本策略、CHANGELOG、安装文档、用户文档、能力矩阵、已知限制、安全与路径脱敏、Evidence / Golden 发布证据及可复现 Release。
+
+---
+
+# 十四、Phase 1~4 总追溯矩阵
+
+| Phase | 原子需求 | 当前状态 |
+|---|---|---|
+| Phase 1 | P1.0 Agent 主入口 | 🟢 QUALIFIED |
+| Phase 1 | P1.1 感知 / Grounding | 🟢 QUALIFIED |
+| Phase 1 | P1.2 工程意图推理 | 🟢 QUALIFIED |
+| Phase 1 | P1.3 Result Intelligence / Report | 🟢 QUALIFIED |
+| Phase 2 | Fatigue 深度 | 🟢 L4 QUALIFIED / 持续扩展 |
+| Phase 2 | Connector 深度 | 🟢 L4 QUALIFIED / 持续扩展 |
+| Phase 2 | FMBD 深度 | 🟢 L4 QUALIFIED / 持续扩展 |
+| Phase 2 | 多物理 / 多工况组合 | 🟡 IN PROGRESS |
+| Phase 2 | 真实工程 Golden Matrix | 🟡 IN PROGRESS |
+| Phase 3 | Planning | ⚪ TODO |
+| Phase 3 | Clarification | 🟡 基础能力已有，Agent 主动闭环 TODO |
+| Phase 3 | Iteration | 🟡 P1.4 已建立受控迭代基础，完整自主闭环 TODO |
+| Phase 3 | Diagnosis / Self-Healing | 🟢 P1.4 QUALIFIED |
+| Phase 3 | Comparison | 🟡 RunDiff 已有，Agent 级比较 TODO |
+| Phase 3 | Optimization | ⚪ TODO |
+| Phase 3 | Full Agent Autonomous Loop | ⚪ TODO |
+| Phase 4 | MCP | ⚪ TODO |
+| Phase 4 | UI / HITL Workbench | ⚪ TODO |
+| Phase 4 | Deployment | ⚪ TODO |
+| Phase 4 | Benchmark | ⚪ TODO |
+| Phase 4 | Release | ⚪ TODO |
+
+> **冻结规则：** 后续开发必须先在本表归属需求；不得因为发现单个功能缺口而重新发明 Phase 或改变总体路线。已有能力优先复用；只有真实缺口才新增代码。
