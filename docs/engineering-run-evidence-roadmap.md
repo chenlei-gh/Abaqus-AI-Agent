@@ -1,12 +1,50 @@
 # Engineering Run / Evidence Closure Roadmap
 
 **Status:** 
-- **RC 1.0 Frozen Baseline**: `v1.0.0-rc1` BASELINE FROZEN at Commit `816872c`+ (616/616 tests PASS, Track GA-3, GA-1.1~1.4, GA-2.1~2.6, and GA-CL.1~CL.7 Fully Closed & Qualified across 20 Physical Engineering Domains) ✅
-- **GA Working Baseline**: `origin/main` QUALIFIED (Tracks GA-3, GA-1.1~GA-1.4, GA-2.1~GA-2.6, GA-CL.1~GA-CL.7 fully closed; Tracks GA-2A and GA-2B staged for post-RC1 evolution) 🚀
+- **RC 1.0 Frozen Baseline**: `v1.0.0-rc1` **BASELINE FROZEN** — 20 physical engineering domains classified as **17 L4 Agent Full-Chain + 3 L3 Specialized Workflow** qualifications; 616/616 regression PASS; three-tier validation hierarchy enforced; production False-PASS bypasses = **0**. ✅
+- **GA Working Baseline**: `origin/main` QUALIFIED; GA-2A Perspective Viewport and GA-2B Multimodal Perception remain explicitly post-RC1 evolution tracks. 🚀
 **Version:** 2026-10-04 (Release Candidate 1.0 Baseline Frozen)  
 **Scope:** Abaqus-AI-Agent engineering architecture, foundational contracts, evidence chain, real-machine physics benchmarks, and material intelligence grounding
 
 ---
+
+## RC1 Frozen Product Qualification
+
+RC1 freezes the existing engineering capability boundary rather than expanding the feature count.
+
+### 20-domain qualification split
+
+- **17 L4 Agent Full-Chain domains:** Linear Static; Nonlinear Static; Contact & Friction; Bolt Pretension; Thermal; Sequential Thermal-Structural; Modal/Frequency; Preloaded Modal; Explicit Dynamics; Implicit Dynamics; Multi-Step Procedure; Spatial Field Loading; Assembly & Tie Interaction; Mesh Quality & GCI; Material Constitutive; Boundary & Load Grounding; Result Acceptance & Engineering Report.
+- **3 L3 Specialized Workflow domains:** High-Cycle Fatigue; Kinematic Connectors; Flexible Multibody (FMBD).
+
+L4 requires the canonical path:
+
+`EngineeringIntent → compile_intent_to_actions → AnalysisRun → Preflight → Abaqus 2025 → ODB → Evidence V2 → Verification → Acceptance → Engineering Report`
+
+L3 requires a bounded, real-Abaqus, evidence-backed specialized workflow, but does **not** claim generic main-entry Intent-to-Solver coverage.
+
+### Three-tier validation hierarchy
+
+| Tier | Purpose | RC1 gate |
+|---|---|---|
+| **Tier A — Real-Machine Physics** | Authentic Abaqus 2025 solver, real ODB, physics-specific metrics | Required for every physical-domain qualification |
+| **Tier B — Engineering Trust** | Preflight, verification, Evidence V2, deterministic Acceptance, fail-closed negative paths | Required before an engineering conclusion can be accepted |
+| **Tier C — Product Delivery** | Agent routing/compiler chain, AnalysisRun traceability, reporting and reproducibility | Required for L4; bounded for L3 |
+
+### False-PASS closure
+
+RC1 records **zero production False-PASS bypasses**. The production code audit confirms:
+
+1. `ACCEPTED` requires passing Acceptance **and** `result_source == "odb"`.
+2. `external_input` cannot become `ACCEPTED`.
+3. Canonical ODB acceptance requires Evidence V2 integrity and expected run identity.
+4. Preflight is mandatory before Job creation/submission.
+5. Tampered, stale, incomplete, or run-ID-mismatched evidence fails closed.
+6. No second production Acceptance state machine was identified.
+
+### RC1 freeze rule
+
+No new physical-domain claim may be promoted to L4 without a new real-machine Agent Full-Chain qualification and corresponding Evidence V2 artifact. Specialized workflows remain L3 until their main Agent entry path is independently qualified. RC1 documentation must preserve these boundaries and must not imply universal Abaqus keyword coverage.
 
 ## 1. Purpose
 
