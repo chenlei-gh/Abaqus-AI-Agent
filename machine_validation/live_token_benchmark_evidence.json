@@ -1,0 +1,54 @@
+{
+  "benchmark_id": "Live-Token-Benchmark-Case1-Case3",
+  "timestamp": "2026-10-08T05:20:16Z",
+  "provider_endpoint": "https://api.openai.com/v1",
+  "model": "gpt-4o-mini",
+  "cases": {
+    "case_01": {
+      "title": "Case 1: Bolted Flange Assembly",
+      "branch_a": {
+        "prompt_tokens": 4644,
+        "completion_tokens": 600,
+        "total_tokens": 5244,
+        "latency_ms": 0.0,
+        "source": "estimated"
+      },
+      "branch_b": {
+        "prompt_tokens": 906,
+        "completion_tokens": 80,
+        "total_tokens": 986,
+        "latency_ms": 0.0,
+        "source": "estimated"
+      },
+      "metrics": {
+        "prompt_token_reduction_pct": 80.49,
+        "total_token_reduction_pct": 81.2,
+        "measurement_source": "estimated",
+        "status": "DRY_RUN_READY"
+      }
+    },
+    "case_03": {
+      "title": "Case 3: Exhaust Manifold Thermo-Mechanical",
+      "branch_a": {
+        "prompt_tokens": 4431,
+        "completion_tokens": 600,
+        "total_tokens": 5031,
+        "latency_ms": 0.0,
+        "source": "estimated"
+      },
+      "branch_b": {
+        "prompt_tokens": 913,
+        "completion_tokens": 80,
+        "total_tokens": 993,
+        "latency_ms": 0.0,
+        "source": "estimated"
+      },
+      "metrics": {
+        "prompt_token_reduction_pct": 79.4,
+        "total_token_reduction_pct": 80.26,
+        "measurement_source": "estimated",
+        "status": "DRY_RUN_READY"
+      }
+    }
+  }
+}
