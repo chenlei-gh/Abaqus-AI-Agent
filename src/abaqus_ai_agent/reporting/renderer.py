@@ -15,10 +15,12 @@ def _plain(value):
 
 def _is_chinese_report(report, language=None):
     if language is not None:
-        return str(language).strip().lower() in ("zh", "zh-cn", "cn", "chinese")
+        return str(language).strip().lower() in ("zh", "zh-cn", "cn", "chinese", "bilingual", "dual")
     if hasattr(report, "metadata") and isinstance(report.metadata, dict):
         lang = report.metadata.get("language")
-        if lang and str(lang).strip().lower() in ("zh", "zh-cn", "cn", "chinese"):
+        if lang and str(lang).strip().lower() in ("zh", "zh-cn", "cn", "chinese", "bilingual", "dual"):
+            return True
+        if report.metadata.get("bilingual") or report.metadata.get("dual_language"):
             return True
     title = getattr(report, "title", "") or ""
     if any('\u4e00' <= char <= '\u9fff' for char in title):
@@ -206,6 +208,7 @@ def _render_custom_table_for_section(heading, value, is_zh=False):
         param_rows = []
         skip_keys = {"assembly_components", "metadata"}
         param_zh_map = {
+            # 歧管相关 (Case 3 Exhaust Manifold)
             "overall_length_mm": "歧管总长度 / Overall Length (mm)",
             "runner_outer_diameter_mm": "支管外径 / Runner Outer Diameter (mm)",
             "runner_wall_thickness_mm": "支管壁厚 / Runner Wall Thickness (mm)",
@@ -215,6 +218,35 @@ def _render_custom_table_for_section(heading, value, is_zh=False):
             "bolt_clearance_hole_diameter_mm": "螺栓通孔直径 / Clearance Hole Diameter (mm)",
             "bolt_radial_clearance_mm": "螺栓径向间隙 / Radial Clearance (mm)",
             "gasket_nominal_thickness_mm": "垫片名义厚度 / Gasket Nominal Thickness (mm)",
+            # 管道与法兰相关 (Case 1 Bolted Flange)
+            "pipe_inner_radius_mm": "管道内半径 / Pipe Inner Radius (mm)",
+            "pipe_outer_radius_mm": "管道外半径 / Pipe Outer Radius (mm)",
+            "flange_outer_diameter_mm": "法兰外径 / Flange Outer Diameter (mm)",
+            "raised_face_diameter_mm": "突面密封面外径 / Raised Face Diameter (mm)",
+            "bolt_circle_diameter_mm": "螺栓分度圆直径 / Bolt Circle Diameter (mm)",
+            "bolt_nominal_diameter_mm": "螺栓公称直径 / Bolt Nominal Diameter (mm)",
+            "bolt_preload_n": "单螺栓预紧力 / Bolt Preload Force (N)",
+            "internal_fluid_pressure_mpa": "介质设计内压 / Internal Design Pressure (MPa)",
+            "operating_temperature_c": "运行工况温度 / Operating Temperature (°C)",
+            # 反应堆压力容器相关 (Case 2 Reactor Pressure Vessel)
+            "vessel_inner_radius_mm": "压力容器内半径 / Vessel Inner Radius (mm)",
+            "vessel_wall_thickness_mm": "容器筒体壁厚 / Vessel Wall Thickness (mm)",
+            "closure_head_crown_radius_mm": "顶盖封头球面半径 / Closure Head Crown Radius (mm)",
+            "flange_ring_outer_diameter_mm": "法兰环外径 / Flange Ring Outer Diameter (mm)",
+            "stud_count": "主螺栓/双头螺柱数量 / Main Stud Bolt Count",
+            "stud_nominal_diameter_mm": "螺柱公称直径 / Stud Nominal Diameter (mm)",
+            "stud_pitch_circle_diameter_mm": "螺柱分度圆直径 / Stud Pitch Circle Diameter (mm)",
+            "design_internal_pressure_mpa": "设计内压峰值 / Peak Design Pressure (MPa)",
+            "design_operating_temperature_c": "设计运行温度 / Design Temperature (°C)",
+            "seal_mean_diameter_mm": "密封环平均密封直径 / Seal Mean Diameter (mm)",
+            "seal_cone_angle_deg": "双锥密封环锥角 / Seal Cone Angle (deg)",
+            # 通用结构尺寸 (General Structural)
+            "length_mm": "结构长度 / Length (mm)",
+            "width_mm": "结构宽度 / Width (mm)",
+            "height_mm": "结构高度 / Height (mm)",
+            "thickness_mm": "结构壁厚 / Thickness (mm)",
+            "outer_diameter_mm": "外径规格 / Outer Diameter (mm)",
+            "inner_diameter_mm": "内径规格 / Inner Diameter (mm)",
         }
         for k, v in value.items():
             if k in skip_keys or isinstance(v, (dict, list, tuple)):
@@ -329,10 +361,19 @@ def _render_custom_table_for_section(heading, value, is_zh=False):
         # Solver Settings
         cfg_rows = []
         solver_zh_map = {
+            "solver": "求解器主程序 / Solver Program",
             "solver_type": "求解器类型 / Solver Type",
-            "geometric_nonlinearity": "几何非线性 / Geometric Nonlinearity",
-            "contact_stabilization": "接触阻尼稳定 / Contact Stabilization",
+            "strategy": "分析步求解策略 / Solution Strategy",
+            "procedure": "分析过程类型 / Procedure Type",
+            "geometric_nonlinearity": "几何非线性开关 / Geometric Nonlinearity (NLGEOM)",
+            "contact_stabilization": "接触阻尼稳定控制 / Contact Stabilization",
             "temperature_interpolation": "温度场插值方法 / Temperature Interpolation",
+            "equation_solver": "代数方程组解法器 / Equation Solver",
+            "time_integration": "时间积分方案 / Time Integration Scheme",
+            "initial_increment": "初始时间增量步 / Initial Time Increment",
+            "min_increment": "最小时间增量步 / Minimum Time Increment",
+            "max_increment": "最大时间增量步 / Maximum Time Increment",
+            "max_increments": "允许最大增量步数 / Maximum Number of Increments",
         }
         for k, v in value.items():
             if k == "step_sequence" or isinstance(v, (dict, list, tuple)):
@@ -347,16 +388,23 @@ def _render_custom_table_for_section(heading, value, is_zh=False):
     # 7. Mesh
     elif heading.startswith("7. Mesh") and isinstance(value, dict) and value:
         mesh_zh_map = {
+            "element_type": "基础有限元单元类型 / Element Type",
+            "seed_size": "网格全局布种尺寸 / Global Seed Size (mm)",
+            "element_count": "有限元单元总数 / Element Count",
+            "node_count": "有限元节点总数 / Node Count",
+            "strategy": "网格划分拓扑策略 / Meshing Strategy",
+            "element_formulation": "单元积分格式 / Element Formulation",
             "element_formulation_thermal": "热学分析单元积分格式 / Thermal Element Formulation",
             "element_formulation_structural": "结构分析单元积分格式 / Structural Element Formulation",
             "total_nodes": "全模型节点总数 / Total Nodes",
             "total_elements": "全模型单元总数 / Total Elements",
             "manifold_runner_mesh_size": "歧管管壁网格尺寸 / Manifold Runner Mesh Size",
             "flange_fillet_refinement": "法兰过渡圆角局部加密 / Flange Fillet Refinement",
-            "minimum_jacobian_ratio": "最小雅可比比率 / Minimum Jacobian Ratio",
+            "minimum_jacobian_ratio": "最小雅可比矩阵比率 / Minimum Jacobian Ratio",
             "maximum_aspect_ratio": "最大单元长宽比 / Maximum Aspect Ratio",
             "severely_distorted_elements": "严重畸变单元数量 / Severely Distorted Elements",
             "maximum_warping_angle": "最大翘曲角 / Maximum Warping Angle",
+            "worst_angle_deviation": "最大角度偏差 / Worst Angle Deviation",
         }
         disc = value.get("discretization")
         if disc and isinstance(disc, dict):
@@ -560,12 +608,73 @@ def _render_custom_table_for_section(heading, value, is_zh=False):
                 th = ["准则项名称 / Criterion", "设计限值要求 / Requirement", "实测计算值 / Actual", "合规状态 / Status"] if is_zh else ["Criterion Name", "Requirement / Limit", "Actual Value", "Status"]
                 lines += [sub_title, "", _format_markdown_table(th, rows), ""]
 
+    # 12. Sensitivity / Uncertainty
+    elif heading.startswith("12. Sensitivity") and value is not None:
+        sens_data, uncert_data = value if isinstance(value, (tuple, list)) and len(value) == 2 else (value, None)
+        # Sensitivity table
+        if sens_data:
+            s_dict = sens_data.to_dict() if hasattr(sens_data, "to_dict") else (sens_data if isinstance(sens_data, dict) else {})
+            params = s_dict.get("parameters") or s_dict.get("sensitivities") or ()
+            if isinstance(params, (list, tuple)) and params:
+                s_rows = []
+                for p in params:
+                    if isinstance(p, dict):
+                        p_name = p.get("parameter_name") or p.get("name", "-")
+                        base_v = str(p.get("baseline_value", "-"))
+                        sens_idx = str(p.get("sensitivity_index") or p.get("impact", "-"))
+                        rank = str(p.get("rank", "-"))
+                        s_rows.append([p_name, base_v, sens_idx, rank])
+                if s_rows:
+                    sub_title = "### 参数敏感性量化核算 (Parameter Sensitivity Quantification)" if is_zh else "### Parameter Sensitivity Quantification"
+                    th = ["参数名称 / Parameter", "基准设定值 / Baseline Value", "敏感度指标 / Sensitivity Index", "影响排序 / Rank"] if is_zh else ["Parameter Name", "Baseline Value", "Sensitivity Index", "Rank"]
+                    lines += [sub_title, "", _format_markdown_table(th, s_rows), ""]
+            elif isinstance(s_dict, dict) and s_dict:
+                s_rows = [[k.replace("_", " ").title(), str(v)] for k, v in s_dict.items() if not isinstance(v, (dict, list, tuple))]
+                if s_rows:
+                    sub_title = "### 参数敏感性量化概览 (Parameter Sensitivity Overview)" if is_zh else "### Parameter Sensitivity Overview"
+                    th = ["敏感性指标 / Sensitivity Metric", "量化数值 / Evaluated Value"] if is_zh else ["Sensitivity Metric", "Evaluated Value"]
+                    lines += [sub_title, "", _format_markdown_table(th, s_rows), ""]
+
+        # Uncertainty table
+        if uncert_data:
+            u_dict = uncert_data.to_dict() if hasattr(uncert_data, "to_dict") else (uncert_data if isinstance(uncert_data, dict) else {})
+            u_items = u_dict.get("uncertainties") or u_dict.get("variables") or ()
+            if isinstance(u_items, (list, tuple)) and u_items:
+                u_rows = []
+                for u in u_items:
+                    if isinstance(u, dict):
+                        u_name = u.get("variable_name") or u.get("name", "-")
+                        dist = str(u.get("distribution", "-"))
+                        mean_v = str(u.get("mean") or u.get("nominal", "-"))
+                        std_v = str(u.get("std_dev") or u.get("variance", "-"))
+                        u_rows.append([u_name, dist, mean_v, std_v])
+                if u_rows:
+                    sub_title = "### 物理不确定度分布模型 (Uncertainty Quantification Models)" if is_zh else "### Uncertainty Quantification Models"
+                    th = ["不确定变量 / Variable", "概率分布类型 / Distribution", "均值/名义值 / Mean (Nominal)", "标准差/离散度 / Std Dev"] if is_zh else ["Variable Name", "Distribution Type", "Mean (Nominal)", "Std Deviation"]
+                    lines += [sub_title, "", _format_markdown_table(th, u_rows), ""]
+
     # 13. Fatigue -> Key Fatigue Metrics Table
     elif heading.startswith("13. Fatigue") and isinstance(value, dict) and value:
-        rows = [[k, str(v)] for k, v in value.items() if not isinstance(v, (dict, list, tuple))]
+        fatigue_zh_map = {
+            "cycles_to_failure": "疲劳失效循环寿命 / Cycles to Failure",
+            "damage_ratio": "累积损伤比率 / Cumulative Damage Ratio",
+            "endurance_limit_mpa": "材料疲劳极限 / Endurance Limit (MPa)",
+            "fatigue_safety_factor": "疲劳强度安全系数 / Fatigue Safety Factor",
+            "stress_amplitude_mpa": "交变应力幅值 / Stress Amplitude (MPa)",
+            "mean_stress_mpa": "平均应力水平 / Mean Stress (MPa)",
+            "life_criterion": "寿命预测准则 / Life Prediction Criterion",
+            "critical_location": "疲劳危险热点位置 / Critical Fatigue Location",
+            "load_ratio_r": "载荷应力比 R / Stress Ratio R",
+        }
+        rows = []
+        for k, v in value.items():
+            if not isinstance(v, (dict, list, tuple)):
+                k_clean = fatigue_zh_map.get(k, k.replace("_", " ").title()) if is_zh else k.replace("_", " ").title()
+                rows.append([k_clean, str(v)])
         if rows:
-            th = ["疲劳参数项 / Parameter", "计算数值 / Value"] if is_zh else ["Fatigue Parameter", "Value"]
-            lines += [_format_markdown_table(th, rows), ""]
+            sub_title = "### 结构高低温疲劳与寿命损伤评估 (Fatigue Life & Damage Evaluation)" if is_zh else "### Fatigue Life & Damage Evaluation"
+            th = ["疲劳评估参数 / Fatigue Parameter", "计算数值 / Evaluated Value"] if is_zh else ["Fatigue Parameter", "Value"]
+            lines += [sub_title, "", _format_markdown_table(th, rows), ""]
 
     # 14b. Solver Diagnostics & Self-Healing Audit
     elif heading.startswith("14b. Solver Diagnostics") and value is not None:
@@ -702,9 +811,18 @@ def _render_custom_table_for_section(heading, value, is_zh=False):
     # 12b. Engineering Mechanism Analysis
     elif heading.startswith("12b. Engineering Mechanism Analysis") and value:
         mech_zh_map = {
+            # Case 3
             "differential_thermal_expansion_slip": "法兰差胀滑移与螺栓孔间隙机理 / Differential Thermal Expansion & Flange Slip Kinematics",
             "runner_junction_fillet_thermal_stress": "支管汇流圆角热应力集中机理 / Runner Confluence Fillet Thermal Stress Concentration",
             "mls_gasket_contact_pressure_evolution": "MLS垫片接触密封压力演化机理 / MLS Gasket Sealing Contact Pressure Evolution",
+            # Case 1
+            "gasket_sealing_pressure_relaxation": "垫片密封接触压力演化与保持机理 / Gasket Sealing Contact Pressure Evolution & Retention",
+            "bolt_tension_fluid_thrust_interaction": "内压流体端面推力与螺栓拉力解耦机理 / Fluid Thrust Interaction & Bolt Tension Equilibrium",
+            "flange_hub_fillet_stress_bending": "法兰颈部过渡圆角弯曲应力机理 / Flange Hub Transition Bending Stress Concentration",
+            # Case 2
+            "double_cone_metallic_seal_self_tightening": "双锥金属密封环自紧式接触机理 / Double-Cone Metallic Gasket Self-Tightening Sealing",
+            "asme_linearized_pl_pb_stress_partition": "ASME规范主薄膜加弯曲应力线性化解剖机理 / ASME Section III Linearized PL+Pb Stress Partitioning",
+            "stud_tension_thermal_hydraulic_equilibrium": "大口径主螺栓液压预紧与承载机理 / High-Capacity Stud Pretension & Structural Equilibrium",
         }
         if isinstance(value, dict):
             for k, v in value.items():
@@ -1360,6 +1478,15 @@ def render_pdf(report, output_path):
             story.append(Preformatted("Figure unavailable: %s" % figure.path, styles["Code"]))
     doc.build(story)
     return output_path
+
+
+def render_report(report, fmt="html", language=None):
+    """Unified entrypoint for deterministic report rendering."""
+    if fmt == "html":
+        return render_html(report, language=language)
+    elif fmt in ("md", "markdown"):
+        return render_markdown(report, language=language)
+    raise ValueError(f"Unsupported format: {fmt}. Expected 'html' or 'markdown'.")
 
 def _conclusion(report, is_zh=False):
     acceptance = report.acceptance

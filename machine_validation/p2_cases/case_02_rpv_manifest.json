@@ -21,7 +21,7 @@
     "passed": true,
     "status": "PASS"
   },
-  "audit_signature": "6bd0a20d4548ca74e3be1a5b6f3fdd6f9185753db885952200072248c97b726c",
+  "audit_signature": "03722b3f66dfe5311914ad06162ec5b4fc8fc1c018eabc90e6159462489dd5e4",
   "benchmark_comparison": {
     "ref_step_1_seal_cpress_mpa": 145.2,
     "ref_step_2_flange_pl_pb_mpa": 238.5,
@@ -51,10 +51,10 @@
   "summary": {
     "acceptance_passed": true,
     "engineering_status": "RESULT_VALID",
-    "report_html_bytes": 10540,
-    "report_md_bytes": 8313,
+    "report_html_bytes": 52433,
+    "report_md_bytes": 32448,
     "status": "COMPLETED"
   },
   "title": "Nuclear Reactor Pressure Vessel (RPV) Bolted Closure Head Joint",
-  "verified_at": "2026-10-04T08:20:29.175622+00:00"
+  "verified_at": "2026-10-08T01:50:17.291930+00:00"
 }

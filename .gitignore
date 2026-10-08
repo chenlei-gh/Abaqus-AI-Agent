@@ -44,3 +44,4 @@ legacy_job_artifacts/
 *.fil
 *.sim
 test_assets/runs/
+runs/
