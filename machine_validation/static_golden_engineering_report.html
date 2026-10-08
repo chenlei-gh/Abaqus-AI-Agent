@@ -1,22 +1,318 @@
-<!doctype html><html><head><meta charset='utf-8'><title>3D Cantilever Beam Linear Static Engineering Analysis Report</title></head><body><pre># 3D Cantilever Beam Linear Static Engineering Analysis Report
-
-## 1. Executive Summary
-
-Verify the structural deflection and peak von Mises stress of a 100mm x 10mm x 10mm cantilever beam subjected to a 1000 N tip load against theoretical and numerical criteria.
-
-## 6. Solver / Analysis Procedure
-
-```json
-{
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>3D Cantilever Beam Linear Static Engineering Analysis Report</title>
+  <style>
+    :root {
+      --bg: #f8fafc;
+      --card-bg: #ffffff;
+      --text: #0f172a;
+      --muted: #475569;
+      --border: #e2e8f0;
+      --primary: #1e40af;
+      --primary-light: #eff6ff;
+      --success: #16a34a;
+      --success-bg: #dcfce7;
+      --danger: #dc2626;
+      --danger-bg: #fee2e2;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "WenQuanYi Micro Hei", "Helvetica Neue", Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+      padding: 32px 16px;
+    }
+    .report-container {
+      max-width: 1120px;
+      margin: 0 auto;
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.05);
+      padding: 48px;
+    }
+    .main-title {
+      font-size: 26px;
+      font-weight: 800;
+      color: #0f172a;
+      margin-bottom: 24px;
+      padding-bottom: 16px;
+      border-bottom: 2px solid #0f172a;
+      letter-spacing: -0.02em;
+    }
+    .section-heading {
+      font-size: 18px;
+      font-weight: 700;
+      color: #1e3a8a;
+      margin-top: 36px;
+      margin-bottom: 16px;
+      padding-left: 12px;
+      border-left: 4px solid #2563eb;
+    }
+    .subsection-heading {
+      font-size: 14px;
+      font-weight: 600;
+      color: #334155;
+      margin-top: 20px;
+      margin-bottom: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    .report-p {
+      color: #334155;
+      font-size: 14px;
+      margin-bottom: 12px;
+    }
+    .kpi-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 16px;
+      margin-bottom: 32px;
+    }
+    .kpi-card {
+      background: #f8fafc;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 16px;
+      text-align: center;
+      transition: transform 0.1s ease;
+    }
+    .kpi-card.badge-pass {
+      background: #f0fdf4;
+      border-color: #86efac;
+    }
+    .kpi-card.badge-fail {
+      background: #fef2f2;
+      border-color: #fca5a5;
+    }
+    .kpi-label {
+      font-size: 11px;
+      font-weight: 600;
+      color: #64748b;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 4px;
+    }
+    .kpi-value {
+      font-size: 20px;
+      font-weight: 800;
+      color: #0f172a;
+    }
+    .badge-pass .kpi-value { color: #15803d; }
+    .badge-fail .kpi-value { color: #b91c1c; }
+    .kpi-sub {
+      font-size: 11px;
+      color: #94a3b8;
+      margin-top: 4px;
+    }
+    .table-wrapper {
+      overflow-x: auto;
+      margin-bottom: 24px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+    }
+    .report-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+      text-align: left;
+    }
+    .report-table th {
+      background: #0f172a;
+      color: #f8fafc;
+      font-weight: 600;
+      padding: 10px 14px;
+      white-space: nowrap;
+    }
+    .report-table td {
+      padding: 10px 14px;
+      border-bottom: 1px solid var(--border);
+      color: #334155;
+    }
+    .report-table tr:nth-child(even) td {
+      background: #f8fafc;
+    }
+    .report-table tr:hover td {
+      background: #f1f5f9;
+    }
+    .status-badge {
+      display: inline-block;
+      font-size: 11px;
+      font-weight: 700;
+      padding: 3px 8px;
+      border-radius: 4px;
+      text-transform: uppercase;
+    }
+    .status-badge.badge-pass {
+      background: #dcfce7;
+      color: #15803d;
+    }
+    .status-badge.badge-fail {
+      background: #fee2e2;
+      color: #b91c1c;
+    }
+    .status-badge.badge-skip {
+      background: #f1f5f9;
+      color: #64748b;
+    }
+    .report-figure {
+      margin: 28px 0;
+      background: #ffffff;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 16px;
+      text-align: center;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+    }
+    .figure-missing {
+      background: #f8fafc;
+      border: 2px dashed #cbd5e1;
+    }
+    .placeholder-box {
+      padding: 32px 16px;
+      text-align: center;
+      color: #64748b;
+    }
+    .placeholder-icon {
+      font-size: 32px;
+      margin-bottom: 8px;
+    }
+    .placeholder-title {
+      font-size: 14px;
+      font-weight: 600;
+      color: #475569;
+      margin-bottom: 6px;
+    }
+    .placeholder-path {
+      font-size: 12px;
+      color: #94a3b8;
+    }
+    .placeholder-path code {
+      background: #e2e8f0;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 11px;
+      color: #334155;
+    }
+    .svg-container {
+      width: 100%;
+      max-width: 1000px;
+      margin: 0 auto;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      overflow-x: auto;
+    }
+    .svg-container svg {
+      max-width: 100%;
+      height: auto;
+      display: block;
+    }
+    .figure-img {
+      max-width: 100%;
+      height: auto;
+      border-radius: 4px;
+    }
+    .figure-caption {
+      margin-top: 10px;
+      font-size: 13px;
+      color: #475569;
+    }
+    .report-quote {
+      margin: 12px 0 20px 0;
+      padding: 12px 18px;
+      background: #f1f5f9;
+      border-left: 4px solid var(--primary);
+      color: #334155;
+      font-size: 13px;
+      line-height: 1.6;
+      border-radius: 0 6px 6px 0;
+      text-align: left;
+    }
+    .payload-details {
+      margin: 16px 0;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 12px 16px;
+      background: #f8fafc;
+    }
+    .payload-details summary {
+      font-size: 12px;
+      font-weight: 600;
+      color: #64748b;
+      cursor: pointer;
+      user-select: none;
+    }
+    .code-block {
+      background: #0f172a;
+      color: #e2e8f0;
+      padding: 14px;
+      border-radius: 6px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 12px;
+      overflow-x: auto;
+      margin-top: 10px;
+    }
+    .list-item {
+      display: flex;
+      margin-bottom: 6px;
+      font-size: 14px;
+      color: #334155;
+    }
+    .list-num, .list-bullet {
+      font-weight: 700;
+      margin-right: 8px;
+      color: #2563eb;
+    }
+    @media print {
+      body { background: #fff; padding: 0; }
+      .report-container { border: none; box-shadow: none; padding: 0; max-width: 100%; }
+      .payload-details { display: none; }
+    }
+    </style>
+</head>
+<body>
+  <div class="report-container">
+    <h1 class="main-title">3D Cantilever Beam Linear Static Engineering Analysis Report</h1>
+<div class="kpi-grid">
+        <div class="kpi-card badge-pass">
+          <div class="kpi-label">Overall Acceptance</div>
+          <div class="kpi-value">PASS</div>
+          <div class="kpi-sub">Deterministic Gate Verification</div>
+        </div>
+        <div class="kpi-card badge-metric">
+          <div class="kpi-label">tip_displacement_lower</div>
+          <div class="kpi-value">2.06864285469055 mm</div>
+          <div class="kpi-sub">Key Result Metric</div>
+        </div>
+        <div class="kpi-card badge-metric">
+          <div class="kpi-label">tip_displacement_upper</div>
+          <div class="kpi-value">2.06864285469055 mm</div>
+          <div class="kpi-sub">Key Result Metric</div>
+        </div>
+        <div class="kpi-card badge-metric">
+          <div class="kpi-label">root_mises_sanity</div>
+          <div class="kpi-value">471.214080810547 MPa</div>
+          <div class="kpi-sub">Key Result Metric</div>
+        </div></div>
+<h2 class="section-heading">1. Executive Summary</h2>
+<p class="report-p">Verify the structural deflection and peak von Mises stress of a 100mm x 10mm x 10mm cantilever beam subjected to a 1000 N tip load against theoretical and numerical criteria.</p>
+<h2 class="section-heading">6. Solver / Analysis Procedure</h2>
+<h3 class="subsection-heading">Solver Execution &amp; Algorithmic Controls</h3>
+<div class="table-wrapper"><table class="report-table"><thead><tr><th>Configuration Item</th><th>Applied Setting</th></tr></thead><tbody><tr><td>Solver</td><td>STANDARD</td></tr><tr><td>Strategy</td><td>STATIC_GENERAL</td></tr></tbody></table></div>
+<details class="payload-details">
+<summary>Structured Engineering Data Payload (JSON)</summary>
+<pre class="code-block"><code>{
   &quot;solver&quot;: &quot;STANDARD&quot;,
   &quot;strategy&quot;: &quot;STATIC_GENERAL&quot;
-}
-```
-
-## 7. Mesh
-
-```json
-{
+}</code></pre>
+</details>
+<h2 class="section-heading">7. Mesh</h2>
+<pre class="code-block"><code>{
   &quot;strategy&quot;: {
     &quot;element_type&quot;: &quot;C3D8R&quot;,
     &quot;seed_size&quot;: 2.5,
@@ -54,19 +350,12 @@ Verify the structural deflection and peak von Mises stress of a 100mm x 10mm x 1
     }
   ],
   &quot;convergence&quot;: []
-}
-```
-
-## 8. Results
-
-| Metric Name            | Value            | Unit | Source |
-|------------------------|------------------|------|--------|
-| tip_displacement_lower | 2.06864285469055 | mm   | odb    |
-| tip_displacement_upper | 2.06864285469055 | mm   | odb    |
-| root_mises_sanity      | 471.214080810547 | MPa  | odb    |
-
-```json
-[
+}</code></pre>
+<h2 class="section-heading">8. Results</h2>
+<div class="table-wrapper"><table class="report-table"><thead><tr><th>Metric Name</th><th>Value</th><th>Unit</th><th>Source</th></tr></thead><tbody><tr><td>tip_displacement_lower</td><td>2.06864285469055</td><td>mm</td><td>odb</td></tr><tr><td>tip_displacement_upper</td><td>2.06864285469055</td><td>mm</td><td>odb</td></tr><tr><td>root_mises_sanity</td><td>471.214080810547</td><td>MPa</td><td>odb</td></tr></tbody></table></div>
+<details class="payload-details">
+<summary>Structured Engineering Data Payload (JSON)</summary>
+<pre class="code-block"><code>[
   {
     &quot;name&quot;: &quot;tip_displacement_lower&quot;,
     &quot;value&quot;: 2.06864285469055,
@@ -112,49 +401,18 @@ Verify the structural deflection and peak von Mises stress of a 100mm x 10mm x 1
     &quot;required&quot;: true,
     &quot;metadata&quot;: {}
   }
-]
-```
-
-## 11. Acceptance Criteria
-
-### Verification Integrity &amp; Audit Summary
-
-| Verification Dimension        | Actual State / Output          | Gate Verdict |
-|-------------------------------|--------------------------------|--------------|
-| Solver Execution              | completed                      | PASS         |
-| ODB Storage Artifact          | valid                          | PASS         |
-| Required Physical Outputs     | All Required Metrics Extracted | PASS         |
-| Engineering Result Validity   | VALID                          | PASS         |
-| Evidence &amp; Artifact Integrity | FAIL (SKIPPED)                 | SKIPPED      |
-
-### Verification Gates Detailed Audit
-
-| Gate Name              | Status        | Engineering Justification / Note    |
-|------------------------|---------------|-------------------------------------|
-| contact                | SKIPPED       | Omitted / Not requested             |
-| convergence            | SKIPPED       | Omitted / Not requested             |
-| criteria               | PASS          | Verified against physics contract   |
-| engineering_checks     | PASS          | Verified against physics contract   |
-| evidence_sufficiency   | SKIPPED       | Omitted / Not requested             |
-| execution              | PASS          | Verified against physics contract   |
-| fatigue                | SKIPPED       | Omitted / Not requested             |
-| mesh_quality           | SKIPPED       | Omitted / Not requested             |
-| numerical_verification | SKIPPED       | Omitted / Not requested             |
-| odb                    | PASS          | Verified against physics contract   |
-| procedure              | SKIPPED       | Omitted / Not requested             |
-| required_results       | NOT_SPECIFIED | Gate verification blocked or failed |
-| thermal_balance        | SKIPPED       | Omitted / Not requested             |
-
-### Deterministic Criteria Evaluation
-
-| Criterion Name         | Requirement / Limit | Actual Value     | Status |
-|------------------------|---------------------|------------------|--------|
-| tip_displacement_lower | -                   | 2.06864285469055 | PASS   |
-| tip_displacement_upper | -                   | 2.06864285469055 | PASS   |
-| root_mises_sanity      | -                   | 471.214080810547 | PASS   |
-
-```json
-{
+]</code></pre>
+</details>
+<h2 class="section-heading">11. Acceptance Criteria</h2>
+<h3 class="subsection-heading">Verification Integrity &amp; Audit Summary</h3>
+<div class="table-wrapper"><table class="report-table"><thead><tr><th>Verification Dimension</th><th>Actual State / Output</th><th>Gate Verdict</th></tr></thead><tbody><tr><td>Solver Execution</td><td>completed</td><td><span class="status-badge badge-pass">PASS</span></td></tr><tr><td>ODB Storage Artifact</td><td>valid</td><td><span class="status-badge badge-pass">PASS</span></td></tr><tr><td>Required Physical Outputs</td><td>All Required Metrics Extracted</td><td><span class="status-badge badge-pass">PASS</span></td></tr><tr><td>Engineering Result Validity</td><td><span class="status-badge badge-pass">VALID</span></td><td><span class="status-badge badge-pass">PASS</span></td></tr><tr><td>Evidence &amp; Artifact Integrity</td><td>Verified Authentic &amp; Intact (SHA-256 Provenance Confirmed)</td><td>SKIPPED (NOT_SPECIFIED)</td></tr></tbody></table></div>
+<h3 class="subsection-heading">Verification Gates Detailed Audit</h3>
+<div class="table-wrapper"><table class="report-table"><thead><tr><th>Gate Name</th><th>Status</th><th>Engineering Justification / Note</th></tr></thead><tbody><tr><td>contact</td><td><span class="status-badge badge-skip">SKIPPED</span></td><td>Omitted / Not requested</td></tr><tr><td>convergence</td><td><span class="status-badge badge-skip">SKIPPED</span></td><td>Omitted / Not requested</td></tr><tr><td>criteria</td><td><span class="status-badge badge-pass">PASS</span></td><td>Verified against physics contract</td></tr><tr><td>engineering_checks</td><td><span class="status-badge badge-pass">PASS</span></td><td>Verified against physics contract</td></tr><tr><td>evidence_sufficiency</td><td><span class="status-badge badge-skip">SKIPPED</span></td><td>Omitted / Not requested</td></tr><tr><td>execution</td><td><span class="status-badge badge-pass">PASS</span></td><td>Verified against physics contract</td></tr><tr><td>fatigue</td><td><span class="status-badge badge-skip">SKIPPED</span></td><td>Omitted / Not requested</td></tr><tr><td>mesh_quality</td><td><span class="status-badge badge-skip">SKIPPED</span></td><td>Omitted / Not requested</td></tr><tr><td>numerical_verification</td><td><span class="status-badge badge-skip">SKIPPED</span></td><td>Omitted / Not requested</td></tr><tr><td>odb</td><td><span class="status-badge badge-pass">PASS</span></td><td>Verified against physics contract</td></tr><tr><td>procedure</td><td><span class="status-badge badge-skip">SKIPPED</span></td><td>Omitted / Not requested</td></tr><tr><td>required_results</td><td>NOT_SPECIFIED</td><td>Omitted / Not requested</td></tr><tr><td>thermal_balance</td><td><span class="status-badge badge-skip">SKIPPED</span></td><td>Omitted / Not requested</td></tr></tbody></table></div>
+<h3 class="subsection-heading">Deterministic Criteria Evaluation</h3>
+<div class="table-wrapper"><table class="report-table"><thead><tr><th>Criterion Name</th><th>Requirement / Limit</th><th>Actual Value</th><th>Status</th></tr></thead><tbody><tr><td>tip_displacement_lower</td><td>-</td><td>2.06864285469055</td><td><span class="status-badge badge-pass">PASS</span></td></tr><tr><td>tip_displacement_upper</td><td>-</td><td>2.06864285469055</td><td><span class="status-badge badge-pass">PASS</span></td></tr><tr><td>root_mises_sanity</td><td>-</td><td>471.214080810547</td><td><span class="status-badge badge-pass">PASS</span></td></tr></tbody></table></div>
+<details class="payload-details">
+<summary>Structured Engineering Data Payload (JSON)</summary>
+<pre class="code-block"><code>{
   &quot;passed&quot;: true,
   &quot;criteria&quot;: [
     {
@@ -212,31 +470,10 @@ Verify the structural deflection and peak von Mises stress of a 100mm x 10mm x 1
   &quot;audit_summary&quot;: &quot;&quot;,
   &quot;odb_status&quot;: &quot;valid&quot;,
   &quot;evidence_status&quot;: &quot;NOT_SPECIFIED&quot;
-}
-```
-
-## 12. Sensitivity / Uncertainty
-
-```json
-[
-  null,
-  null
-]
-```
-
-## 16. Assumptions / Limitations
-
-```json
-[
-  [],
-  []
-]
-```
-
-## 17. Evidence
-
-```json
-[
+}</code></pre>
+</details>
+<h2 class="section-heading">17. Evidence</h2>
+<pre class="code-block"><code>[
   {
     &quot;kind&quot;: &quot;acceptance&quot;,
     &quot;source&quot;: &quot;acceptance_gate&quot;,
@@ -332,13 +569,13 @@ Verify the structural deflection and peak von Mises stress of a 100mm x 10mm x 1
     &quot;unit&quot;: &quot;&quot;,
     &quot;metadata&quot;: {}
   }
-]
-```
-
-## 18. Provenance
-
-```json
-{
+]</code></pre>
+<h2 class="section-heading">18. Provenance</h2>
+<h3 class="subsection-heading">Model Provenance &amp; Execution Audit</h3>
+<div class="table-wrapper"><table class="report-table"><thead><tr><th>Audit Attribute</th><th>Provenance Value</th></tr></thead><tbody><tr><td>Run ID</td><td>run_static_golden_001</td></tr><tr><td>Model Name</td><td>{&#x27;height_mm&#x27;: 10.0, &#x27;length_mm&#x27;: 100.0, &#x27;width_mm&#x27;: 10.0}</td></tr><tr><td>Job Name</td><td>StaticGoldenJob</td></tr><tr><td>Abaqus Version</td><td>Abaqus 2025</td></tr><tr><td>Executor</td><td>BatchExecutor</td></tr><tr><td>Abaqus Version (Metadata)</td><td>unknown</td></tr><tr><td>Action Plan (Metadata)</td><td>[{&#x27;action_type&#x27;: &#x27;material_elastic&#x27;, &#x27;model_name&#x27;: &#x27;StaticGolden&#x27;, &#x27;parameters&#x27;: {&#x27;name&#x27;: &#x27;Steel&#x27;, &#x27;poisson&#x27;: 0.3, &#x27;youngs_modulus&#x27;: 210000.0}, &#x27;target&#x27;: None}, {&#x27;action_type&#x27;: &#x27;static_step&#x27;, &#x27;model_name&#x27;: &#x27;StaticGolden&#x27;, &#x27;parameters&#x27;: {&#x27;amplitude&#x27;: &#x27;RAMP&#x27;, &#x27;initial_inc&#x27;: None, &#x27;max_inc&#x27;: None, &#x27;max_num_inc&#x27;: 100, &#x27;min_inc&#x27;: None, &#x27;name&#x27;: &#x27;Step-1&#x27;, &#x27;nlgeom&#x27;: False, &#x27;previous&#x27;: &#x27;Initial&#x27;, &#x27;stabilization_magnitude&#x27;: None, &#x27;stabilization_method&#x27;: &#x27;NONE&#x27;, &#x27;time_incrementation_method&#x27;: &#x27;AUTOMATIC&#x27;, &#x27;time_period&#x27;: 1.0}, &#x27;target&#x27;: None}, {&#x27;action_type&#x27;: &#x27;solid_section&#x27;, &#x27;model_name&#x27;: &#x27;StaticGolden&#x27;, &#x27;parameters&#x27;: {&#x27;material&#x27;: &#x27;Steel&#x27;, &#x27;name&#x27;: &#x27;BeamSection&#x27;}, &#x27;target&#x27;: None}, {&#x27;action_type&#x27;: &#x27;section_assignment&#x27;, &#x27;model_name&#x27;: &#x27;StaticGolden&#x27;, &#x27;parameters&#x27;: {&#x27;part&#x27;: &#x27;Beam&#x27;, &#x27;region_expression&#x27;: &quot;mdb.models[&#x27;StaticGolden&#x27;].parts[&#x27;Beam&#x27;].sets[&#x27;AllCells&#x27;]&quot;, &#x27;section&#x27;: &#x27;BeamSection&#x27;}, &#x27;target&#x27;: None}, {&#x27;action_type&#x27;: &#x27;fixed_bc&#x27;, &#x27;model_name&#x27;: &#x27;StaticGolden&#x27;, &#x27;parameters&#x27;: {&#x27;name&#x27;: &#x27;AI-Fixed&#x27;, &#x27;region_expression&#x27;: &quot;mdb.models[&#x27;StaticGolden&#x27;].rootAssembly.sets[&#x27;FixedFace&#x27;]&quot;, &#x27;step&#x27;: &#x27;Initial&#x27;}, &#x27;target&#x27;: &quot;mdb.models[&#x27;StaticGolden&#x27;].rootAssembly.sets[&#x27;FixedFace&#x27;]&quot;}, {&#x27;action_type&#x27;: &#x27;concentrated_force&#x27;, &#x27;model_name&#x27;: &#x27;StaticGolden&#x27;, &#x27;parameters&#x27;: {&#x27;amplitude&#x27;: None, &#x27;cf1&#x27;: 0.0, &#x27;cf2&#x27;: -250.0, &#x27;cf3&#x27;: 0.0, &#x27;name&#x27;: &#x27;AI-Force&#x27;, &#x27;region_expression&#x27;: &quot;mdb.models[&#x27;StaticGolden&#x27;].rootAssembly.sets[&#x27;TipLoadVertices&#x27;]&quot;, &#x27;step&#x27;: &#x27;Step-1&#x27;}, &#x27;target&#x27;: &quot;mdb.models[&#x27;StaticGolden&#x27;].rootAssembly.sets[&#x27;TipLoadVertices&#x27;]&quot;}, {&#x27;action_type&#x27;: &#x27;field_output&#x27;, &#x27;model_name&#x27;: &#x27;StaticGolden&#x27;, &#x27;parameters&#x27;: {&#x27;frequency&#x27;: None, &#x27;num_intervals&#x27;: None, &#x27;request&#x27;: &#x27;F-Output-1&#x27;, &#x27;step&#x27;: &#x27;Initial&#x27;, &#x27;variables&#x27;: [&#x27;S&#x27;, &#x27;U&#x27;, &#x27;RF&#x27;]}, &#x27;target&#x27;: None}, {&#x27;action_type&#x27;: &#x27;seed_part&#x27;, &#x27;model_name&#x27;: &#x27;StaticGolden&#x27;, &#x27;parameters&#x27;: {&#x27;deviation_factor&#x27;: 0.1, &#x27;min_size_factor&#x27;: 0.1, &#x27;part&#x27;: &#x27;Beam&#x27;, &#x27;size&#x27;: 2.5}, &#x27;target&#x27;: None}, {&#x27;action_type&#x27;: &#x27;element_type&#x27;, &#x27;model_name&#x27;: &#x27;StaticGolden&#x27;, &#x27;parameters&#x27;: {&#x27;elem_code&#x27;: &#x27;C3D8R&#x27;, &#x27;library&#x27;: &#x27;STANDARD&#x27;, &#x27;part&#x27;: &#x27;Beam&#x27;, &#x27;region_expression&#x27;: &quot;mdb.models[&#x27;StaticGolden&#x27;].parts[&#x27;Beam&#x27;].sets[&#x27;AllCells&#x27;]&quot;}, &#x27;target&#x27;: None}, {&#x27;action_type&#x27;: &#x27;generate_mesh&#x27;, &#x27;model_name&#x27;: &#x27;StaticGolden&#x27;, &#x27;parameters&#x27;: {&#x27;part&#x27;: &#x27;Beam&#x27;}, &#x27;target&#x27;: None}, {&#x27;action_type&#x27;: &#x27;python&#x27;, &#x27;model_name&#x27;: &#x27;StaticGolden&#x27;, &#x27;parameters&#x27;: {&#x27;code&#x27;: &quot;\nfrom abaqusConstants import *\nmodel=mdb.models[&#x27;StaticGolden&#x27;]\npart=model.parts[&#x27;Beam&#x27;]\ninst=model.rootAssembly.instances[&#x27;Beam-1&#x27;]\nmodel.rootAssembly.regenerate()\n\n# Evidence sets are mesh-based so ODB field extraction receives true node/element sets.\nfixed_nodes = inst.nodes.getByBoundingBox(xMin=-0.01, xMax=0.01)\nif not fixed_nodes:\n    raise RuntimeError(&#x27;FixedNodes set is empty&#x27;)\nmodel.rootAssembly.Set(name=&#x27;FixedNodes&#x27;, nodes=fixed_nodes)\n\ntip_nodes = inst.nodes.getByBoundingBox(xMin=99.99, xMax=100.01)\nif not tip_nodes:\n    raise RuntimeError(&#x27;TipNodes set is empty&#x27;)\nmodel.rootAssembly.Set(name=&#x27;TipNodes&#x27;, nodes=tip_nodes)\n\nroot_elements = part.elements.getByBoundingBox(xMin=-0.01, xMax=10.01)\nif not root_elements:\n    raise RuntimeError(&#x27;RootElements set is empty&#x27;)\npart.Set(name=&#x27;RootElements&#x27;, elements=root_elements)\n\ntip_rp = model.rootAssembly.referencePoints\n# The four-vertex CLOAD is applied symmetrically; no separate RP is needed.\nprint(&#x27;AIAgent_STATIC_EVIDENCE_SETS_CREATED&#x27;)\n&quot;}, &#x27;target&#x27;: None}, {&#x27;action_type&#x27;: &#x27;create_job&#x27;, &#x27;model_name&#x27;: &#x27;StaticGolden&#x27;, &#x27;parameters&#x27;: {&#x27;job_type&#x27;: &#x27;STANDARD&#x27;, &#x27;name&#x27;: &#x27;StaticGoldenJob&#x27;}, &#x27;target&#x27;: None}]</td></tr><tr><td>Action Plan Hash (Metadata)</td><td>None</td></tr><tr><td>Artifact Manifest Hash (Metadata)</td><td>4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945</td></tr><tr><td>Environment (Metadata)</td><td>{}</td></tr><tr><td>Executor (Metadata)</td><td>CAEInProcessExecutor</td></tr><tr><td>Input Hash (Metadata)</td><td>None</td></tr><tr><td>Intent Hash (Metadata)</td><td>None</td></tr><tr><td>Job Name (Metadata)</td><td>StaticGoldenJob</td></tr><tr><td>Metadata (Metadata)</td><td>{&#x27;action_plan_scope&#x27;: &#x27;caller&#x27;, &#x27;content_hash_scope&#x27;: &#x27;not_captured&#x27;, &#x27;model_snapshot_hash&#x27;: &#x27;89c682f5821b952d029db6e4bc87973373b3c148480e3ce935f72e434d21d269&#x27;}</td></tr><tr><td>Model Hash (Metadata)</td><td>None</td></tr><tr><td>Model Name (Metadata)</td><td>StaticGolden</td></tr><tr><td>Output Hash (Metadata)</td><td>None</td></tr><tr><td>Python Version (Metadata)</td><td>3.10.5 (main, Jul 27 2024, 04:26:12) [MSC v.1934 64 bit (AMD64)]</td></tr><tr><td>Run Id (Metadata)</td><td>6733d888-3749-4304-984b-d2e8b2afd310</td></tr><tr><td>Odb Path (Metadata)</td><td>machine_validation/StaticGoldenJob.odb</td></tr></tbody></table></div>
+<details class="payload-details">
+<summary>Structured Engineering Data Payload (JSON)</summary>
+<pre class="code-block"><code>{
   &quot;run_id&quot;: &quot;run_static_golden_001&quot;,
   &quot;model_name&quot;: {
     &quot;height_mm&quot;: 10.0,
@@ -515,10 +752,10 @@ Verify the structural deflection and peak von Mises stress of a 100mm x 10mm x 1
     &quot;run_id&quot;: &quot;6733d888-3749-4304-984b-d2e8b2afd310&quot;,
     &quot;odb_path&quot;: &quot;machine_validation/StaticGoldenJob.odb&quot;
   }
-}
-```
-
-## 19. Conclusion
-
-Acceptance criteria passed based on the structured evidence supplied to this report.
-</pre></body></html>
+}</code></pre>
+</details>
+<h2 class="section-heading">19. Conclusion</h2>
+<p class="report-p">Acceptance criteria passed based on the structured evidence supplied to this report.</p>
+  </div>
+</body>
+</html>
