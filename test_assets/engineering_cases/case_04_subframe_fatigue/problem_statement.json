@@ -1,0 +1,83 @@
+{
+  "case_id": "CASE_04_AUTOMOTIVE_SUBFRAME_FATIGUE",
+  "title": "Automotive Front Subframe Multi-Axis Durability and Fatigue Life Evaluation",
+  "domain": "chassis_durability_fatigue",
+  "source": "SAE Technical Papers on Chassis Structural Durability; ASTM E1049-85 Standard Practices for Cycle Counting in Fatigue Analysis; ISO 12107 Metallic Materials Fatigue Testing",
+  "problem_description": "Welded thin-walled box-section automotive front subframe under multi-channel road fatigue loading (longitudinal braking Fx, lateral cornering Fy, vertical pothole bounce Fz, and torque steer). Structural integrity is assessed across critical welding heat-affected zones (HAZ) and control arm bushing mounting brackets using ASTM E1049 rainflow counting, Goodman mean stress correction, and Palmgren-Miner cumulative damage theory over a 300,000 km target proving ground durability schedule.",
+  "geometry": {
+    "subframe_type": "Perimeter-Type Hydroformed Tubular Welded Subframe",
+    "overall_length_mm": 920.0,
+    "overall_width_mm": 860.0,
+    "nominal_wall_thickness_mm": 2.5,
+    "body_mount_count": 4,
+    "lower_control_arm_mount_count": 4,
+    "steering_rack_mount_count": 2,
+    "stabilizer_bar_mount_count": 2,
+    "bushing_inner_diameter_mm": 14.0,
+    "bushing_outer_diameter_mm": 60.0
+  },
+  "materials": {
+    "subframe_steel": {
+      "material_name": "High-Strength Low-Alloy Automotive Steel QSTE420 (SAPH440 Equivalent)",
+      "density_tonne_mm3": 7.85e-9,
+      "elastic_modulus_mpa": 210000.0,
+      "poisson_ratio": 0.3,
+      "yield_strength_mpa": 420.0,
+      "ultimate_tensile_strength_mpa": 520.0,
+      "fatigue_limit_endurance_mpa": 208.0,
+      "basquin_fatigue_strength_coefficient_mpa": 890.0,
+      "basquin_fatigue_strength_exponent_b": -0.095,
+      "sn_curve": [
+        [150.0, 10000000.0],
+        [180.0, 2000000.0],
+        [220.0, 1000000.0],
+        [280.0, 200000.0],
+        [360.0, 50000.0],
+        [450.0, 10000.0]
+      ]
+    },
+    "suspension_bushings": {
+      "material_name": "Natural Rubber Elastomer (Shore A 65)",
+      "radial_stiffness_n_mm": 2500.0,
+      "axial_stiffness_n_mm": 800.0,
+      "torsional_stiffness_n_mm_deg": 12.0
+    }
+  },
+  "loading_procedure": [
+    {
+      "step_number": 1,
+      "step_name": "Step-1-StaticPreloadBushingAssembly",
+      "type": "STATIC_GENERAL",
+      "description": "Gravity preload (1G) and powertrain deadweight reaction at torque strut mount (1500 N downward -Z). Seating bushings into subframe chassis hardpoints.",
+      "gravity_acceleration_mm_s2": 9810.0,
+      "powertrain_deadweight_n": 1500.0
+    },
+    {
+      "step_number": 2,
+      "step_name": "Step-2-MultiAxisRoadSchedule",
+      "type": "STATIC_GENERAL_SERIES",
+      "description": "Sequential multi-channel dynamic proving ground test schedule combining longitudinal braking (-Fx), lateral cornering (+/-Fy), vertical pothole impact (+Fz), and curb strike multi-axis loads applied via lower control arm ball joint mounts.",
+      "duty_cycle_channels": [
+        "Fx_longitudinal_braking_kn",
+        "Fy_lateral_cornering_kn",
+        "Fz_vertical_pothole_kn"
+      ],
+      "target_durability_distance_km": 300000.0
+    }
+  ],
+  "acceptance_criteria": {
+    "max_mises_stress_peak_mpa": 380.0,
+    "yield_strength_safety_factor_min": 1.1,
+    "cumulative_damage_d_max": 0.3,
+    "min_life_blocks": 3.33,
+    "bushing_max_relative_deflection_mm": 4.5,
+    "reaction_force_balance_max_error_percent": 0.1
+  },
+  "reference_benchmarks": {
+    "peak_mises_stress_hotspot_bracket_mpa": 312.4,
+    "rainflow_counted_effective_cycles": 142850,
+    "cumulative_damage_hotspot_miner": 0.187,
+    "predicted_life_blocks": 5.35,
+    "equivalent_durability_mileage_km": 1604000.0
+  }
+}

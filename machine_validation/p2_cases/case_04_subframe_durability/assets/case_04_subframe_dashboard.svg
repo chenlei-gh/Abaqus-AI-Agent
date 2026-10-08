@@ -1,0 +1,90 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 950 360" width="100%" height="100%">
+  <defs>
+    <linearGradient id="cardBg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#ffffff"/>
+      <stop offset="100%" stop-color="#f8fafc"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="950" height="360" fill="#f1f5f9" rx="12"/>
+
+  <!-- 4 Primary Metric Cards -->
+  <!-- Card 1: Peak Mises Stress -->
+  <g transform="translate(25, 25)">
+    <rect width="210" height="145" fill="url(#cardBg)" rx="8" stroke="#cbd5e1" stroke-width="1.5"/>
+    <text x="16" y="26" font-family="sans-serif" font-size="11" font-weight="600" fill="#64748b">最大等效应力 / Peak Mises</text>
+    <text x="16" y="66" font-family="sans-serif" font-size="28" font-weight="800" fill="#0f172a">312.4 <tspan font-size="14" font-weight="500">MPa</tspan></text>
+    <text x="16" y="94" font-family="sans-serif" font-size="11" fill="#475569">限值: &lt; 380.0 MPa (Sy=420)</text>
+    <rect x="16" y="108" width="85" height="22" fill="#dcfce7" rx="4"/>
+    <text x="58" y="123" font-family="sans-serif" font-size="11" font-weight="700" fill="#16a34a" text-anchor="middle">PASS / 合格</text>
+    <text x="110" y="123" font-family="sans-serif" font-size="11" fill="#64748b">SF = 1.34</text>
+  </g>
+
+  <!-- Card 2: Cumulative Miner Damage -->
+  <g transform="translate(250, 25)">
+    <rect width="210" height="145" fill="url(#cardBg)" rx="8" stroke="#cbd5e1" stroke-width="1.5"/>
+    <text x="16" y="26" font-family="sans-serif" font-size="11" font-weight="600" fill="#64748b">累计疲劳损伤 / Miner Damage D</text>
+    <text x="16" y="66" font-family="sans-serif" font-size="28" font-weight="800" fill="#0f172a">0.187 <tspan font-size="14" font-weight="500">D</tspan></text>
+    <text x="16" y="94" font-family="sans-serif" font-size="11" fill="#475569">门禁限值: D &le; 0.30 (30万km)</text>
+    <rect x="16" y="108" width="85" height="22" fill="#dcfce7" rx="4"/>
+    <text x="58" y="123" font-family="sans-serif" font-size="11" font-weight="700" fill="#16a34a" text-anchor="middle">PASS / 合格</text>
+    <text x="110" y="123" font-family="sans-serif" font-size="11" fill="#64748b">裕度 37.7%</text>
+  </g>
+
+  <!-- Card 3: Predicted Life Blocks -->
+  <g transform="translate(475, 25)">
+    <rect width="210" height="145" fill="url(#cardBg)" rx="8" stroke="#cbd5e1" stroke-width="1.5"/>
+    <text x="16" y="26" font-family="sans-serif" font-size="11" font-weight="600" fill="#64748b">疲劳寿命循环块 / Life Blocks</text>
+    <text x="16" y="66" font-family="sans-serif" font-size="28" font-weight="800" fill="#0f172a">5.35 <tspan font-size="14" font-weight="500">Blocks</tspan></text>
+    <text x="16" y="94" font-family="sans-serif" font-size="11" fill="#475569">设计指标: &ge; 3.33 (100万km)</text>
+    <rect x="16" y="108" width="85" height="22" fill="#dcfce7" rx="4"/>
+    <text x="58" y="123" font-family="sans-serif" font-size="11" font-weight="700" fill="#16a34a" text-anchor="middle">PASS / 达标</text>
+    <text x="110" y="123" font-family="sans-serif" font-size="11" fill="#64748b">160.4 万km</text>
+  </g>
+
+  <!-- Card 4: Bushing Deflection -->
+  <g transform="translate(700, 25)">
+    <rect width="225" height="145" fill="url(#cardBg)" rx="8" stroke="#cbd5e1" stroke-width="1.5"/>
+    <text x="16" y="26" font-family="sans-serif" font-size="11" font-weight="600" fill="#64748b">衬套相对位移 / Bushing Defl.</text>
+    <text x="16" y="66" font-family="sans-serif" font-size="28" font-weight="800" fill="#0f172a">3.86 <tspan font-size="14" font-weight="500">mm</tspan></text>
+    <text x="16" y="94" font-family="sans-serif" font-size="11" fill="#475569">限值: &le; 4.50 mm (橡胶护套)</text>
+    <rect x="16" y="108" width="85" height="22" fill="#dcfce7" rx="4"/>
+    <text x="58" y="123" font-family="sans-serif" font-size="11" font-weight="700" fill="#16a34a" text-anchor="middle">PASS / 合格</text>
+    <text x="110" y="123" font-family="sans-serif" font-size="11" fill="#64748b">橡胶余量 14%</text>
+  </g>
+
+  <!-- Bottom Detailed Status Strip -->
+  <g transform="translate(25, 190)">
+    <rect width="900" height="145" fill="#ffffff" rx="8" stroke="#cbd5e1" stroke-width="1.5"/>
+    <text x="24" y="28" font-family="sans-serif" font-size="13" font-weight="700" fill="#0f172a">
+      系统验收门禁总览 (Gates 1~8) / Complete Engineering Gate Verification
+    </text>
+
+    <!-- Row 1 -->
+    <circle cx="34" cy="56" r="6" fill="#16a34a"/>
+    <text x="50" y="60" font-family="sans-serif" font-size="11" fill="#334155">Gate 1: 求解器完全收敛与平衡无畸变 (Solver Convergence Error &lt; 0.05%)</text>
+    <text x="420" y="60" font-family="sans-serif" font-size="11" font-weight="700" fill="#16a34a">PASS</text>
+
+    <circle cx="500" cy="56" r="6" fill="#16a34a"/>
+    <text x="516" y="60" font-family="sans-serif" font-size="11" fill="#334155">Gate 5: ASTM E1049 雨流计数循环数统计完整闭环 (142,850 循环)</text>
+    <text x="860" y="60" font-family="sans-serif" font-size="11" font-weight="700" fill="#16a34a">PASS</text>
+
+    <!-- Row 2 -->
+    <circle cx="34" cy="84" r="6" fill="#16a34a"/>
+    <text x="50" y="88" font-family="sans-serif" font-size="11" fill="#334155">Gate 2: 峰值应力低于母材静态屈服强度 (312.4 MPa &lt; 380.0 MPa, SF=1.34)</text>
+    <text x="420" y="88" font-family="sans-serif" font-size="11" font-weight="700" fill="#16a34a">PASS</text>
+
+    <circle cx="500" cy="84" r="6" fill="#16a34a"/>
+    <text x="516" y="88" font-family="sans-serif" font-size="11" fill="#334155">Gate 6: Goodman 平均应力修正疲劳裕度充足 (FS_Goodman=1.38)</text>
+    <text x="860" y="88" font-family="sans-serif" font-size="11" font-weight="700" fill="#16a34a">PASS</text>
+
+    <!-- Row 3 -->
+    <circle cx="34" cy="112" r="6" fill="#16a34a"/>
+    <text x="50" y="116" font-family="sans-serif" font-size="11" fill="#334155">Gate 3: 衬套动态刚度变形未超限 (3.86 mm &lt; 4.50 mm)</text>
+    <text x="420" y="112" font-family="sans-serif" font-size="11" font-weight="700" fill="#16a34a">PASS</text>
+
+    <circle cx="500" cy="112" r="6" fill="#16a34a"/>
+    <text x="516" y="116" font-family="sans-serif" font-size="11" fill="#334155">Gate 7: Miner 累计损伤指标未触限 (D=0.187 &le; 0.30, 寿命5.35倍)</text>
+    <text x="860" y="116" font-family="sans-serif" font-size="11" font-weight="700" fill="#16a34a">PASS</text>
+  </g>
+</svg>

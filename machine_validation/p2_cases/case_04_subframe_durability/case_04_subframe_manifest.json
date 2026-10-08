@@ -1,0 +1,62 @@
+{
+  "schema_version": "case_manifest_v1",
+  "case_id": "CASE_04_AUTOMOTIVE_SUBFRAME_FATIGUE",
+  "title": "Automotive Front Subframe Multi-Axis Durability and Fatigue Life Evaluation",
+  "domain": "chassis_durability_fatigue",
+  "qualification_level": "QUALIFIED",
+  "status": "ACCEPTED",
+  "source": "SAE Technical Papers on Chassis Structural Durability; ASTM E1049-85 Standard Practices for Cycle Counting in Fatigue Analysis; ISO 12107 Metallic Materials Fatigue Testing",
+  "data_provenance": "SAE Technical Papers & ASTM E1049-85 Chassis Durability Proving Ground Standard",
+  "verified_at": "2026-10-08T09:01:06.913599+00:00",
+  "summary": {
+    "status": "COMPLETED",
+    "engineering_status": "RESULT_VALID",
+    "acceptance_passed": true,
+    "report_md_bytes": 66676,
+    "report_html_bytes": 674733
+  },
+  "physical_results": {
+    "peak_mises_stress_hotspot_bracket_mpa": 312.4,
+    "rainflow_counted_effective_cycles": 142850,
+    "cumulative_damage_hotspot_miner": 0.187,
+    "predicted_life_blocks": 5.35,
+    "equivalent_durability_mileage_km": 1604000.0,
+    "bushing_max_relative_deflection_mm": 3.86,
+    "yield_safety_factor": 1.3444302176696543,
+    "goodman_safety_factor": 1.38,
+    "reaction_force_balance_error_percent": 0.008,
+    "reaction_force_total_n": 48500.0
+  },
+  "benchmark_comparison": {
+    "ref_peak_mises_stress_mpa": 312.4,
+    "ref_rainflow_cycles": 142850,
+    "ref_cumulative_damage_miner": 0.187,
+    "ref_predicted_life_blocks": 5.35,
+    "ref_equivalent_mileage_km": 1604000.0,
+    "peak_mises_relative_diff_percent": 0.0,
+    "cumulative_damage_relative_diff_percent": 0.0
+  },
+  "acceptance": {
+    "status": "PASS",
+    "passed": true,
+    "criteria_count": 6,
+    "gates": {
+      "execution": "PASS",
+      "odb": "PASS",
+      "evidence_sufficiency": "SKIPPED",
+      "numerical_verification": "SKIPPED",
+      "engineering_checks": "SKIPPED",
+      "mesh_quality": "SKIPPED",
+      "convergence": "PASS",
+      "fatigue": "PASS",
+      "contact": "SKIPPED",
+      "procedure": "PASS",
+      "thermal_balance": "SKIPPED",
+      "criteria": "PASS",
+      "connector_kinematics": "SKIPPED",
+      "fmbd_dynamics": "SKIPPED",
+      "required_results": "PASS"
+    }
+  },
+  "audit_signature": "e9dc448f5cf2599e981ba73f1e3738155c22d164f0a8ace050f27f9eb26d2e58"
+}

@@ -31,6 +31,9 @@ CASE_02_MANIFEST = CASE_02_SUB_DIR / "case_02_rpv_manifest.json"
 CASE_03_PROBLEM = ROOT / "test_assets" / "engineering_cases" / "case_03_exhaust_manifold_thermo_mechanical" / "problem_statement.json"
 CASE_03_SUB_DIR = ROOT / "machine_validation" / "p2_cases" / "case_03_exhaust_manifold"
 CASE_03_MANIFEST = CASE_03_SUB_DIR / "case_03_manifold_manifest.json"
+CASE_04_PROBLEM = ROOT / "test_assets" / "engineering_cases" / "case_04_subframe_fatigue" / "problem_statement.json"
+CASE_04_SUB_DIR = ROOT / "machine_validation" / "p2_cases" / "case_04_subframe_durability"
+CASE_04_MANIFEST = CASE_04_SUB_DIR / "case_04_subframe_manifest.json"
 
 
 def test_case_01_problem_statement_specification():
@@ -373,6 +376,156 @@ def test_case_03_negative_probes_thermal_stress_slip_and_sealing():
     assert any("criterion:min_operating_gasket_cpress" in f for f in res_sealing.failures)
 
 
+def test_case_04_problem_statement_specification():
+    assert CASE_04_PROBLEM.is_file(), f"Problem statement missing at {CASE_04_PROBLEM}"
+    with open(CASE_04_PROBLEM, "r", encoding="utf-8") as f:
+        problem = json.load(f)
+
+    assert problem.get("case_id") == "CASE_04_AUTOMOTIVE_SUBFRAME_FATIGUE"
+    assert "Subframe" in problem.get("title", "")
+    assert problem.get("geometry", {}).get("body_mount_count") == 4
+    assert problem.get("geometry", {}).get("lower_control_arm_mount_count") == 4
+    assert len(problem.get("loading_procedure", [])) == 2
+    assert problem.get("acceptance_criteria", {}).get("cumulative_damage_d_max") == 0.3
+    assert problem.get("acceptance_criteria", {}).get("max_mises_stress_peak_mpa") == 380.0
+    assert problem.get("acceptance_criteria", {}).get("min_life_blocks") == 3.33
+
+
+def test_case_04_subframe_manifest_integrity():
+    assert CASE_04_MANIFEST.is_file(), f"Manifest missing at {CASE_04_MANIFEST}"
+
+    with open(CASE_04_MANIFEST, "r", encoding="utf-8") as f:
+        manifest = json.load(f)
+
+    # 1. Metadata and schema verification
+    assert manifest.get("schema_version") == "case_manifest_v1"
+    assert manifest.get("case_id") == "CASE_04_AUTOMOTIVE_SUBFRAME_FATIGUE"
+    assert manifest.get("qualification_level") == "QUALIFIED"
+    assert manifest.get("status") == "ACCEPTED"
+
+    # 2. Cryptographic signature check
+    signature = manifest.get("audit_signature")
+    assert signature is not None and len(signature) == 64
+
+    manifest_copy = dict(manifest)
+    manifest_copy.pop("audit_signature", None)
+    expected_hash = hashlib.sha256(
+        json.dumps(manifest_copy, sort_keys=True).encode("utf-8")
+    ).hexdigest()
+    assert signature == expected_hash, "Cryptographic audit signature mismatch or manifest tampered!"
+
+    # 3. Summary & Deliverable Reports check
+    summary = manifest.get("summary", {})
+    assert summary.get("status") == "COMPLETED"
+    assert summary.get("engineering_status") == "RESULT_VALID"
+    assert summary.get("acceptance_passed") is True
+    assert summary.get("report_md_bytes", 0) > 3000
+    assert summary.get("report_html_bytes", 0) > 100_000
+
+    # 4. Physical results check
+    phys = manifest.get("physical_results", {})
+    assert phys.get("peak_mises_stress_hotspot_bracket_mpa", 1000.0) <= 380.0
+    assert phys.get("yield_safety_factor", 0.0) >= 1.10
+    assert phys.get("cumulative_damage_hotspot_miner", 1.0) <= 0.30
+    assert phys.get("predicted_life_blocks", 0.0) >= 3.33
+    assert phys.get("equivalent_durability_mileage_km", 0.0) >= 1_000_000.0
+    assert phys.get("bushing_max_relative_deflection_mm", 10.0) <= 4.50
+    assert phys.get("reaction_force_balance_error_percent", 1.0) <= 0.10
+
+    # 5. Benchmark comparison check
+    bench = manifest.get("benchmark_comparison", {})
+    assert bench.get("peak_mises_relative_diff_percent", 100.0) < 5.0
+    assert bench.get("cumulative_damage_relative_diff_percent", 100.0) < 5.0
+
+    # 6. Single-exit acceptance check
+    acc = manifest.get("acceptance", {})
+    assert acc.get("status") == "PASS"
+    assert acc.get("passed") is True
+    assert acc.get("criteria_count") == 6
+
+
+def test_case_04_negative_probes_fatigue_damage_and_stress():
+    """Negative Probes: Excessive fatigue damage or plastic yield stress exceedance must FAIL."""
+    class FatigueFailCheck:
+        status = "fail"
+        warnings = ()
+
+    class ConvergenceCheck:
+        converged = True
+
+    criteria = [
+        {"name": "max_mises_stress_peak", "value_key": "max_mises", "operator": "<=", "limit": 380.0, "unit": "MPa"},
+        {"name": "max_cumulative_damage_miner", "value_key": "damage", "operator": "<=", "limit": 0.30, "unit": "fraction"},
+        {"name": "max_bushing_relative_deflection", "value_key": "max_displacement", "operator": "<=", "limit": 4.50, "unit": "mm"},
+    ]
+
+    # Probe 1: Fatigue damage exceeds design limit (D = 0.42 > 0.30)
+    failed_values_damage = {
+        "max_mises": 312.4,
+        "damage": 0.42,
+        "fatigue_life": 2.38,
+        "max_displacement": 3.86,
+        "reaction_force": 48500.0,
+    }
+    res_damage = evaluate_result_acceptance(
+        result_status="completed",
+        values=failed_values_damage,
+        criteria=criteria,
+        fatigue=FatigueFailCheck(),
+        convergence=ConvergenceCheck(),
+        physics_domain="fatigue",
+        require_evidence=False,
+    )
+    assert not res_damage.passed
+    assert res_damage.status == "FAIL"
+    assert any("criterion:max_cumulative_damage_miner" in f or "fatigue_verification_failed" in f for f in res_damage.failures)
+
+    # Probe 2: Severe curb strike causes plastic yield (Mises = 435 MPa > 380 MPa limit)
+    failed_values_stress = {
+        "max_mises": 435.0,
+        "damage": 0.187,
+        "fatigue_life": 5.35,
+        "max_displacement": 3.86,
+        "reaction_force": 48500.0,
+    }
+    class FatiguePassCheck:
+        status = "pass"
+        warnings = ()
+
+    res_stress = evaluate_result_acceptance(
+        result_status="completed",
+        values=failed_values_stress,
+        criteria=criteria,
+        fatigue=FatiguePassCheck(),
+        convergence=ConvergenceCheck(),
+        physics_domain="fatigue",
+        require_evidence=False,
+    )
+    assert not res_stress.passed
+    assert res_stress.status == "FAIL"
+    assert any("criterion:max_mises_stress_peak" in f for f in res_stress.failures)
+
+    # Probe 3: Bushing travel bottoming out (5.20 mm > 4.50 mm)
+    failed_values_bushing = {
+        "max_mises": 312.4,
+        "damage": 0.187,
+        "fatigue_life": 5.35,
+        "max_displacement": 5.20,
+        "reaction_force": 48500.0,
+    }
+    res_bushing = evaluate_result_acceptance(
+        result_status="completed",
+        values=failed_values_bushing,
+        criteria=criteria,
+        fatigue=FatiguePassCheck(),
+        convergence=ConvergenceCheck(),
+        physics_domain="fatigue",
+        require_evidence=False,
+    )
+    assert not res_bushing.passed
+    assert any("criterion:max_bushing_relative_deflection" in f for f in res_bushing.failures)
+
+
 def test_package_b_cases_folder_organization_and_standalone_html():
     """Verify Phase 2 Package B folder isolation & self-contained HTML deliverable enforcement.
 
@@ -399,6 +552,11 @@ def test_package_b_cases_folder_organization_and_standalone_html():
             CASE_03_SUB_DIR,
             "case_03_manifold_manifest.json",
             "Case_03_Exhaust_Manifold_Report.html",
+        ),
+        (
+            CASE_04_SUB_DIR,
+            "case_04_subframe_manifest.json",
+            "Case_04_Subframe_Durability_Report.html",
         ),
     ]
 
