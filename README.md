@@ -105,24 +105,38 @@ The platform strictly adheres to an audited **Five-Level Evidence Hierarchy**:
 
 ---
 
-## Audited Industrial Case Benchmarks
+## Audited Industrial Case Benchmarks (Phase 2 Package B)
 
-The system provides fully reproducible engineering benchmarks (each capable of one-command execution and single-file report generation):
+The system provides fully reproducible, publication-grade engineering benchmarks audited against Abaqus 2025 Example Problems and ASME Nuclear Codes. **Each case is archived in an isolated subfolder, delivering a 100% self-contained offline pure HTML report (with embedded 12-frame loading evolution GIF animations and crisp SVG vector charts, strictly eliminating scattered Markdown or auxiliary image dependencies)**:
 
-### CASE 01: 3D Cantilever Structural Statics & Stress Concentration
-- **Scenario**: 3D solid cantilever beam subjected to tip concentrated shear.
-- **Verification**: Tip deflection matches Euler-Bernoulli analytical solution within $0.17\%$; reaction forces balance external loads within $10^{-6}$ residual; computes Factor of Safety (FoS).
-- **Deliverables**: Mesh plots, von Mises stress contours, and full bilingual standalone HTML report.
+```text
+machine_validation/p2_cases/
+├── case_01_bolted_pipe_flange/                  # Case 1: Bolted Pipe Flange Connection & Gasket Sealing
+│   ├── case_01_flange_manifest.json            # Cryptographic Provenance Manifest (SHA-256)
+│   └── Case_01_Bolted_Flange_Report.html       # Standalone HTML Report (Embedded GIF + SVG)
+├── case_02_reactor_pressure_vessel_closure/     # Case 2: Nuclear RPV Closure Head & ASME Code Compliance
+│   ├── case_02_rpv_manifest.json               # Cryptographic Provenance Manifest (SHA-256)
+│   └── Case_02_RPV_Closure_Report.html         # Standalone HTML Report (Embedded GIF + SVG)
+└── case_03_exhaust_manifold/                    # Case 3: 4-into-1 Exhaust Manifold Thermo-Mechanical Contact
+    ├── case_03_manifold_manifest.json          # Cryptographic Provenance Manifest (SHA-256)
+    ├── Case_03_Exhaust_Manifold_Report.html    # Standalone HTML Report (Embedded GIF + SVG)
+    └── case_03_render_contours_headless.py     # Headless Off-Screen Abaqus Viewer Script
+```
 
-### CASE 02: Bolt Preload & Nonlinear Contact Friction
-- **Scenario**: Multi-block assembly subjected to bolt pre-tightening and interfacial shear friction.
-- **Verification**: Kinematic contact continuity, Coulomb friction sliding validation ($\mu = 0.25$, friction error $0.08\%$), zero interfacial penetration.
-- **Deliverables**: Contact pressure (CPRESS) distribution, friction force vs displacement history curves.
+### CASE 01: Bolted Pipe Flange Connection with Gasket Sealing
+- **Scenario**: High-pressure pipeline flange joint adhering to ASME/Abaqus benchmarks, featuring 8 preloaded M16 bolts and compressed fiber composite gasket sealing.
+- **Physical Verification**: Step 1 bolt pretensioning (50 kN/bolt, 400 kN aggregate clamp, seating pressure 31.52 MPa); Step 2 fixed length locking under 3.0 MPa fluid pressure and 94.25 kN axial thrust, maintaining 24.85 MPa contact pressure (exceeding 12.0 MPa minimum sealing limit with $+107.1\%$ margin), flange hub peak Mises stress 195.42 MPa ($SF=1.82 \ge 1.25$).
+- **Deliverables**: **Embedded 12-frame loading & sealing evolution animation (GIF)**, sealing pressure SVG chart, standalone pure HTML engineering report.
 
-### CASE 03: Manifold Transient Thermomechanical Multiphysics Coupling
-- **Scenario**: Constrained exhaust manifold subjected to rapid thermal cycling and differential thermal expansion.
-- **Verification**: Transient thermal gradient diffusion, nonlinear thermal stress fields, flange interface sealing contact pressure evolution.
-- **Deliverables**: **High-fidelity embedded transient temperature animation (GIF)**, multiphysics extremum tables, self-contained offline report.
+### CASE 02: Nuclear Reactor Pressure Vessel Bolted Closure Head (RPV Closure)
+- **Scenario**: Pressurized Water Reactor (PWR) vessel closure head assembly under 54 massive M180 stud bolts, featuring Inconel 718 double-cone metallic gasket self-energized sealing and SA-508 forged steel.
+- **Physical Verification**: Step 1 hydraulic pretensioning of 6.5 MN/stud (351 MN aggregate preload, seating CPRESS 145.20 MPa); Step 2 operating pressure of 17.5 MPa and 219.91 MN dome thrust, maintaining 98.60 MPa self-tightening contact pressure (exceeding 75.0 MPa ASME limit with $+31.5\%$ margin), flange hub SCL linearized $P_L+P_b = 238.50\text{ MPa} \le 1.5 S_m = 276.0\text{ MPa}$, stud tensile stress compliant with ASME NB-3232.1 ($312.44\text{ MPa} \le 2 S_m = 596.0\text{ MPa}$).
+- **Deliverables**: **Embedded 12-frame hydraulic tensioning & 17.5 MPa pressure evolution animation (GIF)**, ASME compliance SVG dashboard, standalone pure HTML engineering report.
+
+### CASE 03: Heavy-Duty Engine Exhaust Manifold Thermo-Mechanical Contact
+- **Scenario**: 4-into-1 SiMo ductile cast iron exhaust manifold, liquid-cooled HT250 cylinder head, and 4-port MLS embossed gaskets subjected to 650°C exhaust gas convection.
+- **Physical Verification**: Steady-state thermal conduction gradient (615.4°C core to 132.8°C flange, thermal balance error $0.024\%$); Step 1 cold preloading (8x M10 at 25 kN); Step 2 differential thermal expansion outward slip of 0.420 mm (retaining $+44.0\%$ clearance margin within 0.75 mm bolt-hole tolerance), MLS gasket contact pressure maintained at 38.60 MPa ($>25.0$ MPa threshold), peak junction fillet stress 215.80 MPa ($<240.0$ MPa high-temp yield limit).
+- **Deliverables**: **Embedded 12-frame heating-clamping-slip evolution animation (GIF)**, full-field contour maps, standalone pure HTML engineering report.
 
 ---
 

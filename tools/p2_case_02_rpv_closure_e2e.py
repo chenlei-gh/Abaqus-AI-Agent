@@ -47,6 +47,7 @@ from abaqus_ai_agent.acceptance import evaluate_result_acceptance
 from abaqus_ai_agent.contracts.intent import EngineeringIntent
 from abaqus_ai_agent.contracts.report import EngineeringReportData, ReportFigure
 from abaqus_ai_agent.reporting.renderer import render_markdown, render_html
+from abaqus_ai_agent.execution.case_02_contours import render_case_02_evolution_gif
 
 
 def generate_rpv_closure_svg(step_1_seal_cpress: float, step_2_seal_cpress: float, min_seal: float,
@@ -236,7 +237,7 @@ def run_case_02_rpv_closure(workdir: Path, launcher: Optional[str] = None) -> Di
     print(f"  - Step 2 Flange Hub Linearized PL+Pb = {step_2_flange_pl_pb:.2f} MPa (ASME 1.5*Sm Limit <= {problem['acceptance_criteria']['max_asme_linearized_pl_pb_stress_intensity_mpa']} MPa, Margin Ratio = {flange_margin_ratio:.2f})")
     print(f"  - Equilibrium Axial Reaction Balance Error = {reaction_error_percent:.4f}% <= 0.1%")
 
-    # 4. Generate Visual Chart SVG
+    # 4. Generate Visual Chart SVG and 12-Frame Loading Evolution GIF
     chart_svg = generate_rpv_closure_svg(
         step_1_seal_cpress=step_1_seal_cpress,
         step_2_seal_cpress=step_2_seal_cpress,
@@ -247,6 +248,10 @@ def run_case_02_rpv_closure(workdir: Path, launcher: Optional[str] = None) -> Di
     chart_file = case_dir / "rpv_closure_integrity_dashboard.svg"
     chart_file.write_text(chart_svg, encoding="utf-8")
     print(f"  - Generated Visual Asset: {chart_file}")
+
+    gif_file = case_dir / "case_02_rpv_evolution.gif"
+    render_case_02_evolution_gif(gif_file)
+    print(f"  - Generated 12-Frame Loading Evolution GIF: {gif_file} ({gif_file.stat().st_size} bytes)")
 
     # 5. Deterministic Acceptance Evaluation
     print("\n[Step 4] Deterministic Single-Exit Acceptance Evaluation")
@@ -293,10 +298,11 @@ def run_case_02_rpv_closure(workdir: Path, launcher: Optional[str] = None) -> Di
     print(f"  - Acceptance Status: {acceptance_result.status} (Passed: {acceptance_result.passed})")
     assert acceptance_result.passed, f"Acceptance failed: {acceptance_result.failures}"
 
-    # 6. Generate Deliverable Engineering Report with Transparent Audit Notes (Bilingual Standard)
-    print("\n[Step 5] Rendering Deliverable Engineering Report (Bilingual Standard)")
-    report_title = "Case 2: Nuclear Reactor Pressure Vessel Bolted Closure Head Engineering Analysis Report / 核反应堆压力容器封头双锥金属环密封与螺栓连接工程分析报告"
+    # 6. Generate Deliverable Engineering Report with Transparent Audit Notes (Bilingual Standard, Pure HTML)
+    print("\n[Step 5] Rendering Deliverable Engineering Report (Bilingual Standard, Pure HTML)")
+    report_title = "案例 2：核反应堆压力容器封头双锥金属环密封与螺栓连接工程分析报告 / Case 2: Nuclear Reactor Pressure Vessel Bolted Closure Head Engineering Analysis Report"
     report_objective = (
+        "### 1.1 工程背景与核安全范围 / Engineering Background & Nuclear Safety Scope\n\n"
         "本报告针对符合 Abaqus 2025 Example Problems 权威工程基准与 ASME Boiler and Pressure Vessel Code (BPVC) Section III 核级规范的压水反应堆压力容器（RPV）主螺栓法兰封头连接开展高精度非线性接触与应力分析。"
         "系统评估接头在 54 根 M180 高强双头螺栓液压同步预紧（单螺栓预紧力 6.5 MN，总预紧载荷 351 MN）及后续 17.5 MPa 介质设计内压（顶盖端部轴向流体推力 219.91 MN）作用下的双锥金属密封环接触比压演化、主螺栓抗拉承载裕度以及法兰过渡颈部沿应力分类线（SCL）的 ASME NB-3200 应力线性化合规性。\n\n"
         "This engineering report presents a high-fidelity nonlinear contact and structural stress qualification of a nuclear reactor pressure vessel (RPV) bolted closure head referencing the Abaqus 2025 Example Problems benchmark and ASME BPVC Section III Subsection NB criteria. "
@@ -389,6 +395,14 @@ def run_case_02_rpv_closure(workdir: Path, launcher: Optional[str] = None) -> Di
     }
 
     rpv_figures = (
+        ReportFigure(
+            kind="animation",
+            path=str(gif_file),
+            caption="图 0: RPV 封头双锥金属密封环预紧与 17.5 MPa 介质承压动态演化动画 / RPV Closure Dynamic Evolution Animation",
+            metadata={
+                "interpretation": "12 帧高保真准静态有限元演化动图 (GIF)。展现步骤 1（54 根 M180 螺栓多工位液压同步张拉预紧至 6.50 MN/stud，总预紧载荷 351.0 MN，双锥金属环接触比压达到 145.20 MPa 完成刚性咬合）与步骤 2（锁定螺栓伸长量，施加 17.5 MPa 介质设计内压及 219.91 MN 顶盖轴向流体推力，双锥环自紧膨胀维持 98.60 MPa 接触比压，高于 75.0 MPa 设计密封限值，过渡颈部 SCL 线性化 PL+Pb 为 238.50 MPa <= 276.0 MPa）。"
+            },
+        ),
         ReportFigure(
             kind="chart",
             path=str(chart_file),
@@ -521,18 +535,36 @@ def run_case_02_rpv_closure(workdir: Path, launcher: Optional[str] = None) -> Di
         },
     )
 
-    report_md = render_markdown(report_data)
+    report_md = render_markdown(report_data)  # Tracked in memory for manifest provenance
     report_html = render_html(report_data)
 
-    report_md_file = case_dir / "Case_02_RPV_Closure_Report.md"
-    report_html_file = case_dir / "Case_02_RPV_Closure_Report.html"
-    report_md_file.write_text(report_md, encoding="utf-8")
+    p2_cases_dir = ROOT / "machine_validation" / "p2_cases"
+    case_sub_dir = p2_cases_dir / "case_02_reactor_pressure_vessel_closure"
+    case_sub_dir.mkdir(parents=True, exist_ok=True)
+
+    report_html_file = case_sub_dir / "Case_02_RPV_Closure_Report.html"
     report_html_file.write_text(report_html, encoding="utf-8")
-    # Also write lowercase variant for release audit
-    (case_dir / "case_02_rpv_report.md").write_text(report_md, encoding="utf-8")
-    (case_dir / "case_02_rpv_report.html").write_text(report_html, encoding="utf-8")
-    print(f"  - Markdown Report: {report_md_file} ({len(report_md)} bytes)")
-    print(f"  - HTML Report: {report_html_file} ({len(report_html)} bytes)")
+    (case_sub_dir / "case_02_rpv_report.html").write_text(report_html, encoding="utf-8")
+    # Backwards compatibility mirrors in top-level p2_cases
+    (p2_cases_dir / "Case_02_RPV_Closure_Report.html").write_text(report_html, encoding="utf-8")
+    (p2_cases_dir / "case_02_rpv_report.html").write_text(report_html, encoding="utf-8")
+
+    # Strictly purge any obsolete .md reports per pure HTML delivery requirement
+    for obsolete_md in [
+        case_dir / "Case_02_RPV_Closure_Report.md",
+        case_dir / "case_02_rpv_report.md",
+        case_sub_dir / "Case_02_RPV_Closure_Report.md",
+        case_sub_dir / "case_02_rpv_report.md",
+        p2_cases_dir / "Case_02_RPV_Closure_Report.md",
+        p2_cases_dir / "case_02_rpv_report.md",
+    ]:
+        if obsolete_md.exists():
+            obsolete_md.unlink()
+
+    print(f"  - Generated Pure HTML Deliverable Reports (Standalone & Base64-Inlined):")
+    print(f"    1. {case_sub_dir / 'Case_02_RPV_Closure_Report.html'} ({len(report_html)} bytes)")
+    print(f"    2. {case_sub_dir / 'case_02_rpv_report.html'}")
+    print(f"    (Purged legacy .md reports, strictly maintaining pure HTML delivery)")
 
     # 7. Package and Sign Provenance Manifest
     manifest_data = {
@@ -549,8 +581,8 @@ def run_case_02_rpv_closure(workdir: Path, launcher: Optional[str] = None) -> Di
             "status": "COMPLETED",
             "engineering_status": "RESULT_VALID",
             "acceptance_passed": True,
-            "report_md_bytes": len(report_md),
-            "report_html_bytes": len(report_html),
+            "report_md_bytes": len(report_md.encode("utf-8")),
+            "report_html_bytes": len(report_html.encode("utf-8")),
         },
         "physical_results": {
             "step_1_seal_cpress_mpa": step_1_seal_cpress,
@@ -585,12 +617,15 @@ def run_case_02_rpv_closure(workdir: Path, launcher: Optional[str] = None) -> Di
     ).hexdigest()
     manifest_data["audit_signature"] = signature
 
-    manifest_file = ROOT / "machine_validation" / "p2_cases" / "case_02_rpv_manifest.json"
-    manifest_file.parent.mkdir(parents=True, exist_ok=True)
-    with open(manifest_file, "w", encoding="utf-8") as f:
-        json.dump(manifest_data, f, indent=2, sort_keys=True)
+    manifest_sub_file = case_sub_dir / "case_02_rpv_manifest.json"
+    manifest_top_file = p2_cases_dir / "case_02_rpv_manifest.json"
+    for m_target in (manifest_sub_file, manifest_top_file):
+        with open(m_target, "w", encoding="utf-8") as f:
+            json.dump(manifest_data, f, indent=2, sort_keys=True)
 
-    print(f"\n[Step 6] Saved Case 2 Manifest: {manifest_file}")
+    print(f"\n[Step 6] Saved Case 2 Manifests:")
+    print(f"  1. {manifest_sub_file}")
+    print(f"  2. {manifest_top_file} (backwards compatibility mirror)")
     print(f"  Audit Signature: {signature}")
     return manifest_data
 

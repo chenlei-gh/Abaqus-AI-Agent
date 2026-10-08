@@ -23,11 +23,14 @@ from abaqus_ai_agent.acceptance import evaluate_result_acceptance
 
 ROOT = Path(__file__).resolve().parent.parent
 CASE_01_PROBLEM = ROOT / "test_assets" / "engineering_cases" / "case_01_bolted_pipe_flange" / "problem_statement.json"
-CASE_01_MANIFEST = ROOT / "machine_validation" / "p2_cases" / "case_01_flange_manifest.json"
+CASE_01_SUB_DIR = ROOT / "machine_validation" / "p2_cases" / "case_01_bolted_pipe_flange"
+CASE_01_MANIFEST = CASE_01_SUB_DIR / "case_01_flange_manifest.json"
 CASE_02_PROBLEM = ROOT / "test_assets" / "engineering_cases" / "case_02_reactor_pressure_vessel_closure" / "problem_statement.json"
-CASE_02_MANIFEST = ROOT / "machine_validation" / "p2_cases" / "case_02_rpv_manifest.json"
+CASE_02_SUB_DIR = ROOT / "machine_validation" / "p2_cases" / "case_02_reactor_pressure_vessel_closure"
+CASE_02_MANIFEST = CASE_02_SUB_DIR / "case_02_rpv_manifest.json"
 CASE_03_PROBLEM = ROOT / "test_assets" / "engineering_cases" / "case_03_exhaust_manifold_thermo_mechanical" / "problem_statement.json"
-CASE_03_MANIFEST = ROOT / "machine_validation" / "p2_cases" / "case_03_manifold_manifest.json"
+CASE_03_SUB_DIR = ROOT / "machine_validation" / "p2_cases" / "case_03_exhaust_manifold"
+CASE_03_MANIFEST = CASE_03_SUB_DIR / "case_03_manifold_manifest.json"
 
 
 def test_case_01_problem_statement_specification():
@@ -318,10 +321,9 @@ def test_case_03_negative_probes_thermal_stress_slip_and_sealing():
         contact_diagnostics=MockContactDiag(),
         thermal_balance=True,
         odb_fields=["NT", "S", "U", "RF", "CPRESS", "CSLIP", "CSHEAR"],
-        physics_domain="thermal_structural",
-        require_evidence=False,
     )
     assert not res_stress.passed
+    assert res_stress.status == "FAIL"
     assert any("criterion:max_junction_fillet_mises" in f for f in res_stress.failures)
 
     # Probe 2: Excessive slip causes bolt clearance interference (0.85 mm > 0.75 mm)
@@ -369,3 +371,58 @@ def test_case_03_negative_probes_thermal_stress_slip_and_sealing():
     )
     assert not res_sealing.passed
     assert any("criterion:min_operating_gasket_cpress" in f for f in res_sealing.failures)
+
+
+def test_package_b_cases_folder_organization_and_standalone_html():
+    """Verify Phase 2 Package B folder isolation & self-contained HTML deliverable enforcement.
+
+    Asserts:
+    1. Each engineering case is organized inside its own isolated dedicated subfolder.
+    2. Deliverable reports are strictly pure standalone HTML with embedded Base64/SVG assets.
+    3. No legacy Markdown (.md) reports reside on disk.
+    4. Backwards compatibility top-level manifests match isolated folder manifests bit-for-bit.
+    """
+    p2_root = ROOT / "machine_validation" / "p2_cases"
+
+    cases_spec = [
+        (
+            CASE_01_SUB_DIR,
+            "case_01_flange_manifest.json",
+            "Case_01_Bolted_Flange_Report.html",
+        ),
+        (
+            CASE_02_SUB_DIR,
+            "case_02_rpv_manifest.json",
+            "Case_02_RPV_Closure_Report.html",
+        ),
+        (
+            CASE_03_SUB_DIR,
+            "case_03_manifold_manifest.json",
+            "Case_03_Exhaust_Manifold_Report.html",
+        ),
+    ]
+
+    for sub_dir, manifest_name, html_report_name in cases_spec:
+        assert sub_dir.is_dir(), f"Case subfolder missing at {sub_dir}"
+
+        sub_manifest = sub_dir / manifest_name
+        top_manifest = p2_root / manifest_name
+        assert sub_manifest.is_file(), f"Manifest missing in subfolder: {sub_manifest}"
+        assert top_manifest.is_file(), f"Top-level compatibility manifest missing: {top_manifest}"
+
+        # Bit-for-bit identical cryptographic manifest
+        assert sub_manifest.read_bytes() == top_manifest.read_bytes(), f"Manifest mismatch between subfolder and mirror for {manifest_name}"
+
+        # Standalone HTML report check (must be large enough to verify inlined Base64 GIF & SVG)
+        html_file = sub_dir / html_report_name
+        assert html_file.is_file(), f"HTML report missing: {html_file}"
+        assert html_file.stat().st_size > 100_000, f"HTML report {html_file} is smaller than expected ({html_file.stat().st_size} bytes), assets might not be embedded!"
+
+        # Read HTML content to confirm self-contained Base64 Data URI or SVG
+        content = html_file.read_text(encoding="utf-8")
+        assert "data:image/gif;base64," in content or "<svg" in content
+        assert "html" in content.lower()
+
+        # Enforce pure HTML delivery - strictly zero legacy .md files in the subfolder
+        md_files = list(sub_dir.glob("*.md"))
+        assert len(md_files) == 0, f"Legacy Markdown files found in {sub_dir}: {[f.name for f in md_files]}"

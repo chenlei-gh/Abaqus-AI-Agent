@@ -18,9 +18,11 @@ machine_validation/*
 !machine_validation/legacy/
 !machine_validation/legacy/*.json
 !machine_validation/p2_cases/
-!machine_validation/p2_cases/*.json
-!machine_validation/p2_cases/*.md
-!machine_validation/p2_cases/*.html
+!machine_validation/p2_cases/**/
+!machine_validation/p2_cases/**/*.json
+!machine_validation/p2_cases/**/*.html
+!machine_validation/p2_cases/**/*.py
+machine_validation/p2_cases_workdir/
 legacy_job_artifacts/
 *.odb
 *.sta

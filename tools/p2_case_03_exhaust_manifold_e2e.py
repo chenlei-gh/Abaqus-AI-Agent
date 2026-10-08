@@ -115,7 +115,8 @@ def run_case_03_exhaust_manifold(workdir: Path, launcher: Optional[str] = None) 
 
     # 4. Generate 4 Authentic CAE Visual Figures via Headless Abaqus Viewer / Off-Screen Engine
     p2_cases_dir = ROOT / "machine_validation" / "p2_cases"
-    p2_cases_dir.mkdir(parents=True, exist_ok=True)
+    case_sub_dir = p2_cases_dir / "case_03_exhaust_manifold"
+    case_sub_dir.mkdir(parents=True, exist_ok=True)
 
     contour_requests = [
         ContourPlotRequest(
@@ -197,6 +198,7 @@ def run_case_03_exhaust_manifold(workdir: Path, launcher: Optional[str] = None) 
     )
     viewer_script_file = case_dir / "case_03_render_contours_headless.py"
     viewer_script_file.write_text(headless_script, encoding="utf-8")
+    (case_sub_dir / "case_03_render_contours_headless.py").write_text(headless_script, encoding="utf-8")
     (p2_cases_dir / "case_03_render_contours_headless.py").write_text(headless_script, encoding="utf-8")
 
     # Render authentic contour plots and transient evolution GIF animation
@@ -697,8 +699,9 @@ def run_case_03_exhaust_manifold(workdir: Path, launcher: Optional[str] = None) 
     report_md = render_markdown(report_data)  # Tracked in memory for manifest metrics
     report_html = render_html(report_data)
 
-    report_html_file = case_dir / "Case_03_Exhaust_Manifold_Report.html"
+    report_html_file = case_sub_dir / "Case_03_Exhaust_Manifold_Report.html"
     report_html_file.write_text(report_html, encoding="utf-8")
+    (case_sub_dir / "case_03_manifold_report.html").write_text(report_html, encoding="utf-8")
 
     (p2_cases_dir / "Case_03_Exhaust_Manifold_Report.html").write_text(report_html, encoding="utf-8")
     (p2_cases_dir / "case_03_manifold_report.html").write_text(report_html, encoding="utf-8")
@@ -707,6 +710,8 @@ def run_case_03_exhaust_manifold(workdir: Path, launcher: Optional[str] = None) 
     for obsolete_md in [
         case_dir / "Case_03_Exhaust_Manifold_Report.md",
         case_dir / "case_03_manifold_report.md",
+        case_sub_dir / "Case_03_Exhaust_Manifold_Report.md",
+        case_sub_dir / "case_03_manifold_report.md",
         p2_cases_dir / "Case_03_Exhaust_Manifold_Report.md",
         p2_cases_dir / "case_03_manifold_report.md",
     ]:
@@ -714,9 +719,8 @@ def run_case_03_exhaust_manifold(workdir: Path, launcher: Optional[str] = None) 
             obsolete_md.unlink()
 
     print(f"  - Generated Pure HTML Deliverable Reports (Standalone & Base64-Inlined):")
-    print(f"    1. {report_html_file.name}")
-    print(f"    2. Case_03_Exhaust_Manifold_Report.html")
-    print(f"    3. case_03_manifold_report.html")
+    print(f"    1. {case_sub_dir / 'Case_03_Exhaust_Manifold_Report.html'}")
+    print(f"    2. {case_sub_dir / 'case_03_manifold_report.html'}")
     print(f"    (Purged legacy .md reports, strictly maintaining pure HTML delivery)")
 
     # 7. Negative Probes (Fail-Closed Enforcement)
@@ -847,10 +851,14 @@ def run_case_03_exhaust_manifold(workdir: Path, launcher: Optional[str] = None) 
     ).hexdigest()
     manifest_data["audit_signature"] = manifest_sha
 
-    manifest_file = ROOT / "machine_validation" / "p2_cases" / "case_03_manifold_manifest.json"
-    manifest_file.parent.mkdir(parents=True, exist_ok=True)
-    manifest_file.write_text(json.dumps(manifest_data, indent=2), encoding="utf-8")
-    print(f"\n[Step 7] Cryptographic Manifest Generated: {manifest_file} (Audit Signature: {manifest_sha[:16]}...)")
+    manifest_sub_file = case_sub_dir / "case_03_manifold_manifest.json"
+    manifest_top_file = p2_cases_dir / "case_03_manifold_manifest.json"
+    manifest_sub_file.write_text(json.dumps(manifest_data, indent=2), encoding="utf-8")
+    manifest_top_file.write_text(json.dumps(manifest_data, indent=2), encoding="utf-8")
+    print(f"\n[Step 7] Cryptographic Manifest Generated:")
+    print(f"  1. {manifest_sub_file}")
+    print(f"  2. {manifest_top_file} (backwards compatibility mirror)")
+    print(f"  Audit Signature: {manifest_sha}")
 
     return {
         "status": "QUALIFIED",
