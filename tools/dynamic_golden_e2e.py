@@ -569,15 +569,14 @@ def _extract_report(stdout):
 def main(argv=None):
     parser = argparse.ArgumentParser(description='Run the Implicit Dynamic E2E Engineering Case')
     parser.add_argument('--launcher', default=os.environ.get('ABAQUS_COMMAND', 'abaqus'))
-    parser.add_argument('--workdir', default=os.getcwd())
+    parser.add_argument('--workdir', default=os.path.join(str(ROOT), 'runs', 'dynamic_golden_run'))
     parser.add_argument('--timeout', type=int, default=3600)
     parser.add_argument('--output', default=os.path.join('machine_validation', 'dynamic_golden_e2e.json'))
     args = parser.parse_args(argv)
 
     workdir = os.path.abspath(args.workdir)
-    validation_dir = os.path.join(workdir, 'machine_validation')
-    os.makedirs(validation_dir, exist_ok=True)
-    script_path = os.path.join(validation_dir, 'dynamic_golden_e2e_script.py')
+    os.makedirs(workdir, exist_ok=True)
+    script_path = os.path.join(workdir, 'dynamic_golden_e2e_script.py')
     with open(script_path, 'w', encoding='utf-8') as handle:
         handle.write(build_dynamic_golden_script())
 

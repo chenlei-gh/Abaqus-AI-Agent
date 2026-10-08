@@ -341,7 +341,7 @@ print("__TIER2_RESULT__=" + json.dumps({"passed": report["passed"]}))
 def main(argv=None):
     parser = argparse.ArgumentParser(description="Tier 2 Real-Machine BC/Load Equivalence Live Validation")
     parser.add_argument("--launcher", default=os.environ.get("ABAQUS_COMMAND", "abaqus"))
-    parser.add_argument("--workdir", default=os.path.join(str(ROOT), "machine_validation"))
+    parser.add_argument("--workdir", default=os.path.join(str(ROOT), "runs", "tier2_workdir"))
     parser.add_argument("--job-name", default="Tier2_LiveValidation")
     parser.add_argument("--timeout", type=int, default=300)
     args = parser.parse_args(argv)
@@ -370,7 +370,7 @@ def main(argv=None):
     # =========================================================================
     print("\n--- [Step 2] Executing Live Abaqus 2025 Tier 2 Script (Cases A, B, C, E) ---")
     script_path = workdir / f"{args.job_name}_script.py"
-    evidence_json = workdir / "tier2_bc_load_evidence.json"
+    evidence_json = ROOT / "machine_validation" / "tier2_bc_load_evidence.json"
 
     script_content = build_tier2_abaqus_script(
         str(workdir).replace("\\", "/"),

@@ -242,7 +242,7 @@ print("__TIER3_RESULT__=" + json.dumps({"passed": report["passed"]}))
 def main(argv=None):
     parser = argparse.ArgumentParser(description="Tier 3 Real-Machine UnitSystem Invariance Live Validation")
     parser.add_argument("--launcher", default=os.environ.get("ABAQUS_COMMAND", "abaqus"))
-    parser.add_argument("--workdir", default=os.path.join(str(ROOT), "machine_validation"))
+    parser.add_argument("--workdir", default=os.path.join(str(ROOT), "runs", "tier3_workdir"))
     parser.add_argument("--job-name", default="Tier3_LiveValidation")
     parser.add_argument("--timeout", type=int, default=300)
     args = parser.parse_args(argv)
@@ -270,7 +270,7 @@ def main(argv=None):
     # 2. Run Abaqus dual-model simulation
     print("\n--- [Step 2] Executing Live Abaqus 2025 Tier 3 Dual-Model Script ---")
     script_path = workdir / f"{args.job_name}_script.py"
-    evidence_json = workdir / "tier3_unit_system_evidence.json"
+    evidence_json = ROOT / "machine_validation" / "tier3_unit_system_evidence.json"
 
     script_content = build_tier3_abaqus_script(str(evidence_json).replace("\\", "/"))
     script_path.write_text(script_content, encoding="utf-8")

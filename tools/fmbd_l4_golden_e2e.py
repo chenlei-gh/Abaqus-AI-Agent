@@ -777,7 +777,7 @@ with open(r'{extract_out}', 'w') as jf:
 
 def main():
     parser = argparse.ArgumentParser(description="Run FMBD L4 Golden E2E Verification.")
-    parser.add_argument("--workdir", type=Path, default=ROOT / "run_fmbd_l4", help="Working directory for runs")
+    parser.add_argument("--workdir", type=Path, default=ROOT / "runs" / "fmbd_l4_run", help="Working directory for runs")
     parser.add_argument("--launcher", type=str, default=None, help="Abaqus launcher executable")
     args = parser.parse_args()
 

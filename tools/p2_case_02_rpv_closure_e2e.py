@@ -632,7 +632,7 @@ def run_case_02_rpv_closure(workdir: Path, launcher: Optional[str] = None) -> Di
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Phase 2 Package B Case 2 Runner")
-    parser.add_argument("--workdir", default="machine_validation/p2_cases_workdir", help="Output directory")
+    parser.add_argument("--workdir", default="runs/p2_case_02_workdir", help="Output directory")
     parser.add_argument("--launcher", default=None, help="Optional Abaqus launcher command")
     args = parser.parse_args()
 

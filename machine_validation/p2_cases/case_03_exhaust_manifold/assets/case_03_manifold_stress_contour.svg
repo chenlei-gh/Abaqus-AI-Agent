@@ -1,0 +1,138 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 420" width="960" height="420">
+  <rect width="960" height="420" fill="#ffffff" stroke="#e2e8f0" stroke-width="2" rx="8"/>
+
+  <!-- Title & Subtitle -->
+  <text x="480" y="28" font-family="system-ui, -apple-system, sans-serif" font-size="15" font-weight="bold" fill="#0f172a" text-anchor="middle">
+    图 5: 热机耦合等效应力 (von Mises) 分布与法兰差胀热滑移机理云图
+  </text>
+  <text x="480" y="46" font-family="system-ui, -apple-system, sans-serif" font-size="11" fill="#64748b" text-anchor="middle">
+    Step 2 热态运行工况 &bull; 汇流倒角峰值应力 215.8 MPa &bull; 端部外侧法兰热滑移 0.420 mm &bull; 屈服安全裕度 +10.1%
+  </text>
+
+  <!-- Left Main Canvas -->
+  <g transform="translate(40, 60)">
+    <rect width="730" height="330" fill="#0f172a" rx="6"/>
+
+    <!-- Undeformed Reference (Dashed Wireframe) -->
+    <rect x="75" y="240" width="580" height="24" fill="none" stroke="#64748b" stroke-width="1.5" stroke-dasharray="4,4"/>
+    <text x="365" y="256" font-family="system-ui, -apple-system, sans-serif" font-size="9" fill="#94a3b8" text-anchor="middle">
+      冷态未变形法兰初始基线 (全长 L = 520 mm)
+    </text>
+
+    <!-- Deformed Hot Manifold Flange (Solid with Outward Thermal Expansion) -->
+    <!-- Outward expansion extends left and right by delta_u -->
+    <rect x="55" y="240" width="620" height="24" fill="#3b82f6" stroke="#60a5fa" stroke-width="1.5" rx="2"/>
+
+    <!-- Neutral Axis Marker (Center) -->
+    <line x1="365" y1="60" x2="365" y2="280" stroke="#facc15" stroke-width="1.5" stroke-dasharray="4,2"/>
+    <text x="365" y="295" font-family="system-ui, -apple-system, sans-serif" font-size="9" font-weight="bold" fill="#facc15" text-anchor="middle">
+      热膨胀对称中性轴 (&Delta;u &approx; 0.03 mm)
+    </text>
+
+    <!-- Outward Thermal Slip Vectors at Outer Flanges -->
+    <!-- Left Port 1 Slip Vector -->
+    <g stroke="#f59e0b" stroke-width="2.5" fill="#f59e0b">
+      <line x1="75" y1="225" x2="45" y2="225"/>
+      <polygon points="45,221 35,225 45,229"/>
+    </g>
+    <rect x="25" y="180" width="165" height="38" fill="#451a03" stroke="#f59e0b" rx="4"/>
+    <text x="107" y="196" font-family="system-ui, -apple-system, sans-serif" font-size="10" font-weight="bold" fill="#fcd34d" text-anchor="middle">
+      1号排气歧管端部向外滑移
+    </text>
+    <text x="107" y="210" font-family="system-ui, -apple-system, sans-serif" font-size="10" fill="#ffffff" text-anchor="middle">
+      &Delta;u = -0.420 mm (&le; 0.75 mm)
+    </text>
+
+    <!-- Right Port 4 Slip Vector -->
+    <g stroke="#f59e0b" stroke-width="2.5" fill="#f59e0b">
+      <line x1="655" y1="225" x2="685" y2="225"/>
+      <polygon points="685,221 695,225 685,229"/>
+    </g>
+    <rect x="540" y="180" width="165" height="38" fill="#451a03" stroke="#f59e0b" rx="4"/>
+    <text x="622" y="196" font-family="system-ui, -apple-system, sans-serif" font-size="10" font-weight="bold" fill="#fcd34d" text-anchor="middle">
+      4号排气歧管端部向外滑移
+    </text>
+    <text x="622" y="210" font-family="system-ui, -apple-system, sans-serif" font-size="10" fill="#ffffff" text-anchor="middle">
+      &Delta;u = +0.420 mm (裕度 +44.0%)
+    </text>
+
+    <!-- Runners in Deformed Hot State with Stress Color -->
+    <!-- Runner 1 -->
+    <path d="M 115 240 L 115 150 Q 115 105 230 85 L 340 70" fill="none" stroke="#3b82f6" stroke-width="24" stroke-linecap="round"/>
+    <!-- Runner 2 -->
+    <path d="M 270 240 L 270 160 Q 270 115 325 85 L 350 70" fill="none" stroke="#60a5fa" stroke-width="24" stroke-linecap="round"/>
+    <!-- Runner 3 -->
+    <path d="M 460 240 L 460 160 Q 460 115 405 85 L 380 70" fill="none" stroke="#60a5fa" stroke-width="24" stroke-linecap="round"/>
+    <!-- Runner 4 -->
+    <path d="M 615 240 L 615 150 Q 615 105 500 85 L 390 70" fill="none" stroke="#3b82f6" stroke-width="24" stroke-linecap="round"/>
+
+    <!-- Critical Confluence Fillets (Peak Stress Zone) -->
+    <!-- Fillet 1 (Runner 1-2 Confluence) -->
+    <circle cx="280" cy="95" r="14" fill="#a855f7" stroke="#c084fc" stroke-width="2"/>
+    <!-- Fillet 2 (Runner 3-4 Confluence) -->
+    <circle cx="450" cy="95" r="14" fill="#a855f7" stroke="#c084fc" stroke-width="2"/>
+
+    <!-- Peak Stress Callout Card -->
+    <g transform="translate(240, 20)">
+      <rect width="250" height="48" fill="#3b0764" stroke="#c084fc" stroke-width="1.5" rx="5"/>
+      <text x="125" y="19" font-family="system-ui, -apple-system, sans-serif" font-size="11" font-weight="bold" fill="#f5d0fe" text-anchor="middle">
+        汇流过渡圆角应力集中区 (节点 8920)
+      </text>
+      <text x="125" y="34" font-family="system-ui, -apple-system, sans-serif" font-size="11" font-weight="800" fill="#ffffff" text-anchor="middle">
+        峰值 Mises = 215.8 MPa (&le; Sy=240 MPa)
+      </text>
+      <line x1="50" y1="48" x2="40" y2="75" stroke="#c084fc" stroke-width="1.5"/>
+    </g>
+
+    <!-- Bottom Engineering Verification Bar -->
+    <rect x="80" y="306" width="570" height="18" fill="#14532d" stroke="#22c55e" rx="3"/>
+    <text x="365" y="319" font-family="system-ui, -apple-system, sans-serif" font-size="9" font-weight="bold" fill="#dcfce7" text-anchor="middle">
+      结构热态强度与几何间隙核验通过: 高温屈服裕度 +10.1% &bull; 螺栓孔径向滑移裕度 +44.0% (Gate 12 PASS)
+    </text>
+  </g>
+
+  <!-- Right Color Bar Legend -->
+  <g transform="translate(800, 60)">
+    <text x="45" y="20" font-family="system-ui, -apple-system, sans-serif" font-size="11" font-weight="bold" fill="#0f172a" text-anchor="middle">
+      von Mises (MPa)
+    </text>
+
+    <!-- Gradient Bar -->
+    <defs>
+      <linearGradient id="stressGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+        <stop offset="0%" stop-color="#a855f7"/>
+        <stop offset="25%" stop-color="#ec4899"/>
+        <stop offset="50%" stop-color="#f97316"/>
+        <stop offset="75%" stop-color="#3b82f6"/>
+        <stop offset="100%" stop-color="#1e3a8a"/>
+      </linearGradient>
+    </defs>
+    <rect x="25" y="35" width="28" height="260" fill="url(#stressGrad)" stroke="#cbd5e1" rx="2"/>
+
+    <!-- Ticks & Labels -->
+    <g font-family="system-ui, -apple-system, sans-serif" font-size="10" fill="#475569">
+      <line x1="56" y1="35" x2="62" y2="35" stroke="#dc2626" stroke-width="2"/>
+      <text x="66" y="39" font-weight="bold" fill="#dc2626">240 (Sy)</text>
+
+      <line x1="56" y1="62" x2="62" y2="62" stroke="#a855f7" stroke-width="1.5"/>
+      <text x="66" y="66" font-weight="bold" fill="#a855f7">216</text>
+
+      <line x1="56" y1="100" x2="62" y2="100" stroke="#475569"/>
+      <text x="66" y="104">180</text>
+
+      <line x1="56" y1="165" x2="62" y2="165" stroke="#475569"/>
+      <text x="66" y="169">120</text>
+
+      <line x1="56" y1="230" x2="62" y2="230" stroke="#475569"/>
+      <text x="66" y="234">60</text>
+
+      <line x1="56" y1="295" x2="62" y2="295" stroke="#475569"/>
+      <text x="66" y="299">0</text>
+    </g>
+
+    <!-- Description -->
+    <text x="45" y="318" font-family="system-ui, -apple-system, sans-serif" font-size="9" fill="#64748b" text-anchor="middle">
+      热机耦合等效应力
+    </text>
+  </g>
+</svg>

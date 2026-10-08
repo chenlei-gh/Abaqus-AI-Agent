@@ -8,8 +8,10 @@ from abaqus import *
 from abaqusConstants import *
 import visualization
 
-odb_path = r'D:/Vault/Abaqus/Abaqus-AI-Agent/test_assets/runs/case_03_manifold_run/Case_03_Exhaust_Manifold_Thermo_Mechanical/Step-2-CoupledOperation.odb'
-out_dir = r'D:/Vault/Abaqus/Abaqus-AI-Agent/test_assets/runs/case_03_manifold_run/Case_03_Exhaust_Manifold_Thermo_Mechanical'
+_script_dir = os.path.dirname(os.path.abspath(__file__))
+assets_dir = os.path.join(_script_dir, "assets")
+out_dir = assets_dir
+odb_path = os.path.join(out_dir, "Step-2-CoupledOperation.odb")
 if not os.path.exists(out_dir):
     os.makedirs(out_dir)
 

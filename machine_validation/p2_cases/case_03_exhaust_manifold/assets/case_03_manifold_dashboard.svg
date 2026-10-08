@@ -1,0 +1,121 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 360" width="960" height="360">
+  <rect width="960" height="360" fill="#ffffff" stroke="#e2e8f0" stroke-width="2" rx="8"/>
+
+  <!-- Title & Subtitle -->
+  <text x="480" y="30" font-family="system-ui, -apple-system, sans-serif" font-size="16" font-weight="bold" fill="#0f172a" text-anchor="middle">
+    图 6: 重型发动机排气歧管热机耦合接触密封比压、热滑移与强度校核综合仪表盘
+  </text>
+  <text x="480" y="48" font-family="system-ui, -apple-system, sans-serif" font-size="11" fill="#64748b" text-anchor="middle">
+    Abaqus 2025 官方基准标定 &bull; 650&deg;C 热循环 &bull; 垫片波纹密封比压 &bull; 法兰差胀滑移 &bull; 汇流圆角热应力
+  </text>
+
+  <!-- Panel 1: MLS Gasket Contact Pressure (Left) -->
+  <g transform="translate(30, 65)">
+    <rect width="280" height="235" fill="#f8fafc" stroke="#e2e8f0" rx="4"/>
+    <text x="140" y="24" font-family="system-ui, -apple-system, sans-serif" font-size="13" font-weight="bold" fill="#334155" text-anchor="middle">
+      MLS 垫片密封接触比压 CPRESS (MPa)
+    </text>
+
+    <!-- Grid -->
+    <line x1="45" y1="180" x2="255" y2="180" stroke="#cbd5e1" stroke-width="1"/>
+    <line x1="45" y1="140" x2="255" y2="140" stroke="#e2e8f0" stroke-width="1"/>
+    <line x1="45" y1="100" x2="255" y2="100" stroke="#e2e8f0" stroke-width="1"/>
+    <line x1="45" y1="60" x2="255" y2="60" stroke="#e2e8f0" stroke-width="1"/>
+
+    <text x="40" y="184" font-family="system-ui, -apple-system, sans-serif" font-size="10" fill="#64748b" text-anchor="end">0</text>
+    <text x="40" y="144" font-family="system-ui, -apple-system, sans-serif" font-size="10" fill="#64748b" text-anchor="end">20</text>
+    <text x="40" y="104" font-family="system-ui, -apple-system, sans-serif" font-size="10" fill="#64748b" text-anchor="end">40</text>
+    <text x="40" y="64" font-family="system-ui, -apple-system, sans-serif" font-size="10" fill="#64748b" text-anchor="end">60</text>
+
+    <!-- Sealing threshold: 25.0 MPa -->
+    <line x1="45" y1="130.0" x2="255" y2="130.0" stroke="#ef4444" stroke-width="1.5" stroke-dasharray="4,3"/>
+    <text x="253" y="126.0" font-family="system-ui, -apple-system, sans-serif" font-size="9" font-weight="bold" fill="#ef4444" text-anchor="end">
+      最小密封门槛 (25 MPa)
+    </text>
+
+    <!-- Bars -->
+    <rect x="75" y="83.0" width="50" height="97.0" fill="#3b82f6" rx="3"/>
+    <text x="100" y="75.0" font-family="system-ui, -apple-system, sans-serif" font-size="11" font-weight="bold" fill="#1e40af" text-anchor="middle">
+      48.5
+    </text>
+    <text x="100" y="198" font-family="system-ui, -apple-system, sans-serif" font-size="10" fill="#475569" text-anchor="middle">工步 1 (冷态预紧)</text>
+    <text x="100" y="210" font-family="system-ui, -apple-system, sans-serif" font-size="9" fill="#16a34a" text-anchor="middle">压紧状态良好</text>
+
+    <rect x="170" y="102.8" width="50" height="77.2" fill="#10b981" rx="3"/>
+    <text x="195" y="94.8" font-family="system-ui, -apple-system, sans-serif" font-size="11" font-weight="bold" fill="#065f46" text-anchor="middle">
+      38.6
+    </text>
+    <text x="195" y="198" font-family="system-ui, -apple-system, sans-serif" font-size="10" fill="#475569" text-anchor="middle">工步 2 (650&deg;C 热态)</text>
+    <text x="195" y="210" font-family="system-ui, -apple-system, sans-serif" font-size="9" fill="#16a34a" text-anchor="middle">密封裕度 +54.4%</text>
+  </g>
+
+  <!-- Panel 2: Flange Thermal Slip (Center) -->
+  <g transform="translate(340, 65)">
+    <rect width="280" height="235" fill="#f8fafc" stroke="#e2e8f0" rx="4"/>
+    <text x="140" y="24" font-family="system-ui, -apple-system, sans-serif" font-size="13" font-weight="bold" fill="#334155" text-anchor="middle">
+      端部法兰差胀热滑移量 (mm)
+    </text>
+
+    <!-- Grid -->
+    <line x1="45" y1="180" x2="255" y2="180" stroke="#cbd5e1" stroke-width="1"/>
+    <line x1="45" y1="135" x2="255" y2="135" stroke="#e2e8f0" stroke-width="1"/>
+    <line x1="45" y1="90" x2="255" y2="90" stroke="#e2e8f0" stroke-width="1"/>
+    <line x1="45" y1="45" x2="255" y2="45" stroke="#e2e8f0" stroke-width="1"/>
+
+    <text x="40" y="184" font-family="system-ui, -apple-system, sans-serif" font-size="10" fill="#64748b" text-anchor="end">0.0</text>
+    <text x="40" y="139" font-family="system-ui, -apple-system, sans-serif" font-size="10" fill="#64748b" text-anchor="end">0.3</text>
+    <text x="40" y="94" font-family="system-ui, -apple-system, sans-serif" font-size="10" fill="#64748b" text-anchor="end">0.6</text>
+    <text x="40" y="49" font-family="system-ui, -apple-system, sans-serif" font-size="10" fill="#64748b" text-anchor="end">0.9</text>
+
+    <!-- Clearance limit: 0.75 mm -->
+    <line x1="45" y1="67.5" x2="255" y2="67.5" stroke="#dc2626" stroke-width="1.5" stroke-dasharray="4,3"/>
+    <text x="253" y="63.5" font-family="system-ui, -apple-system, sans-serif" font-size="9" font-weight="bold" fill="#dc2626" text-anchor="end">
+      螺栓孔径向间隙上限 (0.75 mm)
+    </text>
+
+    <rect x="110" y="117.0" width="60" height="63.0" fill="#f59e0b" rx="3"/>
+    <text x="140" y="109.0" font-family="system-ui, -apple-system, sans-serif" font-size="12" font-weight="bold" fill="#b45309" text-anchor="middle">
+      0.420 mm
+    </text>
+    <text x="140" y="198" font-family="system-ui, -apple-system, sans-serif" font-size="10" fill="#475569" text-anchor="middle">端部 1/4 号法兰外向滑移</text>
+    <text x="140" y="212" font-family="system-ui, -apple-system, sans-serif" font-size="9" font-weight="bold" fill="#16a34a" text-anchor="middle">间隙安全裕度 +44.0% (合格)</text>
+  </g>
+
+  <!-- Panel 3: Junction Fillet Thermal Stress (Right) -->
+  <g transform="translate(650, 65)">
+    <rect width="280" height="235" fill="#f8fafc" stroke="#e2e8f0" rx="4"/>
+    <text x="140" y="24" font-family="system-ui, -apple-system, sans-serif" font-size="13" font-weight="bold" fill="#334155" text-anchor="middle">
+      汇流圆角峰值热应力 vs 屈服 (MPa)
+    </text>
+
+    <!-- Grid -->
+    <line x1="45" y1="180" x2="255" y2="180" stroke="#cbd5e1" stroke-width="1"/>
+    <line x1="45" y1="140" x2="255" y2="140" stroke="#e2e8f0" stroke-width="1"/>
+    <line x1="45" y1="100" x2="255" y2="100" stroke="#e2e8f0" stroke-width="1"/>
+    <line x1="45" y1="60" x2="255" y2="60" stroke="#e2e8f0" stroke-width="1"/>
+
+    <text x="40" y="184" font-family="system-ui, -apple-system, sans-serif" font-size="10" fill="#64748b" text-anchor="end">0</text>
+    <text x="40" y="144" font-family="system-ui, -apple-system, sans-serif" font-size="10" fill="#64748b" text-anchor="end">100</text>
+    <text x="40" y="104" font-family="system-ui, -apple-system, sans-serif" font-size="10" fill="#64748b" text-anchor="end">200</text>
+    <text x="40" y="64" font-family="system-ui, -apple-system, sans-serif" font-size="10" fill="#64748b" text-anchor="end">300</text>
+
+    <!-- Yield threshold: 240.0 MPa -->
+    <line x1="45" y1="72.0" x2="255" y2="72.0" stroke="#dc2626" stroke-width="1.5" stroke-dasharray="4,3"/>
+    <text x="253" y="68.0" font-family="system-ui, -apple-system, sans-serif" font-size="9" font-weight="bold" fill="#dc2626" text-anchor="end">
+      SiMo 屈服限 Sy (240 MPa)
+    </text>
+
+    <rect x="110" y="82.9" width="60" height="97.1" fill="#8b5cf6" rx="3"/>
+    <text x="140" y="74.9" font-family="system-ui, -apple-system, sans-serif" font-size="12" font-weight="bold" fill="#5b21b6" text-anchor="middle">
+      215.8 MPa
+    </text>
+    <text x="140" y="198" font-family="system-ui, -apple-system, sans-serif" font-size="10" fill="#475569" text-anchor="middle">汇流过渡圆角 Mises 应力</text>
+    <text x="140" y="212" font-family="system-ui, -apple-system, sans-serif" font-size="9" font-weight="bold" fill="#16a34a" text-anchor="middle">高温屈服裕度 +10.1% (合格)</text>
+  </g>
+
+  <!-- Bottom Global Status Bar -->
+  <rect x="280" y="318" width="400" height="26" fill="#dcfce7" rx="13"/>
+  <text x="480" y="335" font-family="system-ui, -apple-system, sans-serif" font-size="12" font-weight="bold" fill="#15803d" text-anchor="middle">
+    多物理场工程评价指标全部满足标准规范 (CONDITIONAL PASS)
+  </text>
+</svg>

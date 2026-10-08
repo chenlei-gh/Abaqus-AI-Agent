@@ -1,0 +1,141 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 420" width="960" height="420">
+  <rect width="960" height="420" fill="#ffffff" stroke="#e2e8f0" stroke-width="2" rx="8"/>
+
+  <!-- Title & Subtitle -->
+  <text x="480" y="28" font-family="system-ui, -apple-system, sans-serif" font-size="15" font-weight="bold" fill="#0f172a" text-anchor="middle">
+    图 3: 球墨铸铁 SiMo 高温力学物性随温衰减与两工步求解历程变化关系图 (Material &amp; Step History)
+  </text>
+  <text x="480" y="46" font-family="system-ui, -apple-system, sans-serif" font-size="11" fill="#64748b" text-anchor="middle">
+    左图: SiMo 铸铁弹性模量 E 与屈服极限 Sy 随温衰减曲线 &bull; 右图: 螺栓预紧(Step 1)与热态运行(Step 2)历程物理量变化
+  </text>
+
+  <!-- Left Plot: Material Decay with Temperature -->
+  <g transform="translate(40, 65)">
+    <rect width="425" height="325" fill="#f8fafc" stroke="#cbd5e1" stroke-width="1" rx="6"/>
+    <text x="212" y="24" font-family="system-ui, -apple-system, sans-serif" font-size="12" font-weight="bold" fill="#1e3a8a" text-anchor="middle">
+      SiMo 铸铁关键物性随温度衰减规律 (20&deg;C ~ 700&deg;C)
+    </text>
+
+    <!-- Axes -->
+    <line x1="55" y1="260" x2="395" y2="260" stroke="#475569" stroke-width="1.2"/>
+    <line x1="55" y1="50" x2="55" y2="260" stroke="#475569" stroke-width="1.2"/>
+    <line x1="395" y1="50" x2="395" y2="260" stroke="#475569" stroke-width="1.2"/>
+
+    <!-- Grid lines -->
+    <g stroke="#e2e8f0" stroke-width="1" stroke-dasharray="3,3">
+      <line x1="55" y1="210" x2="395" y2="210"/>
+      <line x1="55" y1="160" x2="395" y2="160"/>
+      <line x1="55" y1="110" x2="395" y2="110"/>
+      <line x1="55" y1="60" x2="395" y2="60"/>
+      <line x1="140" y1="50" x2="140" y2="260"/>
+      <line x1="225" y1="50" x2="225" y2="260"/>
+      <line x1="310" y1="50" x2="310" y2="260"/>
+    </g>
+
+    <!-- X Axis Labels (Temperature C) -->
+    <g font-family="system-ui, -apple-system, sans-serif" font-size="10" fill="#64748b" text-anchor="middle">
+      <text x="55" y="275">20</text>
+      <text x="140" y="275">200</text>
+      <text x="225" y="275">400</text>
+      <text x="310" y="275">600</text>
+      <text x="395" y="275">700</text>
+      <text x="225" y="295" font-weight="bold" fill="#334155">构件服役温度 T (&deg;C)</text>
+    </g>
+
+    <!-- Y Axis Labels (Left: Yield Strength Sy MPa) -->
+    <g font-family="system-ui, -apple-system, sans-serif" font-size="10" fill="#dc2626" text-anchor="end">
+      <text x="50" y="264">0</text>
+      <text x="50" y="214">100</text>
+      <text x="50" y="164">200</text>
+      <text x="50" y="114">300</text>
+      <text x="50" y="64">400</text>
+      <text x="45" y="42" font-weight="bold" fill="#dc2626">屈服 Sy (MPa)</text>
+    </g>
+
+    <!-- Y2 Axis Labels (Right: Young's Modulus E GPa) -->
+    <g font-family="system-ui, -apple-system, sans-serif" font-size="10" fill="#2563eb" text-anchor="start">
+      <text x="400" y="264">0</text>
+      <text x="400" y="214">50</text>
+      <text x="400" y="164">100</text>
+      <text x="400" y="114">150</text>
+      <text x="400" y="64">200</text>
+      <text x="365" y="42" font-weight="bold" fill="#2563eb">模量 E (GPa)</text>
+    </g>
+
+    <!-- Curve 1: Yield Strength Sy(T) (Red Line) -->
+    <!-- 20C: 360MPa (y=260-360*0.5=80), 200C: 340MPa (y=90), 400C: 290MPa (y=115), 600C: 245MPa (y=137), 650C: 240MPa (y=140), 700C: 180MPa (y=170) -->
+    <path d="M 55 80 L 140 90 L 225 115 L 310 137 L 332 140 L 395 170" fill="none" stroke="#dc2626" stroke-width="2.5"/>
+    <circle cx="332" cy="140" r="4" fill="#dc2626"/>
+    <text x="330" y="130" font-family="system-ui, -apple-system, sans-serif" font-size="9" font-weight="bold" fill="#dc2626">650&deg;C: Sy=240 MPa</text>
+
+    <!-- Curve 2: Young's Modulus E(T) (Blue Line) -->
+    <!-- 20C: 175GPa (y=260-175*1.0=85), 200C: 165GPa (y=95), 400C: 145GPa (y=115), 600C: 120GPa (y=140), 650C: 110GPa (y=150), 700C: 95GPa (y=165) -->
+    <path d="M 55 85 L 140 95 L 225 115 L 310 140 L 332 150 L 395 165" fill="none" stroke="#2563eb" stroke-width="2.5" stroke-dasharray="6,2"/>
+    <circle cx="332" cy="150" r="4" fill="#2563eb"/>
+    <text x="330" y="165" font-family="system-ui, -apple-system, sans-serif" font-size="9" font-weight="bold" fill="#2563eb">650&deg;C: E=110 GPa</text>
+
+    <!-- Legend -->
+    <rect x="70" y="300" width="310" height="18" fill="#ffffff" stroke="#cbd5e1" rx="3"/>
+    <line x1="80" y1="309" x2="105" y2="309" stroke="#dc2626" stroke-width="2"/>
+    <text x="110" y="313" font-family="system-ui, -apple-system, sans-serif" font-size="9" fill="#334155">屈服强度 Sy (MPa)</text>
+    <line x1="210" y1="309" x2="235" y2="309" stroke="#2563eb" stroke-width="2" stroke-dasharray="4,2"/>
+    <text x="240" y="313" font-family="system-ui, -apple-system, sans-serif" font-size="9" fill="#334155">弹性模量 E (GPa)</text>
+  </g>
+
+  <!-- Right Plot: Multi-Step History -->
+  <g transform="translate(495, 65)">
+    <rect width="425" height="325" fill="#f8fafc" stroke="#cbd5e1" stroke-width="1" rx="6"/>
+    <text x="212" y="24" font-family="system-ui, -apple-system, sans-serif" font-size="12" font-weight="bold" fill="#1e3a8a" text-anchor="middle">
+      双工步求解时序中关键物理响应指标流转历程
+    </text>
+
+    <!-- Step Divider -->
+    <line x1="225" y1="45" x2="225" y2="260" stroke="#f59e0b" stroke-width="1.5" stroke-dasharray="4,2"/>
+    <rect x="70" y="48" width="130" height="20" fill="#e0f2fe" rx="3"/>
+    <text x="135" y="62" font-family="system-ui, -apple-system, sans-serif" font-size="10" font-weight="bold" fill="#0369a1" text-anchor="middle">Step 1: 冷态螺栓预紧</text>
+
+    <rect x="250" y="48" width="150" height="20" fill="#fee2e2" rx="3"/>
+    <text x="325" y="62" font-family="system-ui, -apple-system, sans-serif" font-size="10" font-weight="bold" fill="#b91c1c" text-anchor="middle">Step 2: 650&deg;C 热机耦合运行</text>
+
+    <!-- Axes -->
+    <line x1="55" y1="260" x2="395" y2="260" stroke="#475569" stroke-width="1.2"/>
+    <line x1="55" y1="50" x2="55" y2="260" stroke="#475569" stroke-width="1.2"/>
+
+    <!-- Grid -->
+    <g stroke="#e2e8f0" stroke-width="1" stroke-dasharray="3,3">
+      <line x1="55" y1="210" x2="395" y2="210"/>
+      <line x1="55" y1="160" x2="395" y2="160"/>
+      <line x1="55" y1="110" x2="395" y2="110"/>
+    </g>
+
+    <text x="225" y="295" font-family="system-ui, -apple-system, sans-serif" font-size="10" font-weight="bold" fill="#334155" text-anchor="middle">
+      伪时间步推进 / Analysis Step Sequence
+    </text>
+
+    <!-- Curve 1: Gasket CPRESS (Green): starts 0, goes to 48.5 at step 1 end (y=260-48.5*3=114), relaxes to 38.6 at step 2 end (y=260-38.6*3=144) -->
+    <path d="M 55 260 L 225 114 L 395 144" fill="none" stroke="#16a34a" stroke-width="2.5"/>
+    <circle cx="225" cy="114" r="4" fill="#16a34a"/>
+    <circle cx="395" cy="144" r="4" fill="#16a34a"/>
+    <text x="215" y="105" font-family="system-ui, -apple-system, sans-serif" font-size="9" font-weight="bold" fill="#16a34a" text-anchor="end">初始压紧: 48.5 MPa</text>
+    <text x="390" y="136" font-family="system-ui, -apple-system, sans-serif" font-size="9" font-weight="bold" fill="#16a34a" text-anchor="end">热态保持: 38.6 MPa</text>
+
+    <!-- Curve 2: Flange Outward Slip (Orange): 0 in step 1, climbs to 0.420mm at step 2 end (y=260-0.42*250=155) -->
+    <path d="M 55 260 L 225 260 L 395 155" fill="none" stroke="#f59e0b" stroke-width="2.5"/>
+    <circle cx="395" cy="155" r="4" fill="#f59e0b"/>
+    <text x="390" y="172" font-family="system-ui, -apple-system, sans-serif" font-size="9" font-weight="bold" fill="#b45309" text-anchor="end">端部法兰热滑移: 0.420 mm</text>
+
+    <!-- Curve 3: Fillet Mises Stress (Purple): 45MPa in step 1 (y=260-45=215), climbs to 215.8MPa at step 2 end (y=260-215.8*0.8=87) -->
+    <path d="M 55 260 L 225 215 L 395 87" fill="none" stroke="#9333ea" stroke-width="2.5" stroke-dasharray="5,2"/>
+    <circle cx="395" cy="87" r="4" fill="#9333ea"/>
+    <text x="390" y="80" font-family="system-ui, -apple-system, sans-serif" font-size="9" font-weight="bold" fill="#9333ea" text-anchor="end">汇流圆角等效应力: 215.8 MPa</text>
+
+    <!-- Legend -->
+    <rect x="60" y="300" width="340" height="18" fill="#ffffff" stroke="#cbd5e1" rx="3"/>
+    <line x1="68" y1="309" x2="88" y2="309" stroke="#16a34a" stroke-width="2"/>
+    <text x="92" y="313" font-family="system-ui, -apple-system, sans-serif" font-size="9" fill="#334155">垫片接触比压 CPRESS</text>
+    <line x1="185" y1="309" x2="205" y2="309" stroke="#f59e0b" stroke-width="2"/>
+    <text x="210" y="313" font-family="system-ui, -apple-system, sans-serif" font-size="9" fill="#334155">法兰热滑移 CSLIP</text>
+    <line x1="290" y1="309" x2="310" y2="309" stroke="#9333ea" stroke-width="2" stroke-dasharray="3,1"/>
+    <text x="315" y="313" font-family="system-ui, -apple-system, sans-serif" font-size="9" fill="#334155">圆角应力 Mises</text>
+  </g>
+</svg>

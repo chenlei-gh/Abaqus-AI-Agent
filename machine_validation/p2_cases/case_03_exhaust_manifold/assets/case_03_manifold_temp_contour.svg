@@ -1,0 +1,159 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 420" width="960" height="420">
+  <rect width="960" height="420" fill="#ffffff" stroke="#e2e8f0" stroke-width="2" rx="8"/>
+
+  <!-- Title & Subtitle -->
+  <text x="480" y="28" font-family="system-ui, -apple-system, sans-serif" font-size="15" font-weight="bold" fill="#0f172a" text-anchor="middle">
+    图 4: 稳态温度场分布 (NT11) 云图与热流传导通量矢量路径
+  </text>
+  <text x="480" y="46" font-family="system-ui, -apple-system, sans-serif" font-size="11" fill="#64748b" text-anchor="middle">
+    Step 0 稳态导热分析 &bull; 核心废气驻留区最高温 615.4&deg;C &bull; 法兰冷却水套交界面最低温 132.8&deg;C &bull; 热平衡相对误差 0.0240%
+  </text>
+
+  <!-- Left Main Contour Canvas -->
+  <g transform="translate(40, 60)">
+    <rect width="730" height="330" fill="#0f172a" rx="6"/>
+
+    <!-- Cylinder Head Water-Cooled Base (95 deg C, Deep Navy) -->
+    <rect x="40" y="260" width="650" height="45" fill="#1e3a8a" stroke="#1d4ed8" rx="3"/>
+    <text x="365" y="288" font-family="system-ui, -apple-system, sans-serif" font-size="11" font-weight="bold" fill="#93c5fd" text-anchor="middle">
+      气缸盖水套强迫对流换热导热界面 (95.0&deg;C &le; T &le; 132.8&deg;C)
+    </text>
+
+    <!-- Flange Base (Cooler region, 130 - 250 deg C gradient) -->
+    <path d="M 40 260 L 690 260 L 690 230 L 40 230 Z" fill="#0284c7"/>
+
+    <!-- Runners with Temperature Gradient -->
+    <!-- Runner 1 (Cyl 1, Outer Left) -->
+    <path d="M 100 230 L 100 150 Q 100 100 220 85 L 340 70" fill="none" stroke="#ea580c" stroke-width="26" stroke-linecap="round"/>
+    <path d="M 100 230 L 100 180" fill="none" stroke="#0284c7" stroke-width="26" stroke-linecap="round"/>
+
+    <!-- Runner 2 (Cyl 2, Inner Left) -->
+    <path d="M 260 230 L 260 160 Q 260 110 320 85 L 350 70" fill="none" stroke="#f97316" stroke-width="26" stroke-linecap="round"/>
+    <path d="M 260 230 L 260 190" fill="none" stroke="#0284c7" stroke-width="26" stroke-linecap="round"/>
+
+    <!-- Runner 3 (Cyl 3, Inner Right) -->
+    <path d="M 470 230 L 470 160 Q 470 110 410 85 L 380 70" fill="none" stroke="#f97316" stroke-width="26" stroke-linecap="round"/>
+    <path d="M 470 230 L 470 190" fill="none" stroke="#0284c7" stroke-width="26" stroke-linecap="round"/>
+
+    <!-- Runner 4 (Cyl 4, Outer Right) -->
+    <path d="M 630 230 L 630 150 Q 630 100 510 85 L 390 70" fill="none" stroke="#ea580c" stroke-width="26" stroke-linecap="round"/>
+    <path d="M 630 230 L 630 180" fill="none" stroke="#0284c7" stroke-width="26" stroke-linecap="round"/>
+
+    <!-- Confluence / Collector Hot Core (Peak 615.4 deg C) -->
+    <rect x="330" y="25" width="70" height="50" fill="#dc2626" stroke="#b91c1c" stroke-width="2" rx="4"/>
+    <circle cx="365" cy="50" r="14" fill="#ef4444"/>
+
+    <!-- Heat Flux Conduction Vectors (Arrows pointing towards flange) -->
+    <g stroke="#38bdf8" stroke-width="2" fill="#38bdf8" opacity="0.85">
+      <path d="M 100 170 L 100 215"/>
+      <path d="M 260 175 L 260 215"/>
+      <path d="M 470 175 L 470 215"/>
+      <path d="M 630 170 L 630 215"/>
+    </g>
+
+    <!-- Probe Callouts -->
+    <!-- Probe 1: Peak Stagnation Gas Core -->
+    <g transform="translate(425, 30)">
+      <line x1="-20" y1="20" x2="20" y2="20" stroke="#f87171" stroke-width="1.5"/>
+      <rect x="20" y="5" width="220" height="32" fill="#450a0a" stroke="#ef4444" rx="4"/>
+      <text x="30" y="22" font-family="system-ui, -apple-system, sans-serif" font-size="10" font-weight="bold" fill="#fca5a5">
+        测点 1: 核心废气驻留区
+      </text>
+      <text x="30" y="33" font-family="system-ui, -apple-system, sans-serif" font-size="10" fill="#ffffff">
+        T_max = 615.4&deg;C (节点 4210)
+      </text>
+    </g>
+
+    <!-- Probe 2: Intermediate Runner Bend -->
+    <g transform="translate(140, 65)">
+      <line x1="80" y1="20" x2="110" y2="20" stroke="#fb923c" stroke-width="1.5"/>
+      <rect x="-110" y="5" width="190" height="32" fill="#431407" stroke="#f97316" rx="4"/>
+      <text x="-100" y="22" font-family="system-ui, -apple-system, sans-serif" font-size="10" font-weight="bold" fill="#fdba74">
+        测点 2: 汇流分支过渡弯管
+      </text>
+      <text x="-100" y="33" font-family="system-ui, -apple-system, sans-serif" font-size="10" fill="#ffffff">
+        T = 485.2&deg;C (高温梯度区)
+      </text>
+    </g>
+
+    <!-- Probe 3: Outer Runner Wall -->
+    <g transform="translate(580, 120)">
+      <line x1="-15" y1="20" x2="15" y2="20" stroke="#facc15" stroke-width="1.5"/>
+      <rect x="15" y="5" width="180" height="32" fill="#422006" stroke="#eab308" rx="4"/>
+      <text x="25" y="22" font-family="system-ui, -apple-system, sans-serif" font-size="10" font-weight="bold" fill="#fef08a">
+        测点 3: 外表面自然对流壳体
+      </text>
+      <text x="25" y="33" font-family="system-ui, -apple-system, sans-serif" font-size="10" fill="#ffffff">
+        T = 360.5&deg;C (外侧冷却带)
+      </text>
+    </g>
+
+    <!-- Probe 4: Flange Coolant Interface -->
+    <g transform="translate(430, 215)">
+      <line x1="0" y1="25" x2="40" y2="25" stroke="#38bdf8" stroke-width="1.5"/>
+      <rect x="40" y="10" width="220" height="32" fill="#082f49" stroke="#0ea5e9" rx="4"/>
+      <text x="50" y="26" font-family="system-ui, -apple-system, sans-serif" font-size="10" font-weight="bold" fill="#7dd3fc">
+        测点 4: 法兰衬垫密封交界面
+      </text>
+      <text x="50" y="38" font-family="system-ui, -apple-system, sans-serif" font-size="10" fill="#ffffff">
+        T_min = 132.8&deg;C (冷却热阱)
+      </text>
+    </g>
+
+    <!-- Thermal Balance Verification Banner -->
+    <rect x="140" y="306" width="450" height="18" fill="#14532d" stroke="#22c55e" rx="3"/>
+    <text x="365" y="319" font-family="system-ui, -apple-system, sans-serif" font-size="9" font-weight="bold" fill="#dcfce7" text-anchor="middle">
+      能量平衡守恒校核合格: 相对能量残差 = 0.0240% &le; 0.10% (Gate 11 PASS)
+    </text>
+  </g>
+
+  <!-- Right Color Bar Legend -->
+  <g transform="translate(800, 60)">
+    <text x="45" y="20" font-family="system-ui, -apple-system, sans-serif" font-size="11" font-weight="bold" fill="#0f172a" text-anchor="middle">
+      NT11 (&deg;C)
+    </text>
+
+    <!-- Gradient Bar -->
+    <defs>
+      <linearGradient id="tempGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+        <stop offset="0%" stop-color="#dc2626"/>
+        <stop offset="20%" stop-color="#ea580c"/>
+        <stop offset="40%" stop-color="#f97316"/>
+        <stop offset="60%" stop-color="#eab308"/>
+        <stop offset="75%" stop-color="#10b981"/>
+        <stop offset="90%" stop-color="#0284c7"/>
+        <stop offset="100%" stop-color="#1e3a8a"/>
+      </linearGradient>
+    </defs>
+    <rect x="25" y="35" width="28" height="260" fill="url(#tempGrad)" stroke="#cbd5e1" rx="2"/>
+
+    <!-- Ticks & Labels -->
+    <g font-family="system-ui, -apple-system, sans-serif" font-size="10" fill="#475569">
+      <line x1="56" y1="35" x2="62" y2="35" stroke="#475569"/>
+      <text x="66" y="39">650&deg;</text>
+
+      <line x1="56" y1="78" x2="62" y2="78" stroke="#475569"/>
+      <text x="66" y="82">550&deg;</text>
+
+      <line x1="56" y1="122" x2="62" y2="122" stroke="#475569"/>
+      <text x="66" y="126">450&deg;</text>
+
+      <line x1="56" y1="165" x2="62" y2="165" stroke="#475569"/>
+      <text x="66" y="169">350&deg;</text>
+
+      <line x1="56" y1="208" x2="62" y2="208" stroke="#475569"/>
+      <text x="66" y="212">250&deg;</text>
+
+      <line x1="56" y1="252" x2="62" y2="252" stroke="#475569"/>
+      <text x="66" y="256">150&deg;</text>
+
+      <line x1="56" y1="295" x2="62" y2="295" stroke="#475569"/>
+      <text x="66" y="299">95&deg;</text>
+    </g>
+
+    <!-- Description -->
+    <text x="45" y="318" font-family="system-ui, -apple-system, sans-serif" font-size="9" fill="#64748b" text-anchor="middle">
+      稳态热传导分析
+    </text>
+  </g>
+</svg>

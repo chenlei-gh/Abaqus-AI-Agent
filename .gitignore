@@ -22,8 +22,9 @@ machine_validation/*
 !machine_validation/p2_cases/**/*.json
 !machine_validation/p2_cases/**/*.html
 !machine_validation/p2_cases/**/*.py
-machine_validation/p2_cases_workdir/
-legacy_job_artifacts/
+!machine_validation/p2_cases/**/*.png
+!machine_validation/p2_cases/**/*.svg
+!machine_validation/p2_cases/**/*.gif
 *.odb
 *.sta
 *.msg
@@ -45,5 +46,4 @@ legacy_job_artifacts/
 *.lck
 *.fil
 *.sim
-test_assets/runs/
 runs/

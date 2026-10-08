@@ -783,7 +783,7 @@ def parse_evidence_status_from_output(stdout):
 def main(argv=None):
     parser = argparse.ArgumentParser(description="Run the FMBD-5 Closed-Loop Rigid-Flexible Crank-Slider Golden E2E Case")
     parser.add_argument("--launcher", default=os.environ.get("ABAQUS_COMMAND", "abaqus"))
-    parser.add_argument("--workdir", default=os.getcwd())
+    parser.add_argument("--workdir", default=os.path.join(str(ROOT), "runs", "fmbd5_run"))
     parser.add_argument("--job-name", default=JOB)
     parser.add_argument("--timeout", type=int, default=3600)
     parser.add_argument(
@@ -795,10 +795,7 @@ def main(argv=None):
 
     workdir = os.path.abspath(args.workdir)
     os.makedirs(workdir, exist_ok=True)
-    validation_dir = workdir if os.path.basename(workdir) == "machine_validation" else os.path.join(workdir, "machine_validation")
-    os.makedirs(validation_dir, exist_ok=True)
-
-    script_path = os.path.join(validation_dir, args.job_name + "_fmbd5_script.py")
+    script_path = os.path.join(workdir, args.job_name + "_fmbd5_script.py")
     with open(script_path, "w", encoding="utf-8") as handle:
         handle.write(build_fmbd5_golden_script(src_dir=SRC))
 

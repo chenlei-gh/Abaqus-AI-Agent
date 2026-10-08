@@ -486,7 +486,7 @@ print("AIAgent_P1_DRAWING_GOLDEN_SOLVE_SUCCESS")
 
 def main():
     parser = argparse.ArgumentParser(description="P1.1 Drawing to ODB Golden Suite")
-    parser.add_argument("--workdir", type=Path, default=ROOT / "legacy_job_artifacts")
+    parser.add_argument("--workdir", type=Path, default=ROOT / "runs" / "p1_drawing_to_odb_run")
     args = parser.parse_args()
 
     launcher = resolve_default_launcher()

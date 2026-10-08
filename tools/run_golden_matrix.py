@@ -224,6 +224,13 @@ def cmd_run(
     print(f"\n=== Executing Live Golden Matrix Run (Target: {target}, Launcher: {launcher}) ===")
     overall_success = True
 
+    # 4. Determine isolated solver runtime directory
+    if workdir.resolve() == (ROOT / "machine_validation").resolve() or workdir.name == "machine_validation":
+        solver_workdir = ROOT / "runs" / "golden_matrix_workdir"
+    else:
+        solver_workdir = workdir
+    solver_workdir.mkdir(parents=True, exist_ok=True)
+
     for case in cases:
         script_path = ROOT / case.tool_script
         if not script_path.is_file():
@@ -234,7 +241,7 @@ def cmd_run(
         print(f"\n>> Launching Case: {case.case_id} ({case.title})")
         print(f"   Script: {case.tool_script}")
 
-        # 4. Guardrail: backup existing evidence before execution
+        # Guardrail: backup existing evidence before execution
         evidence_path = get_evidence_path(case, workdir)
         if evidence_path.is_file():
             backup_path = evidence_path.with_suffix(".json.bak")
@@ -248,7 +255,7 @@ def cmd_run(
             sys.executable,
             str(script_path),
             "--launcher", launcher,
-            "--workdir", str(workdir),
+            "--workdir", str(solver_workdir),
             "--timeout", str(timeout),
         ]
         if case.case_id == "mbd2_double_pendulum":

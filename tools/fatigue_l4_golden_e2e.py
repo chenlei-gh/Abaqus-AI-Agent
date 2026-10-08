@@ -530,7 +530,7 @@ def run_fatigue_l4_golden(workdir: Path, launcher: str) -> Dict[str, Any]:
 
 def main():
     parser = argparse.ArgumentParser(description="Real Abaqus 2025 Fatigue L4 Golden E2E Runner")
-    parser.add_argument("--workdir", type=Path, default=ROOT / "machine_validation" / "work_fatigue_l4_golden")
+    parser.add_argument("--workdir", type=Path, default=ROOT / "runs" / "fatigue_l4_golden_run")
     parser.add_argument("--launcher", type=str, default=None)
     args = parser.parse_args()
 

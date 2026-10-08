@@ -25,25 +25,22 @@ from abaqus_ai_agent.execution.batch import BatchExecutor
 def main(argv=None):
     parser = argparse.ArgumentParser(description="Run the live Abaqus runtime smoke harness")
     parser.add_argument("--launcher", default=os.environ.get("ABAQUS_COMMAND", "abaqus"))
-    parser.add_argument("--workdir", default=os.getcwd())
+    parser.add_argument(
+        "--workdir",
+        default=os.path.join(str(ROOT), "runs", "runtime_smoke_run"),
+    )
     parser.add_argument("--job-name", default="AIAgent_RuntimeSmoke")
     parser.add_argument("--timeout", type=int, default=3600)
     parser.add_argument(
         "--output",
-        default=os.path.join("machine_validation", "runtime_smoke.json"),
-        help="JSON evidence output path (relative to --workdir unless absolute)",
+        default=os.path.join(str(ROOT), "machine_validation", "runtime_smoke.json"),
+        help="JSON evidence output path",
     )
     args = parser.parse_args(argv)
 
     workdir = os.path.abspath(args.workdir)
     os.makedirs(workdir, exist_ok=True)
-    if os.path.basename(workdir) == "machine_validation":
-        validation_dir = workdir
-    else:
-        validation_dir = os.path.join(workdir, "machine_validation")
-    os.makedirs(validation_dir, exist_ok=True)
-
-    script_path = os.path.join(validation_dir, args.job_name + "_script.py")
+    script_path = os.path.join(workdir, args.job_name + "_script.py")
     with open(script_path, "w", encoding="utf-8") as handle:
         handle.write(build_runtime_smoke_script(args.job_name))
 
@@ -104,10 +101,7 @@ def main(argv=None):
 
     output_path = Path(args.output)
     if not output_path.is_absolute():
-        if os.path.basename(workdir) == "machine_validation" and output_path.parts and output_path.parts[0] == "machine_validation":
-            output_path = Path(workdir).parent / output_path
-        else:
-            output_path = Path(workdir) / output_path
+        output_path = ROOT / output_path
     output_path.parent.mkdir(parents=True, exist_ok=True)
     with open(str(output_path), "w", encoding="utf-8") as handle:
         json.dump(evidence, handle, indent=2, sort_keys=True)

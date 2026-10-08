@@ -1,0 +1,153 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 420" width="960" height="420">
+  <rect width="960" height="420" fill="#ffffff" stroke="#e2e8f0" stroke-width="2" rx="8"/>
+
+  <!-- Title & Subtitle -->
+  <text x="480" y="28" font-family="system-ui, -apple-system, sans-serif" font-size="15" font-weight="bold" fill="#0f172a" text-anchor="middle">
+    图 1: 四进一排气歧管装配拓扑、螺栓布局与热机耦合边界条件定义 (Assembly &amp; Boundary Setup)
+  </text>
+  <text x="480" y="46" font-family="system-ui, -apple-system, sans-serif" font-size="11" fill="#64748b" text-anchor="middle">
+    Abaqus 2025 官方标准算例基准 &bull; 4 个排气支管 (&Oslash;52 mm, 壁厚 6 mm) &bull; 8 颗 M10 10.9级螺栓 &bull; MLS 金属波纹垫片 &bull; 650&deg;C 燃气对流换热
+  </text>
+
+  <!-- Left Schematic Canvas -->
+  <g transform="translate(40, 60)">
+    <!-- Canvas Frame -->
+    <rect width="570" height="330" fill="#f8fafc" stroke="#cbd5e1" stroke-width="1" rx="6"/>
+
+    <!-- Cylinder Head Base (Coolant interface) -->
+    <rect x="30" y="250" width="510" height="55" fill="#334155" stroke="#1e293b" rx="4"/>
+    <text x="285" y="282" font-family="system-ui, -apple-system, sans-serif" font-size="11" font-weight="bold" fill="#f8fafc" text-anchor="middle">
+      水冷发动机气缸盖结合面基体 (HT250 灰铸铁, 冷却液回路温度 T_coolant = 95&deg;C)
+    </text>
+    <text x="285" y="297" font-family="system-ui, -apple-system, sans-serif" font-size="9" fill="#94a3b8" text-anchor="middle">
+      6 自由度全约束刚性基础 (6-DOF Encastre Constraint: U1=U2=U3=UR1=UR2=UR3=0)
+    </text>
+
+    <!-- MLS Gasket Layer -->
+    <rect x="35" y="238" width="500" height="12" fill="#38bdf8" stroke="#0284c7" stroke-width="1" stroke-dasharray="6,2"/>
+    <text x="540" y="247" font-family="system-ui, -apple-system, sans-serif" font-size="9" font-weight="bold" fill="#0284c7" text-anchor="start">
+      MLS 垫片 (t=1.6mm)
+    </text>
+
+    <!-- Manifold Flange -->
+    <rect x="30" y="210" width="510" height="28" fill="#64748b" stroke="#475569" rx="2"/>
+    <text x="285" y="228" font-family="system-ui, -apple-system, sans-serif" font-size="11" font-weight="bold" fill="#ffffff" text-anchor="middle">
+      铸铁排气歧管安装法兰 (SiMo 球墨铸铁, 法兰厚度 = 18 mm, 总长 L = 520 mm)
+    </text>
+
+    <!-- 4 Exhaust Runners -->
+    <!-- Runner 1 (Cyl 1, Left Outer) -->
+    <path d="M 75 210 L 75 140 Q 75 100 160 90 L 260 75" fill="none" stroke="#94a3b8" stroke-width="26" stroke-linecap="round"/>
+    <path d="M 75 210 L 75 140 Q 75 100 160 90 L 260 75" fill="none" stroke="#cbd5e1" stroke-width="16" stroke-linecap="round"/>
+    <text x="75" y="180" font-family="system-ui, -apple-system, sans-serif" font-size="10" font-weight="bold" fill="#0f172a" text-anchor="middle">1缸支管</text>
+
+    <!-- Runner 2 (Cyl 2, Left Inner) -->
+    <path d="M 195 210 L 195 145 Q 195 110 240 90 L 270 75" fill="none" stroke="#94a3b8" stroke-width="26" stroke-linecap="round"/>
+    <path d="M 195 210 L 195 145 Q 195 110 240 90 L 270 75" fill="none" stroke="#cbd5e1" stroke-width="16" stroke-linecap="round"/>
+    <text x="195" y="180" font-family="system-ui, -apple-system, sans-serif" font-size="10" font-weight="bold" fill="#0f172a" text-anchor="middle">2缸支管</text>
+
+    <!-- Runner 3 (Cyl 3, Right Inner) -->
+    <path d="M 375 210 L 375 145 Q 375 110 330 90 L 300 75" fill="none" stroke="#94a3b8" stroke-width="26" stroke-linecap="round"/>
+    <path d="M 375 210 L 375 145 Q 375 110 330 90 L 300 75" fill="none" stroke="#cbd5e1" stroke-width="16" stroke-linecap="round"/>
+    <text x="375" y="180" font-family="system-ui, -apple-system, sans-serif" font-size="10" font-weight="bold" fill="#0f172a" text-anchor="middle">3缸支管</text>
+
+    <!-- Runner 4 (Cyl 4, Right Outer) -->
+    <path d="M 495 210 L 495 140 Q 495 100 410 90 L 310 75" fill="none" stroke="#94a3b8" stroke-width="26" stroke-linecap="round"/>
+    <path d="M 495 210 L 495 140 Q 495 100 410 90 L 310 75" fill="none" stroke="#cbd5e1" stroke-width="16" stroke-linecap="round"/>
+    <text x="495" y="180" font-family="system-ui, -apple-system, sans-serif" font-size="10" font-weight="bold" fill="#0f172a" text-anchor="middle">4缸支管</text>
+
+    <!-- Turbine Collector Outlet -->
+    <rect x="260" y="35" width="50" height="40" fill="#475569" stroke="#1e293b" stroke-width="2" rx="3"/>
+    <text x="285" y="24" font-family="system-ui, -apple-system, sans-serif" font-size="10" font-weight="bold" fill="#dc2626" text-anchor="middle">
+      涡轮进气汇流口 (650&deg;C)
+    </text>
+
+    <!-- Convective Heat Flux Arrows (Red Inflow) -->
+    <g stroke="#ef4444" stroke-width="2" fill="#ef4444">
+      <path d="M 75 160 L 75 130"/>
+      <path d="M 195 160 L 195 130"/>
+      <path d="M 375 160 L 375 130"/>
+      <path d="M 495 160 L 495 130"/>
+      <path d="M 285 65 L 285 45"/>
+    </g>
+    <rect x="175" y="125" width="220" height="20" fill="#fee2e2" stroke="#f87171" rx="4"/>
+    <text x="285" y="139" font-family="system-ui, -apple-system, sans-serif" font-size="9" font-weight="bold" fill="#b91c1c" text-anchor="middle">
+      燃气强迫对流: T_gas=650&deg;C, h=320 W/m&sup2;&middot;K
+    </text>
+
+    <!-- 8 Bolts (Fasteners B1..B8) -->
+    <g fill="#1e293b">
+      <!-- B1 -->
+      <rect x="42" y="200" width="8" height="48" fill="#1e293b" rx="1"/>
+      <circle cx="46" cy="198" r="5" fill="#f59e0b"/>
+      <text x="46" y="188" font-family="system-ui, -apple-system, sans-serif" font-size="8" font-weight="bold" fill="#b45309" text-anchor="middle">B1</text>
+      <!-- B2 -->
+      <rect x="105" y="200" width="8" height="48" fill="#1e293b" rx="1"/>
+      <circle cx="109" cy="198" r="5" fill="#f59e0b"/>
+      <text x="109" y="188" font-family="system-ui, -apple-system, sans-serif" font-size="8" font-weight="bold" fill="#b45309" text-anchor="middle">B2</text>
+      <!-- B3 -->
+      <rect x="162" y="200" width="8" height="48" fill="#1e293b" rx="1"/>
+      <circle cx="166" cy="198" r="5" fill="#f59e0b"/>
+      <text x="166" y="188" font-family="system-ui, -apple-system, sans-serif" font-size="8" font-weight="bold" fill="#b45309" text-anchor="middle">B3</text>
+      <!-- B4 -->
+      <rect x="225" y="200" width="8" height="48" fill="#1e293b" rx="1"/>
+      <circle cx="229" cy="198" r="5" fill="#f59e0b"/>
+      <text x="229" y="188" font-family="system-ui, -apple-system, sans-serif" font-size="8" font-weight="bold" fill="#b45309" text-anchor="middle">B4</text>
+      <!-- B5 -->
+      <rect x="342" y="200" width="8" height="48" fill="#1e293b" rx="1"/>
+      <circle cx="346" cy="198" r="5" fill="#f59e0b"/>
+      <text x="346" y="188" font-family="system-ui, -apple-system, sans-serif" font-size="8" font-weight="bold" fill="#b45309" text-anchor="middle">B5</text>
+      <!-- B6 -->
+      <rect x="405" y="200" width="8" height="48" fill="#1e293b" rx="1"/>
+      <circle cx="409" cy="198" r="5" fill="#f59e0b"/>
+      <text x="409" y="188" font-family="system-ui, -apple-system, sans-serif" font-size="8" font-weight="bold" fill="#b45309" text-anchor="middle">B6</text>
+      <!-- B7 -->
+      <rect x="462" y="200" width="8" height="48" fill="#1e293b" rx="1"/>
+      <circle cx="466" cy="198" r="5" fill="#f59e0b"/>
+      <text x="466" y="188" font-family="system-ui, -apple-system, sans-serif" font-size="8" font-weight="bold" fill="#b45309" text-anchor="middle">B7</text>
+      <!-- B8 -->
+      <rect x="520" y="200" width="8" height="48" fill="#1e293b" rx="1"/>
+      <circle cx="524" cy="198" r="5" fill="#f59e0b"/>
+      <text x="524" y="188" font-family="system-ui, -apple-system, sans-serif" font-size="8" font-weight="bold" fill="#b45309" text-anchor="middle">B8</text>
+    </g>
+
+    <!-- Clamping Force Legend -->
+    <rect x="30" y="308" width="510" height="16" fill="#f1f5f9" rx="2"/>
+    <text x="285" y="320" font-family="system-ui, -apple-system, sans-serif" font-size="9" fill="#475569" text-anchor="middle">
+      8x M10 螺栓阵列: 工步1初始冷态预紧力 25.0 kN/颗 (合计 200.0 kN) &bull; 螺栓孔径向间隙 = 0.75 mm
+    </text>
+  </g>
+
+  <!-- Right Specification Card -->
+  <g transform="translate(630, 60)">
+    <rect width="290" height="330" fill="#f8fafc" stroke="#cbd5e1" stroke-width="1" rx="6"/>
+    <text x="145" y="24" font-family="system-ui, -apple-system, sans-serif" font-size="13" font-weight="bold" fill="#1e3a8a" text-anchor="middle">
+      工程装配与边界规范 (Spec)
+    </text>
+    <line x1="20" y1="36" x2="270" y2="36" stroke="#e2e8f0" stroke-width="1"/>
+
+    <!-- Spec rows -->
+    <g transform="translate(18, 50)" font-family="system-ui, -apple-system, sans-serif" font-size="11">
+      <text y="0" font-weight="bold" fill="#334155">几何拓扑与尺寸参数</text>
+      <text y="16" fill="#64748b">歧管跨距总长 L = 520.0 mm</text>
+      <text y="30" fill="#64748b">支管外径 &Oslash;52 mm, 壁厚 t = 6.0 mm</text>
+      <text y="44" fill="#64748b">安装法兰底板厚度 = 18.0 mm</text>
+
+      <text y="72" font-weight="bold" fill="#334155">紧固件与密封垫片选型</text>
+      <text y="88" fill="#64748b">8x M10 x 1.5 (ISO 898-1 10.9级)</text>
+      <text y="102" fill="#64748b">法兰通孔直径 = &Oslash;11.5 mm</text>
+      <text y="116" fill="#64748b">螺栓径向允许滑移间隙 = 0.75 mm</text>
+      <text y="130" fill="#64748b">MLS 不锈钢波纹垫片: t=1.6mm, &mu;=0.20</text>
+
+      <text y="158" font-weight="bold" fill="#334155">多工步求解时序安排</text>
+      <text y="174" fill="#64748b">Step 0: 稳态导热与对流换热</text>
+      <text y="188" fill="#64748b">Step 1: 螺栓冷态预紧 (25 kN/颗)</text>
+      <text y="202" fill="#64748b">Step 2: 热机耦合与螺栓长度锁定</text>
+      <text y="216" fill="#64748b">接触对算法: 罚函数法 + 库仑摩擦</text>
+
+      <text y="244" font-weight="bold" fill="#334155">选材与材料本构</text>
+      <text y="258" fill="#64748b">歧管本体: SiMo 球墨铸铁 (EN-GJS-SiMo)</text>
+      <text y="272" fill="#64748b">气缸盖: HT250 灰铸铁 (水冷95&deg;C)</text>
+    </g>
+  </g>
+</svg>

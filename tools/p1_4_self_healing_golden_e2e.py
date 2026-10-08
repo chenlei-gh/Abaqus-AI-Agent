@@ -359,7 +359,7 @@ def run_p1_4_self_healing_golden(workdir: Path, launcher: Optional[str] = None) 
 
 def main():
     parser = argparse.ArgumentParser(description="Run P1.4 Self-Healing Golden E2E Verification.")
-    parser.add_argument("--workdir", default="legacy_job_artifacts", help="Working directory")
+    parser.add_argument("--workdir", default=str(ROOT / "runs" / "p1_4_self_healing_run"), help="Working directory")
     parser.add_argument("--launcher", default=None, help="Path to abaqus launcher")
     args = parser.parse_args()
 

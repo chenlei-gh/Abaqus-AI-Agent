@@ -218,7 +218,7 @@ print("__TIER1_RESULT__=" + json.dumps({"passed": report["passed"]}))
 def main(argv=None):
     parser = argparse.ArgumentParser(description="Tier 1 Real-Machine Region Grounding Live Validation")
     parser.add_argument("--launcher", default=os.environ.get("ABAQUS_COMMAND", "abaqus"))
-    parser.add_argument("--workdir", default=os.path.join(str(ROOT), "machine_validation"))
+    parser.add_argument("--workdir", default=os.path.join(str(ROOT), "runs", "tier1_workdir"))
     parser.add_argument("--job-name", default="Tier1_RegionGroundingJob")
     parser.add_argument("--timeout", type=int, default=300)
     args = parser.parse_args(argv)
@@ -246,7 +246,7 @@ def main(argv=None):
     # 2. Prepare Abaqus CAE noGUI script
     print("--- [Step 2] Executing Live Abaqus 2025 Tier 1 Script ---")
     script_path = workdir / f"{args.job_name}_script.py"
-    evidence_json = workdir / "tier1_region_grounding_evidence.json"
+    evidence_json = ROOT / "machine_validation" / "tier1_region_grounding_evidence.json"
     
     script_content = build_tier1_abaqus_script(args.job_name, str(evidence_json))
     script_path.write_text(script_content, encoding="utf-8")

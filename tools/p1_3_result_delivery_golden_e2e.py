@@ -255,7 +255,7 @@ print("AIAgent_P1_3_RESULT_SUCCESS")
 
 def main():
     parser = argparse.ArgumentParser(description="Run P1.3 Result Delivery Golden E2E Verification.")
-    parser.add_argument("--workdir", default="legacy_job_artifacts", help="Working directory")
+    parser.add_argument("--workdir", default=str(ROOT / "runs" / "p1_3_result_delivery_run"), help="Working directory")
     parser.add_argument("--launcher", default=None, help="Path to abaqus launcher")
     args = parser.parse_args()
 

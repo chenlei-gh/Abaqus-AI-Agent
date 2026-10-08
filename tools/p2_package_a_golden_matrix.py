@@ -326,7 +326,7 @@ def run_package_a_matrix(workdir: Path, launcher: Optional[str] = None) -> Dict[
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Phase 2 Package A Golden Matrix Runner")
-    parser.add_argument("--workdir", default="machine_validation/package_a_workdir", help="Output directory")
+    parser.add_argument("--workdir", default="runs/package_a_workdir", help="Output directory")
     parser.add_argument("--launcher", default=None, help="Optional Abaqus launcher command")
     args = parser.parse_args()
 

@@ -768,7 +768,7 @@ def main():
     parser.add_argument("--launcher", default=None, help="Abaqus launcher executable")
     args = parser.parse_args()
 
-    workdir = Path(args.workdir or (ROOT / "machine_validation")).resolve()
+    workdir = Path(args.workdir or (ROOT / "runs" / "connector_l4_run")).resolve()
     launcher = args.launcher or resolve_default_launcher()
     print(f"Using launcher: {launcher}")
     print(f"Using workdir: {workdir}")

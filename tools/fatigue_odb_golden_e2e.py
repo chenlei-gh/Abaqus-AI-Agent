@@ -50,13 +50,18 @@ ULTIMATE_TENSILE_STRENGTH_MPA = 800.0
 def find_candidate_odb(workdir: Path) -> Path:
     """Find the best available live-solved dynamic ODB."""
     candidates = [
-        workdir / "machine_validation" / "DynamicGoldenJob.odb",
         workdir / "DynamicGoldenJob.odb",
+        workdir / "machine_validation" / "DynamicGoldenJob.odb",
+        ROOT / "runs" / "dynamic_golden_run" / "DynamicGoldenJob.odb",
         ROOT / "DynamicGoldenJob.odb",
         ROOT / "machine_validation" / "DynamicGoldenJob.odb",
+        workdir / "ExplicitGoldenJob.odb",
         workdir / "machine_validation" / "ExplicitGoldenJob.odb",
+        ROOT / "runs" / "explicit_golden_run" / "ExplicitGoldenJob.odb",
         ROOT / "machine_validation" / "ExplicitGoldenJob.odb",
+        workdir / "FMBD5GoldenJob.odb",
         workdir / "machine_validation" / "FMBD5GoldenJob.odb",
+        ROOT / "runs" / "fmbd5_crank_slider_run" / "FMBD5GoldenJob.odb",
         ROOT / "machine_validation" / "FMBD5GoldenJob.odb",
     ]
     for c in candidates:
@@ -132,12 +137,16 @@ def main(argv=None):
     )
     parser = argparse.ArgumentParser(description="Real ODB Fatigue Post-Processing Golden Case E2E")
     parser.add_argument("--launcher", default=default_launcher, help="Abaqus launcher executable")
-    parser.add_argument("--workdir", default=os.getcwd(), help="Working directory")
+    parser.add_argument(
+        "--workdir",
+        default=os.path.join(str(ROOT), "runs", "fatigue_odb_golden_run"),
+        help="Working directory",
+    )
     parser.add_argument("--odb", default=None, help="Path to input ODB file")
     parser.add_argument("--timeout", type=int, default=1800, help="Process timeout in seconds")
     parser.add_argument(
         "--output",
-        default=os.path.join("machine_validation", "fatigue_odb_golden_e2e.json"),
+        default=os.path.join(str(ROOT), "machine_validation", "fatigue_odb_golden_e2e.json"),
         help="Output evidence JSON path",
     )
     args = parser.parse_args(argv)
@@ -146,7 +155,7 @@ def main(argv=None):
     workdir.mkdir(parents=True, exist_ok=True)
     output_path = Path(args.output)
     if not output_path.is_absolute():
-        output_path = workdir / output_path
+        output_path = ROOT / output_path
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
     # 1. Resolve source ODB

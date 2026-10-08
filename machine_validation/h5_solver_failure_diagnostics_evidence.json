@@ -26,7 +26,7 @@
     {
       "diagnosis_id": "NUMERICAL_SINGULARITY",
       "severity": "WARNING",
-      "evidence_count": 10,
+      "evidence_count": 2,
       "likely_cause": "Ill-conditioned stiffness matrix near node or DOF.",
       "suggested_remediation": "Verify elastic modulus consistency, node connectivity, and tie constraints."
     }

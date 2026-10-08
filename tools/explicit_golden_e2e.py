@@ -631,18 +631,14 @@ def main(argv=None):
         )
     )
     parser.add_argument('--launcher', default=default_launcher)
-    parser.add_argument('--workdir', default=os.getcwd())
+    parser.add_argument('--workdir', default=os.path.join(str(ROOT), 'runs', 'explicit_golden_run'))
     parser.add_argument('--timeout', type=int, default=3600)
     parser.add_argument('--output', default=os.path.join('machine_validation', 'explicit_golden_e2e.json'))
     args = parser.parse_args(argv)
 
     workdir = os.path.abspath(args.workdir)
-    if os.path.basename(workdir) == 'machine_validation':
-        validation_dir = workdir
-    else:
-        validation_dir = os.path.join(workdir, 'machine_validation')
-    os.makedirs(validation_dir, exist_ok=True)
-    script_path = os.path.join(validation_dir, 'explicit_golden_e2e_script.py')
+    os.makedirs(workdir, exist_ok=True)
+    script_path = os.path.join(workdir, 'explicit_golden_e2e_script.py')
 
     script_content = build_explicit_golden_script(src_dir=SRC)
     with open(script_path, 'w', encoding='utf-8') as f:

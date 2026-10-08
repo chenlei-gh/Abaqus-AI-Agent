@@ -1,4 +1,5 @@
 import os
+from pathlib import Path
 import shutil
 import subprocess
 import uuid
@@ -63,15 +64,29 @@ class BatchExecutor:
             raw_cmd[0] = self.resolved_launcher
         command = tuple(raw_cmd)
         effective_workdir = self.workdir
-        is_repo_root = False
-        if effective_workdir:
+        should_isolate = False
+        if not effective_workdir:
+            should_isolate = True
+        else:
             cand = os.path.abspath(effective_workdir)
             if os.path.isfile(os.path.join(cand, "pyproject.toml")) and os.path.isdir(os.path.join(cand, "src")):
-                is_repo_root = True
+                should_isolate = True
+            else:
+                norm_parts = os.path.normpath(cand).split(os.sep)
+                if any(p in ("machine_validation", "test_assets", "src", "legacy_job_artifacts") for p in norm_parts):
+                    should_isolate = True
 
-        if not effective_workdir or is_repo_root:
-            base_dir = os.path.abspath(effective_workdir) if is_repo_root else os.path.abspath(".")
-            effective_workdir = os.path.abspath(os.path.join(base_dir, "runs", f"batch_{uuid.uuid4().hex[:8]}"))
+        if should_isolate:
+            # Find repo root if possible
+            current_root = os.path.abspath(".")
+            if not (os.path.isfile(os.path.join(current_root, "pyproject.toml")) and os.path.isdir(os.path.join(current_root, "src"))):
+                # Search upwards
+                p = Path(effective_workdir or current_root).resolve()
+                for parent in [p] + list(p.parents):
+                    if (parent / "pyproject.toml").is_file() and (parent / "src").is_dir():
+                        current_root = str(parent)
+                        break
+            effective_workdir = os.path.abspath(os.path.join(current_root, "runs", f"batch_{uuid.uuid4().hex[:8]}"))
             os.makedirs(effective_workdir, exist_ok=True)
             self.workdir = effective_workdir
         else:
