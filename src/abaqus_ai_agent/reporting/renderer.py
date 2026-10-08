@@ -78,6 +78,8 @@ def _resolve_image_path(path_str):
 def _render_html_figure(caption, path_str, is_zh=False):
     """Render publication-grade HTML figure with automatic SVG inlining, Base64 bitmap data URI, or visual placeholder."""
     fig_label = "图 / Figure:" if is_zh else "Figure:"
+    is_anim = path_str and (path_str.lower().endswith(".gif") or "anim" in path_str.lower() or "动画" in caption or "Animation" in caption)
+    anim_badge = ' <span class="status-badge badge-pass" style="margin-left: 6px; font-size: 11px;">[动图 / Animation]</span>' if is_anim else ""
 
     # 1. Inline SVG text directly in path
     if path_str and "<svg" in path_str and "</svg>" in path_str:
@@ -87,7 +89,7 @@ def _render_html_figure(caption, path_str, is_zh=False):
         return (
             f'<figure class="report-figure">'
             f'<div class="svg-container">{svg_content}</div>'
-            f'<figcaption class="figure-caption"><strong>{fig_label}</strong> {html.escape(caption)}</figcaption>'
+            f'<figcaption class="figure-caption"><strong>{fig_label}</strong> {html.escape(caption)}{anim_badge}</figcaption>'
             f'</figure>'
         )
 
@@ -96,7 +98,7 @@ def _render_html_figure(caption, path_str, is_zh=False):
         return (
             f'<figure class="report-figure">'
             f'<img src="{html.escape(path_str, quote=True)}" alt="{html.escape(caption, quote=True)}" class="figure-img">'
-            f'<figcaption class="figure-caption"><strong>{fig_label}</strong> {html.escape(caption)}</figcaption>'
+            f'<figcaption class="figure-caption"><strong>{fig_label}</strong> {html.escape(caption)}{anim_badge}</figcaption>'
             f'</figure>'
         )
 
@@ -114,7 +116,7 @@ def _render_html_figure(caption, path_str, is_zh=False):
                     return (
                         f'<figure class="report-figure">'
                         f'<div class="svg-container">{svg_content}</div>'
-                        f'<figcaption class="figure-caption"><strong>{fig_label}</strong> {html.escape(caption)}</figcaption>'
+                        f'<figcaption class="figure-caption"><strong>{fig_label}</strong> {html.escape(caption)}{anim_badge}</figcaption>'
                         f'</figure>'
                     )
             except Exception:
@@ -123,13 +125,13 @@ def _render_html_figure(caption, path_str, is_zh=False):
             # Bitmap formats: PNG, JPG, JPEG, WEBP, GIF -> Self-contained Base64 Data URI
             try:
                 raw_bytes = resolved_file.read_bytes()
-                mime = mimetypes.guess_type(resolved_file.name)[0] or "image/png"
+                mime = "image/gif" if suffix == ".gif" else (mimetypes.guess_type(resolved_file.name)[0] or "image/png")
                 b64_data = base64.b64encode(raw_bytes).decode("ascii")
                 data_uri = f"data:{mime};base64,{b64_data}"
                 return (
                     f'<figure class="report-figure">'
                     f'<img src="{data_uri}" alt="{html.escape(caption, quote=True)}" class="figure-img">'
-                    f'<figcaption class="figure-caption"><strong>{fig_label}</strong> {html.escape(caption)}</figcaption>'
+                    f'<figcaption class="figure-caption"><strong>{fig_label}</strong> {html.escape(caption)}{anim_badge}</figcaption>'
                     f'</figure>'
                 )
             except Exception:
@@ -1457,36 +1459,9 @@ def render_analysis_report(run, title=None, objective="", language=None):
         "html": render_html(report, language=language),
     }
 
-def render_pdf(report, output_path):
-    try:
-        from reportlab.lib.pagesizes import A4
-        from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Preformatted, Image
-        from reportlab.lib.styles import getSampleStyleSheet
-    except ImportError:
-        raise RuntimeError("PDF rendering requires optional dependency: reportlab")
-    doc = SimpleDocTemplate(output_path, pagesize=A4)
-    styles = getSampleStyleSheet()
-    story = [Paragraph(html.escape(report.title), styles["Title"]), Spacer(1, 12)]
-    for line in render_markdown(report).splitlines():
-        if line.startswith("## "): story.append(Paragraph(html.escape(line[3:]), styles["Heading2"]))
-        elif line and not line.startswith("# ") and not line.startswith("```") and not line.startswith("!["): story.append(Preformatted(line, styles["Code"]))
-    for figure in report.figures:
-        try:
-            story.append(Image(figure.path, width=500, height=300))
-            if figure.caption: story.append(Paragraph(html.escape(figure.caption), styles["BodyText"]))
-        except Exception:
-            story.append(Preformatted("Figure unavailable: %s" % figure.path, styles["Code"]))
-    doc.build(story)
-    return output_path
-
-
 def render_report(report, fmt="html", language=None):
-    """Unified entrypoint for deterministic report rendering."""
-    if fmt == "html":
-        return render_html(report, language=language)
-    elif fmt in ("md", "markdown"):
-        return render_markdown(report, language=language)
-    raise ValueError(f"Unsupported format: {fmt}. Expected 'html' or 'markdown'.")
+    """Unified entrypoint for deterministic report rendering. HTML is the sole standardized delivery format."""
+    return render_html(report, language=language)
 
 def _conclusion(report, is_zh=False):
     acceptance = report.acceptance

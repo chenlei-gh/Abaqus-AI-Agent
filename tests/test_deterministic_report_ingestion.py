@@ -128,11 +128,15 @@ def test_visualization_spec_and_deterministic_figure_binding(tmp_path: Path):
         visualization_specs=[spec],
     )
 
-    # Verify physical file creation and artifact binding
+    # Verify physical file creation and artifact binding (including mandatory animation)
     img_file = tmp_path / "mises_hotspot.svg"
+    anim_file = tmp_path / "transient_evolution.gif"
     assert img_file.exists()
+    assert anim_file.exists()
+    assert anim_file.stat().st_size > 0
     assert report_pointer.size_bytes > 0
-    assert delivery_card.figures_count == 1
+    # 1 static spec + 1 automatically mandated animation spec = 2
+    assert delivery_card.figures_count == 2
     assert "fastener_preload_diagnostics" in delivery_card.active_sections
 
 
@@ -216,13 +220,14 @@ def test_ab_qualification_full_llm_report_vs_deterministic_pipeline(tmp_path: Pa
         language="bilingual",
     )
 
-    # 1. Branch A: Simulated Full LLM Output (Full 70KB Markdown Report)
-    md_file = tmp_path / "report.md"
+    # 1. Branch A: Simulated Full LLM Output (Full 70KB HTML Report dumped into LLM output)
+    # Non-HTML formats are stripped; report.html is the sole authoritative deliverable.
     html_file = tmp_path / "report.html"
-    assert md_file.exists()
+    md_file = tmp_path / "report.md"
     assert html_file.exists()
+    assert not md_file.exists(), "Non-HTML formats must be completely stripped from output."
 
-    raw_full_report_text = md_file.read_text(encoding="utf-8")
+    raw_full_report_text = html_file.read_text(encoding="utf-8")
     branch_a_tokens = _heuristic_count_tokens(raw_full_report_text)
     branch_a_bytes = len(raw_full_report_text.encode("utf-8"))
 
@@ -248,6 +253,12 @@ def test_ab_qualification_full_llm_report_vs_deterministic_pipeline(tmp_path: Pa
     assert "法兰密封面保持良好贴合" in raw_full_report_text
     assert "maintaining intimate sealing contact" in raw_full_report_text
     assert "314.92" in raw_full_report_text
+
+    # Mandatory Animation Check (GIF Animation must be present in HTML)
+    assert "动图 / Animation" in raw_full_report_text or "data:image/gif;base64" in raw_full_report_text
+    anim_file = tmp_path / "transient_evolution.gif"
+    assert anim_file.exists()
+    assert anim_file.stat().st_size > 0
 
     # Persist A/B Evidence
     evidence = {

@@ -31,15 +31,19 @@ class VisualizationSpec:
     caption_zh: str = ""
     caption_en: str = ""
     target_filename: str = "figure.png"
+    is_animation: bool = False
+    animation_fps: int = 10
+    total_frames: int = 12
 
     def to_report_figure(self, physical_image_path: str) -> ReportFigure:
         """Produce the ReportFigure record for the deterministic renderer."""
         caption = f"{self.caption_zh} / {self.caption_en}" if self.caption_en else self.caption_zh
+        is_anim = self.is_animation or physical_image_path.lower().endswith(".gif") or "animation" in self.visualization_type
         return ReportFigure(
             kind=self.visualization_type,
             path=physical_image_path,
             caption=caption,
-            source=f"{self.field_name}.{self.component} (Frame {self.frame_index})",
+            source=f"{self.field_name}.{self.component} (Step: {self.step_name}, Frame {self.frame_index})",
             metadata={
                 "artifact_id": self.artifact_id,
                 "step": self.step_name,
@@ -47,6 +51,9 @@ class VisualizationSpec:
                 "element_id": self.element_id,
                 "node_id": self.node_id,
                 "hotspot_location": list(self.hotspot_location) if self.hotspot_location else None,
+                "is_animation": is_anim,
+                "fps": self.animation_fps if is_anim else None,
+                "total_frames": self.total_frames if is_anim else None,
             },
         )
 
@@ -57,10 +64,12 @@ class VisualizationSpec:
         checksum_sha256: str,
     ) -> ArtifactPointer:
         """Create the authoritative Data Plane pointer."""
+        is_anim = self.is_animation or physical_image_path.lower().endswith(".gif") or "animation" in self.visualization_type
+        media_type = "image/gif" if physical_image_path.lower().endswith(".gif") else ("image/svg+xml" if physical_image_path.lower().endswith(".svg") else "image/png")
         return ArtifactPointer(
             artifact_id=self.artifact_id,
-            type="figure",
-            media_type="image/png",
+            type="figure" if not is_anim else "animation",
+            media_type=media_type,
             location=physical_image_path,
             size_bytes=size_bytes,
             created_by="deterministic_visualization_pipeline",
@@ -72,5 +81,6 @@ class VisualizationSpec:
                 "field": self.field_name,
                 "component": self.component,
                 "step": self.step_name,
+                "is_animation": is_anim,
             },
         )
