@@ -1,6 +1,7 @@
 import os
 import shutil
 import subprocess
+import uuid
 from dataclasses import dataclass
 from typing import Optional, Tuple
 
@@ -61,11 +62,26 @@ class BatchExecutor:
         if raw_cmd and raw_cmd[0] == self.launcher:
             raw_cmd[0] = self.resolved_launcher
         command = tuple(raw_cmd)
+        effective_workdir = self.workdir
+        is_repo_root = False
+        if effective_workdir:
+            cand = os.path.abspath(effective_workdir)
+            if os.path.isfile(os.path.join(cand, "pyproject.toml")) and os.path.isdir(os.path.join(cand, "src")):
+                is_repo_root = True
+
+        if not effective_workdir or is_repo_root:
+            base_dir = os.path.abspath(effective_workdir) if is_repo_root else os.path.abspath(".")
+            effective_workdir = os.path.abspath(os.path.join(base_dir, "runs", f"batch_{uuid.uuid4().hex[:8]}"))
+            os.makedirs(effective_workdir, exist_ok=True)
+            self.workdir = effective_workdir
+        else:
+            effective_workdir = os.path.abspath(effective_workdir)
+            os.makedirs(effective_workdir, exist_ok=True)
         proc = subprocess.run(
-            command, cwd=self.workdir, capture_output=True, text=True,
+            command, cwd=effective_workdir, capture_output=True, text=True,
             timeout=timeout or self.timeout)
         return BatchResult(command, proc.returncode, proc.stdout, proc.stderr,
-                           os.path.abspath(self.workdir) if self.workdir else None)
+                           effective_workdir)
 
     def run_input(self, input_path, job_name=None, timeout=None):
         path = os.path.abspath(input_path)

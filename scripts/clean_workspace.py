@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Safely inspect and clean Abaqus/Python workspace artifacts.
 
-Default behavior is DRY-RUN. No filesystem mutation occurs unless --apply is
+Default behavior is DRY-RUN. No filesystem mutation occurs unless --apply (or --clean) is
 explicitly supplied.
 
 Modes:
@@ -234,6 +234,11 @@ def main() -> int:
         help="actually mutate the filesystem; without this flag the command is dry-run",
     )
     parser.add_argument(
+        "--clean",
+        action="store_true",
+        help="alias for --apply",
+    )
+    parser.add_argument(
         "--root",
         type=Path,
         default=repo_root(),
@@ -241,6 +246,7 @@ def main() -> int:
     )
     args = parser.parse_args()
     root = args.root.resolve()
+    do_apply = args.apply or args.clean
 
     tracked = tracked_paths(root)
     if args.mode == "safe":
@@ -254,7 +260,7 @@ def main() -> int:
     print(f"Workspace: {root}")
     print(f"Mode: {args.mode}")
     print(f"Tracked-file protection: {'enabled' if tracked else 'unavailable'}")
-    print(f"Action: {'APPLY' if args.apply else 'DRY-RUN'}")
+    print(f"Action: {'APPLY' if do_apply else 'DRY-RUN'}")
     print(f"Candidates: {len(candidates)} ({format_bytes(total)})")
 
     for item in candidates:
@@ -264,8 +270,8 @@ def main() -> int:
         print("Nothing to clean.")
         return 0
 
-    if not args.apply:
-        print("\nDry-run only. Re-run with --apply to mutate the filesystem.")
+    if not do_apply:
+        print("\nDry-run only. Re-run with --apply (or --clean) to mutate the filesystem.")
         return 0
 
     changed, failed = apply_candidates(root, candidates)

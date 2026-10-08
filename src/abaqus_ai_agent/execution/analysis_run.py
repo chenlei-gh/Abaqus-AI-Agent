@@ -1,3 +1,4 @@
+import os
 import uuid
 from dataclasses import dataclass, field
 from enum import Enum
@@ -245,7 +246,16 @@ class AnalysisRunner:
             postprocess_profile=None, workdir=None, physics_domain=None):
         run_id = str(uuid.uuid4())
         orig_executor_workdir = getattr(self.executor, "workdir", None)
-        if workdir and hasattr(self.executor, "workdir"):
+        if not workdir:
+            if orig_executor_workdir:
+                workdir = orig_executor_workdir
+            else:
+                runs_root = os.path.abspath("runs")
+                workdir = os.path.join(runs_root, run_id)
+        os.makedirs(workdir, exist_ok=True)
+        workdir = os.path.abspath(workdir)
+
+        if hasattr(self.executor, "workdir"):
             self.executor.workdir = workdir
         runtime = _runtime_provenance(self.executor)
         initial_snapshot = None
@@ -351,6 +361,12 @@ class AnalysisRunner:
                         metadata=dict(run.provenance.metadata, action_plan_scope="output_plan"),
                     ),
                 )
+            try:
+                if hasattr(self.executor, "execute"):
+                    self.executor.execute(f"import os; os.chdir({workdir!r})")
+            except Exception:
+                pass
+
             for output_action in output_actions:
                 from ..validation.actions import validate_action
                 from ..actions.runner import execute
@@ -451,12 +467,12 @@ class AnalysisRunner:
                     target_odb = raw_odb if (raw_odb is not None and hasattr(raw_odb, "steps")) else path
                     computed_fatigue_res, fatigue_metrics = run_fatigue_postprocess(target_odb, fatigue_spec)
                 except Exception:
+                    out_json_path = None
                     try:
                         import tempfile
                         import json
-                        import os
                         from ..fatigue import build_odb_fatigue_postprocess_script
-                        with tempfile.NamedTemporaryFile(suffix=".json", delete=False) as tf:
+                        with tempfile.NamedTemporaryFile(suffix=".json", dir=workdir, delete=False) as tf:
                             out_json_path = tf.name
                         post_script = build_odb_fatigue_postprocess_script(
                             odb_path=path,
@@ -472,10 +488,6 @@ class AnalysisRunner:
                         if os.path.exists(out_json_path):
                             with open(out_json_path, "r", encoding="utf-8") as f:
                                 fatigue_data = json.load(f)
-                            try:
-                                os.remove(out_json_path)
-                            except Exception:
-                                pass
                             c_sum = fatigue_data.get("cycle_summary", {})
                             damage_val = c_sum.get("cumulative_damage", 0.0)
                             total_cnt = max(c_sum.get("total_cycles_count", 1.0), 1.0)
@@ -497,6 +509,12 @@ class AnalysisRunner:
                             }
                     except Exception:
                         pass
+                    finally:
+                        if out_json_path and os.path.exists(out_json_path):
+                            try:
+                                os.remove(out_json_path)
+                            except Exception:
+                                pass
 
                 if computed_fatigue_res is not None:
                     fatigue = computed_fatigue_res
@@ -541,7 +559,6 @@ class AnalysisRunner:
             run_manifest = None
             if result_source == "odb":
                 try:
-                    import os
                     from ..contracts.evidence import build_evidence_manifest_v2
                     art_dir = workdir or (os.path.dirname(os.path.abspath(path)) if path else ".")
                     fnames = [os.path.basename(a.path) for a in artifacts if getattr(a, "exists", False) and getattr(a, "path", None)]
@@ -694,6 +711,12 @@ class AnalysisRunner:
         finally:
             if hasattr(self.executor, "workdir"):
                 self.executor.workdir = orig_executor_workdir
+            if orig_executor_workdir:
+                try:
+                    if hasattr(self.executor, "execute"):
+                        self.executor.execute(f"import os; os.chdir({orig_executor_workdir!r})")
+                except Exception:
+                    pass
 
 
 def _provenance_with_artifacts(provenance, artifacts):

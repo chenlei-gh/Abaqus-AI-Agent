@@ -268,7 +268,7 @@ class AbaqusAIAgent:
                      mesh_quality=None, mesh_convergence=None, fatigue=None,
                      contact_diagnostics=None, sensitivity=None, uncertainty=None,
                      engineering_intent=None, postprocess_profile=None,
-                     action_plan=(), environment=None, timeout=3600):
+                     action_plan=(), environment=None, timeout=3600, workdir=None):
         from .execution.analysis_run import AnalysisRunner
         return AnalysisRunner(self.executor).run(
             model_name, job_name, odb_path=odb_path, criteria=criteria,
@@ -278,7 +278,7 @@ class AbaqusAIAgent:
             contact_diagnostics=contact_diagnostics, sensitivity=sensitivity,
             uncertainty=uncertainty, engineering_intent=engineering_intent,
             postprocess_profile=postprocess_profile, action_plan=action_plan,
-            environment=environment, timeout=timeout)
+            environment=environment, timeout=timeout, workdir=workdir)
 
     def submit(self, job_name, wait=False):
         from .execution.jobs import JobController

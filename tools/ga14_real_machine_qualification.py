@@ -271,7 +271,7 @@ with open(r'{res_json_path}', 'w') as f:
             )
         # Execute live Abaqus
         cmd = [resolved, "cae", f"noGUI={script_file.as_posix()}"]
-        run_res = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
+        run_res = subprocess.run(cmd, cwd=str(m1_dir), capture_output=True, text=True, timeout=120)
         if run_res.returncode != 0:
             raise RuntimeError(
                 f"[M1 FAILED] Live Abaqus returned code {run_res.returncode}.\n"
@@ -514,7 +514,7 @@ with open(r'{res_json_path}', 'w') as f:
                 "Silent fallback is forbidden. For offline evaluation, specify --offline."
             )
         cmd = [resolved, "cae", f"noGUI={script_file.as_posix()}"]
-        run_res = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
+        run_res = subprocess.run(cmd, cwd=str(m2_dir), capture_output=True, text=True, timeout=120)
         if run_res.returncode != 0:
             raise RuntimeError(
                 f"[M2 FAILED] Live Abaqus returned code {run_res.returncode}.\n"
@@ -745,7 +745,7 @@ with open(r'{res_json_path}', 'w') as f:
                 "Silent fallback is forbidden. For offline evaluation, specify --offline."
             )
         cmd = [resolved, "cae", f"noGUI={script_file.as_posix()}"]
-        run_res = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
+        run_res = subprocess.run(cmd, cwd=str(m3_dir), capture_output=True, text=True, timeout=120)
         if run_res.returncode != 0:
             raise RuntimeError(
                 f"[M3 FAILED] Live Abaqus returned code {run_res.returncode}.\n"
@@ -1038,7 +1038,7 @@ with open(r'{res_json_path}', 'w') as f:
                 "Silent fallback is forbidden. For offline evaluation, specify --offline."
             )
         cmd = [resolved, "cae", f"noGUI={script_file.as_posix()}"]
-        run_res = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
+        run_res = subprocess.run(cmd, cwd=str(step_hole_dir), capture_output=True, text=True, timeout=120)
         if run_res.returncode != 0:
             raise RuntimeError(
                 f"[STEP-HOLE FAILED] Live Abaqus returned code {run_res.returncode}.\n"
@@ -1281,7 +1281,7 @@ with open(r'{res_json_path}', 'w') as f:
                 "Silent fallback is forbidden. For offline evaluation, specify --offline."
             )
         cmd = [resolved, "cae", f"noGUI={script_file.as_posix()}"]
-        run_res = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
+        run_res = subprocess.run(cmd, cwd=str(step_fillet_dir), capture_output=True, text=True, timeout=120)
         if run_res.returncode != 0:
             raise RuntimeError(
                 f"[STEP-FILLET FAILED] Live Abaqus returned code {run_res.returncode}.\n"
