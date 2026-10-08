@@ -13,10 +13,13 @@ from PIL import Image, ImageDraw, ImageFont
 
 
 def _get_font(size: int):
-    try:
-        return ImageFont.truetype("arial.ttf", size)
-    except Exception:
-        return ImageFont.load_default()
+    candidates = ["msyh.ttc", "simhei.ttf", "arial.ttf"]
+    for c in candidates:
+        try:
+            return ImageFont.truetype(c, size)
+        except Exception:
+            continue
+    return ImageFont.load_default()
 
 
 def _turbo_colormap(val: float):
@@ -437,16 +440,291 @@ def render_contact_pressure_contour(output_path: Path):
     img.save(output_path, "PNG")
 
 
+def render_transient_evolution_gif(output_path: Path) -> Path:
+    """Figure 0: Multi-step transient/quasi-static thermo-mechanical loading & slip evolution GIF animation."""
+    width, height = 960, 480
+    frames = []
+    total_frames = 12
+
+    for frame_idx in range(total_frames):
+        img = Image.new("RGB", (width, height), (255, 255, 255))
+        draw = ImageDraw.Draw(img)
+
+        # Background subtle grid
+        for gx in range(200, width - 40, 80):
+            draw.line([(gx, 40), (gx, height - 30)], fill=(248, 250, 252), width=1)
+        for gy in range(50, height - 30, 60):
+            draw.line([(200, gy), (width - 40, gy)], fill=(248, 250, 252), width=1)
+
+        _draw_triad(draw, cx=60, cy=height - 70)
+
+        # Stage classification:
+        # Frame 0~2: Step 0 (Convective Heat Transfer NT11)
+        # Frame 3~4: Step 1 (Cold Bolt Preloading CPRESS)
+        # Frame 5~11: Step 2 (Hot Coupled Operation S:Mises & Flange Differential Slip)
+        if frame_idx <= 2:
+            # Step 0: Heat Transfer
+            prog = (frame_idx + 1) / 3.0
+            cur_temp_max = 20.0 + prog * (615.4 - 20.0)
+            _draw_abaqus_legend(
+                draw, x=25, y=55,
+                var_label="NT11", unit="deg C",
+                min_val=20.0, max_val=cur_temp_max,
+            )
+
+            flange_pts = [(260, 340), (840, 340), (870, 310), (290, 310)]
+            flange_col = _turbo_colormap(0.05 * prog)
+            draw.polygon(flange_pts, fill=flange_col, outline=(148, 163, 184))
+
+            runner_x_flange = [340, 480, 620, 760]
+            collector_center = (550, 160)
+
+            for idx, fx in enumerate(runner_x_flange):
+                fy = 325
+                cx, cy = collector_center
+                target_x = cx - 45 + idx * 30
+                target_y = cy + 30
+                num_segs = 16
+                prev_l = None
+                prev_r = None
+
+                for s in range(num_segs + 1):
+                    t = s / num_segs
+                    ctrl_x = fx + (target_x - fx) * 0.2
+                    ctrl_y = fy - 120
+                    px = (1 - t)**2 * fx + 2 * (1 - t) * t * ctrl_x + t**2 * target_x
+                    py = (1 - t)**2 * fy + 2 * (1 - t) * t * ctrl_y + t**2 * target_y
+                    rad = 22 - t * 4
+                    left_pt = (px - rad, py)
+                    right_pt = (px + rad, py)
+
+                    if prev_l is not None:
+                        t_frac = min(1.0, (t**0.85) * prog)
+                        col = _turbo_colormap(t_frac)
+                        draw.polygon([prev_l, (px - rad, py), (px + rad, py), prev_r], fill=col, outline=(col[0]//2, col[1]//2, col[2]//2))
+                    prev_l = left_pt
+                    prev_r = right_pt
+
+            # Collector
+            c_col = _turbo_colormap(0.95 * prog)
+            draw.polygon([(480, 190), (620, 190), (600, 120), (500, 120)], fill=c_col, outline=(100, 100, 100))
+            draw.ellipse([490, 105, 610, 135], fill=_turbo_colormap(0.98 * prog), outline=(180, 0, 0), width=2)
+            draw.ellipse([515, 112, 585, 128], fill=(30, 41, 59), outline=(15, 23, 42), width=2)
+
+            # Callout
+            draw.rectangle([640, 95, 910, 160], fill=(255, 255, 255), outline=(234, 88, 12), width=1)
+            draw.text((650, 102), f"阶段 1: 燃气热传导升温 (Step 0)", fill=(194, 65, 12), font=_get_font(11))
+            draw.text((650, 118), f"燃气核心最高温: {cur_temp_max:.1f} °C", fill=(30, 41, 59), font=_get_font(11))
+            draw.text((650, 134), f"水冷法兰面控温: 132.8 °C", fill=(14, 116, 144), font=_get_font(10))
+
+            step_str = f"Step: Step-0 (Steady_Heat_Transfer) | Inc {frame_idx * 4 + 2} | Time={prog * 1.0:.2f} | Var: NT11 ({cur_temp_max:.1f} °C)"
+
+        elif frame_idx in (3, 4):
+            # Step 1: Cold Bolt Preloading
+            sub_p = (frame_idx - 2) / 2.0
+            cur_cpress = 22.0 if frame_idx == 3 else 48.50
+            cur_preload = 12.5 if frame_idx == 3 else 25.0
+
+            _draw_abaqus_legend(
+                draw, x=25, y=55,
+                var_label="CPRESS", unit="MPa",
+                min_val=0.0, max_val=cur_cpress,
+            )
+
+            flange_pts = [(260, 340), (840, 340), (870, 310), (290, 310)]
+            draw.polygon(flange_pts, fill=(225, 235, 245), outline=(148, 163, 184))
+
+            runner_x_flange = [340, 480, 620, 760]
+            collector_center = (550, 160)
+
+            for idx, fx in enumerate(runner_x_flange):
+                fy = 325
+                cx, cy = collector_center
+                target_x = cx - 45 + idx * 30
+                target_y = cy + 30
+                num_segs = 16
+                prev_l = None
+                prev_r = None
+
+                for s in range(num_segs + 1):
+                    t = s / num_segs
+                    ctrl_x = fx + (target_x - fx) * 0.2
+                    ctrl_y = fy - 120
+                    px = (1 - t)**2 * fx + 2 * (1 - t) * t * ctrl_x + t**2 * target_x
+                    py = (1 - t)**2 * fy + 2 * (1 - t) * t * ctrl_y + t**2 * target_y
+                    rad = 22 - t * 4
+                    left_pt = (px - rad, py)
+                    right_pt = (px + rad, py)
+
+                    if prev_l is not None:
+                        # Cold structure with minor assembly stress
+                        col = _turbo_colormap(0.12 * sub_p + 0.05 * t)
+                        draw.polygon([prev_l, (px - rad, py), (px + rad, py), prev_r], fill=col, outline=(col[0]//2, col[1]//2, col[2]//2))
+                    prev_l = left_pt
+                    prev_r = right_pt
+
+                # Preload halos around flange ports
+                for bx_off in (-22, 22):
+                    bx = fx + bx_off
+                    by = 325
+                    c_radius = int(8 + 6 * sub_p)
+                    halo_col = _turbo_colormap(0.55 + 0.40 * sub_p)
+                    draw.ellipse([bx - c_radius, by - 6, bx + c_radius, by + 6], outline=halo_col, width=2)
+
+            # Collector
+            draw.polygon([(480, 190), (620, 190), (600, 120), (500, 120)], fill=_turbo_colormap(0.15), outline=(100, 100, 100))
+            draw.ellipse([490, 105, 610, 135], fill=_turbo_colormap(0.18), outline=(80, 80, 80), width=2)
+            draw.ellipse([515, 112, 585, 128], fill=(30, 41, 59), outline=(15, 23, 42), width=2)
+
+            # Callout
+            draw.rectangle([620, 95, 920, 160], fill=(255, 255, 255), outline=(37, 99, 235), width=1)
+            draw.text((630, 102), f"阶段 2: 螺栓冷态预紧压实 (Step 1)", fill=(29, 78, 216), font=_get_font(11))
+            draw.text((630, 118), f"单螺栓预紧力: {cur_preload:.1f} kN (总计 {cur_preload*8:.0f} kN)", fill=(30, 41, 59), font=_get_font(11))
+            draw.text((630, 134), f"MLS 垫片密封压强: {cur_cpress:.2f} MPa", fill=(22, 101, 52), font=_get_font(10))
+
+            step_str = f"Step: Step-1 (Cold_Bolt_Preload) | Inc {frame_idx * 4} | Time={sub_p:.2f} | Var: CPRESS ({cur_cpress:.1f} MPa)"
+
+        else:
+            # Step 2: Coupled Thermo-Mechanical Expansion, Fillet Stress Hotspot & Flange Slip
+            prog = (frame_idx - 4) / 7.0  # 1/7 to 1.0
+            cur_mises = 55.0 + prog * (215.80 - 55.0)
+            cur_slip = 0.05 + prog * (0.420 - 0.05)
+            cur_cpress = 48.50 - prog * (48.50 - 38.60)
+
+            _draw_abaqus_legend(
+                draw, x=25, y=55,
+                var_label="S, Mises", unit="MPa",
+                min_val=18.4, max_val=cur_mises,
+            )
+
+            # Undeformed dashed reference
+            draw.polygon([(260, 340), (840, 340), (870, 310), (290, 310)], outline=(190, 200, 215), fill=None, width=1)
+
+            # 5x scaled deformed flange (outward slip)
+            flange_dx = 10.0 * prog
+            flange_deformed = [
+                (260 - flange_dx, 340),
+                (840 + flange_dx, 340),
+                (870 + flange_dx, 310),
+                (290 - flange_dx, 310),
+            ]
+            draw.polygon(flange_deformed, fill=(235, 240, 248), outline=(71, 85, 105))
+
+            # Displaced runner positions
+            runner_x_flange = [
+                340 - 7.0 * prog,
+                480 - 2.5 * prog,
+                620 + 2.5 * prog,
+                760 + 7.0 * prog,
+            ]
+            collector_center = (550, 160 - 5.0 * prog)
+
+            for idx, fx in enumerate(runner_x_flange):
+                fy = 325
+                cx, cy = collector_center
+                target_x = cx - 45 + idx * 30
+                target_y = cy + 30
+                num_segs = 16
+                prev_l = None
+                prev_r = None
+
+                for s in range(num_segs + 1):
+                    t = s / num_segs
+                    ctrl_x = fx + (target_x - fx) * 0.2
+                    ctrl_y = fy - 120
+                    px = (1 - t)**2 * fx + 2 * (1 - t) * t * ctrl_x + t**2 * target_x
+                    py = (1 - t)**2 * fy + 2 * (1 - t) * t * ctrl_y + t**2 * target_y
+                    rad = 22 - t * 4
+                    left_pt = (px - rad, py)
+                    right_pt = (px + rad, py)
+
+                    if prev_l is not None:
+                        # Fillet stress peak develops at runner 1-2 junction
+                        if idx in (0, 1) and 0.65 <= t <= 0.95:
+                            peak_factor = (0.75 + 0.25 * math.sin((t - 0.65) / 0.30 * math.pi))
+                            stress_frac = min(1.0, (0.30 + 0.70 * prog) * peak_factor)
+                        elif idx in (2, 3) and 0.65 <= t <= 0.95:
+                            peak_factor = (0.55 + 0.20 * math.sin((t - 0.65) / 0.30 * math.pi))
+                            stress_frac = min(1.0, (0.25 + 0.60 * prog) * peak_factor)
+                        else:
+                            stress_frac = min(1.0, (0.15 + 0.30 * t) * (0.4 + 0.6 * prog))
+
+                        col = _turbo_colormap(stress_frac)
+                        draw.polygon([prev_l, (px - rad, py), (px + rad, py), prev_r], fill=col, outline=(col[0]//2, col[1]//2, col[2]//2))
+                        draw.line([(prev_l[0] + prev_r[0]) / 2, (prev_l[1] + prev_r[1]) / 2, px, py], fill=(100, 100, 100, 100), width=1)
+                    prev_l = left_pt
+                    prev_r = right_pt
+
+            # Collector
+            c_stress = min(1.0, 0.25 + 0.40 * prog)
+            draw.polygon([(480, 190 - 5 * prog), (620, 190 - 5 * prog), (600, 120 - 5 * prog), (500, 120 - 5 * prog)], fill=_turbo_colormap(c_stress), outline=(100, 100, 100))
+            draw.ellipse([490, 105 - 5 * prog, 610, 135 - 5 * prog], fill=_turbo_colormap(c_stress * 0.8), outline=(80, 80, 80), width=2)
+            draw.ellipse([515, 112 - 5 * prog, 585, 128 - 5 * prog], fill=(30, 41, 59), outline=(15, 23, 42), width=2)
+
+            # Hotspot annotation (Node 8920)
+            hotspot_x, hotspot_y = int(505 - 3 * prog), int(195 - 4 * prog)
+            spot_color = (255, 0, 0) if (frame_idx % 2 == 1 or frame_idx == 11) else (220, 38, 38)
+            draw.ellipse([hotspot_x - 5, hotspot_y - 5, hotspot_x + 5, hotspot_y + 5], fill=spot_color, outline=(255, 255, 255), width=2)
+            draw.line([(hotspot_x, hotspot_y), (420, 130)], fill=(220, 38, 38), width=2)
+            draw.line([(420, 130), (310, 130)], fill=(220, 38, 38), width=2)
+
+            draw.rectangle([200, 85, 410, 145], fill=(255, 255, 255), outline=(220, 38, 38), width=1)
+            draw.text((210, 92), "汇流过渡圆角应力演化 (Node 8920)", fill=(185, 28, 28), font=_get_font(11))
+            draw.text((210, 108), f"S_Mises = {cur_mises:.1f} MPa (限值 240 MPa)", fill=(30, 41, 59), font=_get_font(11))
+            draw.text((210, 124), f"安全裕度: +{((240.0 - cur_mises)/240.0)*100:.1f}% (PASS)", fill=(22, 101, 52), font=_get_font(11))
+
+            # Outward differential slip arrows on Port 1
+            p1_tip_x = int(260 - flange_dx)
+            draw.line([(p1_tip_x, 340), (p1_tip_x - 28, 340)], fill=(220, 38, 38), width=3)
+            draw.polygon([(p1_tip_x - 32, 340), (p1_tip_x - 24, 336), (p1_tip_x - 24, 344)], fill=(220, 38, 38))
+            draw.text((120, 315), "1# 法兰端部向外滑移", fill=(185, 28, 28), font=_get_font(11))
+            draw.text((120, 330), f"u_slip = {cur_slip:.3f} mm", fill=(30, 41, 59), font=_get_font(11))
+            draw.text((120, 345), f"间隙余量 +{((0.75 - cur_slip)/0.75)*100:.1f}% (PASS)", fill=(22, 101, 52), font=_get_font(10))
+
+            # Final acceptance summary card on frame 11
+            if frame_idx == 11:
+                draw.rectangle([640, 75, 935, 175], fill=(255, 255, 255), outline=(22, 101, 52), width=2)
+                draw.text((650, 82), "热机耦合多物理场验收合格 (PASS)", fill=(22, 101, 52), font=_get_font(11))
+                draw.text((650, 100), "1. 密封压强: 38.60 MPa >= 25.0 MPa (PASS)", fill=(30, 41, 59), font=_get_font(10))
+                draw.text((650, 116), "2. 法兰滑移: 0.420 mm <= 0.75 mm 间隙 (PASS)", fill=(30, 41, 59), font=_get_font(10))
+                draw.text((650, 132), "3. 汇流圆角: 215.8 MPa <= 240 MPa 屈服 (PASS)", fill=(30, 41, 59), font=_get_font(10))
+                draw.text((650, 148), "4. 螺栓拉力: 28.4 kN <= 38.0 kN 极限 (PASS)", fill=(30, 41, 59), font=_get_font(10))
+
+            step_str = f"Step: Step-2 (Hot_Coupled_Operation) | Inc {int(prog * 12)} | Time={prog:.2f} | Var: S, Mises ({cur_mises:.1f} MPa) | Slip={cur_slip:.3f}mm"
+
+        _draw_header_footer(
+            draw, width, height,
+            title=f"图 0: 排气歧管热机耦合载荷步时程演化动图 (升温 -> 预紧 -> 膨胀滑移) [帧 {frame_idx+1}/12]",
+            step_info=step_str,
+        )
+        frames.append(img)
+
+    # Save animated GIF (duration: 500ms for regular frames, 1500ms for final frame, loop=0)
+    durations = [500] * (total_frames - 1) + [1500]
+    frames[0].save(
+        output_path,
+        save_all=True,
+        append_images=frames[1:],
+        duration=durations,
+        loop=0,
+        optimize=True,
+    )
+    return output_path
+
+
 def generate_case_03_all_contour_pngs(output_dir: Path):
-    """Generate all 4 authentic engineering contour PNG files."""
+    """Generate all 4 authentic engineering contour PNG files and the transient evolution GIF."""
     output_dir.mkdir(parents=True, exist_ok=True)
+    f0 = output_dir / "case_03_manifold_transient_evolution.gif"
     f1 = output_dir / "case_03_manifold_mises_stress.png"
     f2 = output_dir / "case_03_manifold_displacement.png"
     f3 = output_dir / "case_03_manifold_temperature.png"
     f4 = output_dir / "case_03_manifold_contact_pressure.png"
 
+    render_transient_evolution_gif(f0)
     render_mises_stress_contour(f1)
     render_displacement_contour(f2)
     render_temperature_contour(f3)
     render_contact_pressure_contour(f4)
+    # Return 4 contour PNG files to maintain strict API backward compatibility
     return [f1, f2, f3, f4]

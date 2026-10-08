@@ -7,13 +7,13 @@
   "status": "ACCEPTED",
   "source": "Abaqus 2025 Example Problems - Thermal-Stress Analysis of an Exhaust Manifold; SAE Technical Papers on Heavy-Duty Exhaust System Durability",
   "data_provenance": "Abaqus 2025 Example Problems Benchmark Set & Engine Testing Standard Reference",
-  "verified_at": "2026-10-05T02:44:12.385076+00:00",
+  "verified_at": "2026-10-08T05:32:35.842803+00:00",
   "summary": {
     "status": "COMPLETED",
     "engineering_status": "RESULT_VALID",
     "acceptance_passed": true,
-    "report_md_bytes": 70510,
-    "report_html_bytes": 281714
+    "report_md_bytes": 72250,
+    "report_html_bytes": 721865
   },
   "physical_results": {
     "max_operating_temp_c": 615.4,
@@ -57,5 +57,5 @@
       "required_results": "PASS"
     }
   },
-  "audit_signature": "30adbb069aa10efb0eb390c8e2ab1780972dbf9171f2adf1d89af7e4edeb69be"
+  "audit_signature": "bf83e744800236a2fec1d7ab3ef2b5058e10b194731d005a0454edbe9a1ed557"
 }
