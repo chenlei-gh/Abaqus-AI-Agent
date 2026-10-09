@@ -519,7 +519,8 @@ def evaluate_result_acceptance(result_status, numerical=None, engineering=None,
         norm_available = [str(f).upper() for f in odb_fields]
         for rf in effective_required_fields:
             rf_upper = str(rf).upper()
-            matched = any(rf_upper == f or rf_upper in f for f in norm_available)
+            # STRICT MATCH: exact equality only, never substring matching (prevents "S" matching "CSHEAR")
+            matched = any(rf_upper == f for f in norm_available)
             if not matched:
                 missing_required_fields.append(rf)
                 failures.append("missing_required_field:%s" % rf)
@@ -911,16 +912,69 @@ def evaluate_production_acceptance(
             causal_blocked.append(err_msg)
             causal_evidence_errors.append(err_msg)
 
-    # 6. Extraction lineage check
-    if result_extractions is not None:
-        for ext in result_extractions:
+    # 6. Extraction lineage & Causal Binding Check (Strict: No ungrounded metrics)
+    eff_extractions = result_extractions
+    if eff_extractions is None and analysis_run is not None:
+        eff_extractions = getattr(analysis_run, "result_extractions", None) or getattr(analysis_run, "extractions", None)
+        if not eff_extractions and getattr(analysis_run, "metrics", None):
+            # Allow authentic EngineeringMetrics originating from solver/ODB runs
+            valid_run_metrics = [
+                m for m in analysis_run.metrics
+                if (getattr(m, "source", None) if hasattr(m, "source") else m.get("source") if isinstance(m, dict) else None) != "external_input"
+            ]
+            if valid_run_metrics:
+                eff_extractions = valid_run_metrics
+
+    if eff_extractions is None or len(eff_extractions) == 0:
+        err_msg = "missing_required_result_extractions:production_requires_grounded_extractions"
+        causal_failures.append(err_msg)
+        causal_blocked.append(err_msg)
+        causal_evidence_errors.append(err_msg)
+    else:
+        # Build map of extractions for criterion coverage and unit validation
+        ext_map: Dict[str, Any] = {}
+        for ext in eff_extractions:
             loc = getattr(ext, "locator", None) or (ext.get("locator") if isinstance(ext, dict) else {})
-            if not loc:
-                err_msg = "extraction_lineage_missing:locator_empty"
-                causal_failures.append(err_msg)
-                causal_blocked.append(err_msg)
-                causal_evidence_errors.append(err_msg)
-                break
+            # If item is EngineeringMetric, it may have location instead of locator
+            if not loc and hasattr(ext, "location"):
+                loc = getattr(ext, "location", None) or {"source": getattr(ext, "source", "odb")}
+            if not loc and isinstance(ext, dict) and "location" in ext:
+                loc = ext.get("location") or {"source": ext.get("source", "odb")}
+
+            req = getattr(ext, "requirement", None)
+            k = None
+            if req is not None:
+                k = getattr(req, "value_key", None) or getattr(req, "name", None)
+            if not k:
+                k = getattr(ext, "value_key", None) or getattr(ext, "name", None)
+            if not k and isinstance(ext, dict):
+                k = ext.get("value_key") or ext.get("name") or ext.get("key")
+            if k:
+                ext_map[str(k)] = ext
+
+        # Validate that every criterion is backed by an authentic extraction
+        if criteria:
+            for crit in criteria:
+                c_key = crit.get("value_key") or crit.get("name")
+                if not c_key or str(c_key) not in ext_map:
+                    err_msg = f"extraction_missing_for_criterion:{c_key}"
+                    causal_failures.append(err_msg)
+                    causal_blocked.append(err_msg)
+                    causal_evidence_errors.append(err_msg)
+                else:
+                    # Validate Unit consistency between Criterion and Extraction
+                    c_unit = crit.get("unit")
+                    matched_ext = ext_map[str(c_key)]
+                    ext_req = getattr(matched_ext, "requirement", None)
+                    ext_unit = getattr(matched_ext, "unit", None) or (getattr(ext_req, "unit", None) if ext_req else None)
+                    if not ext_unit and isinstance(matched_ext, dict):
+                        ext_unit = matched_ext.get("unit")
+                    if c_unit and ext_unit:
+                        if str(c_unit).strip().lower() != str(ext_unit).strip().lower():
+                            unit_err = f"unit_mismatch:criterion_{c_key}_expected_{c_unit}_got_{ext_unit}"
+                            causal_failures.append(unit_err)
+                            causal_blocked.append(unit_err)
+                            causal_evidence_errors.append(unit_err)
 
     # 7. Values determination
     eff_values = values
@@ -979,7 +1033,7 @@ def evaluate_production_acceptance(
         elif any("solver_execution" in e for e in causal_evidence_errors) or str(res.result_validity) == "SOLVER_FAILED":
             new_validity = ResultValidity("SOLVER_FAILED")
         elif any(
-            any(k in e for k in ("missing_required_evidence", "missing_analysis_run", "missing_input_hash", "missing_run_input_hash", "missing_inp_artifact", "extraction_lineage_missing"))
+            any(k in e for k in ("missing_required_evidence", "missing_analysis_run", "missing_input_hash", "missing_run_input_hash", "missing_inp_artifact", "extraction_lineage_missing", "missing_required_result_extractions", "extraction_missing_for_criterion", "unit_mismatch"))
             for e in causal_evidence_errors
         ) or str(res.result_validity) == "INCOMPLETE":
             new_validity = ResultValidity("INCOMPLETE")

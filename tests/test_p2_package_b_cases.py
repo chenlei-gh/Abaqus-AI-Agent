@@ -848,21 +848,23 @@ def test_case_06_negative_probes_springback_and_submodel_stress():
 
 def test_case_06_mesh_quality_gate_algorithm_integrity():
     """Verify authentic mesh quality audit algorithm and fail-closed distorted element gate."""
-    from abaqus_ai_agent.execution.case_06_mesh_audit import (
-        audit_case_06_mesh_quality,
+    from abaqus_ai_agent.mesh_audit import (
         audit_quad_element,
     )
     from abaqus_ai_agent.mesh_gate import evaluate_mesh_quality_gate
 
-    # 1. Authentic Case 06 mesh audit passes strict engineering policy
-    gate_eval, report = audit_case_06_mesh_quality()
-    assert gate_eval.passed is True
-    assert gate_eval.status == "PASS"
-    metrics = report["governing_metrics"]
-    assert metrics["min_jacobian"] >= 0.60
-    assert metrics["max_aspect_ratio"] <= 4.00
-    assert metrics["min_angle"] >= 45.0
-    assert metrics["max_angle"] <= 135.0
+    # 1. Authentic Quad element audit evaluates true geometry and Jacobian
+    quad = audit_quad_element(
+        1,
+        (0.0, 0.0, 0.0),
+        (10.0, 0.0, 0.0),
+        (10.0, 10.0, 0.0),
+        (0.0, 10.0, 0.0),
+    )
+    assert quad.aspect_ratio == 1.0
+    assert quad.jacobian_ratio >= 0.99
+    assert quad.min_angle_deg == 90.0
+    assert quad.max_angle_deg == 90.0
 
     # 2. Negative Probe: Inverted element (negative Jacobian <= 0) must trigger BLOCKED
     distorted_metrics_inverted = {

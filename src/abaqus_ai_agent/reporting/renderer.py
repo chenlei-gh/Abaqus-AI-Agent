@@ -1,9 +1,12 @@
+from __future__ import annotations
+
 import base64
 import html
 import json
 import mimetypes
 from pathlib import Path
 import re
+from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
 
 def _plain(value):
     if value is None: return None

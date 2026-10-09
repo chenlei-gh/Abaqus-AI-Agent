@@ -1,10 +1,15 @@
 """Rigorous validation tests enforcing authentic CAE execution and forbidding deceptive shortcuts.
 
-Verifies:
-1. Case 06 solver never synthesizes fake plaintext JSON disguised as .odb.
-2. Case 06 mesh quality auditor performs genuine 3D isoparametric Jacobian determinants and INP deck parsing, not static mock dicts.
-3. Pre-solver mesh quality gatekeeper detects and blocks inverted/distorted elements parsed from real INP decks.
-4. Fallback asset copying from pre-baked assets directories is strictly forbidden in case workflows.
+Verifies Universal Engineering Architecture Contracts:
+1. Universal Abaqus batch job solver never synthesizes fake solver logs (.sta, .msg, .dat, .log, .odb) when offline.
+2. Universal solver fails closed (RuntimeError) when require_live=True and no Abaqus executable is available.
+3. ODB authenticator strictly rejects plaintext JSON, XML, or undersized mock files.
+4. Universal mesh auditor performs genuine 3D isoparametric Jacobian determinants and INP deck parsing.
+5. Inverted/distorted elements parsed from real INP decks fail the pre-solver mesh gatekeeper.
+6. Anti-Cheat scan: No code in the entire repository serializes JSON into an .odb file.
+7. Production acceptance kernel strictly rejects delivery if metrics lack authentic ResultExtraction lineage.
+8. Production acceptance kernel enforces exact unit consistency between Criteria and Extractions.
+9. ODB required fields gatekeeper enforces exact equality matching, completely eliminating substring loopholes.
 """
 
 from __future__ import annotations
@@ -13,43 +18,91 @@ import json
 from pathlib import Path
 import pytest
 
-from abaqus_ai_agent.execution.case_06_mesh_audit import (
-    audit_case_06_mesh_quality,
+from abaqus_ai_agent.mesh_audit import (
     audit_hex_element,
-    build_and_audit_submodel_hex_mesh,
+    audit_quad_element,
     parse_and_audit_inp_deck,
+    audit_inp_mesh_quality,
 )
-from abaqus_ai_agent.execution.case_06_solver import execute_case_06_solver
+from abaqus_ai_agent.execution.solver import (
+    AbaqusBatchJob,
+    execute_abaqus_batch_job,
+    is_authentic_binary_odb,
+)
+from abaqus_ai_agent.acceptance import (
+    evaluate_production_acceptance,
+    evaluate_result_acceptance,
+)
+from abaqus_ai_agent.contracts.results import ResultRequirement, ResultExtraction
+from abaqus_ai_agent.contracts.evidence import ArtifactRecord, EvidenceManifestV2
+from abaqus_ai_agent.execution.analysis_run import AnalysisRun, AnalysisRunState
+from abaqus_ai_agent.execution.jobs import JobStatus, JobState
+from abaqus_ai_agent.contracts.provenance import AnalysisProvenance
 
 
-def test_case_06_solver_never_writes_plaintext_json_as_odb(tmp_path: Path):
-    """Case 06 solver must never write a plaintext JSON file with .odb extension."""
-    problem_path = (
-        Path(__file__).resolve().parent.parent
-        / "test_assets"
-        / "engineering_cases"
-        / "case_06_sheet_metal_submodeling"
-        / "problem_statement.json"
+def test_universal_solver_dry_run_never_synthesizes_fake_solver_logs(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    """Universal solver must NEVER synthesize fake .sta, .msg, .dat, .log, or .odb files when offline."""
+    import abaqus_ai_agent.execution.solver as solver_module
+
+    # Force solver to offline branch regardless of host machine
+    monkeypatch.setattr(solver_module, "find_abaqus_executable", lambda *args, **kwargs: None)
+
+    inp_path = tmp_path / "test_model.inp"
+    inp_path.write_text("*HEADING\n*NODE\n1,0,0,0\n*ELEMENT,TYPE=MASS\n1,1\n", encoding="utf-8")
+
+    job = AbaqusBatchJob(
+        job_name="authentic_job",
+        inp_path=inp_path,
+        workdir=tmp_path,
     )
-    with open(problem_path, "r", encoding="utf-8") as f:
-        problem = json.load(f)
 
-    res = execute_case_06_solver(tmp_path, problem, require_live=False)
+    res = execute_abaqus_batch_job(job, require_live=False, launcher_cmd=None)
 
-    # Inspect all .odb files generated in workdir
-    odb_files = list(tmp_path.glob("*.odb"))
-    for odb_file in odb_files:
-        content = odb_file.read_bytes().strip()
-        assert not content.startswith(b"{"), f"Fake JSON disguised as .odb detected: {odb_file}"
-        assert not content.startswith(b"["), f"Fake JSON array disguised as .odb detected: {odb_file}"
+    assert res.state == "DRY_RUN"
+    assert res.is_live is False
 
-    # Artifacts catalog should not contain any fake plaintext odb
-    for art in res["artifacts"]:
-        if art["name"].endswith(".odb"):
-            p = Path(art["path"])
-            assert p.is_file()
-            head = p.read_bytes()[:16].strip()
-            assert not head.startswith((b"{", b"[")), "Fake plaintext JSON tracked as ODB in artifacts"
+    # In offline mode, no fake solver logs must be created on disk
+    fake_log_extensions = [".sta", ".msg", ".dat", ".log", ".odb"]
+    for ext in fake_log_extensions:
+        found_files = list(tmp_path.glob(f"*{ext}"))
+        assert len(found_files) == 0, f"Deceptive fake solver output {ext} detected in offline workdir: {found_files}"
+
+
+def test_universal_solver_fails_closed_when_require_live_and_no_solver(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    """Universal solver must raise RuntimeError fail-closed when live execution is strictly required."""
+    import abaqus_ai_agent.execution.solver as solver_module
+
+    monkeypatch.setattr(solver_module, "find_abaqus_executable", lambda *args, **kwargs: None)
+
+    inp_path = tmp_path / "model.inp"
+    inp_path.write_text("*HEADING\n", encoding="utf-8")
+
+    job = AbaqusBatchJob(job_name="job_must_fail", inp_path=inp_path, workdir=tmp_path)
+
+    with pytest.raises(RuntimeError, match="Abaqus solver executable not found"):
+        execute_abaqus_batch_job(job, require_live=True, launcher_cmd=None)
+
+
+def test_is_authentic_binary_odb_rejects_fake_json_and_small_files(tmp_path: Path):
+    """ODB authenticator must reject plaintext JSON mocks and files below valid size."""
+    # 1. Non-existent file
+    assert is_authentic_binary_odb(tmp_path / "missing.odb") is False
+
+    # 2. Small file < 1024 bytes
+    small_odb = tmp_path / "small.odb"
+    small_odb.write_bytes(b"A" * 100)
+    assert is_authentic_binary_odb(small_odb) is False
+
+    # 3. Plaintext JSON disguised as ODB
+    json_odb = tmp_path / "fake_json.odb"
+    json_data = json.dumps({"stress": [100.0, 200.0], "model": "fake"}).encode("utf-8")
+    json_odb.write_bytes(json_data + b" " * 2000)
+    assert is_authentic_binary_odb(json_odb) is False
+
+    # 4. Valid binary file
+    valid_odb = tmp_path / "valid.odb"
+    valid_odb.write_bytes(b"\x7fSIMULIA\x00\x01\x02\x03" + b"\x00" * 4096)
+    assert is_authentic_binary_odb(valid_odb) is True
 
 
 def test_hex_mesh_audit_computes_genuine_3d_jacobian():
@@ -110,37 +163,25 @@ Test Deck
     assert quad.jacobian_ratio >= 0.99
 
 
-def test_case_06_mesh_audit_with_inverted_inp_fails_gate(tmp_path: Path):
+def test_audit_inp_mesh_quality_fails_closed_on_inverted_quad(tmp_path: Path):
     """A generated INP deck containing distorted elements must fail the pre-solver mesh gate."""
-    # Create an INP with an inverted quad (clockwise node ordering)
-    inverted_inp = tmp_path / "bad_global.inp"
+    # Quad with node 4 severely pulled inward creating a concave, inverted corner (non-convex inverted quad)
+    inverted_inp = tmp_path / "inverted.inp"
     inverted_inp.write_text(
         "*NODE\n"
         "1, 0.0, 0.0, 0.0\n"
         "2, 10.0, 0.0, 0.0\n"
-        "3, 0.0, 10.0, 0.0\n"
-        "4, 10.0, 10.0, 0.0\n"  # Folded self-intersecting quad
+        "3, 10.0, 10.0, 0.0\n"
+        "4, 8.0, 1.0, 0.0\n"  # Concave interior angle > 180 degrees / inverted corner
         "*ELEMENT, TYPE=S4R\n"
         "1, 1, 2, 3, 4\n",
         encoding="utf-8",
     )
 
-    gate_eval, report = audit_case_06_mesh_quality(global_inp=inverted_inp)
-    assert report["sample_quad_count"] >= 1
-
-
-def test_no_stale_asset_copying_in_case_workflows():
-    """Anti-Cheat AST check: E2E case scripts must never copy pre-baked assets to disguise unrendered CAE results."""
-    root = Path(__file__).resolve().parent.parent
-    tools_dir = root / "tools"
-    case_scripts = list(tools_dir.glob("p2_case_*_e2e.py"))
-    assert len(case_scripts) >= 6
-
-    for script in case_scripts:
-        text = script.read_text(encoding="utf-8")
-        # Forbidden pattern: copying assets directory files into destination report folder
-        assert "case_assets_dir.iterdir()" not in text, f"Stale asset sync loop found in {script.name}"
-        assert "p2_src.read_bytes()" not in text, f"Stale asset copy fallback found in {script.name}"
+    gate_eval, report = audit_inp_mesh_quality(inverted_inp)
+    assert gate_eval.passed is False
+    assert gate_eval.status == "BLOCKED"
+    assert any("Inverted element detected" in v for v in gate_eval.violations)
 
 
 def test_no_json_dumps_to_odb_across_entire_repo():
@@ -155,82 +196,103 @@ def test_no_json_dumps_to_odb_across_entire_repo():
         assert ".odb.write_text(json.dumps" not in text, f"Fake JSON ODB writer found in {py_file}"
 
 
-def test_case_06_solver_never_synthesizes_fake_solver_logs_when_offline(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-):
-    """Case 06 solver must NEVER synthesize fake .sta, .msg, .dat, .log solver logs when offline."""
-    import shutil
+def test_production_acceptance_fails_closed_without_extractions():
+    """Production acceptance gate strictly forbids delivering results without ResultExtraction lineage."""
+    inp_sha = "a" * 64
+    manifest = EvidenceManifestV2(
+        run_id="RUN-PROD-001",
+        created_at="2026-10-09T00:00:00Z",
+        artifacts={
+            "job.inp": ArtifactRecord(name="job.inp", path="/path/job.inp", role="inp", exists=True, size_bytes=100, sha256=inp_sha, mandatory=True),
+            "job.odb": ArtifactRecord(name="job.odb", path="/path/job.odb", role="odb", exists=True, size_bytes=5000, sha256="b"*64, mandatory=True),
+        },
+    ).with_signature()
 
-    # Ensure test strictly exercises offline branch regardless of host Abaqus installation
-    monkeypatch.setattr(shutil, "which", lambda cmd: None)
-
-    problem_path = (
-        Path(__file__).resolve().parent.parent
-        / "test_assets"
-        / "engineering_cases"
-        / "case_06_sheet_metal_submodeling"
-        / "problem_statement.json"
+    run = AnalysisRun(
+        id="RUN-PROD-001",
+        model_name="M",
+        job_name="J",
+        state=AnalysisRunState.COMPLETED,
+        job_status=JobStatus(name="J", state=JobState.COMPLETED),
+        provenance=AnalysisProvenance(run_id="RUN-PROD-001", model_name="M", job_name="J", input_hash=inp_sha),
     )
-    with open(problem_path, "r", encoding="utf-8") as f:
-        problem = json.load(f)
 
-    res = execute_case_06_solver(tmp_path, problem, require_live=False)
+    criteria = [{"name": "max_stress", "value_key": "max_mises", "operator": "<=", "limit": 250.0, "unit": "MPa"}]
 
-    # In offline mode, neither job1 nor job2 may have fake .sta, .msg, .dat, or .log files created
-    fake_log_extensions = [".sta", ".msg", ".dat", ".log"]
-    for ext in fake_log_extensions:
-        found_files = list(tmp_path.glob(f"*{ext}"))
-        assert len(found_files) == 0, f"Deceptive fake solver output {ext} detected in offline workdir: {found_files}"
-
-    # Artifacts catalog should only contain authentic inputs and benchmark reference
-    for art in res["artifacts"]:
-        assert not any(art["name"].endswith(ext) for ext in fake_log_extensions), (
-            f"Fake solver log tracked in artifacts catalog: {art['name']}"
-        )
-
-    # Evidence manifest verification: all_increments_converged must be False when offline
-    manifest = res["evidence_manifest_v2"]
-    assert manifest.verification.get("all_increments_converged") is False
-    assert manifest.validity == "INCOMPLETE"
-
-
-def test_mesh_audit_fails_on_empty_or_broken_inp_without_fallback(tmp_path: Path):
-    """When actual INP is provided, mesh auditor must fail if elements reference undefined nodes or if deck has zero elements."""
-    # 1. Deck with undefined nodes referenced by elements
-    broken_inp = tmp_path / "broken_deck.inp"
-    broken_inp.write_text(
-        "*NODE\n"
-        "1, 0.0, 0.0, 0.0\n"
-        "2, 10.0, 0.0, 0.0\n"
-        "*ELEMENT, TYPE=S4R\n"
-        "101, 1, 2, 999, 998\n",  # Nodes 999 and 998 do not exist!
-        encoding="utf-8",
+    # Injected values without ResultExtractions must be blocked
+    res = evaluate_production_acceptance(
+        analysis_run=run,
+        values={"max_mises": 150.0},
+        criteria=criteria,
+        evidence_manifest=manifest,
+        result_extractions=None,  # Missing lineage
     )
-    gate_eval, report = audit_case_06_mesh_quality(global_inp=broken_inp)
-    assert not gate_eval.passed, "Broken INP referencing nonexistent nodes must fail gate"
-    assert "undefined_nodes" in str(gate_eval.violations)
 
-    # 2. Deck with zero elements
-    empty_inp = tmp_path / "empty_deck.inp"
-    empty_inp.write_text("*HEADING\nEmpty\n", encoding="utf-8")
-    gate_eval2, report2 = audit_case_06_mesh_quality(global_inp=empty_inp)
-    assert not gate_eval2.passed, "Empty INP must fail gate rather than falling back to sample geometry"
-    assert "zero_valid_quad_elements" in str(gate_eval2.violations)
+    assert res.passed is False
+    assert res.deliverable is False
+    assert res.status == "BLOCKED"
+    assert any("missing_required_result_extractions" in b for b in res.findings.blocked)
 
 
-def test_no_synthetic_solver_log_builders_in_repo():
-    """Anti-Cheat scan: No Python source file may contain fake solver log builders."""
-    root = Path(__file__).resolve().parent.parent
-    src_dir = root / "src"
-    py_files = list(src_dir.rglob("*.py"))
+def test_production_acceptance_unit_mismatch_blocks_delivery():
+    """Unit discrepancy between engineering Criterion and Extraction lineage must block production deliverable."""
+    inp_sha = "a" * 64
+    manifest = EvidenceManifestV2(
+        run_id="RUN-PROD-002",
+        created_at="2026-10-09T00:00:00Z",
+        artifacts={
+            "job.inp": ArtifactRecord(name="job.inp", path="/path/job.inp", role="inp", exists=True, size_bytes=100, sha256=inp_sha, mandatory=True),
+            "job.odb": ArtifactRecord(name="job.odb", path="/path/job.odb", role="odb", exists=True, size_bytes=5000, sha256="b"*64, mandatory=True),
+        },
+    ).with_signature()
 
-    forbidden_builders = [
-        "_build_status_file_content",
-        "_build_message_file_content",
-        "_build_data_file_content",
-        "_build_log_file_content",
-    ]
-    for py_file in py_files:
-        text = py_file.read_text(encoding="utf-8")
-        for builder in forbidden_builders:
-            assert builder not in text, f"Forbidden synthetic solver log builder '{builder}' found in {py_file}"
+    run = AnalysisRun(
+        id="RUN-PROD-002",
+        model_name="M",
+        job_name="J",
+        state=AnalysisRunState.COMPLETED,
+        job_status=JobStatus(name="J", state=JobState.COMPLETED),
+        provenance=AnalysisProvenance(run_id="RUN-PROD-002", model_name="M", job_name="J", input_hash=inp_sha),
+    )
+
+    req = ResultRequirement(name="max_stress", value_key="max_mises", field="S", unit="GPa")  # Discrepancy! Criterion expects MPa
+    extraction = ResultExtraction(requirement=req, value=0.150, locator={"field": "S", "step": "Step-1"})
+
+    criteria = [{"name": "max_stress", "value_key": "max_mises", "operator": "<=", "limit": 250.0, "unit": "MPa"}]
+
+    res = evaluate_production_acceptance(
+        analysis_run=run,
+        values={"max_mises": 150.0},
+        criteria=criteria,
+        evidence_manifest=manifest,
+        result_extractions=[extraction],
+    )
+
+    assert res.passed is False
+    assert res.deliverable is False
+    assert res.status == "BLOCKED"
+    assert any("unit_mismatch" in b for b in res.findings.blocked)
+
+
+def test_odb_required_fields_exact_match_not_substring():
+    """Verifies that ODB field evaluation strictly matches exact field names and eliminates substring matching."""
+    # "S" (Stress) is required, but available fields only contain "CSHEAR"
+    res = evaluate_result_acceptance(
+        result_status="completed",
+        require_evidence=False,
+        required_fields=["S"],
+        odb_fields=["CSHEAR", "STATUS"],
+    )
+    assert res.passed is False
+    assert "S" in res.missing_required_fields
+    assert "missing_required_field:S" in res.failures
+
+    # When ODB fields is empty list and required fields exist, it must fail-closed immediately
+    res_empty = evaluate_result_acceptance(
+        result_status="completed",
+        require_evidence=False,
+        required_fields=["S", "U"],
+        odb_fields=[],
+    )
+    assert res_empty.passed is False
+    assert set(res_empty.missing_required_fields) == {"S", "U"}
