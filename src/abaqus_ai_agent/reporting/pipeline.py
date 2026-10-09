@@ -82,6 +82,39 @@ class DeterministicReportPipeline:
         require_deliverable: bool = True,
     ) -> Tuple[ReportDeliveryCard, ArtifactPointer, EngineeringReportData]:
         """Compile report, render HTML & Markdown, register artifacts, and produce LLM card."""
+        # 0. Early Delivery Gate: Verify authorization BEFORE any file creation or disk I/O.
+        status_val = "UNKNOWN"
+        if hasattr(acceptance_info, "status"):
+            status_val = getattr(acceptance_info, "status")
+        elif isinstance(acceptance_info, dict):
+            status_val = acceptance_info.get("status", "UNKNOWN")
+
+        # Strict deliverable authorization determination:
+        # Deliverable authorization is granted IF AND ONLY IF:
+        # 1. acceptance_info explicitly declares deliverable is True, OR
+        # 2. For legacy acceptance objects, it has passed is True AND status == "PASS" (and not explicitly deliverable=False)
+        # In all other cases (None, missing fields, deliverable=False, passed=False), is_deliverable must be False!
+        is_deliverable = False
+        if hasattr(acceptance_info, "deliverable"):
+            is_deliverable = bool(getattr(acceptance_info, "deliverable"))
+        elif isinstance(acceptance_info, dict) and "deliverable" in acceptance_info:
+            is_deliverable = bool(acceptance_info["deliverable"])
+        elif hasattr(acceptance_info, "passed") and hasattr(acceptance_info, "status"):
+            if bool(getattr(acceptance_info, "passed")) and getattr(acceptance_info, "status") == "PASS":
+                is_deliverable = getattr(acceptance_info, "deliverable", True)
+        elif isinstance(acceptance_info, dict) and "passed" in acceptance_info and "status" in acceptance_info:
+            if bool(acceptance_info["passed"]) and acceptance_info["status"] == "PASS":
+                is_deliverable = acceptance_info.get("deliverable", True)
+
+        if require_deliverable and not is_deliverable:
+            raise PermissionError(
+                f"Official engineering delivery blocked: deliverable is False (acceptance_status={status_val}). "
+                "Only runs with verified evidence and valid PASS acceptance can be released as official deliverables. "
+                "No report artifacts were written to disk."
+            )
+
+        delivery_mode = "official_delivery" if is_deliverable else "diagnostic_draft"
+
         target_dir = Path(output_dir)
         target_dir.mkdir(parents=True, exist_ok=True)
 
@@ -179,42 +212,14 @@ class DeterministicReportPipeline:
                 "case_id": case_id,
                 "language": language,
                 "sections": list(self.builder.determine_active_sections()),
+                "delivery_mode": delivery_mode,
+                "is_diagnostic_draft": not is_deliverable,
             },
         )
 
-        # 5. Extract critical metrics and deliverable authorization from acceptance/results for lean LLM card
-        status_val = "UNKNOWN"
-        if hasattr(acceptance_info, "status"):
-            status_val = getattr(acceptance_info, "status")
-        elif isinstance(acceptance_info, dict):
-            status_val = acceptance_info.get("status", "UNKNOWN")
-
-        # Strict deliverable authorization determination:
-        # Deliverable authorization is granted IF AND ONLY IF:
-        # 1. acceptance_info explicitly declares deliverable is True, OR
-        # 2. For legacy acceptance objects, it has passed is True AND status == "PASS" (and not explicitly deliverable=False)
-        # In all other cases (None, missing fields, deliverable=False, passed=False), is_deliverable must be False!
-        is_deliverable = False
-        if hasattr(acceptance_info, "deliverable"):
-            is_deliverable = bool(getattr(acceptance_info, "deliverable"))
-        elif isinstance(acceptance_info, dict) and "deliverable" in acceptance_info:
-            is_deliverable = bool(acceptance_info["deliverable"])
-        elif hasattr(acceptance_info, "passed") and hasattr(acceptance_info, "status"):
-            if bool(getattr(acceptance_info, "passed")) and getattr(acceptance_info, "status") == "PASS":
-                is_deliverable = getattr(acceptance_info, "deliverable", True)
-        elif isinstance(acceptance_info, dict) and "passed" in acceptance_info and "status" in acceptance_info:
-            if bool(acceptance_info["passed"]) and acceptance_info["status"] == "PASS":
-                is_deliverable = acceptance_info.get("deliverable", True)
-
-        if require_deliverable and not is_deliverable:
-            raise PermissionError(
-                f"Official engineering delivery blocked: deliverable is False (acceptance_status={status_val}). "
-                "Only runs with verified evidence and valid PASS acceptance can be released as official deliverables."
-            )
-
         delivery_card = ReportDeliveryCard(
             report_artifact_id=report_pointer.artifact_id,
-            report_title=title,
+            report_title=title if is_deliverable else f"[DIAGNOSTIC / NON-DELIVERABLE DRAFT] {title}",
             format="bilingual_html",
             location=report_pointer.location,
             acceptance_status=status_val,

@@ -2030,8 +2030,8 @@ For full requirements backlog, input/output schemas, anti-hallucination constrai
   - 任务：升级 `contracts/evidence.py` 验签与摘要算法，将 `metadata` 纳入规范化 SHA-256 摘要；加入 Layer 1 ODB 空文件与明文/脚本初筛探针；删除裸字典宽松放行分支。
   - 退出门禁：NEG-02/03/04/05 全部转绿，伪造字典与 JSON/脚本假 ODB 被确定性拦截为 RESULT_INVALID / EVIDENCE_CORRUPT。
 - [x] **阶段 P0-C：运行因果绑定与受控生产入口加固** `[CLOSED & QUALIFIED ✅]`
-  - 任务：封装并加固 `evaluate_production_acceptance()`；强制要求有效 `analysis_run`（禁止为 None）；严禁在缺失作业状态时虚构默认 `completed`；强制校验 `AnalysisRun.provenance.input_hash` 与 Manifest 中 `role="inp"` 工件的哈希强一致性；拦截未提交作业、探测作业与 `external_input` 外部结果注入。
-  - 退出门禁：覆盖缺失 AnalysisRun、缺失作业状态、缺失输入哈希、缺失 INP 工件、跨运行旧工件 (EVIDENCE_STALE)、输入哈希篡改 (EVIDENCE_TAMPERED) 全反例，全部确定性 fail-closed。
-- [x] **阶段 P0-D：交付出口封闭与报告管线默认强门禁收口** `[CLOSED & QUALIFIED ✅]`
-  - 任务：在报告管线 `DeterministicReportPipeline.build_and_render` 将 `require_deliverable` 默认值收紧为 `True`（默认强制拦截未授权交付）；严格要求 `is_deliverable` 必须由受控验收内核显式签发 `deliverable=True`，严禁隐式回退或通过宽松默认放行；`ReportDeliveryCard` 如实反映交付凭据；草稿与诊断副本必须显式声明 `require_deliverable=False` 走非正式路径。
-  - 退出门禁：27 项 P0 专项负例与反例测试全绿，全套测试套件 916/916 PASS 零回归；任何未获授权或字段残缺的结果被报告引擎确定性拦截为 PermissionError。
+  - 任务：封装并加固 `evaluate_production_acceptance()`；强制要求有效 `analysis_run`（禁止为 None）；严禁在缺失作业状态时虚构默认 `completed`；强制校验 `AnalysisRun.provenance.input_hash` 与 Manifest 中 `role="inp"` 工件的哈希强一致性；调用方传入的 `expected_input_hash` 仅作为额外约束，严禁覆盖运行记录哈希，冲突时判定为 `EVIDENCE_TAMPERED`；拦截未提交作业、探测作业与 `external_input` 外部结果注入。
+  - 退出门禁：覆盖缺失 AnalysisRun、缺失作业状态、缺失输入哈希、缺失 INP 工件、调用方参数覆盖攻击、跨运行旧工件 (EVIDENCE_STALE)、输入哈希篡改 (EVIDENCE_TAMPERED) 全反例，全部确定性 fail-closed。
+- [x] **阶段 P0-D：交付出口封闭与报告门禁前移收口** `[CLOSED & QUALIFIED ✅]`
+  - 任务：在报告管线 `DeterministicReportPipeline.build_and_render` 将交付授权检查前移至任何磁盘 I/O（动图、SVG、HTML 写入）之前，未授权交付彻底杜绝任何文件落盘泄露；`require_deliverable` 默认值收紧为 `True`；严格要求 `is_deliverable` 必须由受控验收内核显式签发 `deliverable=True`，严禁隐式回退或通过宽松默认放行；诊断与草稿副本强制标记 `[DIAGNOSTIC / NON-DELIVERABLE DRAFT]` 与 `delivery_mode="diagnostic_draft"`，彻底与正式交付物隔离。
+  - 退出门禁：31 项 P0 专项负例与反例测试全绿，全套测试套件 920/920 PASS 零回归；任何未获授权交付被报告引擎在磁盘写入前拦截为 PermissionError 且零文件残留。

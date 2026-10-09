@@ -847,17 +847,24 @@ def evaluate_production_acceptance(
         causal_blocked.append("missing_required_evidence")
         causal_evidence_errors.append("missing_required_evidence")
 
-    # 4. Input hash provenance binding check (Mandatory input hash and INP artifact)
-    eff_input_hash = expected_input_hash
-    if eff_input_hash is None and analysis_run is not None:
+    # 4. Input hash provenance binding check (AnalysisRun hash is authoritative; caller param cannot override)
+    run_input_hash = None
+    if analysis_run is not None:
         prov = getattr(analysis_run, "provenance", None)
         if prov is not None:
-            eff_input_hash = getattr(prov, "input_hash", None)
+            run_input_hash = getattr(prov, "input_hash", None)
 
-    if not eff_input_hash:
-        causal_failures.append("missing_input_hash")
-        causal_blocked.append("missing_input_hash")
+    if not run_input_hash:
+        causal_failures.append("missing_run_input_hash")
+        causal_blocked.append("missing_run_input_hash")
+        causal_evidence_errors.append("missing_run_input_hash")
         causal_evidence_errors.append("missing_input_hash")
+
+    if expected_input_hash and run_input_hash and expected_input_hash != run_input_hash:
+        err_msg = f"evidence_tampered:caller_input_hash_conflict:expected_{expected_input_hash}_but_run_has_{run_input_hash}"
+        causal_failures.append(err_msg)
+        causal_blocked.append(err_msg)
+        causal_evidence_errors.append(err_msg)
 
     if eff_manifest is not None:
         arts = getattr(eff_manifest, "artifacts", None)
@@ -881,10 +888,15 @@ def evaluate_production_acceptance(
             causal_failures.append("missing_inp_artifact")
             causal_blocked.append("missing_inp_artifact")
             causal_evidence_errors.append("missing_inp_artifact")
-        elif eff_input_hash:
+        else:
             inp_sha = getattr(inp_art, "sha256", None) or (inp_art.get("sha256") if isinstance(inp_art, dict) else None)
-            if inp_sha and inp_sha != eff_input_hash:
-                err_msg = f"evidence_tampered:input_hash_mismatch:expected_{eff_input_hash}_got_{inp_sha}"
+            if run_input_hash and inp_sha and inp_sha != run_input_hash:
+                err_msg = f"evidence_tampered:input_hash_mismatch:run_hash_{run_input_hash}_got_{inp_sha}"
+                causal_failures.append(err_msg)
+                causal_blocked.append(err_msg)
+                causal_evidence_errors.append(err_msg)
+            if expected_input_hash and inp_sha and inp_sha != expected_input_hash:
+                err_msg = f"evidence_tampered:input_hash_mismatch:caller_hash_{expected_input_hash}_got_{inp_sha}"
                 causal_failures.append(err_msg)
                 causal_blocked.append(err_msg)
                 causal_evidence_errors.append(err_msg)
@@ -960,14 +972,14 @@ def evaluate_production_acceptance(
 
         if str(res.result_validity) in ("EVIDENCE_TAMPERED", "EVIDENCE_CORRUPT", "EVIDENCE_STALE"):
             new_validity = res.result_validity
-        elif any("input_hash_mismatch" in e for e in causal_evidence_errors):
+        elif any("input_hash_mismatch" in e or "input_hash_conflict" in e for e in causal_evidence_errors):
             new_validity = ResultValidity("EVIDENCE_TAMPERED")
         elif any("evidence_stale" in e for e in causal_evidence_errors):
             new_validity = ResultValidity("EVIDENCE_STALE")
         elif any("solver_execution" in e for e in causal_evidence_errors) or str(res.result_validity) == "SOLVER_FAILED":
             new_validity = ResultValidity("SOLVER_FAILED")
         elif any(
-            any(k in e for k in ("missing_required_evidence", "missing_analysis_run", "missing_input_hash", "missing_inp_artifact", "extraction_lineage_missing"))
+            any(k in e for k in ("missing_required_evidence", "missing_analysis_run", "missing_input_hash", "missing_run_input_hash", "missing_inp_artifact", "extraction_lineage_missing"))
             for e in causal_evidence_errors
         ) or str(res.result_validity) == "INCOMPLETE":
             new_validity = ResultValidity("INCOMPLETE")

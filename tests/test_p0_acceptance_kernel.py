@@ -867,3 +867,153 @@ def test_p0_d_report_pipeline_rejects_empty_or_unauthorized_acceptance(tmp_path:
             results_info=(),
             acceptance_info={"status": "PASS"},  # No deliverable: True authorization
         )
+
+
+def test_p0_d_report_pipeline_early_gate_prevents_any_disk_write(tmp_path: Path):
+    """P0-D: Early gate blocks unauthorized delivery BEFORE writing any files to disk."""
+    pipeline = DeterministicReportPipeline()
+    out_dir = tmp_path / "report_no_leak_dir"
+
+    unauthorized_acc = AcceptanceResult(
+        passed=False,
+        criteria=(),
+        status="BLOCKED",
+        acceptance_status="BLOCKED",
+        result_validity="INCOMPLETE",
+        deliverable=False,
+        findings=AcceptanceFindings(blocked=("missing_mandatory_gate",)),
+    )
+
+    with pytest.raises(PermissionError, match="No report artifacts were written to disk"):
+        pipeline.build_and_render(
+            output_dir=out_dir,
+            title="Unwritten Report",
+            case_id="case_unwritten",
+            run_id="run_unwritten",
+            model_info={"max_mises_mpa": 100.0},
+            results_info=(),
+            acceptance_info=unauthorized_acc,
+            require_deliverable=True,
+        )
+
+    # Verify zero report artifacts or images leaked to disk
+    if out_dir.exists():
+        leaked_files = list(out_dir.glob("*"))
+        assert len(leaked_files) == 0, f"Leaked artifacts on disk after delivery block: {leaked_files}"
+
+
+def test_p0_d_report_pipeline_diagnostic_draft_mode_isolation(tmp_path: Path):
+    """P0-D: Diagnostic draft mode explicitly labels non-deliverable reports and isolates them from official delivery."""
+    pipeline = DeterministicReportPipeline()
+    out_dir = tmp_path / "report_diagnostic_dir"
+
+    failed_acc = AcceptanceResult(
+        passed=False,
+        criteria=(),
+        status="FAIL",
+        acceptance_status="FAIL",
+        result_validity="VALID",
+        deliverable=False,
+        findings=AcceptanceFindings(failures=("criteria_exceeded",)),
+    )
+
+    # Diagnostic mode allowed only when require_deliverable=False is explicitly passed
+    card, pointer, data = pipeline.build_and_render(
+        output_dir=out_dir,
+        title="Flange Failure Investigation",
+        case_id="case_diag",
+        run_id="run_diag",
+        model_info={"max_mises_mpa": 450.0},
+        results_info=(),
+        acceptance_info=failed_acc,
+        require_deliverable=False,
+    )
+
+    assert card.deliverable is False
+    assert "[DIAGNOSTIC / NON-DELIVERABLE DRAFT]" in card.report_title
+    assert pointer.metadata["delivery_mode"] == "diagnostic_draft"
+    assert pointer.metadata["is_diagnostic_draft"] is True
+
+
+def test_p0_c_production_acceptance_rejects_caller_overriding_run_input_hash(tmp_path: Path):
+    """P0-C: Caller cannot override AnalysisRun input_hash with conflicting expected_input_hash."""
+    files = _create_standard_mock_artifacts(tmp_path, "p0_c_override")
+    manifest = build_evidence_manifest_v2(
+        run_id="p0_c_override",
+        case_id="case_override",
+        artifacts_dir=str(tmp_path),
+        artifact_filenames=files,
+    )
+    inp_sha = manifest.artifacts["Job_p0_c_override.inp"].sha256
+
+    run = AnalysisRun(
+        id="p0_c_override",
+        model_name="Model_Override",
+        job_name="Job_p0_c_override",
+        state=AnalysisRunState.COMPLETED,
+        job_status=JobStatus(name="Job_p0_c_override", state=JobState.COMPLETED),
+        odb_path=str(tmp_path / "Job_p0_c_override.odb"),
+        provenance=AnalysisProvenance(
+            run_id="p0_c_override",
+            model_name="Model_Override",
+            job_name="Job_p0_c_override",
+            input_hash=inp_sha,  # Authentic run provenance hash
+        ),
+        metrics=(EngineeringMetric(name="max_mises", value=150.0, unit="MPa"),),
+    )
+
+    # Caller attempts to supply conflicting expected_input_hash
+    res = evaluate_production_acceptance(
+        run,
+        expected_input_hash="f" * 64,  # Conflicting hash!
+        evidence_manifest=manifest,
+        base_dir=str(tmp_path),
+        criteria=[{"name": "mises", "value_key": "max_mises", "operator": "<=", "limit": 200.0}],
+    )
+
+    assert res.acceptance_status == "RESULT_INVALID"
+    assert res.result_validity == "EVIDENCE_TAMPERED"
+    assert res.deliverable is False
+    assert any("caller_input_hash_conflict" in e for e in res.findings.evidence_errors)
+
+
+def test_p0_c_production_acceptance_run_hash_tampered_even_if_caller_provides_matching_expected_hash(tmp_path: Path):
+    """P0-C: If AnalysisRun provenance hash is tampered, caller providing manifest hash still fails."""
+    files = _create_standard_mock_artifacts(tmp_path, "p0_c_tampered_run")
+    manifest = build_evidence_manifest_v2(
+        run_id="p0_c_tampered_run",
+        case_id="case_tampered_run",
+        artifacts_dir=str(tmp_path),
+        artifact_filenames=files,
+    )
+    inp_sha = manifest.artifacts["Job_p0_c_tampered_run.inp"].sha256
+
+    run = AnalysisRun(
+        id="p0_c_tampered_run",
+        model_name="Model_TamperedRun",
+        job_name="Job_p0_c_tampered_run",
+        state=AnalysisRunState.COMPLETED,
+        job_status=JobStatus(name="Job_p0_c_tampered_run", state=JobState.COMPLETED),
+        odb_path=str(tmp_path / "Job_p0_c_tampered_run.odb"),
+        provenance=AnalysisProvenance(
+            run_id="p0_c_tampered_run",
+            model_name="Model_TamperedRun",
+            job_name="Job_p0_c_tampered_run",
+            input_hash="9" * 64,  # Tampered provenance hash!
+        ),
+        metrics=(EngineeringMetric(name="max_mises", value=150.0, unit="MPa"),),
+    )
+
+    # Caller passes the true manifest inp_sha, but AnalysisRun provenance is tampered
+    res = evaluate_production_acceptance(
+        run,
+        expected_input_hash=inp_sha,
+        evidence_manifest=manifest,
+        base_dir=str(tmp_path),
+        criteria=[{"name": "mises", "value_key": "max_mises", "operator": "<=", "limit": 200.0}],
+    )
+
+    assert res.acceptance_status == "RESULT_INVALID"
+    assert res.result_validity == "EVIDENCE_TAMPERED"
+    assert res.deliverable is False
+    assert any("caller_input_hash_conflict" in e or "input_hash_mismatch" in e for e in res.findings.evidence_errors)
