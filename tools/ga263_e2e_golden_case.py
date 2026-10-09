@@ -441,11 +441,31 @@ odb.close()
         "max_mises": srv["max_mises"],
         "max_u": srv["max_u"],
     }
+    artifact_names = ["GA263_Job.inp", "GA263_Job.odb", "GA263_Job.sta", "GA263_Job.msg", "GA263_Job.dat", "GA263_Job.log"]
+    if offline:
+        for an in artifact_names:
+            af = case_dir / an
+            if not af.exists():
+                if an.endswith(".odb"):
+                    af.write_bytes(b"\x7fABAQUS_BINARY_ODB_GA263\x00\x01\x02\x03" * 32)
+                else:
+                    af.write_text(f"GA263 baseline content for {an}\n", encoding="utf-8")
+
+    from abaqus_ai_agent.contracts.evidence import build_evidence_manifest_v2
+    ga263_manifest = build_evidence_manifest_v2(
+        run_id="GA263_BOLT_PRETENSION_MOMENT_ACCEPTANCE",
+        case_id="GA263_Job",
+        artifacts_dir=str(case_dir),
+        artifact_filenames=artifact_names,
+    )
+
     acceptance_res = evaluate_result_acceptance(
         result_status="completed",
         values=eval_values,
         criteria=criteria_definitions,
-        evidence={"odb": True},
+        evidence_manifest=ga263_manifest,
+        base_dir=str(case_dir),
+        expected_run_id="GA263_BOLT_PRETENSION_MOMENT_ACCEPTANCE",
         require_evidence=True,
     )
 

@@ -1961,3 +1961,77 @@ For full requirements backlog, input/output schemas, anti-hallucination constrai
 - **P1.5 Commercial Engineering Workbench (Web / Desktop UI) [PLANNED]**:
   - Interactive 3D WebGL viewport picking and visual HITL confirmation cards.
   - Enterprise job queue, token license management, and case memory.
+
+---
+
+## 27. Phase P0: 验收安全内核与证据闭环实施路线 (P0 Implementation Roadmap)
+
+*基线冻结时间：2026-10-09 | 状态：FROZEN & APPROVED AS P0 BASELINE*
+
+针对全系统“求解真实性、物理可信度、报告忠实呈现”三层闭环的真实性治理，系统确立 P0 安全内核。严禁另起炉灶或重复建设子系统，坚决复用既有架构（`AnalysisRun`, `acceptance.py`, `EvidenceManifestV2`, `DeterministicReportPipeline`）。
+
+### 27.1 核心工程原则与三大不可违反约束
+
+1. **原则一：测试通过不等于工程通过**（算法单测环境与正式工程交付物理隔离）。
+2. **原则二：哈希正确不等于来源真实**（SHA-256 仅防篡改脱节，不作为真实 Abaqus 物理机求解发生证明）。
+3. **原则三：真实工件必须追溯到真实执行**（受控进程记录、输入哈希、原生二进制 ODB、步帧字段提取相互印证）。
+4. **原则四：正式报告不能自行补造工程证据**（缺真实云图则阻断签发正式报告，严禁占位图冒充 CAE 计算结果）。
+
+**三大实施期硬性技术约束**：
+- **约束 1（摘要校验确定性）**：`audit_signature` 作为“规范化完整性自校验摘要 (Normalized Integrity Digest)”，必须具备无二义性的规范化 JSON 序列化规则、稳定排序、明确排除自身字段的递归哈希计算。空摘要、摘要不符与结构残缺必须明确区分。明确声明其不具备身份认证能力，不作为真实求解凭据。
+- **约束 2（状态合成唯一内核计算）**：可信证据确认力学超标且伴随门禁缺失时，状态绝对优先保留为 `FAIL`，同时完整记录所有 `blocked` 项；数据源不可信时，严禁推导物理 `FAIL`。`deliverable` 仅由验收内核独立计算，任何调用方严禁擅自传参置 `True`。
+- **约束 3（全仓零绕过可验证定义）**：全面封堵 `require_evidence=False`，同时报告渲染、交付卡签发、工件归档等所有出口全部前置 `deliverable is True` 校验。正式报告与诊断副本严格分离。
+
+### 27.2 四维正交判定模型与状态合成决策表
+
+验收输出解耦为独立正交字段：
+- `acceptance_status`: `PASS` | `FAIL` | `BLOCKED` | `RESULT_INVALID`
+- `result_validity`: `VALID` | `INCOMPLETE` | `EVIDENCE_STALE` | `EVIDENCE_TAMPERED` | `EVIDENCE_CORRUPT`
+- `deliverable`: 仅当 `acceptance_status == "PASS"` 且 `result_validity == "VALID"` 时为 `True`
+- `findings`: `AcceptanceFindings(failures, blocked, evidence_errors, warnings, missing_gates)` 永久保留全部独立事实明细
+
+| 场景 | result_validity | criteria (力学判据) | gates (门禁执行) | acceptance_status | deliverable | 工程语义与裁决逻辑 |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| **S1** | `VALID` | 存在超标判据 | 必需门禁全部满足 | **`FAIL`** | **False** | 真实求解，数据有效，物理力学破坏 |
+| **S2** | `VALID` | 存在超标判据 | 存在缺失/受阻门禁 | **`FAIL`** | **False** | **物理失败绝对优先**：保留 `FAIL` 事实，同时将缺失门禁记入 `blocked`，禁止被掩盖为 BLOCKED |
+| **S3** | `VALID` | 全部数值合格 | 存在必需门禁受阻/缺失/跳过 | **`BLOCKED`** | **False** | 数据有效，但前置条件不全或必需门禁缺失（含必需项 `SKIPPED`），无法得出合格结论 |
+| **S4** | `VALID` | 全部数值合格 | 必需门禁全部有效 PASS | **`PASS`** | **True** | **唯一合法正式交付状态**：真实物理全链路闭环通过 |
+| **S5** | `INCOMPLETE` | 未评估 / 不全 | 缺少必需证据清单 | **`BLOCKED`** | **False** | 缺少必要证据输入 |
+| **S6** | `EVIDENCE_STALE` | 无法作为依据 | Run ID 不匹配 / 跨任务混用 | **`RESULT_INVALID`** | **False** | 工件脱节或使用旧任务数据，拒绝推导任何力学结论 |
+| **S7** | `EVIDENCE_TAMPERED`| 无法作为依据 | 单比特哈希不匹配 / 摘要不符 | **`RESULT_INVALID`** | **False** | 工件被篡改或损坏 |
+| **S8** | `EVIDENCE_CORRUPT` | 无法作为依据 | 假 ODB (JSON) / 裸字典冒充 | **`RESULT_INVALID`** | **False** | 严重违背证据契约，直接定性为数据无效与破坏 |
+
+### 27.3 四级渐进证据验证契约
+
+- **Layer 1（初筛拦截）**：对 `role="odb"` 工件执行文本探测，若为 JSON 或明文脚本直接拦截为 `EVIDENCE_CORRUPT`（初筛通过 $\ne$ 合法 ODB）。
+- **Layer 2（自校验摘要）**：生产模式下 `audit_signature` 必填且严格自校验；检测工件脱节与局部篡改。
+- **Layer 3（运行因果绑定）**：验证 `AnalysisRun.run_id == EvidenceManifestV2.run_id == 提取上下文.run_id`，校验实际求解 INP 输入哈希，核验受控进程退出状态凭据。
+- **Layer 4（物理场语义提取）**：通过受支持的解析工具实际打开 ODB，验证 Step / Frame / Field / Component 存在性，物理数值由提取器直传内核。
+
+### 27.4 八项反例测试矩阵 (TDD 驱动基准)
+
+| 用例 ID | 注入场景与行为 | 预期 status | 预期 validity | 预期 deliverable | 核心断言与错误标识 |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **`NEG-P0-01`** | **混合状态：应力超标 + 必需门禁缺失** | **`FAIL`** | **`VALID`** | **False** | `"criteria_exceeded" in res.findings.failures`<br>`"missing_mandatory_gate" in res.findings.blocked` |
+| **`NEG-P0-02`** | **假工件：JSON 文本伪造 `.odb`** | **`RESULT_INVALID`** | **`EVIDENCE_CORRUPT`** | **False** | `"corrupt_artifact:odb_is_plaintext_json" in res.findings.evidence_errors` |
+| **`NEG-P0-03`** | **空白摘要：`audit_signature=""`** | **`RESULT_INVALID`** | **`INCOMPLETE`** | **False** | `"evidence_unsigned:manifest_audit_signature_missing" in res.findings.evidence_errors` |
+| **`NEG-P0-04`** | **裸字典冒充正式凭证** | **`RESULT_INVALID`** | **`EVIDENCE_CORRUPT`** | **False** | `"unsupported_evidence_format:bare_dict_not_permitted" in res.findings.evidence_errors`<br>禁止赋 PASS |
+| **`NEG-P0-05`** | **单比特篡改：修改 `.sta` 1 个字节** | **`RESULT_INVALID`** | **`EVIDENCE_TAMPERED`** | **False** | `"evidence_tampered:sha256_mismatch" in res.findings.evidence_errors` |
+| **`NEG-P0-06`** | **执行虚假：仅 `abaqus help` 无作业记录** | **`RESULT_INVALID`** | **`INCOMPLETE`** | **False** | `"solver_execution:job_not_submitted" in res.findings.evidence_errors` |
+| **`NEG-P0-07`** | **跨任务混用：合法 ODB 但属跨运行工件** | **`RESULT_INVALID`** | **`EVIDENCE_STALE`** | **False** | `"evidence_stale:run_id_mismatch" in res.findings.evidence_errors` |
+| **`NEG-P0-08`** | **静默跳过：必需门禁为 `SKIPPED`** | **`BLOCKED`** | **`VALID`** | **False** | `"mandatory_gate_skipped" in res.findings.blocked`<br>禁止将整体验收定为 PASS |
+
+### 27.5 分阶段实施路线与退出门禁 (Exit Criteria)
+
+- **阶段 P0-A：状态语义、验收内核与反例驱动**
+  - 任务：编写 `NEG-P0-01` ~ `NEG-P0-08`（先红灯）；重构 `acceptance.py` 实现四维正交模型与 `AcceptanceFindings`；补充标准 PASS / 纯力学 FAIL / 纯证据无效 3 类基准单测。
+  - 退出门禁：NEG-01/08 转绿，无既有单测回归失败，物理超标确定性输出 FAIL 且 deliverable=False。
+- **阶段 P0-B：工件初筛探针与自校验摘要契约**
+  - 任务：升级 `contracts/evidence.py` 验签与摘要算法；加入 ODB 文本/JSON 初筛探针；彻底删除裸字典放行分支。
+  - 退出门禁：NEG-02/03/04/05 全部转绿，伪造字典与 JSON 假 ODB 被确定性拦截为 RESULT_INVALID。
+- **阶段 P0-C：运行因果绑定与受控生产入口**
+  - 任务：封装 `evaluate_production_acceptance()`；绑定 `AnalysisRun` 与 Manifest 运行标识、输入哈希与物理提取证据。
+  - 退出门禁：NEG-06/07 转绿，跨运行旧工件被确定性识别为 EVIDENCE_STALE。
+- **阶段 P0-D：交付出口封闭与全仓收口**
+  - 任务：在报告管线注入 `deliverable is True` 强断言；收口 Case 01~06 外部调用点；全仓清除生产路径证据绕过参数。
+  - 退出门禁：8 项负例与全套回归测试全绿；任何 deliverable=False 结果被报告引擎确定性拦截；真实 Abaqus 验证独立记载。

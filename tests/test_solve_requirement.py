@@ -1,5 +1,6 @@
 """Tests for P1.0: End-to-End Engineering Requirement Solver (Agent Product Main Entry)."""
 
+import os
 import pytest
 from abaqus_ai_agent.agent import AbaqusAIAgent
 from abaqus_ai_agent.contracts.capability import CapabilityStatus
@@ -15,9 +16,23 @@ class OdbBackedExecutor(AbaqusExecutor):
 
     def __init__(self):
         self.executed_scripts = []
+        self.workdir = None
 
     def execute(self, code, timeout=120):
         self.executed_scripts.append(code)
+        if self.workdir and os.path.isdir(self.workdir):
+            import re
+            m = re.search(r"Job_[a-zA-Z0-9_]+", code)
+            job_prefix = m.group(0) if m else "Job_REQ_E2E_STATIC"
+            for ext in ("inp", "odb", "sta", "msg", "dat", "log"):
+                p = os.path.join(self.workdir, f"{job_prefix}.{ext}")
+                if not os.path.exists(p):
+                    if ext == "odb":
+                        with open(p, "wb") as f:
+                            f.write(b"\x7fABAQUS_BINARY_ODB_MOCK\x00\x01\x02\x03" * 32)
+                    else:
+                        with open(p, "w", encoding="utf-8") as f:
+                            f.write(f"Mock {ext}\n")
         if "rootAssembly" in code:
             return {"steps": ["Step-1"], "instances": ["Part-1-1"], "step_frames": {"Step-1": 1}}
         if "odb.steps.keys()" in code:

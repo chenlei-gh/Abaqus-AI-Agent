@@ -6,11 +6,11 @@
   "report": {
     "format": "html",
     "path": "machine_validation/static_golden_engineering_report.html",
-    "bytes": 38979,
+    "bytes": 39585,
     "self_contained": true
   },
   "html_report_path": "machine_validation/static_golden_engineering_report.html",
-  "html_size_bytes": 38979,
+  "html_size_bytes": 39585,
   "metrics_reported_count": 3,
   "criteria_reported_count": 3,
   "acceptance_verdict": "PASS",

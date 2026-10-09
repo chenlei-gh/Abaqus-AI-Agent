@@ -452,18 +452,33 @@ P1.0 产品主入口已彻底消除高层自然语言需求与底层 20 个 L4 �
 
 ---
 
+### Phase P0: 验收安全内核与全系统真实性门禁 (Security & Grounding Kernel)
+
+| 需求编号 | 需求名称 | 归属模块 | 输入对象 / 触发条件 | 预期输出 / 行为定义 | 验证等级 | 异常与 Fail-Closed 边界 | 状态 |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| **REQ-P0-001** | 四维正交判定与力学失败绝对保留 | Phase P0-A | 提取指标字典、判据、门禁、证据状态 | `AcceptanceResult` 包含正交四维字段与 `AcceptanceFindings` | Tier A | 真实力学超标且伴随门禁缺失时，绝对保留 `FAIL` 事实并记录 `blocked` 项，禁止降级为 BLOCKED；证据不可信时不推导力学失败 | 📋 **FROZEN & PLANNED** |
+| **REQ-P0-002** | 规范化自校验摘要与 ODB 初筛探针 | Phase P0-B | `EvidenceManifestV2`、工件文件、`role="odb"` | 确定性规范化哈希摘要、非 JSON/明文二进制初筛 | Tier A | 缺失摘要判 `INCOMPLETE`；单比特篡改判 `EVIDENCE_TAMPERED`；假 ODB 或裸字典判 `EVIDENCE_CORRUPT` | 📋 **FROZEN & PLANNED** |
+| **REQ-P0-003** | 运行因果绑定与受控生产验收入口 | Phase P0-C | `AnalysisRun`、Manifest、求解器进程记录 | `evaluate_production_acceptance()` 受控验收凭据 | Tier A | 跨运行旧工件判 `EVIDENCE_STALE`；未实际提交求解作业（仅 `abaqus help`）判 `INCOMPLETE` 并拒绝验收 | 📋 **FROZEN & PLANNED** |
+| **REQ-P0-004** | 报告管线交付资格门禁与全仓零绕过 | Phase P0-D | `deliverable` 标识、报告渲染、交付卡 | 严格门禁断言：仅 `deliverable is True` 签发正式报告 | Tier A | `deliverable is False` 强行请求生成报告时阻断或强制加注“诊断副本/未通过”水印；全仓清除 `require_evidence=False` 绕过 | 📋 **FROZEN & PLANNED** |
+
+---
+
 ## 十、工程质量与防伪铁律（Engineering Redlines）
 
-在推进 Phase P1 商业产品化的全部过程中，全体智能体与开发团队必须绝对坚守以下四项铁律：
+在推进系统的全部过程中，全体智能体与开发团队必须绝对坚守以下六项铁律：
 
 1. **零伪造原则 (Zero Fabrication)**：
    严禁使用任何经验公式、模拟数据或虚构数值冒充真实求解器结果。所有物理数据必须由真实 Abaqus 2025 ODB 现场提取，并具备可验证的密码学 SHA-256 签名。
 2. **Fail-Closed 闭环原则**：
    在任何环节（参数缺失、拓扑无法解析、网格不合法、求解器发散、证据篡改），系统必须果断阻断并明确进入 `BLOCKED` / `NEEDS_CLARIFICATION` / `RESULT_INVALID`，绝不允许伪装成 `ACCEPTED`。
 3. **单一出口原则 (Single-Exit Acceptance)**：
-   外部输入、模型修饰、非标准动作脚本严禁直接触碰 `ACCEPTED` 状态。只有经由 `AnalysisRunner` $\to$ `preflight` $\to$ 真实 Abaqus 求解 $\to$ ODB 提取 $\to$ `EvidenceManifestV2` 验签 $\to$ `evaluate_result_acceptance`，才是通往工程合格裁决的唯一合法路径。
+   外部输入、模型修饰、非标准动作脚本严禁直接触碰 `ACCEPTED` 状态。只有经由 `AnalysisRunner` $\to$ `preflight` $\to$ 真实 Abaqus 求解 $\to$ ODB 提取 $\to$ `EvidenceManifestV2` 验签 $\to$ `evaluate_production_acceptance`，才是通往工程合格裁决的唯一合法路径。
 4. **范围诚实原则 (Stated Scope Precision)**：
    如实陈述已验证的边界。宣称“20 个物理领域 L4 认证”是指在各领域已声明的物理基准和工程契约范围内达到全链路闭环，严禁夸大为“无限制支持 Abaqus 全部几十万个关键词或任意复杂拓扑”。
+5. **四维正交与失败保留铁律**：
+   验收状态 (`acceptance_status`)、证据有效性 (`result_validity`)、交付资格 (`deliverable`) 与事实发现 (`findings`) 必须严格正交。已被证实超标的力学失效决不允许被阻断项掩盖；数据不可信时绝不从脏数据推导力学失效；`deliverable` 必须由统一验收内核计算，任何调用方严禁擅自置 `True`。
+6. **全仓交付出口全封闭铁律**：
+   所有正式工程报告、交付卡与导出管道必须严格校验 `deliverable is True`。算法单测入口永久标记为不可交付；未通过真实求解验证或必需门禁跳过的结果，严禁签发正式工程交付文件。
 
 ---
 

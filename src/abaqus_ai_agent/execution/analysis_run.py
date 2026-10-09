@@ -243,7 +243,7 @@ class AnalysisRunner:
             mesh_quality=None, mesh_convergence=None, fatigue=None, contact_diagnostics=None,
             connector_kinematics=None, fmbd_dynamics=None, sensitivity=None, uncertainty=None,
             timeout=3600, action_plan=(), environment=None, engineering_intent=None,
-            postprocess_profile=None, workdir=None, physics_domain=None):
+            postprocess_profile=None, workdir=None, physics_domain=None, require_evidence=None):
         run_id = str(uuid.uuid4())
         orig_executor_workdir = getattr(self.executor, "workdir", None)
         if not workdir:
@@ -586,6 +586,7 @@ class AnalysisRunner:
             else:
                 domain_to_eval = None
 
+            effective_require_evidence = require_evidence if require_evidence is not None else (True if result_source == "odb" else False)
             accepted = evaluate_result_acceptance(
                 result_status=status.state.value.lower(),
                 numerical=numerical_verification,
@@ -602,7 +603,7 @@ class AnalysisRunner:
                 evidence_manifest=run_manifest,
                 base_dir=art_dir if result_source == "odb" else None,
                 expected_run_id=run_id if result_source == "odb" else None,
-                require_evidence=True if result_source == "odb" else False,
+                require_evidence=effective_require_evidence,
                 physics_domain=domain_to_eval,
             )
             verification_evidence = []
@@ -744,9 +745,29 @@ def _collect_diagnostics(executor, job_name, workdir=None):
 def _collect_artifacts(executor, job_name, workdir=None):
     try:
         from .artifacts import inspect_job_artifacts
-        return inspect_job_artifacts(executor, job_name, workdir=workdir).items
+        items = inspect_job_artifacts(executor, job_name, workdir=workdir).items
+        if items and any(getattr(x, "exists", False) for x in items):
+            return items
     except Exception:
-        return ()
+        pass
+    if workdir and os.path.isdir(workdir):
+        from .artifacts import JobArtifact, DEFAULT_ARTIFACT_SUFFIXES
+        local_items = []
+        for sfx in DEFAULT_ARTIFACT_SUFFIXES:
+            p = os.path.join(workdir, job_name + sfx)
+            if os.path.exists(p):
+                st = os.stat(p)
+                local_items.append(JobArtifact(
+                    job_name=job_name,
+                    suffix=sfx,
+                    path=p,
+                    exists=True,
+                    size=st.st_size,
+                    modified_time=st.st_mtime,
+                ))
+        if local_items:
+            return tuple(local_items)
+    return ()
 
 
 def _normalize_action_plan(action_plan):

@@ -21,6 +21,25 @@ CANONICAL_GATE_ORDER = (
 )
 
 
+class ResultValidity(str):
+    """String subclass representing result validity while maintaining backward compatibility with RESULT_INVALID."""
+    def __eq__(self, other):
+        if str.__eq__(self, str(other)):
+            return True
+        if other == "RESULT_INVALID" and str(self) in (
+            "RESULT_INVALID",
+            "EVIDENCE_TAMPERED",
+            "EVIDENCE_CORRUPT",
+            "EVIDENCE_STALE",
+            "INCOMPLETE",
+        ):
+            return True
+        return False
+
+    def __hash__(self):
+        return str.__hash__(self)
+
+
 @dataclass(frozen=True)
 class CriterionResult:
     name: str
@@ -33,27 +52,41 @@ class CriterionResult:
 
 
 @dataclass(frozen=True)
+class AcceptanceFindings:
+    failures: tuple = ()
+    blocked: tuple = ()
+    evidence_errors: tuple = ()
+    warnings: tuple = ()
+    missing_gates: tuple = ()
+
+
+@dataclass(frozen=True)
 class AcceptanceResult:
     passed: bool
     criteria: tuple
     failures: tuple = ()
     warnings: tuple = ()
-    status: str = "PASS"  # PASS, WARNING, FAIL, BLOCKED
+    status: str = "PASS"  # PASS, WARNING, FAIL, BLOCKED, RESULT_INVALID
     blocked: tuple = ()
     gates: Dict[str, Any] = field(default_factory=dict)
     gate_justifications: Dict[str, str] = field(default_factory=dict)
     missing_required_metrics: tuple = ()
     missing_required_gates: tuple = ()
     missing_required_fields: tuple = ()
-    result_validity: str = "VALID"  # VALID, RESULT_INVALID, SOLVER_FAILED, CRITERIA_FAILED
+    result_validity: str = "VALID"  # VALID, RESULT_INVALID, SOLVER_FAILED, CRITERIA_FAILED, EVIDENCE_TAMPERED, EVIDENCE_CORRUPT, EVIDENCE_STALE, INCOMPLETE
     audit_summary: str = ""
     odb_status: str = "valid"
     evidence_status: str = "NOT_SPECIFIED"  # VALID, TAMPERED, INCOMPLETE, STALE, MISSING, NOT_SPECIFIED
+    acceptance_status: str = "PASS"  # Decoupled acceptance status: PASS | FAIL | BLOCKED | RESULT_INVALID
+    deliverable: bool = False  # Strictly True iff acceptance_status == "PASS" and result_validity == "VALID"
+    findings: AcceptanceFindings = field(default_factory=AcceptanceFindings)
 
     def to_dict(self) -> Dict[str, Any]:
         return {
             "passed": self.passed,
             "status": self.status,
+            "acceptance_status": self.acceptance_status,
+            "deliverable": self.deliverable,
             "result_validity": self.result_validity,
             "audit_summary": self.audit_summary,
             "odb_status": self.odb_status,
@@ -66,6 +99,13 @@ class AcceptanceResult:
             "missing_required_fields": list(self.missing_required_fields),
             "gates": dict(self.gates),
             "gate_justifications": dict(self.gate_justifications),
+            "findings": {
+                "failures": list(self.findings.failures),
+                "blocked": list(self.findings.blocked),
+                "evidence_errors": list(self.findings.evidence_errors),
+                "warnings": list(self.findings.warnings),
+                "missing_gates": list(self.findings.missing_gates),
+            },
             "criteria": [
                 {
                     "name": c.name,
@@ -131,12 +171,15 @@ def evaluate_criteria(values, criteria, required_keys: Optional[Sequence[str]] =
         if not passed:
             failures.append(item)
 
-    # Derive deterministic status
-    if blocked:
-        status = "BLOCKED"
+    # Derive deterministic status: physical failures take absolute precedence
+    if failures and blocked:
+        status = "FAIL"
         passed = False
     elif failures:
         status = "FAIL"
+        passed = False
+    elif blocked:
+        status = "BLOCKED"
         passed = False
     elif warnings:
         status = "WARNING"
@@ -145,6 +188,12 @@ def evaluate_criteria(values, criteria, required_keys: Optional[Sequence[str]] =
         status = "PASS"
         passed = True
 
+    failure_names = tuple(f.name if hasattr(f, "name") else str(f) for f in failures)
+    findings = AcceptanceFindings(
+        failures=failure_names,
+        blocked=tuple(blocked),
+        warnings=tuple(warnings),
+    )
     all_failures = tuple(failures) + tuple(blocked)
     return AcceptanceResult(
         passed=passed,
@@ -153,6 +202,9 @@ def evaluate_criteria(values, criteria, required_keys: Optional[Sequence[str]] =
         warnings=tuple(warnings),
         status=status,
         blocked=tuple(blocked),
+        acceptance_status=status,
+        deliverable=(status == "PASS"),
+        findings=findings,
     )
 
 
@@ -179,6 +231,7 @@ def evaluate_result_acceptance(result_status, numerical=None, engineering=None,
     failures = []
     warnings = []
     blocked = []
+    evidence_errors = []
     gates = {}
     missing_required_gates = []
     missing_required_metrics = []
@@ -217,6 +270,8 @@ def evaluate_result_acceptance(result_status, numerical=None, engineering=None,
     if result_status != "completed":
         failures.append("solver_status:%s" % result_status)
         blocked.append("solver_not_completed:%s" % result_status)
+        if result_status in ("unsubmitted", "probe_only"):
+            evidence_errors.append("solver_execution:job_not_submitted")
         gates["execution"] = "FAIL"
     else:
         gates["execution"] = "PASS"
@@ -241,10 +296,6 @@ def evaluate_result_acceptance(result_status, numerical=None, engineering=None,
     else:
         gates["odb"] = "PASS" if result_status == "completed" else "NOT_SPECIFIED"
 
-    # Gate 3: Evidence Sufficiency Gate
-    manifest_target = evidence_manifest if evidence_manifest is not None else evidence
-    evidence_status = "NOT_SPECIFIED"
-
     def _is_v2_manifest(target):
         if target is None:
             return False
@@ -256,6 +307,13 @@ def evaluate_result_acceptance(result_status, numerical=None, engineering=None,
         ):
             return True
         return False
+
+    # Gate 3: Evidence Sufficiency Gate
+    manifest_target = evidence_manifest
+    if manifest_target is None and evidence is not None:
+        if _is_v2_manifest(evidence) or isinstance(evidence, dict):
+            manifest_target = evidence
+    evidence_status = "NOT_SPECIFIED"
 
     if manifest_target is not None:
         if _is_v2_manifest(manifest_target):
@@ -273,6 +331,7 @@ def evaluate_result_acceptance(result_status, numerical=None, engineering=None,
                 gates["evidence_sufficiency"] = "FAIL"
                 failures.extend(verif_rep.failures)
                 blocked.extend(verif_rep.failures)
+                evidence_errors.extend(verif_rep.failures)
             else:
                 gates["evidence_sufficiency"] = "PASS"
         elif isinstance(manifest_target, dict) and (
@@ -286,16 +345,21 @@ def evaluate_result_acceptance(result_status, numerical=None, engineering=None,
             rep_failures = verif_rep.failures or ("unsupported_legacy_manifest:schema_v1_deprecated_for_rc",)
             failures.extend(rep_failures)
             blocked.extend(rep_failures)
+            evidence_errors.extend(rep_failures)
             evidence_status = verif_rep.validity or "INVALID"
-        elif getattr(manifest_target, "validity", None) == "VALID":
-            gates["evidence_sufficiency"] = "PASS"
-            evidence_status = "VALID"
-        elif evidence or evidence_manifest:
-            gates["evidence_sufficiency"] = "PASS"
-            evidence_status = "VALID"
+        else:
+            # Bare unvalidated dictionary or unsupported evidence format: FAIL CLOSED
+            err = "unsupported_evidence_format:bare_dict_not_permitted"
+            failures.append(err)
+            blocked.append(err)
+            evidence_errors.append(err)
+            gates["evidence_sufficiency"] = "FAIL"
+            evidence_status = "EVIDENCE_CORRUPT"
     elif require_evidence or "evidence_sufficiency" in effective_required_gates:
-        failures.append("missing_required_evidence")
-        blocked.append("missing_required_evidence")
+        err = "missing_required_evidence"
+        failures.append(err)
+        blocked.append(err)
+        evidence_errors.append(err)
         gates["evidence_sufficiency"] = "BLOCKED"
         missing_required_gates.append("evidence_sufficiency")
         evidence_status = "MISSING"
@@ -402,8 +466,9 @@ def evaluate_result_acceptance(result_status, numerical=None, engineering=None,
             gates["contact"] = "PASS"
     elif "contact" in effective_required_gates:
         gates["contact"] = "BLOCKED"
-        failures.append("missing_mandatory_gate:contact")
-        blocked.append("missing_mandatory_gate:contact")
+        err = "missing_mandatory_gate:contact_diagnostics"
+        failures.append(err)
+        blocked.append(err)
         missing_required_gates.append("contact")
     else:
         gates["contact"] = "SKIPPED"
@@ -554,31 +619,81 @@ def evaluate_result_acceptance(result_status, numerical=None, engineering=None,
     else:
         gates["fmbd_dynamics"] = "SKIPPED"
 
-    # Status & Result Validity Synthesis
-    if missing_required_metrics or missing_required_fields or missing_required_gates or gates.get("evidence_sufficiency") in ("FAIL", "BLOCKED"):
-        result_validity = "RESULT_INVALID"
-    elif blocked:
-        if result_status == "completed":
-            result_validity = "RESULT_INVALID"
-        else:
-            result_validity = "SOLVER_FAILED"
-    elif failures:
-        result_validity = "CRITERIA_FAILED"
-    else:
-        result_validity = "VALID"
+    # Status & Result Validity & Deliverability Synthesis (S1 ~ S8)
+    criteria_failed = any(not item.passed for item in criteria_result.criteria)
+    physical_criteria_failed = criteria_failed or any(
+        ("failed" in f or "exceeded" in f or "violation" in f or "limit" in f)
+        and not f.startswith("missing_")
+        and not f.startswith("solver_")
+        and not f.startswith("unsupported_")
+        and not f.startswith("evidence_")
+        and not f.startswith("corrupt_")
+        for f in failures
+    )
 
-    if blocked:
+    if evidence_status in ("TAMPERED", "EVIDENCE_TAMPERED"):
+        acceptance_status = "RESULT_INVALID"
+        result_validity = ResultValidity("EVIDENCE_TAMPERED")
+        passed = False
+        deliverable = False
         status = "BLOCKED"
+    elif evidence_status in ("CORRUPT", "EVIDENCE_CORRUPT"):
+        acceptance_status = "RESULT_INVALID"
+        result_validity = ResultValidity("EVIDENCE_CORRUPT")
         passed = False
-    elif failures:
+        deliverable = False
+        status = "BLOCKED"
+    elif evidence_status in ("STALE", "EVIDENCE_STALE"):
+        acceptance_status = "RESULT_INVALID"
+        result_validity = ResultValidity("EVIDENCE_STALE")
+        passed = False
+        deliverable = False
+        status = "BLOCKED"
+    elif evidence_status in ("INCOMPLETE", "EVIDENCE_INCOMPLETE"):
+        acceptance_status = "RESULT_INVALID"
+        result_validity = ResultValidity("INCOMPLETE")
+        passed = False
+        deliverable = False
+        status = "BLOCKED"
+    elif result_status not in ("completed",):
+        acceptance_status = "RESULT_INVALID" if result_status in ("unsubmitted", "probe_only") else "BLOCKED"
+        result_validity = ResultValidity("SOLVER_FAILED")
+        passed = False
+        deliverable = False
+        status = "BLOCKED"
+    elif physical_criteria_failed:
+        # S1 & S2: Valid evidence confirmed physical failure!
+        # Physical failure takes absolute precedence over missing gates (never masked by BLOCKED)
+        acceptance_status = "FAIL"
+        result_validity = ResultValidity("VALID")
+        passed = False
+        deliverable = False
         status = "FAIL"
+    elif blocked or missing_required_metrics or missing_required_fields or missing_required_gates:
+        # S3 / S5: Missing mandatory gates or prerequisites blocks acceptance while data itself remains VALID
+        acceptance_status = "BLOCKED"
+        if missing_required_metrics or missing_required_fields:
+            result_validity = ResultValidity("RESULT_INVALID")
+        elif evidence_status == "MISSING":
+            result_validity = ResultValidity("INCOMPLETE")
+        else:
+            result_validity = ResultValidity("VALID")
         passed = False
+        deliverable = False
+        status = "BLOCKED"
     elif warnings:
+        acceptance_status = "WARNING"
+        result_validity = ResultValidity("VALID")
+        passed = True
+        deliverable = False
         status = "WARNING"
-        passed = True
     else:
-        status = "PASS"
+        # S4: Golden Pass
+        acceptance_status = "PASS"
+        result_validity = ResultValidity("VALID")
         passed = True
+        deliverable = True
+        status = "PASS"
 
     # Deterministic Audit Summary Line
     s_part = "PASS" if result_status == "completed" else "FAIL"
@@ -596,6 +711,14 @@ def evaluate_result_acceptance(result_status, numerical=None, engineering=None,
         if g_key not in ordered_gates:
             ordered_gates[g_key] = g_val
 
+    findings = AcceptanceFindings(
+        failures=tuple(failures),
+        blocked=tuple(blocked),
+        evidence_errors=tuple(evidence_errors),
+        warnings=tuple(warnings),
+        missing_gates=tuple(missing_required_gates),
+    )
+
     return AcceptanceResult(
         passed=passed,
         criteria=criteria_result.criteria,
@@ -612,4 +735,7 @@ def evaluate_result_acceptance(result_status, numerical=None, engineering=None,
         audit_summary=audit_summary,
         odb_status=effective_odb_status,
         evidence_status=evidence_status,
+        acceptance_status=acceptance_status,
+        deliverable=deliverable,
+        findings=findings,
     )

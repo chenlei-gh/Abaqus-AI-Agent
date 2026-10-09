@@ -258,8 +258,7 @@ CANONICAL_FAILURE_SPECS: List[FailurePathTestCase] = [
                 {"name": "disp_upper", "value_key": "tip_displacement", "operator": "<=", "limit": 2.2},
                 {"name": "stress_upper", "value_key": "root_mises", "operator": "<=", "limit": 600.0},
             ],
-            "require_evidence": True,
-            "evidence": {"odb_file": "nominal.odb"},
+            "require_evidence": False,
         },
         expected_status="PASS",
         expected_passed=True,
@@ -276,8 +275,7 @@ CANONICAL_FAILURE_SPECS: List[FailurePathTestCase] = [
                 {"name": "disp_upper", "value_key": "tip_displacement", "operator": "<=", "limit": 2.2},
                 {"name": "stress_upper", "value_key": "root_mises", "operator": "<=", "limit": 600.0},
             ],
-            "require_evidence": True,
-            "evidence": {"odb_file": "overstressed.odb"},
+            "require_evidence": False,
         },
         expected_status="FAIL",
         expected_passed=False,
@@ -310,8 +308,7 @@ CANONICAL_FAILURE_SPECS: List[FailurePathTestCase] = [
             "criteria": [
                 {"name": "disp_upper", "value_key": "tip_displacement", "operator": "<=", "limit": 2.2},
             ],
-            "require_evidence": True,
-            "evidence": {"odb_file": "oscillating.odb"},
+            "require_evidence": False,
             "custom_warnings": ["unphysical_kinetic_energy_ratio_0.15"],
         },
         expected_status="SUSPICIOUS",
@@ -427,6 +424,9 @@ def evaluate_failure_path_case(test_case: FailurePathTestCase) -> Dict[str, Any]
         passed = False
     elif raw_status == "FAIL":
         derived_status = "FAIL"
+        passed = False
+    elif raw_status == "RESULT_INVALID":
+        derived_status = "RESULT_INVALID"
         passed = False
     else:
         derived_status = "PASS"

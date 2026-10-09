@@ -61,6 +61,7 @@ def _run(result_values=True, **kwargs):
             "model_name": "Model",
             "job_name": "Job",
             "criteria": ({"value_key": "tip_displacement", "operator": "<=", "limit": 1.0},),
+            "require_evidence": False,
         }
         if result_values is not False:
             call["result_values"] = {"tip_displacement": 0.5}

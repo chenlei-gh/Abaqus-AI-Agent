@@ -291,7 +291,19 @@ def test_solve_requirement_delivers_result_intelligence():
     from abaqus_ai_agent.planning.compiler import IntentGeometrySpec
 
     class MockOdbExecutor(AbaqusExecutor):
+        workdir = None
+
         def execute(self, code, timeout=120):
+            if self.workdir and os.path.isdir(self.workdir):
+                for ext in ("inp", "odb", "sta", "msg", "dat", "log"):
+                    p = os.path.join(self.workdir, f"Job_REQ_P1_3_E2E.{ext}")
+                    if not os.path.exists(p):
+                        if ext == "odb":
+                            with open(p, "wb") as f:
+                                f.write(b"\x7fABAQUS_BINARY_ODB_MOCK\x00\x01\x02\x03" * 32)
+                        else:
+                            with open(p, "w", encoding="utf-8") as f:
+                                f.write(f"Mock {ext}\n")
             if "rootAssembly" in code:
                 return {"steps": ["Step-1"], "instances": ["Part-1-1"], "step_frames": {"Step-1": 1}}
             if "fo=" in code:

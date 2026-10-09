@@ -413,8 +413,13 @@ def verify_evidence_integrity(
 
     # 1. Cryptographic Audit Signature Check
     sig_valid = True
-    if check_signature and manifest_obj.audit_signature:
-        if not manifest_obj.verify_signature():
+    if check_signature:
+        if not manifest_obj.audit_signature:
+            sig_valid = False
+            failures.append("evidence_unsigned:manifest_audit_signature_missing")
+            if current_validity == "VALID":
+                current_validity = "INCOMPLETE"
+        elif not manifest_obj.verify_signature():
             sig_valid = False
             failures.append("evidence_tampered:manifest_signature_mismatch")
             current_validity = "TAMPERED"
@@ -485,8 +490,20 @@ def verify_evidence_integrity(
                 "actual_sha256": live_sha,
                 "matched": matched,
             }
+            # Layer 1 Probe: Plaintext JSON mock detection for ODB artifacts
+            if art.role == "odb":
+                try:
+                    with open(p, "rb") as bf:
+                        sample = bf.read(128).strip()
+                    if sample.startswith(b"{") or sample.startswith(b"["):
+                        failures.append(f"corrupt_artifact:odb_is_plaintext_json:{name}")
+                        current_validity = "EVIDENCE_CORRUPT"
+                except Exception:
+                    pass
+
             if not matched:
                 tampered_artifacts.append(name)
+                failures.append(f"evidence_tampered:sha256_mismatch:{name}")
                 failures.append(f"evidence_tampered:hash_mismatch:{name}")
                 current_validity = "TAMPERED"
 
