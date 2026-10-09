@@ -79,7 +79,7 @@ class DeterministicReportPipeline:
         loads_info: Sequence[Dict[str, Any]] = (),
         bcs_info: Sequence[Dict[str, Any]] = (),
         mesh_info: Optional[Dict[str, Any]] = None,
-        require_deliverable: bool = False,
+        require_deliverable: bool = True,
     ) -> Tuple[ReportDeliveryCard, ArtifactPointer, EngineeringReportData]:
         """Compile report, render HTML & Markdown, register artifacts, and produce LLM card."""
         target_dir = Path(output_dir)
@@ -183,19 +183,28 @@ class DeterministicReportPipeline:
         )
 
         # 5. Extract critical metrics and deliverable authorization from acceptance/results for lean LLM card
-        status_val = "PASS"
+        status_val = "UNKNOWN"
         if hasattr(acceptance_info, "status"):
             status_val = getattr(acceptance_info, "status")
         elif isinstance(acceptance_info, dict):
-            status_val = acceptance_info.get("status", "PASS")
+            status_val = acceptance_info.get("status", "UNKNOWN")
 
-        is_deliverable = getattr(acceptance_info, "deliverable", None)
-        if is_deliverable is None and hasattr(acceptance_info, "passed"):
-            is_deliverable = bool(acceptance_info.passed)
-        elif is_deliverable is None and isinstance(acceptance_info, dict):
-            is_deliverable = acceptance_info.get("deliverable", acceptance_info.get("passed", True))
-        elif is_deliverable is None:
-            is_deliverable = True
+        # Strict deliverable authorization determination:
+        # Deliverable authorization is granted IF AND ONLY IF:
+        # 1. acceptance_info explicitly declares deliverable is True, OR
+        # 2. For legacy acceptance objects, it has passed is True AND status == "PASS" (and not explicitly deliverable=False)
+        # In all other cases (None, missing fields, deliverable=False, passed=False), is_deliverable must be False!
+        is_deliverable = False
+        if hasattr(acceptance_info, "deliverable"):
+            is_deliverable = bool(getattr(acceptance_info, "deliverable"))
+        elif isinstance(acceptance_info, dict) and "deliverable" in acceptance_info:
+            is_deliverable = bool(acceptance_info["deliverable"])
+        elif hasattr(acceptance_info, "passed") and hasattr(acceptance_info, "status"):
+            if bool(getattr(acceptance_info, "passed")) and getattr(acceptance_info, "status") == "PASS":
+                is_deliverable = getattr(acceptance_info, "deliverable", True)
+        elif isinstance(acceptance_info, dict) and "passed" in acceptance_info and "status" in acceptance_info:
+            if bool(acceptance_info["passed"]) and acceptance_info["status"] == "PASS":
+                is_deliverable = acceptance_info.get("deliverable", True)
 
         if require_deliverable and not is_deliverable:
             raise PermissionError(

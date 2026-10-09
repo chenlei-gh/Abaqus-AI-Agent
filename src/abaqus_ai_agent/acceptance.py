@@ -788,14 +788,19 @@ def evaluate_production_acceptance(
     causal_blocked: List[str] = []
     causal_evidence_errors: List[str] = []
 
-    # 1. Identity binding
+    # 1. Identity binding & Mandatory AnalysisRun enforcement
+    if analysis_run is None:
+        causal_failures.append("missing_analysis_run")
+        causal_blocked.append("missing_analysis_run")
+        causal_evidence_errors.append("missing_analysis_run")
+
     eff_run_id = expected_run_id
     if analysis_run is not None:
         run_id_val = getattr(analysis_run, "id", None)
         if run_id_val:
             eff_run_id = run_id_val
 
-    # 2. Solver status determination
+    # 2. Solver status determination (Strict: Never assume completed if missing)
     eff_status = result_status
     if analysis_run is not None:
         job_st = getattr(analysis_run, "job_status", None)
@@ -805,10 +810,12 @@ def evaluate_production_acceptance(
         elif getattr(analysis_run, "state", None) is not None:
             st = getattr(analysis_run, "state", None)
             eff_status = st.value.lower() if hasattr(st, "value") else str(st or "").lower()
-    if not eff_status:
-        eff_status = "completed"
 
-    if eff_status in ("unsubmitted", "probe_only", "created", "preflighted"):
+    if not eff_status:
+        causal_failures.append("solver_execution:missing_job_status")
+        causal_blocked.append("solver_execution:missing_job_status")
+        causal_evidence_errors.append("solver_execution:missing_job_status")
+    elif eff_status in ("unsubmitted", "probe_only", "created", "preflighted"):
         causal_failures.append(f"solver_execution:job_not_submitted_status_{eff_status}")
         causal_blocked.append(f"solver_execution:job_not_submitted_status_{eff_status}")
         causal_evidence_errors.append("solver_execution:job_not_submitted")
@@ -840,14 +847,19 @@ def evaluate_production_acceptance(
         causal_blocked.append("missing_required_evidence")
         causal_evidence_errors.append("missing_required_evidence")
 
-    # 4. Input hash provenance binding check
+    # 4. Input hash provenance binding check (Mandatory input hash and INP artifact)
     eff_input_hash = expected_input_hash
     if eff_input_hash is None and analysis_run is not None:
         prov = getattr(analysis_run, "provenance", None)
         if prov is not None:
             eff_input_hash = getattr(prov, "input_hash", None)
 
-    if eff_input_hash and eff_manifest is not None:
+    if not eff_input_hash:
+        causal_failures.append("missing_input_hash")
+        causal_blocked.append("missing_input_hash")
+        causal_evidence_errors.append("missing_input_hash")
+
+    if eff_manifest is not None:
         arts = getattr(eff_manifest, "artifacts", None)
         if isinstance(eff_manifest, dict):
             arts = eff_manifest.get("artifacts", {})
@@ -858,7 +870,18 @@ def evaluate_production_acceptance(
                 if role == "inp":
                     inp_art = a_rec
                     break
-        if inp_art is not None:
+        elif isinstance(arts, (list, tuple)):
+            for a_rec in arts:
+                role = getattr(a_rec, "role", None) or (a_rec.get("role") if isinstance(a_rec, dict) else None)
+                if role == "inp":
+                    inp_art = a_rec
+                    break
+
+        if inp_art is None:
+            causal_failures.append("missing_inp_artifact")
+            causal_blocked.append("missing_inp_artifact")
+            causal_evidence_errors.append("missing_inp_artifact")
+        elif eff_input_hash:
             inp_sha = getattr(inp_art, "sha256", None) or (inp_art.get("sha256") if isinstance(inp_art, dict) else None)
             if inp_sha and inp_sha != eff_input_hash:
                 err_msg = f"evidence_tampered:input_hash_mismatch:expected_{eff_input_hash}_got_{inp_sha}"
@@ -935,12 +958,19 @@ def evaluate_production_acceptance(
         new_blocked = tuple(res.findings.blocked) + tuple(causal_blocked)
         new_evidence_errors = tuple(res.findings.evidence_errors) + tuple(causal_evidence_errors)
 
-        if any("input_hash_mismatch" in e for e in causal_evidence_errors):
+        if str(res.result_validity) in ("EVIDENCE_TAMPERED", "EVIDENCE_CORRUPT", "EVIDENCE_STALE"):
+            new_validity = res.result_validity
+        elif any("input_hash_mismatch" in e for e in causal_evidence_errors):
             new_validity = ResultValidity("EVIDENCE_TAMPERED")
-        elif any("missing_required_evidence" in e for e in causal_evidence_errors):
-            new_validity = ResultValidity("INCOMPLETE")
-        elif any("solver_execution" in e for e in causal_evidence_errors):
+        elif any("evidence_stale" in e for e in causal_evidence_errors):
+            new_validity = ResultValidity("EVIDENCE_STALE")
+        elif any("solver_execution" in e for e in causal_evidence_errors) or str(res.result_validity) == "SOLVER_FAILED":
             new_validity = ResultValidity("SOLVER_FAILED")
+        elif any(
+            any(k in e for k in ("missing_required_evidence", "missing_analysis_run", "missing_input_hash", "missing_inp_artifact", "extraction_lineage_missing"))
+            for e in causal_evidence_errors
+        ) or str(res.result_validity) == "INCOMPLETE":
+            new_validity = ResultValidity("INCOMPLETE")
         elif str(res.result_validity) == "VALID":
             new_validity = ResultValidity("RESULT_INVALID")
         else:

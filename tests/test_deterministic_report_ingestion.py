@@ -124,7 +124,7 @@ def test_visualization_spec_and_deterministic_figure_binding(tmp_path: Path):
         run_id="RUN-P05-TEST",
         model_info={"name": "BoltedFlange", "max_mises_mpa": 314.92, "max_displacement_mm": 0.000777},
         results_info=(),
-        acceptance_info={"status": "PASS"},
+        acceptance_info={"status": "PASS", "deliverable": True},
         visualization_specs=[spec],
     )
 
@@ -193,6 +193,7 @@ def test_ab_qualification_full_llm_report_vs_deterministic_pipeline(tmp_path: Pa
         criteria=(criterion,),
         status="PASS",
         result_validity="VALID",
+        deliverable=True,
     )
 
     model_info = {

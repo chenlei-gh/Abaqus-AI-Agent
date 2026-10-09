@@ -679,3 +679,191 @@ def test_p0_d_report_delivery_card_reflects_deliverable_status(tmp_path: Path):
 
     assert card.deliverable is True
     assert card.to_llm_card()["deliverable"] is True
+
+
+def test_p0_c_production_acceptance_rejects_missing_analysis_run(tmp_path: Path):
+    """P0-C: Calling evaluate_production_acceptance with analysis_run=None is strictly blocked."""
+    files = _create_standard_mock_artifacts(tmp_path, "p0_c_no_run")
+    manifest = build_evidence_manifest_v2(
+        run_id="p0_c_no_run",
+        case_id="case_no_run",
+        artifacts_dir=str(tmp_path),
+        artifact_filenames=files,
+    )
+
+    res = evaluate_production_acceptance(
+        analysis_run=None,
+        evidence_manifest=manifest,
+        base_dir=str(tmp_path),
+        criteria=[{"name": "mises", "value_key": "max_mises", "operator": "<=", "limit": 200.0}],
+    )
+
+    assert res.acceptance_status in ("BLOCKED", "RESULT_INVALID")
+    assert res.deliverable is False
+    assert any("missing_analysis_run" in e for e in res.findings.evidence_errors)
+
+
+def test_p0_c_production_acceptance_rejects_missing_job_status(tmp_path: Path):
+    """P0-C: AnalysisRun without job status is rejected as missing_job_status; never defaults to completed."""
+    files = _create_standard_mock_artifacts(tmp_path, "p0_c_no_status")
+    manifest = build_evidence_manifest_v2(
+        run_id="p0_c_no_status",
+        case_id="case_no_status",
+        artifacts_dir=str(tmp_path),
+        artifact_filenames=files,
+    )
+    inp_sha = manifest.artifacts["Job_p0_c_no_status.inp"].sha256
+
+    run = AnalysisRun(
+        id="p0_c_no_status",
+        model_name="Model_NoStatus",
+        job_name="Job_p0_c_no_status",
+        state=None,  # No state
+        job_status=None,  # No job status
+        odb_path=str(tmp_path / "Job_p0_c_no_status.odb"),
+        provenance=AnalysisProvenance(
+            run_id="p0_c_no_status",
+            model_name="Model_NoStatus",
+            job_name="Job_p0_c_no_status",
+            input_hash=inp_sha,
+        ),
+        metrics=(EngineeringMetric(name="max_mises", value=150.0, unit="MPa"),),
+    )
+
+    res = evaluate_production_acceptance(
+        run,
+        evidence_manifest=manifest,
+        base_dir=str(tmp_path),
+        criteria=[{"name": "mises", "value_key": "max_mises", "operator": "<=", "limit": 200.0}],
+    )
+
+    assert res.acceptance_status == "RESULT_INVALID"
+    assert res.result_validity == "SOLVER_FAILED"
+    assert res.deliverable is False
+    assert any("solver_execution:missing_job_status" in e for e in res.findings.evidence_errors)
+
+
+def test_p0_c_production_acceptance_rejects_missing_input_hash(tmp_path: Path):
+    """P0-C: AnalysisRun lacking input hash in provenance is blocked as missing_input_hash."""
+    files = _create_standard_mock_artifacts(tmp_path, "p0_c_no_inp_hash")
+    manifest = build_evidence_manifest_v2(
+        run_id="p0_c_no_inp_hash",
+        case_id="case_no_inp_hash",
+        artifacts_dir=str(tmp_path),
+        artifact_filenames=files,
+    )
+
+    run = AnalysisRun(
+        id="p0_c_no_inp_hash",
+        model_name="Model_NoHash",
+        job_name="Job_p0_c_no_inp_hash",
+        state=AnalysisRunState.COMPLETED,
+        job_status=JobStatus(name="Job_p0_c_no_inp_hash", state=JobState.COMPLETED),
+        odb_path=str(tmp_path / "Job_p0_c_no_inp_hash.odb"),
+        provenance=None,  # No provenance / no input_hash
+        metrics=(EngineeringMetric(name="max_mises", value=150.0, unit="MPa"),),
+    )
+
+    res = evaluate_production_acceptance(
+        run,
+        evidence_manifest=manifest,
+        base_dir=str(tmp_path),
+        criteria=[{"name": "mises", "value_key": "max_mises", "operator": "<=", "limit": 200.0}],
+    )
+
+    assert res.acceptance_status == "BLOCKED"
+    assert res.result_validity == "INCOMPLETE"
+    assert res.deliverable is False
+    assert any("missing_input_hash" in e for e in res.findings.evidence_errors)
+
+
+def test_p0_c_production_acceptance_rejects_missing_inp_artifact(tmp_path: Path):
+    """P0-C: EvidenceManifest lacking role='inp' artifact is blocked as missing_inp_artifact."""
+    # Create artifacts omitting .inp
+    files = ["Job_no_inp.odb", "Job_no_inp.sta", "Job_no_inp.dat"]
+    for fn in files:
+        fp = tmp_path / fn
+        if fn.endswith(".odb"):
+            fp.write_bytes(b"\x00\x00\x00\x00" + b"\x53\x49\x4d" + b"\x00" * 2000)
+        else:
+            fp.write_text("dummy artifact content\n", encoding="utf-8")
+
+    manifest = build_evidence_manifest_v2(
+        run_id="p0_c_no_inp_art",
+        case_id="case_no_inp_art",
+        artifacts_dir=str(tmp_path),
+        artifact_filenames=files,
+    )
+
+    run = AnalysisRun(
+        id="p0_c_no_inp_art",
+        model_name="Model_NoInpArt",
+        job_name="Job_no_inp",
+        state=AnalysisRunState.COMPLETED,
+        job_status=JobStatus(name="Job_no_inp", state=JobState.COMPLETED),
+        odb_path=str(tmp_path / "Job_no_inp.odb"),
+        provenance=AnalysisProvenance(
+            run_id="p0_c_no_inp_art",
+            model_name="Model_NoInpArt",
+            job_name="Job_no_inp",
+            input_hash="a" * 64,
+        ),
+        metrics=(EngineeringMetric(name="max_mises", value=150.0, unit="MPa"),),
+    )
+
+    res = evaluate_production_acceptance(
+        run,
+        evidence_manifest=manifest,
+        base_dir=str(tmp_path),
+        criteria=[{"name": "mises", "value_key": "max_mises", "operator": "<=", "limit": 200.0}],
+    )
+
+    assert res.acceptance_status == "BLOCKED"
+    assert res.result_validity == "INCOMPLETE"
+    assert res.deliverable is False
+    assert any("missing_inp_artifact" in e for e in res.findings.evidence_errors)
+
+
+def test_p0_d_report_pipeline_defaults_to_strict_deliverable_rejection(tmp_path: Path):
+    """P0-D: pipeline.build_and_render defaults to require_deliverable=True and raises PermissionError without explicit argument."""
+    pipeline = DeterministicReportPipeline()
+    out_dir = tmp_path / "report_strict_default"
+
+    failed_acc = AcceptanceResult(
+        passed=False,
+        criteria=(),
+        status="FAIL",
+        acceptance_status="FAIL",
+        result_validity="VALID",
+        deliverable=False,
+        findings=AcceptanceFindings(failures=("criteria_exceeded:max_mises",)),
+    )
+
+    # Note: caller does NOT pass require_deliverable; it must default to True and fail closed!
+    with pytest.raises(PermissionError, match="Official engineering delivery blocked: deliverable is False"):
+        pipeline.build_and_render(
+            output_dir=out_dir,
+            title="Strict Default Delivery Test",
+            case_id="case_strict_default",
+            run_id="run_strict_default",
+            model_info={"max_mises_mpa": 350.0},
+            results_info=(),
+            acceptance_info=failed_acc,
+        )
+
+
+def test_p0_d_report_pipeline_rejects_empty_or_unauthorized_acceptance(tmp_path: Path):
+    """P0-D: Passing a bare dict with only status='PASS' or empty info is rejected by default as deliverable=False."""
+    pipeline = DeterministicReportPipeline()
+    out_dir = tmp_path / "report_bare_dict"
+
+    with pytest.raises(PermissionError, match="Official engineering delivery blocked: deliverable is False"):
+        pipeline.build_and_render(
+            output_dir=out_dir,
+            title="Bare Dict Rejection",
+            case_id="case_bare_dict",
+            run_id="run_bare_dict",
+            model_info={"max_mises_mpa": 120.0},
+            results_info=(),
+            acceptance_info={"status": "PASS"},  # No deliverable: True authorization
+        )
