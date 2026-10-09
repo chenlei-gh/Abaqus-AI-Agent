@@ -342,13 +342,43 @@ def test_agent_solve_requirement_require_production_full_closure_and_delivery(tm
 
     def _mock_render_vis(odb_path, specs, output_dir, **kwargs):
         import hashlib
+        from abaqus_ai_agent.execution.odb_rendering import (
+            compute_viewer_session_token,
+            create_render_execution_evidence,
+        )
         rendered = []
+        session_nonce = "0123456789abcdef0123456789abcdef"
+        run_id = str(kwargs.get("run_id", "PROD")).strip()
+        odb_sha256 = ""
+        if odb_path and Path(odb_path).exists():
+            odb_sha256 = hashlib.sha256(Path(odb_path).read_bytes()).hexdigest()
+        rendered_summary = []
         for s in specs:
             out_file = Path(output_dir) / s.target_filename
             if not out_file.exists():
                 out_file.write_bytes(MINIMAL_VALID_PNG_BYTES)
             img_bytes = out_file.read_bytes()
             sha = hashlib.sha256(img_bytes).hexdigest()
+            rendered_summary.append({"filename": out_file.name, "image_sha256": sha})
+
+        render_ev = create_render_execution_evidence(
+            session_nonce=session_nonce,
+            run_id=run_id,
+            odb_sha256=odb_sha256,
+            rendered_figures=rendered_summary,
+        )
+
+        for s in specs:
+            out_file = Path(output_dir) / s.target_filename
+            img_bytes = out_file.read_bytes()
+            sha = hashlib.sha256(img_bytes).hexdigest()
+            token = compute_viewer_session_token(
+                session_nonce=session_nonce,
+                run_id=run_id,
+                odb_sha256=odb_sha256,
+                target_filename=out_file.name,
+                image_sha256=sha,
+            )
             rendered.append(
                 ReportFigure(
                     kind=s.kind,
@@ -363,11 +393,15 @@ def test_agent_solve_requirement_require_production_full_closure_and_delivery(tm
                         "actual_frame": s.actual_frame_index,
                         "region": getattr(s, "region", "WHOLE_MODEL"),
                         "output_position": getattr(s, "output_position", "INTEGRATION_POINT"),
-                        "run_id": kwargs.get("run_id", "PROD"),
+                        "run_id": run_id,
                         "input_hash": kwargs.get("input_hash", ""),
+                        "odb_sha256": odb_sha256,
                         "image_sha256": sha,
                         "sha256": sha,
                         "viewer_rendered": True,
+                        "session_nonce": session_nonce,
+                        "viewer_session_token": token,
+                        "render_execution_evidence": render_ev.to_dict(),
                     },
                 )
             )
@@ -773,7 +807,10 @@ def test_negative_p0_b_missing_or_mismatched_provenance_rejected(tmp_path: Path)
     assert len(res_wrong_step.reused_figures) == 0
 
     # Case 7: Full matching provenance whitelist: strictly admitted
-    from abaqus_ai_agent.execution.odb_rendering import compute_viewer_session_token
+    from abaqus_ai_agent.execution.odb_rendering import (
+        compute_viewer_session_token,
+        create_render_execution_evidence,
+    )
     valid_nonce = "0123456789abcdef0123456789abcdef"
     valid_token = compute_viewer_session_token(
         session_nonce=valid_nonce,
@@ -781,6 +818,12 @@ def test_negative_p0_b_missing_or_mismatched_provenance_rejected(tmp_path: Path)
         odb_sha256="ODB-01",
         target_filename=img_file.name,
         image_sha256=valid_img_sha256,
+    )
+    valid_ev = create_render_execution_evidence(
+        session_nonce=valid_nonce,
+        run_id="RUN-CURR-01",
+        odb_sha256="ODB-01",
+        rendered_figures=[{"filename": img_file.name, "image_sha256": valid_img_sha256}],
     )
     fig_valid = ReportFigure(
         kind="stress_hotspot",
@@ -793,13 +836,16 @@ def test_negative_p0_b_missing_or_mismatched_provenance_rejected(tmp_path: Path)
             "run_id": "RUN-CURR-01",
             "input_hash": "INP-01",
             "odb_hash": "ODB-01",
+            "odb_sha256": "ODB-01",
             "sha256": valid_img_sha256,
+            "image_sha256": valid_img_sha256,
             "step": "Step-1",
             "frame": -1,
             "output_position": "INTEGRATION_POINT",
             "viewer_rendered": True,
             "session_nonce": valid_nonce,
             "viewer_session_token": valid_token,
+            "render_execution_evidence": valid_ev.to_dict(),
         },
     )
     res_valid = select_engineering_figures(
@@ -1051,6 +1097,25 @@ def test_negative_p0_b_delivery_gate_blocks_missing_input_hash_or_odb_hash(tmp_p
     mock_odb.write_bytes(b"\x7fSIMULIA_ODB_BINARY_HEADER" + b"\x00" * 1024)
     odb_sha256 = hashlib.sha256(mock_odb.read_bytes()).hexdigest()
 
+    from abaqus_ai_agent.execution.odb_rendering import (
+        compute_viewer_session_token,
+        create_render_execution_evidence,
+    )
+    valid_nonce = "0123456789abcdef0123456789abcdef"
+    valid_token = compute_viewer_session_token(
+        session_nonce=valid_nonce,
+        run_id="RUN-GATE-01",
+        odb_sha256=odb_sha256,
+        target_filename=img_file.name,
+        image_sha256=img_sha256,
+    )
+    valid_ev = create_render_execution_evidence(
+        session_nonce=valid_nonce,
+        run_id="RUN-GATE-01",
+        odb_sha256=odb_sha256,
+        rendered_figures=[{"filename": img_file.name, "image_sha256": img_sha256}],
+    )
+
     fig = ReportFigure(
         kind="stress_hotspot",
         path=str(img_file.as_posix()),
@@ -1063,7 +1128,9 @@ def test_negative_p0_b_delivery_gate_blocks_missing_input_hash_or_odb_hash(tmp_p
             "image_sha256": img_sha256,
             "output_position": "INTEGRATION_POINT",
             "viewer_rendered": True,
-            "viewer_session_token": "VIEWER-TOKEN-GATE-01",
+            "session_nonce": valid_nonce,
+            "viewer_session_token": valid_token,
+            "render_execution_evidence": valid_ev.to_dict(),
         },
     )
 
@@ -1182,6 +1249,48 @@ def test_negative_p0_b_delivery_gate_blocks_missing_viewer_session_token_or_unre
             require_deliverable=True,
         )
     assert "was not rendered by a controlled Viewer session" in str(exc_b.value)
+
+    # Case C: Missing render_execution_evidence
+    from abaqus_ai_agent.execution.odb_rendering import compute_viewer_session_token
+    token_c = compute_viewer_session_token(
+        session_nonce="0123456789abcdef0123456789abcdef",
+        run_id="RUN-TOK-01",
+        odb_sha256=odb_sha256,
+        target_filename=img_file.name,
+        image_sha256=img_sha256,
+    )
+    fig_no_evidence = ReportFigure(
+        kind="stress_hotspot",
+        path=str(img_file.as_posix()),
+        metadata={
+            "field": "S",
+            "component": "mises",
+            "run_id": "RUN-TOK-01",
+            "input_hash": "INP-TOK-01",
+            "odb_sha256": odb_sha256,
+            "image_sha256": img_sha256,
+            "output_position": "INTEGRATION_POINT",
+            "viewer_rendered": True,
+            "session_nonce": "0123456789abcdef0123456789abcdef",
+            "viewer_session_token": token_c,
+            # render_execution_evidence missing!
+        },
+    )
+    with pytest.raises(PermissionError) as exc_c:
+        pipeline.build_and_render(
+            output_dir=report_dir,
+            title="Gate Test No Evidence",
+            case_id="case_tok",
+            run_id="RUN-TOK-01",
+            input_hash="INP-TOK-01",
+            odb_path=mock_odb,
+            model_info={},
+            results_info=(),
+            acceptance_info={"status": "PASS", "deliverable": True},
+            figures=[fig_no_evidence],
+            require_deliverable=True,
+        )
+    assert "lacks mandatory render_execution_evidence" in str(exc_c.value)
 
 
 def test_odb_rendering_session_nonce_and_token_entropy_verification(tmp_path: Path, monkeypatch):
@@ -1382,6 +1491,67 @@ def test_negative_p0_b_forged_viewer_session_token_rejected_in_admission_and_del
     )
     assert is_adm_f is False
     assert "viewer_session_token mismatch or forged" in reason_f
+
+    # Subcase 4: Forged / tampered render_execution_evidence HMAC signature fails closed in admission & delivery gate
+    from abaqus_ai_agent.execution.odb_rendering import create_render_execution_evidence
+    valid_token_4 = compute_viewer_session_token(
+        session_nonce=nonce,
+        run_id="RUN-FORGE-01",
+        odb_sha256=odb_sha256,
+        target_filename=img_file.name,
+        image_sha256=img_sha256,
+    )
+    tampered_ev = create_render_execution_evidence(
+        session_nonce=nonce,
+        run_id="RUN-FORGE-01",
+        odb_sha256=odb_sha256,
+        rendered_figures=[{"filename": img_file.name, "image_sha256": img_sha256}],
+    ).to_dict()
+    tampered_ev["session_signature"] = "deadbeef" * 8  # Forged HMAC signature
+
+    fig_tampered_sig = ReportFigure(
+        kind="stress_hotspot",
+        path=str(img_file.as_posix()),
+        metadata={
+            "field": "S",
+            "component": "mises",
+            "run_id": "RUN-FORGE-01",
+            "input_hash": "INP-FORGE-01",
+            "odb_sha256": odb_sha256,
+            "image_sha256": img_sha256,
+            "output_position": "INTEGRATION_POINT",
+            "viewer_rendered": True,
+            "session_nonce": nonce,
+            "viewer_session_token": valid_token_4,
+            "render_execution_evidence": tampered_ev,
+        },
+    )
+    is_adm_sig, reason_sig = admit_figure_for_reuse(
+        figure=fig_tampered_sig,
+        current_run_id="RUN-FORGE-01",
+        current_input_hash="INP-FORGE-01",
+        current_odb_hash=odb_sha256,
+        target_field="S",
+        target_component="mises",
+    )
+    assert is_adm_sig is False
+    assert "Render execution evidence invalid" in reason_sig
+
+    with pytest.raises(PermissionError) as exc_sig:
+        pipeline.build_and_render(
+            output_dir=report_dir,
+            title="Forged Signature Test",
+            case_id="case_forge",
+            run_id="RUN-FORGE-01",
+            input_hash="INP-FORGE-01",
+            odb_path=mock_odb,
+            model_info={},
+            results_info=(),
+            acceptance_info={"status": "PASS", "deliverable": True},
+            figures=[fig_tampered_sig],
+            require_deliverable=True,
+        )
+    assert "render_execution_evidence invalid" in str(exc_sig.value)
 
 
 def test_negative_p0_b_preexisting_stale_image_not_adopted_if_viewer_fails_or_does_not_produce(tmp_path: Path, monkeypatch):

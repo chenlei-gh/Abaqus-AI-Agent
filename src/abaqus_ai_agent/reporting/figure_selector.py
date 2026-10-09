@@ -219,15 +219,16 @@ def admit_figure_for_reuse(
         return False, "viewer_session_token mismatch or forged (does not match cryptographically verified session evidence)"
 
     rev_data = f_meta.get("render_execution_evidence")
-    if rev_data:
-        from ..execution.odb_rendering import verify_render_execution_evidence
-        is_ev_valid, ev_reason = verify_render_execution_evidence(
-            evidence=rev_data,
-            expected_run_id=str(current_run_id).strip(),
-            expected_odb_sha256=str(current_odb_hash).strip(),
-        )
-        if not is_ev_valid:
-            return False, f"Render execution evidence invalid: {ev_reason}"
+    if not rev_data:
+        return False, "Figure metadata lacks authentic render_execution_evidence"
+    from ..execution.odb_rendering import verify_render_execution_evidence
+    is_ev_valid, ev_reason = verify_render_execution_evidence(
+        evidence=rev_data,
+        expected_run_id=str(current_run_id).strip(),
+        expected_odb_sha256=str(current_odb_hash).strip(),
+    )
+    if not is_ev_valid:
+        return False, f"Render execution evidence invalid: {ev_reason}"
 
     return True, "Admitted"
 

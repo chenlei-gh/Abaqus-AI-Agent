@@ -114,7 +114,10 @@ def test_priority_1_reuse_existing_verified_figure(tmp_path: Path):
     existing_img.write_bytes(img_bytes)
     img_sha256 = hashlib.sha256(img_bytes).hexdigest()
 
-    from abaqus_ai_agent.execution.odb_rendering import compute_viewer_session_token
+    from abaqus_ai_agent.execution.odb_rendering import (
+        compute_viewer_session_token,
+        create_render_execution_evidence,
+    )
     p1_nonce = "0123456789abcdef0123456789abcdef"
     p1_token = compute_viewer_session_token(
         session_nonce=p1_nonce,
@@ -122,6 +125,12 @@ def test_priority_1_reuse_existing_verified_figure(tmp_path: Path):
         odb_sha256="HASH-ODB-1",
         target_filename=existing_img.name,
         image_sha256=img_sha256,
+    )
+    p1_ev = create_render_execution_evidence(
+        session_nonce=p1_nonce,
+        run_id="RUN-PRIORITY-1",
+        odb_sha256="HASH-ODB-1",
+        rendered_figures=[{"filename": existing_img.name, "image_sha256": img_sha256}],
     )
     existing_fig = ReportFigure(
         kind="stress_hotspot",
@@ -142,6 +151,7 @@ def test_priority_1_reuse_existing_verified_figure(tmp_path: Path):
             "viewer_rendered": True,
             "session_nonce": p1_nonce,
             "viewer_session_token": p1_token,
+            "render_execution_evidence": p1_ev.to_dict(),
         },
     )
 
@@ -565,3 +575,90 @@ def test_admit_figure_render_execution_evidence_tampered_rejected(tmp_path: Path
     )
     assert adm is False
     assert "Render execution evidence invalid" in reason
+
+
+def test_admit_figure_missing_render_execution_evidence_rejected(tmp_path: Path):
+    """Negative test: Figure lacking mandatory render_execution_evidence is rejected."""
+    import hashlib
+    from abaqus_ai_agent.execution.odb_rendering import (
+        MINIMAL_VALID_PNG_BYTES,
+        compute_viewer_session_token,
+    )
+    img_file = tmp_path / "no_ev_test.png"
+    img_file.write_bytes(MINIMAL_VALID_PNG_BYTES)
+    img_h = hashlib.sha256(MINIMAL_VALID_PNG_BYTES).hexdigest()
+
+    nonce = "0123456789abcdef0123456789abcdef"
+    token = compute_viewer_session_token(
+        session_nonce=nonce,
+        run_id="RUN-NO-EV",
+        odb_sha256="ODB-NO-EV",
+        target_filename=img_file.name,
+        image_sha256=img_h,
+    )
+
+    fig = ReportFigure(
+        kind="stress_contour",
+        path=str(img_file.as_posix()),
+        metadata={
+            "field": "S",
+            "component": "mises",
+            "step": "Step-1",
+            "frame": -1,
+            "region": "WHOLE_MODEL",
+            "output_position": "INTEGRATION_POINT",
+            "run_id": "RUN-NO-EV",
+            "input_hash": "INP-NO-EV",
+            "odb_sha256": "ODB-NO-EV",
+            "image_sha256": img_h,
+            "viewer_rendered": True,
+            "session_nonce": nonce,
+            "viewer_session_token": token,
+            # render_execution_evidence intentionally missing
+        },
+    )
+
+    from abaqus_ai_agent.reporting.figure_selector import admit_figure_for_reuse
+    adm, reason = admit_figure_for_reuse(
+        figure=fig,
+        current_run_id="RUN-NO-EV",
+        current_input_hash="INP-NO-EV",
+        current_odb_hash="ODB-NO-EV",
+        target_field="S",
+        target_component="mises",
+        target_step="Step-1",
+        target_frame=-1,
+    )
+    assert adm is False
+    assert "lacks authentic render_execution_evidence" in reason
+
+
+def test_verify_png_image_integrity_deep_validation(tmp_path: Path):
+    """Negative test: Deep chunk and raster validation rejects corrupt PNG files."""
+    from abaqus_ai_agent.execution.odb_rendering import (
+        MINIMAL_VALID_PNG_BYTES,
+        verify_png_image_integrity,
+    )
+    import pytest
+
+    # 1. Authentic PNG succeeds
+    w, h = verify_png_image_integrity(MINIMAL_VALID_PNG_BYTES)
+    assert w == 1 and h == 1
+
+    # 2. Truncated before IEND fails
+    with pytest.raises(ValueError, match="missing standard IEND"):
+        verify_png_image_integrity(MINIMAL_VALID_PNG_BYTES[:-8])
+
+    # 3. Bad chunk CRC fails
+    bad_crc_data = MINIMAL_VALID_PNG_BYTES[:16] + b"\xff" + MINIMAL_VALID_PNG_BYTES[17:]
+    with pytest.raises(ValueError, match="CRC32 mismatch"):
+        verify_png_image_integrity(bad_crc_data)
+
+    # 4. Short byte stream (<33 bytes) fails
+    with pytest.raises(ValueError, match="Truncated PNG image"):
+        verify_png_image_integrity(MINIMAL_VALID_PNG_BYTES[:20])
+
+    # 5. Corrupted chunk stream before IEND fails
+    corrupt_chunk_hdr = MINIMAL_VALID_PNG_BYTES[:-12] + b"\x00\x01\x02" + MINIMAL_VALID_PNG_BYTES[-12:]
+    with pytest.raises(ValueError, match="Corrupt PNG chunk"):
+        verify_png_image_integrity(corrupt_chunk_hdr)

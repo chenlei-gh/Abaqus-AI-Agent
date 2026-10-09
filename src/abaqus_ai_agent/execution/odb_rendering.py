@@ -9,14 +9,25 @@ databases without needing interactive GUI windows or manual screenshotting.
 
 from dataclasses import dataclass
 import hashlib
+import hmac
+import io
 import os
 from pathlib import Path
 import secrets
 import shutil
+import struct
 import subprocess
 import sys
 import tempfile
-from typing import Any, Dict, List, Optional, Sequence, Set, Union
+from typing import Any, Dict, List, Optional, Sequence, Set, Tuple, Union
+import zlib
+
+try:
+    from PIL import Image as _PILImage
+    _HAS_PIL = True
+except ImportError:
+    _PILImage = None
+    _HAS_PIL = False
 
 from ..contracts.report import ReportFigure
 from .batch import resolve_default_launcher
@@ -37,12 +48,12 @@ VALID_PLOT_STATES: Set[str] = {
     "UNDEFORMED",
 }
 
-# 1x1 RGBA standard PNG byte stream (IHDR width=1, height=1, positive dimensions)
+# 1x1 RGBA authentic standard PNG byte stream (IHDR width=1, height=1, valid chunk CRCs & IEND)
 MINIMAL_VALID_PNG_BYTES: bytes = (
     b"\x89PNG\r\n\x1a\n"
     b"\x00\x00\x00\rIHDR"
-    b"\x00\x00\x00\x01\x00\x00\x00\x01\x08\x06\x00\x00\x00\x1f\x15c4"
-    b"\x00\x00\x00\rIDATx\x9cc\xf8\xcf\xc0\x00\x00\x03\x01\x01\x00\x18\xdd\x8d\xb0"
+    b"\x00\x00\x00\x01\x00\x00\x00\x01\x08\x06\x00\x00\x00\x1f\x15\xc4\x89"
+    b"\x00\x00\x00\rIDATx\x9cc\xf8\xcf\xc0\xf0\x1f\x00\x05\x00\x01\xff\x89\x99=\x1d"
     b"\x00\x00\x00\x00IEND\xaeB`\x82"
 )
 
@@ -50,11 +61,14 @@ MINIMAL_VALID_PNG_BYTES: bytes = (
 def verify_png_image_integrity(
     file_path_or_bytes: Union[str, Path, bytes],
 ) -> Tuple[int, int]:
-    """Verify that input data represents a valid, non-corrupt PNG with positive dimensions.
+    """Verify that input data represents an authentic, non-corrupt PNG with positive dimensions.
 
     Validates:
     - Standard 8-byte PNG magic signature (\\x89PNG\\r\\n\\x1a\\n).
     - Presence of initial IHDR chunk with positive width and height.
+    - Integrity of all chunk headers, lengths, and CRC32 checksums.
+    - Standard IEND termination chunk with valid CRC.
+    - Complete raster decoding if Pillow is available.
 
     Returns (width, height) on success.
     Raises ValueError / FileNotFoundError / TypeError if invalid.
@@ -63,30 +77,48 @@ def verify_png_image_integrity(
         p = Path(file_path_or_bytes)
         if not p.is_file():
             raise FileNotFoundError(f"Image file does not exist: {p}")
-        with open(p, "rb") as fh:
-            data = fh.read(32)
+        data = p.read_bytes()
     elif isinstance(file_path_or_bytes, (bytes, bytearray)):
-        data = file_path_or_bytes[:32]
+        data = bytes(file_path_or_bytes)
     else:
         raise TypeError(f"Expected file path or bytes, got {type(file_path_or_bytes)}")
 
-    if len(data) < 24:
+    if len(data) < 33:
         raise ValueError(
-            f"Truncated PNG image: data length is only {len(data)} bytes, expected >= 24 bytes"
+            f"Truncated PNG image: data length is only {len(data)} bytes, expected >= 33 bytes"
         )
 
     PNG_MAGIC = b"\x89PNG\r\n\x1a\n"
-    if data[:8] != PNG_MAGIC:
+    if not data.startswith(PNG_MAGIC):
         raise ValueError(
             f"Invalid PNG magic signature: {data[:8]!r}. File is not an authentic PNG image."
         )
 
-    chunk_len = int.from_bytes(data[8:12], byteorder="big")
-    chunk_type = data[12:16]
-    if chunk_type != b"IHDR" or chunk_len < 13:
-        raise ValueError(
-            f"Invalid PNG header: expected IHDR chunk (len >= 13), got {chunk_type!r} (len {chunk_len})"
-        )
+    if not data.endswith(b"\x00\x00\x00\x00IEND\xaeB`\x82"):
+        raise ValueError("Corrupt or truncated PNG: missing standard IEND termination chunk or invalid CRC.")
+
+    offset = 8
+    chunks: List[bytes] = []
+    while offset < len(data):
+        if offset + 8 > len(data):
+            raise ValueError("Corrupt PNG chunk structure: truncated chunk header")
+        length, chunk_type = struct.unpack(">I4s", data[offset:offset + 8])
+        offset += 8
+        if offset + length + 4 > len(data):
+            raise ValueError(f"Corrupt PNG chunk data: truncated {chunk_type.decode(errors='replace')} payload")
+        chunk_data = data[offset:offset + length]
+        offset += length
+        expected_crc, = struct.unpack(">I", data[offset:offset + 4])
+        offset += 4
+        calc_crc = zlib.crc32(chunk_type + chunk_data) & 0xFFFFFFFF
+        if calc_crc != expected_crc:
+            raise ValueError(f"Corrupt PNG data: CRC32 mismatch in chunk {chunk_type.decode(errors='replace')}")
+        chunks.append(chunk_type)
+
+    if not chunks or chunks[0] != b"IHDR":
+        raise ValueError("Invalid PNG structure: first chunk is not IHDR")
+    if chunks[-1] != b"IEND":
+        raise ValueError("Invalid PNG structure: last chunk is not IEND")
 
     width = int.from_bytes(data[16:20], byteorder="big")
     height = int.from_bytes(data[20:24], byteorder="big")
@@ -95,7 +127,30 @@ def verify_png_image_integrity(
             f"Invalid PNG dimensions: width={width}, height={height}. Expected positive dimensions."
         )
 
+    if _HAS_PIL and _PILImage is not None:
+        try:
+            im = _PILImage.open(io.BytesIO(data))
+            if im.format != "PNG":
+                raise ValueError(f"Decoded image format is {im.format!r}, expected 'PNG'")
+            im.load()
+            dec_w, dec_h = im.size
+            if dec_w != width or dec_h != height:
+                raise ValueError(f"Raster dimension mismatch: IHDR ({width}x{height}) vs decoded ({dec_w}x{dec_h})")
+        except Exception as exc:
+            raise ValueError(f"Corrupt PNG image data: failed to decode raster payload: {exc}")
+
     return width, height
+
+
+_PROCESS_RENDER_SIGNING_KEY: bytes = secrets.token_bytes(32)
+
+
+def get_render_signing_key() -> bytes:
+    """Obtain process-isolated or environment-controlled HMAC secret key for authentic render evidence."""
+    env_secret = os.environ.get("ABAQUS_RENDER_SIGNING_SECRET")
+    if env_secret:
+        return hashlib.sha256(env_secret.encode("utf-8")).digest()
+    return _PROCESS_RENDER_SIGNING_KEY
 
 
 @dataclass
@@ -108,6 +163,8 @@ class RenderExecutionEvidence:
     timestamp_utc: str
     rendered_figures: List[Dict[str, Any]]
     session_signature: str
+    exit_code: int = 0
+    viewer_duration_sec: float = 0.0
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -117,6 +174,8 @@ class RenderExecutionEvidence:
             "timestamp_utc": self.timestamp_utc,
             "rendered_figures": self.rendered_figures,
             "session_signature": self.session_signature,
+            "exit_code": self.exit_code,
+            "viewer_duration_sec": self.viewer_duration_sec,
         }
 
 
@@ -125,8 +184,10 @@ def create_render_execution_evidence(
     run_id: str,
     odb_sha256: str,
     rendered_figures: Sequence[Dict[str, Any]],
+    exit_code: int = 0,
+    viewer_duration_sec: float = 0.0,
 ) -> RenderExecutionEvidence:
-    """Construct authentic RenderExecutionEvidence with deterministic session signature."""
+    """Construct authentic RenderExecutionEvidence with HMAC-SHA256 session signature."""
     import datetime
 
     ts = datetime.datetime.now(datetime.timezone.utc).isoformat()
@@ -135,8 +196,9 @@ def create_render_execution_evidence(
         for rf in rendered_figures
         if isinstance(rf, dict) and rf.get("filename")
     )
-    sig_payload = f"EVIDENCE:{session_nonce}:{run_id}:{odb_sha256}:{';'.join(fig_digests)}"
-    sig = hashlib.sha256(sig_payload.encode("utf-8")).hexdigest()
+    sig_payload = f"EVIDENCE:{session_nonce}:{run_id}:{odb_sha256}:{exit_code}:{';'.join(fig_digests)}"
+    key = get_render_signing_key()
+    sig = hmac.new(key, sig_payload.encode("utf-8"), hashlib.sha256).hexdigest()
     return RenderExecutionEvidence(
         session_nonce=session_nonce,
         run_id=run_id,
@@ -144,6 +206,8 @@ def create_render_execution_evidence(
         timestamp_utc=ts,
         rendered_figures=list(rendered_figures),
         session_signature=sig,
+        exit_code=exit_code,
+        viewer_duration_sec=viewer_duration_sec,
     )
 
 
@@ -152,7 +216,7 @@ def verify_render_execution_evidence(
     expected_run_id: str,
     expected_odb_sha256: str,
 ) -> Tuple[bool, str]:
-    """Verify that a RenderExecutionEvidence matches runtime context and has untampered signature."""
+    """Verify that a RenderExecutionEvidence matches runtime context and has authentic HMAC signature."""
     if isinstance(evidence, RenderExecutionEvidence):
         data = evidence.to_dict()
     elif isinstance(evidence, dict):
@@ -165,6 +229,10 @@ def verify_render_execution_evidence(
     odb_sha = data.get("odb_sha256") or ""
     figs = data.get("rendered_figures") or []
     sig = data.get("session_signature") or ""
+    exit_code = data.get("exit_code", 0)
+
+    if exit_code != 0:
+        return False, f"Viewer process exited with non-zero exit code: {exit_code}"
 
     if not nonce or len(nonce) < 16:
         return False, "Evidence lacks valid session_nonce"
@@ -178,10 +246,11 @@ def verify_render_execution_evidence(
         for rf in figs
         if isinstance(rf, dict) and rf.get("filename")
     )
-    sig_payload = f"EVIDENCE:{nonce}:{run_id}:{odb_sha}:{';'.join(fig_digests)}"
-    expected_sig = hashlib.sha256(sig_payload.encode("utf-8")).hexdigest()
-    if sig != expected_sig:
-        return False, "Evidence session_signature mismatch or tampered"
+    sig_payload = f"EVIDENCE:{nonce}:{run_id}:{odb_sha}:{exit_code}:{';'.join(fig_digests)}"
+    key = get_render_signing_key()
+    expected_sig = hmac.new(key, sig_payload.encode("utf-8"), hashlib.sha256).hexdigest()
+    if not hmac.compare_digest(sig, expected_sig):
+        return False, "Evidence session_signature mismatch or forged (invalid HMAC signature)"
 
     return True, "Valid"
 
@@ -273,8 +342,8 @@ def generate_headless_viewer_script(
         "        annotations=OFF,",
         "    )",
         "    vp.odbDisplay.commonOptions.setValues(renderStyle=SHADED)",
-        "except Exception:",
-        "    pass",
+        "except Exception as _vp_err:",
+        "    print('[HeadlessViewer] WARNING: Viewport cosmetic annotations degraded: %s' % _vp_err)",
         "",
     ]
 
@@ -504,6 +573,17 @@ def render_odb_contours_headless(
                 final_target = out_dir / scratch_target.name
                 shutil.copy2(scratch_target, final_target)
                 produced.append(final_target)
+
+        if len(produced) != len(requests):
+            missing_names = [
+                Path(req.output_filename).name
+                for req in requests
+                if not (out_dir / Path(req.output_filename).name).exists()
+            ]
+            raise RuntimeError(
+                f"Headless Abaqus Viewer failed to produce all requested figures: "
+                f"expected {len(requests)}, got {len(produced)}. Missing: {missing_names}"
+            )
 
         return produced
 

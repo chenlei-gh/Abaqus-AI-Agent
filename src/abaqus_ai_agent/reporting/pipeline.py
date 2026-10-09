@@ -312,15 +312,6 @@ class DeterministicReportPipeline:
                     raise PermissionError(
                         f"Official delivery blocked: figure physical file is missing or empty at '{fig.path}'"
                     )
-                # P0-2 & P0-10: Verify genuine PNG header & positive dimensions
-                if f_path.suffix.lower() == ".png":
-                    try:
-                        from ..execution.odb_rendering import verify_png_image_integrity
-                        verify_png_image_integrity(f_path)
-                    except Exception as png_err:
-                        raise PermissionError(
-                            f"Official delivery blocked: Figure '{f_path.name}' is corrupt or not a valid PNG image: {png_err}"
-                        )
                 f_meta = fig.metadata or {}
                 # 1. Live hash re-verification on disk (anti-tamper)
                 f_bytes = f_path.read_bytes()
@@ -331,6 +322,16 @@ class DeterministicReportPipeline:
                         f"Official delivery blocked: Figure '{f_path.name}' tampered or sha256 mismatch "
                         f"(recorded={rec_sha256!r}, live={live_sha256!r})"
                     )
+
+                # 2. P0-2 & P0-10: Verify genuine PNG header & positive dimensions
+                if f_path.suffix.lower() == ".png":
+                    try:
+                        from ..execution.odb_rendering import verify_png_image_integrity
+                        verify_png_image_integrity(f_path)
+                    except Exception as png_err:
+                        raise PermissionError(
+                            f"Official delivery blocked: Figure '{f_path.name}' is corrupt or not a valid PNG image: {png_err}"
+                        )
 
                 # 2. Strict run_id verification (mandatory, exact match)
                 fig_run_id = f_meta.get("run_id")
@@ -395,17 +396,20 @@ class DeterministicReportPipeline:
                         f"(token does not match live session evidence or was tampered)"
                     )
                 rev_data = f_meta.get("render_execution_evidence")
-                if rev_data:
-                    from ..execution.odb_rendering import verify_render_execution_evidence
-                    is_ev_valid, ev_reason = verify_render_execution_evidence(
-                        evidence=rev_data,
-                        expected_run_id=str(run_id).strip(),
-                        expected_odb_sha256=str(eff_odb_hash).strip(),
+                if not rev_data:
+                    raise PermissionError(
+                        f"Official delivery blocked: Figure '{f_path.name}' lacks mandatory render_execution_evidence"
                     )
-                    if not is_ev_valid:
-                        raise PermissionError(
-                            f"Official delivery blocked: Figure '{f_path.name}' render_execution_evidence invalid: {ev_reason}"
-                        )
+                from ..execution.odb_rendering import verify_render_execution_evidence
+                is_ev_valid, ev_reason = verify_render_execution_evidence(
+                    evidence=rev_data,
+                    expected_run_id=str(run_id).strip(),
+                    expected_odb_sha256=str(eff_odb_hash).strip(),
+                )
+                if not is_ev_valid:
+                    raise PermissionError(
+                        f"Official delivery blocked: Figure '{f_path.name}' render_execution_evidence invalid: {ev_reason}"
+                    )
 
         # 2. Build polymorphic EngineeringReportData
         report_data = self.builder.build_report_data(
@@ -429,16 +433,21 @@ class DeterministicReportPipeline:
         html_bytes = html_content.encode("utf-8")
         html_sha256 = hashlib.sha256(html_bytes).hexdigest()
 
-        # Atomic publication: write to a temporary file in target_dir then replace
-        tmp_report = target_dir / f".report_{secrets.token_hex(8)}.tmp"
-        tmp_report.write_bytes(html_bytes)
+        # Atomic publication: staged write to a unique temporary file in target_dir, then atomic replace
         html_file = target_dir / "report.html"
-        if os.name == "nt" and html_file.exists():
-            try:
-                html_file.unlink()
-            except Exception as _un_err:
-                raise PermissionError(f"Atomic report publication failed: unable to overwrite {html_file}: {_un_err}")
-        tmp_report.replace(html_file)
+        tmp_report = target_dir / f".report_{secrets.token_hex(8)}.tmp"
+        try:
+            tmp_report.write_bytes(html_bytes)
+            os.replace(tmp_report, html_file)
+        except Exception as _pub_err:
+            if tmp_report.exists():
+                try:
+                    tmp_report.unlink()
+                except Exception:
+                    pass
+            raise PermissionError(
+                f"Atomic report publication failed: unable to publish authoritative {html_file}: {_pub_err}"
+            )
 
         # 4. Construct Data Plane Artifact Pointer
         report_pointer = ArtifactPointer(
