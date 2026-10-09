@@ -105,7 +105,9 @@ def is_authentic_binary_odb(path: Path) -> bool:
 def find_abaqus_executable(launcher_cmd: Optional[str] = None) -> Optional[str]:
     """Find authentic Abaqus executable or return None if offline."""
     if launcher_cmd:
-        return launcher_cmd
+        if shutil.which(launcher_cmd) or os.path.isfile(launcher_cmd):
+            return launcher_cmd
+        return None
     cmd = shutil.which("abaqus")
     if cmd:
         return cmd

@@ -78,10 +78,10 @@ else:
     matches=[(_name,_value) for _name,_value in regions.items()
              if %r in _value.historyOutputs]
     if len(matches) != 1:
-        raise KeyError('history output is ambiguous; specify history_region: %s' %% %r)
+        raise KeyError('history output is ambiguous; specify history_region: ' + str(matches))
     region_name, hr=matches[0]
 if hr is None or %r not in hr.historyOutputs:
-    raise KeyError('history output not found: %s' %% %r)
+    raise KeyError('history output not found: ' + str(region_name))
 data=list(hr.historyOutputs[%r].data)
 values=[float(x[1]) for x in data]
 if not values:

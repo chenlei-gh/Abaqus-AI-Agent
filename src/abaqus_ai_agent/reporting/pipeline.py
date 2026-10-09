@@ -43,6 +43,9 @@ class DeterministicReportPipeline:
         bcs_info: Sequence[Dict[str, Any]] = (),
         mesh_info: Optional[Dict[str, Any]] = None,
         require_deliverable: bool = True,
+        odb_path: Optional[Union[str, Path]] = None,
+        input_hash: Optional[str] = None,
+        launcher: Optional[str] = None,
     ) -> Tuple[ReportDeliveryCard, ArtifactPointer, EngineeringReportData]:
         """Compile report, render HTML & Markdown, register artifacts, and produce LLM card."""
         # 0. Early Delivery Gate: Verify authorization BEFORE any file creation or disk I/O.
@@ -77,6 +80,25 @@ class DeterministicReportPipeline:
         target_dir.mkdir(parents=True, exist_ok=True)
 
         # 1. Process and bind authentic CAE visualization figures
+        # If visualization specs are requested and images are not yet rendered, invoke headless authentic Viewer if odb_path provided
+        missing_specs = []
+        for spec in visualization_specs:
+            img_path = target_dir / spec.target_filename
+            alt_path = Path(spec.target_filename)
+            if not img_path.exists() and not alt_path.is_file():
+                missing_specs.append(spec)
+
+        if missing_specs and odb_path:
+            from ..execution.odb_rendering import render_authentic_visualizations
+            render_authentic_visualizations(
+                odb_path=odb_path,
+                specs=missing_specs,
+                output_dir=target_dir,
+                launcher=launcher,
+                run_id=run_id,
+                input_hash=input_hash,
+            )
+
         report_figures: List[ReportFigure] = []
         fig_pointers: List[ArtifactPointer] = []
 

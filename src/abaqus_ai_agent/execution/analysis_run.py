@@ -10,7 +10,7 @@ from ..evidence.result import summarize_odb
 from ..evidence.model import Evidence, EvidenceBundle
 from ..contracts.provenance import AnalysisProvenance
 from ..provenance import stable_hash
-from ..acceptance import evaluate_result_acceptance
+from ..acceptance import evaluate_production_acceptance, evaluate_result_acceptance
 
 
 class AnalysisRunState(str, Enum):
@@ -54,6 +54,7 @@ class AnalysisRun:
     verification: Optional[Dict[str, Any]] = None
     acceptance: Optional[Any] = None
     report_reference: Optional[str] = None
+    extractions: Tuple[Any, ...] = ()
 
     def with_state(self, state, **changes):
         values = dict(
@@ -71,6 +72,7 @@ class AnalysisRun:
             runtime=self.runtime, solver=self.solver, inputs=self.inputs,
             outputs=self.outputs, verification=self.verification,
             acceptance=self.acceptance, report_reference=self.report_reference,
+            extractions=self.extractions,
         )
         values.update(changes)
         return AnalysisRun(**values)
@@ -243,7 +245,8 @@ class AnalysisRunner:
             mesh_quality=None, mesh_convergence=None, fatigue=None, contact_diagnostics=None,
             connector_kinematics=None, fmbd_dynamics=None, sensitivity=None, uncertainty=None,
             timeout=3600, action_plan=(), environment=None, engineering_intent=None,
-            postprocess_profile=None, workdir=None, physics_domain=None, require_evidence=None):
+            postprocess_profile=None, workdir=None, physics_domain=None, require_evidence=None,
+            require_production=False):
         run_id = str(uuid.uuid4())
         orig_executor_workdir = getattr(self.executor, "workdir", None)
         if not workdir:
@@ -439,6 +442,10 @@ class AnalysisRunner:
             if not effective_criteria and numerical_verification is None and engineering_checks is None and mesh_quality is None and mesh_convergence is None and fatigue is None and fatigue_spec is None and contact_diagnostics is None and connector_kinematics is None and fmbd_dynamics is None and not getattr(engineering_intent, "connectors", None) and not getattr(engineering_intent, "fmbd", None) and sensitivity is None and uncertainty is None:
                 return run.with_state(AnalysisRunState.ODB_VALIDATED)
 
+            extractions = ()
+            art_dir = workdir or (os.path.dirname(os.path.abspath(path)) if path else ".")
+            run_metrics = ()
+
             if result_values is None:
                 from .results import extract_requirements
                 extractions, result_evidence = extract_requirements(
@@ -587,25 +594,53 @@ class AnalysisRunner:
                 domain_to_eval = None
 
             effective_require_evidence = require_evidence if require_evidence is not None else (True if result_source == "odb" else False)
-            accepted = evaluate_result_acceptance(
-                result_status=status.state.value.lower(),
-                numerical=numerical_verification,
-                engineering=engineering_checks,
-                mesh_quality=mesh_quality,
-                convergence=mesh_convergence,
-                fatigue=fatigue,
-                contact_diagnostics=contact_diagnostics,
-                connector_kinematics=connector_kinematics,
-                fmbd_dynamics=fmbd_dynamics,
-                values=result_values,
-                criteria=effective_criteria,
-                evidence=result_evidence,
-                evidence_manifest=run_manifest,
-                base_dir=art_dir if result_source == "odb" else None,
-                expected_run_id=run_id if result_source == "odb" else None,
-                require_evidence=effective_require_evidence,
-                physics_domain=domain_to_eval,
-            )
+            if require_production:
+                run_snapshot_for_acc = run.with_state(
+                    run.state,
+                    extractions=tuple(extractions if result_source == "odb" else ()),
+                    artifacts=artifacts,
+                    job_status=status,
+                    odb_path=path,
+                )
+                accepted = evaluate_production_acceptance(
+                    analysis_run=run_snapshot_for_acc,
+                    result_status=status.state.value.lower(),
+                    numerical=numerical_verification,
+                    engineering=engineering_checks,
+                    mesh_quality=mesh_quality,
+                    convergence=mesh_convergence,
+                    fatigue=fatigue,
+                    contact_diagnostics=contact_diagnostics,
+                    connector_kinematics=connector_kinematics,
+                    fmbd_dynamics=fmbd_dynamics,
+                    values=result_values,
+                    criteria=effective_criteria,
+                    evidence_manifest=run_manifest,
+                    expected_run_id=run_id,
+                    base_dir=art_dir if result_source == "odb" else None,
+                    physics_domain=domain_to_eval,
+                    result_extractions=extractions if result_source == "odb" else None,
+                )
+            else:
+                accepted = evaluate_result_acceptance(
+                    result_status=status.state.value.lower(),
+                    numerical=numerical_verification,
+                    engineering=engineering_checks,
+                    mesh_quality=mesh_quality,
+                    convergence=mesh_convergence,
+                    fatigue=fatigue,
+                    contact_diagnostics=contact_diagnostics,
+                    connector_kinematics=connector_kinematics,
+                    fmbd_dynamics=fmbd_dynamics,
+                    values=result_values,
+                    criteria=effective_criteria,
+                    evidence=result_evidence,
+                    evidence_manifest=run_manifest,
+                    base_dir=art_dir if result_source == "odb" else None,
+                    expected_run_id=run_id if result_source == "odb" else None,
+                    require_evidence=effective_require_evidence,
+                    physics_domain=domain_to_eval,
+                )
             verification_evidence = []
             if numerical_verification is not None:
                 verification_evidence.append(Evidence(
@@ -682,9 +717,14 @@ class AnalysisRunner:
                 status_value = EngineeringStatus.RESULT_SUSPICIOUS.value
                 acceptance_passed = False
             elif accepted.passed and result_source == "odb":
-                final_state = AnalysisRunState.ACCEPTED
-                status_value = EngineeringStatus.RESULT_VALID.value
-                acceptance_passed = True
+                if require_production and not getattr(accepted, "deliverable", False):
+                    final_state = AnalysisRunState.RESULTS_EXTRACTED
+                    status_value = EngineeringStatus.RESULT_INVALID.value
+                    acceptance_passed = False
+                else:
+                    final_state = AnalysisRunState.ACCEPTED
+                    status_value = EngineeringStatus.RESULT_VALID.value
+                    acceptance_passed = True
             else:
                 final_state = AnalysisRunState.RESULTS_EXTRACTED
                 status_value = EngineeringStatus.RESULT_INVALID.value
@@ -700,7 +740,8 @@ class AnalysisRunner:
                 postprocess_profile=postprocess_profile,
                 action_plan=tuple(normalized_action_plan),
                 verification=verification_map,
-                evidence=evidence, artifacts=artifacts, metrics=locals().get("run_metrics", ()))
+                evidence=evidence, artifacts=artifacts, metrics=run_metrics,
+                extractions=tuple(extractions if result_source == "odb" else ()))
         except Exception as exc:
             artifacts = _collect_artifacts(self.executor, job_name, workdir=workdir)
             diagnostics = _collect_diagnostics(self.executor, job_name, workdir=workdir)
@@ -726,10 +767,23 @@ def _provenance_with_artifacts(provenance, artifacts):
     manifest = tuple((getattr(a, "suffix", ""), getattr(a, "path", ""),
                       bool(getattr(a, "exists", False)), getattr(a, "size", None),
                       getattr(a, "modified_time", None)) for a in artifacts or ())
+    inp_hash = provenance.input_hash
+    if not inp_hash:
+        import hashlib
+        for a in artifacts or ():
+            if getattr(a, "suffix", "") == ".inp" and getattr(a, "exists", False):
+                p = getattr(a, "path", None)
+                if p and os.path.isfile(p):
+                    try:
+                        with open(p, "rb") as f:
+                            inp_hash = hashlib.sha256(f.read()).hexdigest()
+                        break
+                    except Exception:
+                        pass
     return AnalysisProvenance(
         run_id=provenance.run_id, model_name=provenance.model_name,
         job_name=provenance.job_name, model_hash=provenance.model_hash,
-        input_hash=provenance.input_hash, output_hash=provenance.output_hash,
+        input_hash=inp_hash, output_hash=provenance.output_hash,
         artifact_manifest_hash=stable_hash(manifest),
         abaqus_version=provenance.abaqus_version, python_version=provenance.python_version,
         executor=provenance.executor, action_plan=provenance.action_plan,

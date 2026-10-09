@@ -2044,3 +2044,10 @@ For full requirements backlog, input/output schemas, anti-hallucination constrai
     5. **图件真实性阻断 (Fail-Closed)**：声明在 `visualization_specs` 中的 CAE 图件在磁盘上若不存在，正式交付模式下严禁生成虚假占位图，必须坚决抛出 `FileNotFoundError` 阻断正式报告签发，且保证零文件落盘；
     6. **案例工具解耦**：重构 `tools/p2_case_*_e2e.py`，移除对已删除 `contours.py` 的依赖，仅当真实归档或 headless Abaqus Viewer 导出的真实图件存在时才引用，严禁虚假伪造。
   - 退出门禁：全套测试套件 922/922 全部通过，43 项 P0 专项内核与管线反例测试全绿，全仓零合成假图工具。
+- [x] **通用工程仿真执行架构攻坚与真实 CAE 交付闭环 (Universal CAE Execution & Extraction Backbone)** `[CLOSED & QUALIFIED ✅]`
+  - 任务：
+    1. **通用无头 ODB 真实提取器 (`odb_extractor.py`)**：基于真实 Abaqus Python 子进程调度与原生 `odbAccess` 脚本，杜绝任何外部注入/基准常量冒充；将 `run_id`、`input_hash`、`odb_path`、`odb_sha256` 深度注入至 `ResultExtraction.locator` 与 `Evidence.metadata`，实现物理结果与计算过程的绝对因果绑定；
+    2. **真实云图渲染与报告管线打通 (`odb_rendering.py` & `pipeline.py`)**：实现 `render_authentic_visualizations`，由无头 Abaqus Viewer 原生渲染真实云图并验证文件存在且大于 0 字节；报告管线接收 `odb_path` 并自动调度真实渲染，缺少图件坚决 fail-closed 阻断，彻底消除任何合成占位图；
+    3. **统一生产验收与 AnalysisRunner 贯穿 (`analysis_run.py`)**：在 `AnalysisRun` 增加 `extractions` 真实溯源列表；`AnalysisRunner.run` 支持 `require_production=True`，严格调用 `evaluate_production_acceptance`；当且仅当 `accepted.deliverable is True` 时方可签发 `ACCEPTED` 与 `acceptance_passed=True`，并自动回填 `.inp` 真实 SHA-256；
+    4. **六层通用架构因果防绕过全贯穿测试 (`test_cae_pipeline_integration.py`)**：覆盖外部注入拒绝交付、作业未提交/失败阻断、真实 ODB 提取及 Manifest 授权全链路、伪造 ODB 渲染阻断及全失败路径零文件落盘。
+  - 退出门禁：全套测试套件 946/946 全部通过，全仓零合成假图、零占位伪造，六层架构因果绑定全绿闭环。

@@ -1258,19 +1258,19 @@ def render_html(report, language=None):
     ))
 
     for m in (report.results or ())[:5]:
-        m_name = getattr(m, "name", None) or (m.get("name") if isinstance(m, dict) else str(m))
+        m_name = getattr(m, "name", None) or (m.get("name") or m.get("metric") or m.get("label") if isinstance(m, dict) else str(m)) or "Metric"
         m_val = getattr(m, "value", None) if hasattr(m, "value") else (m.get("value") if isinstance(m, dict) else "-")
         m_unit = getattr(m, "unit", "") if hasattr(m, "unit") else (m.get("unit", "") if isinstance(m, dict) else "")
         v_str = f"{m_val} {m_unit}".strip()
-        kpi_cards.append((m_name, v_str, "关键物理指标 / Key Metric" if is_zh else "Key Result Metric", "badge-metric"))
+        kpi_cards.append((str(m_name), str(v_str), "关键物理指标 / Key Metric" if is_zh else "Key Result Metric", "badge-metric"))
 
     kpi_html = '<div class="kpi-grid">'
     for label, val, sub, b_cls in kpi_cards:
         kpi_html += f'''
         <div class="kpi-card {b_cls}">
-          <div class="kpi-label">{html.escape(label)}</div>
-          <div class="kpi-value">{html.escape(val)}</div>
-          <div class="kpi-sub">{html.escape(sub)}</div>
+          <div class="kpi-label">{html.escape(str(label or ""))}</div>
+          <div class="kpi-value">{html.escape(str(val or ""))}</div>
+          <div class="kpi-sub">{html.escape(str(sub or ""))}</div>
         </div>'''
     kpi_html += '</div>'
 

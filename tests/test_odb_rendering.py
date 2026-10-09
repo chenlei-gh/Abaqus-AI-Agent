@@ -144,3 +144,107 @@ def test_render_odb_contours_headless_missing_launcher(tmp_path):
             output_dir=tmp_path,
             launcher="non_existent_abaqus_launcher_999",
         )
+
+
+def test_render_authentic_visualizations_fails_closed_on_fake_odb(tmp_path):
+    from abaqus_ai_agent.execution.odb_rendering import render_authentic_visualizations
+    from abaqus_ai_agent.reporting.visualization_spec import VisualizationSpec
+
+    fake_odb = tmp_path / "fake.odb"
+    fake_odb.write_text('{"fake": "odb"}', encoding="utf-8")
+    spec = VisualizationSpec(
+        artifact_id="fig_1",
+        visualization_type="stress_contour",
+        field_name="S",
+        component="Mises",
+        target_filename="stress.png",
+    )
+
+    with pytest.raises(ValueError, match="not an authentic binary ODB"):
+        render_authentic_visualizations(
+            odb_path=fake_odb,
+            specs=[spec],
+            output_dir=tmp_path,
+        )
+
+
+def test_render_authentic_visualizations_fails_closed_when_image_missing(tmp_path, monkeypatch):
+    from abaqus_ai_agent.execution.odb_rendering import render_authentic_visualizations
+    from abaqus_ai_agent.reporting.visualization_spec import VisualizationSpec
+
+    # Create dummy binary ODB
+    valid_odb = tmp_path / "valid.odb"
+    valid_odb.write_bytes(b"\x89HDF\r\n\x1a\n" + b"\x00" * 4096)
+
+    # Monkeypatch render_odb_contours_headless to simulate a failure where no PNG is produced
+    def mock_headless_render(*args, **kwargs):
+        return []
+
+    monkeypatch.setattr(
+        "abaqus_ai_agent.execution.odb_rendering.render_odb_contours_headless",
+        mock_headless_render,
+    )
+
+    spec = VisualizationSpec(
+        artifact_id="fig_fail",
+        visualization_type="stress_contour",
+        field_name="S",
+        component="Mises",
+        target_filename="stress_missing.png",
+    )
+
+    with pytest.raises(FileNotFoundError, match="Fail-Closed: Authentic CAE visualization"):
+        render_authentic_visualizations(
+            odb_path=valid_odb,
+            specs=[spec],
+            output_dir=tmp_path,
+            run_id="run_test",
+            input_hash="hash_test",
+        )
+
+
+def test_render_authentic_visualizations_success_and_lineage_binding(tmp_path, monkeypatch):
+    from abaqus_ai_agent.execution.odb_rendering import render_authentic_visualizations
+    from abaqus_ai_agent.reporting.visualization_spec import VisualizationSpec
+
+    valid_odb = tmp_path / "valid.odb"
+    valid_odb.write_bytes(b"\x89HDF\r\n\x1a\n" + b"\x00" * 4096)
+
+    target_png = tmp_path / "stress_success.png"
+
+    # Monkeypatch render_odb_contours_headless to simulate successful PNG rendering
+    def mock_headless_render(odb_path, requests, output_dir, **kwargs):
+        target_png.write_bytes(b"\x89PNG\r\n\x1a\nfake_image_bytes")
+        return [target_png]
+
+    monkeypatch.setattr(
+        "abaqus_ai_agent.execution.odb_rendering.render_odb_contours_headless",
+        mock_headless_render,
+    )
+
+    spec = VisualizationSpec(
+        artifact_id="fig_success",
+        visualization_type="stress_contour",
+        field_name="S",
+        component="Mises",
+        target_filename="stress_success.png",
+        caption_zh="Mises 应力云图",
+        caption_en="Mises Stress Contour",
+    )
+
+    figures = render_authentic_visualizations(
+        odb_path=valid_odb,
+        specs=[spec],
+        output_dir=tmp_path,
+        run_id="run_golden_render",
+        input_hash="hash_golden_render",
+    )
+
+    assert len(figures) == 1
+    fig = figures[0]
+    assert fig.kind == "stress_contour"
+    assert fig.metadata["run_id"] == "run_golden_render"
+    assert fig.metadata["input_hash"] == "hash_golden_render"
+    assert fig.metadata["odb_path"] == str(valid_odb.resolve())
+    assert len(fig.metadata["odb_sha256"]) == 64
+    assert len(fig.metadata["image_sha256"]) == 64

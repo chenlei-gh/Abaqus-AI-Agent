@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field as dataclass_field
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, Optional, Tuple, Union
 
 from .units import validate_quantity_unit
 
@@ -77,7 +77,7 @@ class ResultExtraction:
     requirement: ResultRequirement
     value: float
     locator: Dict[str, Any] = dataclass_field(default_factory=dict)
-    evidence: Tuple[Dict[str, Any], ...] = ()
+    evidence: Tuple[Union[Dict[str, Any], Any], ...] = ()
 
 
 

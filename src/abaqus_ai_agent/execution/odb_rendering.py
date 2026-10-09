@@ -14,6 +14,7 @@ import subprocess
 import sys
 from typing import Any, Dict, List, Optional, Sequence, Union
 
+from ..contracts.report import ReportFigure
 from .batch import resolve_default_launcher
 
 
@@ -267,3 +268,112 @@ def render_odb_contours_headless(
         pass
 
     return produced
+
+
+def render_authentic_visualizations(
+    odb_path: Union[str, Path],
+    specs: Sequence[Any],
+    output_dir: Union[str, Path],
+    launcher: Optional[str] = None,
+    timeout: int = 180,
+    run_id: Optional[str] = None,
+    input_hash: Optional[str] = None,
+) -> List[ReportFigure]:
+    """Authentically render and causally bind all requested CAE visualization specs.
+
+    Fail-Closed Discipline:
+    1. Validates that the target is a genuine binary ODB (never empty/mock).
+    2. Translates each VisualizationSpec into a headless Abaqus Viewer contour request.
+    3. Executes headless Abaqus Viewer.
+    4. Ensures EVERY declared image is successfully produced on disk (> 0 bytes).
+    5. Calculates authentic SHA-256 and causally binds run_id, input_hash, and odb_sha256 into the ReportFigure metadata.
+    """
+    import hashlib
+    from .solver import is_authentic_binary_odb
+
+    odb = Path(odb_path).resolve()
+    if not odb.is_file():
+        raise FileNotFoundError(f"Target ODB file does not exist: {odb}")
+    if not is_authentic_binary_odb(odb):
+        raise ValueError(
+            f"Target file {odb} is not an authentic binary ODB. "
+            "Headless viewer rendering strictly forbids synthetic or mock files."
+        )
+
+    h_odb = hashlib.sha256()
+    with open(odb, "rb") as f:
+        while chunk := f.read(65536):
+            h_odb.update(chunk)
+    odb_sha256 = h_odb.hexdigest()
+
+    out_dir = Path(output_dir).resolve()
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    if not specs:
+        return []
+
+    requests = []
+    for spec in specs:
+        v_orient = "Iso"
+        vm = getattr(spec, "view_mode", "AUTO_FIT").upper()
+        if "TOP" in vm:
+            v_orient = "Top"
+        elif "FRONT" in vm:
+            v_orient = "Front"
+        elif "SECTION" in vm or "ISOMETRIC" in vm:
+            v_orient = "Iso"
+
+        req = ContourPlotRequest(
+            output_filename=spec.target_filename,
+            variable_label=spec.field_name,
+            component_or_invariant=spec.component,
+            step_name=spec.step_name,
+            frame_index=spec.frame_index,
+            view_orientation=v_orient,
+            caption=getattr(spec, "caption_zh", "") or getattr(spec, "caption_en", ""),
+        )
+        requests.append(req)
+
+    render_odb_contours_headless(
+        odb_path=odb,
+        requests=requests,
+        output_dir=out_dir,
+        launcher=launcher,
+        timeout=timeout,
+    )
+
+    figures: List[ReportFigure] = []
+    for spec in specs:
+        target_path = out_dir / Path(spec.target_filename).name
+        if not target_path.exists() or target_path.stat().st_size == 0:
+            raise FileNotFoundError(
+                f"Fail-Closed: Authentic CAE visualization '{spec.target_filename}' "
+                f"failed to render from ODB {odb}. Placeholder images are strictly forbidden."
+            )
+
+        h_img = hashlib.sha256()
+        with open(target_path, "rb") as f:
+            while chunk := f.read(65536):
+                h_img.update(chunk)
+        img_sha256 = h_img.hexdigest()
+
+        fig = spec.to_report_figure(str(target_path))
+        fig_meta = dict(fig.metadata or {})
+        fig_meta["odb_path"] = str(odb)
+        fig_meta["odb_sha256"] = odb_sha256
+        fig_meta["image_sha256"] = img_sha256
+        if run_id:
+            fig_meta["run_id"] = run_id
+        if input_hash:
+            fig_meta["input_hash"] = input_hash
+
+        bound_fig = ReportFigure(
+            kind=fig.kind,
+            path=fig.path,
+            caption=fig.caption,
+            source=fig.source,
+            metadata=fig_meta,
+        )
+        figures.append(bound_fig)
+
+    return figures
