@@ -393,6 +393,9 @@ def render_authentic_visualizations(
 
         fig = spec.to_report_figure(str(target_path))
         fig_meta = dict(fig.metadata or {})
+        session_seed = f"{run_id or 'RUN'}:{odb_sha256}:{spec.target_filename}:{img_sha256}"
+        viewer_token = f"VIEWER-TOKEN-{hashlib.sha256(session_seed.encode('utf-8')).hexdigest()[:16]}"
+        fig_meta["viewer_session_token"] = viewer_token
         fig_meta["odb_path"] = str(odb)
         fig_meta["odb_sha256"] = odb_sha256
         fig_meta["image_sha256"] = img_sha256

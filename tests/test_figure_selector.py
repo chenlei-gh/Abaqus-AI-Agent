@@ -125,6 +125,7 @@ def test_priority_1_reuse_existing_verified_figure(tmp_path: Path):
             "input_hash": "HASH-INPUT-1",
             "odb_hash": "HASH-ODB-1",
             "sha256": img_sha256,
+            "viewer_rendered": True,
         },
     )
 

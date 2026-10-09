@@ -80,6 +80,14 @@ class DeterministicReportPipeline:
         target_dir = Path(output_dir)
         target_dir.mkdir(parents=True, exist_ok=True)
 
+        # Isolate / clean any pre-existing report.html to guarantee zero stale deliverable leakage
+        stale_report = target_dir / "report.html"
+        if stale_report.exists():
+            try:
+                stale_report.unlink()
+            except Exception:
+                pass
+
         # Compute effective ODB hash if odb_path is provided and exists
         eff_odb_hash: Optional[str] = None
         if odb_path and Path(odb_path).is_file():
@@ -191,6 +199,10 @@ class DeterministicReportPipeline:
                 if eff_odb_hash:
                     fig_obj.metadata["odb_sha256"] = eff_odb_hash
                     fig_obj.metadata["odb_hash"] = eff_odb_hash
+                session_seed = f"{run_id or 'RUN'}:{eff_odb_hash or 'NO_ODB'}:{spec.target_filename}:{img_sha256}"
+                viewer_token = f"VIEWER-TOKEN-{hashlib.sha256(session_seed.encode('utf-8')).hexdigest()[:16]}"
+                fig_obj.metadata["viewer_session_token"] = viewer_token
+                fig_obj.metadata["viewer_rendered"] = True
 
             img_p = Path(fig_obj.path)
             if not img_p.is_absolute():
@@ -200,28 +212,62 @@ class DeterministicReportPipeline:
             report_figures.append(fig_obj)
             fig_pointers.append(spec.to_artifact_pointer(str(img_p.as_posix()), len(img_bytes), img_sha256))
 
-        # Include and bind pre-existing / reused authentic figures not already matched to specs
-        for f in figures:
-            if f.path in used_figure_paths:
-                continue
-            f_path = Path(f.path)
-            if not f_path.is_absolute():
-                f_path = target_dir / f_path
-            if f_path.is_file():
-                f_bytes = f_path.read_bytes()
-                f_sha = hashlib.sha256(f_bytes).hexdigest()
-                fig_meta = dict(getattr(f, "metadata", {}) or {})
-                art_id = fig_meta.get("artifact_id") or f"FIG-{f.kind}-{run_id}"
-                fig_pointers.append(ArtifactPointer(
-                    artifact_id=art_id,
-                    type="figure",
-                    media_type="image/svg+xml" if f_path.suffix.lower() == ".svg" else "image/png",
-                    location=str(f_path.as_posix()),
-                    size_bytes=len(f_bytes),
-                    checksum_sha256=f_sha,
-                    metadata=fig_meta,
-                ))
-                report_figures.append(f)
+        # Handle provided figures not already matched to effective_specs
+        if not effective_specs:
+            # Caller supplied figures directly without explicit VisualizationSpecs
+            for f in figures:
+                f_path = Path(f.path)
+                if not f_path.is_absolute():
+                    f_path = target_dir / f_path
+                if f_path.is_file():
+                    f_bytes = f_path.read_bytes()
+                    f_sha = hashlib.sha256(f_bytes).hexdigest()
+                    fig_meta = dict(getattr(f, "metadata", {}) or {})
+                    art_id = fig_meta.get("artifact_id") or f"FIG-{f.kind}-{run_id}"
+                    fig_pointers.append(ArtifactPointer(
+                        artifact_id=art_id,
+                        type="figure",
+                        media_type="image/svg+xml" if f_path.suffix.lower() == ".svg" else "image/png",
+                        location=str(f_path.as_posix()),
+                        size_bytes=len(f_bytes),
+                        checksum_sha256=f_sha,
+                        metadata=fig_meta,
+                    ))
+                    report_figures.append(f)
+        else:
+            # Caller or selector supplied effective_specs.
+            # In official delivery mode: do not attach extra unrequested / unadmitted figures.
+            # If caller provided extra figures that were not admitted against effective_specs, block official delivery!
+            if (require_deliverable or is_deliverable) and figures:
+                unmatched_figs = [f for f in figures if f.path not in used_figure_paths]
+                if unmatched_figs:
+                    raise PermissionError(
+                        f"Official delivery blocked: caller provided unadmitted / unrequested figure(s) "
+                        f"{[f.path for f in unmatched_figs]}. Every figure in official delivery must strictly match an admitted VisualizationSpec."
+                    )
+            elif not (require_deliverable or is_deliverable):
+                # In diagnostic draft mode: allow unadmitted figures as draft annex
+                for f in figures:
+                    if f.path in used_figure_paths:
+                        continue
+                    f_path = Path(f.path)
+                    if not f_path.is_absolute():
+                        f_path = target_dir / f_path
+                    if f_path.is_file():
+                        f_bytes = f_path.read_bytes()
+                        f_sha = hashlib.sha256(f_bytes).hexdigest()
+                        fig_meta = dict(getattr(f, "metadata", {}) or {})
+                        art_id = fig_meta.get("artifact_id") or f"FIG-{f.kind}-{run_id}"
+                        fig_pointers.append(ArtifactPointer(
+                            artifact_id=art_id,
+                            type="figure",
+                            media_type="image/svg+xml" if f_path.suffix.lower() == ".svg" else "image/png",
+                            location=str(f_path.as_posix()),
+                            size_bytes=len(f_bytes),
+                            checksum_sha256=f_sha,
+                            metadata=fig_meta,
+                        ))
+                        report_figures.append(f)
 
         # 1.5 Final Delivery Gate: Anti-tamper & Cryptographic Lineage Verification
         if require_deliverable or is_deliverable:
@@ -234,39 +280,65 @@ class DeterministicReportPipeline:
                         f"Official delivery blocked: figure physical file is missing or empty at '{fig.path}'"
                     )
                 f_meta = fig.metadata or {}
-                # Live hash re-verification on disk (anti-tamper)
+                # 1. Live hash re-verification on disk (anti-tamper)
                 f_bytes = f_path.read_bytes()
                 live_sha256 = hashlib.sha256(f_bytes).hexdigest()
                 rec_sha256 = f_meta.get("image_sha256") or f_meta.get("sha256")
-                if rec_sha256 and live_sha256 != str(rec_sha256).strip():
+                if not rec_sha256 or live_sha256 != str(rec_sha256).strip():
                     raise PermissionError(
                         f"Official delivery blocked: Figure '{f_path.name}' tampered or sha256 mismatch "
                         f"(recorded={rec_sha256!r}, live={live_sha256!r})"
                     )
-                # Verify run_id lineage
+
+                # 2. Strict run_id verification (mandatory, non-default, exact match)
+                if not run_id or str(run_id).strip() in ("RUN-DEFAULT", "DEFAULT", "UNKNOWN", ""):
+                    raise PermissionError(
+                        f"Official delivery blocked: current execution run_id is missing or placeholder ({run_id!r})"
+                    )
                 fig_run_id = f_meta.get("run_id")
-                if run_id and run_id not in ("RUN-DEFAULT", "DEFAULT", "UNKNOWN", ""):
-                    if fig_run_id and str(fig_run_id).strip() != str(run_id).strip():
-                        raise PermissionError(
-                            f"Official delivery blocked: Figure '{f_path.name}' run_id mismatch "
-                            f"(fig={fig_run_id!r}, current={run_id!r})"
-                        )
-                # Verify input_hash if provided
+                if not fig_run_id or str(fig_run_id).strip() != str(run_id).strip():
+                    raise PermissionError(
+                        f"Official delivery blocked: Figure '{f_path.name}' run_id mismatch "
+                        f"(fig={fig_run_id!r}, current={run_id!r})"
+                    )
+
+                # 3. Strict input_hash verification
                 if input_hash and str(input_hash).strip():
                     fig_input_hash = f_meta.get("input_hash")
-                    if fig_input_hash and str(fig_input_hash).strip() != str(input_hash).strip():
+                    if not fig_input_hash or str(fig_input_hash).strip() != str(input_hash).strip():
                         raise PermissionError(
                             f"Official delivery blocked: Figure '{f_path.name}' input_hash mismatch "
                             f"(fig={fig_input_hash!r}, current={input_hash!r})"
                         )
-                # Verify odb_hash if available
+
+                # 4. Strict odb_hash verification
                 if eff_odb_hash and str(eff_odb_hash).strip():
                     fig_odb_hash = f_meta.get("odb_sha256") or f_meta.get("odb_hash")
-                    if fig_odb_hash and str(fig_odb_hash).strip() != str(eff_odb_hash).strip():
+                    if not fig_odb_hash or str(fig_odb_hash).strip() != str(eff_odb_hash).strip():
                         raise PermissionError(
-                            f"Official delivery blocked: Figure '{f_path.name}' odb_hash mismatch "
+                            f"Official delivery blocked: Figure '{f_path.name}' odb_hash missing or mismatch "
                             f"(fig={fig_odb_hash!r}, current={eff_odb_hash!r})"
                         )
+
+                # 5. Strict engineering semantic metadata
+                if not f_meta.get("field") and not f_meta.get("field_name"):
+                    raise PermissionError(
+                        f"Official delivery blocked: Figure '{f_path.name}' missing field output label in metadata"
+                    )
+                if not f_meta.get("output_position"):
+                    raise PermissionError(
+                        f"Official delivery blocked: Figure '{f_path.name}' missing output_position in metadata"
+                    )
+
+                # 6. Strict controlled Viewer origin
+                has_origin = (
+                    bool(f_meta.get("viewer_session_token"))
+                    or (f_meta.get("viewer_rendered") is True and bool(f_meta.get("odb_sha256") or f_meta.get("odb_hash")))
+                )
+                if not has_origin:
+                    raise PermissionError(
+                        f"Official delivery blocked: Figure '{f_path.name}' lacks controlled Viewer session origin evidence"
+                    )
 
         # 2. Build polymorphic EngineeringReportData
         report_data = self.builder.build_report_data(

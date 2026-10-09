@@ -780,6 +780,8 @@ def test_negative_p0_b_missing_or_mismatched_provenance_rejected(tmp_path: Path)
             "sha256": valid_img_sha256,
             "step": "Step-1",
             "frame": -1,
+            "output_position": "INTEGRATION_POINT",
+            "viewer_rendered": True,
         },
     )
     res_valid = select_engineering_figures(

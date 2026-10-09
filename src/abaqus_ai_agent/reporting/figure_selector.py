@@ -182,19 +182,20 @@ def admit_figure_for_reuse(
     if target_output_position:
         target_p = target_output_position.strip().upper()
         fig_p = (f_meta.get("output_position") or "").strip().upper()
-        if fig_p and fig_p != target_p:
+        if not fig_p:
+            return False, "Figure metadata missing output_position label"
+        if fig_p != target_p:
             return False, f"Output position mismatch: fig has {fig_p!r}, requested {target_p!r}"
 
     # -------------------------------------------------------------------------
     # Category C: Controlled Origin
     # -------------------------------------------------------------------------
     has_origin = (
-        bool(f_meta.get("viewer_rendered"))
-        or bool(f_meta.get("odb_path"))
-        or (bool(figure.source) and ("Step" in figure.source or "." in figure.source))
+        bool(f_meta.get("viewer_session_token"))
+        or (f_meta.get("viewer_rendered") is True and bool(f_meta.get("odb_sha256") or f_meta.get("odb_hash")))
     )
     if not has_origin:
-        return False, "Figure metadata lacks controlled ODB viewer session origin tracking"
+        return False, "Figure metadata lacks controlled ODB viewer session origin tracking (missing viewer_session_token or viewer_rendered)"
 
     return True, "Admitted"
 
