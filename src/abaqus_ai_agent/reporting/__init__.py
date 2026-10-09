@@ -2,6 +2,7 @@ from .adaptive_template import AdaptiveReportBuilder, AnalysisObjective
 from .interpretation_card import InterpretationCard, InterpretationCardError, ReportDeliveryCard
 from .figure_selector import (
     FigureSelectionResult,
+    admit_figure_for_reuse,
     identify_analysis_scenario,
     select_engineering_figures,
 )
@@ -24,6 +25,7 @@ __all__ = [
     "InterpretationCardError",
     "ReportDeliveryCard",
     "VisualizationSpec",
+    "admit_figure_for_reuse",
     "identify_analysis_scenario",
     "render_analysis_report",
     "render_html",

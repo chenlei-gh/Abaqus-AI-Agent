@@ -10,7 +10,7 @@ from __future__ import annotations
 import hashlib
 import json
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Sequence, Tuple
+from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
 
 from ..contracts.artifact import ArtifactPointer
 from ..contracts.report import EngineeringReportData, ReportFigure
@@ -80,6 +80,15 @@ class DeterministicReportPipeline:
         target_dir = Path(output_dir)
         target_dir.mkdir(parents=True, exist_ok=True)
 
+        # Compute effective ODB hash if odb_path is provided and exists
+        eff_odb_hash: Optional[str] = None
+        if odb_path and Path(odb_path).is_file():
+            hasher_odb = hashlib.sha256()
+            with open(str(odb_path), "rb") as _fh:
+                while chunk := _fh.read(65536):
+                    hasher_odb.update(chunk)
+            eff_odb_hash = hasher_odb.hexdigest()
+
         # Determine effective visualization specs: if not explicitly supplied and no pre-existing figures provided,
         # automatically invoke the Adaptive Figure Selector based on physics domain & engineering objective.
         effective_specs: List[VisualizationSpec] = list(visualization_specs)
@@ -92,20 +101,52 @@ class DeterministicReportPipeline:
                 odb_path=odb_path,
                 extracted_results=results_info,
                 output_dir=target_dir,
+                run_id=run_id,
+                input_hash=input_hash,
+                odb_hash=eff_odb_hash,
             )
             effective_specs = list(selection_res.specs)
 
         # 1. Process and bind authentic CAE visualization figures
-        # If visualization specs are requested and images are not yet rendered, invoke headless authentic Viewer if odb_path provided
-        missing_specs = []
+        # Match specs against provided figures using strict admit_figure_for_reuse
+        from .figure_selector import admit_figure_for_reuse
+
+        spec_to_figure: Dict[VisualizationSpec, ReportFigure] = {}
+        missing_specs: List[VisualizationSpec] = []
+        used_figure_paths = set()
+
         for spec in effective_specs:
-            img_path = target_dir / spec.target_filename
-            if not img_path.exists():
+            matched_fig = None
+            for cand_fig in figures:
+                if not isinstance(cand_fig, ReportFigure) or cand_fig.path in used_figure_paths:
+                    continue
+                is_adm, _reason = admit_figure_for_reuse(
+                    figure=cand_fig,
+                    current_run_id=run_id,
+                    current_input_hash=input_hash,
+                    current_odb_hash=eff_odb_hash,
+                    target_field=spec.field_name,
+                    target_component=spec.component,
+                    target_step=spec.step_name,
+                    target_frame=spec.frame_index,
+                    target_region=getattr(spec, "region", "WHOLE_MODEL"),
+                    target_output_position=getattr(spec, "output_position", "INTEGRATION_POINT"),
+                    resolved_actual_frame=getattr(spec, "actual_frame_index", None),
+                )
+                if is_adm:
+                    matched_fig = cand_fig
+                    break
+
+            if matched_fig is not None:
+                spec_to_figure[spec] = matched_fig
+                used_figure_paths.add(matched_fig.path)
+            else:
                 missing_specs.append(spec)
 
+        rendered_by_filename: Dict[str, ReportFigure] = {}
         if missing_specs and odb_path:
             from ..execution.odb_rendering import render_authentic_visualizations
-            render_authentic_visualizations(
+            rendered_list = render_authentic_visualizations(
                 odb_path=odb_path,
                 specs=missing_specs,
                 output_dir=target_dir,
@@ -113,32 +154,56 @@ class DeterministicReportPipeline:
                 run_id=run_id,
                 input_hash=input_hash,
             )
+            for rf in rendered_list:
+                rendered_by_filename[Path(rf.path).name] = rf
 
         report_figures: List[ReportFigure] = []
         fig_pointers: List[ArtifactPointer] = []
 
         for spec in effective_specs:
-            img_path = target_dir / spec.target_filename
-            if not img_path.exists():
-                if require_deliverable or is_deliverable:
-                    raise FileNotFoundError(
-                        f"Official engineering delivery blocked: required CAE visualization asset '{spec.target_filename}' "
-                        f"({spec.field_name}.{spec.component}) does not exist in target run directory '{target_dir}'. "
-                        "Fallback to ambient working directory or synthetic placeholder generation is strictly prohibited; "
-                        "authentic CAE results rendered from live ODB extraction are required."
-                    )
-                # In diagnostic draft mode: do not synthesize fake CAE images; skip missing asset
-                continue
+            fig_obj: Optional[ReportFigure] = None
+            if spec in spec_to_figure:
+                fig_obj = spec_to_figure[spec]
+            elif spec.target_filename in rendered_by_filename:
+                fig_obj = rendered_by_filename[spec.target_filename]
+            else:
+                img_path = target_dir / spec.target_filename
+                if not img_path.exists():
+                    if require_deliverable or is_deliverable:
+                        raise FileNotFoundError(
+                            f"Official engineering delivery blocked: required CAE visualization asset '{spec.target_filename}' "
+                            f"({spec.field_name}.{spec.component}) does not exist in target run directory '{target_dir}'. "
+                            "Fallback to ambient working directory or synthetic placeholder generation is strictly prohibited; "
+                            "authentic CAE results rendered from live ODB extraction are required."
+                        )
+                    continue
 
-            img_bytes = img_path.read_bytes()
+                img_bytes = img_path.read_bytes()
+                img_sha256 = hashlib.sha256(img_bytes).hexdigest()
+                rel_path = str(img_path.as_posix())
+                fig_obj = spec.to_report_figure(rel_path)
+                fig_obj.metadata["image_sha256"] = img_sha256
+                fig_obj.metadata["sha256"] = img_sha256
+                if run_id:
+                    fig_obj.metadata["run_id"] = run_id
+                if input_hash:
+                    fig_obj.metadata["input_hash"] = input_hash
+                if eff_odb_hash:
+                    fig_obj.metadata["odb_sha256"] = eff_odb_hash
+                    fig_obj.metadata["odb_hash"] = eff_odb_hash
+
+            img_p = Path(fig_obj.path)
+            if not img_p.is_absolute():
+                img_p = target_dir / img_p
+            img_bytes = img_p.read_bytes()
             img_sha256 = hashlib.sha256(img_bytes).hexdigest()
-            rel_path = str(img_path.as_posix())
+            report_figures.append(fig_obj)
+            fig_pointers.append(spec.to_artifact_pointer(str(img_p.as_posix()), len(img_bytes), img_sha256))
 
-            report_figures.append(spec.to_report_figure(rel_path))
-            fig_pointers.append(spec.to_artifact_pointer(rel_path, len(img_bytes), img_sha256))
-
-        # Include and bind pre-existing / reused authentic figures
+        # Include and bind pre-existing / reused authentic figures not already matched to specs
         for f in figures:
+            if f.path in used_figure_paths:
+                continue
             f_path = Path(f.path)
             if not f_path.is_absolute():
                 f_path = target_dir / f_path
@@ -157,6 +222,51 @@ class DeterministicReportPipeline:
                     metadata=fig_meta,
                 ))
                 report_figures.append(f)
+
+        # 1.5 Final Delivery Gate: Anti-tamper & Cryptographic Lineage Verification
+        if require_deliverable or is_deliverable:
+            for fig in report_figures:
+                f_path = Path(fig.path)
+                if not f_path.is_absolute():
+                    f_path = target_dir / f_path
+                if not f_path.is_file() or f_path.stat().st_size <= 0:
+                    raise PermissionError(
+                        f"Official delivery blocked: figure physical file is missing or empty at '{fig.path}'"
+                    )
+                f_meta = fig.metadata or {}
+                # Live hash re-verification on disk (anti-tamper)
+                f_bytes = f_path.read_bytes()
+                live_sha256 = hashlib.sha256(f_bytes).hexdigest()
+                rec_sha256 = f_meta.get("image_sha256") or f_meta.get("sha256")
+                if rec_sha256 and live_sha256 != str(rec_sha256).strip():
+                    raise PermissionError(
+                        f"Official delivery blocked: Figure '{f_path.name}' tampered or sha256 mismatch "
+                        f"(recorded={rec_sha256!r}, live={live_sha256!r})"
+                    )
+                # Verify run_id lineage
+                fig_run_id = f_meta.get("run_id")
+                if run_id and run_id not in ("RUN-DEFAULT", "DEFAULT", "UNKNOWN", ""):
+                    if fig_run_id and str(fig_run_id).strip() != str(run_id).strip():
+                        raise PermissionError(
+                            f"Official delivery blocked: Figure '{f_path.name}' run_id mismatch "
+                            f"(fig={fig_run_id!r}, current={run_id!r})"
+                        )
+                # Verify input_hash if provided
+                if input_hash and str(input_hash).strip():
+                    fig_input_hash = f_meta.get("input_hash")
+                    if fig_input_hash and str(fig_input_hash).strip() != str(input_hash).strip():
+                        raise PermissionError(
+                            f"Official delivery blocked: Figure '{f_path.name}' input_hash mismatch "
+                            f"(fig={fig_input_hash!r}, current={input_hash!r})"
+                        )
+                # Verify odb_hash if available
+                if eff_odb_hash and str(eff_odb_hash).strip():
+                    fig_odb_hash = f_meta.get("odb_sha256") or f_meta.get("odb_hash")
+                    if fig_odb_hash and str(fig_odb_hash).strip() != str(eff_odb_hash).strip():
+                        raise PermissionError(
+                            f"Official delivery blocked: Figure '{f_path.name}' odb_hash mismatch "
+                            f"(fig={fig_odb_hash!r}, current={eff_odb_hash!r})"
+                        )
 
         # 2. Build polymorphic EngineeringReportData
         report_data = self.builder.build_report_data(

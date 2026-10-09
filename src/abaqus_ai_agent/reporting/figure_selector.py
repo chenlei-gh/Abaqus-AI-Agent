@@ -37,6 +37,168 @@ class FigureSelectionResult:
         return len(self.specs) + len(self.reused_figures)
 
 
+def admit_figure_for_reuse(
+    figure: Any,
+    current_run_id: Optional[str],
+    current_input_hash: Optional[str],
+    current_odb_hash: Optional[str],
+    target_field: str,
+    target_component: Optional[str] = None,
+    target_step: Optional[str] = None,
+    target_frame: Optional[int] = None,
+    target_region: Optional[str] = None,
+    target_output_position: Optional[str] = None,
+    resolved_actual_frame: Optional[int] = None,
+) -> Tuple[bool, str]:
+    """Strict, fail-closed admission check for reusing a ReportFigure under Priority 1.
+
+    Returns (admitted: bool, reason: str).
+    Admitted is True IF AND ONLY IF all 3 categories of evidence are verified:
+    A. Provenance & Integrity (run_id, input_hash, odb_sha256, live image sha256).
+    B. Engineering Semantics (field, component/invariant, step, frame/actual_frame, region, output_position).
+    C. Origin validity (controlled generation, authentic ODB source).
+    """
+    if not isinstance(figure, ReportFigure):
+        return False, "Not a ReportFigure instance"
+
+    f_path = Path(figure.path)
+    if not f_path.is_file() or f_path.stat().st_size <= 0:
+        return False, f"Figure physical file does not exist or is empty: {figure.path}"
+
+    f_meta = figure.metadata or {}
+
+    # -------------------------------------------------------------------------
+    # Category A: Provenance & Integrity
+    # -------------------------------------------------------------------------
+    # 1. run_id: mandatory in caller context and metadata, non-default, exact match
+    if not current_run_id or str(current_run_id).strip() in ("RUN-DEFAULT", "DEFAULT", "UNKNOWN", ""):
+        return False, f"Caller run_id is missing or default placeholder ({current_run_id!r})"
+    fig_run_id = f_meta.get("run_id")
+    if not fig_run_id or str(fig_run_id).strip() in ("RUN-DEFAULT", "DEFAULT", "UNKNOWN", ""):
+        return False, f"Figure metadata run_id missing or default placeholder ({fig_run_id!r})"
+    if str(fig_run_id).strip() != str(current_run_id).strip():
+        return False, f"run_id mismatch: fig has {fig_run_id!r}, current run is {current_run_id!r}"
+
+    # 2. input_hash: mandatory in caller context and metadata, non-empty, exact match
+    if not current_input_hash or not str(current_input_hash).strip():
+        return False, "Caller input_hash is missing or empty"
+    fig_input_hash = f_meta.get("input_hash")
+    if not fig_input_hash or not str(fig_input_hash).strip():
+        return False, "Figure metadata input_hash is missing or empty"
+    if str(fig_input_hash).strip() != str(current_input_hash).strip():
+        return False, f"input_hash mismatch: fig has {fig_input_hash!r}, current is {current_input_hash!r}"
+
+    # 3. odb_sha256: mandatory in caller context and metadata, exact match
+    if not current_odb_hash or not str(current_odb_hash).strip():
+        return False, "Caller ODB hash is missing or empty"
+    fig_odb_hash = f_meta.get("odb_sha256") or f_meta.get("odb_hash")
+    if not fig_odb_hash or not str(fig_odb_hash).strip():
+        return False, "Figure metadata odb_sha256 is missing or empty"
+    if str(fig_odb_hash).strip() != str(current_odb_hash).strip():
+        return False, f"odb_sha256 mismatch: fig has {fig_odb_hash!r}, current is {current_odb_hash!r}"
+
+    # 4. Content integrity: recorded sha256 must match live disk content
+    rec_sha256 = f_meta.get("image_sha256") or f_meta.get("sha256")
+    if not rec_sha256 or not str(rec_sha256).strip():
+        return False, "Figure metadata image_sha256 is missing or empty"
+    try:
+        import hashlib
+        hasher_img = hashlib.sha256()
+        with open(str(f_path), "rb") as _img_fh:
+            while chunk := _img_fh.read(65536):
+                hasher_img.update(chunk)
+        live_sha256 = hasher_img.hexdigest()
+        if live_sha256 != str(rec_sha256).strip():
+            return False, f"Image content hash mismatch: recorded={rec_sha256!r}, live={live_sha256!r}"
+    except Exception as exc:
+        return False, f"Failed to compute live hash for {f_path}: {exc}"
+
+    # -------------------------------------------------------------------------
+    # Category B: Engineering Semantics
+    # -------------------------------------------------------------------------
+    # 1. Field Output Variable
+    target_f = target_field.strip().upper()
+    fig_f = (f_meta.get("field") or f_meta.get("field_name") or f_meta.get("variable_label") or "").strip().upper()
+    if not fig_f:
+        return False, "Figure metadata missing field output variable label"
+    if fig_f != target_f:
+        return False, f"Field output variable mismatch: fig has {fig_f!r}, requested {target_f!r}"
+
+    # 2. Invariant / Component
+    if target_component:
+        target_c = target_component.strip().lower()
+        fig_c = (f_meta.get("component") or f_meta.get("component_or_invariant") or "").strip().lower()
+        if not fig_c:
+            return False, "Figure metadata missing component/invariant label"
+        if fig_c != target_c:
+            return False, f"Component/invariant mismatch: fig has {fig_c!r}, requested {target_c!r}"
+
+    # 3. Step Name
+    if target_step:
+        target_s = str(target_step).strip()
+        fig_s = str(f_meta.get("step") or f_meta.get("step_name") or "").strip()
+        if not fig_s:
+            return False, "Figure metadata missing step name"
+        if fig_s != target_s:
+            return False, f"Step name mismatch: fig has {fig_s!r}, requested {target_s!r}"
+
+    # 4. Frame Index & Last Frame Semantics
+    if target_frame is not None:
+        fig_fr = f_meta.get("frame") if f_meta.get("frame") is not None else f_meta.get("frame_index")
+        fig_act_fr = f_meta.get("actual_frame") if f_meta.get("actual_frame") is not None else f_meta.get("actual_frame_index")
+
+        if fig_fr is None and fig_act_fr is None:
+            return False, "Figure metadata missing frame index"
+
+        if int(target_frame) == -1:
+            # Request specifies last frame (-1)
+            if fig_fr is not None and int(fig_fr) == -1:
+                pass
+            elif resolved_actual_frame is not None:
+                eff_act = fig_act_fr if fig_act_fr is not None else fig_fr
+                if eff_act is None or int(eff_act) != int(resolved_actual_frame):
+                    return False, f"Last frame mismatch: resolved target is {resolved_actual_frame}, fig has {eff_act}"
+            elif fig_act_fr is not None:
+                if fig_fr is not None and int(fig_fr) != -1:
+                    return False, f"Last frame mismatch: target requested last frame (-1), fig records frame={fig_fr}"
+            else:
+                return False, f"Last frame mismatch: target requested last frame (-1), fig records frame={fig_fr}"
+        else:
+            t_int = int(target_frame)
+            if fig_fr is not None and int(fig_fr) == t_int:
+                pass
+            elif fig_act_fr is not None and int(fig_act_fr) == t_int:
+                pass
+            else:
+                return False, f"Frame index mismatch: fig has frame={fig_fr}, actual={fig_act_fr}, requested {t_int}"
+
+    # 5. Region (Whole Model vs specific Set)
+    target_r = (target_region or "WHOLE_MODEL").strip().upper()
+    fig_r = (f_meta.get("region") or "WHOLE_MODEL").strip().upper()
+    if fig_r != target_r:
+        return False, f"Region mismatch: fig has {fig_r!r}, requested {target_r!r}"
+
+    # 6. Output Position (Integration Point vs Nodal vs Element Nodal)
+    if target_output_position:
+        target_p = target_output_position.strip().upper()
+        fig_p = (f_meta.get("output_position") or "").strip().upper()
+        if fig_p and fig_p != target_p:
+            return False, f"Output position mismatch: fig has {fig_p!r}, requested {target_p!r}"
+
+    # -------------------------------------------------------------------------
+    # Category C: Controlled Origin
+    # -------------------------------------------------------------------------
+    has_origin = (
+        bool(f_meta.get("viewer_rendered"))
+        or bool(f_meta.get("odb_path"))
+        or (bool(figure.source) and ("Step" in figure.source or "." in figure.source))
+    )
+    if not has_origin:
+        return False, "Figure metadata lacks controlled ODB viewer session origin tracking"
+
+    return True, "Admitted"
+
+
 def probe_odb_fields(
     odb_path: Union[str, Path],
     launcher_cmd: Optional[str] = None,
@@ -77,6 +239,8 @@ class FigureSelector:
         extracted_results: Optional[Any] = None,
         existing_figures: Sequence[Any] = (),
         run_id: Optional[str] = None,
+        input_hash: Optional[str] = None,
+        odb_hash: Optional[str] = None,
         output_dir: Optional[Union[str, Path]] = None,
         hotspot_info: Optional[Dict[str, Any]] = None,
     ) -> FigureSelectionResult:
@@ -103,6 +267,8 @@ class FigureSelector:
             results_info=res_dict,
             existing_figures=existing_figures,
             run_id=run_id,
+            input_hash=input_hash,
+            odb_hash=odb_hash,
             hotspot_info=hotspot_info,
             output_dir=output_dir,
         )
@@ -225,9 +391,26 @@ def select_engineering_figures(
         except Exception:
             pass
 
-    # If available_fields not explicitly provided, try probing ODB directly
-    if available_fields is None and odb_path and os.path.exists(str(odb_path)):
-        available_fields = probe_odb_fields(odb_path)
+    # If available_fields or step structure not explicitly provided, probe ODB directly
+    resolved_actual_frame: Optional[int] = None
+    if odb_path and os.path.exists(str(odb_path)):
+        try:
+            from ..execution.solver import verify_authentic_odb_structure
+            odb_probe = verify_authentic_odb_structure(path=odb_path)
+            if odb_probe.get("verified") and "steps" in odb_probe:
+                steps_data = odb_probe["steps"]
+                if available_fields is None:
+                    fld_set = set()
+                    for _s_name, s_data in steps_data.items():
+                        for fld in s_data.get("fields", []):
+                            fld_set.add(str(fld).upper())
+                    available_fields = sorted(list(fld_set))
+                if step in steps_data:
+                    n_fr = steps_data[step].get("frames", 0)
+                    if frame_index == -1 and n_fr > 0:
+                        resolved_actual_frame = n_fr - 1
+        except Exception:
+            pass
 
     # Normalize available fields (case-insensitive set)
     avail_set = None
@@ -244,68 +427,6 @@ def select_engineering_figures(
         coords = hotspot_info.get("hotspot_location") or hotspot_info.get("coordinates")
         if coords and len(coords) >= 3:
             hotspot_coords = (float(coords[0]), float(coords[1]), float(coords[2]))
-
-    # Existing figures lookup map: key -> ReportFigure
-    # Priority 1: Reuse existing verified figures belonging strictly to THIS run
-    existing_by_field: Dict[str, ReportFigure] = {}
-    if existing_figures:
-        for f in existing_figures:
-            if not isinstance(f, ReportFigure):
-                continue
-            f_path = Path(f.path)
-            if not f_path.is_file() or f_path.stat().st_size <= 0:
-                continue
-            f_meta = f.metadata or {}
-
-            # Strict provenance whitelist admission:
-            # All 4 cryptographic & provenance pillars are strictly mandatory for Priority 1 reuse:
-            # 1. run_id: must exist in figure metadata, cannot be default/empty, and must match current run_id
-            fig_run_id = f_meta.get("run_id")
-            if not fig_run_id or not r_id or fig_run_id != r_id or r_id == "RUN-DEFAULT":
-                continue
-
-            # 2. input_hash: must exist in caller context and figure metadata, and must match
-            fig_input_hash = f_meta.get("input_hash")
-            if not input_hash or not fig_input_hash or fig_input_hash != input_hash:
-                continue
-
-            # 3. odb_hash: must exist in caller context and figure metadata, and must match
-            fig_odb_hash = f_meta.get("odb_hash") or f_meta.get("odb_sha256")
-            if not eff_odb_hash or not fig_odb_hash or fig_odb_hash != eff_odb_hash:
-                continue
-
-            # 4. Content integrity check: sha256 or image_sha256 must exist and match actual image file on disk
-            rec_sha256 = f_meta.get("sha256") or f_meta.get("image_sha256")
-            if not rec_sha256:
-                continue
-            try:
-                import hashlib
-                hasher_img = hashlib.sha256()
-                with open(str(f_path), "rb") as _img_fh:
-                    while chunk := _img_fh.read(65536):
-                        hasher_img.update(chunk)
-                if hasher_img.hexdigest() != rec_sha256:
-                    continue
-            except Exception:
-                continue
-
-            # 5. Semantic validity: step and frame if specified in metadata must match
-            fig_step = f_meta.get("step") or f_meta.get("step_name")
-            if fig_step and fig_step != step:
-                continue
-            fig_frame = f_meta.get("frame") or f_meta.get("frame_index")
-            if fig_frame is not None and frame_index is not None:
-                try:
-                    if int(fig_frame) != int(frame_index):
-                        continue
-                except (ValueError, TypeError):
-                    continue
-
-            f_field = (f_meta.get("field") or f_meta.get("variable_label") or "").upper()
-            if f_field:
-                existing_by_field[f_field] = f
-            if f.kind:
-                existing_by_field[f.kind.lower()] = f
 
     # Define candidate figure templates per scenario
     # Each item: (kind, field_name, component, filename, caption_zh, caption_en, view_mode)
@@ -487,12 +608,35 @@ def select_engineering_figures(
     selected_specs: List[VisualizationSpec] = []
     reused: List[ReportFigure] = []
     unavailable: List[Dict[str, str]] = []
+    already_reused_paths = set()
 
     for kind, f_name, comp, filename, zh, en, view_mode in candidates:
         # Priority 1: Check if already exists in verified existing_figures for THIS run
-        match = existing_by_field.get(f_name.upper()) or existing_by_field.get(kind.lower())
-        if match is not None:
-            reused.append(match)
+        admitted_fig = None
+        if existing_figures:
+            for cand_fig in existing_figures:
+                if not isinstance(cand_fig, ReportFigure) or cand_fig.path in already_reused_paths:
+                    continue
+                is_adm, _ = admit_figure_for_reuse(
+                    figure=cand_fig,
+                    current_run_id=r_id,
+                    current_input_hash=input_hash,
+                    current_odb_hash=eff_odb_hash,
+                    target_field=f_name,
+                    target_component=comp,
+                    target_step=step,
+                    target_frame=frame_index,
+                    target_region="WHOLE_MODEL",
+                    target_output_position="INTEGRATION_POINT",
+                    resolved_actual_frame=resolved_actual_frame,
+                )
+                if is_adm:
+                    admitted_fig = cand_fig
+                    break
+
+        if admitted_fig is not None:
+            reused.append(admitted_fig)
+            already_reused_paths.add(admitted_fig.path)
             continue
 
         # Priority 3: Check ODB field availability
@@ -513,7 +657,10 @@ def select_engineering_figures(
             component=comp,
             step_name=step,
             frame_index=frame_index,
+            actual_frame_index=resolved_actual_frame,
             view_mode=view_mode,
+            region="WHOLE_MODEL",
+            output_position="INTEGRATION_POINT",
             element_id=elem_id if is_hotspot else None,
             node_id=node_id if is_hotspot else None,
             hotspot_location=hotspot_coords if is_hotspot else None,

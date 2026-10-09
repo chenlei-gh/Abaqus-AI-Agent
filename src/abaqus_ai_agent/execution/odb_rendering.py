@@ -33,6 +33,7 @@ class ContourPlotRequest:
     deformation_scale_factor: Optional[float] = None  # None = AUTO, 1.0 = True scale
     caption: str = ""
     description: str = ""
+    region: str = "WHOLE_MODEL"
 
 
 def generate_headless_viewer_script(
@@ -123,6 +124,28 @@ def generate_headless_viewer_script(
             "    # 2. Display mode (Contour on Deformed / Undeformed)",
             f"    vp.odbDisplay.display.setValues(plotState=({p_state},))",
         ]
+
+        if req.region and req.region != "WHOLE_MODEL":
+            code_lines += [
+                f"    # Region set filtering: {req.region}",
+                f"    reg_name = {req.region!r}",
+                "    found_reg = None",
+                "    if reg_name in odb.rootAssembly.elementSets:",
+                "        found_reg = odb.rootAssembly.elementSets[reg_name]",
+                "    elif reg_name in odb.rootAssembly.nodeSets:",
+                "        found_reg = odb.rootAssembly.nodeSets[reg_name]",
+                "    else:",
+                "        for inst in odb.rootAssembly.instances.values():",
+                "            if reg_name in inst.elementSets:",
+                "                found_reg = inst.elementSets[reg_name]",
+                "                break",
+                "            elif reg_name in inst.nodeSets:",
+                "                found_reg = inst.nodeSets[reg_name]",
+                "                break",
+                "    if found_reg is None:",
+                f"        raise KeyError('Requested region \"' + reg_name + '\" not found in ODB assembly or instance sets')",
+                "    vp.odbDisplay.setValues(visibleDisplayGroups=(found_reg,))",
+            ]
 
         # Deformation scale factor
         if req.deformation_scale_factor is not None:
@@ -336,10 +359,12 @@ def render_authentic_visualizations(
             output_filename=spec.target_filename,
             variable_label=spec.field_name,
             component_or_invariant=spec.component,
+            output_position=getattr(spec, "output_position", "INTEGRATION_POINT") or "INTEGRATION_POINT",
             step_name=spec.step_name,
             frame_index=spec.frame_index,
             view_orientation=v_orient,
             caption=getattr(spec, "caption_zh", "") or getattr(spec, "caption_en", ""),
+            region=getattr(spec, "region", "WHOLE_MODEL") or "WHOLE_MODEL",
         )
         requests.append(req)
 
@@ -371,10 +396,22 @@ def render_authentic_visualizations(
         fig_meta["odb_path"] = str(odb)
         fig_meta["odb_sha256"] = odb_sha256
         fig_meta["image_sha256"] = img_sha256
+        fig_meta["sha256"] = img_sha256
         if run_id:
             fig_meta["run_id"] = run_id
         if input_hash:
             fig_meta["input_hash"] = input_hash
+        fig_meta["field"] = spec.field_name
+        fig_meta["component"] = spec.component
+        fig_meta["step"] = spec.step_name
+        fig_meta["step_name"] = spec.step_name
+        fig_meta["frame"] = spec.frame_index
+        fig_meta["frame_index"] = spec.frame_index
+        fig_meta["actual_frame"] = getattr(spec, "actual_frame_index", None)
+        fig_meta["actual_frame_index"] = getattr(spec, "actual_frame_index", None)
+        fig_meta["region"] = getattr(spec, "region", "WHOLE_MODEL") or "WHOLE_MODEL"
+        fig_meta["output_position"] = getattr(spec, "output_position", "INTEGRATION_POINT") or "INTEGRATION_POINT"
+        fig_meta["viewer_rendered"] = True
 
         bound_fig = ReportFigure(
             kind=fig.kind,

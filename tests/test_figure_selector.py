@@ -117,6 +117,10 @@ def test_priority_1_reuse_existing_verified_figure(tmp_path: Path):
         metadata={
             "field": "S",
             "component": "mises",
+            "step": "Step-1",
+            "frame": -1,
+            "region": "WHOLE_MODEL",
+            "output_position": "INTEGRATION_POINT",
             "run_id": "RUN-PRIORITY-1",
             "input_hash": "HASH-INPUT-1",
             "odb_hash": "HASH-ODB-1",
@@ -225,3 +229,215 @@ def test_figure_selector_wrapper_and_probe_odb_fields(tmp_path: Path):
     assert res.scenario == "static_structural"
     assert len(res.specs) > 0
     assert any(s.field_name == "S" for s in res.specs)
+
+
+def test_admit_figure_semantic_component_mismatch(tmp_path: Path):
+    """Negative test: Request S.mises, but figure provides S.max_principal -> rejected."""
+    import hashlib
+    img_file = tmp_path / "max_principal.png"
+    img_bytes = b"\x89PNG\r\n\x1a\n" + b"\x00" * 64
+    img_file.write_bytes(img_bytes)
+    h = hashlib.sha256(img_bytes).hexdigest()
+
+    fig = ReportFigure(
+        kind="stress_contour",
+        path=str(img_file.as_posix()),
+        metadata={
+            "field": "S",
+            "component": "max_principal",
+            "step": "Step-1",
+            "frame": -1,
+            "region": "WHOLE_MODEL",
+            "output_position": "INTEGRATION_POINT",
+            "run_id": "RUN-01",
+            "input_hash": "INP-01",
+            "odb_sha256": "ODB-01",
+            "image_sha256": h,
+            "viewer_rendered": True,
+        },
+    )
+
+    from abaqus_ai_agent.reporting.figure_selector import admit_figure_for_reuse
+    adm, reason = admit_figure_for_reuse(
+        figure=fig,
+        current_run_id="RUN-01",
+        current_input_hash="INP-01",
+        current_odb_hash="ODB-01",
+        target_field="S",
+        target_component="mises",
+        target_step="Step-1",
+        target_frame=-1,
+    )
+    assert adm is False
+    assert "Component/invariant mismatch" in reason
+
+
+def test_admit_figure_semantic_region_mismatch(tmp_path: Path):
+    """Negative test: Request WHOLE_MODEL, figure provides BOLT_HEAD -> rejected."""
+    import hashlib
+    img_file = tmp_path / "bolt_head.png"
+    img_bytes = b"\x89PNG\r\n\x1a\n" + b"\x00" * 64
+    img_file.write_bytes(img_bytes)
+    h = hashlib.sha256(img_bytes).hexdigest()
+
+    fig = ReportFigure(
+        kind="stress_contour",
+        path=str(img_file.as_posix()),
+        metadata={
+            "field": "S",
+            "component": "mises",
+            "step": "Step-1",
+            "frame": -1,
+            "region": "BOLT_HEAD",
+            "output_position": "INTEGRATION_POINT",
+            "run_id": "RUN-01",
+            "input_hash": "INP-01",
+            "odb_sha256": "ODB-01",
+            "image_sha256": h,
+            "viewer_rendered": True,
+        },
+    )
+
+    from abaqus_ai_agent.reporting.figure_selector import admit_figure_for_reuse
+    adm, reason = admit_figure_for_reuse(
+        figure=fig,
+        current_run_id="RUN-01",
+        current_input_hash="INP-01",
+        current_odb_hash="ODB-01",
+        target_field="S",
+        target_component="mises",
+        target_step="Step-1",
+        target_frame=-1,
+        target_region="WHOLE_MODEL",
+    )
+    assert adm is False
+    assert "Region mismatch" in reason
+
+
+def test_admit_figure_semantic_output_position_mismatch(tmp_path: Path):
+    """Negative test: Request INTEGRATION_POINT, figure provides NODAL -> rejected."""
+    import hashlib
+    img_file = tmp_path / "nodal_stress.png"
+    img_bytes = b"\x89PNG\r\n\x1a\n" + b"\x00" * 64
+    img_file.write_bytes(img_bytes)
+    h = hashlib.sha256(img_bytes).hexdigest()
+
+    fig = ReportFigure(
+        kind="stress_contour",
+        path=str(img_file.as_posix()),
+        metadata={
+            "field": "S",
+            "component": "mises",
+            "step": "Step-1",
+            "frame": -1,
+            "region": "WHOLE_MODEL",
+            "output_position": "NODAL",
+            "run_id": "RUN-01",
+            "input_hash": "INP-01",
+            "odb_sha256": "ODB-01",
+            "image_sha256": h,
+            "viewer_rendered": True,
+        },
+    )
+
+    from abaqus_ai_agent.reporting.figure_selector import admit_figure_for_reuse
+    adm, reason = admit_figure_for_reuse(
+        figure=fig,
+        current_run_id="RUN-01",
+        current_input_hash="INP-01",
+        current_odb_hash="ODB-01",
+        target_field="S",
+        target_component="mises",
+        target_step="Step-1",
+        target_frame=-1,
+        target_output_position="INTEGRATION_POINT",
+    )
+    assert adm is False
+    assert "Output position mismatch" in reason
+
+
+def test_admit_figure_semantic_frame_mismatch(tmp_path: Path):
+    """Negative test: Request frame=-1 (last), figure provides frame=0 without resolved match -> rejected."""
+    import hashlib
+    img_file = tmp_path / "initial_frame.png"
+    img_bytes = b"\x89PNG\r\n\x1a\n" + b"\x00" * 64
+    img_file.write_bytes(img_bytes)
+    h = hashlib.sha256(img_bytes).hexdigest()
+
+    fig = ReportFigure(
+        kind="stress_contour",
+        path=str(img_file.as_posix()),
+        metadata={
+            "field": "S",
+            "component": "mises",
+            "step": "Step-1",
+            "frame": 0,
+            "actual_frame": 0,
+            "region": "WHOLE_MODEL",
+            "output_position": "INTEGRATION_POINT",
+            "run_id": "RUN-01",
+            "input_hash": "INP-01",
+            "odb_sha256": "ODB-01",
+            "image_sha256": h,
+            "viewer_rendered": True,
+        },
+    )
+
+    from abaqus_ai_agent.reporting.figure_selector import admit_figure_for_reuse
+    adm, reason = admit_figure_for_reuse(
+        figure=fig,
+        current_run_id="RUN-01",
+        current_input_hash="INP-01",
+        current_odb_hash="ODB-01",
+        target_field="S",
+        target_component="mises",
+        target_step="Step-1",
+        target_frame=-1,
+        resolved_actual_frame=10,
+    )
+    assert adm is False
+    assert "Last frame mismatch" in reason
+
+
+def test_admit_figure_tampered_content_hash_rejected(tmp_path: Path):
+    """Negative test: Disk content tampered after recording sha256 -> rejected."""
+    import hashlib
+    img_file = tmp_path / "tampered.png"
+    img_bytes = b"\x89PNG\r\n\x1a\n" + b"\x00" * 64
+    img_file.write_bytes(img_bytes)
+    original_h = hashlib.sha256(img_bytes).hexdigest()
+
+    # Tamper the file on disk
+    img_file.write_bytes(b"\x89PNG\r\n\x1a\n" + b"\xFF" * 128)
+
+    fig = ReportFigure(
+        kind="stress_contour",
+        path=str(img_file.as_posix()),
+        metadata={
+            "field": "S",
+            "component": "mises",
+            "step": "Step-1",
+            "frame": -1,
+            "region": "WHOLE_MODEL",
+            "output_position": "INTEGRATION_POINT",
+            "run_id": "RUN-01",
+            "input_hash": "INP-01",
+            "odb_sha256": "ODB-01",
+            "image_sha256": original_h,
+            "viewer_rendered": True,
+        },
+    )
+
+    from abaqus_ai_agent.reporting.figure_selector import admit_figure_for_reuse
+    adm, reason = admit_figure_for_reuse(
+        figure=fig,
+        current_run_id="RUN-01",
+        current_input_hash="INP-01",
+        current_odb_hash="ODB-01",
+        target_field="S",
+        target_component="mises",
+        target_step="Step-1",
+        target_frame=-1,
+    )
+    assert adm is False
+    assert "Image content hash mismatch" in reason

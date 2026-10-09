@@ -18,6 +18,7 @@ import pytest
 
 from abaqus_ai_agent.acceptance import AcceptanceResult, CriterionResult
 from abaqus_ai_agent.contracts.artifact import ArtifactPointer
+from abaqus_ai_agent.contracts.report import ReportFigure
 from abaqus_ai_agent.reporting import (
     AdaptiveReportBuilder,
     AnalysisObjective,
@@ -388,3 +389,96 @@ def test_p0_3_cwd_leakage_blocked_in_report_pipeline(tmp_path: Path):
     finally:
         if ambient_file.exists():
             ambient_file.unlink()
+
+
+def test_delivery_gate_blocks_tampered_figure_with_zero_html_leakage(tmp_path: Path):
+    """Negative Test: Tampering with image bytes on disk triggers delivery gate PermissionError with zero HTML leakage."""
+    import hashlib
+    pipeline = DeterministicReportPipeline()
+    img_file = tmp_path / "authentic_figure.png"
+    img_bytes = b"\x89PNG\r\n\x1a\n" + b"\x00" * 128
+    img_file.write_bytes(img_bytes)
+    recorded_sha = hashlib.sha256(img_bytes).hexdigest()
+
+    fig = ReportFigure(
+        kind="stress_hotspot",
+        path=str(img_file.as_posix()),
+        metadata={
+            "field": "S",
+            "component": "mises",
+            "step": "Step-1",
+            "frame": -1,
+            "region": "WHOLE_MODEL",
+            "output_position": "INTEGRATION_POINT",
+            "run_id": "RUN-SECURE-01",
+            "input_hash": "INP-SECURE-01",
+            "odb_sha256": "ODB-SECURE-01",
+            "image_sha256": recorded_sha,
+            "viewer_rendered": True,
+        },
+    )
+
+    # Malicious tampering on disk after figure was registered
+    img_file.write_bytes(b"\x89PNG\r\n\x1a\n" + b"\xFF" * 256)
+
+    with pytest.raises(PermissionError) as exc_info:
+        pipeline.build_and_render(
+            output_dir=tmp_path,
+            title="Secure Delivery Report",
+            case_id="case_tamper",
+            run_id="RUN-SECURE-01",
+            model_info={},
+            results_info=(),
+            acceptance_info={"status": "PASS", "deliverable": True},
+            figures=[fig],
+            require_deliverable=True,
+            input_hash="INP-SECURE-01",
+        )
+
+    assert "tampered or sha256 mismatch" in str(exc_info.value)
+    # Zero leakage guarantee
+    assert not (tmp_path / "report.html").exists()
+
+
+def test_delivery_gate_blocks_mismatched_run_id_or_odb_hash(tmp_path: Path):
+    """Negative Test: Figure from different run_id triggers delivery gate PermissionError."""
+    import hashlib
+    pipeline = DeterministicReportPipeline()
+    img_file = tmp_path / "foreign_run_figure.png"
+    img_bytes = b"\x89PNG\r\n\x1a\n" + b"\x00" * 128
+    img_file.write_bytes(img_bytes)
+    recorded_sha = hashlib.sha256(img_bytes).hexdigest()
+
+    fig = ReportFigure(
+        kind="stress_hotspot",
+        path=str(img_file.as_posix()),
+        metadata={
+            "field": "S",
+            "component": "mises",
+            "step": "Step-1",
+            "frame": -1,
+            "region": "WHOLE_MODEL",
+            "output_position": "INTEGRATION_POINT",
+            "run_id": "FOREIGN-RUN-ID",
+            "input_hash": "INP-01",
+            "odb_sha256": "ODB-01",
+            "image_sha256": recorded_sha,
+            "viewer_rendered": True,
+        },
+    )
+
+    with pytest.raises(PermissionError) as exc_info:
+        pipeline.build_and_render(
+            output_dir=tmp_path,
+            title="Lineage Check Report",
+            case_id="case_lineage",
+            run_id="CURRENT-RUN-ID",
+            model_info={},
+            results_info=(),
+            acceptance_info={"status": "PASS", "deliverable": True},
+            figures=[fig],
+            require_deliverable=True,
+        )
+
+    assert "run_id mismatch" in str(exc_info.value)
+    assert not (tmp_path / "report.html").exists()

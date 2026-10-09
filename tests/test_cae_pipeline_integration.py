@@ -332,20 +332,41 @@ def test_agent_solve_requirement_require_production_full_closure_and_delivery(tm
     )
     # Mock headless viewer rendering so authentic figures are generated during pipeline execution
     import abaqus_ai_agent.execution.odb_rendering as rend_mod
-    monkeypatch.setattr(
-        rend_mod,
-        "render_authentic_visualizations",
-        lambda odb_path, specs, output_dir, **kwargs: [
-            ReportFigure(
-                kind=s.kind,
-                path=str((Path(output_dir) / s.target_filename).as_posix()),
-                caption=s.caption,
-                source=f"{s.field_name}.{s.component}",
-                metadata={"field": s.field_name, "component": s.component, "run_id": kwargs.get("run_id", "PROD")},
+
+    def _mock_render_vis(odb_path, specs, output_dir, **kwargs):
+        import hashlib
+        rendered = []
+        for s in specs:
+            out_file = Path(output_dir) / s.target_filename
+            if not out_file.exists():
+                out_file.write_bytes(b"\x89PNG\r\n\x1a\n" + b"\x00" * 128)
+            img_bytes = out_file.read_bytes()
+            sha = hashlib.sha256(img_bytes).hexdigest()
+            rendered.append(
+                ReportFigure(
+                    kind=s.kind,
+                    path=str(out_file.as_posix()),
+                    caption=s.caption,
+                    source=f"{s.field_name}.{s.component}",
+                    metadata={
+                        "field": s.field_name,
+                        "component": s.component,
+                        "step": s.step_name,
+                        "frame": s.frame_index,
+                        "actual_frame": s.actual_frame_index,
+                        "region": getattr(s, "region", "WHOLE_MODEL"),
+                        "output_position": getattr(s, "output_position", "INTEGRATION_POINT"),
+                        "run_id": kwargs.get("run_id", "PROD"),
+                        "input_hash": kwargs.get("input_hash", ""),
+                        "image_sha256": sha,
+                        "sha256": sha,
+                        "viewer_rendered": True,
+                    },
+                )
             )
-            for s in specs
-        ],
-    )
+        return rendered
+
+    monkeypatch.setattr(rend_mod, "render_authentic_visualizations", _mock_render_vis)
 
     # Mock extract_requirements to supply authentic extraction
     req = ResultRequirement(

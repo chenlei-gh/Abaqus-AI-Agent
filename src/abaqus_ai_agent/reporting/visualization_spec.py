@@ -34,6 +34,9 @@ class VisualizationSpec:
     is_animation: bool = False
     animation_fps: int = 10
     total_frames: int = 12
+    region: str = "WHOLE_MODEL"
+    output_position: str = "INTEGRATION_POINT"
+    actual_frame_index: Optional[int] = None
 
     def to_report_figure(self, physical_image_path: str) -> ReportFigure:
         """Produce the ReportFigure record for the deterministic renderer."""
@@ -47,7 +50,15 @@ class VisualizationSpec:
             metadata={
                 "artifact_id": self.artifact_id,
                 "step": self.step_name,
+                "step_name": self.step_name,
                 "frame": self.frame_index,
+                "frame_index": self.frame_index,
+                "actual_frame": self.actual_frame_index,
+                "actual_frame_index": self.actual_frame_index,
+                "field": self.field_name,
+                "component": self.component,
+                "region": self.region or "WHOLE_MODEL",
+                "output_position": self.output_position or "INTEGRATION_POINT",
                 "element_id": self.element_id,
                 "node_id": self.node_id,
                 "hotspot_location": list(self.hotspot_location) if self.hotspot_location else None,
@@ -81,6 +92,10 @@ class VisualizationSpec:
                 "field": self.field_name,
                 "component": self.component,
                 "step": self.step_name,
+                "frame": self.frame_index,
+                "actual_frame": self.actual_frame_index,
+                "region": self.region or "WHOLE_MODEL",
+                "output_position": self.output_position or "INTEGRATION_POINT",
                 "is_animation": is_anim,
             },
         )
