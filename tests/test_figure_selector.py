@@ -109,6 +109,15 @@ def test_priority_1_reuse_existing_verified_figure(tmp_path: Path):
     existing_img.write_bytes(img_bytes)
     img_sha256 = hashlib.sha256(img_bytes).hexdigest()
 
+    from abaqus_ai_agent.execution.odb_rendering import compute_viewer_session_token
+    p1_nonce = "0123456789abcdef0123456789abcdef"
+    p1_token = compute_viewer_session_token(
+        session_nonce=p1_nonce,
+        run_id="RUN-PRIORITY-1",
+        odb_sha256="HASH-ODB-1",
+        target_filename=existing_img.name,
+        image_sha256=img_sha256,
+    )
     existing_fig = ReportFigure(
         kind="stress_hotspot",
         path=str(existing_img.as_posix()),
@@ -126,7 +135,8 @@ def test_priority_1_reuse_existing_verified_figure(tmp_path: Path):
             "odb_hash": "HASH-ODB-1",
             "sha256": img_sha256,
             "viewer_rendered": True,
-            "viewer_session_token": "VIEWER-TOKEN-PRIORITY-1",
+            "session_nonce": p1_nonce,
+            "viewer_session_token": p1_token,
         },
     )
 

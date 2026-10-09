@@ -2202,3 +2202,20 @@ For full requirements backlog, input/output schemas, anti-hallucination constrai
 - [x] **负向与全量回归验证** `[QUALIFIED]`
   - 全仓 979 项自动化回归测试全部通过 (979 passed, 0 failed, 0 skipped)。
   - `machine_validation/` 黄金基线资产 100% 保持只读未篡改状态。
+
+### 28.8 渲染沙盒隔离、凭据验证闭环与静默降级根除实施记录 (Viewer Sandbox & Zero-Fallback Hardening)
+
+- [x] **漏洞 1 闭环：Viewer Session Token 闭环密码学重新核验** `[CLOSED]`
+  - `odb_rendering.py` 提供公开函数 `compute_viewer_session_token()`，将 `session_nonce`、`run_id`、`odb_sha256`、`target_filename` 和 `image_sha256` 绑定推导哈希。
+  - `figure_selector.py` (`admit_figure_for_reuse`) 与 `pipeline.py` (Final Delivery Gate) 下游准入时强制重新计算并比对 token，任意参数不一致或伪造 token 一律拒绝。
+- [x] **漏洞 2 闭环：临时渲染沙盒 (Scratch Directory Sandbox) 隔离** `[CLOSED]`
+  - `render_odb_contours_headless()` 改为在纯净独立临时目录 `tempfile.TemporaryDirectory` 中执行 Viewer 后处理脚本，仅当进程退出码为 0 且沙盒内生成非空图片时，才原子复制至 `output_dir`。
+  - `render_authentic_visualizations()` 严格检验每张图件是否在本次会话由 Viewer 新鲜产出，磁盘既有同名文件绝不可被直接采纳认证。
+- [x] **漏洞 3 闭环：根除 Viewer 脚本静默降级与硬编码字符串** `[CLOSED]`
+  - `generate_headless_viewer_script()` 校验 `output_position` 必须在受控集合内（`INTEGRATION_POINT`, `NODAL`, 等），非法值直接抛出 `ValueError`。
+  - 彻底删除标量变量设置失败时向 `outputPosition=NODAL` 的静默回退，失败时抛出 `ValueError` 并终止退出码 4。
+  - 变量、工况步、区域与文件名全面采用 `repr()` 安全字面量序列化，杜绝特殊字符拼接漏洞。
+- [x] **负向与全量回归验证** `[QUALIFIED]`
+  - 新增伪造 Token 拒绝、短 Nonce 拒绝、跨运行 Token 拒绝、残留旧图拒绝认证、非法输出位置拒绝等负向测试。
+  - 全仓 982 项自动化回归测试全部通过 (982 passed, 0 failed, 0 skipped)。
+  - `machine_validation/` 黄金基线资产 100% 保持只读未篡改状态。

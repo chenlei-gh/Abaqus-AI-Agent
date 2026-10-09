@@ -768,6 +768,15 @@ def test_negative_p0_b_missing_or_mismatched_provenance_rejected(tmp_path: Path)
     assert len(res_wrong_step.reused_figures) == 0
 
     # Case 7: Full matching provenance whitelist: strictly admitted
+    from abaqus_ai_agent.execution.odb_rendering import compute_viewer_session_token
+    valid_nonce = "0123456789abcdef0123456789abcdef"
+    valid_token = compute_viewer_session_token(
+        session_nonce=valid_nonce,
+        run_id="RUN-CURR-01",
+        odb_sha256="ODB-01",
+        target_filename=img_file.name,
+        image_sha256=valid_img_sha256,
+    )
     fig_valid = ReportFigure(
         kind="stress_hotspot",
         path=str(img_file.as_posix()),
@@ -784,7 +793,8 @@ def test_negative_p0_b_missing_or_mismatched_provenance_rejected(tmp_path: Path)
             "frame": -1,
             "output_position": "INTEGRATION_POINT",
             "viewer_rendered": True,
-            "viewer_session_token": "VIEWER-TOKEN-CURR-01",
+            "session_nonce": valid_nonce,
+            "viewer_session_token": valid_token,
         },
     )
     res_valid = select_engineering_figures(
@@ -1224,3 +1234,213 @@ def test_odb_rendering_session_nonce_and_token_entropy_verification(tmp_path: Pa
     token2 = meta2.get("viewer_session_token")
     assert nonce2 != nonce1
     assert token2 != token1
+
+
+def test_negative_p0_b_forged_viewer_session_token_rejected_in_admission_and_delivery_gate(tmp_path: Path):
+    """Negative Test P0-B: Forged, tampered, or mismatched viewer_session_token fails closed."""
+    from abaqus_ai_agent.execution.odb_rendering import compute_viewer_session_token
+    from abaqus_ai_agent.reporting.figure_selector import admit_figure_for_reuse
+
+    report_dir = tmp_path / "forged_token_dir"
+    report_dir.mkdir()
+    img_file = report_dir / "forged_fig.png"
+    img_bytes = b"\x89PNG\r\n\x1a\n" + b"\x00" * 128
+    img_file.write_bytes(img_bytes)
+    img_sha256 = hashlib.sha256(img_bytes).hexdigest()
+
+    mock_odb = tmp_path / "forged_test.odb"
+    mock_odb.write_bytes(b"\x7fSIMULIA_ODB_BINARY_HEADER" + b"\x00" * 1024)
+    odb_sha256 = hashlib.sha256(mock_odb.read_bytes()).hexdigest()
+
+    pipeline = DeterministicReportPipeline()
+    nonce = "0123456789abcdef0123456789abcdef"
+
+    # Subcase 1: Arbitrary string token (not cryptographically derived)
+    fig_forged_str = ReportFigure(
+        kind="stress_hotspot",
+        path=str(img_file.as_posix()),
+        metadata={
+            "field": "S",
+            "component": "mises",
+            "run_id": "RUN-FORGE-01",
+            "input_hash": "INP-FORGE-01",
+            "odb_sha256": odb_sha256,
+            "image_sha256": img_sha256,
+            "output_position": "INTEGRATION_POINT",
+            "viewer_rendered": True,
+            "session_nonce": nonce,
+            "viewer_session_token": "VIEWER-TOKEN-FORGED-STRING-12345",
+        },
+    )
+    is_adm, reason = admit_figure_for_reuse(
+        figure=fig_forged_str,
+        current_run_id="RUN-FORGE-01",
+        current_input_hash="INP-FORGE-01",
+        current_odb_hash=odb_sha256,
+        target_field="S",
+        target_component="mises",
+    )
+    assert is_adm is False
+    assert "viewer_session_token mismatch or forged" in reason
+
+    with pytest.raises(PermissionError) as exc_forge:
+        pipeline.build_and_render(
+            output_dir=report_dir,
+            title="Forged Token Test",
+            case_id="case_forge",
+            run_id="RUN-FORGE-01",
+            input_hash="INP-FORGE-01",
+            odb_path=mock_odb,
+            model_info={},
+            results_info=(),
+            acceptance_info={"status": "PASS", "deliverable": True},
+            figures=[fig_forged_str],
+            require_deliverable=True,
+        )
+    assert "viewer_session_token verification failed" in str(exc_forge.value)
+
+    # Subcase 2: Nonce missing or too short (<16 chars)
+    fig_bad_nonce = ReportFigure(
+        kind="stress_hotspot",
+        path=str(img_file.as_posix()),
+        metadata={
+            "field": "S",
+            "component": "mises",
+            "run_id": "RUN-FORGE-01",
+            "input_hash": "INP-FORGE-01",
+            "odb_sha256": odb_sha256,
+            "image_sha256": img_sha256,
+            "output_position": "INTEGRATION_POINT",
+            "viewer_rendered": True,
+            "session_nonce": "too_short",
+            "viewer_session_token": "VIEWER-TOKEN-ANYTHING",
+        },
+    )
+    is_adm_n, reason_n = admit_figure_for_reuse(
+        figure=fig_bad_nonce,
+        current_run_id="RUN-FORGE-01",
+        current_input_hash="INP-FORGE-01",
+        current_odb_hash=odb_sha256,
+        target_field="S",
+        target_component="mises",
+    )
+    assert is_adm_n is False
+    assert "lacks authentic session_nonce evidence" in reason_n
+
+    with pytest.raises(PermissionError) as exc_nonce:
+        pipeline.build_and_render(
+            output_dir=report_dir,
+            title="Bad Nonce Test",
+            case_id="case_forge",
+            run_id="RUN-FORGE-01",
+            input_hash="INP-FORGE-01",
+            odb_path=mock_odb,
+            model_info={},
+            results_info=(),
+            acceptance_info={"status": "PASS", "deliverable": True},
+            figures=[fig_bad_nonce],
+            require_deliverable=True,
+        )
+    assert "lacks authentic session_nonce evidence" in str(exc_nonce.value)
+
+    # Subcase 3: Token derived from foreign run_id
+    foreign_token = compute_viewer_session_token(
+        session_nonce=nonce,
+        run_id="FOREIGN-RUN",
+        odb_sha256=odb_sha256,
+        target_filename=img_file.name,
+        image_sha256=img_sha256,
+    )
+    fig_foreign = ReportFigure(
+        kind="stress_hotspot",
+        path=str(img_file.as_posix()),
+        metadata={
+            "field": "S",
+            "component": "mises",
+            "run_id": "RUN-FORGE-01",
+            "input_hash": "INP-FORGE-01",
+            "odb_sha256": odb_sha256,
+            "image_sha256": img_sha256,
+            "output_position": "INTEGRATION_POINT",
+            "viewer_rendered": True,
+            "session_nonce": nonce,
+            "viewer_session_token": foreign_token,
+        },
+    )
+    is_adm_f, reason_f = admit_figure_for_reuse(
+        figure=fig_foreign,
+        current_run_id="RUN-FORGE-01",
+        current_input_hash="INP-FORGE-01",
+        current_odb_hash=odb_sha256,
+        target_field="S",
+        target_component="mises",
+    )
+    assert is_adm_f is False
+    assert "viewer_session_token mismatch or forged" in reason_f
+
+
+def test_negative_p0_b_preexisting_stale_image_not_adopted_if_viewer_fails_or_does_not_produce(tmp_path: Path, monkeypatch):
+    """Negative Test P0-B: Stale file sitting in output_dir is never certified if Viewer doesn't produce it."""
+    from abaqus_ai_agent.execution.odb_rendering import render_authentic_visualizations
+    from abaqus_ai_agent.reporting.visualization_spec import VisualizationSpec
+
+    mock_odb = tmp_path / "ambient_test.odb"
+    mock_odb.write_bytes(b"\x7fSIMULIA_ODB_BINARY_HEADER" + b"\x00" * 1024)
+
+    out_dir = tmp_path / "ambient_out"
+    out_dir.mkdir()
+    stale_img = out_dir / "stale_stress.png"
+    # Pre-existing file sitting in output directory from a previous or foreign process
+    stale_img.write_bytes(b"\x89PNG\r\n\x1a\n" + b"STALE_OLD_BYTES" * 8)
+
+    spec = VisualizationSpec(
+        artifact_id="FIG-STALE",
+        visualization_type="stress_hotspot",
+        field_name="S",
+        component="mises",
+        target_filename="stale_stress.png",
+    )
+
+    # Simulate headless viewer returning an empty list (failed to produce image in scratch sandbox)
+    monkeypatch.setattr(
+        "abaqus_ai_agent.execution.odb_rendering.render_odb_contours_headless",
+        lambda **kwargs: [],
+    )
+
+    with pytest.raises(FileNotFoundError) as exc_info:
+        render_authentic_visualizations(
+            odb_path=mock_odb,
+            specs=[spec],
+            output_dir=out_dir,
+            run_id="RUN-FRESH-01",
+            input_hash="INP-FRESH-01",
+        )
+
+    err = str(exc_info.value)
+    assert "failed to render from ODB" in err
+    assert "in this viewer session" in err
+
+
+def test_negative_p0_c_viewer_script_rejects_invalid_output_position_and_has_no_nodal_fallback():
+    """Negative Test P0-C: Invalid outputPosition raises ValueError; script has no silent NODAL fallback."""
+    from abaqus_ai_agent.execution.odb_rendering import ContourPlotRequest, generate_headless_viewer_script
+
+    # 1. Invalid outputPosition raises ValueError immediately during script generation
+    req_invalid_pos = ContourPlotRequest(
+        output_filename="test_pos.png",
+        output_position="UNSUPPORTED_RANDOM_POS",
+        variable_label="S",
+    )
+    with pytest.raises(ValueError, match="Invalid output_position"):
+        generate_headless_viewer_script("dummy.odb", [req_invalid_pos], "dummy_dir")
+
+    # 2. Scalar variable with no invariant has NO silent fallback to NODAL
+    req_scalar = ContourPlotRequest(
+        output_filename="test_scalar.png",
+        variable_label="CPRESS",
+        component_or_invariant=None,
+        output_position="INTEGRATION_POINT",
+    )
+    script = generate_headless_viewer_script("dummy.odb", [req_scalar], "dummy_dir")
+    assert "outputPosition=NODAL" not in script
+    assert "Failed to set primary variable \"CPRESS\" at outputPosition INTEGRATION_POINT" in script

@@ -352,13 +352,32 @@ class DeterministicReportPipeline:
                     )
 
                 # 6. Strict controlled Viewer origin
-                if not f_meta.get("viewer_session_token") or not str(f_meta.get("viewer_session_token")).strip():
-                    raise PermissionError(
-                        f"Official delivery blocked: Figure '{f_path.name}' lacks authentic viewer_session_token evidence"
-                    )
                 if f_meta.get("viewer_rendered") is not True:
                     raise PermissionError(
                         f"Official delivery blocked: Figure '{f_path.name}' was not rendered by a controlled Viewer session"
+                    )
+                session_token = str(f_meta.get("viewer_session_token") or "").strip()
+                if not session_token:
+                    raise PermissionError(
+                        f"Official delivery blocked: Figure '{f_path.name}' lacks authentic viewer_session_token evidence"
+                    )
+                session_nonce = str(f_meta.get("session_nonce") or "").strip()
+                if not session_nonce or len(session_nonce) < 16:
+                    raise PermissionError(
+                        f"Official delivery blocked: Figure '{f_path.name}' lacks authentic session_nonce evidence"
+                    )
+                from ..execution.odb_rendering import compute_viewer_session_token
+                expected_token = compute_viewer_session_token(
+                    session_nonce=session_nonce,
+                    run_id=str(run_id).strip(),
+                    odb_sha256=str(eff_odb_hash).strip(),
+                    target_filename=f_path.name,
+                    image_sha256=live_sha256,
+                )
+                if session_token != expected_token:
+                    raise PermissionError(
+                        f"Official delivery blocked: Figure '{f_path.name}' viewer_session_token verification failed "
+                        f"(token does not match live session evidence or was tampered)"
                     )
 
         # 2. Build polymorphic EngineeringReportData

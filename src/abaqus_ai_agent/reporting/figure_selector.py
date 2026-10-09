@@ -195,6 +195,20 @@ def admit_figure_for_reuse(
     session_token = str(f_meta.get("viewer_session_token") or "").strip()
     if not session_token:
         return False, "Figure metadata lacks authentic viewer_session_token evidence"
+    session_nonce = str(f_meta.get("session_nonce") or "").strip()
+    if not session_nonce or len(session_nonce) < 16:
+        return False, "Figure metadata lacks authentic session_nonce evidence"
+
+    from ..execution.odb_rendering import compute_viewer_session_token
+    expected_token = compute_viewer_session_token(
+        session_nonce=session_nonce,
+        run_id=str(current_run_id).strip(),
+        odb_sha256=str(current_odb_hash).strip(),
+        target_filename=f_path.name,
+        image_sha256=live_sha256,
+    )
+    if session_token != expected_token:
+        return False, "viewer_session_token mismatch or forged (does not match cryptographically verified session evidence)"
 
     return True, "Admitted"
 

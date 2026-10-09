@@ -143,9 +143,19 @@ def test_visualization_spec_and_deterministic_figure_binding(tmp_path: Path):
     fig.metadata["step"] = spec.step_name
     fig.metadata["frame"] = spec.frame_index
     fig.metadata["region"] = "WHOLE_MODEL"
+    from abaqus_ai_agent.execution.odb_rendering import compute_viewer_session_token
+    t_nonce = "0123456789abcdef0123456789abcdef"
+    t_token = compute_viewer_session_token(
+        session_nonce=t_nonce,
+        run_id=test_run_id,
+        odb_sha256=odb_sha256,
+        target_filename=img_file.name,
+        image_sha256=img_sha256,
+    )
     fig.metadata["output_position"] = "INTEGRATION_POINT"
     fig.metadata["viewer_rendered"] = True
-    fig.metadata["viewer_session_token"] = "VIEWER-TOKEN-P05-TEST"
+    fig.metadata["session_nonce"] = t_nonce
+    fig.metadata["viewer_session_token"] = t_token
 
     delivery_card, report_pointer, report_data = pipeline.build_and_render(
         output_dir=tmp_path,
@@ -273,9 +283,19 @@ def test_ab_qualification_full_llm_report_vs_deterministic_pipeline(tmp_path: Pa
     fig1.metadata["frame"] = -1
     fig1.metadata["step"] = spec1.step_name
     fig1.metadata["region"] = "WHOLE_MODEL"
+    from abaqus_ai_agent.execution.odb_rendering import compute_viewer_session_token
+    ab_nonce_1 = "0123456789abcdef0123456789abcdef"
+    ab_token_1 = compute_viewer_session_token(
+        session_nonce=ab_nonce_1,
+        run_id=ab_run_id,
+        odb_sha256=odb_sha_ab,
+        target_filename=f1_path.name,
+        image_sha256=f1_sha,
+    )
     fig1.metadata["output_position"] = "INTEGRATION_POINT"
     fig1.metadata["viewer_rendered"] = True
-    fig1.metadata["viewer_session_token"] = "VIEWER-TOKEN-AB-1"
+    fig1.metadata["session_nonce"] = ab_nonce_1
+    fig1.metadata["viewer_session_token"] = ab_token_1
 
     fig2 = anim_spec.to_report_figure(str(f2_path.as_posix()))
     fig2.metadata["image_sha256"] = f2_sha
@@ -288,9 +308,18 @@ def test_ab_qualification_full_llm_report_vs_deterministic_pipeline(tmp_path: Pa
     fig2.metadata["frame"] = -1
     fig2.metadata["step"] = anim_spec.step_name
     fig2.metadata["region"] = "WHOLE_MODEL"
+    ab_nonce_2 = "fedcba9876543210fedcba9876543210"
+    ab_token_2 = compute_viewer_session_token(
+        session_nonce=ab_nonce_2,
+        run_id=ab_run_id,
+        odb_sha256=odb_sha_ab,
+        target_filename=f2_path.name,
+        image_sha256=f2_sha,
+    )
     fig2.metadata["output_position"] = "NODAL"
     fig2.metadata["viewer_rendered"] = True
-    fig2.metadata["viewer_session_token"] = "VIEWER-TOKEN-AB-2"
+    fig2.metadata["session_nonce"] = ab_nonce_2
+    fig2.metadata["viewer_session_token"] = ab_token_2
 
     # Execute Branch B: Deterministic Pipeline
     delivery_card, report_pointer, report_data = pipeline.build_and_render(

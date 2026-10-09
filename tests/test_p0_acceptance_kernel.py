@@ -1172,9 +1172,19 @@ def test_p0_d_authentic_cae_visualization_asset_succeeds_in_official_delivery(tm
     fig.metadata["odb_sha256"] = h_odb
     fig.metadata["field"] = specs[0].field_name
     fig.metadata["component"] = specs[0].component
+    from abaqus_ai_agent.execution.odb_rendering import compute_viewer_session_token
+    auth_nonce = "0123456789abcdef0123456789abcdef"
+    auth_token = compute_viewer_session_token(
+        session_nonce=auth_nonce,
+        run_id="run_authentic_asset",
+        odb_sha256=h_odb,
+        target_filename=authentic_img.name,
+        image_sha256=h_img,
+    )
     fig.metadata["output_position"] = "INTEGRATION_POINT"
     fig.metadata["viewer_rendered"] = True
-    fig.metadata["viewer_session_token"] = "VIEWER-TOKEN-AUTH-ASSET"
+    fig.metadata["session_nonce"] = auth_nonce
+    fig.metadata["viewer_session_token"] = auth_token
 
     card, pointer, data = pipeline.build_and_render(
         output_dir=out_dir,

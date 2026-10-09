@@ -8,15 +8,51 @@ databases without needing interactive GUI windows or manual screenshotting.
 """
 
 from dataclasses import dataclass
+import hashlib
 import os
 from pathlib import Path
 import secrets
+import shutil
 import subprocess
 import sys
-from typing import Any, Dict, List, Optional, Sequence, Union
+import tempfile
+from typing import Any, Dict, List, Optional, Sequence, Set, Union
 
 from ..contracts.report import ReportFigure
 from .batch import resolve_default_launcher
+
+
+VALID_OUTPUT_POSITIONS: Set[str] = {
+    "INTEGRATION_POINT",
+    "NODAL",
+    "ELEMENT_NODAL",
+    "CENTROID",
+    "ELEMENT_FACE",
+}
+
+VALID_PLOT_STATES: Set[str] = {
+    "CONTOURS_ON_DEF",
+    "CONTOURS_ON_UNDEF",
+    "DEFORMED",
+    "UNDEFORMED",
+}
+
+
+def compute_viewer_session_token(
+    session_nonce: str,
+    run_id: str,
+    odb_sha256: str,
+    target_filename: str,
+    image_sha256: str,
+) -> str:
+    """Cryptographically derive authentic viewer_session_token for an Abaqus Viewer render session.
+
+    Binds the unpredictable session nonce, run_id, odb_sha256, target filename,
+    and image content sha256. Prevents downstream forgery and ambient file adoption.
+    """
+    fname = Path(target_filename).name
+    seed = f"VIEWER-SESSION:{session_nonce}:{run_id}:{odb_sha256}:{fname}:{image_sha256}"
+    return f"VIEWER-TOKEN-{hashlib.sha256(seed.encode('utf-8')).hexdigest()}"
 
 
 @dataclass
@@ -96,7 +132,23 @@ def generate_headless_viewer_script(
 
     for idx, req in enumerate(requests):
         safe_fname = Path(req.output_filename).name
-        target_path_expr = f"os.path.join(out_dir, r'{safe_fname}')"
+        target_path_expr = f"os.path.join(out_dir, {safe_fname!r})"
+
+        pos_raw = (req.output_position or "INTEGRATION_POINT").strip().upper()
+        if pos_raw not in VALID_OUTPUT_POSITIONS:
+            raise ValueError(
+                f"Invalid output_position {req.output_position!r} for request '{safe_fname}'. "
+                f"Must be one of {sorted(VALID_OUTPUT_POSITIONS)}"
+            )
+        pos = pos_raw
+
+        plot_state_raw = (req.plot_state or "CONTOURS_ON_DEF").strip().upper()
+        if plot_state_raw not in VALID_PLOT_STATES:
+            raise ValueError(
+                f"Invalid plot_state {req.plot_state!r} for request '{safe_fname}'. "
+                f"Must be one of {sorted(VALID_PLOT_STATES)}"
+            )
+        p_state = plot_state_raw
 
         code_lines += [
             f"# ---------------------------------------------------------------------------",
@@ -107,20 +159,18 @@ def generate_headless_viewer_script(
         ]
 
         if req.step_name:
-            code_lines.append(f"    if '{req.step_name}' not in odb.steps:")
+            code_lines.append(f"    if {req.step_name!r} not in odb.steps:")
             code_lines.append(f"        raise KeyError('Requested step \"{req.step_name}\" not found in ODB steps: ' + str(list(odb.steps.keys())))")
-            code_lines.append(f"    target_step = odb.steps['{req.step_name}']")
-            code_lines.append(f"    target_frame = target_step.frames[{req.frame_index}]")
-            code_lines.append(f"    vp.odbDisplay.setFrame(step='{req.step_name}', frame={req.frame_index})")
+            code_lines.append(f"    target_step = odb.steps[{req.step_name!r}]")
+            code_lines.append(f"    target_frame = target_step.frames[{int(req.frame_index)}]")
+            code_lines.append(f"    vp.odbDisplay.setFrame(step={req.step_name!r}, frame={int(req.frame_index)})")
         else:
             code_lines.append("    # Select final available step and frame")
             code_lines.append("    if len(odb.steps) == 0:")
             code_lines.append("        raise ValueError('Target ODB contains zero steps')")
             code_lines.append("    last_step_key = list(odb.steps.keys())[-1]")
-            code_lines.append(f"    vp.odbDisplay.setFrame(step=last_step_key, frame={req.frame_index})")
+            code_lines.append(f"    vp.odbDisplay.setFrame(step=last_step_key, frame={int(req.frame_index)})")
 
-        # Plot state
-        p_state = req.plot_state
         code_lines += [
             "    # 2. Display mode (Contour on Deformed / Undeformed)",
             f"    vp.odbDisplay.display.setValues(plotState=({p_state},))",
@@ -144,7 +194,7 @@ def generate_headless_viewer_script(
                 "                found_reg = inst.nodeSets[reg_name]",
                 "                break",
                 "    if found_reg is None:",
-                f"        raise KeyError('Requested region \"' + reg_name + '\" not found in ODB assembly or instance sets')",
+                "        raise KeyError('Requested region \"' + reg_name + '\" not found in ODB assembly or instance sets')",
                 "    vp.odbDisplay.setValues(visibleDisplayGroups=(found_reg,))",
             ]
 
@@ -160,7 +210,6 @@ def generate_headless_viewer_script(
 
         # Primary Variable setup
         v_label = req.variable_label
-        pos = req.output_position
         inv = req.component_or_invariant
 
         code_lines.append(f"    # 3. Field variable configuration: {v_label}")
@@ -169,30 +218,30 @@ def generate_headless_viewer_script(
             code_lines += [
                 "    try:",
                 f"        vp.odbDisplay.setPrimaryVariable(",
-                f"            variableLabel='{v_label}',",
+                f"            variableLabel={v_label!r},",
                 f"            outputPosition={pos},",
-                f"            refinement=(INVARIANT, '{inv_upper}')",
+                f"            refinement=(INVARIANT, {inv_upper!r})",
                 "        )",
                 "    except Exception:",
                 "        try:",
                 f"            vp.odbDisplay.setPrimaryVariable(",
-                f"                variableLabel='{v_label}',",
+                f"                variableLabel={v_label!r},",
                 f"                outputPosition={pos},",
-                f"                refinement=(INVARIANT, '{inv}')",
+                f"                refinement=(INVARIANT, {inv!r})",
                 "            )",
                 "        except Exception:",
                 "            try:",
                 f"                vp.odbDisplay.setPrimaryVariable(",
-                f"                    variableLabel='{v_label}',",
+                f"                    variableLabel={v_label!r},",
                 f"                    outputPosition={pos},",
-                f"                    refinement=(COMPONENT, '{inv}')",
+                f"                    refinement=(COMPONENT, {inv!r})",
                 "                )",
                 "            except Exception:",
                 "                try:",
                 f"                    vp.odbDisplay.setPrimaryVariable(",
-                f"                        variableLabel='{v_label}',",
+                f"                        variableLabel={v_label!r},",
                 f"                        outputPosition={pos},",
-                f"                        refinement=(COMPONENT, '{inv_upper}')",
+                f"                        refinement=(COMPONENT, {inv_upper!r})",
                 "                    )",
                 "                except Exception:",
                 f"                    raise ValueError('Failed to set primary variable \"{v_label}\" with invariant/component \"{inv}\"')",
@@ -200,17 +249,17 @@ def generate_headless_viewer_script(
         else:
             code_lines += [
                 "    try:",
-                f"        vp.odbDisplay.setPrimaryVariable(variableLabel='{v_label}', outputPosition={pos})",
-                "    except Exception:",
-                f"        vp.odbDisplay.setPrimaryVariable(variableLabel='{v_label}', outputPosition=NODAL)",
+                f"        vp.odbDisplay.setPrimaryVariable(variableLabel={v_label!r}, outputPosition={pos})",
+                "    except Exception as _pos_err:",
+                f"        raise ValueError('Failed to set primary variable \"{v_label}\" at outputPosition {pos}: ' + str(_pos_err))",
             ]
 
         # View Orientation
         v_orient = req.view_orientation
         code_lines += [
             f"    # 4. Camera view orientation: {v_orient}",
-            f"    if '{v_orient}' in session.views:",
-            f"        vp.view.setValues(session.views['{v_orient}'])",
+            f"    if {v_orient!r} in session.views:",
+            f"        vp.view.setValues(session.views[{v_orient!r}])",
             "    vp.view.fitView()",
             "",
             f"    # 5. Export authentic PNG",
@@ -238,69 +287,69 @@ def render_odb_contours_headless(
     launcher: Optional[str] = None,
     timeout: int = 180,
 ) -> List[Path]:
-    """Execute headless Abaqus Viewer to produce authentic physical contour images.
+    """Execute headless Abaqus Viewer in an isolated scratch sandbox to produce authentic contour images.
 
-    Returns the list of generated PNG image Paths on disk.
+    Returns the list of verified, newly-generated PNG image Paths transferred to output_dir.
+    Pre-existing files in output_dir are never certified or adopted if Viewer did not render them.
     """
     odb = Path(odb_path).resolve()
     out_dir = Path(output_dir).resolve()
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    script_path = out_dir / "_headless_viewer_post.py"
-    script_content = generate_headless_viewer_script(
-        odb_path=odb,
-        requests=requests,
-        output_dir=out_dir,
-    )
-    script_path.write_text(script_content, encoding="utf-8")
+    if not requests:
+        return []
 
     resolved_launcher = resolve_default_launcher(launcher or "abaqus")
     if not (os.path.exists(resolved_launcher) or any(os.access(p, os.X_OK) for p in [resolved_launcher])):
         # Fallback check on PATH
-        import shutil
         if not shutil.which(resolved_launcher):
             raise RuntimeError(
                 f"Abaqus launcher not found at {resolved_launcher}. "
                 "Headless viewer rendering requires authentic Abaqus installation."
             )
 
-    cmd = [str(resolved_launcher), "viewer", "-noGUI", str(script_path)]
-    use_shell = (os.name == "nt")
-
-    try:
-        proc = subprocess.run(
-            cmd,
-            cwd=str(out_dir),
-            capture_output=True,
-            text=True,
-            timeout=timeout,
-            shell=use_shell,
-            check=False,
+    with tempfile.TemporaryDirectory(prefix="viewer_render_scratch_") as scratch_str:
+        scratch_dir = Path(scratch_str).resolve()
+        script_path = scratch_dir / "_headless_viewer_post.py"
+        script_content = generate_headless_viewer_script(
+            odb_path=odb,
+            requests=requests,
+            output_dir=scratch_dir,
         )
-    except subprocess.TimeoutExpired as exc:
-        raise RuntimeError(f"Headless Abaqus Viewer timed out after {timeout}s: {exc}")
+        script_path.write_text(script_content, encoding="utf-8")
 
-    if proc.returncode != 0:
-        err_msg = proc.stderr.strip() or proc.stdout.strip()
-        raise RuntimeError(
-            f"Headless Abaqus Viewer failed with exit code {proc.returncode}: {err_msg}"
-        )
+        cmd = [str(resolved_launcher), "viewer", "-noGUI", str(script_path)]
+        use_shell = (os.name == "nt")
 
-    # Collect successfully generated images
-    produced = []
-    for req in requests:
-        target = out_dir / Path(req.output_filename).name
-        if target.exists() and target.stat().st_size > 0:
-            produced.append(target)
+        try:
+            proc = subprocess.run(
+                cmd,
+                cwd=str(scratch_dir),
+                capture_output=True,
+                text=True,
+                timeout=timeout,
+                shell=use_shell,
+                check=False,
+            )
+        except subprocess.TimeoutExpired as exc:
+            raise RuntimeError(f"Headless Abaqus Viewer timed out after {timeout}s: {exc}")
 
-    # Clean up temporary script
-    try:
-        if script_path.exists():
-            script_path.unlink()
-    except Exception:
-        pass
+        if proc.returncode != 0:
+            err_msg = proc.stderr.strip() or proc.stdout.strip()
+            raise RuntimeError(
+                f"Headless Abaqus Viewer failed with exit code {proc.returncode}: {err_msg}"
+            )
 
-    return produced
+        # Collect only freshly generated images from scratch sandbox and transfer to out_dir
+        produced = []
+        for req in requests:
+            scratch_target = scratch_dir / Path(req.output_filename).name
+            if scratch_target.exists() and scratch_target.stat().st_size > 0:
+                final_target = out_dir / scratch_target.name
+                shutil.copy2(scratch_target, final_target)
+                produced.append(final_target)
+
+        return produced
 
 
 def render_authentic_visualizations(
@@ -369,22 +418,26 @@ def render_authentic_visualizations(
         )
         requests.append(req)
 
-    render_odb_contours_headless(
+    produced_paths = render_odb_contours_headless(
         odb_path=odb,
         requests=requests,
         output_dir=out_dir,
         launcher=launcher,
         timeout=timeout,
     )
+    produced_names = {p.name for p in produced_paths}
 
     figures: List[ReportFigure] = []
     session_nonce = secrets.token_hex(16)
+    eff_run_id = str(run_id or "RUN").strip()
+
     for spec in specs:
-        target_path = out_dir / Path(spec.target_filename).name
-        if not target_path.exists() or target_path.stat().st_size == 0:
+        target_name = Path(spec.target_filename).name
+        target_path = out_dir / target_name
+        if target_name not in produced_names or not target_path.exists() or target_path.stat().st_size == 0:
             raise FileNotFoundError(
                 f"Fail-Closed: Authentic CAE visualization '{spec.target_filename}' "
-                f"failed to render from ODB {odb}. Placeholder images are strictly forbidden."
+                f"failed to render from ODB {odb} in this viewer session. Placeholder images are strictly forbidden."
             )
 
         h_img = hashlib.sha256()
@@ -395,8 +448,13 @@ def render_authentic_visualizations(
 
         fig = spec.to_report_figure(str(target_path))
         fig_meta = dict(fig.metadata or {})
-        session_seed = f"VIEWER-SESSION:{session_nonce}:{run_id or 'RUN'}:{odb_sha256}:{spec.target_filename}:{img_sha256}"
-        viewer_token = f"VIEWER-TOKEN-{hashlib.sha256(session_seed.encode('utf-8')).hexdigest()}"
+        viewer_token = compute_viewer_session_token(
+            session_nonce=session_nonce,
+            run_id=eff_run_id,
+            odb_sha256=odb_sha256,
+            target_filename=target_name,
+            image_sha256=img_sha256,
+        )
         fig_meta["session_nonce"] = session_nonce
         fig_meta["viewer_session_token"] = viewer_token
         fig_meta["odb_path"] = str(odb)
