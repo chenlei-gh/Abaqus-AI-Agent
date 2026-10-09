@@ -456,10 +456,10 @@ P1.0 产品主入口已彻底消除高层自然语言需求与底层 20 个 L4 �
 
 | 需求编号 | 需求名称 | 归属模块 | 输入对象 / 触发条件 | 预期输出 / 行为定义 | 验证等级 | 异常与 Fail-Closed 边界 | 状态 |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| **REQ-P0-001** | 四维正交判定与力学失败绝对保留 | Phase P0-A | 提取指标字典、判据、门禁、证据状态 | `AcceptanceResult` 包含正交四维字段与 `AcceptanceFindings` | Tier A | 真实力学超标且伴随门禁缺失时，绝对保留 `FAIL` 事实并记录 `blocked` 项，禁止降级为 BLOCKED；证据不可信时不推导力学失败 | 📋 **FROZEN & PLANNED** |
-| **REQ-P0-002** | 规范化自校验摘要与 ODB 初筛探针 | Phase P0-B | `EvidenceManifestV2`、工件文件、`role="odb"` | 确定性规范化哈希摘要、非 JSON/明文二进制初筛 | Tier A | 缺失摘要判 `INCOMPLETE`；单比特篡改判 `EVIDENCE_TAMPERED`；假 ODB 或裸字典判 `EVIDENCE_CORRUPT` | 📋 **FROZEN & PLANNED** |
-| **REQ-P0-003** | 运行因果绑定与受控生产验收入口 | Phase P0-C | `AnalysisRun`、Manifest、求解器进程记录 | `evaluate_production_acceptance()` 受控验收凭据 | Tier A | 跨运行旧工件判 `EVIDENCE_STALE`；未实际提交求解作业（仅 `abaqus help`）判 `INCOMPLETE` 并拒绝验收 | 📋 **FROZEN & PLANNED** |
-| **REQ-P0-004** | 报告管线交付资格门禁与全仓零绕过 | Phase P0-D | `deliverable` 标识、报告渲染、交付卡 | 严格门禁断言：仅 `deliverable is True` 签发正式报告 | Tier A | `deliverable is False` 强行请求生成报告时阻断或强制加注“诊断副本/未通过”水印；全仓清除 `require_evidence=False` 绕过 | 📋 **FROZEN & PLANNED** |
+| **REQ-P0-001** | 四维正交判定与力学失败绝对保留 | Phase P0-A | 提取指标字典、判据、门禁、证据状态 | `AcceptanceResult` 包含正交四维字段与 `AcceptanceFindings` | Tier A | 真实力学超标且伴随门禁缺失时，绝对保留 `FAIL` 事实并记录 `blocked` 项，禁止降级为 BLOCKED；证据不可信时不推导力学失败 | 🟢 **QUALIFIED** |
+| **REQ-P0-002** | 规范化自校验摘要与 ODB 初筛探针 | Phase P0-B | `EvidenceManifestV2`、工件文件、`role="odb"` | 确定性规范化哈希摘要、非 JSON/明文二进制初筛 | Tier A | 缺失摘要判 `INCOMPLETE`；单比特篡改判 `EVIDENCE_TAMPERED`；假 ODB 或裸字典判 `EVIDENCE_CORRUPT` | 🟢 **QUALIFIED** |
+| **REQ-P0-003** | 运行因果绑定与受控生产验收入口 | Phase P0-C | `AnalysisRun`、Manifest、求解器进程记录 | `evaluate_production_acceptance()` 受控验收凭据 | Tier A | 跨运行旧工件判 `EVIDENCE_STALE`；未实际提交求解作业（仅 `abaqus help`）判 `INCOMPLETE` 并拒绝验收 | 🟢 **QUALIFIED** |
+| **REQ-P0-004** | 报告管线交付资格门禁与全仓零绕过 | Phase P0-D | `deliverable` 标识、报告渲染、交付卡 | 严格门禁断言：仅 `deliverable is True` 签发正式报告 | Tier A | `deliverable is False` 强行请求生成报告时阻断或强制加注“诊断副本/未通过”水印；全仓清除 `require_evidence=False` 绕过 | 🟢 **QUALIFIED** |
 
 ---
 

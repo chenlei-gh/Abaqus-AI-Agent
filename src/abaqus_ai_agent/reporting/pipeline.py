@@ -79,6 +79,7 @@ class DeterministicReportPipeline:
         loads_info: Sequence[Dict[str, Any]] = (),
         bcs_info: Sequence[Dict[str, Any]] = (),
         mesh_info: Optional[Dict[str, Any]] = None,
+        require_deliverable: bool = False,
     ) -> Tuple[ReportDeliveryCard, ArtifactPointer, EngineeringReportData]:
         """Compile report, render HTML & Markdown, register artifacts, and produce LLM card."""
         target_dir = Path(output_dir)
@@ -181,12 +182,26 @@ class DeterministicReportPipeline:
             },
         )
 
-        # 5. Extract critical metrics from acceptance/results for lean LLM card
+        # 5. Extract critical metrics and deliverable authorization from acceptance/results for lean LLM card
         status_val = "PASS"
         if hasattr(acceptance_info, "status"):
             status_val = getattr(acceptance_info, "status")
         elif isinstance(acceptance_info, dict):
             status_val = acceptance_info.get("status", "PASS")
+
+        is_deliverable = getattr(acceptance_info, "deliverable", None)
+        if is_deliverable is None and hasattr(acceptance_info, "passed"):
+            is_deliverable = bool(acceptance_info.passed)
+        elif is_deliverable is None and isinstance(acceptance_info, dict):
+            is_deliverable = acceptance_info.get("deliverable", acceptance_info.get("passed", True))
+        elif is_deliverable is None:
+            is_deliverable = True
+
+        if require_deliverable and not is_deliverable:
+            raise PermissionError(
+                f"Official engineering delivery blocked: deliverable is False (acceptance_status={status_val}). "
+                "Only runs with verified evidence and valid PASS acceptance can be released as official deliverables."
+            )
 
         delivery_card = ReportDeliveryCard(
             report_artifact_id=report_pointer.artifact_id,
@@ -194,6 +209,7 @@ class DeterministicReportPipeline:
             format="bilingual_html",
             location=report_pointer.location,
             acceptance_status=status_val,
+            deliverable=is_deliverable,
             key_metrics={
                 "max_mises_mpa": model_info.get("max_mises_mpa"),
                 "max_displacement_mm": model_info.get("max_displacement_mm"),

@@ -169,6 +169,7 @@ class EvidenceManifestV2:
             "verification": self.verification,
             "acceptance": self.acceptance,
             "provenance": self.provenance,
+            "metadata": self.metadata,
         }
         canonical_str = json.dumps(payload, sort_keys=True, ensure_ascii=False, separators=(",", ":"))
         return hashlib.sha256(canonical_str.encode("utf-8")).hexdigest()
@@ -490,16 +491,23 @@ def verify_evidence_integrity(
                 "actual_sha256": live_sha,
                 "matched": matched,
             }
-            # Layer 1 Probe: Plaintext JSON mock detection for ODB artifacts
+            # Layer 1 Probe: ODB artifact quick sanity checks (rejection of obvious corrupt/fake artifacts)
             if art.role == "odb":
-                try:
-                    with open(p, "rb") as bf:
-                        sample = bf.read(128).strip()
-                    if sample.startswith(b"{") or sample.startswith(b"["):
-                        failures.append(f"corrupt_artifact:odb_is_plaintext_json:{name}")
-                        current_validity = "EVIDENCE_CORRUPT"
-                except Exception:
-                    pass
+                if live_size == 0:
+                    failures.append(f"corrupt_artifact:odb_file_empty:{name}")
+                    current_validity = "EVIDENCE_CORRUPT"
+                else:
+                    try:
+                        with open(p, "rb") as bf:
+                            sample = bf.read(128).strip()
+                        if sample.startswith(b"{") or sample.startswith(b"["):
+                            failures.append(f"corrupt_artifact:odb_is_plaintext_json:{name}")
+                            current_validity = "EVIDENCE_CORRUPT"
+                        elif sample.startswith((b"#!", b"import ", b"from ", b"def ", b"print(")):
+                            failures.append(f"corrupt_artifact:odb_is_script:{name}")
+                            current_validity = "EVIDENCE_CORRUPT"
+                    except Exception:
+                        pass
 
             if not matched:
                 tampered_artifacts.append(name)

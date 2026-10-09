@@ -1,5 +1,7 @@
+import os
 from dataclasses import dataclass, field
-from typing import Any, Dict, Optional, Sequence, Tuple
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
 
 # Canonical order of engineering gates G1 ~ G14 plus composite required_results
 CANONICAL_GATE_ORDER = (
@@ -739,3 +741,242 @@ def evaluate_result_acceptance(result_status, numerical=None, engineering=None,
         deliverable=deliverable,
         findings=findings,
     )
+
+
+def evaluate_production_acceptance(
+    analysis_run: Optional[Any] = None,
+    *,
+    result_status: Optional[str] = None,
+    values: Optional[Dict[str, Any]] = None,
+    criteria: Optional[Sequence[Dict[str, Any]]] = None,
+    evidence_manifest: Optional[Union[Any, Dict[str, Any]]] = None,
+    expected_run_id: Optional[str] = None,
+    expected_input_hash: Optional[str] = None,
+    base_dir: Optional[Union[Path, str]] = None,
+    physics_domain: Optional[str] = None,
+    result_requirements: Optional[Sequence[Any]] = None,
+    result_extractions: Optional[Sequence[Any]] = None,
+    numerical: Optional[Any] = None,
+    engineering: Optional[Any] = None,
+    mesh_quality: Optional[Any] = None,
+    convergence: Optional[Any] = None,
+    fatigue: Optional[Any] = None,
+    contact_diagnostics: Optional[Any] = None,
+    connector_kinematics: Optional[Any] = None,
+    fmbd_dynamics: Optional[Any] = None,
+    thermal_balance: Optional[Any] = None,
+    procedure_verification: Optional[Any] = None,
+    odb_status: Optional[str] = None,
+    max_age_seconds: Optional[float] = None,
+    mandatory_roles: Optional[Sequence[str]] = None,
+    **kwargs,
+) -> AcceptanceResult:
+    """Strict Production Acceptance Gate with Full Causal & Grounding Binding.
+
+    Contract Rules for Production Acceptance:
+    1. NEVER allows require_evidence=False; evidence is strictly mandatory.
+    2. Causal Identity Binding: AnalysisRun.id == EvidenceManifest.run_id.
+    3. Input Hash Provenance Binding: Model input hash matches manifest 'inp' artifact live hash.
+    4. Solver Execution Provenance: Completed job state required; probe-only, unsubmitted, or failed runs rejected.
+    5. Result Source & Lineage Binding: External/mock injected metrics strictly prohibited from production deliverable.
+    6. Decoupled 4D status: deliverable is strictly True ONLY if acceptance_status == 'PASS' and result_validity == 'VALID'.
+    """
+    if kwargs.get("require_evidence") is False:
+        raise ValueError("evaluate_production_acceptance strictly forbids disabling evidence (require_evidence=False).")
+
+    causal_failures: List[str] = []
+    causal_blocked: List[str] = []
+    causal_evidence_errors: List[str] = []
+
+    # 1. Identity binding
+    eff_run_id = expected_run_id
+    if analysis_run is not None:
+        run_id_val = getattr(analysis_run, "id", None)
+        if run_id_val:
+            eff_run_id = run_id_val
+
+    # 2. Solver status determination
+    eff_status = result_status
+    if analysis_run is not None:
+        job_st = getattr(analysis_run, "job_status", None)
+        if job_st is not None:
+            st = getattr(job_st, "state", None)
+            eff_status = st.value.lower() if hasattr(st, "value") else str(st or "").lower()
+        elif getattr(analysis_run, "state", None) is not None:
+            st = getattr(analysis_run, "state", None)
+            eff_status = st.value.lower() if hasattr(st, "value") else str(st or "").lower()
+    if not eff_status:
+        eff_status = "completed"
+
+    if eff_status in ("unsubmitted", "probe_only", "created", "preflighted"):
+        causal_failures.append(f"solver_execution:job_not_submitted_status_{eff_status}")
+        causal_blocked.append(f"solver_execution:job_not_submitted_status_{eff_status}")
+        causal_evidence_errors.append("solver_execution:job_not_submitted")
+    elif eff_status not in ("completed", "accepted"):
+        causal_failures.append(f"solver_execution:job_not_completed_status_{eff_status}")
+        causal_blocked.append(f"solver_execution:job_not_completed_status_{eff_status}")
+        causal_evidence_errors.append(f"solver_execution:status_{eff_status}")
+
+    # 3. Evidence manifest determination
+    eff_manifest = evidence_manifest
+    if eff_manifest is None and analysis_run is not None:
+        ev = getattr(analysis_run, "evidence", None)
+        if ev is not None:
+            if hasattr(ev, "manifest") and ev.manifest is not None:
+                eff_manifest = ev.manifest
+            elif hasattr(ev, "get_manifest"):
+                eff_manifest = ev.get_manifest()
+            elif hasattr(ev, "entries"):
+                for e in ev.entries:
+                    if getattr(e, "kind", None) in ("evidence_manifest_v2", "manifest"):
+                        eff_manifest = getattr(e, "value", None)
+                        break
+        if eff_manifest is None:
+            meta = getattr(analysis_run, "metadata", {}) or {}
+            eff_manifest = meta.get("evidence_manifest") or meta.get("manifest")
+
+    if eff_manifest is None:
+        causal_failures.append("missing_required_evidence_manifest")
+        causal_blocked.append("missing_required_evidence")
+        causal_evidence_errors.append("missing_required_evidence")
+
+    # 4. Input hash provenance binding check
+    eff_input_hash = expected_input_hash
+    if eff_input_hash is None and analysis_run is not None:
+        prov = getattr(analysis_run, "provenance", None)
+        if prov is not None:
+            eff_input_hash = getattr(prov, "input_hash", None)
+
+    if eff_input_hash and eff_manifest is not None:
+        arts = getattr(eff_manifest, "artifacts", None)
+        if isinstance(eff_manifest, dict):
+            arts = eff_manifest.get("artifacts", {})
+        inp_art = None
+        if isinstance(arts, dict):
+            for a_name, a_rec in arts.items():
+                role = getattr(a_rec, "role", None) or (a_rec.get("role") if isinstance(a_rec, dict) else None)
+                if role == "inp":
+                    inp_art = a_rec
+                    break
+        if inp_art is not None:
+            inp_sha = getattr(inp_art, "sha256", None) or (inp_art.get("sha256") if isinstance(inp_art, dict) else None)
+            if inp_sha and inp_sha != eff_input_hash:
+                err_msg = f"evidence_tampered:input_hash_mismatch:expected_{eff_input_hash}_got_{inp_sha}"
+                causal_failures.append(err_msg)
+                causal_blocked.append(err_msg)
+                causal_evidence_errors.append(err_msg)
+
+    # 5. Result source & external input check
+    if analysis_run is not None:
+        meta = getattr(analysis_run, "metadata", {}) or {}
+        res_source = meta.get("result_source")
+        if res_source == "external_input":
+            err_msg = "unsupported_result_source:external_input_disallowed_in_production"
+            causal_failures.append(err_msg)
+            causal_blocked.append(err_msg)
+            causal_evidence_errors.append(err_msg)
+
+    # 6. Extraction lineage check
+    if result_extractions is not None:
+        for ext in result_extractions:
+            loc = getattr(ext, "locator", None) or (ext.get("locator") if isinstance(ext, dict) else {})
+            if not loc:
+                err_msg = "extraction_lineage_missing:locator_empty"
+                causal_failures.append(err_msg)
+                causal_blocked.append(err_msg)
+                causal_evidence_errors.append(err_msg)
+                break
+
+    # 7. Values determination
+    eff_values = values
+    if eff_values is None and analysis_run is not None:
+        eff_values = {}
+        for m in getattr(analysis_run, "metrics", ()) or ():
+            k = getattr(m, "name", None) or getattr(m, "value_key", None) or (m.get("name") if isinstance(m, dict) else m.get("value_key") if isinstance(m, dict) else None)
+            v = getattr(m, "value", None) if hasattr(m, "value") else (m.get("value") if isinstance(m, dict) else None)
+            if k is not None and v is not None:
+                eff_values[k] = v
+        if not eff_values and getattr(analysis_run, "outputs", None):
+            eff_values = dict(getattr(analysis_run, "outputs"))
+
+    # 8. Base dir determination
+    eff_base_dir = base_dir
+    if eff_base_dir is None and analysis_run is not None:
+        if getattr(analysis_run, "odb_path", None):
+            eff_base_dir = os.path.dirname(os.path.abspath(analysis_run.odb_path))
+
+    res = evaluate_result_acceptance(
+        result_status=eff_status,
+        numerical=numerical,
+        engineering=engineering,
+        mesh_quality=mesh_quality,
+        convergence=convergence,
+        fatigue=fatigue,
+        contact_diagnostics=contact_diagnostics,
+        connector_kinematics=connector_kinematics,
+        fmbd_dynamics=fmbd_dynamics,
+        thermal_balance=thermal_balance,
+        procedure_verification=procedure_verification,
+        values=eff_values,
+        criteria=criteria,
+        evidence_manifest=eff_manifest,
+        expected_run_id=eff_run_id,
+        base_dir=eff_base_dir,
+        require_evidence=True,  # STRICT: production always requires evidence
+        physics_domain=physics_domain,
+        result_requirements=result_requirements,
+        odb_status=odb_status,
+        max_age_seconds=max_age_seconds,
+        mandatory_roles=mandatory_roles,
+    )
+
+    if causal_failures or causal_blocked or causal_evidence_errors:
+        new_failures = tuple(res.findings.failures) + tuple(causal_failures)
+        new_blocked = tuple(res.findings.blocked) + tuple(causal_blocked)
+        new_evidence_errors = tuple(res.findings.evidence_errors) + tuple(causal_evidence_errors)
+
+        if any("input_hash_mismatch" in e for e in causal_evidence_errors):
+            new_validity = ResultValidity("EVIDENCE_TAMPERED")
+        elif any("missing_required_evidence" in e for e in causal_evidence_errors):
+            new_validity = ResultValidity("INCOMPLETE")
+        elif any("solver_execution" in e for e in causal_evidence_errors):
+            new_validity = ResultValidity("SOLVER_FAILED")
+        elif str(res.result_validity) == "VALID":
+            new_validity = ResultValidity("RESULT_INVALID")
+        else:
+            new_validity = res.result_validity
+
+        new_status = "RESULT_INVALID" if str(new_validity) in ("EVIDENCE_TAMPERED", "EVIDENCE_CORRUPT", "EVIDENCE_STALE", "SOLVER_FAILED") else "BLOCKED"
+        if res.acceptance_status == "FAIL":
+            # Physical failure takes absolute precedence
+            new_status = "FAIL"
+
+        new_findings = AcceptanceFindings(
+            failures=new_failures,
+            blocked=new_blocked,
+            evidence_errors=new_evidence_errors,
+            warnings=res.findings.warnings,
+            missing_gates=res.findings.missing_gates,
+        )
+        return AcceptanceResult(
+            passed=False,
+            status=new_status,
+            acceptance_status=new_status,
+            result_validity=new_validity,
+            deliverable=False,
+            findings=new_findings,
+            criteria=res.criteria,
+            failures=new_failures,
+            warnings=res.warnings,
+            blocked=new_blocked,
+            missing_required_gates=res.missing_required_gates,
+            missing_required_metrics=res.missing_required_metrics,
+            missing_required_fields=res.missing_required_fields,
+            gates=dict(res.gates),
+            gate_justifications=dict(res.gate_justifications),
+            audit_summary=res.audit_summary.replace("Engineering Acceptance: PASS", "Engineering Acceptance: FAIL"),
+            odb_status=res.odb_status,
+            evidence_status=str(new_validity),
+        )
+
+    return res

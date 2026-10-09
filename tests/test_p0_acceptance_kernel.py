@@ -13,6 +13,7 @@ Covers:
 
 from __future__ import annotations
 
+import dataclasses
 import json
 from pathlib import Path
 import pytest
@@ -21,9 +22,15 @@ from abaqus_ai_agent.acceptance import (
     AcceptanceFindings,
     AcceptanceResult,
     evaluate_criteria,
+    evaluate_production_acceptance,
     evaluate_result_acceptance,
 )
-from abaqus_ai_agent.contracts.evidence import build_evidence_manifest_v2
+from abaqus_ai_agent.contracts.evidence import build_evidence_manifest_v2, verify_evidence_integrity, compute_file_sha256
+from abaqus_ai_agent.execution.jobs import JobStatus, JobState
+from abaqus_ai_agent.contracts.metrics import EngineeringMetric
+from abaqus_ai_agent.contracts.provenance import AnalysisProvenance
+from abaqus_ai_agent.reporting.pipeline import DeterministicReportPipeline
+from abaqus_ai_agent.execution.analysis_run import AnalysisRun, AnalysisRunState
 
 
 def _create_standard_mock_artifacts(tmp_path: Path, run_id: str = "run_p0_std") -> list[str]:
@@ -342,8 +349,6 @@ def test_pos_p0_03_corrupt_evidence_never_yields_mechanical_fail(tmp_path: Path)
     # Corrupt an artifact
     (tmp_path / "Job_p0_pos3.msg").write_bytes(b"CORRUPTED")
 
-    # Even if max_mises is 500.0 (which would be fail if data was valid),
-    # since evidence is corrupt, the system MUST NOT claim a valid mechanical failure.
     res = evaluate_result_acceptance(
         result_status="completed",
         values={"max_mises": 500.0},
@@ -356,3 +361,321 @@ def test_pos_p0_03_corrupt_evidence_never_yields_mechanical_fail(tmp_path: Path)
     assert res.acceptance_status == "RESULT_INVALID"
     assert res.result_validity == "EVIDENCE_TAMPERED"
     assert res.deliverable is False
+
+
+# =========================================================================
+# P0-B & P0-C Specific Verification Suites
+# =========================================================================
+
+def test_p0_b_audit_signature_canonicalization_and_metadata_tamper(tmp_path: Path):
+    """P0-B: Verify that canonical audit_signature protects all manifest fields including metadata."""
+    files = _create_standard_mock_artifacts(tmp_path, "p0_b_sig")
+    manifest = build_evidence_manifest_v2(
+        run_id="p0_b_sig",
+        case_id="case_b_sig",
+        artifacts_dir=str(tmp_path),
+        artifact_filenames=files,
+        metadata={"domain_policy": "strict_v1"},
+    )
+    assert manifest.verify_signature() is True
+
+    # 1. Tampering metadata must invalidate signature
+    manifest.metadata["domain_policy"] = "loose_v0"
+    assert manifest.verify_signature() is False
+    manifest.metadata["domain_policy"] = "strict_v1"
+    assert manifest.verify_signature() is True
+
+    # 2. Tampering case_id must invalidate signature
+    manifest.case_id = "forged_case"
+    assert manifest.verify_signature() is False
+    manifest.case_id = "case_b_sig"
+    assert manifest.verify_signature() is True
+
+    # 3. Tampering artifact record must invalidate signature
+    old_art = manifest.artifacts["Job_p0_b_sig.sta"]
+    manifest.artifacts["Job_p0_b_sig.sta"] = dataclasses.replace(old_art, sha256="0" * 64)
+    assert manifest.verify_signature() is False
+
+
+def test_p0_b_layer1_odb_empty_and_script_probe(tmp_path: Path):
+    """P0-B: Layer 1 ODB probe rejects empty files and scripts disguised as ODB as EVIDENCE_CORRUPT."""
+    files = _create_standard_mock_artifacts(tmp_path, "p0_b_probe")
+
+    # 1. Empty ODB file
+    empty_odb = tmp_path / "Job_p0_b_probe.odb"
+    empty_odb.write_bytes(b"")
+    manifest = build_evidence_manifest_v2(
+        run_id="p0_b_probe",
+        case_id="case_b_probe",
+        artifacts_dir=str(tmp_path),
+        artifact_filenames=files,
+    )
+    rep = verify_evidence_integrity(manifest, base_dir=str(tmp_path))
+    assert rep.valid is False
+    assert rep.validity == "EVIDENCE_CORRUPT"
+    assert any("corrupt_artifact:odb_file_empty" in f for f in rep.failures)
+
+    # 2. Python script disguised as ODB
+    empty_odb.write_bytes(b"import abaqus\ndef main(): pass\n")
+    manifest2 = build_evidence_manifest_v2(
+        run_id="p0_b_probe",
+        case_id="case_b_probe",
+        artifacts_dir=str(tmp_path),
+        artifact_filenames=files,
+    )
+    rep2 = verify_evidence_integrity(manifest2, base_dir=str(tmp_path))
+    assert rep2.valid is False
+    assert rep2.validity == "EVIDENCE_CORRUPT"
+    assert any("corrupt_artifact:odb_is_script" in f for f in rep2.failures)
+
+
+def test_p0_c_production_acceptance_golden_path(tmp_path: Path):
+    """P0-C: Production acceptance succeeds with full causal binding and delivers True."""
+    files = _create_standard_mock_artifacts(tmp_path, "p0_c_gold")
+    manifest = build_evidence_manifest_v2(
+        run_id="p0_c_gold",
+        case_id="case_c_gold",
+        artifacts_dir=str(tmp_path),
+        artifact_filenames=files,
+    )
+    inp_sha = manifest.artifacts["Job_p0_c_gold.inp"].sha256
+
+    run = AnalysisRun(
+        id="p0_c_gold",
+        model_name="Model_Golden",
+        job_name="Job_p0_c_gold",
+        state=AnalysisRunState.COMPLETED,
+        job_status=JobStatus(name="Job_p0_c_gold", state=JobState.COMPLETED),
+        odb_path=str(tmp_path / "Job_p0_c_gold.odb"),
+        provenance=AnalysisProvenance(
+            run_id="p0_c_gold",
+            model_name="Model_Golden",
+            job_name="Job_p0_c_gold",
+            input_hash=inp_sha,
+        ),
+        metrics=(
+            EngineeringMetric(name="max_mises", value=150.0, unit="MPa"),
+            EngineeringMetric(name="reaction_force", value=1000.0, unit="N"),
+            EngineeringMetric(name="max_displacement", value=0.5, unit="mm"),
+        ),
+    )
+
+    res = evaluate_production_acceptance(
+        run,
+        criteria=[
+            {"name": "mises_limit", "value_key": "max_mises", "operator": "<=", "limit": 200.0},
+        ],
+        evidence_manifest=manifest,
+        base_dir=str(tmp_path),
+        physics_domain="static",
+        odb_fields=["U", "S", "RF"],
+    )
+
+    assert res.acceptance_status == "PASS"
+    assert res.status == "PASS"
+    assert res.passed is True
+    assert res.result_validity == "VALID"
+    assert res.deliverable is True
+
+
+def test_p0_c_production_acceptance_forbids_require_evidence_false():
+    """P0-C: Production acceptance strictly raises ValueError if caller attempts require_evidence=False."""
+    with pytest.raises(ValueError, match="strictly forbids disabling evidence"):
+        evaluate_production_acceptance(require_evidence=False)
+
+
+def test_p0_c_production_acceptance_input_hash_mismatch(tmp_path: Path):
+    """P0-C: Input hash mismatch between AnalysisRun provenance and manifest INP artifact causes EVIDENCE_TAMPERED."""
+    files = _create_standard_mock_artifacts(tmp_path, "p0_c_inp_tamper")
+    manifest = build_evidence_manifest_v2(
+        run_id="p0_c_inp_tamper",
+        case_id="case_inp_tamper",
+        artifacts_dir=str(tmp_path),
+        artifact_filenames=files,
+    )
+
+    run = AnalysisRun(
+        id="p0_c_inp_tamper",
+        model_name="Model_Inp",
+        job_name="Job_p0_c_inp_tamper",
+        state=AnalysisRunState.COMPLETED,
+        job_status=JobStatus(name="Job_p0_c_inp_tamper", state=JobState.COMPLETED),
+        odb_path=str(tmp_path / "Job_p0_c_inp_tamper.odb"),
+        provenance=AnalysisProvenance(
+            run_id="p0_c_inp_tamper",
+            model_name="Model_Inp",
+            job_name="Job_p0_c_inp_tamper",
+            input_hash="deadbeef" * 8,  # Does not match live INP sha256!
+        ),
+        metrics=(EngineeringMetric(name="max_mises", value=150.0, unit="MPa"),),
+    )
+
+    res = evaluate_production_acceptance(
+        run,
+        criteria=[{"name": "mises_limit", "value_key": "max_mises", "operator": "<=", "limit": 200.0}],
+        evidence_manifest=manifest,
+        base_dir=str(tmp_path),
+    )
+
+    assert res.acceptance_status == "RESULT_INVALID"
+    assert res.result_validity == "EVIDENCE_TAMPERED"
+    assert res.deliverable is False
+    assert any("input_hash_mismatch" in e for e in res.findings.evidence_errors)
+
+
+def test_p0_c_production_acceptance_run_id_mismatch(tmp_path: Path):
+    """P0-C: Run ID mismatch between AnalysisRun and Manifest triggers EVIDENCE_STALE."""
+    files = _create_standard_mock_artifacts(tmp_path, "run_manifest_A")
+    manifest = build_evidence_manifest_v2(
+        run_id="run_manifest_A",
+        case_id="case_A",
+        artifacts_dir=str(tmp_path),
+        artifact_filenames=files,
+    )
+
+    run = AnalysisRun(
+        id="run_expected_B",  # Mismatch!
+        model_name="Model_B",
+        job_name="Job_B",
+        state=AnalysisRunState.COMPLETED,
+        job_status=JobStatus(name="Job_B", state=JobState.COMPLETED),
+        odb_path=str(tmp_path / "Job_run_manifest_A.odb"),
+        metrics=(EngineeringMetric(name="max_mises", value=150.0, unit="MPa"),),
+    )
+
+    res = evaluate_production_acceptance(
+        run,
+        criteria=[{"name": "mises_limit", "value_key": "max_mises", "operator": "<=", "limit": 200.0}],
+        evidence_manifest=manifest,
+        base_dir=str(tmp_path),
+    )
+
+    assert res.acceptance_status == "RESULT_INVALID"
+    assert res.result_validity == "EVIDENCE_STALE"
+    assert res.deliverable is False
+    assert any("evidence_stale" in e for e in res.findings.evidence_errors)
+
+
+def test_p0_c_production_acceptance_unsubmitted_job(tmp_path: Path):
+    """P0-C: Unsubmitted / probe-only job status is rejected as solver_execution failure in production."""
+    files = _create_standard_mock_artifacts(tmp_path, "run_unsubmitted")
+    manifest = build_evidence_manifest_v2(
+        run_id="run_unsubmitted",
+        case_id="case_unsub",
+        artifacts_dir=str(tmp_path),
+        artifact_filenames=files,
+    )
+
+    run = AnalysisRun(
+        id="run_unsubmitted",
+        model_name="Model_Unsub",
+        job_name="Job_Unsub",
+        state=AnalysisRunState.PREFLIGHTED,
+        job_status=JobStatus(name="Job_Unsub", state=JobState.CREATED),
+        metrics=(EngineeringMetric(name="max_mises", value=150.0, unit="MPa"),),
+    )
+
+    res = evaluate_production_acceptance(
+        run,
+        criteria=[{"name": "mises_limit", "value_key": "max_mises", "operator": "<=", "limit": 200.0}],
+        evidence_manifest=manifest,
+        base_dir=str(tmp_path),
+    )
+
+    assert res.acceptance_status == "RESULT_INVALID"
+    assert res.deliverable is False
+    assert any("solver_execution" in e for e in res.findings.evidence_errors)
+
+
+def test_p0_c_production_acceptance_rejects_external_input(tmp_path: Path):
+    """P0-C: AnalysisRun marked with result_source='external_input' is strictly prohibited from production deliverable."""
+    files = _create_standard_mock_artifacts(tmp_path, "run_ext_input")
+    manifest = build_evidence_manifest_v2(
+        run_id="run_ext_input",
+        case_id="case_ext",
+        artifacts_dir=str(tmp_path),
+        artifact_filenames=files,
+    )
+
+    run = AnalysisRun(
+        id="run_ext_input",
+        model_name="Model_Ext",
+        job_name="Job_Ext",
+        state=AnalysisRunState.COMPLETED,
+        job_status=JobStatus(name="Job_Ext", state=JobState.COMPLETED),
+        metadata={"result_source": "external_input"},
+        metrics=(EngineeringMetric(name="max_mises", value=150.0, unit="MPa"),),
+    )
+
+    res = evaluate_production_acceptance(
+        run,
+        criteria=[{"name": "mises_limit", "value_key": "max_mises", "operator": "<=", "limit": 200.0}],
+        evidence_manifest=manifest,
+        base_dir=str(tmp_path),
+    )
+
+    assert res.deliverable is False
+    assert any("external_input_disallowed_in_production" in e for e in res.findings.evidence_errors)
+
+
+# =========================================================================
+# P0-D Delivery Exit Gate & Reporting Closure
+# =========================================================================
+
+def test_p0_d_report_pipeline_deliverable_gating_blocks_undeliverable_run(tmp_path: Path):
+    """P0-D: DeterministicReportPipeline with require_deliverable=True raises PermissionError on deliverable=False."""
+    pipeline = DeterministicReportPipeline()
+    out_dir = tmp_path / "report_out"
+
+    # Simulated acceptance result with deliverable=False
+    failed_acc = AcceptanceResult(
+        passed=False,
+        criteria=(),
+        status="FAIL",
+        acceptance_status="FAIL",
+        result_validity="VALID",
+        deliverable=False,
+        findings=AcceptanceFindings(failures=("criteria_exceeded:max_mises",)),
+    )
+
+    with pytest.raises(PermissionError, match="Official engineering delivery blocked: deliverable is False"):
+        pipeline.build_and_render(
+            output_dir=out_dir,
+            title="Bolted Flange Test Report",
+            case_id="case_p0_d",
+            run_id="run_p0_d",
+            model_info={"max_mises_mpa": 350.0},
+            results_info=(),
+            acceptance_info=failed_acc,
+            require_deliverable=True,
+        )
+
+
+def test_p0_d_report_delivery_card_reflects_deliverable_status(tmp_path: Path):
+    """P0-D: ReportDeliveryCard captures deliverable status correctly for both pass and fail runs."""
+    pipeline = DeterministicReportPipeline()
+    out_dir = tmp_path / "report_out2"
+
+    passed_acc = AcceptanceResult(
+        passed=True,
+        criteria=(),
+        status="PASS",
+        acceptance_status="PASS",
+        result_validity="VALID",
+        deliverable=True,
+        findings=AcceptanceFindings(),
+    )
+
+    card, pointer, data = pipeline.build_and_render(
+        output_dir=out_dir,
+        title="Flange Passing Report",
+        case_id="case_p0_d_pass",
+        run_id="run_p0_d_pass",
+        model_info={"max_mises_mpa": 120.0},
+        results_info=(),
+        acceptance_info=passed_acc,
+        require_deliverable=False,
+    )
+
+    assert card.deliverable is True
+    assert card.to_llm_card()["deliverable"] is True

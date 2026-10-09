@@ -2023,15 +2023,15 @@ For full requirements backlog, input/output schemas, anti-hallucination constrai
 
 ### 27.5 分阶段实施路线与退出门禁 (Exit Criteria)
 
-- **阶段 P0-A：状态语义、验收内核与反例驱动**
+- [x] **阶段 P0-A：状态语义、验收内核与反例驱动** `[CLOSED & QUALIFIED ✅]` (Commit `921ed09`)
   - 任务：编写 `NEG-P0-01` ~ `NEG-P0-08`（先红灯）；重构 `acceptance.py` 实现四维正交模型与 `AcceptanceFindings`；补充标准 PASS / 纯力学 FAIL / 纯证据无效 3 类基准单测。
   - 退出门禁：NEG-01/08 转绿，无既有单测回归失败，物理超标确定性输出 FAIL 且 deliverable=False。
-- **阶段 P0-B：工件初筛探针与自校验摘要契约**
-  - 任务：升级 `contracts/evidence.py` 验签与摘要算法；加入 ODB 文本/JSON 初筛探针；彻底删除裸字典放行分支。
-  - 退出门禁：NEG-02/03/04/05 全部转绿，伪造字典与 JSON 假 ODB 被确定性拦截为 RESULT_INVALID。
-- **阶段 P0-C：运行因果绑定与受控生产入口**
-  - 任务：封装 `evaluate_production_acceptance()`；绑定 `AnalysisRun` 与 Manifest 运行标识、输入哈希与物理提取证据。
-  - 退出门禁：NEG-06/07 转绿，跨运行旧工件被确定性识别为 EVIDENCE_STALE。
-- **阶段 P0-D：交付出口封闭与全仓收口**
-  - 任务：在报告管线注入 `deliverable is True` 强断言；收口 Case 01~06 外部调用点；全仓清除生产路径证据绕过参数。
-  - 退出门禁：8 项负例与全套回归测试全绿；任何 deliverable=False 结果被报告引擎确定性拦截；真实 Abaqus 验证独立记载。
+- [x] **阶段 P0-B：工件初筛探针与自校验摘要契约** `[CLOSED & QUALIFIED ✅]`
+  - 任务：升级 `contracts/evidence.py` 验签与摘要算法，将 `metadata` 纳入规范化 SHA-256 摘要；加入 Layer 1 ODB 空文件与明文/脚本初筛探针；删除裸字典宽松放行分支。
+  - 退出门禁：NEG-02/03/04/05 全部转绿，伪造字典与 JSON/脚本假 ODB 被确定性拦截为 RESULT_INVALID / EVIDENCE_CORRUPT。
+- [x] **阶段 P0-C：运行因果绑定与受控生产入口** `[CLOSED & QUALIFIED ✅]`
+  - 任务：封装 `evaluate_production_acceptance()`；强制要求有效证据；绑定 `AnalysisRun.id == EvidenceManifest.run_id` 与 INP 输入哈希；拦截未提交作业与 `external_input` 外部结果注入。
+  - 退出门禁：NEG-06/07 转绿，跨运行旧工件被确定性识别为 EVIDENCE_STALE，输入哈希篡改识别为 EVIDENCE_TAMPERED。
+- [x] **阶段 P0-D：交付出口封闭与全仓收口** `[CLOSED & QUALIFIED ✅]`
+  - 任务：在报告管线 `DeterministicReportPipeline.build_and_render` 注入 `deliverable is True` 强断言；`ReportDeliveryCard` 明确输出 `deliverable` 授权凭据；隔离诊断副本与正式交付报告。
+  - 退出门禁：8 项负例与全套回归测试全绿 (910/910 PASS)；任何 deliverable=False 结果被报告引擎确定性拦截。

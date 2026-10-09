@@ -96,6 +96,7 @@ class ReportDeliveryCard:
     figures_count: int
     size_bytes: int
     checksum_sha256: str
+    deliverable: bool = True
 
     def to_llm_card(self) -> Dict[str, Any]:
         return {
@@ -104,6 +105,7 @@ class ReportDeliveryCard:
             "format": self.format,
             "location": self.location,
             "acceptance_status": self.acceptance_status,
+            "deliverable": self.deliverable,
             "key_metrics": self.key_metrics,
             "active_sections": list(self.active_sections),
             "figures_count": self.figures_count,
