@@ -207,30 +207,27 @@ def run_case_03_exhaust_manifold(workdir: Path, launcher: Optional[str] = None) 
     fig3_name = "case_03_manifold_temperature.png"
     fig4_name = "case_03_manifold_contact_pressure.png"
 
-    # Attempt authentic headless Abaqus Viewer rendering if ODB is available
+    # Attempt authentic headless Abaqus Viewer rendering if authentic binary ODB is available
     rendered = []
     coupled_odb = case_dir / "Step-2-CoupledOperation.odb"
-    if coupled_odb.exists():
+    if coupled_odb.is_file():
         try:
-            rendered = render_odb_contours_headless(
-                odb_path=coupled_odb,
-                requests=contour_requests,
-                output_dir=case_dir,
-                launcher=launcher,
-            )
+            head = coupled_odb.read_bytes()[:16].strip()
+            if not head.startswith((b"{", b"[")):
+                rendered = render_odb_contours_headless(
+                    odb_path=coupled_odb,
+                    requests=contour_requests,
+                    output_dir=case_dir,
+                    launcher=launcher,
+                )
         except Exception as e:
             print(f"  [Viewer] Headless execution notice: {e}")
 
-    # Ensure visual assets are present from authentic rendering or existing verified archive
-    if len(rendered) < 4:
-        for f_name in [fig0_name, fig1_name, fig2_name, fig3_name, fig4_name]:
-            p2_src = p2_cases_dir / f_name
-            if p2_src.exists() and not (case_dir / f_name).exists():
-                (case_dir / f_name).write_bytes(p2_src.read_bytes())
-    else:
-        for r_path in rendered:
-            target_p2 = p2_cases_dir / r_path.name
-            target_p2.write_bytes(r_path.read_bytes())
+    # Strict Authenticity: Never silently copy stale assets to disguise unrendered figures!
+    # Only genuinely rendered assets are exported
+    for r_path in rendered:
+        target_p2 = p2_cases_dir / r_path.name
+        target_p2.write_bytes(r_path.read_bytes())
 
     print(f"  - Generated Authentic CAE Visual Contour & Animation Assets:")
     print(f"    0. {fig0_name} (热机耦合瞬态加载与法兰滑移演化动图 / Animated GIF)")

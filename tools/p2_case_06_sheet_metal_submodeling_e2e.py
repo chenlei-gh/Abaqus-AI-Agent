@@ -150,15 +150,9 @@ def run_case_06_sheet_metal_submodeling(workdir: Optional[Path] = None) -> Dict[
     print(f"  - Benchmark Diff Springback: {diff_springback_pct:.2f}% vs Numisheet (1.85 vs 1.82 mm)")
     print(f"  - Benchmark Diff Peak Stress: {diff_peak_stress_pct:.2f}% vs Abaqus Example (684.2 vs 670.0 MPa)")
 
-    # 5. Verify Visual CAE Assets (GIF, PNGs, SVGs)
-    print("\n[Step 5] Verifying Pre-computed CAE Visual Assets...")
-    # Sync existing verified assets into case_sub_dir if present
-    if case_assets_dir.exists():
-        for asset_file in case_assets_dir.iterdir():
-            if asset_file.is_file():
-                dest = case_sub_dir / asset_file.name
-                if not dest.exists():
-                    dest.write_bytes(asset_file.read_bytes())
+    # 5. Authentic Visual Assets Pipeline (GIF, PNGs, SVGs)
+    print("\n[Step 5] Verifying Authentic CAE Visual Assets...")
+    # Stale asset copying is strictly prohibited: only genuinely generated or rendered files are tracked
 
     fig0_name = "case_06_sheet_metal_forming_evolution.gif"
     fig1_name = "case_06_global_forming_springback.png"

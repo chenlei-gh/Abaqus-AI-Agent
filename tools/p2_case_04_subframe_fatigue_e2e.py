@@ -108,19 +108,12 @@ def run_case_04_subframe_fatigue(workdir: Optional[Path] = None) -> Dict[str, An
     print(f"  - Goodman Safety Factor: FS = {goodman_safety_factor:.2f} (PASS)")
     print(f"  - Reaction Equilibrium Error: {reaction_force_balance_error:.4f}% <= 0.1% (PASS)")
 
-    # 4. Generate Visual CAE Assets (GIF, PNGs, SVGs)
+    # 4. Authentic Visual Assets Pipeline (GIF, PNGs, SVGs)
     p2_cases_dir = ROOT / "machine_validation" / "p2_cases"
     case_sub_dir = p2_cases_dir / "case_04_subframe_durability"
-    case_assets_dir = case_sub_dir / "assets"
 
-    print("\n[Step 4] Verifying Pre-computed CAE Visual Assets...")
-    # Sync existing verified assets into case_sub_dir if present
-    if case_assets_dir.exists():
-        for asset_file in case_assets_dir.iterdir():
-            if asset_file.is_file():
-                dest = case_sub_dir / asset_file.name
-                if not dest.exists():
-                    dest.write_bytes(asset_file.read_bytes())
+    print("\n[Step 4] Verifying Authentic CAE Visual Assets...")
+    # Stale asset copying is strictly prohibited: only genuinely generated or rendered files are tracked
 
     fig0_name = "case_04_subframe_transient_evolution.gif"
     fig1_name = "case_04_subframe_mises_stress.png"
