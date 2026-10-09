@@ -117,6 +117,9 @@ def test_visualization_spec_and_deterministic_figure_binding(tmp_path: Path):
         target_filename="mises_hotspot.svg",
     )
 
+    # Pre-existing authentic CAE visualization asset on disk
+    (tmp_path / "mises_hotspot.svg").write_text("<svg><rect width='100' height='100'/></svg>", encoding="utf-8")
+
     delivery_card, report_pointer, report_data = pipeline.build_and_render(
         output_dir=tmp_path,
         title="Case 3 螺栓法兰装配分析评估报告",
@@ -128,15 +131,12 @@ def test_visualization_spec_and_deterministic_figure_binding(tmp_path: Path):
         visualization_specs=[spec],
     )
 
-    # Verify physical file creation and artifact binding (including mandatory animation)
+    # Verify physical file artifact binding
     img_file = tmp_path / "mises_hotspot.svg"
-    anim_file = tmp_path / "transient_evolution.gif"
     assert img_file.exists()
-    assert anim_file.exists()
-    assert anim_file.stat().st_size > 0
     assert report_pointer.size_bytes > 0
-    # 1 static spec + 1 automatically mandated animation spec = 2
-    assert delivery_card.figures_count == 2
+    # 1 static authentic CAE figure bound
+    assert delivery_card.figures_count == 1
     assert "fastener_preload_diagnostics" in delivery_card.active_sections
 
 
@@ -204,6 +204,20 @@ def test_ab_qualification_full_llm_report_vs_deterministic_pipeline(tmp_path: Pa
         "nodes": 18450,
     }
 
+    # Pre-existing authentic CAE visualization assets on disk
+    (tmp_path / "fig_mises.svg").write_text("<svg><rect width='100' height='100'/></svg>", encoding="utf-8")
+    (tmp_path / "transient_evolution.gif").write_bytes(b"GIF89a" + b"\x00" * 200)
+
+    anim_spec = VisualizationSpec(
+        artifact_id="ANIM-001",
+        visualization_type="dynamic_animation",
+        field_name="U",
+        component="magnitude",
+        target_filename="transient_evolution.gif",
+        caption_zh="螺栓预紧加载演化动图",
+        caption_en="Bolt Preload Transient Evolution Animation",
+    )
+
     # Execute Branch B: Deterministic Pipeline
     delivery_card, report_pointer, report_data = pipeline.build_and_render(
         output_dir=tmp_path,
@@ -213,7 +227,7 @@ def test_ab_qualification_full_llm_report_vs_deterministic_pipeline(tmp_path: Pa
         model_info=model_info,
         results_info=(criterion,),
         acceptance_info=acceptance,
-        visualization_specs=[spec1],
+        visualization_specs=[spec1, anim_spec],
         interpretation_card=card,
         materials_info=({"name": "Steel-Q355", "E": 210000.0, "nu": 0.3},),
         loads_info=({"name": "BoltPreload", "magnitude": 1000.0, "direction": "-Z"},),

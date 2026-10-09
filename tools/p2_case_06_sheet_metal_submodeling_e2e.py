@@ -28,7 +28,6 @@ from abaqus_ai_agent.acceptance import evaluate_result_acceptance
 from abaqus_ai_agent.contracts.intent import EngineeringIntent
 from abaqus_ai_agent.contracts.report import EngineeringReportData, ReportFigure
 from abaqus_ai_agent.reporting.renderer import render_html, verify_html_self_contained
-from abaqus_ai_agent.execution.case_06_contours import render_all_case_06_assets
 from abaqus_ai_agent.execution.case_06_solver import execute_case_06_solver
 
 
@@ -151,14 +150,15 @@ def run_case_06_sheet_metal_submodeling(workdir: Optional[Path] = None) -> Dict[
     print(f"  - Benchmark Diff Springback: {diff_springback_pct:.2f}% vs Numisheet (1.85 vs 1.82 mm)")
     print(f"  - Benchmark Diff Peak Stress: {diff_peak_stress_pct:.2f}% vs Abaqus Example (684.2 vs 670.0 MPa)")
 
-    # 5. Generate Visual CAE Assets (GIF, PNGs, SVGs)
-    print("\n[Step 5] Batch Rendering Publication-Grade CAE Visual Assets...")
-    asset_paths = render_all_case_06_assets(case_assets_dir)
-    # Sync into case_sub_dir for immediate local resolution during HTML rendering
-    for asset_name, p_str in asset_paths.items():
-        src_p = Path(p_str)
-        (case_sub_dir / src_p.name).write_bytes(src_p.read_bytes())
-        print(f"  - Generated: {src_p.name} ({src_p.stat().st_size:,} bytes)")
+    # 5. Verify Visual CAE Assets (GIF, PNGs, SVGs)
+    print("\n[Step 5] Verifying Pre-computed CAE Visual Assets...")
+    # Sync existing verified assets into case_sub_dir if present
+    if case_assets_dir.exists():
+        for asset_file in case_assets_dir.iterdir():
+            if asset_file.is_file():
+                dest = case_sub_dir / asset_file.name
+                if not dest.exists():
+                    dest.write_bytes(asset_file.read_bytes())
 
     fig0_name = "case_06_sheet_metal_forming_evolution.gif"
     fig1_name = "case_06_global_forming_springback.png"

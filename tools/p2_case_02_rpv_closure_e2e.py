@@ -47,7 +47,6 @@ from abaqus_ai_agent.acceptance import evaluate_result_acceptance
 from abaqus_ai_agent.contracts.intent import EngineeringIntent
 from abaqus_ai_agent.contracts.report import EngineeringReportData, ReportFigure
 from abaqus_ai_agent.reporting.renderer import render_markdown, render_html
-from abaqus_ai_agent.execution.case_02_contours import render_case_02_evolution_gif
 
 
 def generate_rpv_closure_svg(step_1_seal_cpress: float, step_2_seal_cpress: float, min_seal: float,
@@ -250,8 +249,10 @@ def run_case_02_rpv_closure(workdir: Path, launcher: Optional[str] = None) -> Di
     print(f"  - Generated Visual Asset: {chart_file}")
 
     gif_file = case_dir / "case_02_rpv_evolution.gif"
-    render_case_02_evolution_gif(gif_file)
-    print(f"  - Generated 12-Frame Loading Evolution GIF: {gif_file} ({gif_file.stat().st_size} bytes)")
+    if gif_file.exists():
+        print(f"  - Verified CAE Loading Evolution GIF: {gif_file} ({gif_file.stat().st_size} bytes)")
+    else:
+        print(f"  - [Notice] Authentic CAE GIF {gif_file.name} not present; synthetic generation disabled.")
 
     # 5. Deterministic Acceptance Evaluation
     print("\n[Step 4] Deterministic Single-Exit Acceptance Evaluation")
@@ -394,15 +395,7 @@ def run_case_02_rpv_closure(workdir: Path, launcher: Optional[str] = None) -> Di
         },
     }
 
-    rpv_figures = (
-        ReportFigure(
-            kind="animation",
-            path=str(gif_file),
-            caption="图 0: RPV 封头双锥金属密封环预紧与 17.5 MPa 介质承压动态演化动画 / RPV Closure Dynamic Evolution Animation",
-            metadata={
-                "interpretation": "12 帧高保真准静态有限元演化动图 (GIF)。展现步骤 1（54 根 M180 螺栓多工位液压同步张拉预紧至 6.50 MN/stud，总预紧载荷 351.0 MN，双锥金属环接触比压达到 145.20 MPa 完成刚性咬合）与步骤 2（锁定螺栓伸长量，施加 17.5 MPa 介质设计内压及 219.91 MN 顶盖轴向流体推力，双锥环自紧膨胀维持 98.60 MPa 接触比压，高于 75.0 MPa 设计密封限值，过渡颈部 SCL 线性化 PL+Pb 为 238.50 MPa <= 276.0 MPa）。"
-            },
-        ),
+    rpv_figs = [
         ReportFigure(
             kind="chart",
             path=str(chart_file),
@@ -411,7 +404,20 @@ def run_case_02_rpv_closure(workdir: Path, launcher: Optional[str] = None) -> Di
                 "interpretation": "左图展示了双锥金属密封环在步骤1（液压预紧）与步骤2（运行内压）下的接触压强演化。预紧阶段接触压强达到 145.20 MPa，运行工况下由于流体推力与自紧效应重新平衡，接触比压稳定保持在 98.60 MPa，显著高于 ASME 最低密封设计阈值 75.0 MPa（裕度 +31.5%），宏观无界面泄漏通道。右图展示了法兰过渡颈部沿应力分类线（SCL）的一次元薄膜加弯曲应力强度（PL+Pb）为 238.50 MPa，低于 ASME Section III NB-3221.3 规定的 1.5 Sm 限值（276.0 MPa），结构处于完全受控的安全弹性承载区。"
             },
         ),
-    )
+    ]
+    if gif_file.exists():
+        rpv_figs.insert(
+            0,
+            ReportFigure(
+                kind="animation",
+                path=str(gif_file),
+                caption="图 0: RPV 封头双锥金属密封环预紧与 17.5 MPa 介质承压动态演化动画 / RPV Closure Dynamic Evolution Animation",
+                metadata={
+                    "interpretation": "12 帧高保真准静态有限元演化动图 (GIF)。展现步骤 1（54 根 M180 螺栓多工位液压同步张拉预紧至 6.50 MN/stud，总预紧载荷 351.0 MN，双锥金属环接触比压达到 145.20 MPa 完成刚性咬合）与步骤 2（锁定螺栓伸长量，施加 17.5 MPa 介质设计内压及 219.91 MN 顶盖轴向流体推力，双锥环自紧膨胀维持 98.60 MPa 接触比压，高于 75.0 MPa 设计密封限值，过渡颈部 SCL 线性化 PL+Pb 为 238.50 MPa <= 276.0 MPa）。"
+                },
+            ),
+        )
+    rpv_figures = tuple(rpv_figs)
 
     rpv_checks = (
         {

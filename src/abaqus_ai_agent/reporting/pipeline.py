@@ -20,43 +20,6 @@ from .renderer import render_report
 from .visualization_spec import VisualizationSpec
 
 
-def _generate_deterministic_animation_gif(img_path: Path, caption_zh: str, caption_en: str, field_name: str) -> None:
-    """Generate authentic multi-frame transient animation GIF."""
-    try:
-        from PIL import Image, ImageDraw
-        frames = []
-        width, height = 480, 270
-        for i in range(12):
-            img = Image.new("RGB", (width, height), (22, 27, 34))
-            draw = ImageDraw.Draw(img)
-            radius = int(30 + i * 8)
-            colors = [(20, 80, 200), (40, 160, 220), (50, 200, 120), (240, 200, 30), (230, 60, 40)]
-            color = colors[min(i // 3, len(colors) - 1)]
-            draw.ellipse(
-                (width // 2 - radius, height // 2 - radius, width // 2 + radius, height // 2 + radius),
-                outline=color,
-                width=6,
-            )
-            draw.ellipse(
-                (width // 2 - 15, height // 2 - 15, width // 2 + 15, height // 2 + 15),
-                fill=color,
-            )
-            draw.text((20, 15), f"Abaqus Transient Animation: {field_name}", fill=(200, 210, 225))
-            draw.text((20, 35), f"Frame {i + 1}/12 | Load Increment: {(i + 1) * 8.33:.1f}%", fill=(88, 166, 255))
-            draw.text((20, height - 25), f"[ANIMATION] {caption_en or caption_zh}", fill=(139, 148, 158))
-            frames.append(img)
-        frames[0].save(
-            img_path,
-            save_all=True,
-            append_images=frames[1:],
-            duration=100,
-            loop=0,
-        )
-    except Exception:
-        raw_gif = b'GIF89a\x01\x00\x01\x00\x80\x00\x00\x00\x00\x00\xff\xff\xff!\xf9\x04\x00\x00\x00\x00\x00,\x00\x00\x00\x00\x01\x00\x01\x00\x00\x02\x02D\x01\x00;'
-        img_path.write_bytes(raw_gif)
-
-
 class DeterministicReportPipeline:
     """Executes deterministic report compilation and artifact registration."""
 
@@ -89,22 +52,16 @@ class DeterministicReportPipeline:
         elif isinstance(acceptance_info, dict):
             status_val = acceptance_info.get("status", "UNKNOWN")
 
-        # Strict deliverable authorization determination:
-        # Deliverable authorization is granted IF AND ONLY IF:
-        # 1. acceptance_info explicitly declares deliverable is True, OR
-        # 2. For legacy acceptance objects, it has passed is True AND status == "PASS" (and not explicitly deliverable=False)
-        # In all other cases (None, missing fields, deliverable=False, passed=False), is_deliverable must be False!
+        # Strict deliverable authorization determination (P0-D-1):
+        # Official deliverable authorization is granted IF AND ONLY IF:
+        # acceptance_info has deliverable is True (or for dict, acceptance_info.get("deliverable") is True).
+        # Legacy objects with passed=True / status="PASS" but missing explicit `deliverable is True`
+        # MUST NOT be granted official delivery authorization!
         is_deliverable = False
         if hasattr(acceptance_info, "deliverable"):
-            is_deliverable = bool(getattr(acceptance_info, "deliverable"))
+            is_deliverable = getattr(acceptance_info, "deliverable") is True
         elif isinstance(acceptance_info, dict) and "deliverable" in acceptance_info:
-            is_deliverable = bool(acceptance_info["deliverable"])
-        elif hasattr(acceptance_info, "passed") and hasattr(acceptance_info, "status"):
-            if bool(getattr(acceptance_info, "passed")) and getattr(acceptance_info, "status") == "PASS":
-                is_deliverable = getattr(acceptance_info, "deliverable", True)
-        elif isinstance(acceptance_info, dict) and "passed" in acceptance_info and "status" in acceptance_info:
-            if bool(acceptance_info["passed"]) and acceptance_info["status"] == "PASS":
-                is_deliverable = acceptance_info.get("deliverable", True)
+            is_deliverable = acceptance_info["deliverable"] is True
 
         if require_deliverable and not is_deliverable:
             raise PermissionError(
@@ -114,56 +71,32 @@ class DeterministicReportPipeline:
             )
 
         delivery_mode = "official_delivery" if is_deliverable else "diagnostic_draft"
+        effective_title = title if is_deliverable else f"[DIAGNOSTIC / NON-DELIVERABLE DRAFT] {title}"
 
         target_dir = Path(output_dir)
         target_dir.mkdir(parents=True, exist_ok=True)
 
-        # 1. Process and bind visualization figures (Mandate at least one animation)
+        # 1. Process and bind authentic CAE visualization figures
         report_figures: List[ReportFigure] = []
         fig_pointers: List[ArtifactPointer] = []
 
-        all_specs: List[VisualizationSpec] = list(visualization_specs)
-        has_animation = any(
-            s.is_animation or s.target_filename.lower().endswith(".gif") or "animation" in s.visualization_type
-            for s in all_specs
-        )
-        if not has_animation:
-            # Mandate at least one dynamic animation asset in every report deliverable
-            anim_spec = VisualizationSpec(
-                artifact_id=f"ART-ANIM-{run_id}-01",
-                visualization_type="deformation_time_history_animation",
-                field_name="U_S_EVOLUTION",
-                component="magnitude",
-                step_name="Step-1",
-                frame_index=-1,
-                caption_zh="载荷历程与结构动力学变形演化动图",
-                caption_en="Transient Loading & Dynamic Deformation Evolution Animation",
-                target_filename="transient_evolution.gif",
-                is_animation=True,
-                animation_fps=10,
-                total_frames=12,
-            )
-            all_specs.append(anim_spec)
-
-        for spec in all_specs:
+        for spec in visualization_specs:
             img_path = target_dir / spec.target_filename
-            # If image doesn't exist on disk yet, generate deterministic GIF or SVG
             if not img_path.exists():
-                if spec.is_animation or spec.target_filename.lower().endswith(".gif"):
-                    _generate_deterministic_animation_gif(
-                        img_path=img_path,
-                        caption_zh=spec.caption_zh,
-                        caption_en=spec.caption_en,
-                        field_name=f"{spec.field_name}.{spec.component}",
+                alt_path = Path(spec.target_filename)
+                if alt_path.is_file():
+                    img_path = alt_path
+
+            if not img_path.exists():
+                if require_deliverable or is_deliverable:
+                    raise FileNotFoundError(
+                        f"Official engineering delivery blocked: required CAE visualization asset '{spec.target_filename}' "
+                        f"({spec.field_name}.{spec.component}) does not exist on disk. "
+                        "Synthetic placeholder generation is strictly prohibited for official deliverables; "
+                        "authentic CAE results rendered from live ODB extraction are required."
                     )
-                else:
-                    svg_content = f"""<svg width="400" height="250" xmlns="http://www.w3.org/2000/svg">
-  <rect width="100%" height="100%" fill="#1a1a2e"/>
-  <text x="50%" y="40%" fill="#e94560" font-size="16" text-anchor="middle" font-family="sans-serif">{spec.caption_zh}</text>
-  <text x="50%" y="60%" fill="#0f3460" font-size="12" text-anchor="middle" font-family="sans-serif">{spec.caption_en}</text>
-  <text x="50%" y="80%" fill="#ffffff" font-size="10" text-anchor="middle" font-family="sans-serif">{spec.field_name}.{spec.component} (Step: {spec.step_name})</text>
-</svg>"""
-                    img_path.write_text(svg_content, encoding="utf-8")
+                # In diagnostic draft mode: do not synthesize fake CAE images; skip missing asset
+                continue
 
             img_bytes = img_path.read_bytes()
             img_sha256 = hashlib.sha256(img_bytes).hexdigest()
@@ -174,7 +107,7 @@ class DeterministicReportPipeline:
 
         # 2. Build polymorphic EngineeringReportData
         report_data = self.builder.build_report_data(
-            title=title,
+            title=effective_title,
             case_id=case_id,
             run_id=run_id,
             model_info=model_info,
@@ -208,7 +141,7 @@ class DeterministicReportPipeline:
             access_policy="human_downloadable",
             checksum_sha256=html_sha256,
             metadata={
-                "title": title,
+                "title": effective_title,
                 "case_id": case_id,
                 "language": language,
                 "sections": list(self.builder.determine_active_sections()),
@@ -219,7 +152,7 @@ class DeterministicReportPipeline:
 
         delivery_card = ReportDeliveryCard(
             report_artifact_id=report_pointer.artifact_id,
-            report_title=title if is_deliverable else f"[DIAGNOSTIC / NON-DELIVERABLE DRAFT] {title}",
+            report_title=effective_title,
             format="bilingual_html",
             location=report_pointer.location,
             acceptance_status=status_val,

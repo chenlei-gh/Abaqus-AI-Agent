@@ -1272,10 +1272,18 @@ def render_html(report, language=None):
     kpi_html += '</div>'
 
     # Build semantic HTML directly from report structure without intermediate Markdown string
-    body_parts = [
+    body_parts = []
+    if report.title.startswith("[DIAGNOSTIC") or "[NON-DELIVERABLE DRAFT]" in report.title:
+        body_parts.append(
+            '<div class="diagnostic-banner" style="background:#fee2e2;border:2px solid #ef4444;color:#991b1b;'
+            'padding:14px 20px;border-radius:8px;margin-bottom:24px;font-weight:bold;text-align:center;font-size:16px;">'
+            '⚠️ 非正式交付草稿 / DIAGNOSTIC NON-DELIVERABLE DRAFT — 未获得正式工程交付授权 (UNAUTHORIZED FOR ENGINEERING RELEASE)'
+            '</div>'
+        )
+    body_parts.extend([
         f'<h1 class="main-title">{html.escape(report.title)}</h1>',
         kpi_html,
-    ]
+    ])
 
     # 1. Executive Summary
     if report.objective:

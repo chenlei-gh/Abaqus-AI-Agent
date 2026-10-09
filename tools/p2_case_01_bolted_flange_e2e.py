@@ -53,7 +53,6 @@ from abaqus_ai_agent.contracts.procedure import MultiStepProcedureSpec, StepDepe
 from abaqus_ai_agent.contracts.report import EngineeringReportData, ReportFigure
 from abaqus_ai_agent.contracts.results import get_physics_result_profile
 from abaqus_ai_agent.reporting.renderer import render_markdown, render_html
-from abaqus_ai_agent.execution.case_01_contours import render_case_01_evolution_gif
 
 
 def _sha256(filepath: Path) -> str:
@@ -210,8 +209,10 @@ def run_case_01_flange(workdir: Path, launcher: Optional[str] = None) -> Dict[st
     print(f"  - Generated Visual Asset: {chart_file}")
 
     gif_file = case_dir / "case_01_flange_evolution.gif"
-    render_case_01_evolution_gif(gif_file)
-    print(f"  - Generated 12-Frame Loading Evolution GIF: {gif_file} ({gif_file.stat().st_size} bytes)")
+    if gif_file.exists():
+        print(f"  - Verified CAE Loading Evolution GIF: {gif_file} ({gif_file.stat().st_size} bytes)")
+    else:
+        print(f"  - [Notice] Authentic CAE GIF {gif_file.name} not present; synthetic generation disabled.")
 
     # 5. Deterministic Acceptance Evaluation
     print("\n[Step 4] Deterministic Single-Exit Acceptance Evaluation")
@@ -346,15 +347,7 @@ def run_case_01_flange(workdir: Path, launcher: Optional[str] = None) -> Dict[st
         },
     }
 
-    flange_figures = (
-        ReportFigure(
-            kind="animation",
-            path=str(gif_file),
-            caption="图 0: 螺栓法兰管道连接双工步预紧压实与介质承压动态演化动画 / Flange Joint Dynamic Evolution Animation",
-            metadata={
-                "interpretation": "12 帧高保真准静态加载演化动图 (GIF)。涵盖步骤 1（8 根 M16 螺栓施加 50 kN 预紧力，总预紧载荷 400 kN，垫片平均接触压强平稳上升至 31.52 MPa 完成初始压实）与步骤 2（锁定螺栓物理伸长量，施加 3.0 MPa 介质内压及 94.25 kN 轴向流体推力，垫片略微弹性卸载但有效接触比压保持在 24.85 MPa，高于 12.0 MPa 最低密封限值，法兰颈部集中应力稳定在 195.42 MPa）。"
-            },
-        ),
+    flange_figs = [
         ReportFigure(
             kind="chart",
             path=str(chart_file),
@@ -363,7 +356,20 @@ def run_case_01_flange(workdir: Path, launcher: Optional[str] = None) -> Dict[st
                 "interpretation": "图表显示了预紧工步（Step 1）与内压运行工步（Step 2）下垫片平均接触压强的演化对比。螺栓预紧后平均接触压强达到 31.52 MPa，介质内压和端推力导致法兰偏转引起部分卸载，但运行期平均接触压强仍稳定维持在 24.85 MPa，显著高于 12.0 MPa 最低密封限值，具有充分的防泄漏安全裕度。"
             },
         ),
-    )
+    ]
+    if gif_file.exists():
+        flange_figs.insert(
+            0,
+            ReportFigure(
+                kind="animation",
+                path=str(gif_file),
+                caption="图 0: 螺栓法兰管道连接双工步预紧压实与介质承压动态演化动画 / Flange Joint Dynamic Evolution Animation",
+                metadata={
+                    "interpretation": "12 帧高保真准静态加载演化动图 (GIF)。涵盖步骤 1（8 根 M16 螺栓施加 50 kN 预紧力，总预紧载荷 400 kN，垫片平均接触压强平稳上升至 31.52 MPa 完成初始压实）与步骤 2（锁定螺栓物理伸长量，施加 3.0 MPa 介质内压及 94.25 kN 轴向流体推力，垫片略微弹性卸载但有效接触比压保持在 24.85 MPa，高于 12.0 MPa 最低密封限值，法兰颈部集中应力稳定在 195.42 MPa）。"
+                },
+            ),
+        )
+    flange_figures = tuple(flange_figs)
 
     flange_checks = (
         {

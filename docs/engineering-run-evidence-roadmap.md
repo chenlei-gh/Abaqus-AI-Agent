@@ -2035,3 +2035,12 @@ For full requirements backlog, input/output schemas, anti-hallucination constrai
 - [x] **阶段 P0-D：交付出口封闭与报告门禁前移收口** `[CLOSED & QUALIFIED ✅]`
   - 任务：在报告管线 `DeterministicReportPipeline.build_and_render` 将交付授权检查前移至任何磁盘 I/O（动图、SVG、HTML 写入）之前，未授权交付彻底杜绝任何文件落盘泄露；`require_deliverable` 默认值收紧为 `True`；严格要求 `is_deliverable` 必须由受控验收内核显式签发 `deliverable=True`，严禁隐式回退或通过宽松默认放行；诊断与草稿副本强制标记 `[DIAGNOSTIC / NON-DELIVERABLE DRAFT]` 与 `delivery_mode="diagnostic_draft"`，彻底与正式交付物隔离。
   - 退出门禁：31 项 P0 专项负例与反例测试全绿，全套测试套件 920/920 PASS 零回归；任何未获授权交付被报告引擎在磁盘写入前拦截为 PermissionError 且零文件残留。
+- [x] **阶段 P0-D 终态加固：CAE 图件真实性闭环与虚假图片工具彻底清除** `[CLOSED & QUALIFIED ✅]`
+  - 任务：
+    1. **删除所有虚假云图生成工具**：彻底删除 `src/abaqus_ai_agent/execution/case_01_contours.py` ~ `case_06_contours.py`，全仓清除 PIL 伪造物理量插值；
+    2. **清除管线伪造占位生成**：彻底移除 `DeterministicReportPipeline` 内部无中生有注入 `transient_evolution.gif` 与兜底 SVG 占位图的逻辑；
+    3. **P0-D-1 严格交付授权收口**：在 `pipeline.py` 中彻底移除针对缺少 `deliverable` 字段的兼容放行，正式交付必须严格校验 `acceptance_info.deliverable is True`，否则抛出 `PermissionError`；
+    4. **P0-D-2 诊断草稿全域显式注入**：在 `renderer.py` 中检测到诊断模式时，在 HTML 正文顶部强制注入醒目的 `<div class="diagnostic-banner">` 警示横幅，确保无法被误认为是正式交付报告；
+    5. **图件真实性阻断 (Fail-Closed)**：声明在 `visualization_specs` 中的 CAE 图件在磁盘上若不存在，正式交付模式下严禁生成虚假占位图，必须坚决抛出 `FileNotFoundError` 阻断正式报告签发，且保证零文件落盘；
+    6. **案例工具解耦**：重构 `tools/p2_case_*_e2e.py`，移除对已删除 `contours.py` 的依赖，仅当真实归档或 headless Abaqus Viewer 导出的真实图件存在时才引用，严禁虚假伪造。
+  - 退出门禁：全套测试套件 922/922 全部通过，43 项 P0 专项内核与管线反例测试全绿，全仓零合成假图工具。

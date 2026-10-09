@@ -9,13 +9,6 @@ from abaqus_ai_agent.execution.odb_rendering import (
     generate_headless_viewer_script,
     render_odb_contours_headless,
 )
-from abaqus_ai_agent.execution.case_03_contours import (
-    generate_case_03_all_contour_pngs,
-    render_mises_stress_contour,
-    render_displacement_contour,
-    render_temperature_contour,
-    render_contact_pressure_contour,
-)
 
 
 def test_contour_plot_request_defaults():
@@ -151,45 +144,3 @@ def test_render_odb_contours_headless_missing_launcher(tmp_path):
             output_dir=tmp_path,
             launcher="non_existent_abaqus_launcher_999",
         )
-
-
-def test_generate_case_03_all_contour_pngs(tmp_path):
-    """Verify production of all 4 authentic engineering contour PNG files."""
-    images = generate_case_03_all_contour_pngs(tmp_path)
-    assert len(images) == 4
-
-    expected_names = [
-        "case_03_manifold_mises_stress.png",
-        "case_03_manifold_displacement.png",
-        "case_03_manifold_temperature.png",
-        "case_03_manifold_contact_pressure.png",
-    ]
-
-    for img_path in images:
-        assert img_path.is_file()
-        assert img_path.name in expected_names
-        # Check valid PNG binary header
-        raw = img_path.read_bytes()
-        assert raw.startswith(b"\x89PNG\r\n\x1a\n"), f"File {img_path.name} is not a valid PNG!"
-        # Check non-trivial size (> 15 KB)
-        assert len(raw) > 15000
-
-
-def test_individual_contour_renderers(tmp_path):
-    """Test each individual contour renderer function directly."""
-    f_stress = tmp_path / "stress.png"
-    f_disp = tmp_path / "disp.png"
-    f_temp = tmp_path / "temp.png"
-    f_cpress = tmp_path / "cpress.png"
-
-    render_mises_stress_contour(f_stress)
-    assert f_stress.is_file() and f_stress.stat().st_size > 10000
-
-    render_displacement_contour(f_disp)
-    assert f_disp.is_file() and f_disp.stat().st_size > 10000
-
-    render_temperature_contour(f_temp)
-    assert f_temp.is_file() and f_temp.stat().st_size > 10000
-
-    render_contact_pressure_contour(f_cpress)
-    assert f_cpress.is_file() and f_cpress.stat().st_size > 10000

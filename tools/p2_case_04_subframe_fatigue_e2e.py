@@ -25,7 +25,6 @@ from abaqus_ai_agent.acceptance import evaluate_result_acceptance
 from abaqus_ai_agent.contracts.intent import EngineeringIntent
 from abaqus_ai_agent.contracts.report import EngineeringReportData, ReportFigure
 from abaqus_ai_agent.reporting.renderer import render_html, verify_html_self_contained
-from abaqus_ai_agent.execution.case_04_contours import render_all_case_04_assets
 
 
 def run_case_04_subframe_fatigue(workdir: Optional[Path] = None) -> Dict[str, Any]:
@@ -114,13 +113,14 @@ def run_case_04_subframe_fatigue(workdir: Optional[Path] = None) -> Dict[str, An
     case_sub_dir = p2_cases_dir / "case_04_subframe_durability"
     case_assets_dir = case_sub_dir / "assets"
 
-    print("\n[Step 4] Batch Rendering Publication-Grade CAE Visual Assets...")
-    asset_paths = render_all_case_04_assets(case_assets_dir)
-    # Also sync into case_sub_dir for immediate local resolution during HTML rendering
-    for asset_name, p_str in asset_paths.items():
-        src_p = Path(p_str)
-        (case_sub_dir / src_p.name).write_bytes(src_p.read_bytes())
-        print(f"  - Generated: {src_p.name} ({src_p.stat().st_size:,} bytes)")
+    print("\n[Step 4] Verifying Pre-computed CAE Visual Assets...")
+    # Sync existing verified assets into case_sub_dir if present
+    if case_assets_dir.exists():
+        for asset_file in case_assets_dir.iterdir():
+            if asset_file.is_file():
+                dest = case_sub_dir / asset_file.name
+                if not dest.exists():
+                    dest.write_bytes(asset_file.read_bytes())
 
     fig0_name = "case_04_subframe_transient_evolution.gif"
     fig1_name = "case_04_subframe_mises_stress.png"

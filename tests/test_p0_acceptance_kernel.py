@@ -1017,3 +1017,159 @@ def test_p0_c_production_acceptance_run_hash_tampered_even_if_caller_provides_ma
     assert res.result_validity == "EVIDENCE_TAMPERED"
     assert res.deliverable is False
     assert any("caller_input_hash_conflict" in e or "input_hash_mismatch" in e for e in res.findings.evidence_errors)
+
+
+def test_p0_d_legacy_dict_with_passed_true_blocked_without_explicit_deliverable(tmp_path: Path):
+    """P0-D-1: Legacy acceptance dict with passed=True but lacking explicit deliverable=True is strictly blocked."""
+    pipeline = DeterministicReportPipeline()
+    out_dir = tmp_path / "report_legacy_dict_blocked"
+
+    with pytest.raises(PermissionError, match="deliverable is False"):
+        pipeline.build_and_render(
+            output_dir=out_dir,
+            title="Legacy Dict Official Attempt",
+            case_id="case_legacy_blocked",
+            run_id="run_legacy_blocked",
+            model_info={"max_mises_mpa": 120.0},
+            results_info=(),
+            acceptance_info={"status": "PASS", "passed": True},  # Missing deliverable: True
+            require_deliverable=True,
+        )
+
+
+def test_p0_d_diagnostic_draft_mode_renders_html_banner_and_title(tmp_path: Path):
+    """P0-D-2: Diagnostic draft mode embeds explicit banner and title tag in actual rendered HTML body."""
+    pipeline = DeterministicReportPipeline()
+    out_dir = tmp_path / "report_diagnostic_html_check"
+
+    failed_acc = AcceptanceResult(
+        passed=False,
+        criteria=(),
+        status="FAIL",
+        acceptance_status="FAIL",
+        result_validity="VALID",
+        deliverable=False,
+        findings=AcceptanceFindings(failures=("criteria_exceeded:max_mises",)),
+    )
+
+    card, pointer, data = pipeline.build_and_render(
+        output_dir=out_dir,
+        title="Diagnostic Stress Report",
+        case_id="case_diag_html",
+        run_id="run_diag_html",
+        model_info={"max_mises_mpa": 450.0},
+        results_info=(),
+        acceptance_info=failed_acc,
+        require_deliverable=False,
+    )
+
+    html_file = out_dir / "report.html"
+    assert html_file.exists()
+    html_content = html_file.read_text(encoding="utf-8")
+
+    # Assert explicit diagnostic banners exist in generated HTML
+    assert "[DIAGNOSTIC / NON-DELIVERABLE DRAFT]" in html_content
+    assert "diagnostic-banner" in html_content
+    assert "DIAGNOSTIC NON-DELIVERABLE DRAFT" in html_content
+
+
+def test_p0_d_missing_cae_visualization_asset_blocks_official_delivery_without_synthetic_fallback(tmp_path: Path):
+    """P0-D-3: Missing required CAE visualization image fails closed (FileNotFoundError); never generates synthetic fallback."""
+    from abaqus_ai_agent.reporting.visualization_spec import VisualizationSpec
+
+    pipeline = DeterministicReportPipeline()
+    out_dir = tmp_path / "report_missing_vis_asset"
+
+    passed_acc = AcceptanceResult(
+        passed=True,
+        criteria=(),
+        status="PASS",
+        acceptance_status="PASS",
+        result_validity="VALID",
+        deliverable=True,
+        findings=AcceptanceFindings(),
+    )
+
+    non_existent_img_name = "non_existent_mises_contour.png"
+    specs = [
+        VisualizationSpec(
+            artifact_id="FIG-S-001",
+            visualization_type="stress_hotspot",
+            field_name="S",
+            component="mises",
+            target_filename=non_existent_img_name,
+            caption_zh="Mises 应力云图",
+            caption_en="von Mises Stress Contour",
+        )
+    ]
+
+    with pytest.raises(FileNotFoundError, match="Official engineering delivery blocked: required CAE visualization asset"):
+        pipeline.build_and_render(
+            output_dir=out_dir,
+            title="Official Report Missing Asset",
+            case_id="case_missing_asset",
+            run_id="run_missing_asset",
+            model_info={"max_mises_mpa": 120.0},
+            results_info=(),
+            acceptance_info=passed_acc,
+            visualization_specs=specs,
+            require_deliverable=True,
+        )
+
+    # Fail-closed guarantee: zero report files written to output_dir
+    if out_dir.exists():
+        assert len(list(out_dir.glob("*.html"))) == 0
+
+
+def test_p0_d_authentic_cae_visualization_asset_succeeds_in_official_delivery(tmp_path: Path):
+    """P0-D-4: Official delivery succeeds when authentic CAE image file is verified on disk."""
+    from abaqus_ai_agent.reporting.visualization_spec import VisualizationSpec
+
+    pipeline = DeterministicReportPipeline()
+    out_dir = tmp_path / "report_authentic_vis_asset"
+
+    passed_acc = AcceptanceResult(
+        passed=True,
+        criteria=(),
+        status="PASS",
+        acceptance_status="PASS",
+        result_validity="VALID",
+        deliverable=True,
+        findings=AcceptanceFindings(),
+    )
+
+    # Provide authentic CAE image artifact on disk
+    authentic_filename = "authentic_odb_contour.png"
+    authentic_img = tmp_path / "report_authentic_vis_asset" / authentic_filename
+    out_dir.mkdir(parents=True, exist_ok=True)
+    authentic_img.write_bytes(b"\x89PNG\r\n\x1a\n" + b"\x00" * 1024)
+
+    specs = [
+        VisualizationSpec(
+            artifact_id="FIG-S-002",
+            visualization_type="stress_hotspot",
+            field_name="S",
+            component="mises",
+            target_filename=authentic_filename,
+            caption_zh="Mises 应力云图",
+            caption_en="von Mises Stress Contour",
+        )
+    ]
+
+    card, pointer, data = pipeline.build_and_render(
+        output_dir=out_dir,
+        title="Official Authentic Delivery",
+        case_id="case_authentic_asset",
+        run_id="run_authentic_asset",
+        model_info={"max_mises_mpa": 120.0},
+        results_info=(),
+        acceptance_info=passed_acc,
+        visualization_specs=specs,
+        require_deliverable=True,
+    )
+
+    assert card.deliverable is True
+    assert len(data.figures) == 1
+    assert Path(data.figures[0].path) == authentic_img
+    # Ensure no synthetic transient_evolution.gif was forced
+    assert not any(fig.path.endswith("transient_evolution.gif") for fig in data.figures)
