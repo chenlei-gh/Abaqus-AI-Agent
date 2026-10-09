@@ -695,7 +695,8 @@ class AbaqusAIAgent:
                 for k in candidate_keys:
                     if k in metric_dict:
                         v = metric_dict[k]
-                        if isinstance(v, (int, float)) and not math.isnan(float(v)):
+                        # Disallow bool (bool subclasses int in Python) and require finite number
+                        if not isinstance(v, bool) and isinstance(v, (int, float)) and math.isfinite(float(v)):
                             found_valid_val = True
                             break
 
@@ -703,8 +704,13 @@ class AbaqusAIAgent:
                 diag_failed = False
                 for k in candidate_keys:
                     if k in diag_map:
-                        msg = str(diag_map[k]).upper()
-                        if msg.startswith("UNAVAILABLE") or msg.startswith("FAILED"):
+                        diag_entry = diag_map[k]
+                        msg = ""
+                        if isinstance(diag_entry, dict):
+                            msg = str(diag_entry.get("status") or diag_entry.get("error") or diag_entry.get("reason") or diag_entry.get("detail") or "").upper()
+                        else:
+                            msg = str(diag_entry).upper()
+                        if any(token in msg for token in ("UNAVAILABLE", "FAILED", "MISSING", "ERROR", "INVALID", "BLOCKED")):
                             diag_failed = True
                             break
 

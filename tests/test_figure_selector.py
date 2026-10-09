@@ -111,12 +111,13 @@ def test_priority_1_reuse_existing_verified_figure(tmp_path: Path):
         path=str(existing_img.as_posix()),
         caption="Existing verified stress hotspot",
         source="S.mises",
-        metadata={"field": "S", "component": "mises"},
+        metadata={"field": "S", "component": "mises", "run_id": "RUN-PRIORITY-1"},
     )
 
     res = select_engineering_figures(
         physics_domain="static",
         existing_figures=[existing_fig],
+        run_id="RUN-PRIORITY-1",
     )
 
     # Stress hotspot should be in reused_figures, NOT in specs to be generated

@@ -464,8 +464,6 @@ class AnalysisRunner:
                             artifacts=artifacts,
                         )
                     launcher = getattr(self.executor, "launcher", None)
-                    cname = getattr(self.executor, "__class__", None).__name__ or ""
-                    is_test_double = any(token in cname for token in ("Mock", "Fake", "Stub", "Dummy", "OdbBackedExecutor"))
 
                     req_fields = []
                     for c in effective_criteria:
@@ -473,9 +471,10 @@ class AnalysisRunner:
                         if fld:
                             req_fields.append(str(fld).upper())
 
-                    if not is_test_double:
+                    if require_production:
                         # In genuine production mode, launcher MUST be present and native verification MUST succeed.
                         # Offline state, missing launcher, or verification errors strictly block delivery.
+                        # Class name is NEVER used as an implicit exemption.
                         if not launcher:
                             return run.with_state(
                                 AnalysisRunState.FAILED,
@@ -490,15 +489,16 @@ class AnalysisRunner:
                             required_fields=tuple(set(req_fields)) if req_fields else None,
                         )
                         if not odb_check.get("verified", False):
+                            reason = "odb_native_structure_unverified" if odb_check.get("offline", False) else "odb_native_structure_invalid"
                             return run.with_state(
                                 AnalysisRunState.FAILED,
                                 odb_path=path,
                                 engineering_status=EngineeringStatus.RESULT_INVALID.value,
-                                diagnostics=({"reason": "odb_native_structure_unverified", "detail": odb_check.get("error", "Native ODB verification failed or launcher is offline")},),
+                                diagnostics=({"reason": reason, "detail": odb_check.get("error", "Native ODB verification failed or launcher is offline")},),
                                 artifacts=artifacts,
                             )
                     else:
-                        # Test double path: if launcher provided and not offline, enforce check
+                        # Non-production (test/diagnostics) path: if launcher provided and not offline, enforce check
                         if launcher:
                             odb_check = verify_authentic_odb_structure(
                                 path=path,

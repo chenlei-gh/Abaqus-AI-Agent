@@ -144,6 +144,11 @@ def test_analysis_runner_require_production_full_causal_binding_and_delivery(tmp
     workdir = tmp_path / "run_authentic"
     workdir.mkdir()
     executor = MockCaeExecutor(workdir, job_name="Job_Auth")
+    executor.launcher = "abaqus"
+    monkeypatch.setattr(
+        "abaqus_ai_agent.execution.solver.verify_authentic_odb_structure",
+        lambda **kwargs: {"verified": True, "offline": False, "steps": {"Step-1": {"frames": [0, 1]}}, "fields": ["S", "U"]},
+    )
 
     # Mock extract_requirements to simulate authentic live ODB extraction
     req = ResultRequirement(
@@ -320,6 +325,27 @@ def test_agent_solve_requirement_require_production_full_closure_and_delivery(tm
     workdir = tmp_path / "prod_agent_run"
     workdir.mkdir()
     executor = MockCaeExecutor(workdir, job_name="Job_PROD")
+    executor.launcher = "abaqus"
+    monkeypatch.setattr(
+        "abaqus_ai_agent.execution.solver.verify_authentic_odb_structure",
+        lambda **kwargs: {"verified": True, "offline": False, "steps": {"Step-1": {"frames": [0, 1]}}, "fields": ["S", "U"]},
+    )
+    # Mock headless viewer rendering so authentic figures are generated during pipeline execution
+    import abaqus_ai_agent.execution.odb_rendering as rend_mod
+    monkeypatch.setattr(
+        rend_mod,
+        "render_authentic_visualizations",
+        lambda odb_path, specs, output_dir, **kwargs: [
+            ReportFigure(
+                kind=s.kind,
+                path=str((Path(output_dir) / s.target_filename).as_posix()),
+                caption=s.caption,
+                source=f"{s.field_name}.{s.component}",
+                metadata={"field": s.field_name, "component": s.component, "run_id": kwargs.get("run_id", "PROD")},
+            )
+            for s in specs
+        ],
+    )
 
     # Mock extract_requirements to supply authentic extraction
     req = ResultRequirement(
@@ -536,7 +562,7 @@ def test_negative_p0_a_corrupt_or_empty_odb_rejected_by_analysis_runner_require_
 
 
 def test_negative_p0_a_production_mode_denies_missing_launcher_or_offline_verification(tmp_path: Path, monkeypatch):
-    """Negative Test P0-A: Real production executor without launcher or with offline verification MUST fail."""
+    """Negative Test P0-A: Production executor without launcher or with offline verification MUST fail regardless of class name."""
     workdir = tmp_path / "neg_p0_a_real"
     workdir.mkdir()
 
@@ -546,8 +572,8 @@ def test_negative_p0_a_production_mode_denies_missing_launcher_or_offline_verifi
     (workdir / "RealJob.sta").write_text("THE ANALYSIS HAS COMPLETED SUCCESSFULLY\n", encoding="utf-8")
     (workdir / "RealJob.log").write_text("Abaqus JOB COMPLETED\n", encoding="utf-8")
 
-    class ProductionEngineExecutor(AbaqusExecutor):
-        """Genuine executor class name (no Mock/Fake token)."""
+    class FakeOrMockExecutor(AbaqusExecutor):
+        """Executor containing 'Mock' / 'Fake' in class name to verify class name heuristic is dead."""
         def __init__(self):
             self.launcher = None  # Missing launcher!
         def execute(self, code, timeout=120):
@@ -557,10 +583,10 @@ def test_negative_p0_a_production_mode_denies_missing_launcher_or_offline_verifi
         def inspect_odb(self, path):
             return {"status": "available", "steps": {"Step-1": {"frames": [0]}}}
 
-    exec_real = ProductionEngineExecutor()
-    runner = AnalysisRunner(exec_real)
+    exec_fake_name = FakeOrMockExecutor()
+    runner = AnalysisRunner(exec_fake_name)
 
-    # 1. Missing launcher in production mode must fail-closed
+    # 1. Missing launcher in production mode must fail-closed even if class name has 'Mock'/'Fake'
     res_no_launcher = runner.run(
         model_name="M1",
         job_name="RealJob",
@@ -573,7 +599,7 @@ def test_negative_p0_a_production_mode_denies_missing_launcher_or_offline_verifi
     assert any("production_launcher_missing" in str(d) for d in res_no_launcher.diagnostics)
 
     # 2. Launcher present but verification returns offline: MUST fail-closed in production mode
-    exec_real.launcher = "abaqus"
+    exec_fake_name.launcher = "abaqus"
     monkeypatch.setattr(
         "abaqus_ai_agent.execution.solver.verify_authentic_odb_structure",
         lambda **kwargs: {"verified": False, "offline": True, "error": "Abaqus offline"},
@@ -630,7 +656,29 @@ def test_negative_p0_b_missing_or_mismatched_provenance_rejected(tmp_path: Path)
     )
     assert len(res_wrong_odb.reused_figures) == 0
 
-    # Figure 3: Full matching provenance: admitted
+    # Figure 3: Matching provenance but image file content altered (tampered sha256): rejected
+    fig_tampered = ReportFigure(
+        kind="stress_hotspot",
+        path=str(img_file.as_posix()),
+        caption="Tampered content figure",
+        source="S.mises",
+        metadata={
+            "field": "S",
+            "component": "mises",
+            "run_id": "RUN-CURR-01",
+            "odb_hash": "HASH-NEW-ODB",
+            "sha256": "expected_different_sha256_hash",
+        },
+    )
+    res_tampered = select_engineering_figures(
+        physics_domain="static",
+        existing_figures=[fig_tampered],
+        run_id="RUN-CURR-01",
+        odb_hash="HASH-NEW-ODB",
+    )
+    assert len(res_tampered.reused_figures) == 0
+
+    # Figure 4: Full matching provenance: admitted
     fig_valid = ReportFigure(
         kind="stress_hotspot",
         path=str(img_file.as_posix()),
@@ -733,19 +781,19 @@ def test_negative_p1_d_missing_required_criterion_blocks_task_completion_and_del
     assert result.summary_card.get("delivery_card") is None
 
 
-def test_negative_p1_d_required_criterion_with_nan_or_unavailable_diagnostic_blocked(tmp_path: Path, monkeypatch):
-    """Negative Test P1-D: Required criterion having NaN value or UNAVAILABLE diagnostic blocks delivery."""
+def test_negative_p1_d_required_criterion_with_nan_inf_bool_or_unavailable_diagnostic_blocked(tmp_path: Path, monkeypatch):
+    """Negative Test P1-D: Required criterion having NaN, +inf, -inf, bool, or structured error diagnostics blocks delivery."""
     from abaqus_ai_agent.agent import AbaqusAIAgent
     from abaqus_ai_agent.contracts.intent import EngineeringIntent
     from abaqus_ai_agent.contracts.material import ElasticProperties, MaterialDefinition
     from abaqus_ai_agent.contracts.task import TaskStatus
     from abaqus_ai_agent.planning.compiler import IntentGeometrySpec
+    import abaqus_ai_agent.execution.results as res_mod
 
     workdir = tmp_path / "req_nan_run"
     workdir.mkdir()
-    executor = MockCaeExecutor(workdir, job_name="Job_ReqNaN")
+    executor = MockCaeExecutor(workdir, job_name="Job_ReqNonFinite")
 
-    # Metric extraction returns NaN for required criterion
     req = ResultRequirement(
         name="max_mises",
         value_key="max_mises",
@@ -755,15 +803,7 @@ def test_negative_p1_d_required_criterion_with_nan_or_unavailable_diagnostic_blo
         step="Step-1",
         frame=-1,
     )
-    extraction = ResultExtraction(
-        requirement=req,
-        value=float("nan"),  # NaN!
-        locator={"step": "Step-1", "frame": -1, "field": "S", "component": "mises", "source": "odb"},
-    )
-    import abaqus_ai_agent.execution.results as res_mod
-    monkeypatch.setattr(res_mod, "extract_requirements", lambda ex, path, crit: ([extraction], ()))
 
-    agent = AbaqusAIAgent(executor)
     geom = IntentGeometrySpec(shape="cantilever_box", length=100.0, width=10.0, height=10.0)
     mat = MaterialDefinition(
         name="Steel",
@@ -772,7 +812,7 @@ def test_negative_p1_d_required_criterion_with_nan_or_unavailable_diagnostic_blo
         density=7.85e-9,
     )
     intent = EngineeringIntent(
-        id="REQ-NAN-CRIT",
+        id="REQ-NONFINITE-CRIT",
         kind="linear_static",
         description="Linear static cantilever analysis",
         boundary_conditions=({"type": "encastre", "region": "RootFace"},),
@@ -782,15 +822,52 @@ def test_negative_p1_d_required_criterion_with_nan_or_unavailable_diagnostic_blo
         ),
     )
 
-    result = agent.solve_requirement(
+    # Sub-test 1: Test NaN, +inf, -inf, and True (bool) all block delivery
+    for bad_val in (float("nan"), float("inf"), float("-inf"), True):
+        extraction = ResultExtraction(
+            requirement=req,
+            value=bad_val,
+            locator={"step": "Step-1", "frame": -1, "field": "S", "component": "mises", "source": "odb"},
+        )
+        monkeypatch.setattr(res_mod, "extract_requirements", lambda ex, path, crit, _ext=extraction: ([_ext], ()))
+        agent = AbaqusAIAgent(executor)
+        result = agent.solve_requirement(
+            requirement=intent,
+            geometry=geom,
+            material=mat,
+            workdir=str(workdir),
+            require_production=True,
+        )
+        assert result.status == TaskStatus.FAILED
+        assert result.summary_card["engineering_status"] == "RESULT_INVALID"
+        assert result.summary_card.get("delivery_card") is None
+
+    # Sub-test 2: Valid numeric value but extraction diagnostics contains structured dict failure
+    valid_extraction = ResultExtraction(
+        requirement=req,
+        value=150.0,
+        locator={"step": "Step-1", "frame": -1, "field": "S", "component": "mises", "source": "odb"},
+    )
+    monkeypatch.setattr(res_mod, "extract_requirements", lambda ex, path, crit: ([valid_extraction], ()))
+
+    # Inject structured error diagnostic into result bundle metadata
+    orig_extract_bundle = agent.extract_result_intelligence
+    def mock_bundle_with_diag(*args, **kwargs):
+        bundle, figs = orig_extract_bundle(*args, **kwargs)
+        if hasattr(bundle, "metadata"):
+            bundle.metadata["extraction_diagnostics"] = {
+                "max_mises": {"status": "FAILED", "reason": "sensor_reading_corrupted"}
+            }
+        return bundle, figs
+    monkeypatch.setattr(agent, "extract_result_intelligence", mock_bundle_with_diag)
+
+    result_diag = agent.solve_requirement(
         requirement=intent,
         geometry=geom,
         material=mat,
         workdir=str(workdir),
         require_production=True,
     )
-
-    # Must fail-closed due to NaN numeric value
-    assert result.status == TaskStatus.FAILED
-    assert result.summary_card["engineering_status"] == "RESULT_INVALID"
-    assert result.summary_card.get("delivery_card") is None
+    assert result_diag.status == TaskStatus.FAILED
+    assert result_diag.summary_card["engineering_status"] == "RESULT_INVALID"
+    assert result_diag.summary_card.get("delivery_card") is None

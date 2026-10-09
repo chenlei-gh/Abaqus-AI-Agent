@@ -209,13 +209,19 @@ def select_engineering_figures(
     r_id = run_id or "RUN-DEFAULT"
     step = step_name or "Step-1"
 
-    # Compute effective ODB hash if path exists and hash not provided
+    # Compute effective ODB hash if path exists and hash not provided (chunk-based for memory efficiency)
     eff_odb_hash = odb_hash
     if not eff_odb_hash and odb_path and os.path.isfile(str(odb_path)):
         try:
             import hashlib
+            hasher = hashlib.sha256()
             with open(str(odb_path), "rb") as _fh:
-                eff_odb_hash = hashlib.sha256(_fh.read()).hexdigest()
+                while True:
+                    chunk = _fh.read(65536)
+                    if not chunk:
+                        break
+                    hasher.update(chunk)
+            eff_odb_hash = hasher.hexdigest()
         except Exception:
             pass
 
@@ -252,11 +258,10 @@ def select_engineering_figures(
             f_meta = f.metadata or {}
 
             # Strict provenance whitelist admission:
-            # 1. Reject figures with missing or mismatched run_id when run_id is known
+            # 1. Reject figures with missing or mismatched run_id
             fig_run_id = f_meta.get("run_id")
-            if r_id != "RUN-DEFAULT":
-                if not fig_run_id or fig_run_id != r_id:
-                    continue
+            if not fig_run_id or fig_run_id != r_id:
+                continue
 
             # 2. Reject figures with missing or mismatched input_hash when input_hash is enforced
             if input_hash:
@@ -268,6 +273,17 @@ def select_engineering_figures(
             if eff_odb_hash:
                 fig_odb_hash = f_meta.get("odb_hash")
                 if not fig_odb_hash or fig_odb_hash != eff_odb_hash:
+                    continue
+
+            # 4. Content integrity check: reject figures whose physical image file content doesn't match recorded sha256
+            rec_sha256 = f_meta.get("sha256") or f_meta.get("image_sha256")
+            if rec_sha256:
+                try:
+                    import hashlib
+                    actual_sha = hashlib.sha256(f_path.read_bytes()).hexdigest()
+                    if actual_sha != rec_sha256:
+                        continue
+                except Exception:
                     continue
 
             f_field = (f_meta.get("field") or f_meta.get("variable_label") or "").upper()
