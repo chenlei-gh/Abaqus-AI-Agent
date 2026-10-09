@@ -192,3 +192,23 @@ def test_extraction_diagnostics_records_unavailable_status():
     assert bundle is not None
     diag = bundle.metadata.get("extraction_diagnostics", {})
     assert isinstance(diag, dict)
+
+
+def test_figure_selector_wrapper_and_probe_odb_fields(tmp_path: Path):
+    """Verify FigureSelector class wrapper and probe_odb_fields helper function."""
+    from abaqus_ai_agent.reporting.figure_selector import FigureSelector, probe_odb_fields
+
+    # 1. Non-existent file probe returns None
+    assert probe_odb_fields(tmp_path / "missing.odb") is None
+
+    # 2. FigureSelector wrapper execution with dict results
+    selector = FigureSelector()
+    res = selector.select_figures(
+        domain="structural",
+        objective="general_fea",
+        extracted_results={"max_mises": 120.0},
+        run_id="RUN-WRAP",
+    )
+    assert res.scenario == "static_structural"
+    assert len(res.specs) > 0
+    assert any(s.field_name == "S" for s in res.specs)

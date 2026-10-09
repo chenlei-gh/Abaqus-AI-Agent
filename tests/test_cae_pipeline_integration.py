@@ -504,3 +504,148 @@ def test_p0_6_headless_viewer_failure_raises_runtime_error(tmp_path: Path, monke
             launcher="python",
         )
     assert "Headless Abaqus Viewer failed with exit code 2" in str(exc_info.value)
+
+
+def test_negative_p0_a_corrupt_or_empty_odb_rejected_by_analysis_runner_require_production(tmp_path: Path, monkeypatch):
+    """Negative Test P0-A: Corrupt ODB or structural failure in openOdb verification must fail AnalysisRunner."""
+    workdir = tmp_path / "neg_p0_a"
+    workdir.mkdir()
+    executor = MockCaeExecutor(workdir, job_name="Job_NegP0A")
+    executor.launcher = "python"
+
+    # Simulate solver returning invalid ODB structure verification
+    import abaqus_ai_agent.execution.analysis_run as ar_mod
+    monkeypatch.setattr(
+        "abaqus_ai_agent.execution.solver.verify_authentic_odb_structure",
+        lambda **kwargs: {"verified": False, "offline": False, "error": "ODB contains zero steps"},
+    )
+
+    runner = AnalysisRunner(executor)
+    criteria = ({"name": "mises", "value_key": "max_mises", "required": True},)
+
+    run_res = runner.run(
+        model_name="Model-1",
+        job_name="Job_NegP0A",
+        workdir=str(workdir),
+        criteria=criteria,
+        require_production=True,
+    )
+
+    assert run_res.state == AnalysisRunState.FAILED
+    assert run_res.engineering_status == "RESULT_INVALID"
+    assert any("odb_native_structure_invalid" in str(d) for d in run_res.diagnostics)
+
+
+def test_negative_p0_b_stale_ambient_figures_rejected_on_mismatched_run_id_or_input_hash(tmp_path: Path):
+    """Negative Test P0-B: Stale figures from previous runs (different run_id or input_hash) are rejected."""
+    from abaqus_ai_agent.reporting.figure_selector import select_engineering_figures
+
+    stale_img = tmp_path / "mises_stress_hotspot.png"
+    stale_img.write_bytes(b"\x89PNG\r\n\x1a\n" + b"\x00" * 128)
+
+    # Figure belongs to run 'RUN-PREV', not current 'RUN-CURR'
+    stale_fig = ReportFigure(
+        kind="stress_hotspot",
+        path=str(stale_img.as_posix()),
+        caption="Stale previous run figure",
+        source="S.mises",
+        metadata={"field": "S", "component": "mises", "run_id": "RUN-PREV", "input_hash": "HASH-OLD"},
+    )
+
+    res = select_engineering_figures(
+        physics_domain="static",
+        existing_figures=[stale_fig],
+        run_id="RUN-CURR",
+        input_hash="HASH-NEW",
+    )
+
+    # Stale figure must NOT be reused
+    assert len(res.reused_figures) == 0
+    # Instead, a fresh spec must be scheduled
+    assert any(s.field_name == "S" for s in res.specs)
+
+
+def test_negative_p0_c_viewer_script_fails_closed_on_missing_step_or_unsupported_component():
+    """Negative Test P0-C: Generated viewer script raises error on missing step or failed component."""
+    from abaqus_ai_agent.execution.odb_rendering import ContourPlotRequest, generate_headless_viewer_script
+
+    req = ContourPlotRequest(
+        output_filename="test_step.png",
+        step_name="Step-NonExistent",
+        variable_label="S",
+        component_or_invariant="mises",
+    )
+
+    script = generate_headless_viewer_script("dummy.odb", [req], "dummy_dir")
+
+    # Script must check step existence and raise KeyError
+    assert "if 'Step-NonExistent' not in odb.steps:" in script
+    assert "raise KeyError" in script
+
+    # Script must NOT degrade to unrefined scalar if invariant fails
+    assert "Failed to set primary variable \"S\" with invariant/component \"mises\"" in script
+    assert "vp.odbDisplay.setPrimaryVariable(variableLabel='S', outputPosition=pos)" not in script
+
+
+def test_negative_p1_d_missing_required_criterion_blocks_task_completion_and_delivery(tmp_path: Path, monkeypatch):
+    """Negative Test P1-D: Missing required engineering criterion blocks COMPLETED and deliverable."""
+    from abaqus_ai_agent.agent import AbaqusAIAgent
+    from abaqus_ai_agent.contracts.intent import EngineeringIntent
+    from abaqus_ai_agent.contracts.material import ElasticProperties, MaterialDefinition
+    from abaqus_ai_agent.contracts.task import TaskStatus
+    from abaqus_ai_agent.planning.compiler import IntentGeometrySpec
+
+    workdir = tmp_path / "req_diag_run"
+    workdir.mkdir()
+    executor = MockCaeExecutor(workdir, job_name="Job_ReqDiag")
+
+    # Mock extraction returning only optional displacement U, missing required max_mises S
+    req = ResultRequirement(
+        name="max_displacement",
+        value_key="max_displacement",
+        field="U",
+        component="magnitude",
+        region="Tip",
+        step="Step-1",
+        frame=-1,
+    )
+    extraction = ResultExtraction(
+        requirement=req,
+        value=0.5,
+        locator={"step": "Step-1", "frame": -1, "field": "U", "component": "magnitude", "source": "odb"},
+    )
+    import abaqus_ai_agent.execution.results as res_mod
+    monkeypatch.setattr(res_mod, "extract_requirements", lambda ex, path, crit: ([extraction], ()))
+
+    agent = AbaqusAIAgent(executor)
+    geom = IntentGeometrySpec(shape="cantilever_box", length=100.0, width=10.0, height=10.0)
+    mat = MaterialDefinition(
+        name="Steel",
+        unit_system="MM_N_MPA",
+        elastic=ElasticProperties(youngs_modulus=210000.0, poisson_ratio=0.3),
+        density=7.85e-9,
+    )
+    # Required criterion 'mises_limit' (max_mises) is NOT in extractions!
+    intent = EngineeringIntent(
+        id="REQ-MISSING-CRIT",
+        kind="linear_static",
+        description="Linear static cantilever analysis",
+        boundary_conditions=({"type": "encastre", "region": "RootFace"},),
+        loads=({"type": "concentrated_force", "region": "TipFace", "magnitude": 1000.0, "direction": "-Y"},),
+        acceptance_criteria=(
+            {"name": "mises_limit", "value_key": "max_mises", "operator": "<=", "limit": 250.0, "unit": "MPa", "required": True},
+        ),
+    )
+
+    result = agent.solve_requirement(
+        requirement=intent,
+        geometry=geom,
+        material=mat,
+        workdir=str(workdir),
+        require_production=True,
+    )
+
+    # Must fail-closed: TaskStatus.FAILED, engineering_status == RESULT_INVALID, deliverable is False
+    assert result.status == TaskStatus.FAILED
+    assert result.summary_card["engineering_status"] == "RESULT_INVALID"
+    assert result.summary_card.get("delivery_card") is None

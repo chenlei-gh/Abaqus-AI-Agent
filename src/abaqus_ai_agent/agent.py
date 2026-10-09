@@ -611,6 +611,8 @@ class AbaqusAIAgent:
             results_info=metric_dict,
             existing_figures=generated_figures,
             run_id=getattr(run, "id", None),
+            odb_path=getattr(run, "odb_path", None),
+            input_hash=getattr(run.provenance, "input_hash", "") if getattr(run, "provenance", None) else "",
             hotspot_info=top_hotspot_info,
             output_dir=out_dir,
         )
@@ -643,6 +645,42 @@ class AbaqusAIAgent:
             and eng_status in ("ACCEPTED", "RESULT_VALID")
             and bool(getattr(run, "acceptance_passed", False))
         )
+
+        # P1-D: Causal link between required criteria, extraction diagnostics, and delivery authorization.
+        # If any acceptance criterion is explicitly marked as required (required=True),
+        # its metric must exist in metric_dict, and its extraction must not be UNAVAILABLE or FAILED.
+        if intent and getattr(intent, "acceptance_criteria", None):
+            diag_map = (
+                ri_bundle.metadata.get("extraction_diagnostics", {})
+                if ri_bundle and hasattr(ri_bundle, "metadata")
+                else {}
+            )
+            for c in intent.acceptance_criteria:
+                is_req = c.get("required") if isinstance(c, dict) else getattr(c, "required", False)
+                if not is_req:
+                    continue
+                c_name = c.get("name") if isinstance(c, dict) else getattr(c, "name", None)
+                c_key = c.get("value_key") if isinstance(c, dict) else getattr(c, "value_key", None)
+                c_field = c.get("field") if isinstance(c, dict) else getattr(c, "field", None)
+
+                found = False
+                for target_key in (c_name, c_key, c_field):
+                    if target_key and target_key in metric_dict and metric_dict[target_key] is not None:
+                        found = True
+                        break
+
+                diag_failed = False
+                for target_key in (c_name, c_key, c_field):
+                    if target_key and target_key in diag_map:
+                        msg = str(diag_map[target_key]).upper()
+                        if msg.startswith("UNAVAILABLE") or msg.startswith("FAILED"):
+                            diag_failed = True
+                            break
+
+                if not found or diag_failed:
+                    is_completed = False
+                    eng_status = "RESULT_INVALID"
+                    break
 
         deterministic_delivery_card = None
         if prod_req and is_completed and acceptance and getattr(acceptance, "deliverable", False):

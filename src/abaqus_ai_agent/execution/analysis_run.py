@@ -453,8 +453,37 @@ class AnalysisRunner:
             run_metrics = ()
 
             if result_values is None:
-                from .solver import is_authentic_binary_odb
-                if require_production and path and os.path.isfile(path) and is_authentic_binary_odb(path):
+                from .solver import is_authentic_binary_odb, verify_authentic_odb_structure
+                if require_production:
+                    if not path or not os.path.isfile(path) or not is_authentic_binary_odb(path):
+                        return run.with_state(
+                            AnalysisRunState.FAILED,
+                            odb_path=path,
+                            engineering_status=EngineeringStatus.RESULT_INVALID.value,
+                            diagnostics=({"reason": "odb_not_authentic_binary", "path": path},),
+                            artifacts=artifacts,
+                        )
+                    launcher = getattr(self.executor, "launcher", None)
+                    if launcher:
+                        req_fields = []
+                        for c in effective_criteria:
+                            fld = c.get("field") if isinstance(c, dict) else getattr(c, "field", None)
+                            if fld:
+                                req_fields.append(str(fld).upper())
+                        odb_check = verify_authentic_odb_structure(
+                            path=path,
+                            launcher_cmd=launcher,
+                            required_fields=tuple(set(req_fields)) if req_fields else None,
+                        )
+                        if not odb_check.get("verified", False) and not odb_check.get("offline", False):
+                            return run.with_state(
+                                AnalysisRunState.FAILED,
+                                odb_path=path,
+                                engineering_status=EngineeringStatus.RESULT_INVALID.value,
+                                diagnostics=({"reason": "odb_native_structure_invalid", "detail": odb_check.get("error")},),
+                                artifacts=artifacts,
+                            )
+
                     from .odb_extractor import extract_odb_results
                     eff_inp_hash = (run.provenance.input_hash if run.provenance else None) or ""
                     report = extract_odb_results(

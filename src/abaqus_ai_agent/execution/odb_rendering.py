@@ -105,15 +105,17 @@ def generate_headless_viewer_script(
         ]
 
         if req.step_name:
-            code_lines.append(f"    if '{req.step_name}' in odb.steps:")
-            code_lines.append(f"        target_step = odb.steps['{req.step_name}']")
-            code_lines.append(f"        target_frame = target_step.frames[{req.frame_index}]")
-            code_lines.append(f"        vp.odbDisplay.setFrame(step='{req.step_name}', frame={req.frame_index})")
+            code_lines.append(f"    if '{req.step_name}' not in odb.steps:")
+            code_lines.append(f"        raise KeyError('Requested step \"{req.step_name}\" not found in ODB steps: ' + str(list(odb.steps.keys())))")
+            code_lines.append(f"    target_step = odb.steps['{req.step_name}']")
+            code_lines.append(f"    target_frame = target_step.frames[{req.frame_index}]")
+            code_lines.append(f"    vp.odbDisplay.setFrame(step='{req.step_name}', frame={req.frame_index})")
         else:
             code_lines.append("    # Select final available step and frame")
-            code_lines.append("    if len(odb.steps) > 0:")
-            code_lines.append("        last_step_key = list(odb.steps.keys())[-1]")
-            code_lines.append(f"        vp.odbDisplay.setFrame(step=last_step_key, frame={req.frame_index})")
+            code_lines.append("    if len(odb.steps) == 0:")
+            code_lines.append("        raise ValueError('Target ODB contains zero steps')")
+            code_lines.append("    last_step_key = list(odb.steps.keys())[-1]")
+            code_lines.append(f"    vp.odbDisplay.setFrame(step=last_step_key, frame={req.frame_index})")
 
         # Plot state
         p_state = req.plot_state
@@ -169,7 +171,7 @@ def generate_headless_viewer_script(
                 f"                        refinement=(COMPONENT, '{inv_upper}')",
                 "                    )",
                 "                except Exception:",
-                f"                    vp.odbDisplay.setPrimaryVariable(variableLabel='{v_label}', outputPosition={pos})",
+                f"                    raise ValueError('Failed to set primary variable \"{v_label}\" with invariant/component \"{inv}\"')",
             ]
         else:
             code_lines += [

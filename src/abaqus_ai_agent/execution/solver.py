@@ -107,12 +107,18 @@ def is_authentic_binary_odb(path: Union[str, Path]) -> bool:
 def verify_authentic_odb_structure(
     path: Union[str, Path],
     launcher_cmd: Optional[str] = None,
+    required_fields: Optional[Sequence[str]] = None,
+    required_step: Optional[str] = None,
     timeout: int = 60,
 ) -> Dict[str, Any]:
-    """Perform native odbAccess structural verification using headless Abaqus Python (P0-5).
+    """Perform native odbAccess structural verification using headless Abaqus Python (P0-5 / P0-A).
 
-    Verifies that the file can be opened via native odbAccess.openOdb, contains
-    at least one Step, and reports frame and field availability.
+    Verifies that:
+    1. File is valid non-empty binary ODB.
+    2. File can be opened via native odbAccess.openOdb.
+    3. File contains at least one valid Step, and each Step contains at least one Frame.
+    4. Required step (if specified) is present and contains frames.
+    5. Required fields (if specified) are present in the last frame of the target/last step.
     """
     path = Path(path).resolve()
     if not is_authentic_binary_odb(path):
@@ -130,18 +136,48 @@ def verify_authentic_odb_structure(
             "error": "Abaqus executable not found on host to perform native openOdb verification",
         }
 
+    req_fields_json = json.dumps([str(f).upper() for f in (required_fields or ())])
+    req_step_str = str(required_step) if required_step else ""
+
     probe_script = f"""
 import sys, json
 try:
     from odbAccess import openOdb
     odb = openOdb({str(path)!r}, readOnly=True)
     steps = list(odb.steps.keys())
+    if not steps:
+        print("__ODB_VERIFIED__" + json.dumps({{'valid': False, 'error': 'ODB contains zero steps'}}))
+        odb.close()
+        sys.exit(1)
+
     step_info = {{}}
     for s in steps:
         step_obj = odb.steps[s]
         n_frames = len(step_obj.frames)
         fields = list(step_obj.frames[-1].fieldOutputs.keys()) if n_frames > 0 else []
         step_info[s] = {{'frames': n_frames, 'fields': fields}}
+
+    req_step = {req_step_str!r}
+    if req_step:
+        if req_step not in step_info:
+            print("__ODB_VERIFIED__" + json.dumps({{'valid': False, 'error': f"Required step '{{req_step}}' not found in ODB steps: {{steps}}"}}))
+            odb.close()
+            sys.exit(1)
+        if step_info[req_step]['frames'] <= 0:
+            print("__ODB_VERIFIED__" + json.dumps({{'valid': False, 'error': f"Required step '{{req_step}}' has zero frames"}}))
+            odb.close()
+            sys.exit(1)
+
+    req_fields = {req_fields_json}
+    if req_fields:
+        target_s = req_step if req_step else steps[-1]
+        avail_flds = [f.upper() for f in step_info[target_s]['fields']]
+        missing = [f for f in req_fields if f not in avail_flds]
+        if missing:
+            print("__ODB_VERIFIED__" + json.dumps({{'valid': False, 'error': f"Required fields missing from step '{{target_s}}': {{missing}}"}}))
+            odb.close()
+            sys.exit(1)
+
     odb.close()
     print("__ODB_VERIFIED__" + json.dumps({{'valid': True, 'steps': step_info}}))
 except Exception as exc:
