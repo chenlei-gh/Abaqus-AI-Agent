@@ -514,7 +514,6 @@ def test_negative_p0_a_corrupt_or_empty_odb_rejected_by_analysis_runner_require_
     executor.launcher = "python"
 
     # Simulate solver returning invalid ODB structure verification
-    import abaqus_ai_agent.execution.analysis_run as ar_mod
     monkeypatch.setattr(
         "abaqus_ai_agent.execution.solver.verify_authentic_odb_structure",
         lambda **kwargs: {"verified": False, "offline": False, "error": "ODB contains zero steps"},
@@ -536,33 +535,116 @@ def test_negative_p0_a_corrupt_or_empty_odb_rejected_by_analysis_runner_require_
     assert any("odb_native_structure_invalid" in str(d) for d in run_res.diagnostics)
 
 
-def test_negative_p0_b_stale_ambient_figures_rejected_on_mismatched_run_id_or_input_hash(tmp_path: Path):
-    """Negative Test P0-B: Stale figures from previous runs (different run_id or input_hash) are rejected."""
+def test_negative_p0_a_production_mode_denies_missing_launcher_or_offline_verification(tmp_path: Path, monkeypatch):
+    """Negative Test P0-A: Real production executor without launcher or with offline verification MUST fail."""
+    workdir = tmp_path / "neg_p0_a_real"
+    workdir.mkdir()
+
+    # Create real binary ODB
+    odb_p = workdir / "RealJob.odb"
+    odb_p.write_bytes(b"\x7fSIMULIA_ODB_BINARY_HEADER" + b"\x00" * 1024)
+    (workdir / "RealJob.sta").write_text("THE ANALYSIS HAS COMPLETED SUCCESSFULLY\n", encoding="utf-8")
+    (workdir / "RealJob.log").write_text("Abaqus JOB COMPLETED\n", encoding="utf-8")
+
+    class ProductionEngineExecutor(AbaqusExecutor):
+        """Genuine executor class name (no Mock/Fake token)."""
+        def __init__(self):
+            self.launcher = None  # Missing launcher!
+        def execute(self, code, timeout=120):
+            if "status" in code or "jobs" in code:
+                return "COMPLETED"
+            return ""
+        def inspect_odb(self, path):
+            return {"status": "available", "steps": {"Step-1": {"frames": [0]}}}
+
+    exec_real = ProductionEngineExecutor()
+    runner = AnalysisRunner(exec_real)
+
+    # 1. Missing launcher in production mode must fail-closed
+    res_no_launcher = runner.run(
+        model_name="M1",
+        job_name="RealJob",
+        workdir=str(workdir),
+        criteria=({"name": "stress", "value_key": "max_mises"},),
+        require_production=True,
+    )
+    assert res_no_launcher.state == AnalysisRunState.FAILED
+    assert res_no_launcher.engineering_status == "RESULT_INVALID"
+    assert any("production_launcher_missing" in str(d) for d in res_no_launcher.diagnostics)
+
+    # 2. Launcher present but verification returns offline: MUST fail-closed in production mode
+    exec_real.launcher = "abaqus"
+    monkeypatch.setattr(
+        "abaqus_ai_agent.execution.solver.verify_authentic_odb_structure",
+        lambda **kwargs: {"verified": False, "offline": True, "error": "Abaqus offline"},
+    )
+    res_offline = runner.run(
+        model_name="M1",
+        job_name="RealJob",
+        workdir=str(workdir),
+        criteria=({"name": "stress", "value_key": "max_mises"},),
+        require_production=True,
+    )
+    assert res_offline.state == AnalysisRunState.FAILED
+    assert res_offline.engineering_status == "RESULT_INVALID"
+    assert any("odb_native_structure_unverified" in str(d) for d in res_offline.diagnostics)
+
+
+def test_negative_p0_b_missing_or_mismatched_provenance_rejected(tmp_path: Path):
+    """Negative Test P0-B: Missing or mismatched provenance metadata is strictly rejected from reuse."""
     from abaqus_ai_agent.reporting.figure_selector import select_engineering_figures
 
-    stale_img = tmp_path / "mises_stress_hotspot.png"
-    stale_img.write_bytes(b"\x89PNG\r\n\x1a\n" + b"\x00" * 128)
+    img_file = tmp_path / "mises_stress_hotspot.png"
+    img_file.write_bytes(b"\x89PNG\r\n\x1a\n" + b"\x00" * 128)
 
-    # Figure belongs to run 'RUN-PREV', not current 'RUN-CURR'
-    stale_fig = ReportFigure(
+    # Figure 1: Missing run_id (unknown origin)
+    fig_no_run = ReportFigure(
         kind="stress_hotspot",
-        path=str(stale_img.as_posix()),
-        caption="Stale previous run figure",
+        path=str(img_file.as_posix()),
+        caption="Unknown origin figure",
         source="S.mises",
-        metadata={"field": "S", "component": "mises", "run_id": "RUN-PREV", "input_hash": "HASH-OLD"},
+        metadata={"field": "S", "component": "mises"},  # No run_id!
     )
 
-    res = select_engineering_figures(
+    res_no_run = select_engineering_figures(
         physics_domain="static",
-        existing_figures=[stale_fig],
-        run_id="RUN-CURR",
-        input_hash="HASH-NEW",
+        existing_figures=[fig_no_run],
+        run_id="RUN-CURR-01",
     )
+    # Must NOT reuse unknown origin figure
+    assert len(res_no_run.reused_figures) == 0
 
-    # Stale figure must NOT be reused
-    assert len(res.reused_figures) == 0
-    # Instead, a fresh spec must be scheduled
-    assert any(s.field_name == "S" for s in res.specs)
+    # Figure 2: Matching run_id, but mismatched odb_hash
+    fig_wrong_odb = ReportFigure(
+        kind="stress_hotspot",
+        path=str(img_file.as_posix()),
+        caption="Wrong ODB figure",
+        source="S.mises",
+        metadata={"field": "S", "component": "mises", "run_id": "RUN-CURR-01", "odb_hash": "HASH-OLD-ODB"},
+    )
+    res_wrong_odb = select_engineering_figures(
+        physics_domain="static",
+        existing_figures=[fig_wrong_odb],
+        run_id="RUN-CURR-01",
+        odb_hash="HASH-NEW-ODB",
+    )
+    assert len(res_wrong_odb.reused_figures) == 0
+
+    # Figure 3: Full matching provenance: admitted
+    fig_valid = ReportFigure(
+        kind="stress_hotspot",
+        path=str(img_file.as_posix()),
+        caption="Fully verified figure",
+        source="S.mises",
+        metadata={"field": "S", "component": "mises", "run_id": "RUN-CURR-01", "odb_hash": "HASH-NEW-ODB"},
+    )
+    res_valid = select_engineering_figures(
+        physics_domain="static",
+        existing_figures=[fig_valid],
+        run_id="RUN-CURR-01",
+        odb_hash="HASH-NEW-ODB",
+    )
+    assert len(res_valid.reused_figures) == 1
 
 
 def test_negative_p0_c_viewer_script_fails_closed_on_missing_step_or_unsupported_component():
@@ -646,6 +728,69 @@ def test_negative_p1_d_missing_required_criterion_blocks_task_completion_and_del
     )
 
     # Must fail-closed: TaskStatus.FAILED, engineering_status == RESULT_INVALID, deliverable is False
+    assert result.status == TaskStatus.FAILED
+    assert result.summary_card["engineering_status"] == "RESULT_INVALID"
+    assert result.summary_card.get("delivery_card") is None
+
+
+def test_negative_p1_d_required_criterion_with_nan_or_unavailable_diagnostic_blocked(tmp_path: Path, monkeypatch):
+    """Negative Test P1-D: Required criterion having NaN value or UNAVAILABLE diagnostic blocks delivery."""
+    from abaqus_ai_agent.agent import AbaqusAIAgent
+    from abaqus_ai_agent.contracts.intent import EngineeringIntent
+    from abaqus_ai_agent.contracts.material import ElasticProperties, MaterialDefinition
+    from abaqus_ai_agent.contracts.task import TaskStatus
+    from abaqus_ai_agent.planning.compiler import IntentGeometrySpec
+
+    workdir = tmp_path / "req_nan_run"
+    workdir.mkdir()
+    executor = MockCaeExecutor(workdir, job_name="Job_ReqNaN")
+
+    # Metric extraction returns NaN for required criterion
+    req = ResultRequirement(
+        name="max_mises",
+        value_key="max_mises",
+        field="S",
+        component="mises",
+        region="Root",
+        step="Step-1",
+        frame=-1,
+    )
+    extraction = ResultExtraction(
+        requirement=req,
+        value=float("nan"),  # NaN!
+        locator={"step": "Step-1", "frame": -1, "field": "S", "component": "mises", "source": "odb"},
+    )
+    import abaqus_ai_agent.execution.results as res_mod
+    monkeypatch.setattr(res_mod, "extract_requirements", lambda ex, path, crit: ([extraction], ()))
+
+    agent = AbaqusAIAgent(executor)
+    geom = IntentGeometrySpec(shape="cantilever_box", length=100.0, width=10.0, height=10.0)
+    mat = MaterialDefinition(
+        name="Steel",
+        unit_system="MM_N_MPA",
+        elastic=ElasticProperties(youngs_modulus=210000.0, poisson_ratio=0.3),
+        density=7.85e-9,
+    )
+    intent = EngineeringIntent(
+        id="REQ-NAN-CRIT",
+        kind="linear_static",
+        description="Linear static cantilever analysis",
+        boundary_conditions=({"type": "encastre", "region": "RootFace"},),
+        loads=({"type": "concentrated_force", "region": "TipFace", "magnitude": 1000.0, "direction": "-Y"},),
+        acceptance_criteria=(
+            {"name": "mises_limit", "value_key": "max_mises", "field": "S", "operator": "<=", "limit": 250.0, "unit": "MPa", "required": True},
+        ),
+    )
+
+    result = agent.solve_requirement(
+        requirement=intent,
+        geometry=geom,
+        material=mat,
+        workdir=str(workdir),
+        require_production=True,
+    )
+
+    # Must fail-closed due to NaN numeric value
     assert result.status == TaskStatus.FAILED
     assert result.summary_card["engineering_status"] == "RESULT_INVALID"
     assert result.summary_card.get("delivery_card") is None

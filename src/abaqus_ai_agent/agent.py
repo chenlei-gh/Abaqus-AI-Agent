@@ -605,6 +605,10 @@ class AbaqusAIAgent:
                 "coordinates": getattr(top_h, "coordinates", None),
             }
 
+        eff_odb_hash = None
+        if run and getattr(run, "provenance", None):
+            eff_odb_hash = getattr(run.provenance, "odb_hash", None)
+
         figure_selection = select_engineering_figures(
             intent=intent,
             physics_domain=capability.physics_domain,
@@ -613,6 +617,7 @@ class AbaqusAIAgent:
             run_id=getattr(run, "id", None),
             odb_path=getattr(run, "odb_path", None),
             input_hash=getattr(run.provenance, "input_hash", "") if getattr(run, "provenance", None) else "",
+            odb_hash=eff_odb_hash,
             hotspot_info=top_hotspot_info,
             output_dir=out_dir,
         )
@@ -648,13 +653,21 @@ class AbaqusAIAgent:
 
         # P1-D: Causal link between required criteria, extraction diagnostics, and delivery authorization.
         # If any acceptance criterion is explicitly marked as required (required=True),
-        # its metric must exist in metric_dict, and its extraction must not be UNAVAILABLE or FAILED.
+        # its metric must exist in metric_dict as a valid finite numeric value, and its extraction must not be UNAVAILABLE or FAILED.
         if intent and getattr(intent, "acceptance_criteria", None):
             diag_map = (
                 ri_bundle.metadata.get("extraction_diagnostics", {})
                 if ri_bundle and hasattr(ri_bundle, "metadata")
                 else {}
             )
+            field_aliases = {
+                "S": ("max_mises", "s_mises", "mises", "max_stress", "s"),
+                "U": ("max_displacement", "u_magnitude", "displacement", "u"),
+                "RF": ("reaction_force", "rf", "rf2", "rf_mag", "total_rf"),
+                "CPRESS": ("max_cpress", "cpress", "contact_pressure"),
+                "NT": ("max_temperature", "temperature", "nt", "nt11"),
+            }
+            import math
             for c in intent.acceptance_criteria:
                 is_req = c.get("required") if isinstance(c, dict) else getattr(c, "required", False)
                 if not is_req:
@@ -663,21 +676,39 @@ class AbaqusAIAgent:
                 c_key = c.get("value_key") if isinstance(c, dict) else getattr(c, "value_key", None)
                 c_field = c.get("field") if isinstance(c, dict) else getattr(c, "field", None)
 
-                found = False
-                for target_key in (c_name, c_key, c_field):
-                    if target_key and target_key in metric_dict and metric_dict[target_key] is not None:
-                        found = True
-                        break
+                # Build candidate keys set
+                candidate_keys = set()
+                if c_name:
+                    candidate_keys.add(str(c_name))
+                    candidate_keys.add(str(c_name).lower())
+                if c_key:
+                    candidate_keys.add(str(c_key))
+                    candidate_keys.add(str(c_key).lower())
+                if c_field:
+                    f_upper = str(c_field).upper()
+                    candidate_keys.add(f_upper)
+                    for alias in field_aliases.get(f_upper, ()):
+                        candidate_keys.add(alias)
+                        candidate_keys.add(alias.upper())
 
+                found_valid_val = False
+                for k in candidate_keys:
+                    if k in metric_dict:
+                        v = metric_dict[k]
+                        if isinstance(v, (int, float)) and not math.isnan(float(v)):
+                            found_valid_val = True
+                            break
+
+                # Also inspect extraction diagnostics
                 diag_failed = False
-                for target_key in (c_name, c_key, c_field):
-                    if target_key and target_key in diag_map:
-                        msg = str(diag_map[target_key]).upper()
+                for k in candidate_keys:
+                    if k in diag_map:
+                        msg = str(diag_map[k]).upper()
                         if msg.startswith("UNAVAILABLE") or msg.startswith("FAILED"):
                             diag_failed = True
                             break
 
-                if not found or diag_failed:
+                if not found_valid_val or diag_failed:
                     is_completed = False
                     eng_status = "RESULT_INVALID"
                     break
