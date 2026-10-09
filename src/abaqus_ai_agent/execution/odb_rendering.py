@@ -11,6 +11,7 @@ from dataclasses import dataclass
 import hashlib
 import hmac
 import io
+import json
 import os
 from pathlib import Path
 import secrets
@@ -113,12 +114,18 @@ def verify_png_image_integrity(
         calc_crc = zlib.crc32(chunk_type + chunk_data) & 0xFFFFFFFF
         if calc_crc != expected_crc:
             raise ValueError(f"Corrupt PNG data: CRC32 mismatch in chunk {chunk_type.decode(errors='replace')}")
+        if chunk_type == b"IHDR" and length != 13:
+            raise ValueError(f"Invalid IHDR chunk length: {length}, expected 13")
         chunks.append(chunk_type)
 
     if not chunks or chunks[0] != b"IHDR":
         raise ValueError("Invalid PNG structure: first chunk is not IHDR")
+    if chunks.count(b"IHDR") != 1:
+        raise ValueError("Invalid PNG structure: duplicate IHDR chunk detected")
     if chunks[-1] != b"IEND":
         raise ValueError("Invalid PNG structure: last chunk is not IEND")
+    if chunks.count(b"IEND") != 1:
+        raise ValueError("Invalid PNG structure: multiple IEND chunks detected")
 
     width = int.from_bytes(data[16:20], byteorder="big")
     height = int.from_bytes(data[20:24], byteorder="big")
@@ -127,17 +134,19 @@ def verify_png_image_integrity(
             f"Invalid PNG dimensions: width={width}, height={height}. Expected positive dimensions."
         )
 
-    if _HAS_PIL and _PILImage is not None:
-        try:
-            im = _PILImage.open(io.BytesIO(data))
-            if im.format != "PNG":
-                raise ValueError(f"Decoded image format is {im.format!r}, expected 'PNG'")
-            im.load()
-            dec_w, dec_h = im.size
-            if dec_w != width or dec_h != height:
-                raise ValueError(f"Raster dimension mismatch: IHDR ({width}x{height}) vs decoded ({dec_w}x{dec_h})")
-        except Exception as exc:
-            raise ValueError(f"Corrupt PNG image data: failed to decode raster payload: {exc}")
+    if not _HAS_PIL or _PILImage is None:
+        raise RuntimeError("Official delivery requires Pillow for full PNG decoding")
+
+    try:
+        im = _PILImage.open(io.BytesIO(data))
+        if im.format != "PNG":
+            raise ValueError(f"Decoded image format is {im.format!r}, expected 'PNG'")
+        im.load()
+        dec_w, dec_h = im.size
+        if dec_w != width or dec_h != height:
+            raise ValueError(f"Raster dimension mismatch: IHDR ({width}x{height}) vs decoded ({dec_w}x{dec_h})")
+    except Exception as exc:
+        raise ValueError(f"Corrupt PNG image data: failed to decode raster payload: {exc}")
 
     return width, height
 
@@ -165,6 +174,8 @@ class RenderExecutionEvidence:
     session_signature: str
     exit_code: int = 0
     viewer_duration_sec: float = 0.0
+    input_hash: str = ""
+    viewer_script_sha256: str = ""
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -176,7 +187,45 @@ class RenderExecutionEvidence:
             "session_signature": self.session_signature,
             "exit_code": self.exit_code,
             "viewer_duration_sec": self.viewer_duration_sec,
+            "input_hash": self.input_hash,
+            "viewer_script_sha256": self.viewer_script_sha256,
         }
+
+
+def compute_evidence_canonical_payload(
+    session_nonce: str,
+    run_id: str,
+    odb_sha256: str,
+    rendered_figures: Sequence[Dict[str, Any]],
+    exit_code: int = 0,
+    input_hash: str = "",
+    viewer_script_sha256: str = "",
+) -> str:
+    """Compute canonical, normalized JSON payload for HMAC signing across all session parameters."""
+    norm_figs = []
+    for rf in rendered_figures:
+        if isinstance(rf, dict) and rf.get("filename"):
+            norm_figs.append({
+                "component": str(rf.get("component") or ""),
+                "field": str(rf.get("field") or ""),
+                "filename": str(Path(str(rf.get("filename"))).name),
+                "frame": str(rf.get("frame") if rf.get("frame") is not None else (rf.get("frame_index") if rf.get("frame_index") is not None else "")),
+                "image_sha256": str(rf.get("image_sha256") or ""),
+                "output_position": str(rf.get("output_position") or ""),
+                "region": str(rf.get("region") or ""),
+                "step": str(rf.get("step") or rf.get("step_name") or ""),
+            })
+    norm_figs.sort(key=lambda x: x["filename"])
+    payload = {
+        "exit_code": int(exit_code),
+        "figures": norm_figs,
+        "input_hash": str(input_hash or ""),
+        "odb_sha256": str(odb_sha256 or ""),
+        "run_id": str(run_id or ""),
+        "session_nonce": str(session_nonce or ""),
+        "viewer_script_sha256": str(viewer_script_sha256 or ""),
+    }
+    return json.dumps(payload, sort_keys=True, separators=(",", ":"))
 
 
 def create_render_execution_evidence(
@@ -186,19 +235,24 @@ def create_render_execution_evidence(
     rendered_figures: Sequence[Dict[str, Any]],
     exit_code: int = 0,
     viewer_duration_sec: float = 0.0,
+    input_hash: str = "",
+    viewer_script_sha256: str = "",
 ) -> RenderExecutionEvidence:
     """Construct authentic RenderExecutionEvidence with HMAC-SHA256 session signature."""
     import datetime
 
     ts = datetime.datetime.now(datetime.timezone.utc).isoformat()
-    fig_digests = sorted(
-        f"{rf.get('filename')}:{rf.get('image_sha256')}"
-        for rf in rendered_figures
-        if isinstance(rf, dict) and rf.get("filename")
+    canonical_payload = compute_evidence_canonical_payload(
+        session_nonce=session_nonce,
+        run_id=run_id,
+        odb_sha256=odb_sha256,
+        rendered_figures=rendered_figures,
+        exit_code=exit_code,
+        input_hash=input_hash,
+        viewer_script_sha256=viewer_script_sha256,
     )
-    sig_payload = f"EVIDENCE:{session_nonce}:{run_id}:{odb_sha256}:{exit_code}:{';'.join(fig_digests)}"
     key = get_render_signing_key()
-    sig = hmac.new(key, sig_payload.encode("utf-8"), hashlib.sha256).hexdigest()
+    sig = hmac.new(key, canonical_payload.encode("utf-8"), hashlib.sha256).hexdigest()
     return RenderExecutionEvidence(
         session_nonce=session_nonce,
         run_id=run_id,
@@ -208,6 +262,8 @@ def create_render_execution_evidence(
         session_signature=sig,
         exit_code=exit_code,
         viewer_duration_sec=viewer_duration_sec,
+        input_hash=input_hash,
+        viewer_script_sha256=viewer_script_sha256,
     )
 
 
@@ -215,6 +271,7 @@ def verify_render_execution_evidence(
     evidence: Union[RenderExecutionEvidence, Dict[str, Any]],
     expected_run_id: str,
     expected_odb_sha256: str,
+    expected_input_hash: Optional[str] = None,
 ) -> Tuple[bool, str]:
     """Verify that a RenderExecutionEvidence matches runtime context and has authentic HMAC signature."""
     if isinstance(evidence, RenderExecutionEvidence):
@@ -230,6 +287,8 @@ def verify_render_execution_evidence(
     figs = data.get("rendered_figures") or []
     sig = data.get("session_signature") or ""
     exit_code = data.get("exit_code", 0)
+    ev_input_hash = data.get("input_hash") or ""
+    viewer_script_sha = data.get("viewer_script_sha256") or ""
 
     if exit_code != 0:
         return False, f"Viewer process exited with non-zero exit code: {exit_code}"
@@ -240,15 +299,21 @@ def verify_render_execution_evidence(
         return False, f"Evidence run_id mismatch: {run_id!r} != {expected_run_id!r}"
     if odb_sha != str(expected_odb_sha256).strip():
         return False, f"Evidence odb_sha256 mismatch: {odb_sha!r} != {expected_odb_sha256!r}"
+    if expected_input_hash and ev_input_hash:
+        if ev_input_hash != str(expected_input_hash).strip():
+            return False, f"Evidence input_hash mismatch: {ev_input_hash!r} != {expected_input_hash!r}"
 
-    fig_digests = sorted(
-        f"{rf.get('filename')}:{rf.get('image_sha256')}"
-        for rf in figs
-        if isinstance(rf, dict) and rf.get("filename")
+    canonical_payload = compute_evidence_canonical_payload(
+        session_nonce=nonce,
+        run_id=run_id,
+        odb_sha256=odb_sha,
+        rendered_figures=figs,
+        exit_code=exit_code,
+        input_hash=ev_input_hash,
+        viewer_script_sha256=viewer_script_sha,
     )
-    sig_payload = f"EVIDENCE:{nonce}:{run_id}:{odb_sha}:{exit_code}:{';'.join(fig_digests)}"
     key = get_render_signing_key()
-    expected_sig = hmac.new(key, sig_payload.encode("utf-8"), hashlib.sha256).hexdigest()
+    expected_sig = hmac.new(key, canonical_payload.encode("utf-8"), hashlib.sha256).hexdigest()
     if not hmac.compare_digest(sig, expected_sig):
         return False, "Evidence session_signature mismatch or forged (invalid HMAC signature)"
 
@@ -725,8 +790,24 @@ def render_authentic_visualizations(
         figures.append(bound_fig)
 
     # Cryptographically bind session evidence across all generated figures
+    script_str = generate_headless_viewer_script(
+        odb_path=odb,
+        requests=requests,
+        output_dir=out_dir,
+    )
+    viewer_script_sha256 = hashlib.sha256(script_str.encode("utf-8")).hexdigest()
+
     rendered_summary = [
-        {"filename": Path(f.path).name, "image_sha256": f.metadata.get("image_sha256")}
+        {
+            "filename": Path(f.path).name,
+            "image_sha256": f.metadata.get("image_sha256"),
+            "field": f.metadata.get("field"),
+            "component": f.metadata.get("component"),
+            "step": f.metadata.get("step"),
+            "frame": f.metadata.get("frame"),
+            "region": f.metadata.get("region"),
+            "output_position": f.metadata.get("output_position"),
+        }
         for f in figures
     ]
     render_evidence = create_render_execution_evidence(
@@ -734,6 +815,8 @@ def render_authentic_visualizations(
         run_id=eff_run_id,
         odb_sha256=odb_sha256,
         rendered_figures=rendered_summary,
+        input_hash=str(input_hash or ""),
+        viewer_script_sha256=viewer_script_sha256,
     )
     for f in figures:
         f.metadata["render_execution_evidence"] = render_evidence.to_dict()

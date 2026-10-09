@@ -405,11 +405,21 @@ class DeterministicReportPipeline:
                     evidence=rev_data,
                     expected_run_id=str(run_id).strip(),
                     expected_odb_sha256=str(eff_odb_hash).strip(),
+                    expected_input_hash=str(input_hash).strip() if input_hash else None,
                 )
                 if not is_ev_valid:
                     raise PermissionError(
                         f"Official delivery blocked: Figure '{f_path.name}' render_execution_evidence invalid: {ev_reason}"
                     )
+
+                ev_figs = rev_data.get("rendered_figures") or []
+                matching_ev_fig = next((rf for rf in ev_figs if Path(rf.get("filename", "")).name == f_path.name), None)
+                if matching_ev_fig:
+                    rf_sha = matching_ev_fig.get("image_sha256")
+                    if rf_sha and rf_sha != live_sha256:
+                        raise PermissionError(
+                            f"Official delivery blocked: Figure '{f_path.name}' content sha256 mismatch with signed evidence: {live_sha256} != {rf_sha}"
+                        )
 
         # 2. Build polymorphic EngineeringReportData
         report_data = self.builder.build_report_data(

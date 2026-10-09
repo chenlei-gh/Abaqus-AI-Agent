@@ -226,9 +226,17 @@ def admit_figure_for_reuse(
         evidence=rev_data,
         expected_run_id=str(current_run_id).strip(),
         expected_odb_sha256=str(current_odb_hash).strip(),
+        expected_input_hash=str(current_input_hash).strip() if current_input_hash else None,
     )
     if not is_ev_valid:
         return False, f"Render execution evidence invalid: {ev_reason}"
+
+    ev_figs = rev_data.get("rendered_figures") or []
+    matching_ev_fig = next((rf for rf in ev_figs if Path(rf.get("filename", "")).name == f_path.name), None)
+    if matching_ev_fig:
+        rf_sha = matching_ev_fig.get("image_sha256")
+        if rf_sha and rf_sha != live_sha256:
+            return False, f"Figure content sha256 mismatch with signed evidence: {live_sha256} != {rf_sha}"
 
     return True, "Admitted"
 

@@ -9,7 +9,9 @@ description = "Open-source AI engineering agent for Abaqus/CAE"
 readme = "README.md"
 requires-python = ">=3.9"
 license = {file = "LICENSE"}
-dependencies = []
+dependencies = [
+    "Pillow>=9.0.0",
+]
 
 [project.scripts]
 abaqus-ai-agent = "abaqus_ai_agent.cli:main"

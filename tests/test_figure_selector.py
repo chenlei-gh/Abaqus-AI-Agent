@@ -662,3 +662,106 @@ def test_verify_png_image_integrity_deep_validation(tmp_path: Path):
     corrupt_chunk_hdr = MINIMAL_VALID_PNG_BYTES[:-12] + b"\x00\x01\x02" + MINIMAL_VALID_PNG_BYTES[-12:]
     with pytest.raises(ValueError, match="Corrupt PNG chunk"):
         verify_png_image_integrity(corrupt_chunk_hdr)
+
+
+def test_admit_figure_render_execution_evidence_payload_tampering_matrix(tmp_path: Path):
+    """Negative tests: Mutating any field, step, image_sha, or input_hash in evidence breaks HMAC."""
+    import hashlib
+    from abaqus_ai_agent.execution.odb_rendering import (
+        MINIMAL_VALID_PNG_BYTES,
+        create_render_execution_evidence,
+        verify_render_execution_evidence,
+    )
+    img_file = tmp_path / "matrix_test.png"
+    img_file.write_bytes(MINIMAL_VALID_PNG_BYTES)
+    img_h = hashlib.sha256(MINIMAL_VALID_PNG_BYTES).hexdigest()
+
+    nonce = "0123456789abcdef0123456789abcdef"
+    ev = create_render_execution_evidence(
+        session_nonce=nonce,
+        run_id="RUN-MAT",
+        odb_sha256="ODB-MAT",
+        rendered_figures=[{
+            "filename": img_file.name,
+            "image_sha256": img_h,
+            "field": "S",
+            "component": "Mises",
+            "step": "Step-1",
+            "frame": -1,
+            "region": "WHOLE_MODEL",
+            "output_position": "INTEGRATION_POINT",
+        }],
+        input_hash="INP-MAT",
+        viewer_script_sha256="SCRIPT-MAT",
+    )
+
+    # 1. Authentic evidence succeeds
+    ok, msg = verify_render_execution_evidence(ev, "RUN-MAT", "ODB-MAT", "INP-MAT")
+    assert ok is True
+
+    # 2. Mutating field inside rendered_figures breaks HMAC
+    t1 = ev.to_dict()
+    t1["rendered_figures"][0]["field"] = "U"
+    ok1, msg1 = verify_render_execution_evidence(t1, "RUN-MAT", "ODB-MAT", "INP-MAT")
+    assert ok1 is False
+    assert "invalid HMAC signature" in msg1
+
+    # 3. Mutating step inside rendered_figures breaks HMAC
+    t2 = ev.to_dict()
+    t2["rendered_figures"][0]["step"] = "Step-2"
+    ok2, msg2 = verify_render_execution_evidence(t2, "RUN-MAT", "ODB-MAT", "INP-MAT")
+    assert ok2 is False
+    assert "invalid HMAC signature" in msg2
+
+    # 4. Mutating image_sha256 inside rendered_figures breaks HMAC
+    t3 = ev.to_dict()
+    t3["rendered_figures"][0]["image_sha256"] = "bad_hash"
+    ok3, msg3 = verify_render_execution_evidence(t3, "RUN-MAT", "ODB-MAT", "INP-MAT")
+    assert ok3 is False
+    assert "invalid HMAC signature" in msg3
+
+    # 5. Mutating input_hash breaks HMAC
+    t4 = ev.to_dict()
+    t4["input_hash"] = "tampered_inp"
+    ok4, msg4 = verify_render_execution_evidence(t4, "RUN-MAT", "ODB-MAT", "INP-MAT")
+    assert ok4 is False
+
+    # 6. Mutating viewer_script_sha256 breaks HMAC
+    t5 = ev.to_dict()
+    t5["viewer_script_sha256"] = "tampered_script"
+    ok5, msg5 = verify_render_execution_evidence(t5, "RUN-MAT", "ODB-MAT", "INP-MAT")
+    assert ok5 is False
+    assert "invalid HMAC signature" in msg5
+
+
+def test_verify_png_image_integrity_chunk_constraints(monkeypatch):
+    """Negative tests: IHDR length != 13, duplicate IHDR, duplicate IEND, and Pillow absence."""
+    import pytest
+    from abaqus_ai_agent.execution.odb_rendering import (
+        MINIMAL_VALID_PNG_BYTES,
+        verify_png_image_integrity,
+    )
+    import abaqus_ai_agent.execution.odb_rendering as mod
+
+    # 1. Invalid IHDR length != 13
+    bad_ihdr_len = MINIMAL_VALID_PNG_BYTES[:8] + b"\x00\x00\x00\x0eIHDR" + MINIMAL_VALID_PNG_BYTES[16:]
+    with pytest.raises(ValueError):
+        verify_png_image_integrity(bad_ihdr_len)
+
+    # 2. Duplicate IHDR chunk
+    ihdr_chunk = MINIMAL_VALID_PNG_BYTES[8:33]
+    dup_ihdr = MINIMAL_VALID_PNG_BYTES[:33] + ihdr_chunk + MINIMAL_VALID_PNG_BYTES[33:]
+    with pytest.raises(ValueError, match="duplicate IHDR"):
+        verify_png_image_integrity(dup_ihdr)
+
+    # 3. Duplicate IEND chunk
+    iend_chunk = MINIMAL_VALID_PNG_BYTES[-12:]
+    dup_iend = MINIMAL_VALID_PNG_BYTES + iend_chunk
+    with pytest.raises(ValueError, match="multiple IEND|Corrupt PNG"):
+        verify_png_image_integrity(dup_iend)
+
+    # 4. Mandatory Pillow verification check
+    monkeypatch.setattr(mod, "_HAS_PIL", False)
+    monkeypatch.setattr(mod, "_PILImage", None)
+    with pytest.raises(RuntimeError, match="Official delivery requires Pillow"):
+        verify_png_image_integrity(MINIMAL_VALID_PNG_BYTES)

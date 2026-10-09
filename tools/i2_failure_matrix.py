@@ -100,12 +100,10 @@ def spawn_and_evaluate_real_process_failure(
 
         elif probe_type == "TIMEOUT":
             # Real OS subprocess timeout with TimeoutExpired exception
-            script = (
-                "import time, pathlib; "
-                "pathlib.Path('job.log').write_text('Abaqus solver started...\\n'); "
-                "pathlib.Path('job.sta').write_text('ITERATION 1...\\n'); "
-                "time.sleep(10)"
-            )
+            # In a real Abaqus run, solver initial files are created before the process hangs
+            (tmppath / "job.log").write_text("Abaqus solver started...\n", encoding="utf-8")
+            (tmppath / "job.sta").write_text("ITERATION 1...\n", encoding="utf-8")
+            script = "import time; time.sleep(10)"
             proc = subprocess.Popen(
                 [sys.executable, "-c", script],
                 cwd=tmpdir,
@@ -115,14 +113,14 @@ def spawn_and_evaluate_real_process_failure(
             )
             pid = proc.pid
             try:
-                out, err = proc.communicate(timeout=0.2)
+                out, err = proc.communicate(timeout=0.3)
                 retcode = proc.returncode
                 stdout_stderr = (out or "") + (err or "")
             except subprocess.TimeoutExpired:
                 proc.kill()
                 out, err = proc.communicate()
                 retcode = -9
-                stdout_stderr = f"TimeoutExpired: Subprocess exceeded 0.2s walltime limit.\n{err or ''}"
+                stdout_stderr = f"TimeoutExpired: Subprocess exceeded 0.3s walltime limit.\n{err or ''}"
             metric_values = {}
 
         elif probe_type == "MISSING_ODB":
