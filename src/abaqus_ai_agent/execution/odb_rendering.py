@@ -37,6 +37,154 @@ VALID_PLOT_STATES: Set[str] = {
     "UNDEFORMED",
 }
 
+# 1x1 RGBA standard PNG byte stream (IHDR width=1, height=1, positive dimensions)
+MINIMAL_VALID_PNG_BYTES: bytes = (
+    b"\x89PNG\r\n\x1a\n"
+    b"\x00\x00\x00\rIHDR"
+    b"\x00\x00\x00\x01\x00\x00\x00\x01\x08\x06\x00\x00\x00\x1f\x15c4"
+    b"\x00\x00\x00\rIDATx\x9cc\xf8\xcf\xc0\x00\x00\x03\x01\x01\x00\x18\xdd\x8d\xb0"
+    b"\x00\x00\x00\x00IEND\xaeB`\x82"
+)
+
+
+def verify_png_image_integrity(
+    file_path_or_bytes: Union[str, Path, bytes],
+) -> Tuple[int, int]:
+    """Verify that input data represents a valid, non-corrupt PNG with positive dimensions.
+
+    Validates:
+    - Standard 8-byte PNG magic signature (\\x89PNG\\r\\n\\x1a\\n).
+    - Presence of initial IHDR chunk with positive width and height.
+
+    Returns (width, height) on success.
+    Raises ValueError / FileNotFoundError / TypeError if invalid.
+    """
+    if isinstance(file_path_or_bytes, (str, Path)):
+        p = Path(file_path_or_bytes)
+        if not p.is_file():
+            raise FileNotFoundError(f"Image file does not exist: {p}")
+        with open(p, "rb") as fh:
+            data = fh.read(32)
+    elif isinstance(file_path_or_bytes, (bytes, bytearray)):
+        data = file_path_or_bytes[:32]
+    else:
+        raise TypeError(f"Expected file path or bytes, got {type(file_path_or_bytes)}")
+
+    if len(data) < 24:
+        raise ValueError(
+            f"Truncated PNG image: data length is only {len(data)} bytes, expected >= 24 bytes"
+        )
+
+    PNG_MAGIC = b"\x89PNG\r\n\x1a\n"
+    if data[:8] != PNG_MAGIC:
+        raise ValueError(
+            f"Invalid PNG magic signature: {data[:8]!r}. File is not an authentic PNG image."
+        )
+
+    chunk_len = int.from_bytes(data[8:12], byteorder="big")
+    chunk_type = data[12:16]
+    if chunk_type != b"IHDR" or chunk_len < 13:
+        raise ValueError(
+            f"Invalid PNG header: expected IHDR chunk (len >= 13), got {chunk_type!r} (len {chunk_len})"
+        )
+
+    width = int.from_bytes(data[16:20], byteorder="big")
+    height = int.from_bytes(data[20:24], byteorder="big")
+    if width <= 0 or height <= 0:
+        raise ValueError(
+            f"Invalid PNG dimensions: width={width}, height={height}. Expected positive dimensions."
+        )
+
+    return width, height
+
+
+@dataclass
+class RenderExecutionEvidence:
+    """Tamper-evident record binding a verified headless Abaqus Viewer rendering session."""
+
+    session_nonce: str
+    run_id: str
+    odb_sha256: str
+    timestamp_utc: str
+    rendered_figures: List[Dict[str, Any]]
+    session_signature: str
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "session_nonce": self.session_nonce,
+            "run_id": self.run_id,
+            "odb_sha256": self.odb_sha256,
+            "timestamp_utc": self.timestamp_utc,
+            "rendered_figures": self.rendered_figures,
+            "session_signature": self.session_signature,
+        }
+
+
+def create_render_execution_evidence(
+    session_nonce: str,
+    run_id: str,
+    odb_sha256: str,
+    rendered_figures: Sequence[Dict[str, Any]],
+) -> RenderExecutionEvidence:
+    """Construct authentic RenderExecutionEvidence with deterministic session signature."""
+    import datetime
+
+    ts = datetime.datetime.now(datetime.timezone.utc).isoformat()
+    fig_digests = sorted(
+        f"{rf.get('filename')}:{rf.get('image_sha256')}"
+        for rf in rendered_figures
+        if isinstance(rf, dict) and rf.get("filename")
+    )
+    sig_payload = f"EVIDENCE:{session_nonce}:{run_id}:{odb_sha256}:{';'.join(fig_digests)}"
+    sig = hashlib.sha256(sig_payload.encode("utf-8")).hexdigest()
+    return RenderExecutionEvidence(
+        session_nonce=session_nonce,
+        run_id=run_id,
+        odb_sha256=odb_sha256,
+        timestamp_utc=ts,
+        rendered_figures=list(rendered_figures),
+        session_signature=sig,
+    )
+
+
+def verify_render_execution_evidence(
+    evidence: Union[RenderExecutionEvidence, Dict[str, Any]],
+    expected_run_id: str,
+    expected_odb_sha256: str,
+) -> Tuple[bool, str]:
+    """Verify that a RenderExecutionEvidence matches runtime context and has untampered signature."""
+    if isinstance(evidence, RenderExecutionEvidence):
+        data = evidence.to_dict()
+    elif isinstance(evidence, dict):
+        data = evidence
+    else:
+        return False, "Invalid evidence object type"
+
+    nonce = data.get("session_nonce") or ""
+    run_id = data.get("run_id") or ""
+    odb_sha = data.get("odb_sha256") or ""
+    figs = data.get("rendered_figures") or []
+    sig = data.get("session_signature") or ""
+
+    if not nonce or len(nonce) < 16:
+        return False, "Evidence lacks valid session_nonce"
+    if run_id != str(expected_run_id).strip():
+        return False, f"Evidence run_id mismatch: {run_id!r} != {expected_run_id!r}"
+    if odb_sha != str(expected_odb_sha256).strip():
+        return False, f"Evidence odb_sha256 mismatch: {odb_sha!r} != {expected_odb_sha256!r}"
+
+    fig_digests = sorted(
+        f"{rf.get('filename')}:{rf.get('image_sha256')}"
+        for rf in figs
+        if isinstance(rf, dict) and rf.get("filename")
+    )
+    sig_payload = f"EVIDENCE:{nonce}:{run_id}:{odb_sha}:{';'.join(fig_digests)}"
+    expected_sig = hashlib.sha256(sig_payload.encode("utf-8")).hexdigest()
+    if sig != expected_sig:
+        return False, "Evidence session_signature mismatch or tampered"
+
+    return True, "Valid"
+
 
 def compute_viewer_session_token(
     session_nonce: str,
@@ -130,8 +278,15 @@ def generate_headless_viewer_script(
         "",
     ]
 
+    seen_filenames: Set[str] = set()
     for idx, req in enumerate(requests):
         safe_fname = Path(req.output_filename).name
+        if safe_fname in seen_filenames:
+            raise ValueError(
+                f"Duplicate target_filename detected in contour plot requests: {safe_fname!r}. "
+                "Each visualization request must have a unique target_filename to prevent collision."
+            )
+        seen_filenames.add(safe_fname)
         target_path_expr = f"os.path.join(out_dir, {safe_fname!r})"
 
         pos_raw = (req.output_position or "INTEGRATION_POINT").strip().upper()
@@ -345,6 +500,7 @@ def render_odb_contours_headless(
         for req in requests:
             scratch_target = scratch_dir / Path(req.output_filename).name
             if scratch_target.exists() and scratch_target.stat().st_size > 0:
+                verify_png_image_integrity(scratch_target)
                 final_target = out_dir / scratch_target.name
                 shutil.copy2(scratch_target, final_target)
                 produced.append(final_target)
@@ -440,6 +596,8 @@ def render_authentic_visualizations(
                 f"failed to render from ODB {odb} in this viewer session. Placeholder images are strictly forbidden."
             )
 
+        verify_png_image_integrity(target_path)
+
         h_img = hashlib.sha256()
         with open(target_path, "rb") as f:
             while chunk := f.read(65536):
@@ -485,5 +643,19 @@ def render_authentic_visualizations(
             metadata=fig_meta,
         )
         figures.append(bound_fig)
+
+    # Cryptographically bind session evidence across all generated figures
+    rendered_summary = [
+        {"filename": Path(f.path).name, "image_sha256": f.metadata.get("image_sha256")}
+        for f in figures
+    ]
+    render_evidence = create_render_execution_evidence(
+        session_nonce=session_nonce,
+        run_id=eff_run_id,
+        odb_sha256=odb_sha256,
+        rendered_figures=rendered_summary,
+    )
+    for f in figures:
+        f.metadata["render_execution_evidence"] = render_evidence.to_dict()
 
     return figures

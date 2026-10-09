@@ -9,7 +9,10 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 from pathlib import Path
+import secrets
+import tempfile
 from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
 
 from ..contracts.artifact import ArtifactPointer
@@ -86,8 +89,11 @@ class DeterministicReportPipeline:
         if stale_report.exists():
             try:
                 stale_report.unlink()
-            except Exception:
-                pass
+            except Exception as exc:
+                raise PermissionError(
+                    f"Official delivery blocked: unable to safely remove existing stale report at '{stale_report}'. "
+                    f"Atomic report isolation failed: {exc}"
+                )
 
         # Compute effective ODB hash if odb_path is provided and exists
         eff_odb_hash: Optional[str] = None
@@ -306,6 +312,15 @@ class DeterministicReportPipeline:
                     raise PermissionError(
                         f"Official delivery blocked: figure physical file is missing or empty at '{fig.path}'"
                     )
+                # P0-2 & P0-10: Verify genuine PNG header & positive dimensions
+                if f_path.suffix.lower() == ".png":
+                    try:
+                        from ..execution.odb_rendering import verify_png_image_integrity
+                        verify_png_image_integrity(f_path)
+                    except Exception as png_err:
+                        raise PermissionError(
+                            f"Official delivery blocked: Figure '{f_path.name}' is corrupt or not a valid PNG image: {png_err}"
+                        )
                 f_meta = fig.metadata or {}
                 # 1. Live hash re-verification on disk (anti-tamper)
                 f_bytes = f_path.read_bytes()
@@ -379,6 +394,18 @@ class DeterministicReportPipeline:
                         f"Official delivery blocked: Figure '{f_path.name}' viewer_session_token verification failed "
                         f"(token does not match live session evidence or was tampered)"
                     )
+                rev_data = f_meta.get("render_execution_evidence")
+                if rev_data:
+                    from ..execution.odb_rendering import verify_render_execution_evidence
+                    is_ev_valid, ev_reason = verify_render_execution_evidence(
+                        evidence=rev_data,
+                        expected_run_id=str(run_id).strip(),
+                        expected_odb_sha256=str(eff_odb_hash).strip(),
+                    )
+                    if not is_ev_valid:
+                        raise PermissionError(
+                            f"Official delivery blocked: Figure '{f_path.name}' render_execution_evidence invalid: {ev_reason}"
+                        )
 
         # 2. Build polymorphic EngineeringReportData
         report_data = self.builder.build_report_data(
@@ -397,12 +424,21 @@ class DeterministicReportPipeline:
             language=language,
         )
 
-        # 3. Deterministically render Semantic HTML (Single authoritative deliverable, all non-HTML stripped)
+        # 3. Deterministically render Semantic HTML (Single authoritative deliverable, atomic publication)
         html_content = render_report(report_data, fmt="html")
-        html_file = target_dir / "report.html"
         html_bytes = html_content.encode("utf-8")
-        html_file.write_bytes(html_bytes)
         html_sha256 = hashlib.sha256(html_bytes).hexdigest()
+
+        # Atomic publication: write to a temporary file in target_dir then replace
+        tmp_report = target_dir / f".report_{secrets.token_hex(8)}.tmp"
+        tmp_report.write_bytes(html_bytes)
+        html_file = target_dir / "report.html"
+        if os.name == "nt" and html_file.exists():
+            try:
+                html_file.unlink()
+            except Exception as _un_err:
+                raise PermissionError(f"Atomic report publication failed: unable to overwrite {html_file}: {_un_err}")
+        tmp_report.replace(html_file)
 
         # 4. Construct Data Plane Artifact Pointer
         report_pointer = ArtifactPointer(

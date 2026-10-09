@@ -499,9 +499,10 @@ def test_p0_3_cwd_leakage_blocked_in_report_pipeline(tmp_path: Path):
 def test_delivery_gate_blocks_tampered_figure_with_zero_html_leakage(tmp_path: Path):
     """Negative Test: Tampering with image bytes on disk triggers delivery gate PermissionError with zero HTML leakage."""
     import hashlib
+    from abaqus_ai_agent.execution.odb_rendering import MINIMAL_VALID_PNG_BYTES
     pipeline = DeterministicReportPipeline()
     img_file = tmp_path / "authentic_figure.png"
-    img_bytes = b"\x89PNG\r\n\x1a\n" + b"\x00" * 128
+    img_bytes = MINIMAL_VALID_PNG_BYTES
     img_file.write_bytes(img_bytes)
     recorded_sha = hashlib.sha256(img_bytes).hexdigest()
 
@@ -528,8 +529,8 @@ def test_delivery_gate_blocks_tampered_figure_with_zero_html_leakage(tmp_path: P
         },
     )
 
-    # Malicious tampering on disk after figure was registered
-    img_file.write_bytes(b"\x89PNG\r\n\x1a\n" + b"\xFF" * 256)
+    # Malicious tampering on disk after figure was registered (still valid PNG bytes, altered hash)
+    img_file.write_bytes(MINIMAL_VALID_PNG_BYTES + b"\x00" * 32)
 
     with pytest.raises(PermissionError) as exc_info:
         pipeline.build_and_render(
@@ -554,9 +555,10 @@ def test_delivery_gate_blocks_tampered_figure_with_zero_html_leakage(tmp_path: P
 def test_delivery_gate_blocks_mismatched_run_id_or_odb_hash(tmp_path: Path):
     """Negative Test: Figure from different run_id triggers delivery gate PermissionError."""
     import hashlib
+    from abaqus_ai_agent.execution.odb_rendering import MINIMAL_VALID_PNG_BYTES
     pipeline = DeterministicReportPipeline()
     img_file = tmp_path / "foreign_run_figure.png"
-    img_bytes = b"\x89PNG\r\n\x1a\n" + b"\x00" * 128
+    img_bytes = MINIMAL_VALID_PNG_BYTES
     img_file.write_bytes(img_bytes)
     recorded_sha = hashlib.sha256(img_bytes).hexdigest()
 

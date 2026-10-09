@@ -1140,10 +1140,11 @@ def test_p0_d_authentic_cae_visualization_asset_succeeds_in_official_delivery(tm
     )
 
     # Provide authentic CAE image artifact on disk
+    from abaqus_ai_agent.execution.odb_rendering import MINIMAL_VALID_PNG_BYTES
     authentic_filename = "authentic_odb_contour.png"
     authentic_img = tmp_path / "report_authentic_vis_asset" / authentic_filename
     out_dir.mkdir(parents=True, exist_ok=True)
-    authentic_img.write_bytes(b"\x89PNG\r\n\x1a\n" + b"\x00" * 1024)
+    authentic_img.write_bytes(MINIMAL_VALID_PNG_BYTES)
 
     specs = [
         VisualizationSpec(

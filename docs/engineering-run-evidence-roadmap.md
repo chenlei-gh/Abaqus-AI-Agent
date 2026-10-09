@@ -2219,3 +2219,23 @@ For full requirements backlog, input/output schemas, anti-hallucination constrai
   - 新增伪造 Token 拒绝、短 Nonce 拒绝、跨运行 Token 拒绝、残留旧图拒绝认证、非法输出位置拒绝等负向测试。
   - 全仓 982 项自动化回归测试全部通过 (982 passed, 0 failed, 0 skipped)。
   - `machine_validation/` 黄金基线资产 100% 保持只读未篡改状态。
+
+---
+
+### 28.9 渲染执行凭证、真实 PNG 校验、报告原子发布与多图防重收口实施记录 (Atomic Publishing & Verification Hardening)
+
+- [x] **P0-1 闭环：可核验渲染会话凭证 (`RenderExecutionEvidence`)** `[CLOSED]`
+  - 在 `odb_rendering.py` 中定义 `RenderExecutionEvidence`，固化 `session_nonce`、`run_id`、`odb_sha256`、`timestamp_utc`、图件清单摘要及密码学签名 `session_signature`。
+  - 在 `render_authentic_visualizations()` 中自动签发凭证并注入图件元数据；在 `pipeline.py` 与 `figure_selector.py` 准入及交付门禁中验证凭证签名与运行时强一致性。
+- [x] **P0-2 & P0-10 闭环：PNG 二进制魔数与 IHDR 正向尺寸完整性校验** `[CLOSED]`
+  - 实现 `verify_png_image_integrity()`，严格检查 PNG 8 字节魔数签名 (`\x89PNG\r\n\x1a\n`) 及 IHDR chunk，确保 width > 0 且 height > 0。
+  - 拦截任何伪造文本文件、截断损坏文件与零尺寸假图，并在沙盒提取、图件准入及最终交付门禁三道防线中强制执行。
+- [x] **P0-3 闭环：报告原子发布与残留报告阻断** `[CLOSED]`
+  - `DeterministicReportPipeline.build_and_render()` 废除旧报告删除的静默吞异常 (`except: pass`)，删除受阻时严格抛出 `PermissionError` fail-closed。
+  - 实施原子暂存发布机制：全部交付门禁检查未通过前，目标目录零 `report.html` 落盘；通过后通过唯一临时文件原子置换，根除半成品与过期报告泄露风险。
+- [x] **P0-8 & P0-9 闭环：多图请求目标文件名防重拦截** `[CLOSED]`
+  - `generate_headless_viewer_script()` 检测到重复 `output_filename` 时立即抛出 `ValueError`，杜绝图件冲突与覆盖错配。
+- [x] **负向与全量回归验证** `[QUALIFIED]`
+  - 新增假图/损坏 PNG 拒绝、重复文件名拦截、旧报告锁定拦截、门禁失败原子零泄露、签名篡改拦截等专项负向测试。
+  - 全仓 988 项自动化回归测试全部通过 (988 passed, 0 failed, 0 skipped)。
+  - `machine_validation/` 黄金基线资产 100% 保持只读未篡改状态。

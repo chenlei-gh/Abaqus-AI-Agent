@@ -113,6 +113,14 @@ def admit_figure_for_reuse(
     except Exception as exc:
         return False, f"Failed to compute live hash for {f_path}: {exc}"
 
+    # 5. Image binary integrity (validate PNG magic signature & positive dimensions)
+    if f_path.suffix.lower() == ".png":
+        try:
+            from ..execution.odb_rendering import verify_png_image_integrity
+            verify_png_image_integrity(f_path)
+        except Exception as png_err:
+            return False, f"Figure physical file is corrupt or not a valid PNG: {png_err}"
+
     # -------------------------------------------------------------------------
     # Category B: Engineering Semantics
     # -------------------------------------------------------------------------
@@ -209,6 +217,17 @@ def admit_figure_for_reuse(
     )
     if session_token != expected_token:
         return False, "viewer_session_token mismatch or forged (does not match cryptographically verified session evidence)"
+
+    rev_data = f_meta.get("render_execution_evidence")
+    if rev_data:
+        from ..execution.odb_rendering import verify_render_execution_evidence
+        is_ev_valid, ev_reason = verify_render_execution_evidence(
+            evidence=rev_data,
+            expected_run_id=str(current_run_id).strip(),
+            expected_odb_sha256=str(current_odb_hash).strip(),
+        )
+        if not is_ev_valid:
+            return False, f"Render execution evidence invalid: {ev_reason}"
 
     return True, "Admitted"
 

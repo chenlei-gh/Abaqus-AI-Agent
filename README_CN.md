@@ -7,7 +7,7 @@
 [![CI](https://github.com/chenlei-gh/Abaqus-AI-Agent/actions/workflows/ci.yml/badge.svg)](https://github.com/chenlei-gh/Abaqus-AI-Agent/actions/workflows/ci.yml)
 [![Python](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12-blue.svg)](https://www.python.org/)
 [![Abaqus](https://img.shields.io/badge/Abaqus-2025%20Validated-brightgreen.svg)](https://www.3ds.com/products-services/simulia/products/abaqus/)
-[![Tests](https://img.shields.io/badge/tests-875%20passed-success.svg)](tests/)
+[![Tests](https://img.shields.io/badge/tests-988%20passed-success.svg)](tests/)
 [![Golden Matrix](https://img.shields.io/badge/golden%20matrix-20%2F20%20L4%20passed-success.svg)](machine_validation/)
 [![Official Benchmarks](https://img.shields.io/badge/tier%20a%20benchmarks-22%2F22%20passed-success.svg)](tools/j_comprehensive_physics_matrix.py)
 [![Tier B Benchmarks](https://img.shields.io/badge/tier%20b%20benchmarks-7%2F7%20passed-success.svg)](tools/j3_tier_b_extended_physics.py)
@@ -95,7 +95,7 @@ graph LR
                │ Level 3: 复杂非线性参数契约   │  (Tier A 9 项高阶有限元算例规范)
                │ (量纲相容性与边界无量纲检验)  │  离线保障参数在复杂物理空间的合法性。
                ├───────────────────────────────┤
-               │ Level 4: 软件确定性回归套件   │  (875 项全自动确定性测试, 0 warnings)
+               │ Level 4: 软件确定性回归套件   │  (988 项全自动确定性测试, 0 warnings)
                │ (跨平台、跨 Python 版本确定性)│  零求解器商业许可依赖的纯软件回归底座。
                ├───────────────────────────────┤
                │ Level 5: 故障注入与自愈修复   │  (NEG-01, L3, T6 求解发散受控修复)
@@ -205,7 +205,7 @@ python -m pip install -e ".[test]"
 
 ```bash
 python -m pytest -q
-# 预期输出：875 passed in ~58s (0 warnings)
+# 预期输出：988 passed in ~65s (0 warnings)
 ```
 
 ### 3. 一行代码调用智能体
@@ -259,7 +259,7 @@ python scripts/clean_workspace.py
 
 | 验证层级 | 执行环境 | 依赖要求 | 覆盖范围与质量标准 |
 | :--- | :--- | :--- | :--- |
-| **CI 纯软件确定性门禁** | GitHub Actions / Ubuntu / macOS / Windows | 零 Abaqus 许可依赖 (Python 3.10-3.12) | • **875 项单元与契约测试全通过**<br>• 13 项 Golden Matrix 结构契约完整性<br>• 22 项达索官方 Tier A 理论力学基准<br>• 7 项 Tier B 扩展高阶力学基准（黏弹性/蠕变/断裂）<br>• 全仓库无秘钥泄漏与无污染安全审计 |
+| **CI 纯软件确定性门禁** | GitHub Actions / Ubuntu / macOS / Windows | 零 Abaqus 许可依赖 (Python 3.10-3.12) | • **988 项单元与契约测试全通过**<br>• 13 项 Golden Matrix 结构契约完整性<br>• 22 项达索官方 Tier A 理论力学基准<br>• 7 项 Tier B 扩展高阶力学基准（黏弹性/蠕变/断裂）<br>• 全仓库无秘钥泄漏与无污染安全审计 |
 | **真实商用机求解执行门禁** | Windows 11 / Server (配备正版 Abaqus 2025) | 商业 SIMULIA Abaqus 求解器许可 | • A/B 独立双进程求解复现性（误差 $\le 10^{-4}$）<br>• 9 大工程物理类别真实重算探针<br>• 复杂非线性 Solver Doctor 自愈收敛<br>• 真实 ODB 张量提取与单文件报告全要素渲染 |
 
 ---
@@ -283,7 +283,7 @@ Abaqus-AI-Agent/
 │   ├── planning/             # 动作规划器与机构图编译器
 │   ├── reporting/            # 单文件双语 HTML 报告渲染器 (内联多模态资产)
 │   └── validation/           # 量纲、网格与工程验收门禁
-├── tests/                    # 875 项确定性软件测试套件
+├── tests/                    # 988 项确定性软件测试套件
 └── tools/                    # 统一 Golden 矩阵管理、CLI 驱动与验证探针
 ```
 

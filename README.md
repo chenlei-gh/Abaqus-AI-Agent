@@ -7,7 +7,7 @@
 [![CI](https://github.com/chenlei-gh/Abaqus-AI-Agent/actions/workflows/ci.yml/badge.svg)](https://github.com/chenlei-gh/Abaqus-AI-Agent/actions/workflows/ci.yml)
 [![Python](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12-blue.svg)](https://www.python.org/)
 [![Abaqus](https://img.shields.io/badge/Abaqus-2025%20Validated-brightgreen.svg)](https://www.3ds.com/products-services/simulia/products/abaqus/)
-[![Tests](https://img.shields.io/badge/tests-875%20passed-success.svg)](tests/)
+[![Tests](https://img.shields.io/badge/tests-988%20passed-success.svg)](tests/)
 [![Golden Matrix](https://img.shields.io/badge/golden%20matrix-20%2F20%20L4%20passed-success.svg)](machine_validation/)
 [![Official Benchmarks](https://img.shields.io/badge/tier%20a%20benchmarks-22%2F22%20passed-success.svg)](tools/j_comprehensive_physics_matrix.py)
 [![Tier B Benchmarks](https://img.shields.io/badge/tier%20b%20benchmarks-7%2F7%20passed-success.svg)](tools/j3_tier_b_extended_physics.py)
@@ -95,7 +95,7 @@ The platform strictly adheres to an audited **Five-Level Evidence Hierarchy**:
                │ Level 3: Nonlinear Contracts  │  (Tier A 9 high-order FEA specs)
                │ (Dimensional & boundary consistency) │  Offline verification of setup legality.
                ├───────────────────────────────┤
-               │ Level 4: Software Test Suite  │  (875 automated deterministic tests, 0 warnings)
+               │ Level 4: Software Test Suite  │  (988 automated deterministic tests, 0 warnings)
                │ (Deterministic CI across Python 3.10-3.12) │  Zero-solver software foundation.
                ├───────────────────────────────┤
                │ Level 5: Divergence Healing   │  (NEG-01, L3, T6 divergence recovery)
@@ -205,7 +205,7 @@ Run deterministic regression suite (validating the software layer):
 
 ```bash
 python -m pytest -q
-# Expected output: 875 passed in ~58s (0 warnings)
+# Expected output: 988 passed in ~65s (0 warnings)
 ```
 
 ### 3. Minimal Python Usage
@@ -259,7 +259,7 @@ The repository is guarded by two independent engineering gates:
 
 | Verification Gate | Environment | Dependencies | Scope & Standards |
 | :--- | :--- | :--- | :--- |
-| **CI Software Contract Gate** | GitHub Actions / Ubuntu / macOS / Windows | Zero Abaqus license required (Python 3.10-3.12) | • **875 automated unit & contract tests passed**<br>• 13 Golden Matrix schema checks<br>• 22 Dassault Tier A physics baselines<br>• 7 Tier B extended mechanics baselines (viscoelasticity/creep/fracture)<br>• Full repository zero-leakage security audit |
+| **CI Software Contract Gate** | GitHub Actions / Ubuntu / macOS / Windows | Zero Abaqus license required (Python 3.10-3.12) | • **988 automated unit & contract tests passed**<br>• 13 Golden Matrix schema checks<br>• 22 Dassault Tier A physics baselines<br>• 7 Tier B extended mechanics baselines (viscoelasticity/creep/fracture)<br>• Full repository zero-leakage security audit |
 | **Real Machine Execution Gate** | Windows 11 / Windows Server with live Abaqus 2025 | SIMULIA Abaqus commercial license | • A/B dual-run reproducibility (relative error $\le 10^{-4}$)<br>• 9 physics categories live solver recomputation<br>• Nonlinear Solver Doctor divergence healing<br>• Full-tensor ODB extraction to standalone HTML reports |
 
 ---
@@ -283,7 +283,7 @@ Abaqus-AI-Agent/
 │   ├── planning/             # Action planning & mechanism graph compiler
 │   ├── reporting/            # Standalone bilingual HTML renderer (embedded media)
 │   └── validation/           # Dimensional consistency, mesh, and acceptance gates
-├── tests/                    # 875 deterministic software tests
+├── tests/                    # 988 deterministic software tests
 └── tools/                    # Golden matrix CLI drivers and verification probes
 ```
 

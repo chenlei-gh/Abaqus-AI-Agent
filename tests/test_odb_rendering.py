@@ -214,7 +214,8 @@ def test_render_authentic_visualizations_success_and_lineage_binding(tmp_path, m
 
     # Monkeypatch render_odb_contours_headless to simulate successful PNG rendering
     def mock_headless_render(odb_path, requests, output_dir, **kwargs):
-        target_png.write_bytes(b"\x89PNG\r\n\x1a\nfake_image_bytes")
+        from abaqus_ai_agent.execution.odb_rendering import MINIMAL_VALID_PNG_BYTES
+        target_png.write_bytes(MINIMAL_VALID_PNG_BYTES)
         return [target_png]
 
     monkeypatch.setattr(

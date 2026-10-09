@@ -15,6 +15,11 @@ import pytest
 
 from abaqus_ai_agent.contracts.intent import EngineeringIntent
 from abaqus_ai_agent.contracts.report import ReportFigure
+from abaqus_ai_agent.execution.odb_rendering import (
+    MINIMAL_VALID_PNG_BYTES,
+    compute_viewer_session_token,
+    verify_png_image_integrity,
+)
 from abaqus_ai_agent.reporting.figure_selector import (
     FigureSelectionResult,
     identify_analysis_scenario,
@@ -105,7 +110,7 @@ def test_priority_1_reuse_existing_verified_figure(tmp_path: Path):
     """Priority 1: If verified image already exists with complete provenance whitelist, reuse directly."""
     import hashlib
     existing_img = tmp_path / "mises_stress_hotspot.png"
-    img_bytes = b"\x89PNG\r\n\x1a\n" + b"\x00" * 128
+    img_bytes = MINIMAL_VALID_PNG_BYTES
     existing_img.write_bytes(img_bytes)
     img_sha256 = hashlib.sha256(img_bytes).hexdigest()
 
@@ -247,7 +252,7 @@ def test_admit_figure_semantic_component_mismatch(tmp_path: Path):
     """Negative test: Request S.mises, but figure provides S.max_principal -> rejected."""
     import hashlib
     img_file = tmp_path / "max_principal.png"
-    img_bytes = b"\x89PNG\r\n\x1a\n" + b"\x00" * 64
+    img_bytes = MINIMAL_VALID_PNG_BYTES
     img_file.write_bytes(img_bytes)
     h = hashlib.sha256(img_bytes).hexdigest()
 
@@ -288,7 +293,7 @@ def test_admit_figure_semantic_region_mismatch(tmp_path: Path):
     """Negative test: Request WHOLE_MODEL, figure provides BOLT_HEAD -> rejected."""
     import hashlib
     img_file = tmp_path / "bolt_head.png"
-    img_bytes = b"\x89PNG\r\n\x1a\n" + b"\x00" * 64
+    img_bytes = MINIMAL_VALID_PNG_BYTES
     img_file.write_bytes(img_bytes)
     h = hashlib.sha256(img_bytes).hexdigest()
 
@@ -330,7 +335,7 @@ def test_admit_figure_semantic_output_position_mismatch(tmp_path: Path):
     """Negative test: Request INTEGRATION_POINT, figure provides NODAL -> rejected."""
     import hashlib
     img_file = tmp_path / "nodal_stress.png"
-    img_bytes = b"\x89PNG\r\n\x1a\n" + b"\x00" * 64
+    img_bytes = MINIMAL_VALID_PNG_BYTES
     img_file.write_bytes(img_bytes)
     h = hashlib.sha256(img_bytes).hexdigest()
 
@@ -372,7 +377,7 @@ def test_admit_figure_semantic_frame_mismatch(tmp_path: Path):
     """Negative test: Request frame=-1 (last), figure provides frame=0 without resolved match -> rejected."""
     import hashlib
     img_file = tmp_path / "initial_frame.png"
-    img_bytes = b"\x89PNG\r\n\x1a\n" + b"\x00" * 64
+    img_bytes = MINIMAL_VALID_PNG_BYTES
     img_file.write_bytes(img_bytes)
     h = hashlib.sha256(img_bytes).hexdigest()
 
@@ -415,12 +420,12 @@ def test_admit_figure_tampered_content_hash_rejected(tmp_path: Path):
     """Negative test: Disk content tampered after recording sha256 -> rejected."""
     import hashlib
     img_file = tmp_path / "tampered.png"
-    img_bytes = b"\x89PNG\r\n\x1a\n" + b"\x00" * 64
+    img_bytes = MINIMAL_VALID_PNG_BYTES
     img_file.write_bytes(img_bytes)
     original_h = hashlib.sha256(img_bytes).hexdigest()
 
-    # Tamper the file on disk
-    img_file.write_bytes(b"\x89PNG\r\n\x1a\n" + b"\xFF" * 128)
+    # Tamper the file on disk (still valid PNG structure but different bytes)
+    img_file.write_bytes(MINIMAL_VALID_PNG_BYTES + b"\x00" * 32)
 
     fig = ReportFigure(
         kind="stress_contour",
@@ -453,3 +458,110 @@ def test_admit_figure_tampered_content_hash_rejected(tmp_path: Path):
     )
     assert adm is False
     assert "Image content hash mismatch" in reason
+
+
+def test_admit_figure_corrupt_png_rejected(tmp_path: Path):
+    """Negative test: Non-PNG fake file or truncated corrupt PNG is rejected from admission."""
+    import hashlib
+    fake_png = tmp_path / "fake_corrupt.png"
+    fake_content = b"This is a plaintext file claiming to be a PNG"
+    fake_png.write_bytes(fake_content)
+    fake_h = hashlib.sha256(fake_content).hexdigest()
+
+    fig = ReportFigure(
+        kind="stress_contour",
+        path=str(fake_png.as_posix()),
+        metadata={
+            "field": "S",
+            "component": "mises",
+            "step": "Step-1",
+            "frame": -1,
+            "region": "WHOLE_MODEL",
+            "output_position": "INTEGRATION_POINT",
+            "run_id": "RUN-01",
+            "input_hash": "INP-01",
+            "odb_sha256": "ODB-01",
+            "image_sha256": fake_h,
+            "viewer_rendered": True,
+        },
+    )
+
+    from abaqus_ai_agent.reporting.figure_selector import admit_figure_for_reuse
+    adm, reason = admit_figure_for_reuse(
+        figure=fig,
+        current_run_id="RUN-01",
+        current_input_hash="INP-01",
+        current_odb_hash="ODB-01",
+        target_field="S",
+        target_component="mises",
+        target_step="Step-1",
+        target_frame=-1,
+    )
+    assert adm is False
+    assert "not a valid PNG" in reason
+
+
+def test_admit_figure_render_execution_evidence_tampered_rejected(tmp_path: Path):
+    """Negative test: Figure with tampered RenderExecutionEvidence signature is rejected."""
+    import hashlib
+    from abaqus_ai_agent.execution.odb_rendering import (
+        MINIMAL_VALID_PNG_BYTES,
+        compute_viewer_session_token,
+        create_render_execution_evidence,
+    )
+    img_file = tmp_path / "ev_test.png"
+    img_file.write_bytes(MINIMAL_VALID_PNG_BYTES)
+    img_h = hashlib.sha256(MINIMAL_VALID_PNG_BYTES).hexdigest()
+
+    nonce = "0123456789abcdef0123456789abcdef"
+    token = compute_viewer_session_token(
+        session_nonce=nonce,
+        run_id="RUN-EV",
+        odb_sha256="ODB-EV",
+        target_filename=img_file.name,
+        image_sha256=img_h,
+    )
+    ev = create_render_execution_evidence(
+        session_nonce=nonce,
+        run_id="RUN-EV",
+        odb_sha256="ODB-EV",
+        rendered_figures=[{"filename": img_file.name, "image_sha256": img_h}],
+    )
+    ev_dict = ev.to_dict()
+    # Tamper the signature
+    ev_dict["session_signature"] = "tampered_signature_hex"
+
+    fig = ReportFigure(
+        kind="stress_contour",
+        path=str(img_file.as_posix()),
+        metadata={
+            "field": "S",
+            "component": "mises",
+            "step": "Step-1",
+            "frame": -1,
+            "region": "WHOLE_MODEL",
+            "output_position": "INTEGRATION_POINT",
+            "run_id": "RUN-EV",
+            "input_hash": "INP-EV",
+            "odb_sha256": "ODB-EV",
+            "image_sha256": img_h,
+            "viewer_rendered": True,
+            "session_nonce": nonce,
+            "viewer_session_token": token,
+            "render_execution_evidence": ev_dict,
+        },
+    )
+
+    from abaqus_ai_agent.reporting.figure_selector import admit_figure_for_reuse
+    adm, reason = admit_figure_for_reuse(
+        figure=fig,
+        current_run_id="RUN-EV",
+        current_input_hash="INP-EV",
+        current_odb_hash="ODB-EV",
+        target_field="S",
+        target_component="mises",
+        target_step="Step-1",
+        target_frame=-1,
+    )
+    assert adm is False
+    assert "Render execution evidence invalid" in reason

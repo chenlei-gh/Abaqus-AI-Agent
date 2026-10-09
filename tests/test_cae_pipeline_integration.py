@@ -22,6 +22,11 @@ from abaqus_ai_agent.contracts.results import ResultExtraction, ResultRequiremen
 from abaqus_ai_agent.execution.analysis_run import AnalysisRun, AnalysisRunner, AnalysisRunState
 from abaqus_ai_agent.execution.client import AbaqusExecutor
 from abaqus_ai_agent.execution.jobs import JobState, JobStatus
+from abaqus_ai_agent.execution.odb_rendering import (
+    MINIMAL_VALID_PNG_BYTES,
+    ContourPlotRequest,
+    generate_headless_viewer_script,
+)
 from abaqus_ai_agent.reporting.pipeline import DeterministicReportPipeline
 from abaqus_ai_agent.reporting.visualization_spec import VisualizationSpec
 
@@ -341,7 +346,7 @@ def test_agent_solve_requirement_require_production_full_closure_and_delivery(tm
         for s in specs:
             out_file = Path(output_dir) / s.target_filename
             if not out_file.exists():
-                out_file.write_bytes(b"\x89PNG\r\n\x1a\n" + b"\x00" * 128)
+                out_file.write_bytes(MINIMAL_VALID_PNG_BYTES)
             img_bytes = out_file.read_bytes()
             sha = hashlib.sha256(img_bytes).hexdigest()
             rendered.append(
@@ -391,9 +396,9 @@ def test_agent_solve_requirement_require_production_full_closure_and_delivery(tm
 
     # Pre-render dummy verified figures so Viewer dispatch is bypassed (Priority 1)
     img_mises = workdir / "mises_stress_hotspot.png"
-    img_mises.write_bytes(b"\x89PNG\r\n\x1a\n" + b"\x00" * 128)
+    img_mises.write_bytes(MINIMAL_VALID_PNG_BYTES)
     img_disp = workdir / "total_displacement.png"
-    img_disp.write_bytes(b"\x89PNG\r\n\x1a\n" + b"\x00" * 128)
+    img_disp.write_bytes(MINIMAL_VALID_PNG_BYTES)
 
     agent = AbaqusAIAgent(executor)
     geom = IntentGeometrySpec(shape="cantilever_box", length=100.0, width=10.0, height=10.0)
@@ -645,7 +650,7 @@ def test_negative_p0_b_missing_or_mismatched_provenance_rejected(tmp_path: Path)
     from abaqus_ai_agent.reporting.figure_selector import select_engineering_figures
 
     img_file = tmp_path / "mises_stress_hotspot.png"
-    img_bytes = b"\x89PNG\r\n\x1a\n" + b"\x00" * 128
+    img_bytes = MINIMAL_VALID_PNG_BYTES
     img_file.write_bytes(img_bytes)
     valid_img_sha256 = hashlib.sha256(img_bytes).hexdigest()
 
@@ -992,7 +997,7 @@ def test_negative_p0_b_ambient_pre_existing_file_adoption_blocked_in_deliverable
     report_dir = tmp_path / "ambient_run_dir"
     report_dir.mkdir()
     ambient_file = report_dir / "ambient_stress_hotspot.png"
-    ambient_file.write_bytes(b"\x89PNG\r\n\x1a\n" + b"\x00" * 128)
+    ambient_file.write_bytes(MINIMAL_VALID_PNG_BYTES)
 
     mock_odb = tmp_path / "test_ambient.odb"
     mock_odb.write_bytes(b"\x7fSIMULIA_ODB_BINARY_HEADER" + b"\x00" * 1024)
@@ -1038,7 +1043,7 @@ def test_negative_p0_b_delivery_gate_blocks_missing_input_hash_or_odb_hash(tmp_p
     report_dir = tmp_path / "gate_hash_dir"
     report_dir.mkdir()
     img_file = report_dir / "valid_gate_fig.png"
-    img_bytes = b"\x89PNG\r\n\x1a\n" + b"\x00" * 128
+    img_bytes = MINIMAL_VALID_PNG_BYTES
     img_file.write_bytes(img_bytes)
     img_sha256 = hashlib.sha256(img_bytes).hexdigest()
 
@@ -1104,7 +1109,7 @@ def test_negative_p0_b_delivery_gate_blocks_missing_viewer_session_token_or_unre
     report_dir = tmp_path / "gate_token_dir"
     report_dir.mkdir()
     img_file = report_dir / "token_test_fig.png"
-    img_bytes = b"\x89PNG\r\n\x1a\n" + b"\x00" * 128
+    img_bytes = MINIMAL_VALID_PNG_BYTES
     img_file.write_bytes(img_bytes)
     img_sha256 = hashlib.sha256(img_bytes).hexdigest()
 
@@ -1190,7 +1195,7 @@ def test_odb_rendering_session_nonce_and_token_entropy_verification(tmp_path: Pa
     out_dir = tmp_path / "nonce_out"
     out_dir.mkdir()
     target_img = out_dir / "nonce_stress.png"
-    target_img.write_bytes(b"\x89PNG\r\n\x1a\n" + b"\x00" * 64)
+    target_img.write_bytes(MINIMAL_VALID_PNG_BYTES)
 
     spec = VisualizationSpec(
         artifact_id="FIG-NONCE",
@@ -1244,7 +1249,7 @@ def test_negative_p0_b_forged_viewer_session_token_rejected_in_admission_and_del
     report_dir = tmp_path / "forged_token_dir"
     report_dir.mkdir()
     img_file = report_dir / "forged_fig.png"
-    img_bytes = b"\x89PNG\r\n\x1a\n" + b"\x00" * 128
+    img_bytes = MINIMAL_VALID_PNG_BYTES
     img_file.write_bytes(img_bytes)
     img_sha256 = hashlib.sha256(img_bytes).hexdigest()
 
@@ -1391,7 +1396,7 @@ def test_negative_p0_b_preexisting_stale_image_not_adopted_if_viewer_fails_or_do
     out_dir.mkdir()
     stale_img = out_dir / "stale_stress.png"
     # Pre-existing file sitting in output directory from a previous or foreign process
-    stale_img.write_bytes(b"\x89PNG\r\n\x1a\n" + b"STALE_OLD_BYTES" * 8)
+    stale_img.write_bytes(MINIMAL_VALID_PNG_BYTES)
 
     spec = VisualizationSpec(
         artifact_id="FIG-STALE",
@@ -1444,3 +1449,136 @@ def test_negative_p0_c_viewer_script_rejects_invalid_output_position_and_has_no_
     script = generate_headless_viewer_script("dummy.odb", [req_scalar], "dummy_dir")
     assert "outputPosition=NODAL" not in script
     assert "Failed to set primary variable \"CPRESS\" at outputPosition INTEGRATION_POINT" in script
+
+
+def test_negative_p0_png_corrupt_or_fake_rejected_in_delivery_gate(tmp_path: Path):
+    """Negative Test P0: Final Delivery Gate rejects corrupt or fake non-PNG figure files."""
+    report_dir = tmp_path / "gate_corrupt_png_dir"
+    report_dir.mkdir()
+    fake_png = report_dir / "fake_stress.png"
+    fake_png.write_text("NOT A REAL PNG FILE AT ALL - JUST TEXT", encoding="utf-8")
+    fake_sha256 = hashlib.sha256(fake_png.read_bytes()).hexdigest()
+
+    mock_odb = tmp_path / "test_corrupt.odb"
+    mock_odb.write_bytes(b"\x7fSIMULIA_ODB_BINARY_HEADER" + b"\x00" * 1024)
+    odb_sha256 = hashlib.sha256(mock_odb.read_bytes()).hexdigest()
+
+    from abaqus_ai_agent.execution.odb_rendering import compute_viewer_session_token
+    nonce = "0123456789abcdef0123456789abcdef"
+    token = compute_viewer_session_token(
+        session_nonce=nonce,
+        run_id="RUN-CORRUPT",
+        odb_sha256=odb_sha256,
+        target_filename=fake_png.name,
+        image_sha256=fake_sha256,
+    )
+
+    fig = ReportFigure(
+        kind="stress_hotspot",
+        path=str(fake_png.as_posix()),
+        metadata={
+            "field": "S",
+            "component": "mises",
+            "run_id": "RUN-CORRUPT",
+            "input_hash": "INP-CORRUPT",
+            "odb_sha256": odb_sha256,
+            "image_sha256": fake_sha256,
+            "output_position": "INTEGRATION_POINT",
+            "viewer_rendered": True,
+            "session_nonce": nonce,
+            "viewer_session_token": token,
+        },
+    )
+
+    pipeline = DeterministicReportPipeline()
+    with pytest.raises(PermissionError) as exc_info:
+        pipeline.build_and_render(
+            output_dir=report_dir,
+            title="Corrupt PNG Gate Test",
+            case_id="case_corrupt",
+            run_id="RUN-CORRUPT",
+            input_hash="INP-CORRUPT",
+            odb_path=mock_odb,
+            model_info={},
+            results_info=(),
+            acceptance_info={"status": "PASS", "deliverable": True},
+            figures=[fig],
+            require_deliverable=True,
+        )
+    assert "is corrupt or not a valid PNG image" in str(exc_info.value)
+    # Ensure zero leakage
+    assert not (report_dir / "report.html").exists()
+
+
+def test_negative_p0_duplicate_target_filename_rejected(tmp_path: Path):
+    """Negative Test P0: Multiple visualization requests with duplicate target_filename raise ValueError."""
+    req1 = ContourPlotRequest(
+        output_filename="duplicate_name.png",
+        variable_label="S",
+        component_or_invariant="mises",
+    )
+    req2 = ContourPlotRequest(
+        output_filename="duplicate_name.png",
+        variable_label="U",
+        component_or_invariant="magnitude",
+    )
+    with pytest.raises(ValueError, match="Duplicate target_filename detected"):
+        generate_headless_viewer_script("dummy.odb", [req1, req2], "out_dir")
+
+
+def test_negative_p0_stale_report_locked_fails_closed(tmp_path: Path, monkeypatch):
+    """Negative Test P0: Pre-existing stale report.html that cannot be removed aborts delivery."""
+    report_dir = tmp_path / "stale_lock_dir"
+    report_dir.mkdir()
+    stale_file = report_dir / "report.html"
+    stale_file.write_text("OLD STALE REPORT CONTENT", encoding="utf-8")
+
+    pipeline = DeterministicReportPipeline()
+    # Mock unlink to raise PermissionError
+    monkeypatch.setattr(Path, "unlink", lambda self, *args, **kwargs: (_ for _ in ()).throw(PermissionError("File locked by process")))
+
+    with pytest.raises(PermissionError) as exc_info:
+        pipeline.build_and_render(
+            output_dir=report_dir,
+            title="Stale Report Lock Test",
+            case_id="case_stale_lock",
+            run_id="RUN-STALE-LOCK",
+            input_hash="INP-STALE-LOCK",
+            model_info={},
+            results_info=(),
+            acceptance_info={"status": "PASS", "deliverable": True},
+            require_deliverable=True,
+        )
+    assert "unable to safely remove existing stale report" in str(exc_info.value)
+
+
+def test_atomic_report_publishing_blocks_partial_leakage_on_gate_failure(tmp_path: Path):
+    """Negative Test P0: If Final Delivery Gate fails, target_dir has ZERO report.html written."""
+    report_dir = tmp_path / "atomic_zero_leakage_dir"
+    report_dir.mkdir()
+
+    pipeline = DeterministicReportPipeline()
+    spec = VisualizationSpec(
+        artifact_id="FIG-FAIL",
+        visualization_type="stress_hotspot",
+        field_name="S",
+        component="mises",
+        target_filename="missing_figure.png",
+    )
+
+    with pytest.raises((PermissionError, FileNotFoundError)):
+        pipeline.build_and_render(
+            output_dir=report_dir,
+            title="Atomic Leakage Block Test",
+            case_id="case_atomic",
+            run_id="RUN-ATOMIC-01",
+            input_hash="INP-ATOMIC-01",
+            model_info={},
+            results_info=(),
+            acceptance_info={"status": "PASS", "deliverable": True},
+            visualization_specs=[spec],
+            require_deliverable=True,
+        )
+
+    # Zero file leakage in target directory
+    assert not (report_dir / "report.html").exists()
