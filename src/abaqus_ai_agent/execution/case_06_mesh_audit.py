@@ -490,15 +490,21 @@ def parse_and_audit_inp_deck(inp_path: Path) -> Dict[str, Any]:
                 pass
 
     audited_quads = []
+    missing_node_quads = 0
     for eid, (n1, n2, n3, n4) in quad_elements.items():
         if n1 in nodes and n2 in nodes and n3 in nodes and n4 in nodes:
             audited_quads.append(audit_quad_element(eid, nodes[n1], nodes[n2], nodes[n3], nodes[n4]))
+        else:
+            missing_node_quads += 1
 
     audited_hexes = []
+    missing_node_hexes = 0
     for eid, h_nodes in hex_elements.items():
         if all(n in nodes for n in h_nodes):
             pts = tuple(nodes[n] for n in h_nodes)
             audited_hexes.append(audit_hex_element(eid, pts))
+        else:
+            missing_node_hexes += 1
 
     return {
         "nodes_count": len(nodes),
@@ -506,6 +512,7 @@ def parse_and_audit_inp_deck(inp_path: Path) -> Dict[str, Any]:
         "hex_elements_count": len(hex_elements),
         "audited_quads": audited_quads,
         "audited_hexes": audited_hexes,
+        "missing_node_elements_count": missing_node_quads + missing_node_hexes,
     }
 
 
@@ -515,57 +522,10 @@ def audit_case_06_mesh_quality(
 ) -> Tuple[MeshGateEvaluation, Dict[str, Any]]:
     """Complete mesh quality audit for Case 06 combining S4R shell and C3D8R solid meshes.
 
-    Performs authentic geometric/isoparametric Jacobian calculation either directly on the
-    model's generated INP decks or on the authentic discrete engineering mesh topology.
+    Performs authentic geometric/isoparametric Jacobian calculation directly on the
+    model's actual INP decks. Never falls back to synthetic benchmark samples if actual INP decks
+    are provided.
     """
-    quad_results, quad_summary = build_and_audit_hat_channel_mesh()
-    hex_results, hex_summary = build_and_audit_submodel_hex_mesh()
-
-    # If actual INP decks exist, verify and blend their live topology
-    if global_inp and Path(global_inp).is_file():
-        parsed_global = parse_and_audit_inp_deck(Path(global_inp))
-        if parsed_global["audited_quads"]:
-            quad_results = parsed_global["audited_quads"]
-            max_ar = max(q.aspect_ratio for q in quad_results)
-            min_jac = min(q.jacobian_ratio for q in quad_results)
-            min_ang = min(q.min_angle_deg for q in quad_results)
-            max_ang = max(q.max_angle_deg for q in quad_results)
-            quad_summary = {
-                "total_elements": float(len(quad_results)),
-                "max_aspect_ratio": round(max_ar, 3),
-                "min_jacobian": round(min_jac, 3),
-                "min_angle": round(min_ang, 2),
-                "max_angle": round(max_ang, 2),
-                "max_warping_angle": 0.0,
-                "distorted_elements_count": 0.0,
-            }
-
-    if submodel_inp and Path(submodel_inp).is_file():
-        parsed_sub = parse_and_audit_inp_deck(Path(submodel_inp))
-        if parsed_sub["audited_hexes"]:
-            hex_results = parsed_sub["audited_hexes"]
-            max_ar = max(h.aspect_ratio for h in hex_results)
-            min_jac = min(h.jacobian_ratio for h in hex_results)
-            min_ang = min(h.min_angle_deg for h in hex_results)
-            max_ang = max(h.max_angle_deg for h in hex_results)
-            hex_summary = {
-                "submodel_total_elements": float(len(hex_results)),
-                "submodel_min_jacobian": round(min_jac, 3),
-                "submodel_max_aspect_ratio": round(max_ar, 3),
-                "submodel_min_angle": round(min_ang, 2),
-                "submodel_max_angle": round(max_ang, 2),
-                "submodel_distorted_count": 0.0,
-            }
-
-    # Unified governing metrics
-    governing_metrics = {
-        "min_jacobian": min(quad_summary["min_jacobian"], hex_summary["submodel_min_jacobian"]),
-        "max_aspect_ratio": max(quad_summary["max_aspect_ratio"], hex_summary["submodel_max_aspect_ratio"]),
-        "min_angle": min(quad_summary["min_angle"], hex_summary["submodel_min_angle"]),
-        "max_angle": max(quad_summary["max_angle"], hex_summary["submodel_max_angle"]),
-    }
-
-    # Strict engineering gate policy (max AR <= 4.0, min Jacobian >= 0.60)
     policy = MeshQualityPolicy(
         max_aspect_ratio=4.0,
         min_jacobian=0.60,
@@ -573,18 +533,140 @@ def audit_case_06_mesh_quality(
         max_angle=135.0,
     )
 
+    quad_summary: Dict[str, float] = {}
+    hex_summary: Dict[str, float] = {}
+    sample_quad_count = 0
+    sample_hex_count = 0
+    violations: List[str] = []
+
+    # 1. Audit Global Shell INP Deck if specified
+    if global_inp is not None:
+        p_global = Path(global_inp)
+        if not p_global.is_file():
+            violations.append(f"global_inp_not_found:{p_global}")
+        else:
+            parsed_global = parse_and_audit_inp_deck(p_global)
+            if parsed_global["missing_node_elements_count"] > 0:
+                violations.append(
+                    f"global_inp_contains_{parsed_global['missing_node_elements_count']}_elements_referencing_undefined_nodes"
+                )
+            if not parsed_global["audited_quads"]:
+                violations.append("global_inp_contains_zero_valid_quad_elements")
+            else:
+                quad_results = parsed_global["audited_quads"]
+                sample_quad_count = len(quad_results)
+                max_ar = max(q.aspect_ratio for q in quad_results)
+                min_jac = min(q.jacobian_ratio for q in quad_results)
+                min_ang = min(q.min_angle_deg for q in quad_results)
+                max_ang = max(q.max_angle_deg for q in quad_results)
+                distorted_count = sum(1 for q in quad_results if q.jacobian_ratio < 0.01 or q.aspect_ratio > 10.0)
+                quad_summary = {
+                    "total_elements": float(len(quad_results)),
+                    "max_aspect_ratio": round(max_ar, 3),
+                    "min_jacobian": round(min_jac, 3),
+                    "min_angle": round(min_ang, 2),
+                    "max_angle": round(max_ang, 2),
+                    "max_warping_angle": 0.0,
+                    "distorted_elements_count": float(distorted_count),
+                }
+
+    # 2. Audit Submodel Solid Hex INP Deck if specified
+    if submodel_inp is not None:
+        p_sub = Path(submodel_inp)
+        if not p_sub.is_file():
+            violations.append(f"submodel_inp_not_found:{p_sub}")
+        else:
+            parsed_sub = parse_and_audit_inp_deck(p_sub)
+            if parsed_sub["missing_node_elements_count"] > 0:
+                violations.append(
+                    f"submodel_inp_contains_{parsed_sub['missing_node_elements_count']}_elements_referencing_undefined_nodes"
+                )
+            if not parsed_sub["audited_hexes"]:
+                violations.append("submodel_inp_contains_zero_valid_hex_elements")
+            else:
+                hex_results = parsed_sub["audited_hexes"]
+                sample_hex_count = len(hex_results)
+                max_ar = max(h.aspect_ratio for h in hex_results)
+                min_jac = min(h.jacobian_ratio for h in hex_results)
+                min_ang = min(h.min_angle_deg for h in hex_results)
+                max_ang = max(h.max_angle_deg for h in hex_results)
+                distorted_count = sum(1 for h in hex_results if h.jacobian_ratio < 0.01 or h.aspect_ratio > 10.0)
+                hex_summary = {
+                    "submodel_total_elements": float(len(hex_results)),
+                    "submodel_min_jacobian": round(min_jac, 3),
+                    "submodel_max_aspect_ratio": round(max_ar, 3),
+                    "submodel_min_angle": round(min_ang, 2),
+                    "submodel_max_angle": round(max_ang, 2),
+                    "submodel_distorted_count": float(distorted_count),
+                }
+
+    # 3. If neither INP is supplied, run standalone benchmark geometry tests (explicit offline sample)
+    if global_inp is None and submodel_inp is None:
+        _, quad_summary = build_and_audit_hat_channel_mesh()
+        _, hex_summary = build_and_audit_submodel_hex_mesh()
+        sample_quad_count = int(quad_summary["total_elements"])
+        sample_hex_count = int(hex_summary["submodel_total_elements"])
+
+    # If any INP-specific integrity violations occurred, immediately reject gate without blending
+    if violations:
+        gate_eval = MeshGateEvaluation(
+            passed=False,
+            status="BLOCKED",
+            metrics={},
+            violations=tuple(violations),
+        )
+        detailed_report = {
+            "gate_status": "FAIL",
+            "passed": False,
+            "violations": violations,
+            "governing_metrics": {},
+            "quad_summary": quad_summary,
+            "hex_summary": hex_summary,
+            "quad_shell_audit": quad_summary,
+            "hex_solid_audit": hex_summary,
+            "sample_quad_count": sample_quad_count,
+            "sample_hex_count": sample_hex_count,
+            "audit_source": "inp_deck_verification_failed",
+        }
+        return gate_eval, detailed_report
+
+    # Synthesize governing metrics from evaluated sections
+    min_jacs = []
+    max_ars = []
+    min_angs = []
+    max_angs = []
+    if quad_summary:
+        min_jacs.append(quad_summary["min_jacobian"])
+        max_ars.append(quad_summary["max_aspect_ratio"])
+        min_angs.append(quad_summary["min_angle"])
+        max_angs.append(quad_summary["max_angle"])
+    if hex_summary:
+        min_jacs.append(hex_summary["submodel_min_jacobian"])
+        max_ars.append(hex_summary["submodel_max_aspect_ratio"])
+        min_angs.append(hex_summary["submodel_min_angle"])
+        max_angs.append(hex_summary["submodel_max_angle"])
+
+    governing_metrics = {
+        "min_jacobian": min(min_jacs) if min_jacs else 0.0,
+        "max_aspect_ratio": max(max_ars) if max_ars else 999.0,
+        "min_angle": min(min_angs) if min_angs else 0.0,
+        "max_angle": max(max_angs) if max_angs else 180.0,
+    }
+
     gate_eval = evaluate_mesh_quality_gate(governing_metrics, policy=policy)
 
     detailed_report = {
         "gate_status": gate_eval.status,
         "passed": gate_eval.passed,
-        "governing_metrics": governing_metrics,
-        "quad_shell_audit": quad_summary,
-        "hex_solid_audit": hex_summary,
-        "sample_quad_count": len(quad_results),
-        "sample_hex_count": len(hex_results),
         "violations": list(gate_eval.violations),
         "warnings": list(gate_eval.warnings),
+        "governing_metrics": governing_metrics,
+        "quad_summary": quad_summary,
+        "hex_summary": hex_summary,
+        "quad_shell_audit": quad_summary,
+        "hex_solid_audit": hex_summary,
+        "sample_quad_count": sample_quad_count,
+        "sample_hex_count": sample_hex_count,
+        "audit_source": "inp_deck_analysis" if (global_inp or submodel_inp) else "discrete_geometric_benchmark_sample",
     }
-
     return gate_eval, detailed_report

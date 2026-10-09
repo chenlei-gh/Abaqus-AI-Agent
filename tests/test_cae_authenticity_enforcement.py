@@ -153,3 +153,84 @@ def test_no_json_dumps_to_odb_across_entire_repo():
         text = py_file.read_text(encoding="utf-8")
         assert "odb_path.write_text(json.dumps" not in text, f"Fake JSON ODB writer found in {py_file}"
         assert ".odb.write_text(json.dumps" not in text, f"Fake JSON ODB writer found in {py_file}"
+
+
+def test_case_06_solver_never_synthesizes_fake_solver_logs_when_offline(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    """Case 06 solver must NEVER synthesize fake .sta, .msg, .dat, .log solver logs when offline."""
+    import shutil
+
+    # Ensure test strictly exercises offline branch regardless of host Abaqus installation
+    monkeypatch.setattr(shutil, "which", lambda cmd: None)
+
+    problem_path = (
+        Path(__file__).resolve().parent.parent
+        / "test_assets"
+        / "engineering_cases"
+        / "case_06_sheet_metal_submodeling"
+        / "problem_statement.json"
+    )
+    with open(problem_path, "r", encoding="utf-8") as f:
+        problem = json.load(f)
+
+    res = execute_case_06_solver(tmp_path, problem, require_live=False)
+
+    # In offline mode, neither job1 nor job2 may have fake .sta, .msg, .dat, or .log files created
+    fake_log_extensions = [".sta", ".msg", ".dat", ".log"]
+    for ext in fake_log_extensions:
+        found_files = list(tmp_path.glob(f"*{ext}"))
+        assert len(found_files) == 0, f"Deceptive fake solver output {ext} detected in offline workdir: {found_files}"
+
+    # Artifacts catalog should only contain authentic inputs and benchmark reference
+    for art in res["artifacts"]:
+        assert not any(art["name"].endswith(ext) for ext in fake_log_extensions), (
+            f"Fake solver log tracked in artifacts catalog: {art['name']}"
+        )
+
+    # Evidence manifest verification: all_increments_converged must be False when offline
+    manifest = res["evidence_manifest_v2"]
+    assert manifest.verification.get("all_increments_converged") is False
+    assert manifest.validity == "INCOMPLETE"
+
+
+def test_mesh_audit_fails_on_empty_or_broken_inp_without_fallback(tmp_path: Path):
+    """When actual INP is provided, mesh auditor must fail if elements reference undefined nodes or if deck has zero elements."""
+    # 1. Deck with undefined nodes referenced by elements
+    broken_inp = tmp_path / "broken_deck.inp"
+    broken_inp.write_text(
+        "*NODE\n"
+        "1, 0.0, 0.0, 0.0\n"
+        "2, 10.0, 0.0, 0.0\n"
+        "*ELEMENT, TYPE=S4R\n"
+        "101, 1, 2, 999, 998\n",  # Nodes 999 and 998 do not exist!
+        encoding="utf-8",
+    )
+    gate_eval, report = audit_case_06_mesh_quality(global_inp=broken_inp)
+    assert not gate_eval.passed, "Broken INP referencing nonexistent nodes must fail gate"
+    assert "undefined_nodes" in str(gate_eval.violations)
+
+    # 2. Deck with zero elements
+    empty_inp = tmp_path / "empty_deck.inp"
+    empty_inp.write_text("*HEADING\nEmpty\n", encoding="utf-8")
+    gate_eval2, report2 = audit_case_06_mesh_quality(global_inp=empty_inp)
+    assert not gate_eval2.passed, "Empty INP must fail gate rather than falling back to sample geometry"
+    assert "zero_valid_quad_elements" in str(gate_eval2.violations)
+
+
+def test_no_synthetic_solver_log_builders_in_repo():
+    """Anti-Cheat scan: No Python source file may contain fake solver log builders."""
+    root = Path(__file__).resolve().parent.parent
+    src_dir = root / "src"
+    py_files = list(src_dir.rglob("*.py"))
+
+    forbidden_builders = [
+        "_build_status_file_content",
+        "_build_message_file_content",
+        "_build_data_file_content",
+        "_build_log_file_content",
+    ]
+    for py_file in py_files:
+        text = py_file.read_text(encoding="utf-8")
+        for builder in forbidden_builders:
+            assert builder not in text, f"Forbidden synthetic solver log builder '{builder}' found in {py_file}"
