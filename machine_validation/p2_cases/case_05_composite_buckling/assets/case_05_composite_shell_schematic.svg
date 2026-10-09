@@ -1,0 +1,110 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 950 500" width="100%" height="100%">
+  <defs>
+    <linearGradient id="schemGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#f8fafc"/>
+      <stop offset="100%" stop-color="#ffffff"/>
+    </linearGradient>
+    <linearGradient id="cylGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#3b82f6" stop-opacity="0.3"/>
+      <stop offset="50%" stop-color="#60a5fa" stop-opacity="0.15"/>
+      <stop offset="100%" stop-color="#1d4ed8" stop-opacity="0.4"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="950" height="500" fill="url(#schemGrad)" rx="10" stroke="#cbd5e1" stroke-width="1.5"/>
+
+  <!-- Title -->
+  <text x="35" y="38" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="18" font-weight="700" fill="#0f172a">
+    图 7: 开孔复合材料圆柱壳 3D 几何拓扑、对称铺层与轴向边界示意图
+  </text>
+  <text x="35" y="60" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="13" fill="#64748b">
+    Figure 7: 3D Cylindrical Shell Geometry, Central Circular Hole, [45/-45/0/90]s Layup &amp; Boundary Conditions
+  </text>
+
+  <!-- 3D Cylinder Schematic (Center cx=340, cy=280) -->
+  <!-- Top ellipse cx=340, cy=130, rx=140, ry=35 -->
+  <!-- Bottom ellipse cx=340, cy=410, rx=140, ry=35 -->
+  <g transform="translate(0, 0)">
+    <!-- Cylinder Body -->
+    <path d="M 200 130
+             L 200 410
+             A 140 35 0 0 0 480 410
+             L 480 130
+             A 140 35 0 0 1 200 130 Z"
+          fill="url(#cylGrad)" stroke="#1e40af" stroke-width="2"/>
+
+    <!-- Bottom ellipse visible front -->
+    <ellipse cx="340" cy="410" rx="140" ry="35" fill="none" stroke="#1e40af" stroke-width="2"/>
+
+    <!-- Top ellipse visible -->
+    <ellipse cx="340" cy="130" rx="140" ry="35" fill="#dbeafe" stroke="#1e40af" stroke-width="2"/>
+
+    <!-- Central Hole (cx=340, cy=270, rx=24, ry=14) -->
+    <ellipse cx="340" cy="270" rx="24" ry="14" fill="#ffffff" stroke="#0f172a" stroke-width="2"/>
+    <ellipse cx="340" cy="271.5" rx="24" ry="14" fill="none" stroke="#64748b" stroke-width="1"/>
+
+    <!-- Dimensions Arrows -->
+    <!-- Length L = 500 mm -->
+    <line x1="160" y1="130" x2="160" y2="410" stroke="#0f172a" stroke-width="1.5"/>
+    <line x1="150" y1="130" x2="170" y2="130" stroke="#0f172a" stroke-width="1.5"/>
+    <line x1="150" y1="410" x2="170" y2="410" stroke="#0f172a" stroke-width="1.5"/>
+    <text x="145" y="275" font-family="sans-serif" font-size="12" font-weight="700" fill="#0f172a" text-anchor="end">高度 L = 500.0 mm</text>
+
+    <!-- Radius R = 200 mm -->
+    <line x1="340" y1="130" x2="480" y2="130" stroke="#0f172a" stroke-width="1.5"/>
+    <circle cx="340" cy="130" r="3" fill="#0f172a"/>
+    <circle cx="480" cy="130" r="3" fill="#0f172a"/>
+    <text x="410" y="122" font-family="sans-serif" font-size="12" font-weight="700" fill="#0f172a" text-anchor="middle">半径 R = 200.0 mm</text>
+
+    <!-- Central Hole Dimension -->
+    <line x1="340" y1="270" x2="430" y2="230" stroke="#dc2626" stroke-width="1.5"/>
+    <text x="435" y="234" font-family="sans-serif" font-size="12" font-weight="700" fill="#dc2626">中心圆孔直径 d = 40.0 mm (r/R=0.10)</text>
+
+    <!-- Load arrows on top -->
+    <g stroke="#dc2626" stroke-width="2" fill="#dc2626">
+      <line x1="260" y1="80" x2="260" y2="115"/>
+      <polygon points="260,120 256,110 264,110"/>
+      <line x1="340" y1="80" x2="340" y2="115"/>
+      <polygon points="340,120 336,110 344,110"/>
+      <line x1="420" y1="80" x2="420" y2="115"/>
+      <polygon points="420,120 416,110 424,110"/>
+    </g>
+    <text x="340" y="70" font-family="sans-serif" font-size="12" font-weight="700" fill="#dc2626" text-anchor="middle">轴向均布受压载荷 P / Uniform Axial Compression</text>
+
+    <!-- Boundary condition marks on bottom -->
+    <g stroke="#2563eb" stroke-width="2" fill="#2563eb">
+      <line x1="260" y1="435" x2="260" y2="455"/>
+      <line x1="340" y1="435" x2="340" y2="455"/>
+      <line x1="420" y1="435" x2="420" y2="455"/>
+    </g>
+    <text x="340" y="475" font-family="sans-serif" font-size="12" font-weight="700" fill="#2563eb" text-anchor="middle">固定刚性约束 / Encastre (U1=U2=U3=UR=0)</text>
+  </g>
+
+  <!-- Right Side: Structural Specifications Box -->
+  <g transform="translate(560, 95)">
+    <rect width="355" height="365" rx="8" fill="#f8fafc" stroke="#cbd5e1" stroke-width="1.2"/>
+    <text x="20" y="30" font-family="sans-serif" font-size="14" font-weight="700" fill="#0f172a">
+      模型几何与复合材料参数规约
+    </text>
+
+    <g font-family="sans-serif" font-size="12" fill="#334155" transform="translate(20, 56)">
+      <text x="0" y="0" font-weight="600" fill="#0284c7">【几何尺度参数 / Geometry】</text>
+      <text x="0" y="20">• 圆柱总高 L: 500.0 mm</text>
+      <text x="0" y="40">• 圆柱中面半径 R: 200.0 mm (R/t = 100)</text>
+      <text x="0" y="60">• 总壁厚 t: 2.0 mm (8 层预浸料)</text>
+      <text x="0" y="80">• 开孔直径 d: 40.0 mm (d/(2πR) = 3.18%)</text>
+
+      <text x="0" y="115" font-weight="600" fill="#059669">【材料与铺层 / Laminate Layup】</text>
+      <text x="0" y="135">• 材料体系: AS4/3501-6 碳纤维/环氧树脂</text>
+      <text x="0" y="155">• 单层厚度 t_ply: 0.25 mm (共 8 层)</text>
+      <text x="0" y="175">• 铺层顺序: [45 / -45 / 0 / 90]_s 准各向同性</text>
+      <text x="0" y="195">• 纵向模量 E1: 142.0 GPa | E2: 9.8 GPa</text>
+      <text x="0" y="215">• 泊松比 ν12: 0.30 | 剪模量 G12: 6.0 GPa</text>
+
+      <text x="0" y="250" font-weight="600" fill="#dc2626">【数值求解策略 / Numerical Solver】</text>
+      <text x="0" y="270">• 单元类型: S4R 连续壳单元 (41,800 单元)</text>
+      <text x="0" y="290">• Step 1: *BUCKLE 特征值求解 (Lanczos)</text>
+      <text x="0" y="310">• Step 2: *STATIC, RIKS (初始缺陷 w0 = 0.20 mm)</text>
+    </g>
+  </g>
+</svg>

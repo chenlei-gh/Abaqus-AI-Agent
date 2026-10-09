@@ -1,0 +1,132 @@
+{
+  "case_id": "CASE_06_SHEET_METAL_SUBMODELING",
+  "title": "多工序钣金冲压成形-回弹-拼焊装配与全局-局部子模型缺口应力分析 / Multi-Stage Sheet Metal Forming, Springback, Spot-Welded Assembly & Global-Local Submodeling Analysis",
+  "domain": "automotive_body_structures",
+  "source": "Numisheet Benchmark (U-Bend Forming & Springback) & Abaqus 2025 Example Problems (Global-Local Submodeling of a Spot-Welded Joint & Hat-Section Forming)",
+  "problem_description": "评估汽车白车身先进高强钢（DP780双相钢/HC420LA高强钢）帽型薄壁结构在多道次工序制造与装配载荷下的全链条力学响应：Step 1 大变形弹塑性深拉深成形（*STATIC, Swift等向强化模型）；Step 2 模具卸载弹性回弹（*SPRINGBACK，自由回弹法向翘曲偏差分析）；Step 3 双板夹紧定位与 6 点电阻点焊拼焊装配（面-面接触与装配残余应力场）；Step 4 全局服役弯曲-扭转工况加载（整体结构刚度与焊点载荷分配）；Step 5 最危险焊点 3D 实体子模型切分与切割边界位移驱动插值分析（*SUBMODELING，C3D8R 细化六面体实体网格），精确提取焊根熔核微缺口应力集中峰值与抗疲劳安全裕度。",
+  "geometry": {
+    "assembly_type": "two_piece_spot_welded_top_hat_box_beam",
+    "hat_channel": {
+      "part_name": "Top_Hat_Channel_DP780",
+      "length_l_mm": 600.0,
+      "width_b_mm": 120.0,
+      "height_h_mm": 60.0,
+      "flange_width_wf_mm": 25.0,
+      "corner_radius_r_mm": 5.0,
+      "thickness_t1_mm": 1.60
+    },
+    "closing_plate": {
+      "part_name": "Bottom_Closing_Plate_HC420LA",
+      "length_l_mm": 600.0,
+      "width_w_mm": 170.0,
+      "thickness_t2_mm": 1.40
+    },
+    "fastening": {
+      "connection_type": "resistance_spot_welding_rsw",
+      "spot_weld_count": 6,
+      "nugget_diameter_dn_mm": 6.0,
+      "weld_pitch_mm": 150.0,
+      "flange_edge_distance_mm": 12.5
+    },
+    "submodel_region": {
+      "target_location": "End_Spotweld_No1_Critical_Shear_Zone",
+      "box_dimensions_mm": {
+        "length_x_mm": 40.0,
+        "width_y_mm": 30.0,
+        "height_z_mm": 15.0
+      },
+      "element_type": "C3D8R_fine_solid_continuum",
+      "notch_root_refinement_mm": 0.25
+    }
+  },
+  "materials": {
+    "top_hat_material": {
+      "material_name": "DP780 高强双相钢 (Dual Phase Advanced High Strength Steel)",
+      "density_t_mm3": 7.85e-9,
+      "elastic_modulus_e_mpa": 210000.0,
+      "poisson_ratio_nu": 0.30,
+      "initial_yield_stress_sigma_y_mpa": 510.0,
+      "tensile_strength_rm_mpa": 820.0,
+      "hardening_law": "Swift_Isotropic_Hardening",
+      "swift_parameters": {
+        "k_mpa": 1150.0,
+        "epsilon_0": 0.005,
+        "n_exponent": 0.165
+      }
+    },
+    "closing_plate_material": {
+      "material_name": "HC420LA 低合金高强钢 (High Strength Low Alloy Steel)",
+      "density_t_mm3": 7.85e-9,
+      "elastic_modulus_e_mpa": 210000.0,
+      "poisson_ratio_nu": 0.30,
+      "initial_yield_stress_sigma_y_mpa": 430.0,
+      "tensile_strength_rm_mpa": 520.0,
+      "hardening_law": "Ludwik_Isotropic_Hardening",
+      "ludwik_parameters": {
+        "k_mpa": 620.0,
+        "n_exponent": 0.190
+      }
+    },
+    "spot_weld_nugget_material": {
+      "material_name": "RSW 熔核柱状晶强化区 (Columnar Grain Solidified Nugget)",
+      "elastic_modulus_e_mpa": 210000.0,
+      "poisson_ratio_nu": 0.30,
+      "yield_stress_mpa": 750.0,
+      "tensile_strength_mpa": 980.0
+    }
+  },
+  "loading_procedure": [
+    {
+      "step_number": 1,
+      "step_name": "Sheet_Metal_Deep_Drawing",
+      "analysis_type": "nonlinear_static_forming",
+      "solver": "Newton_Raphson_Full",
+      "punch_stroke_mm": 60.0,
+      "blank_holder_force_kn": 25.0,
+      "description": "模具下压冲压成形U形截面帽型构件，伴随大变形弹塑性流动与应变硬化"
+    },
+    {
+      "step_number": 2,
+      "step_name": "Tool_Release_Springback",
+      "analysis_type": "nonlinear_static_springback",
+      "solver": "Direct_Sparse_Solver",
+      "description": "模具与压边圈卸载释放，弹性应变能释放诱发侧壁开口与法向翘曲自由回弹"
+    },
+    {
+      "step_number": 3,
+      "step_name": "Clamping_And_Spotwelding",
+      "analysis_type": "nonlinear_contact_assembly",
+      "contact_formulation": "Surface_To_Surface_Penalty",
+      "description": "气动夹具强行夹紧成形回弹件与下底板，生成 6 处电阻点焊连接，引入装配贴合残余应力"
+    },
+    {
+      "step_number": 4,
+      "step_name": "Global_Service_Load",
+      "analysis_type": "nonlinear_static_service",
+      "bending_force_kn": 8.5,
+      "torsion_moment_n_m": 1200.0,
+      "description": "总成端部固支，对自由端施加垂向弯曲力与扭转复合工况载荷，求解宏观变形与点焊载荷分布"
+    },
+    {
+      "step_number": 5,
+      "step_name": "Submodel_Cut_Boundary_Driven",
+      "analysis_type": "global_local_submodeling",
+      "driven_variables": "Displacements_And_Rotations",
+      "description": "切分受载最危险的 1 号端部焊点局部 3D 实体子模型，通过切割边界插值驱动求解焊核缺口应力集中"
+    }
+  ],
+  "acceptance_criteria": {
+    "max_springback_deviation_mm": 2.50,
+    "max_clamping_residual_stress_mpa": 450.0,
+    "max_cut_boundary_drift_percent": 1.00,
+    "max_submodel_nugget_peak_stress_mpa": 750.0,
+    "max_reaction_equilibrium_error_percent": 0.05
+  },
+  "reference_benchmarks": {
+    "numisheet_benchmark_springback_deviation_mm": 1.82,
+    "abaqus_example_submodel_peak_stress_mpa": 670.0,
+    "abaqus_example_cut_boundary_drift_percent": 0.20,
+    "spotweld_yield_strength_mpa": 750.0,
+    "spotweld_ultimate_strength_mpa": 980.0
+  }
+}

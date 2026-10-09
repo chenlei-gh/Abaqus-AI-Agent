@@ -3,10 +3,14 @@
   "case": "H.1_engineering_report_generator",
   "job_name": "StaticGoldenJob",
   "run_id": "run_static_golden_001",
-  "markdown_report_path": "machine_validation/static_golden_engineering_report.md",
+  "report": {
+    "format": "html",
+    "path": "machine_validation/static_golden_engineering_report.html",
+    "bytes": 38979,
+    "self_contained": true
+  },
   "html_report_path": "machine_validation/static_golden_engineering_report.html",
-  "markdown_size_bytes": 98443,
-  "html_size_bytes": 38333,
+  "html_size_bytes": 38979,
   "metrics_reported_count": 3,
   "criteria_reported_count": 3,
   "acceptance_verdict": "PASS",

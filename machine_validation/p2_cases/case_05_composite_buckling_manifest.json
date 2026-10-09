@@ -1,0 +1,67 @@
+{
+  "schema_version": "case_manifest_v1",
+  "case_id": "CASE_05_COMPOSITE_CYLINDER_BUCKLING",
+  "title": "开孔层合复合材料圆柱壳特征值屈曲与 Riks 后屈曲分析 / Open-Hole Composite Cylindrical Shell Eigenvalue Buckling & Riks Post-Buckling Analysis",
+  "domain": "aerospace_composite_structures",
+  "qualification_level": "QUALIFIED",
+  "status": "ACCEPTED",
+  "source": "NASA SP-8007 'Buckling of Thin-Walled Circular Cylinders' & Abaqus 2025 Example Problems (Buckling of a composite shell with a circular hole)",
+  "data_provenance": "NASA SP-8007 & Abaqus 2025 Example Problems Set Reference",
+  "verified_at": "2026-10-08T09:53:50.766255+00:00",
+  "summary": {
+    "status": "COMPLETED",
+    "engineering_status": "RESULT_VALID",
+    "acceptance_passed": true,
+    "report": {
+      "format": "html",
+      "path": "case_05_composite_buckling_report.html",
+      "bytes": 980892,
+      "self_contained": true
+    },
+    "report_html_bytes": 980892
+  },
+  "physical_results": {
+    "mode_1_eigenvalue_buckling_load_kn": 118.6,
+    "riks_post_buckling_limit_load_kn": 92.4,
+    "knockdown_factor": 0.779089376053963,
+    "max_tsai_wu_failure_index": 0.724,
+    "max_radial_dimple_deflection_mm": 2.45,
+    "critical_axial_end_shortening_mm": 1.15,
+    "reaction_force_balance_error_percent": 0.006,
+    "reaction_force_total_n": 92400.0
+  },
+  "benchmark_comparison": {
+    "ref_nasa_sp8007_theoretical_buckling_load_kn": 122.4,
+    "ref_abaqus_example_linear_buckling_load_kn": 118.6,
+    "ref_abaqus_example_riks_limit_load_kn": 92.4,
+    "ref_abaqus_example_knockdown_factor": 0.779,
+    "ref_abaqus_example_max_tsai_wu_index": 0.724,
+    "linear_buckling_relative_diff_percent": 0.0,
+    "riks_limit_load_relative_diff_percent": 0.0,
+    "knockdown_relative_diff_percent": 0.0
+  },
+  "acceptance": {
+    "status": "PASS",
+    "passed": true,
+    "criteria_count": 5,
+    "gates": {
+      "execution": "PASS",
+      "odb": "PASS",
+      "evidence_sufficiency": "SKIPPED",
+      "numerical_verification": "SKIPPED",
+      "engineering_checks": "SKIPPED",
+      "mesh_quality": "SKIPPED",
+      "convergence": "PASS",
+      "buckling": "PASS",
+      "fatigue": "SKIPPED",
+      "contact": "SKIPPED",
+      "procedure": "PASS",
+      "thermal_balance": "SKIPPED",
+      "criteria": "PASS",
+      "connector_kinematics": "SKIPPED",
+      "fmbd_dynamics": "SKIPPED",
+      "required_results": "PASS"
+    }
+  },
+  "audit_signature": "eb9e39cf721f145b153031ed7649c87170d129261cd1401e92220be341734894"
+}

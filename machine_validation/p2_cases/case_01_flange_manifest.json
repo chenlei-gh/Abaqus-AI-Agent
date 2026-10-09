@@ -21,7 +21,7 @@
     "passed": true,
     "status": "PASS"
   },
-  "audit_signature": "ae3d75a0cda6c0d5922a077a73d9451dfa3509305b1d7668c0c918e49debef12",
+  "audit_signature": "f7c9fa450bcc30ebf38ea530275418f3c0df620b7c1dbbbb21defad330256ef5",
   "benchmark_comparison": {
     "bolt_tension_relative_diff_percent": 0.01879699248120301,
     "gasket_stress_relative_diff_percent": 0.2016129032258093,
@@ -49,8 +49,13 @@
     "acceptance_passed": true,
     "engineering_status": "RESULT_VALID",
     "report_html_bytes": 378833,
-    "report_md_bytes": 39566,
-    "status": "COMPLETED"
+    "status": "COMPLETED",
+    "report": {
+      "format": "html",
+      "path": "Case_01_Bolted_Flange_Report.html",
+      "bytes": 378833,
+      "self_contained": true
+    }
   },
   "title": "Bolted Pipe Flange Connection with Gasket Sealing",
   "verified_at": "2026-10-08T06:55:25.414422+00:00"

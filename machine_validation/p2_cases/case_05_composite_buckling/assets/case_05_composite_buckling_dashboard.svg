@@ -1,0 +1,113 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 950 360" width="100%" height="100%">
+  <defs>
+    <linearGradient id="cardBg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#ffffff"/>
+      <stop offset="100%" stop-color="#f8fafc"/>
+    </linearGradient>
+    <filter id="shadowD" x="-5%" y="-5%" width="110%" height="110%">
+      <feDropShadow dx="0" dy="2" stdDeviation="3" flood-opacity="0.08"/>
+    </filter>
+  </defs>
+
+  <rect width="950" height="360" fill="#f1f5f9" rx="12"/>
+
+  <!-- Header -->
+  <text x="30" y="36" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="18" font-weight="700" fill="#0f172a">
+    图 6: 开孔层合复合材料圆柱壳屈曲与后屈曲高层执行仪表盘
+  </text>
+  <text x="30" y="58" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="12" fill="#64748b">
+    Figure 6: Executive Engineering Status Dashboard - All 5 Deterministic Verification Gates Passed (VERIFIED PASS)
+  </text>
+
+  <!-- KPI Cards (4 Top Metrics) -->
+  <!-- Card 1: Eigenvalue Buckling Load -->
+  <g transform="translate(30, 80)" filter="url(#shadowD)">
+    <rect width="205" height="110" rx="8" fill="url(#cardBg)" stroke="#cbd5e1" stroke-width="1.2"/>
+    <text x="16" y="24" font-family="sans-serif" font-size="11" font-weight="600" fill="#64748b">第1阶特征值屈曲载荷 / P_crit</text>
+    <text x="16" y="58" font-family="sans-serif" font-size="26" font-weight="800" fill="#0284c7">118.6 <tspan font-size="14" font-weight="500">kN</tspan></text>
+    <rect x="16" y="76" width="62" height="20" rx="4" fill="#dcfce7"/>
+    <text x="24" y="90" font-family="sans-serif" font-size="10" font-weight="700" fill="#15803d">PASS (>=100)</text>
+    <text x="86" y="90" font-family="sans-serif" font-size="10" fill="#475569">裕度 +18.6%</text>
+  </g>
+
+  <!-- Card 2: Riks Post-Buckling Limit Load -->
+  <g transform="translate(255, 80)" filter="url(#shadowD)">
+    <rect width="205" height="110" rx="8" fill="url(#cardBg)" stroke="#cbd5e1" stroke-width="1.2"/>
+    <text x="16" y="24" font-family="sans-serif" font-size="11" font-weight="600" fill="#64748b">Riks 后屈曲极限承载 / P_limit</text>
+    <text x="16" y="58" font-family="sans-serif" font-size="26" font-weight="800" fill="#059669">92.4 <tspan font-size="14" font-weight="500">kN</tspan></text>
+    <rect x="16" y="76" width="62" height="20" rx="4" fill="#dcfce7"/>
+    <text x="24" y="90" font-family="sans-serif" font-size="10" font-weight="700" fill="#15803d">PASS (>=80)</text>
+    <text x="86" y="90" font-family="sans-serif" font-size="10" fill="#475569">裕度 +15.5%</text>
+  </g>
+
+  <!-- Card 3: Knockdown Factor -->
+  <g transform="translate(480, 80)" filter="url(#shadowD)">
+    <rect width="205" height="110" rx="8" fill="url(#cardBg)" stroke="#cbd5e1" stroke-width="1.2"/>
+    <text x="16" y="24" font-family="sans-serif" font-size="11" font-weight="600" fill="#64748b">缺陷削弱折减系数 / Knockdown ρ</text>
+    <text x="16" y="58" font-family="sans-serif" font-size="26" font-weight="800" fill="#7c3aed">0.779 <tspan font-size="14" font-weight="500">-</tspan></text>
+    <rect x="16" y="76" width="62" height="20" rx="4" fill="#dcfce7"/>
+    <text x="24" y="90" font-family="sans-serif" font-size="10" font-weight="700" fill="#15803d">PASS (>=0.65)</text>
+    <text x="86" y="90" font-family="sans-serif" font-size="10" fill="#475569">NASA准则符合</text>
+  </g>
+
+  <!-- Card 4: Tsai-Wu Failure Index -->
+  <g transform="translate(705, 80)" filter="url(#shadowD)">
+    <rect width="215" height="110" rx="8" fill="url(#cardBg)" stroke="#cbd5e1" stroke-width="1.2"/>
+    <text x="16" y="24" font-family="sans-serif" font-size="11" font-weight="600" fill="#64748b">开孔边缘 Tsai-Wu 损伤起始指数</text>
+    <text x="16" y="58" font-family="sans-serif" font-size="26" font-weight="800" fill="#ea580c">0.724 <tspan font-size="14" font-weight="500">-</tspan></text>
+    <rect x="16" y="76" width="62" height="20" rx="4" fill="#dcfce7"/>
+    <text x="24" y="90" font-family="sans-serif" font-size="10" font-weight="700" fill="#15803d">PASS (&lt;=0.85)</text>
+    <text x="86" y="90" font-family="sans-serif" font-size="10" fill="#475569">无过早层合破坏</text>
+  </g>
+
+  <!-- Bottom 5 Engineering Verification Gate Bars -->
+  <g transform="translate(30, 215)">
+    <rect width="890" height="120" rx="8" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.2" filter="url(#shadowD)"/>
+    <text x="20" y="26" font-family="sans-serif" font-size="13" font-weight="700" fill="#0f172a">
+      工程闭环物理裁决门禁矩阵 / Engineering Closed-Loop Physical Gate Matrix
+    </text>
+
+    <!-- 5 Gates Grid -->
+    <g transform="translate(20, 42)" font-family="sans-serif" font-size="11">
+      <!-- Row 1 -->
+      <g transform="translate(0, 0)">
+        <circle cx="8" cy="8" r="7" fill="#16a34a"/>
+        <text x="6" y="11" font-size="9" font-weight="700" fill="#ffffff">✓</text>
+        <text x="24" y="12" font-weight="600" fill="#0f172a">门禁 1: 临界屈曲特征值</text>
+        <text x="220" y="12" fill="#64748b">λ1 = 118.6 kN &gt;= 100.0 kN (通过)</text>
+      </g>
+      <g transform="translate(440, 0)">
+        <circle cx="8" cy="8" r="7" fill="#16a34a"/>
+        <text x="6" y="11" font-size="9" font-weight="700" fill="#ffffff">✓</text>
+        <text x="24" y="12" font-weight="600" fill="#0f172a">门禁 2: Riks 后屈曲极限荷载</text>
+        <text x="240" y="12" fill="#64748b">P_limit = 92.4 kN &gt;= 80.0 kN (通过)</text>
+      </g>
+
+      <!-- Row 2 -->
+      <g transform="translate(0, 26)">
+        <circle cx="8" cy="8" r="7" fill="#16a34a"/>
+        <text x="6" y="11" font-size="9" font-weight="700" fill="#ffffff">✓</text>
+        <text x="24" y="12" font-weight="600" fill="#0f172a">门禁 3: 缺陷后屈曲 Knockdown</text>
+        <text x="220" y="12" fill="#64748b">ρ = 0.779 &gt;= 0.650 (通过)</text>
+      </g>
+      <g transform="translate(440, 26)">
+        <circle cx="8" cy="8" r="7" fill="#16a34a"/>
+        <text x="6" y="11" font-size="9" font-weight="700" fill="#ffffff">✓</text>
+        <text x="24" y="12" font-weight="600" fill="#0f172a">门禁 4: 各向异性 Tsai-Wu 判据</text>
+        <text x="240" y="12" fill="#64748b">I_TW = 0.724 &lt;= 0.850 (通过)</text>
+      </g>
+
+      <!-- Row 3 -->
+      <g transform="translate(0, 52)">
+        <circle cx="8" cy="8" r="7" fill="#16a34a"/>
+        <text x="6" y="11" font-size="9" font-weight="700" fill="#ffffff">✓</text>
+        <text x="24" y="12" font-weight="600" fill="#0f172a">门禁 5: 轴向反力数值平衡残差</text>
+        <text x="220" y="12" fill="#64748b">Error = 0.006% &lt;= 0.050% (通过)</text>
+      </g>
+      <g transform="translate(440, 52)">
+        <rect x="24" y="0" width="180" height="20" rx="4" fill="#ecfdf5" stroke="#10b981" stroke-width="1"/>
+        <text x="32" y="14" font-weight="700" fill="#047857">综合工程合格结论: VERIFIED PASS</text>
+      </g>
+    </g>
+  </g>
+</svg>

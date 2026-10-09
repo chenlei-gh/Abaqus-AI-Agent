@@ -12,8 +12,13 @@
     "status": "COMPLETED",
     "engineering_status": "RESULT_VALID",
     "acceptance_passed": true,
-    "report_md_bytes": 72250,
-    "report_html_bytes": 721865
+    "report_html_bytes": 721865,
+    "report": {
+      "format": "html",
+      "path": "Case_03_Exhaust_Manifold_Report.html",
+      "bytes": 721865,
+      "self_contained": true
+    }
   },
   "physical_results": {
     "max_operating_temp_c": 615.4,
@@ -57,5 +62,5 @@
       "required_results": "PASS"
     }
   },
-  "audit_signature": "f266c9b41f9be27a01637036d237bd8e68f2a77dd65b3dd14f96039581d481fa"
+  "audit_signature": "918c863206046a364dcbab11c563c1166de5299e16677261c6367d8606d187b6"
 }

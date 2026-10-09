@@ -23,7 +23,7 @@ sys.path.insert(0, str(ROOT / "src"))
 from abaqus_ai_agent.acceptance import evaluate_result_acceptance
 from abaqus_ai_agent.contracts.intent import EngineeringIntent
 from abaqus_ai_agent.contracts.report import EngineeringReportData, ReportFigure
-from abaqus_ai_agent.reporting.renderer import render_markdown, render_html
+from abaqus_ai_agent.reporting.renderer import render_html, verify_html_self_contained
 from abaqus_ai_agent.execution.odb_rendering import (
     ContourPlotRequest,
     generate_headless_viewer_script,
@@ -696,7 +696,6 @@ def run_case_03_exhaust_manifold(workdir: Path, launcher: Optional[str] = None) 
     )
 
     # Render pure HTML deliverable report (strictly eliminating .md / .pdf formats per specification)
-    report_md = render_markdown(report_data)  # Tracked in memory for manifest metrics
     report_html = render_html(report_data)
 
     report_html_file = case_sub_dir / "Case_03_Exhaust_Manifold_Report.html"
@@ -705,6 +704,9 @@ def run_case_03_exhaust_manifold(workdir: Path, launcher: Optional[str] = None) 
 
     (p2_cases_dir / "Case_03_Exhaust_Manifold_Report.html").write_text(report_html, encoding="utf-8")
     (p2_cases_dir / "case_03_manifold_report.html").write_text(report_html, encoding="utf-8")
+
+    # Verify 100% self-contained contract (no external CSS/JS/img/fonts)
+    verify_html_self_contained(report_html_file)
 
     # Clean up any legacy markdown reports to enforce pure HTML delivery
     for obsolete_md in [
@@ -798,7 +800,6 @@ def run_case_03_exhaust_manifold(workdir: Path, launcher: Optional[str] = None) 
     # 8. Cryptographic Manifest Signature with Unified Case Schema
     import datetime
 
-    report_md_bytes = len(report_md.encode("utf-8"))
     report_html_bytes = len(report_html.encode("utf-8"))
 
     manifest_data = {
@@ -815,7 +816,12 @@ def run_case_03_exhaust_manifold(workdir: Path, launcher: Optional[str] = None) 
             "status": "COMPLETED",
             "engineering_status": "RESULT_VALID",
             "acceptance_passed": acceptance_result.passed,
-            "report_md_bytes": report_md_bytes,
+            "report": {
+                "format": "html",
+                "path": "case_03_manifold_report.html",
+                "bytes": report_html_bytes,
+                "self_contained": True,
+            },
             "report_html_bytes": report_html_bytes,
         },
         "physical_results": {

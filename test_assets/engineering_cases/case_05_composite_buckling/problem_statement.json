@@ -1,0 +1,73 @@
+{
+  "case_id": "CASE_05_COMPOSITE_CYLINDER_BUCKLING",
+  "title": "开孔层合复合材料圆柱壳特征值屈曲与 Riks 后屈曲分析 / Open-Hole Composite Cylindrical Shell Eigenvalue Buckling & Riks Post-Buckling Analysis",
+  "domain": "aerospace_composite_structures",
+  "source": "NASA SP-8007 'Buckling of Thin-Walled Circular Cylinders' & Abaqus 2025 Example Problems (Buckling of a composite shell with a circular hole)",
+  "problem_description": "评估航空航天薄壁碳纤维层合圆柱壳在中心圆孔几何突变与轴向均布压力作用下的线弹性特征值屈曲临界载荷（*BUCKLE, Subspace/Lanczos 求解器）、基于特征模态初始几何缺陷（*IMPERFECTION, 幅值 10% 壁厚）的非线性 Riks 弧长法后屈曲平衡路径演化、Tsai-Wu 复合材料各向异性损伤起始判据，以及对比 NASA SP-8007 理论解的开孔削弱折减系数 (Knockdown Factor)。",
+  "geometry": {
+    "shell_type": "thin_walled_circular_cylinder",
+    "cylinder_length_l_mm": 500.0,
+    "cylinder_radius_r_mm": 200.0,
+    "cylinder_wall_thickness_t_mm": 2.0,
+    "radius_to_thickness_ratio_r_t": 100.0,
+    "central_hole_diameter_d_mm": 40.0,
+    "hole_diameter_to_shell_circumference_ratio": 0.03183,
+    "hole_diameter_to_radius_ratio": 0.20
+  },
+  "materials": {
+    "composite_lamina": {
+      "material_name": "AS4/3501-6 碳纤维/环氧树脂单向预浸料 (Carbon/Epoxy Lamina)",
+      "lamina_thickness_mm": 0.25,
+      "number_of_plies": 8,
+      "layup_sequence": "[45/-45/0/90]_s",
+      "elastic_orthotropic": {
+        "e1_longitudinal_modulus_mpa": 142000.0,
+        "e2_transverse_modulus_mpa": 9800.0,
+        "nu12_major_poisson_ratio": 0.30,
+        "g12_inplane_shear_modulus_mpa": 6000.0,
+        "g13_outplane_shear_modulus_mpa": 6000.0,
+        "g23_transverse_shear_modulus_mpa": 3800.0
+      },
+      "strength_allowables_mpa": {
+        "xt_longitudinal_tensile_strength": 2200.0,
+        "xc_longitudinal_compressive_strength": 1500.0,
+        "yt_transverse_tensile_strength": 50.0,
+        "yc_transverse_compressive_strength": 200.0,
+        "s_inplane_shear_strength": 85.0
+      }
+    }
+  },
+  "loading_procedure": [
+    {
+      "step_number": 1,
+      "step_name": "Eigenvalue_Buckling_Extraction",
+      "analysis_type": "linear_perturbation_buckling",
+      "solver": "subspace_lanczos",
+      "modes_extracted": 5,
+      "description": "提取圆柱壳在轴向单位受压下的前 5 阶特征值模态与分歧屈曲载荷因子"
+    },
+    {
+      "step_number": 2,
+      "step_name": "Riks_Arc_Length_Post_Buckling",
+      "analysis_type": "nonlinear_static_riks",
+      "geometric_nonlinearity": "NLGEOM=YES",
+      "imperfection_amplitude_mm": 0.20,
+      "imperfection_mode": 1,
+      "description": "基于第 1 阶屈曲模态引入 10% 壁厚几何缺陷，采用修正 Riks 弧长法追踪后屈曲荷载-位移极值点平衡路径"
+    }
+  ],
+  "acceptance_criteria": {
+    "min_eigenvalue_buckling_load_kn": 100.0,
+    "min_riks_post_buckling_limit_load_kn": 80.0,
+    "min_knockdown_factor": 0.65,
+    "max_tsai_wu_failure_index": 0.85,
+    "max_reaction_equilibrium_error_percent": 0.05
+  },
+  "reference_benchmarks": {
+    "nasa_sp8007_theoretical_buckling_load_kn": 122.4,
+    "abaqus_example_linear_buckling_load_kn": 118.6,
+    "abaqus_example_riks_limit_load_kn": 92.4,
+    "abaqus_example_knockdown_factor": 0.779,
+    "abaqus_example_max_tsai_wu_index": 0.724
+  }
+}

@@ -117,29 +117,30 @@ def run_h1_report_generation():
         "cantilever beam subjected to a 1000 N tip load against theoretical and numerical criteria."
     )
     rendered = render_analysis_report(run, title=title, objective=objective)
-    report_md = rendered["markdown"]
     report_html = rendered["html"]
 
     # 7. Verification assertions on rendered outputs
-    assert "# " + title in report_md, "Title missing from Markdown report"
-    assert "## 1. Executive Summary" in report_md, "Executive summary missing"
-    assert "2.068" in report_md or "2.07" in report_md or "max_displacement" in report_md, "Displacement metric missing from report"
-    assert "471.2" in report_md or "root_mises" in report_md, "Stress metric missing from report"
-    assert "| Metric Name" in report_md, "Results table missing from Markdown report"
-    assert "| Criterion Name" in report_md, "Acceptance criteria table missing from Markdown report"
-    assert "tip_displacement_lower" in report_md, "Criteria names missing from report"
-    assert "PASS" in report_md, "Acceptance PASS verdict missing from report"
-    assert "StaticGoldenJob.odb" in report_md, "ODB path provenance missing from report"
-    assert "Steel" in report_md, "Material specification missing from report"
     assert "<html" in report_html.lower() and "</html>" in report_html.lower(), "HTML malformed"
+    assert title in report_html, "Title missing from HTML report"
+    assert "1. Executive Summary" in report_html, "Executive summary missing"
+    assert "2.068" in report_html or "2.07" in report_html or "max_displacement" in report_html, "Displacement metric missing from report"
+    assert "471.2" in report_html or "root_mises" in report_html, "Stress metric missing from report"
+    assert "tip_displacement_lower" in report_html, "Criteria names missing from report"
+    assert "PASS" in report_html, "Acceptance PASS verdict missing from report"
+    assert "StaticGoldenJob.odb" in report_html, "ODB path provenance missing from report"
+    assert "Steel" in report_html, "Material specification missing from report"
 
-    # 8. Save output files
-    md_out_path = validation_dir / "static_golden_engineering_report.md"
+    from abaqus_ai_agent.reporting.renderer import verify_html_self_contained
+    self_contained_audit = verify_html_self_contained(report_html)
+    assert self_contained_audit["self_contained"] is True, f"Report must be 100% self-contained: {self_contained_audit}"
+
+    # 8. Save single-file self-contained HTML deliverable and purge obsolete .md
     html_out_path = validation_dir / "static_golden_engineering_report.html"
-    with open(md_out_path, "w", encoding="utf-8") as f:
-        f.write(report_md)
-    with open(html_out_path, "w", encoding="utf-8") as f:
-        f.write(report_html)
+    html_out_path.write_text(report_html, encoding="utf-8")
+
+    md_out_path = validation_dir / "static_golden_engineering_report.md"
+    if md_out_path.exists():
+        md_out_path.unlink()
 
     # 9. Write H.1 Evidence Summary
     evidence_payload = {
@@ -147,9 +148,13 @@ def run_h1_report_generation():
         "case": "H.1_engineering_report_generator",
         "job_name": run.job_name,
         "run_id": run.id,
-        "markdown_report_path": "machine_validation/static_golden_engineering_report.md",
+        "report": {
+            "format": "html",
+            "path": "machine_validation/static_golden_engineering_report.html",
+            "bytes": html_out_path.stat().st_size,
+            "self_contained": True,
+        },
         "html_report_path": "machine_validation/static_golden_engineering_report.html",
-        "markdown_size_bytes": md_out_path.stat().st_size,
         "html_size_bytes": html_out_path.stat().st_size,
         "metrics_reported_count": len(metrics_list),
         "criteria_reported_count": len(crit_objs),
@@ -161,6 +166,7 @@ def run_h1_report_generation():
     with open(evidence_path, "w", encoding="utf-8") as f:
         json.dump(evidence_payload, f, indent=2)
 
+    return evidence_payload
     print("H.1 Engineering Report Generator E2E: PASS")
     print("  Markdown report: %s (%d bytes)" % (md_out_path.name, evidence_payload["markdown_size_bytes"]))
     print("  HTML report:     %s (%d bytes)" % (html_out_path.name, evidence_payload["html_size_bytes"]))

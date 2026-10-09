@@ -24,7 +24,7 @@ sys.path.insert(0, str(ROOT / "src"))
 from abaqus_ai_agent.acceptance import evaluate_result_acceptance
 from abaqus_ai_agent.contracts.intent import EngineeringIntent
 from abaqus_ai_agent.contracts.report import EngineeringReportData, ReportFigure
-from abaqus_ai_agent.reporting.renderer import render_markdown, render_html
+from abaqus_ai_agent.reporting.renderer import render_html, verify_html_self_contained
 from abaqus_ai_agent.execution.case_04_contours import render_all_case_04_assets
 
 
@@ -634,7 +634,6 @@ def run_case_04_subframe_fatigue(workdir: Optional[Path] = None) -> Dict[str, An
 
     # 7. Render Pure Single-File Self-Contained HTML Report
     print("\n[Step 7] Rendering Standalone Single-File Bilingual HTML Report...")
-    report_md = render_markdown(report_data)  # Tracked for manifest bytes metric
     report_html = render_html(report_data)
 
     report_html_file = case_sub_dir / "Case_04_Subframe_Durability_Report.html"
@@ -643,6 +642,9 @@ def run_case_04_subframe_fatigue(workdir: Optional[Path] = None) -> Dict[str, An
 
     (p2_cases_dir / "Case_04_Subframe_Durability_Report.html").write_text(report_html, encoding="utf-8")
     (p2_cases_dir / "case_04_subframe_report.html").write_text(report_html, encoding="utf-8")
+
+    # Verify 100% self-contained contract
+    verify_html_self_contained(report_html_file)
 
     # Enforce pure HTML delivery - strictly delete any legacy .md files
     for obsolete_md in [
@@ -674,7 +676,12 @@ def run_case_04_subframe_fatigue(workdir: Optional[Path] = None) -> Dict[str, An
             "status": "COMPLETED",
             "engineering_status": "RESULT_VALID",
             "acceptance_passed": True,
-            "report_md_bytes": len(report_md.encode("utf-8")),
+            "report": {
+                "format": "html",
+                "path": "case_04_subframe_report.html",
+                "bytes": report_html_size,
+                "self_contained": True,
+            },
             "report_html_bytes": report_html_size,
         },
         "physical_results": {

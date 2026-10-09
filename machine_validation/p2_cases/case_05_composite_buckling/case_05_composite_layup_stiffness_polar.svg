@@ -1,0 +1,124 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 950 520" width="100%" height="100%">
+  <defs>
+    <linearGradient id="bgGrad2" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#ffffff"/>
+      <stop offset="100%" stop-color="#f8fafc"/>
+    </linearGradient>
+    <filter id="shadow2" x="-5%" y="-5%" width="110%" height="110%">
+      <feDropShadow dx="0" dy="2" stdDeviation="3" flood-opacity="0.1"/>
+    </filter>
+  </defs>
+
+  <rect width="950" height="520" fill="url(#bgGrad2)" rx="10" stroke="#cbd5e1" stroke-width="1.5"/>
+
+  <!-- Title -->
+  <text x="35" y="38" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" font-size="18" font-weight="700" fill="#0f172a">
+    图 5: [45/-45/0/90]s 碳纤维准各向同性层合板各向异性刚度极坐标分布
+  </text>
+  <text x="35" y="60" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" font-size="13" fill="#64748b">
+    Figure 5: Quasi-Isotropic [45/-45/0/90]s Laminate In-Plane Stiffness Polar &amp; Ply Constitutive Layout
+  </text>
+
+  <!-- Left Side: Polar Plot (Center at cx=260, cy=290, Radius R=170) -->
+  <g transform="translate(260, 290)">
+    <!-- Polar circles: 20 GPa, 40 GPa, 60 GPa, 80 GPa -->
+    <circle cx="0" cy="0" r="42" fill="none" stroke="#e2e8f0" stroke-width="1"/>
+    <circle cx="0" cy="0" r="85" fill="none" stroke="#e2e8f0" stroke-width="1"/>
+    <circle cx="0" cy="0" r="128" fill="none" stroke="#e2e8f0" stroke-width="1"/>
+    <circle cx="0" cy="0" r="170" fill="none" stroke="#cbd5e1" stroke-width="1.5"/>
+
+    <!-- Polar rays -->
+    <line x1="-175" y1="0" x2="175" y2="0" stroke="#cbd5e1" stroke-width="1"/>
+    <line x1="0" y1="-175" x2="0" y2="175" stroke="#cbd5e1" stroke-width="1"/>
+    <line x1="-124" y1="-124" x2="124" y2="124" stroke="#e2e8f0" stroke-width="1" stroke-dasharray="3,3"/>
+    <line x1="-124" y1="124" x2="124" y2="-124" stroke="#e2e8f0" stroke-width="1" stroke-dasharray="3,3"/>
+
+    <!-- Angle Labels -->
+    <text x="185" y="4" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="11" fill="#64748b" text-anchor="start">0° (Axial)</text>
+    <text x="0" y="-185" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="11" fill="#64748b" text-anchor="middle">90° (Circ)</text>
+    <text x="-185" y="4" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="11" fill="#64748b" text-anchor="end">180°</text>
+    <text x="0" y="195" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="11" fill="#64748b" text-anchor="middle">270°</text>
+    <text x="135" y="-130" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="11" fill="#64748b">+45°</text>
+    <text x="135" y="140" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="11" fill="#64748b">-45°</text>
+
+    <!-- Polar Shape 1: AS4/3501-6 Single Lamina (Extremely anisotropic, E1=142, E2=9.8 GPa) - dashed blue -->
+    <!-- Scaled: 142 GPa = 170 px -> Scale = 1.197 px/GPa -->
+    <path d="M 170 0
+             C 170 -12 70 -15 11.7 -11.7
+             C 0 -11.7 0 -11.7 0 -11.7
+             C 0 0 0 11.7 11.7 11.7
+             C 70 15 170 12 170 0 Z"
+          fill="none" stroke="#0284c7" stroke-width="2" stroke-dasharray="4,3"/>
+
+    <!-- Polar Shape 2: [45/-45/0/90]s Laminate Ex(theta) - Almost perfect circle (Quasi-isotropic, Ex ~ 54.8 GPa = 65.6 px) -->
+    <circle cx="0" cy="0" r="65.6" fill="#10b981" fill-opacity="0.15" stroke="#059669" stroke-width="2.5"/>
+
+    <text x="0" y="-45" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="11" font-weight="700" fill="#047857" text-anchor="middle">
+      E_eff = 54.8 GPa (准各向同性圆)
+    </text>
+  </g>
+
+  <!-- Right Side: Layup Stack Table and Engineering Constants Card -->
+  <g transform="translate(520, 100)">
+    <!-- Card 1: 8-Ply Layup Definition -->
+    <rect width="390" height="200" rx="8" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.2" filter="url(#shadow2)"/>
+    <rect width="390" height="36" rx="8" fill="#f1f5f9"/>
+    <text x="18" y="24" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="13" font-weight="700" fill="#0f172a">
+      8层准各向同性对称平衡铺层配置 / 8-Ply Layup Stack
+    </text>
+
+    <!-- Plies Visual Stack -->
+    <!-- 8 plies colored bar -->
+    <g transform="translate(20, 52)">
+      <!-- Ply 1: +45° -->
+      <rect x="0" y="0" width="350" height="15" fill="#f59e0b" rx="2"/>
+      <text x="10" y="11" font-family="monospace" font-size="10" font-weight="700" fill="#ffffff">Ply 1: +45° (0.25 mm) - AS4/3501-6 顶层剪切铺层</text>
+      <!-- Ply 2: -45° -->
+      <rect x="0" y="17" width="350" height="15" fill="#d97706" rx="2"/>
+      <text x="10" y="28" font-family="monospace" font-size="10" font-weight="700" fill="#ffffff">Ply 2: -45° (0.25 mm) - AS4/3501-6 对称配对剪切层</text>
+      <!-- Ply 3: 0° -->
+      <rect x="0" y="34" width="350" height="15" fill="#2563eb" rx="2"/>
+      <text x="10" y="45" font-family="monospace" font-size="10" font-weight="700" fill="#ffffff">Ply 3:  0°  (0.25 mm) - 轴向主受压承载纤维层</text>
+      <!-- Ply 4: 90° -->
+      <rect x="0" y="51" width="350" height="15" fill="#059669" rx="2"/>
+      <text x="10" y="62" font-family="monospace" font-size="10" font-weight="700" fill="#ffffff">Ply 4: 90° (0.25 mm) - 环向抗鼓胀环箍纤维层</text>
+
+      <!-- Midplane line -->
+      <line x1="-5" y1="69" x2="355" y2="69" stroke="#dc2626" stroke-width="1.5" stroke-dasharray="4,2"/>
+      <text x="360" y="73" font-family="sans-serif" font-size="9" fill="#dc2626">对称中面</text>
+
+      <!-- Ply 5: 90° -->
+      <rect x="0" y="72" width="350" height="15" fill="#059669" rx="2"/>
+      <text x="10" y="83" font-family="monospace" font-size="10" font-weight="700" fill="#ffffff">Ply 5: 90° (0.25 mm) - 对称下层环向层</text>
+      <!-- Ply 6: 0° -->
+      <rect x="0" y="89" width="350" height="15" fill="#2563eb" rx="2"/>
+      <text x="10" y="100" font-family="monospace" font-size="10" font-weight="700" fill="#ffffff">Ply 6:  0°  (0.25 mm) - 对称下层轴向主承载层</text>
+      <!-- Ply 7: -45° -->
+      <rect x="0" y="106" width="350" height="15" fill="#d97706" rx="2"/>
+      <text x="10" y="117" font-family="monospace" font-size="10" font-weight="700" fill="#ffffff">Ply 7: -45° (0.25 mm) - 对称下层剪切层</text>
+      <!-- Ply 8: +45° -->
+      <rect x="0" y="123" width="350" height="15" fill="#f59e0b" rx="2"/>
+      <text x="10" y="134" font-family="monospace" font-size="10" font-weight="700" fill="#ffffff">Ply 8: +45° (0.25 mm) - 底层剪切铺层</text>
+    </g>
+
+    <!-- Card 2: Derived Effective Laminate Properties -->
+    <g transform="translate(0, 220)">
+      <rect width="390" height="160" rx="8" fill="#f8fafc" stroke="#cbd5e1" stroke-width="1.2"/>
+      <text x="18" y="26" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="13" font-weight="700" fill="#0f172a">
+        经典层合板理论 (CLT) 面内等效刚度常数
+      </text>
+
+      <g font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="12" fill="#334155" transform="translate(18, 50)">
+        <text x="0" y="0">等效轴向杨氏模量 E_x = <tspan font-weight="700" fill="#0284c7">54.82 GPa</tspan></text>
+        <text x="200" y="0">等效环向杨氏模量 E_y = <tspan font-weight="700" fill="#0284c7">54.82 GPa</tspan></text>
+
+        <text x="0" y="24">等效面内泊松比 ν_xy = <tspan font-weight="700" fill="#0284c7">0.312</tspan></text>
+        <text x="200" y="24">等效面内剪切模量 G_xy = <tspan font-weight="700" fill="#0284c7">20.89 GPa</tspan></text>
+
+        <text x="0" y="48">拉弯耦合矩阵 [B] = <tspan font-weight="700" fill="#16a34a">[0] (完全无拉弯耦合)</tspan></text>
+        <text x="0" y="72">弯曲刚度矩阵 D11 = <tspan font-weight="700" fill="#475569">41.8 N·m</tspan> | D22 = <tspan font-weight="700" fill="#475569">32.6 N·m</tspan></text>
+        <text x="0" y="96" fill="#dc2626" font-weight="600">★ 对称铺层消除热压罐固化残余弯曲翘曲风险</text>
+      </g>
+    </g>
+  </g>
+</svg>

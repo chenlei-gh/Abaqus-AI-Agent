@@ -535,7 +535,6 @@ def run_case_02_rpv_closure(workdir: Path, launcher: Optional[str] = None) -> Di
         },
     )
 
-    report_md = render_markdown(report_data)  # Tracked in memory for manifest provenance
     report_html = render_html(report_data)
 
     p2_cases_dir = ROOT / "machine_validation" / "p2_cases"
@@ -581,7 +580,12 @@ def run_case_02_rpv_closure(workdir: Path, launcher: Optional[str] = None) -> Di
             "status": "COMPLETED",
             "engineering_status": "RESULT_VALID",
             "acceptance_passed": True,
-            "report_md_bytes": len(report_md.encode("utf-8")),
+            "report": {
+                "format": "html",
+                "path": "Case_02_RPV_Closure_Report.html",
+                "bytes": len(report_html.encode("utf-8")),
+                "self_contained": True,
+            },
             "report_html_bytes": len(report_html.encode("utf-8")),
         },
         "physical_results": {

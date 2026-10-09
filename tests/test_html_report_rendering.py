@@ -5,6 +5,7 @@ from abaqus_ai_agent.reporting.renderer import (
     render_markdown,
     render_html,
     render_analysis_report,
+    verify_html_self_contained,
     _resolve_image_path,
     _render_html_figure,
     _is_chinese_report,
@@ -148,3 +149,66 @@ def test_html_report_missing_image_placeholder():
     assert '<html lang="en">' in html_en
     assert 'figure-missing' in html_en
     assert 'Visual Engineering Asset' in html_en
+
+
+def test_verify_html_self_contained():
+    # 1. Clean self-contained HTML
+    clean_html = """<!doctype html><html><head><style>body { color: red; }</style></head>
+    <body><img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAAB"></body></html>"""
+    audit = verify_html_self_contained(clean_html)
+    assert audit["self_contained"] is True
+    assert audit["external_references_count"] == 0
+
+    # 2. Polluted HTML with external stylesheet and external image
+    polluted_html = """<!doctype html><html><head>
+    <link rel="stylesheet" href="https://cdn.example.com/styles.css">
+    </head><body><img src="images/external_plot.png"></body></html>"""
+    polluted_audit = verify_html_self_contained(polluted_html)
+    assert polluted_audit["self_contained"] is False
+    assert polluted_audit["has_external_css"] is True
+    assert polluted_audit["has_external_images"] is True
+    assert polluted_audit["external_references_count"] == 2
+
+
+def test_html_report_rich_text_markdown_rendering():
+    """Verify objective rich text containing ### headings, **bold**, lists, and markdown tables are parsed into semantic HTML."""
+    objective_text = (
+        "### 1.1 工程背景 / Engineering Background\n\n"
+        "本案例针对复合材料壳段在轴向载荷下的稳定性进行评估。\n\n"
+        "### 1.2 评估模式 / Assessment Modes\n\n"
+        "1. **特征值分歧屈曲模态 / Eigenvalue Bifurcation Modes**: 提取前 5 阶分歧屈曲载荷因子；\n"
+        "2. **初始几何缺陷敏感性 / Geometric Imperfection**: 引入 10% 壁厚初始缺陷。\n\n"
+        "### 1.3 核心指标总览 / Executive Summary\n\n"
+        "| 评估指标 / Metric | 目标限值 / Limit | 模拟值 / Simulated | 状态 / Status |\n"
+        "| :--- | :--- | :--- | :--- |\n"
+        "| **第1阶特征值屈曲载荷** | >= 100.0 kN | 118.6 kN | PASS |\n"
+        "| **极限后屈曲荷载** | >= 80.0 kN | 92.4 kN | PASS |\n\n"
+        "**总体裁决结论 / Overall Verdict**: **合格 (VERIFIED PASS)** — 满足工程规范要求。"
+    )
+
+    report = EngineeringReportData(
+        title="富文本渲染测试报告 / Rich Text Rendering Test Report",
+        objective=objective_text,
+        acceptance=True,
+    )
+
+    html_out = render_html(report)
+
+    # 1. Headings parsed to <h3>
+    assert '<h3 class="subsection-heading">1.1 工程背景 / Engineering Background</h3>' in html_out
+    assert '<h3 class="subsection-heading">1.2 评估模式 / Assessment Modes</h3>' in html_out
+    assert '<h3 class="subsection-heading">1.3 核心指标总览 / Executive Summary</h3>' in html_out
+
+    # 2. Lists parsed to .list-item with bold rendered
+    assert '<span class="list-num">1.</span>' in html_out
+    assert '<strong>特征值分歧屈曲模态 / Eigenvalue Bifurcation Modes</strong>' in html_out
+    assert '<span class="list-num">2.</span>' in html_out
+
+    # 3. Table parsed to .report-table with header and rows
+    assert '<table class="report-table">' in html_out
+    assert '<th>评估指标 / Metric</th>' in html_out
+    assert '<td><strong>第1阶特征值屈曲载荷</strong></td>' in html_out
+    assert '<span class="status-badge badge-pass">PASS</span>' in html_out
+
+    # 4. Paragraph with bold rendered
+    assert '<strong>总体裁决结论 / Overall Verdict</strong>: <strong>合格 (VERIFIED PASS)</strong>' in html_out

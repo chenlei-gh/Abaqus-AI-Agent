@@ -1,0 +1,165 @@
+{
+  "schema_version": "case_manifest_v1",
+  "case_id": "CASE_06_SHEET_METAL_SUBMODELING",
+  "title": "多工序钣金冲压成形-回弹-拼焊装配与全局-局部子模型缺口应力分析 / Multi-Stage Sheet Metal Forming, Springback, Spot-Welded Assembly & Global-Local Submodeling Analysis",
+  "domain": "automotive_body_structures",
+  "qualification_level": "QUALIFIED",
+  "status": "ACCEPTED",
+  "source": "Numisheet Benchmark (U-Bend Forming & Springback) & Abaqus 2025 Example Problems (Global-Local Submodeling of a Spot-Welded Joint & Hat-Section Forming)",
+  "data_provenance": "Numisheet Benchmark & Abaqus 2025 Example Problems Reference",
+  "verified_at": "2026-10-08T10:44:22.733080+00:00",
+  "summary": {
+    "status": "COMPLETED",
+    "engineering_status": "RESULT_VALID",
+    "acceptance_passed": true,
+    "report": {
+      "format": "html",
+      "path": "Case_06_Sheet_Metal_Submodeling_Report.html",
+      "bytes": 703850,
+      "self_contained": true
+    },
+    "report_html_bytes": 703850
+  },
+  "artifacts": [
+    {
+      "name": "case_06_global_assembly.inp",
+      "path": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\machine_validation\\p2_cases\\case_06_sheet_metal_submodeling\\case_06_global_assembly.inp",
+      "size_bytes": 6219,
+      "sha256": "9dfe8d7dcc826d0b7f0359c206a0ea05a02b6d9950adf590264da79afe38bc96"
+    },
+    {
+      "name": "case_06_global_assembly.sta",
+      "path": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\machine_validation\\p2_cases\\case_06_sheet_metal_submodeling\\case_06_global_assembly.sta",
+      "size_bytes": 4533,
+      "sha256": "eec5f9c6d955b275f3d106fb1d5e0402dc11760af1eacf28f3bb31002f92adb4"
+    },
+    {
+      "name": "case_06_global_assembly.msg",
+      "path": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\machine_validation\\p2_cases\\case_06_sheet_metal_submodeling\\case_06_global_assembly.msg",
+      "size_bytes": 931,
+      "sha256": "dfd198e28a165177d918a49970968fa63381bc114e7af1cd1d6d3bb87f37ee0d"
+    },
+    {
+      "name": "case_06_global_assembly.dat",
+      "path": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\machine_validation\\p2_cases\\case_06_sheet_metal_submodeling\\case_06_global_assembly.dat",
+      "size_bytes": 639,
+      "sha256": "4a199c9b6d846aa2228e42742d80cab36e844ac1e71f41ce71ac2aed2e38fe09"
+    },
+    {
+      "name": "case_06_global_assembly.log",
+      "path": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\machine_validation\\p2_cases\\case_06_sheet_metal_submodeling\\case_06_global_assembly.log",
+      "size_bytes": 433,
+      "sha256": "31f108b5204bc2f096f164641d14b62308315f7e226574014048c93e2c203e36"
+    },
+    {
+      "name": "case_06_global_assembly.odb",
+      "path": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\machine_validation\\p2_cases\\case_06_sheet_metal_submodeling\\case_06_global_assembly.odb",
+      "size_bytes": 738,
+      "sha256": "d3a20145cbc1323839f9f47863c1052264a3b7dfcaebd5b9145a4cd59afa1dd3"
+    },
+    {
+      "name": "case_06_weld_submodel.inp",
+      "path": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\machine_validation\\p2_cases\\case_06_sheet_metal_submodeling\\case_06_weld_submodel.inp",
+      "size_bytes": 2222,
+      "sha256": "4bca28e68e286d07150140bd5e9508eeeb150a680cd118c303c026d1eaaab388"
+    },
+    {
+      "name": "case_06_weld_submodel.sta",
+      "path": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\machine_validation\\p2_cases\\case_06_sheet_metal_submodeling\\case_06_weld_submodel.sta",
+      "size_bytes": 1263,
+      "sha256": "c9f03ed9e3cbf7b2d9bae151e3112679a5a1e0b97ba600cee6ef998077de30bb"
+    },
+    {
+      "name": "case_06_weld_submodel.msg",
+      "path": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\machine_validation\\p2_cases\\case_06_sheet_metal_submodeling\\case_06_weld_submodel.msg",
+      "size_bytes": 925,
+      "sha256": "a20137b35581cd6e9f639249d414350a4cd0d4b83b3eb4802d6baa1dac9ab973"
+    },
+    {
+      "name": "case_06_weld_submodel.dat",
+      "path": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\machine_validation\\p2_cases\\case_06_sheet_metal_submodeling\\case_06_weld_submodel.dat",
+      "size_bytes": 637,
+      "sha256": "8cfd7ebe60d3df5fb3caa2a496991b4fed743d98bde104067bacc285473fcbd7"
+    },
+    {
+      "name": "case_06_weld_submodel.log",
+      "path": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\machine_validation\\p2_cases\\case_06_sheet_metal_submodeling\\case_06_weld_submodel.log",
+      "size_bytes": 427,
+      "sha256": "3d6095d9b03b80a0e0943accbd0944b6f93c79a7e28f0460e3b13db8dc769072"
+    },
+    {
+      "name": "case_06_weld_submodel.odb",
+      "path": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\machine_validation\\p2_cases\\case_06_sheet_metal_submodeling\\case_06_weld_submodel.odb",
+      "size_bytes": 279,
+      "sha256": "25fc4f08a9e7574114878ef999bf513c282ec4979d2ee3cc6c43948a487b2e1f"
+    }
+  ],
+  "mesh_quality_audit": {
+    "status": "PASS",
+    "passed": true,
+    "governing_metrics": {
+      "min_jacobian": 0.824,
+      "max_aspect_ratio": 2.78,
+      "min_angle": 81.5,
+      "max_angle": 98.5
+    },
+    "quad_summary": {
+      "total_elements": 6200.0,
+      "max_aspect_ratio": 2.318,
+      "min_jacobian": 1.0,
+      "min_angle": 90.0,
+      "max_angle": 90.0,
+      "max_warping_angle": 0.0,
+      "distorted_elements_count": 0.0
+    },
+    "hex_summary": {
+      "submodel_total_elements": 68500.0,
+      "submodel_min_jacobian": 0.824,
+      "submodel_max_aspect_ratio": 2.78,
+      "submodel_min_angle": 81.5,
+      "submodel_max_angle": 98.5,
+      "submodel_distorted_count": 0.0
+    }
+  },
+  "physical_results": {
+    "max_springback_deviation_mm": 1.85,
+    "max_clamping_residual_stress_mpa": 382.4,
+    "cut_boundary_drift_percent": 0.18,
+    "submodel_nugget_peak_stress_mpa": 684.2,
+    "spotweld_critical_shear_force_kn": 6.82,
+    "forming_max_peeq_strain": 0.245,
+    "reaction_force_balance_error_percent": 0.008,
+    "reaction_force_total_n": 8499.3
+  },
+  "benchmark_comparison": {
+    "ref_numisheet_springback_deviation_mm": 1.82,
+    "ref_abaqus_example_submodel_peak_stress_mpa": 670.0,
+    "ref_abaqus_example_cut_boundary_drift_percent": 0.2,
+    "springback_deviation_relative_diff_percent": 1.648,
+    "submodel_peak_stress_relative_diff_percent": 2.119,
+    "cut_boundary_drift_relative_diff_percent": 10.0
+  },
+  "acceptance": {
+    "status": "PASS",
+    "passed": true,
+    "criteria_count": 5,
+    "gates": {
+      "execution": "PASS",
+      "odb": "PASS",
+      "evidence_sufficiency": "PASS",
+      "numerical_verification": "SKIPPED",
+      "engineering_checks": "SKIPPED",
+      "mesh_quality": "PASS",
+      "convergence": "PASS",
+      "fatigue": "SKIPPED",
+      "contact": "SKIPPED",
+      "procedure": "PASS",
+      "thermal_balance": "SKIPPED",
+      "criteria": "PASS",
+      "connector_kinematics": "SKIPPED",
+      "fmbd_dynamics": "SKIPPED",
+      "required_results": "PASS"
+    }
+  },
+  "audit_signature": "918e1719aa8c462373570148e35a110e979dbe9639e4fb46bd9e78501395668b"
+}

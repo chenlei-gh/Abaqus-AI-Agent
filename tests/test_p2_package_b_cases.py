@@ -34,6 +34,12 @@ CASE_03_MANIFEST = CASE_03_SUB_DIR / "case_03_manifold_manifest.json"
 CASE_04_PROBLEM = ROOT / "test_assets" / "engineering_cases" / "case_04_subframe_fatigue" / "problem_statement.json"
 CASE_04_SUB_DIR = ROOT / "machine_validation" / "p2_cases" / "case_04_subframe_durability"
 CASE_04_MANIFEST = CASE_04_SUB_DIR / "case_04_subframe_manifest.json"
+CASE_05_PROBLEM = ROOT / "test_assets" / "engineering_cases" / "case_05_composite_buckling" / "problem_statement.json"
+CASE_05_SUB_DIR = ROOT / "machine_validation" / "p2_cases" / "case_05_composite_buckling"
+CASE_05_MANIFEST = CASE_05_SUB_DIR / "case_05_composite_buckling_manifest.json"
+CASE_06_PROBLEM = ROOT / "test_assets" / "engineering_cases" / "case_06_sheet_metal_submodeling" / "problem_statement.json"
+CASE_06_SUB_DIR = ROOT / "machine_validation" / "p2_cases" / "case_06_sheet_metal_submodeling"
+CASE_06_MANIFEST = CASE_06_SUB_DIR / "case_06_sheet_metal_manifest.json"
 
 
 def test_case_01_problem_statement_specification():
@@ -76,7 +82,10 @@ def test_case_01_flange_manifest_integrity():
     assert summary.get("status") == "COMPLETED"
     assert summary.get("engineering_status") == "RESULT_VALID"
     assert summary.get("acceptance_passed") is True
-    assert summary.get("report_md_bytes", 0) > 3000
+    report_info = summary.get("report", {})
+    assert report_info.get("format") == "html"
+    assert report_info.get("self_contained") is True
+    assert report_info.get("bytes", 0) > 4000
     assert summary.get("report_html_bytes", 0) > 4000
 
     # 4. Physical results check
@@ -170,7 +179,10 @@ def test_case_02_rpv_manifest_integrity():
     assert summary.get("status") == "COMPLETED"
     assert summary.get("engineering_status") == "RESULT_VALID"
     assert summary.get("acceptance_passed") is True
-    assert summary.get("report_md_bytes", 0) > 3000
+    report_info = summary.get("report", {})
+    assert report_info.get("format") == "html"
+    assert report_info.get("self_contained") is True
+    assert report_info.get("bytes", 0) > 4000
     assert summary.get("report_html_bytes", 0) > 4000
 
     # 4. Physical results check
@@ -270,7 +282,10 @@ def test_case_03_manifold_manifest_integrity():
     assert summary.get("status") == "COMPLETED"
     assert summary.get("engineering_status") == "RESULT_VALID"
     assert summary.get("acceptance_passed") is True
-    assert summary.get("report_md_bytes", 0) > 3000
+    report_info = summary.get("report", {})
+    assert report_info.get("format") == "html"
+    assert report_info.get("self_contained") is True
+    assert report_info.get("bytes", 0) > 4000
     assert summary.get("report_html_bytes", 0) > 4000
 
     # 4. Physical results check
@@ -419,7 +434,10 @@ def test_case_04_subframe_manifest_integrity():
     assert summary.get("status") == "COMPLETED"
     assert summary.get("engineering_status") == "RESULT_VALID"
     assert summary.get("acceptance_passed") is True
-    assert summary.get("report_md_bytes", 0) > 3000
+    report_info = summary.get("report", {})
+    assert report_info.get("format") == "html"
+    assert report_info.get("self_contained") is True
+    assert report_info.get("bytes", 0) > 4000
     assert summary.get("report_html_bytes", 0) > 100_000
 
     # 4. Physical results check
@@ -526,6 +544,410 @@ def test_case_04_negative_probes_fatigue_damage_and_stress():
     assert any("criterion:max_bushing_relative_deflection" in f for f in res_bushing.failures)
 
 
+def test_case_05_problem_statement_specification():
+    assert CASE_05_PROBLEM.is_file(), f"Problem statement missing at {CASE_05_PROBLEM}"
+    with open(CASE_05_PROBLEM, "r", encoding="utf-8") as f:
+        problem = json.load(f)
+
+    assert problem.get("case_id") == "CASE_05_COMPOSITE_CYLINDER_BUCKLING"
+    assert "Composite" in problem.get("title", "")
+    assert problem.get("geometry", {}).get("cylinder_radius_r_mm") == 200.0
+    assert problem.get("geometry", {}).get("central_hole_diameter_d_mm") == 40.0
+    assert len(problem.get("loading_procedure", [])) == 2
+    assert problem.get("acceptance_criteria", {}).get("min_eigenvalue_buckling_load_kn") == 100.0
+    assert problem.get("acceptance_criteria", {}).get("min_riks_post_buckling_limit_load_kn") == 80.0
+    assert problem.get("acceptance_criteria", {}).get("max_tsai_wu_failure_index") == 0.85
+
+
+def test_case_05_composite_buckling_manifest_integrity():
+    assert CASE_05_MANIFEST.is_file(), f"Manifest missing at {CASE_05_MANIFEST}"
+
+    with open(CASE_05_MANIFEST, "r", encoding="utf-8") as f:
+        manifest = json.load(f)
+
+    # 1. Metadata and schema verification
+    assert manifest.get("schema_version") == "case_manifest_v1"
+    assert manifest.get("case_id") == "CASE_05_COMPOSITE_CYLINDER_BUCKLING"
+    assert manifest.get("qualification_level") == "QUALIFIED"
+    assert manifest.get("status") == "ACCEPTED"
+
+    # 2. Cryptographic signature check
+    signature = manifest.get("audit_signature")
+    assert signature is not None and len(signature) == 64
+
+    manifest_copy = dict(manifest)
+    manifest_copy.pop("audit_signature", None)
+    expected_hash = hashlib.sha256(
+        json.dumps(manifest_copy, sort_keys=True).encode("utf-8")
+    ).hexdigest()
+    assert signature == expected_hash, "Cryptographic audit signature mismatch or manifest tampered!"
+
+    # 3. Summary & Deliverable Reports check
+    summary = manifest.get("summary", {})
+    assert summary.get("status") == "COMPLETED"
+    assert summary.get("engineering_status") == "RESULT_VALID"
+    assert summary.get("acceptance_passed") is True
+    report_info = summary.get("report", {})
+    assert report_info.get("format") == "html"
+    assert report_info.get("self_contained") is True
+    assert report_info.get("bytes", 0) > 100_000
+    assert summary.get("report_html_bytes", 0) > 100_000
+
+    # 4. Physical results check
+    phys = manifest.get("physical_results", {})
+    assert phys.get("mode_1_eigenvalue_buckling_load_kn", 0.0) >= 100.0
+    assert phys.get("riks_post_buckling_limit_load_kn", 0.0) >= 80.0
+    assert phys.get("knockdown_factor", 0.0) >= 0.650
+    assert phys.get("max_tsai_wu_failure_index", 1.0) <= 0.850
+    assert phys.get("reaction_force_balance_error_percent", 1.0) <= 0.050
+
+    # 5. Benchmark comparison check
+    bench = manifest.get("benchmark_comparison", {})
+    assert bench.get("linear_buckling_relative_diff_percent", 100.0) < 5.0
+    assert bench.get("riks_limit_load_relative_diff_percent", 100.0) < 5.0
+
+    # 6. Single-exit acceptance check
+    acc = manifest.get("acceptance", {})
+    assert acc.get("status") == "PASS"
+    assert acc.get("passed") is True
+    assert acc.get("criteria_count") == 5
+
+
+def test_case_05_negative_probes_buckling_and_tsai_wu():
+    """Negative Probes: Insufficient buckling load or excessive Tsai-Wu failure index must FAIL."""
+    class ConvergenceCheck:
+        converged = True
+
+    criteria = [
+        {"name": "min_eigenvalue_buckling_load", "value_key": "buckling_load", "operator": ">=", "limit": 100.0, "unit": "kN"},
+        {"name": "min_riks_post_buckling_limit_load", "value_key": "limit_load", "operator": ">=", "limit": 80.0, "unit": "kN"},
+        {"name": "max_tsai_wu_failure_index", "value_key": "tsai_wu_index", "operator": "<=", "limit": 0.850, "unit": "-"},
+    ]
+
+    # Probe 1: Buckling load collapses below threshold (72.0 kN < 80.0 kN limit)
+    failed_values_load = {
+        "buckling_load": 88.0,  # Below 100.0 kN
+        "limit_load": 72.0,     # Below 80.0 kN
+        "tsai_wu_index": 0.650,
+        "max_displacement": 3.20,
+        "reaction_force": 72000.0,
+    }
+    res_load = evaluate_result_acceptance(
+        result_status="completed",
+        values=failed_values_load,
+        criteria=criteria,
+        convergence=ConvergenceCheck(),
+        physics_domain="buckling",
+        require_evidence=False,
+    )
+    assert not res_load.passed
+    assert res_load.status == "FAIL"
+    assert any("criterion:min_eigenvalue_buckling_load" in f or "criterion:min_riks_post_buckling_limit_load" in f for f in res_load.failures)
+
+    # Probe 2: Excessive stress concentration causes composite rupture (Tsai-Wu 0.96 > 0.85)
+    failed_values_tsai_wu = {
+        "buckling_load": 118.6,
+        "limit_load": 92.4,
+        "tsai_wu_index": 0.960,  # Exceeds 0.850
+        "max_displacement": 2.45,
+        "reaction_force": 92400.0,
+    }
+    res_tw = evaluate_result_acceptance(
+        result_status="completed",
+        values=failed_values_tsai_wu,
+        criteria=criteria,
+        convergence=ConvergenceCheck(),
+        physics_domain="buckling",
+        require_evidence=False,
+    )
+    assert not res_tw.passed
+    assert res_tw.status == "FAIL"
+    assert any("criterion:max_tsai_wu_failure_index" in f for f in res_tw.failures)
+
+
+def test_case_06_problem_statement_specification():
+    assert CASE_06_PROBLEM.is_file(), f"Problem statement missing at {CASE_06_PROBLEM}"
+    with open(CASE_06_PROBLEM, "r", encoding="utf-8") as f:
+        problem = json.load(f)
+
+    assert problem.get("case_id") == "CASE_06_SHEET_METAL_SUBMODELING"
+    assert "Sheet Metal" in problem.get("title", "")
+    assert problem.get("geometry", {}).get("fastening", {}).get("spot_weld_count") == 6
+    assert problem.get("geometry", {}).get("hat_channel", {}).get("thickness_t1_mm") == 1.60
+    assert len(problem.get("loading_procedure", [])) == 5
+    assert problem.get("acceptance_criteria", {}).get("max_springback_deviation_mm") == 2.50
+    assert problem.get("acceptance_criteria", {}).get("max_clamping_residual_stress_mpa") == 450.0
+    assert problem.get("acceptance_criteria", {}).get("max_cut_boundary_drift_percent") == 1.00
+    assert problem.get("acceptance_criteria", {}).get("max_submodel_nugget_peak_stress_mpa") == 750.0
+
+
+def test_case_06_sheet_metal_submodeling_manifest_integrity():
+    assert CASE_06_MANIFEST.is_file(), f"Manifest missing at {CASE_06_MANIFEST}"
+
+    with open(CASE_06_MANIFEST, "r", encoding="utf-8") as f:
+        manifest = json.load(f)
+
+    # 1. Metadata and schema verification
+    assert manifest.get("schema_version") == "case_manifest_v1"
+    assert manifest.get("case_id") == "CASE_06_SHEET_METAL_SUBMODELING"
+    assert manifest.get("qualification_level") == "QUALIFIED"
+    assert manifest.get("status") == "ACCEPTED"
+
+    # 2. Cryptographic signature check
+    signature = manifest.get("audit_signature")
+    assert signature is not None and len(signature) == 64
+
+    manifest_copy = dict(manifest)
+    manifest_copy.pop("audit_signature", None)
+    expected_hash = hashlib.sha256(
+        json.dumps(manifest_copy, sort_keys=True).encode("utf-8")
+    ).hexdigest()
+    assert signature == expected_hash, "Cryptographic audit signature mismatch or manifest tampered!"
+
+    # 3. Summary & Deliverable Reports check
+    summary = manifest.get("summary", {})
+    assert summary.get("status") == "COMPLETED"
+    assert summary.get("engineering_status") == "RESULT_VALID"
+    assert summary.get("acceptance_passed") is True
+    report_info = summary.get("report", {})
+    assert report_info.get("format") == "html"
+    assert report_info.get("self_contained") is True
+    assert report_info.get("bytes", 0) > 100_000
+    assert summary.get("report_html_bytes", 0) > 100_000
+
+    # 4. Physical results check
+    phys = manifest.get("physical_results", {})
+    assert phys.get("max_springback_deviation_mm", 10.0) <= 2.50
+    assert phys.get("max_clamping_residual_stress_mpa", 1000.0) <= 450.0
+    assert phys.get("cut_boundary_drift_percent", 10.0) <= 1.00
+    assert phys.get("submodel_nugget_peak_stress_mpa", 1000.0) <= 750.0
+    assert phys.get("reaction_force_balance_error_percent", 1.0) <= 0.050
+
+    # 5. Benchmark comparison check
+    bench = manifest.get("benchmark_comparison", {})
+    assert bench.get("springback_deviation_relative_diff_percent", 100.0) < 5.0
+    assert bench.get("submodel_peak_stress_relative_diff_percent", 100.0) < 5.0
+
+    # 6. Single-exit acceptance check
+    acc = manifest.get("acceptance", {})
+    assert acc.get("status") == "PASS"
+    assert acc.get("passed") is True
+    assert acc.get("criteria_count") == 5
+
+    # 7. Machine solver artifacts check
+    artifacts = manifest.get("artifacts", [])
+    assert len(artifacts) >= 12, "Solver artifacts (.inp, .sta, .msg, .dat, .log, .odb) must be tracked in manifest"
+    artifact_names = [a.get("name") for a in artifacts]
+    assert "case_06_global_assembly.inp" in artifact_names
+    assert "case_06_weld_submodel.inp" in artifact_names
+    assert "case_06_global_assembly.sta" in artifact_names
+    assert "case_06_weld_submodel.sta" in artifact_names
+    assert "case_06_global_assembly.msg" in artifact_names
+    assert "case_06_weld_submodel.msg" in artifact_names
+    assert "case_06_global_assembly.log" in artifact_names
+    assert "case_06_weld_submodel.log" in artifact_names
+    assert "case_06_global_assembly.odb" in artifact_names
+    assert "case_06_weld_submodel.odb" in artifact_names
+
+    # 8. True Mesh Quality Audit check
+    mesh_audit = manifest.get("mesh_quality_audit", {})
+    assert mesh_audit.get("status") == "PASS"
+    assert mesh_audit.get("passed") is True
+    gov = mesh_audit.get("governing_metrics", {})
+    assert gov.get("min_jacobian", 0.0) >= 0.60
+    assert gov.get("max_aspect_ratio", 100.0) <= 4.00
+    assert gov.get("min_angle", 0.0) >= 45.0
+    assert gov.get("max_angle", 180.0) <= 135.0
+
+
+def test_case_06_negative_probes_springback_and_submodel_stress():
+    """Negative Probes: Excessive springback warpage or nugget notch over-stress must FAIL."""
+    class ConvergenceCheck:
+        converged = True
+
+    criteria = [
+        {"name": "max_springback_deviation", "value_key": "springback_deviation", "operator": "<=", "limit": 2.50, "unit": "mm"},
+        {"name": "max_clamping_residual_stress", "value_key": "clamping_stress", "operator": "<=", "limit": 450.0, "unit": "MPa"},
+        {"name": "max_cut_boundary_drift", "value_key": "cut_boundary_drift", "operator": "<=", "limit": 1.00, "unit": "%"},
+        {"name": "max_submodel_nugget_peak_stress", "value_key": "nugget_peak_stress", "operator": "<=", "limit": 750.0, "unit": "MPa"},
+        {"name": "max_reaction_balance_error", "value_key": "reaction_error_percent", "operator": "<=", "limit": 0.050, "unit": "%"},
+    ]
+
+    # Probe 1: Springback warpage collapses tolerance (3.42 mm > 2.50 mm limit)
+    failed_values_springback = {
+        "springback_deviation": 3.42,
+        "clamping_stress": 382.4,
+        "cut_boundary_drift": 0.18,
+        "nugget_peak_stress": 684.2,
+        "reaction_error_percent": 0.008,
+        "reaction_force": 8499.3,
+        "max_displacement": 3.42,
+        "max_mises": 684.2,
+    }
+    res_sb = evaluate_result_acceptance(
+        result_status="completed",
+        values=failed_values_springback,
+        criteria=criteria,
+        convergence=ConvergenceCheck(),
+        procedure_verification=True,
+        physics_domain="plasticity",
+        require_evidence=False,
+    )
+    assert not res_sb.passed
+    assert res_sb.status == "FAIL"
+    assert any("criterion:max_springback_deviation" in f for f in res_sb.failures)
+
+    # Probe 2: Weld nugget stress exceeds material yield (820.0 MPa > 750.0 MPa limit)
+    failed_values_notch = {
+        "springback_deviation": 1.85,
+        "clamping_stress": 382.4,
+        "cut_boundary_drift": 0.18,
+        "nugget_peak_stress": 820.0,  # Rupture yield
+        "reaction_error_percent": 0.008,
+        "reaction_force": 8499.3,
+        "max_displacement": 1.85,
+        "max_mises": 820.0,
+    }
+    res_notch = evaluate_result_acceptance(
+        result_status="completed",
+        values=failed_values_notch,
+        criteria=criteria,
+        convergence=ConvergenceCheck(),
+        procedure_verification=True,
+        physics_domain="plasticity",
+        require_evidence=False,
+    )
+    assert not res_notch.passed
+    assert res_notch.status == "FAIL"
+    assert any("criterion:max_submodel_nugget_peak_stress" in f for f in res_notch.failures)
+
+    # Probe 3: Submodel boundary cut drift exceeds fidelity gate (1.85% > 1.00%)
+    failed_values_drift = {
+        "springback_deviation": 1.85,
+        "clamping_stress": 382.4,
+        "cut_boundary_drift": 1.85,  # Interpolation drift error
+        "nugget_peak_stress": 684.2,
+        "reaction_error_percent": 0.008,
+        "reaction_force": 8499.3,
+        "max_displacement": 1.85,
+        "max_mises": 684.2,
+    }
+    res_drift = evaluate_result_acceptance(
+        result_status="completed",
+        values=failed_values_drift,
+        criteria=criteria,
+        convergence=ConvergenceCheck(),
+        procedure_verification=True,
+        physics_domain="plasticity",
+        require_evidence=False,
+    )
+    assert not res_drift.passed
+    assert res_drift.status == "FAIL"
+    assert any("criterion:max_cut_boundary_drift" in f for f in res_drift.failures)
+
+
+def test_case_06_mesh_quality_gate_algorithm_integrity():
+    """Verify authentic mesh quality audit algorithm and fail-closed distorted element gate."""
+    from abaqus_ai_agent.execution.case_06_mesh_audit import (
+        audit_case_06_mesh_quality,
+        audit_quad_element,
+    )
+    from abaqus_ai_agent.mesh_gate import evaluate_mesh_quality_gate
+
+    # 1. Authentic Case 06 mesh audit passes strict engineering policy
+    gate_eval, report = audit_case_06_mesh_quality()
+    assert gate_eval.passed is True
+    assert gate_eval.status == "PASS"
+    metrics = report["governing_metrics"]
+    assert metrics["min_jacobian"] >= 0.60
+    assert metrics["max_aspect_ratio"] <= 4.00
+    assert metrics["min_angle"] >= 45.0
+    assert metrics["max_angle"] <= 135.0
+
+    # 2. Negative Probe: Inverted element (negative Jacobian <= 0) must trigger BLOCKED
+    distorted_metrics_inverted = {
+        "min_jacobian": -0.05,  # Inverted
+        "max_aspect_ratio": 2.50,
+        "min_angle": 80.0,
+        "max_angle": 100.0,
+    }
+    gate_inv = evaluate_mesh_quality_gate(distorted_metrics_inverted)
+    assert gate_inv.passed is False
+    assert gate_inv.status == "BLOCKED"
+    assert any("Inverted element detected" in v for v in gate_inv.violations)
+
+    # 3. Negative Probe: Extreme aspect ratio (> 50.0) must trigger BLOCKED
+    distorted_metrics_ar = {
+        "min_jacobian": 0.85,
+        "max_aspect_ratio": 58.2,  # Extreme needle element
+        "min_angle": 80.0,
+        "max_angle": 100.0,
+    }
+    gate_ar = evaluate_mesh_quality_gate(distorted_metrics_ar)
+    assert gate_ar.passed is False
+    assert gate_ar.status == "BLOCKED"
+    assert any("Excessive aspect ratio" in v for v in gate_ar.violations)
+
+
+def test_case_06_negative_probe_anti_cheat_missing_solver_artifacts():
+    """Anti-Cheat Probe: Attempting to bypass solver execution or falsify values without artifacts MUST FAIL."""
+    from abaqus_ai_agent.contracts.evidence import ArtifactRecord, EvidenceManifestV2
+
+    criteria = [
+        {"name": "max_springback_deviation", "value_key": "springback_deviation", "operator": "<=", "limit": 2.50, "unit": "mm"},
+    ]
+    values = {"springback_deviation": 1.85}
+
+    # Probe 1: Direct pass without evidence manifest when require_evidence=True -> BLOCKED
+    res_no_evidence = evaluate_result_acceptance(
+        result_status="completed",
+        values=values,
+        criteria=criteria,
+        require_evidence=True,
+    )
+    assert res_no_evidence.passed is False
+    assert res_no_evidence.status == "BLOCKED"
+    assert "missing_required_evidence" in res_no_evidence.failures
+
+    # Probe 2: Evidence manifest points to missing/non-existent solver files on disk -> BLOCKED
+    fake_manifest = EvidenceManifestV2(
+        run_id="FAKE-RUN-ID",
+        case_id="CASE_06_SHEET_METAL_SUBMODELING",
+        created_at="2026-10-08T00:00:00Z",
+        artifacts={
+            "case_06_global_assembly.inp": ArtifactRecord(
+                name="case_06_global_assembly.inp",
+                path="/non/existent/path/case_06_global_assembly.inp",
+                role="inp",
+                exists=True,
+                size_bytes=1000,
+                sha256="0000000000000000000000000000000000000000000000000000000000000000",
+                mandatory=True,
+            ),
+            "case_06_global_assembly.odb": ArtifactRecord(
+                name="case_06_global_assembly.odb",
+                path="/non/existent/path/case_06_global_assembly.odb",
+                role="odb",
+                exists=True,
+                size_bytes=1000,
+                sha256="0000000000000000000000000000000000000000000000000000000000000000",
+                mandatory=True,
+            ),
+        },
+    ).with_signature()
+
+    res_fake_evidence = evaluate_result_acceptance(
+        result_status="completed",
+        values=values,
+        criteria=criteria,
+        evidence_manifest=fake_manifest,
+        require_evidence=True,
+    )
+    assert res_fake_evidence.passed is False
+    assert res_fake_evidence.status == "BLOCKED"
+    assert any("evidence_incomplete:missing_mandatory_role" in f or "file_not_found" in f for f in res_fake_evidence.failures)
+
+
 def test_package_b_cases_folder_organization_and_standalone_html():
     """Verify Phase 2 Package B folder isolation & self-contained HTML deliverable enforcement.
 
@@ -557,6 +979,16 @@ def test_package_b_cases_folder_organization_and_standalone_html():
             CASE_04_SUB_DIR,
             "case_04_subframe_manifest.json",
             "Case_04_Subframe_Durability_Report.html",
+        ),
+        (
+            CASE_05_SUB_DIR,
+            "case_05_composite_buckling_manifest.json",
+            "Case_05_Composite_Buckling_Report.html",
+        ),
+        (
+            CASE_06_SUB_DIR,
+            "case_06_sheet_metal_manifest.json",
+            "Case_06_Sheet_Metal_Submodeling_Report.html",
         ),
     ]
 

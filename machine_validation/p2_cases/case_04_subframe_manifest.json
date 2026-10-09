@@ -12,8 +12,13 @@
     "status": "COMPLETED",
     "engineering_status": "RESULT_VALID",
     "acceptance_passed": true,
-    "report_md_bytes": 66676,
-    "report_html_bytes": 674733
+    "report_html_bytes": 673343,
+    "report": {
+      "format": "html",
+      "path": "Case_04_Subframe_Fatigue_Report.html",
+      "bytes": 673343,
+      "self_contained": true
+    }
   },
   "physical_results": {
     "peak_mises_stress_hotspot_bracket_mpa": 312.4,
@@ -58,5 +63,5 @@
       "required_results": "PASS"
     }
   },
-  "audit_signature": "e9dc448f5cf2599e981ba73f1e3738155c22d164f0a8ace050f27f9eb26d2e58"
+  "audit_signature": "148871df63096ffaaf29921c110f25bd822367a471af387254b454555e8d09a8"
 }

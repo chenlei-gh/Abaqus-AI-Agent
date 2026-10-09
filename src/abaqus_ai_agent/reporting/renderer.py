@@ -3,6 +3,7 @@ import html
 import json
 import mimetypes
 from pathlib import Path
+import re
 
 def _plain(value):
     if value is None: return None
@@ -156,17 +157,49 @@ def _render_html_figure(caption, path_str, is_zh=False):
     )
 
 
+def _format_inline_markdown(text: str) -> str:
+    """Safely and deterministically transform inline markdown (*, **, `) into HTML elements."""
+    if not text:
+        return ""
+    # 1. Escape HTML special characters first to avoid XSS / tag breakage
+    escaped = html.escape(str(text))
+    # 2. Inline code: `code` -> <code>code</code>
+    escaped = re.sub(r'`([^`\n]+)`', r'<code>\1</code>', escaped)
+    # 3. Bold: **bold** -> <strong>bold</strong>
+    escaped = re.sub(r'\*\*(.+?)\*\*', r'<strong>\1</strong>', escaped)
+    # 4. Italic: *italic* (only isolated single asterisk)
+    escaped = re.sub(r'(?<!\*)\*([^\*\n]+?)\*(?!\*)', r'<em>\1</em>', escaped)
+    return escaped
+
+
 def _format_cell_badge(c_clean, is_zh=False):
-    c_upper = c_clean.upper()
-    if c_clean in ("PASS", "合格", "通过", "通过 / PASS", "PASS / 合格", "VALID", "有效", "BALANCED", "平衡", "STABLE", "稳定", "YES", "已成功自愈"):
-        return f'<span class="status-badge badge-pass">{html.escape(c_clean)}</span>'
-    elif c_clean in ("FAIL", "不合格", "未通过", "未合格", "FAIL / 未合格", "REJECTED", "TAMPERED", "DRIFT_EXCEEDED", "漂移超标", "NO", "需人工介入"):
-        return f'<span class="status-badge badge-fail">{html.escape(c_clean)}</span>'
-    elif c_clean.startswith("FAIL (") and c_clean.endswith(")"):
-        return f'<span class="status-badge badge-fail">{html.escape(c_clean)}</span>'
-    elif c_clean in ("SKIPPED", "跳过", "忽略", "SKIPPED / 忽略"):
-        return f'<span class="status-badge badge-skip">{html.escape(c_clean)}</span>'
-    return html.escape(c_clean)
+    c_clean_str = str(c_clean).strip()
+    badge_key = c_clean_str
+    if badge_key.startswith("**") and badge_key.endswith("**") and len(badge_key) > 4:
+        badge_key = badge_key[2:-2].strip()
+
+    pass_badges = (
+        "PASS", "合格", "通过", "通过 / PASS", "PASS / 合格", "VALID", "有效",
+        "BALANCED", "平衡", "STABLE", "稳定", "YES", "已成功自愈",
+        "VERIFIED", "VERIFIED PASS", "合格 (VERIFIED PASS)"
+    )
+    fail_badges = (
+        "FAIL", "不合格", "未通过", "未合格", "FAIL / 未合格", "REJECTED",
+        "TAMPERED", "DRIFT_EXCEEDED", "漂移超标", "NO", "需人工介入", "FAILED"
+    )
+    skip_badges = ("SKIPPED", "跳过", "忽略", "SKIPPED / 忽略")
+
+    if badge_key in pass_badges:
+        display = badge_key if c_clean_str.startswith("**") else c_clean_str
+        return f'<span class="status-badge badge-pass">{html.escape(display)}</span>'
+    elif badge_key in fail_badges or (badge_key.startswith("FAIL (") and badge_key.endswith(")")):
+        display = badge_key if c_clean_str.startswith("**") else c_clean_str
+        return f'<span class="status-badge badge-fail">{html.escape(display)}</span>'
+    elif badge_key in skip_badges:
+        display = badge_key if c_clean_str.startswith("**") else c_clean_str
+        return f'<span class="status-badge badge-skip">{html.escape(display)}</span>'
+
+    return _format_inline_markdown(c_clean_str)
 
 
 def _format_markdown_table(headers, rows):
@@ -1011,13 +1044,199 @@ def render_markdown(report, language=None):
     return "\n".join(lines)
 
 
+def _render_rich_text_to_html(content, is_zh=False):
+    """Deterministically parse rich text / Markdown blocks into semantic publication-grade HTML elements."""
+    if not content:
+        return ""
+
+    if isinstance(content, str):
+        raw_lines = content.splitlines()
+    else:
+        raw_lines = []
+        for item in content:
+            if isinstance(item, str):
+                raw_lines.extend(item.splitlines())
+            else:
+                raw_lines.append(str(item))
+
+    body_parts = []
+
+    in_table = False
+    table_headers = []
+    table_rows = []
+
+    in_code = False
+    code_lines = []
+
+    para_lines = []
+
+    def flush_table():
+        nonlocal in_table, table_headers, table_rows
+        if not in_table or not table_headers:
+            in_table = False
+            table_headers = []
+            table_rows = []
+            return
+        out = ['<div class="table-wrapper"><table class="report-table"><thead><tr>']
+        for h in table_headers:
+            out.append(f'<th>{_format_inline_markdown(h)}</th>')
+        out.append('</tr></thead><tbody>')
+        for r in table_rows:
+            out.append('<tr>')
+            for c in r:
+                cell_content = _format_cell_badge(c, is_zh=is_zh)
+                out.append(f'<td>{cell_content}</td>')
+            out.append('</tr>')
+        out.append('</tbody></table></div>')
+        body_parts.append("".join(out))
+        in_table = False
+        table_headers = []
+        table_rows = []
+
+    def flush_para():
+        nonlocal para_lines
+        if not para_lines:
+            return
+        # Join lines intelligently: avoid redundant space between adjacent CJK characters
+        joined = para_lines[0].strip()
+        for nxt in para_lines[1:]:
+            nxt_s = nxt.strip()
+            if not nxt_s:
+                continue
+            prev_char = joined[-1] if joined else ""
+            next_char = nxt_s[0] if nxt_s else ""
+            if '\u4e00' <= prev_char <= '\u9fff' and '\u4e00' <= next_char <= '\u9fff':
+                joined += nxt_s
+            else:
+                joined += " " + nxt_s
+        if joined:
+            body_parts.append(f'<p class="report-p">{_format_inline_markdown(joined)}</p>')
+        para_lines = []
+
+    def flush_code():
+        nonlocal in_code, code_lines
+        if not in_code:
+            return
+        code_text = html.escape("\n".join(code_lines))
+        body_parts.append(f'<pre class="code-block"><code>{code_text}</code></pre>')
+        in_code = False
+        code_lines = []
+
+    def flush_all():
+        flush_table()
+        flush_para()
+        flush_code()
+
+    for line in raw_lines:
+        trimmed = line.strip()
+
+        # 1. Code fence ```
+        if trimmed.startswith("```"):
+            flush_table()
+            flush_para()
+            if in_code:
+                flush_code()
+            else:
+                in_code = True
+                code_lines = []
+            continue
+
+        if in_code:
+            code_lines.append(line)
+            continue
+
+        # 2. Markdown Table row: starts and ends with |
+        if trimmed.startswith("|") and trimmed.endswith("|") and len(trimmed) >= 2:
+            flush_para()
+            raw_cells = [c.strip() for c in trimmed[1:-1].split("|")]
+            is_sep = all(set(c).issubset({"-", ":", " "}) for c in raw_cells if c)
+            if is_sep:
+                continue
+            if not in_table:
+                in_table = True
+                table_headers = raw_cells
+                table_rows = []
+            else:
+                table_rows.append(raw_cells)
+            continue
+        else:
+            if in_table:
+                flush_table()
+
+        # 3. Headings
+        if trimmed.startswith("#### "):
+            flush_para()
+            heading_text = trimmed[5:].strip()
+            body_parts.append(f'<h4 class="subsubsection-heading">{_format_inline_markdown(heading_text)}</h4>')
+            continue
+        elif trimmed.startswith("### "):
+            flush_para()
+            heading_text = trimmed[4:].strip()
+            body_parts.append(f'<h3 class="subsection-heading">{_format_inline_markdown(heading_text)}</h3>')
+            continue
+        elif trimmed.startswith("## "):
+            flush_para()
+            heading_text = trimmed[3:].strip()
+            body_parts.append(f'<h2 class="section-heading">{_format_inline_markdown(heading_text)}</h2>')
+            continue
+
+        # 4. Blockquote
+        if trimmed.startswith("> "):
+            flush_para()
+            quote_text = trimmed[2:].strip()
+            body_parts.append(f'<blockquote class="report-quote">{_format_inline_markdown(quote_text)}</blockquote>')
+            continue
+
+        # 5. List items
+        # Ordered: "1. ", "2. ", "10. ", "1) ", etc.
+        m_ordered = re.match(r'^(\d+[\.\)])\s+(.+)$', trimmed)
+        if m_ordered:
+            flush_para()
+            num_label = m_ordered.group(1)
+            item_text = m_ordered.group(2)
+            body_parts.append(
+                f'<div class="list-item">'
+                f'<span class="list-num">{html.escape(num_label)}</span>'
+                f'<span class="list-text">{_format_inline_markdown(item_text)}</span>'
+                f'</div>'
+            )
+            continue
+
+        # Unordered: "- ", "* " (not "**")
+        m_bullet = re.match(r'^([-\*])\s+(.+)$', trimmed)
+        if m_bullet and not trimmed.startswith("**"):
+            flush_para()
+            item_text = m_bullet.group(2)
+            body_parts.append(
+                f'<div class="list-item">'
+                f'<span class="list-bullet">&bull;</span>'
+                f'<span class="list-text">{_format_inline_markdown(item_text)}</span>'
+                f'</div>'
+            )
+            continue
+
+        # 6. Blank line -> flush paragraph
+        if not trimmed:
+            flush_para()
+            continue
+
+        # 7. Normal text line accumulating into paragraph
+        para_lines.append(trimmed)
+
+    flush_all()
+    return "\n".join(body_parts)
+
+
+def _render_section_lines_to_html(lines, is_zh=False):
+    """Render structured table lines into semantic HTML tables, headings, and lists."""
+    return _render_rich_text_to_html(lines, is_zh=is_zh)
+
+
 def render_html(report, language=None):
-    """Render publication-grade industrial CAE engineering report in semantic HTML."""
+    """Render publication-grade industrial CAE engineering report directly from EngineeringReportData in semantic HTML."""
     is_zh = _is_chinese_report(report, language=language)
 
-    md_text = render_markdown(report, language=language)
-    
-    # Extract KPI summaries for executive banner
+    # Extract KPI summaries for executive banner directly from report data
     kpi_cards = []
     acceptance = report.acceptance
     acc_passed = False
@@ -1052,110 +1271,80 @@ def render_html(report, language=None):
         </div>'''
     kpi_html += '</div>'
 
-    # Convert Markdown lines to semantic HTML
-    body_parts = []
-    in_table = False
-    table_headers = []
-    table_rows = []
-    in_details = False
-    in_code = False
-    code_lines = []
+    # Build semantic HTML directly from report structure without intermediate Markdown string
+    body_parts = [
+        f'<h1 class="main-title">{html.escape(report.title)}</h1>',
+        kpi_html,
+    ]
 
-    def flush_table():
-        nonlocal in_table, table_headers, table_rows
-        if not in_table:
-            return ""
-        out = ['<div class="table-wrapper"><table class="report-table"><thead><tr>']
-        for h in table_headers:
-            out.append(f'<th>{html.escape(h)}</th>')
-        out.append('</tr></thead><tbody>')
-        for r in table_rows:
-            out.append('<tr>')
-            for c in r:
-                c_clean = c.strip()
-                cell_content = _format_cell_badge(c_clean, is_zh=is_zh)
-                out.append(f'<td>{cell_content}</td>')
-            out.append('</tr>')
-        out.append('</tbody></table></div>')
-        in_table = False
-        table_headers = []
-        table_rows = []
-        return "".join(out)
+    # 1. Executive Summary
+    if report.objective:
+        exec_heading = "1. Executive Summary / 工程执行摘要" if is_zh else "1. Executive Summary"
+        body_parts.append(f'<h2 class="section-heading">{html.escape(exec_heading)}</h2>')
+        body_parts.append(_render_rich_text_to_html(report.objective, is_zh=is_zh))
 
-    for line in md_text.splitlines():
-        # Code block
-        if line.startswith("```"):
-            if not in_code:
-                if in_table: body_parts.append(flush_table())
-                in_code = True
-                code_lines = []
-            else:
-                in_code = False
-                body_parts.append(f'<pre class="code-block"><code>{html.escape(chr(10).join(code_lines))}</code></pre>')
-                code_lines = []
+    # 2 - 18. Structured Sections
+    sections = [
+        ("2. Model Information", "几何模型与装配拓扑定义", report.model),
+        ("3. Material", "材料本构模型与物性温变定义", report.materials),
+        ("4. Boundary Conditions", "边界约束与位移固定条件", report.boundary_conditions),
+        ("5. Loads", "载荷工况与热流压力历程", report.loads),
+        ("6. Solver / Analysis Procedure", "求解器步序与算法控制策略", report.solver),
+        ("7. Mesh", "有限元网格离散与质量审计", report.mesh),
+        ("8. Results", "关键工程物理指标计算结果", report.results),
+        ("8b. Result Intelligence & Derived Metrics", "结果智能与空间热点衍生指标", getattr(report, "result_intelligence", None)),
+        ("9. Figures", "工程图纸与仿真云图资产", report.figures),
+        ("10. Engineering Checks", "工业工程准则合规性详细核验", report.engineering_checks),
+        ("11. Acceptance Criteria", "确定性工程设计准则验算与门禁", report.acceptance),
+        ("12. Sensitivity / Uncertainty", "参数敏感性与不确定度量化", (report.sensitivity, report.uncertainty)),
+        ("12b. Engineering Mechanism Analysis", "深层物理失效机理工程剖析", report.metadata.get("mechanism_analysis") if hasattr(report, "metadata") and isinstance(report.metadata, dict) else None),
+        ("13. Fatigue", "高低温疲劳与寿命损伤评估", report.fatigue),
+        ("13b. Design Recommendations & Countermeasures", "结构改型建议与对策方案", report.metadata.get("design_recommendations") if hasattr(report, "metadata") and isinstance(report.metadata, dict) else None),
+        ("14. Contact Diagnostics", "接触界面状态与穿透诊断", report.contact_diagnostics),
+        ("14b. Solver Diagnostics & Self-Healing Audit", "求解器自愈生命周期审计", getattr(report, "self_healing", None)),
+        ("15. Mechanism Kinematics & Topology", "机构运动学与拓扑参数", report.mechanism),
+        ("16. Assumptions / Limitations", "基础工程假设与分析局限性", (report.assumptions, report.limitations)),
+        ("17. Evidence", "电子证据链与产物完整性防伪", report.evidence),
+        ("18. Provenance", "模型版本与运行出处追溯", report.provenance),
+    ]
+
+    for heading, zh_heading, value in sections:
+        if value in (None, {}, (), [], ""):
             continue
-
-        if in_code:
-            code_lines.append(line)
+        if isinstance(value, (tuple, list)) and all(v in (None, {}, (), [], "") for v in value):
             continue
 
-        # Details
-        if line.startswith("<details>"):
-            if in_table: body_parts.append(flush_table())
-            in_details = True
-            body_parts.append('<details class="payload-details">')
-            continue
-        elif line.startswith("</details>"):
-            in_details = False
-            body_parts.append('</details>')
-            continue
-        elif line.startswith("<summary>"):
-            body_parts.append(line)
-            continue
+        section_title = f"{heading} / {zh_heading}" if is_zh else heading
+        body_parts.append(f'<h2 class="section-heading">{html.escape(section_title)}</h2>')
 
-        # Markdown Table line
-        if line.startswith("|") and line.endswith("|"):
-            cells = [c.strip() for c in line[1:-1].split("|")]
-            # Check if separator line
-            if all(set(c).issubset({"-", ":", " "}) for c in cells if c):
-                continue
-            if not in_table:
-                in_table = True
-                table_headers = cells
-                table_rows = []
-            else:
-                table_rows.append(cells)
-            continue
+        if heading == "9. Figures":
+            for figure in value:
+                body_parts.append(_render_html_figure(figure.caption or figure.kind, figure.path, is_zh=is_zh))
+                meta = getattr(figure, "metadata", None) or {}
+                interp = meta.get("description") or meta.get("interpretation") or meta.get("engineering_notes")
+                if interp:
+                    lead = "图面工程技术解读 (Technical Figure Analysis):" if is_zh else "Technical Figure Analysis:"
+                    body_parts.append(f'<blockquote class="report-quote"><strong>{html.escape(lead)}</strong> {_format_inline_markdown(interp)}</blockquote>')
         else:
-            if in_table:
-                body_parts.append(flush_table())
-
-        # Markdown Headings
-        if line.startswith("# "):
-            body_parts.append(f'<h1 class="main-title">{html.escape(line[2:].strip())}</h1>')
-            body_parts.append(kpi_html)
-        elif line.startswith("## "):
-            body_parts.append(f'<h2 class="section-heading">{html.escape(line[3:].strip())}</h2>')
-        elif line.startswith("### "):
-            body_parts.append(f'<h3 class="subsection-heading">{html.escape(line[4:].strip())}</h3>')
-        elif line.startswith("![") and "](" in line and line.endswith(")"):
-            caption = line[2:line.index("](")]
-            path_str = line[line.index("](") + 2:-1]
-            body_parts.append(_render_html_figure(caption, path_str, is_zh=is_zh))
-        elif line.startswith("> "):
-            body_parts.append(f'<blockquote class="report-quote">{html.escape(line[2:].strip())}</blockquote>')
-        elif line.strip():
-            # Paragraph or list item
-            stripped = line.strip()
-            if stripped[0].isdigit() and stripped[1:3] in (". ", ") "):
-                body_parts.append(f'<div class="list-item"><span class="list-num">{html.escape(stripped[:2])}</span><span class="list-text">{html.escape(stripped[3:])}</span></div>')
-            elif stripped.startswith("- ") or stripped.startswith("* "):
-                body_parts.append(f'<div class="list-item"><span class="list-bullet">&bull;</span><span class="list-text">{html.escape(stripped[2:])}</span></div>')
+            tbl_lines = _render_custom_table_for_section(heading, value, is_zh=is_zh)
+            if tbl_lines:
+                body_parts.append(_render_section_lines_to_html(tbl_lines, is_zh=is_zh))
+                sum_title = "结构化工程底层数据载荷 (Structured Engineering Data Payload JSON)" if is_zh else "Structured Engineering Data Payload (JSON)"
+                json_data = json.dumps(_plain(value), indent=2, ensure_ascii=False, default=str)
+                body_parts.append(
+                    f'<details class="payload-details">'
+                    f'<summary>{html.escape(sum_title)}</summary>'
+                    f'<pre class="code-block"><code>{html.escape(json_data)}</code></pre>'
+                    f'</details>'
+                )
             else:
-                body_parts.append(f'<p class="report-p">{html.escape(line)}</p>')
+                json_data = json.dumps(_plain(value), indent=2, ensure_ascii=False, default=str)
+                body_parts.append(f'<pre class="code-block"><code>{html.escape(json_data)}</code></pre>')
 
-    if in_table:
-        body_parts.append(flush_table())
+    # 19. Conclusion
+    conc_title = "19. Conclusion / 工程分析最终裁决结论" if is_zh else "19. Conclusion"
+    body_parts.append(f'<h2 class="section-heading">{html.escape(conc_title)}</h2>')
+    body_parts.append(_render_rich_text_to_html(_conclusion(report, is_zh=is_zh), is_zh=is_zh))
 
     content_html = "\n".join(body_parts)
 
@@ -1209,18 +1398,39 @@ def render_html(report, language=None):
       border-left: 4px solid #2563eb;
     }
     .subsection-heading {
-      font-size: 14px;
+      font-size: 15px;
+      font-weight: 700;
+      color: #1e3a8a;
+      margin-top: 24px;
+      margin-bottom: 12px;
+      padding-bottom: 4px;
+      border-bottom: 1px solid #e2e8f0;
+      letter-spacing: -0.01em;
+    }
+    .subsubsection-heading {
+      font-size: 13.5px;
       font-weight: 600;
       color: #334155;
-      margin-top: 20px;
-      margin-bottom: 10px;
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
+      margin-top: 16px;
+      margin-bottom: 8px;
     }
     .report-p {
       color: #334155;
       font-size: 14px;
       margin-bottom: 12px;
+      line-height: 1.65;
+    }
+    .report-p strong, .list-text strong, .report-table td strong {
+      color: #0f172a;
+      font-weight: 600;
+    }
+    code {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 0.9em;
+      background: #f1f5f9;
+      padding: 2px 6px;
+      border-radius: 4px;
+      color: #1e40af;
     }
     .kpi-grid {
       display: grid;
@@ -1414,14 +1624,19 @@ def render_html(report, language=None):
     }
     .list-item {
       display: flex;
-      margin-bottom: 6px;
+      margin-bottom: 8px;
       font-size: 14px;
       color: #334155;
+      line-height: 1.6;
     }
     .list-num, .list-bullet {
       font-weight: 700;
       margin-right: 8px;
       color: #2563eb;
+      flex-shrink: 0;
+    }
+    .list-text {
+      flex: 1;
     }
     @media print {
       body { background: #fff; padding: 0; }
@@ -1459,8 +1674,74 @@ def render_analysis_report(run, title=None, objective="", language=None):
         "html": render_html(report, language=language),
     }
 
+def verify_html_self_contained(html_text, max_size_bytes: int = 50 * 1024 * 1024) -> Dict[str, Any]:
+    """Audit single-file HTML deliverable to strictly ensure 100% self-containment.
+
+    Checks:
+    1. No external CSS stylesheets (<link rel="stylesheet"> with non-data URLs).
+    2. No external JS scripts (<script src="..."> with non-data URLs).
+    3. No external non-inlined images (<img src="..."> with relative or http/https URLs instead of data: URIs).
+    4. No external font @import rules.
+    5. Overall file payload size within engineering threshold.
+    """
+    import re
+    from pathlib import Path
+
+    if isinstance(html_text, Path) or hasattr(html_text, "read_text"):
+        html_text = html_text.read_text(encoding="utf-8")
+    else:
+        html_text = str(html_text)
+
+    external_refs = []
+
+    # 1. External CSS links
+    css_links = re.findall(r'<link[^>]+rel=[\'"]stylesheet[\'"][^>]*href=[\'"]([^\'"]+)[\'"]', html_text, re.IGNORECASE)
+    for href in css_links:
+        if not href.startswith("data:"):
+            external_refs.append(f"External CSS link: {href}")
+
+    # 2. External JS scripts
+    js_scripts = re.findall(r'<script[^>]+src=[\'"]([^\'"]+)[\'"]', html_text, re.IGNORECASE)
+    for src in js_scripts:
+        if not src.startswith("data:"):
+            external_refs.append(f"External JS script: {src}")
+
+    # 3. External images
+    img_sources = re.findall(r'<img[^>]+src=[\'"]([^\'"]+)[\'"]', html_text, re.IGNORECASE)
+    for src in img_sources:
+        if not src.startswith("data:"):
+            external_refs.append(f"External image source: {src}")
+
+    # 4. External font @import
+    font_imports = re.findall(r'@import\s+(?:url\()?[\'"]?(https?:[^\'")]+)[\'"]?', html_text, re.IGNORECASE)
+    for fi in font_imports:
+        external_refs.append(f"External font import: {fi}")
+
+    size_bytes = len(html_text.encode("utf-8"))
+    oversized = size_bytes > max_size_bytes
+    if oversized:
+        external_refs.append(f"HTML size {size_bytes} bytes exceeds threshold {max_size_bytes}")
+
+    is_self_contained = len(external_refs) == 0
+
+    return {
+        "self_contained": is_self_contained,
+        "size_bytes": size_bytes,
+        "external_references_count": len(external_refs),
+        "external_references": external_refs,
+        "has_external_css": any("CSS" in r for r in external_refs),
+        "has_external_js": any("JS" in r for r in external_refs),
+        "has_external_images": any("image" in r for r in external_refs),
+    }
+
+
 def render_report(report, fmt="html", language=None):
     """Unified entrypoint for deterministic report rendering. HTML is the sole standardized delivery format."""
+    if fmt == "html":
+        return render_html(report, language=language)
+    elif fmt == "markdown":
+        return render_markdown(report, language=language)
+    raise ValueError(f"Unsupported report format: {fmt}. Standardized deliverable format is 'html'.")
     return render_html(report, language=language)
 
 def _conclusion(report, is_zh=False):

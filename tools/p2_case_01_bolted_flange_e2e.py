@@ -483,7 +483,6 @@ def run_case_01_flange(workdir: Path, launcher: Optional[str] = None) -> Dict[st
         },
     )
 
-    report_md = render_markdown(report_data)  # Tracked in memory for manifest provenance
     report_html = render_html(report_data)
 
     p2_cases_dir = ROOT / "machine_validation" / "p2_cases"
@@ -528,7 +527,12 @@ def run_case_01_flange(workdir: Path, launcher: Optional[str] = None) -> Dict[st
             "status": "COMPLETED",
             "engineering_status": "RESULT_VALID",
             "acceptance_passed": True,
-            "report_md_bytes": len(report_md.encode("utf-8")),
+            "report": {
+                "format": "html",
+                "path": "Case_01_Bolted_Flange_Report.html",
+                "bytes": len(report_html.encode("utf-8")),
+                "self_contained": True,
+            },
             "report_html_bytes": len(report_html.encode("utf-8")),
         },
         "physical_results": {

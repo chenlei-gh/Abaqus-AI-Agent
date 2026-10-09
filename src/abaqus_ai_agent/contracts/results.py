@@ -108,6 +108,9 @@ _RESULT_QUANTITIES = {
     "tip_deflection": "displacement",
     "strain_energy_ratio": "energy",
     "energy_dissipation_ratio": "energy",
+    "buckling_load": "force",
+    "limit_load": "force",
+    "eigenvalue_load": "force",
 }
 
 
@@ -154,6 +157,9 @@ _FIELD_ALIASES = {
     "connector_relative_displacement": ("CU", "MAGNITUDE"),
     "connector_force": ("CTF", "MAGNITUDE"),
     "connector_position": ("CU", "MAGNITUDE"),
+    "buckling_load": ("RF", "MAGNITUDE"),
+    "limit_load": ("RF", "MAGNITUDE"),
+    "eigenvalue_load": ("RF", "MAGNITUDE"),
 }
 
 
@@ -335,6 +341,17 @@ def get_physics_result_profile(domain: str, **custom_overrides) -> PhysicsResult
             gate_justifications={
                 "contact": "Linear eigenvalue extraction; contact diagnostics not applicable.",
                 "fatigue": "Frequency domain eigenmodes; time-domain fatigue not requested.",
+            },
+        )
+    elif d in ("buckling", "eigenvalue_buckling", "post_buckling", "riks_buckling"):
+        prof = PhysicsResultProfile(
+            domain="buckling",
+            required_fields=("U", "RF"),
+            required_metrics=("buckling_load", "limit_load"),
+            required_gates=("execution", "odb", "criteria"),
+            gate_justifications={
+                "contact": "Continuous laminated shell; contact interaction not modeled.",
+                "fatigue": "Monotonic axial compression and stability limit load; high-cycle fatigue not applicable.",
             },
         )
     elif d in ("fatigue", "cyclic_fatigue"):
