@@ -12,6 +12,7 @@ Validates the Three-Plane Deliverable Architecture:
 
 from __future__ import annotations
 
+import hashlib
 import json
 from pathlib import Path
 import pytest
@@ -119,17 +120,45 @@ def test_visualization_spec_and_deterministic_figure_binding(tmp_path: Path):
     )
 
     # Pre-existing authentic CAE visualization asset on disk
-    (tmp_path / "mises_hotspot.svg").write_text("<svg><rect width='100' height='100'/></svg>", encoding="utf-8")
+    img_file = tmp_path / "mises_hotspot.svg"
+    img_bytes = b"<svg><rect width='100' height='100'/></svg>"
+    img_file.write_bytes(img_bytes)
+    img_sha256 = hashlib.sha256(img_bytes).hexdigest()
+
+    mock_odb = tmp_path / "test.odb"
+    mock_odb.write_bytes(b"\x7fSIMULIA_ODB_BINARY_HEADER" + b"\x00" * 1024)
+    odb_sha256 = hashlib.sha256(mock_odb.read_bytes()).hexdigest()
+
+    test_run_id = "RUN-P05-TEST"
+    test_input_hash = "INP-P05-TEST"
+
+    fig = spec.to_report_figure(str(img_file.as_posix()))
+    fig.metadata["image_sha256"] = img_sha256
+    fig.metadata["sha256"] = img_sha256
+    fig.metadata["run_id"] = test_run_id
+    fig.metadata["input_hash"] = test_input_hash
+    fig.metadata["odb_sha256"] = odb_sha256
+    fig.metadata["field"] = spec.field_name
+    fig.metadata["component"] = spec.component
+    fig.metadata["step"] = spec.step_name
+    fig.metadata["frame"] = spec.frame_index
+    fig.metadata["region"] = "WHOLE_MODEL"
+    fig.metadata["output_position"] = "INTEGRATION_POINT"
+    fig.metadata["viewer_rendered"] = True
+    fig.metadata["viewer_session_token"] = "VIEWER-TOKEN-P05-TEST"
 
     delivery_card, report_pointer, report_data = pipeline.build_and_render(
         output_dir=tmp_path,
         title="Case 3 螺栓法兰装配分析评估报告",
         case_id="case_03_flange",
-        run_id="RUN-P05-TEST",
+        run_id=test_run_id,
+        input_hash=test_input_hash,
+        odb_path=mock_odb,
         model_info={"name": "BoltedFlange", "max_mises_mpa": 314.92, "max_displacement_mm": 0.000777},
         results_info=(),
         acceptance_info={"status": "PASS", "deliverable": True},
         visualization_specs=[spec],
+        figures=[fig],
     )
 
     # Verify physical file artifact binding
@@ -206,29 +235,76 @@ def test_ab_qualification_full_llm_report_vs_deterministic_pipeline(tmp_path: Pa
     }
 
     # Pre-existing authentic CAE visualization assets on disk
-    (tmp_path / "fig_mises.svg").write_text("<svg><rect width='100' height='100'/></svg>", encoding="utf-8")
-    (tmp_path / "transient_evolution.gif").write_bytes(b"GIF89a" + b"\x00" * 200)
+    f1_path = tmp_path / "fig_mises.svg"
+    f1_bytes = b"<svg><rect width='100' height='100'/></svg>"
+    f1_path.write_bytes(f1_bytes)
+    f1_sha = hashlib.sha256(f1_bytes).hexdigest()
+
+    f2_path = tmp_path / "transient_evolution.gif"
+    f2_bytes = b"GIF89a" + b"\x00" * 200
+    f2_path.write_bytes(f2_bytes)
+    f2_sha = hashlib.sha256(f2_bytes).hexdigest()
+
+    mock_odb_ab = tmp_path / "ab_test.odb"
+    mock_odb_ab.write_bytes(b"\x7fSIMULIA_ODB_BINARY_HEADER" + b"\x00" * 1024)
+    odb_sha_ab = hashlib.sha256(mock_odb_ab.read_bytes()).hexdigest()
+    ab_run_id = "RUN-CASE03-P05"
+    ab_input_hash = "INP-CASE03-P05"
 
     anim_spec = VisualizationSpec(
         artifact_id="ANIM-001",
         visualization_type="dynamic_animation",
         field_name="U",
         component="magnitude",
+        output_position="NODAL",
         target_filename="transient_evolution.gif",
         caption_zh="螺栓预紧加载演化动图",
         caption_en="Bolt Preload Transient Evolution Animation",
     )
+
+    fig1 = spec1.to_report_figure(str(f1_path.as_posix()))
+    fig1.metadata["image_sha256"] = f1_sha
+    fig1.metadata["sha256"] = f1_sha
+    fig1.metadata["run_id"] = ab_run_id
+    fig1.metadata["input_hash"] = ab_input_hash
+    fig1.metadata["odb_sha256"] = odb_sha_ab
+    fig1.metadata["field"] = spec1.field_name
+    fig1.metadata["component"] = spec1.component
+    fig1.metadata["frame"] = -1
+    fig1.metadata["step"] = spec1.step_name
+    fig1.metadata["region"] = "WHOLE_MODEL"
+    fig1.metadata["output_position"] = "INTEGRATION_POINT"
+    fig1.metadata["viewer_rendered"] = True
+    fig1.metadata["viewer_session_token"] = "VIEWER-TOKEN-AB-1"
+
+    fig2 = anim_spec.to_report_figure(str(f2_path.as_posix()))
+    fig2.metadata["image_sha256"] = f2_sha
+    fig2.metadata["sha256"] = f2_sha
+    fig2.metadata["run_id"] = ab_run_id
+    fig2.metadata["input_hash"] = ab_input_hash
+    fig2.metadata["odb_sha256"] = odb_sha_ab
+    fig2.metadata["field"] = anim_spec.field_name
+    fig2.metadata["component"] = anim_spec.component
+    fig2.metadata["frame"] = -1
+    fig2.metadata["step"] = anim_spec.step_name
+    fig2.metadata["region"] = "WHOLE_MODEL"
+    fig2.metadata["output_position"] = "NODAL"
+    fig2.metadata["viewer_rendered"] = True
+    fig2.metadata["viewer_session_token"] = "VIEWER-TOKEN-AB-2"
 
     # Execute Branch B: Deterministic Pipeline
     delivery_card, report_pointer, report_data = pipeline.build_and_render(
         output_dir=tmp_path,
         title="Case 3 螺栓法兰装配分析评估报告",
         case_id="case_03_bolted_joint",
-        run_id="RUN-CASE03-P05",
+        run_id=ab_run_id,
+        input_hash=ab_input_hash,
+        odb_path=mock_odb_ab,
         model_info=model_info,
         results_info=(criterion,),
         acceptance_info=acceptance,
         visualization_specs=[spec1, anim_spec],
+        figures=[fig1, fig2],
         interpretation_card=card,
         materials_info=({"name": "Steel-Q355", "E": 210000.0, "nu": 0.3},),
         loads_info=({"name": "BoltPreload", "magnitude": 1000.0, "direction": "-Z"},),
@@ -400,6 +476,10 @@ def test_delivery_gate_blocks_tampered_figure_with_zero_html_leakage(tmp_path: P
     img_file.write_bytes(img_bytes)
     recorded_sha = hashlib.sha256(img_bytes).hexdigest()
 
+    mock_odb_t = tmp_path / "mock_t.odb"
+    mock_odb_t.write_bytes(b"\x7fSIMULIA_ODB_BINARY_HEADER" + b"\x00" * 1024)
+    odb_sha_t = hashlib.sha256(mock_odb_t.read_bytes()).hexdigest()
+
     fig = ReportFigure(
         kind="stress_hotspot",
         path=str(img_file.as_posix()),
@@ -412,9 +492,10 @@ def test_delivery_gate_blocks_tampered_figure_with_zero_html_leakage(tmp_path: P
             "output_position": "INTEGRATION_POINT",
             "run_id": "RUN-SECURE-01",
             "input_hash": "INP-SECURE-01",
-            "odb_sha256": "ODB-SECURE-01",
+            "odb_sha256": odb_sha_t,
             "image_sha256": recorded_sha,
             "viewer_rendered": True,
+            "viewer_session_token": "VIEWER-TOKEN-VALID",
         },
     )
 
@@ -433,6 +514,7 @@ def test_delivery_gate_blocks_tampered_figure_with_zero_html_leakage(tmp_path: P
             figures=[fig],
             require_deliverable=True,
             input_hash="INP-SECURE-01",
+            odb_path=mock_odb_t,
         )
 
     assert "tampered or sha256 mismatch" in str(exc_info.value)
@@ -449,6 +531,10 @@ def test_delivery_gate_blocks_mismatched_run_id_or_odb_hash(tmp_path: Path):
     img_file.write_bytes(img_bytes)
     recorded_sha = hashlib.sha256(img_bytes).hexdigest()
 
+    mock_odb_m = tmp_path / "mock_m.odb"
+    mock_odb_m.write_bytes(b"\x7fSIMULIA_ODB_BINARY_HEADER" + b"\x00" * 1024)
+    odb_sha_m = hashlib.sha256(mock_odb_m.read_bytes()).hexdigest()
+
     fig = ReportFigure(
         kind="stress_hotspot",
         path=str(img_file.as_posix()),
@@ -461,9 +547,10 @@ def test_delivery_gate_blocks_mismatched_run_id_or_odb_hash(tmp_path: Path):
             "output_position": "INTEGRATION_POINT",
             "run_id": "FOREIGN-RUN-ID",
             "input_hash": "INP-01",
-            "odb_sha256": "ODB-01",
+            "odb_sha256": odb_sha_m,
             "image_sha256": recorded_sha,
             "viewer_rendered": True,
+            "viewer_session_token": "VIEWER-TOKEN-VALID",
         },
     )
 
@@ -478,6 +565,8 @@ def test_delivery_gate_blocks_mismatched_run_id_or_odb_hash(tmp_path: Path):
             acceptance_info={"status": "PASS", "deliverable": True},
             figures=[fig],
             require_deliverable=True,
+            input_hash="INP-01",
+            odb_path=mock_odb_m,
         )
 
     assert "run_id mismatch" in str(exc_info.value)

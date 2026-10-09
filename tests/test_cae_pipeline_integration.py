@@ -214,6 +214,8 @@ def test_analysis_runner_require_production_full_causal_binding_and_delivery(tmp
         results_info=[{"metric": "max_mises", "value": 180.0, "unit": "MPa"}],
         acceptance_info=run_res.acceptance,
         require_deliverable=True,
+        odb_path=run_res.odb_path,
+        input_hash=run_res.provenance.input_hash,
     )
 
     assert delivery_card.deliverable is True
@@ -782,6 +784,7 @@ def test_negative_p0_b_missing_or_mismatched_provenance_rejected(tmp_path: Path)
             "frame": -1,
             "output_position": "INTEGRATION_POINT",
             "viewer_rendered": True,
+            "viewer_session_token": "VIEWER-TOKEN-CURR-01",
         },
     )
     res_valid = select_engineering_figures(
@@ -972,3 +975,252 @@ def test_negative_p1_d_required_criterion_with_nan_inf_bool_or_unavailable_diagn
     assert result_diag.status == TaskStatus.FAILED
     assert result_diag.summary_card["engineering_status"] == "RESULT_INVALID"
     assert result_diag.summary_card.get("delivery_card") is None
+
+
+def test_negative_p0_b_ambient_pre_existing_file_adoption_blocked_in_deliverable_mode(tmp_path: Path, monkeypatch):
+    """Negative Test P0-B: Ambient file on disk matching spec target_filename MUST NOT be adopted in deliverable mode."""
+    report_dir = tmp_path / "ambient_run_dir"
+    report_dir.mkdir()
+    ambient_file = report_dir / "ambient_stress_hotspot.png"
+    ambient_file.write_bytes(b"\x89PNG\r\n\x1a\n" + b"\x00" * 128)
+
+    mock_odb = tmp_path / "test_ambient.odb"
+    mock_odb.write_bytes(b"\x7fSIMULIA_ODB_BINARY_HEADER" + b"\x00" * 1024)
+
+    # Simulate Viewer execution not producing this figure
+    monkeypatch.setattr(
+        "abaqus_ai_agent.execution.odb_rendering.render_authentic_visualizations",
+        lambda **kwargs: [],
+    )
+
+    pipeline = DeterministicReportPipeline()
+    spec = VisualizationSpec(
+        artifact_id="FIG-AMB-TEST",
+        visualization_type="stress_hotspot",
+        field_name="S",
+        component="mises",
+        target_filename="ambient_stress_hotspot.png",
+        output_position="INTEGRATION_POINT",
+    )
+
+    # In deliverable mode: fail-closed with PermissionError
+    with pytest.raises(PermissionError) as exc_info:
+        pipeline.build_and_render(
+            output_dir=report_dir,
+            title="Ambient Adoption Block Test",
+            case_id="case_ambient",
+            run_id="RUN-AMB-01",
+            input_hash="INP-AMB-01",
+            odb_path=mock_odb,
+            model_info={},
+            results_info=(),
+            acceptance_info={"status": "PASS", "deliverable": True},
+            visualization_specs=[spec],
+            require_deliverable=True,
+        )
+    assert "neither admitted with verified provenance nor rendered by a controlled Viewer session" in str(exc_info.value)
+    # Zero leakage: report.html must not exist
+    assert not (report_dir / "report.html").exists()
+
+
+def test_negative_p0_b_delivery_gate_blocks_missing_input_hash_or_odb_hash(tmp_path: Path):
+    """Negative Test P0-B: Final Delivery Gate unconditionally requires input_hash and authentic ODB hash."""
+    report_dir = tmp_path / "gate_hash_dir"
+    report_dir.mkdir()
+    img_file = report_dir / "valid_gate_fig.png"
+    img_bytes = b"\x89PNG\r\n\x1a\n" + b"\x00" * 128
+    img_file.write_bytes(img_bytes)
+    img_sha256 = hashlib.sha256(img_bytes).hexdigest()
+
+    mock_odb = tmp_path / "test_gate.odb"
+    mock_odb.write_bytes(b"\x7fSIMULIA_ODB_BINARY_HEADER" + b"\x00" * 1024)
+    odb_sha256 = hashlib.sha256(mock_odb.read_bytes()).hexdigest()
+
+    fig = ReportFigure(
+        kind="stress_hotspot",
+        path=str(img_file.as_posix()),
+        metadata={
+            "field": "S",
+            "component": "mises",
+            "run_id": "RUN-GATE-01",
+            "input_hash": "INP-GATE-01",
+            "odb_sha256": odb_sha256,
+            "image_sha256": img_sha256,
+            "output_position": "INTEGRATION_POINT",
+            "viewer_rendered": True,
+            "viewer_session_token": "VIEWER-TOKEN-GATE-01",
+        },
+    )
+
+    pipeline = DeterministicReportPipeline()
+
+    # Case A: Missing input_hash in execution context
+    with pytest.raises(PermissionError) as exc_a:
+        pipeline.build_and_render(
+            output_dir=report_dir,
+            title="Gate Test Missing Input Hash",
+            case_id="case_gate",
+            run_id="RUN-GATE-01",
+            input_hash="",  # Empty
+            odb_path=mock_odb,
+            model_info={},
+            results_info=(),
+            acceptance_info={"status": "PASS", "deliverable": True},
+            figures=[fig],
+            require_deliverable=True,
+        )
+    assert "current execution input_hash is missing or empty" in str(exc_a.value)
+
+    # Case B: Missing ODB path / hash in execution context
+    with pytest.raises(PermissionError) as exc_b:
+        pipeline.build_and_render(
+            output_dir=report_dir,
+            title="Gate Test Missing ODB",
+            case_id="case_gate",
+            run_id="RUN-GATE-01",
+            input_hash="INP-GATE-01",
+            odb_path=None,  # Missing
+            model_info={},
+            results_info=(),
+            acceptance_info={"status": "PASS", "deliverable": True},
+            figures=[fig],
+            require_deliverable=True,
+        )
+    assert "authentic ODB hash is missing or ODB file was not provided" in str(exc_b.value)
+
+
+def test_negative_p0_b_delivery_gate_blocks_missing_viewer_session_token_or_unrendered(tmp_path: Path):
+    """Negative Test P0-B: Final Delivery Gate blocks figure lacking viewer_session_token or viewer_rendered=True."""
+    report_dir = tmp_path / "gate_token_dir"
+    report_dir.mkdir()
+    img_file = report_dir / "token_test_fig.png"
+    img_bytes = b"\x89PNG\r\n\x1a\n" + b"\x00" * 128
+    img_file.write_bytes(img_bytes)
+    img_sha256 = hashlib.sha256(img_bytes).hexdigest()
+
+    mock_odb = tmp_path / "test_token.odb"
+    mock_odb.write_bytes(b"\x7fSIMULIA_ODB_BINARY_HEADER" + b"\x00" * 1024)
+    odb_sha256 = hashlib.sha256(mock_odb.read_bytes()).hexdigest()
+
+    pipeline = DeterministicReportPipeline()
+
+    # Case A: Missing viewer_session_token
+    fig_no_token = ReportFigure(
+        kind="stress_hotspot",
+        path=str(img_file.as_posix()),
+        metadata={
+            "field": "S",
+            "component": "mises",
+            "run_id": "RUN-TOK-01",
+            "input_hash": "INP-TOK-01",
+            "odb_sha256": odb_sha256,
+            "image_sha256": img_sha256,
+            "output_position": "INTEGRATION_POINT",
+            "viewer_rendered": True,
+            # viewer_session_token missing!
+        },
+    )
+    with pytest.raises(PermissionError) as exc_a:
+        pipeline.build_and_render(
+            output_dir=report_dir,
+            title="Gate Test No Token",
+            case_id="case_tok",
+            run_id="RUN-TOK-01",
+            input_hash="INP-TOK-01",
+            odb_path=mock_odb,
+            model_info={},
+            results_info=(),
+            acceptance_info={"status": "PASS", "deliverable": True},
+            figures=[fig_no_token],
+            require_deliverable=True,
+        )
+    assert "lacks authentic viewer_session_token evidence" in str(exc_a.value)
+
+    # Case B: viewer_rendered is False
+    fig_not_rendered = ReportFigure(
+        kind="stress_hotspot",
+        path=str(img_file.as_posix()),
+        metadata={
+            "field": "S",
+            "component": "mises",
+            "run_id": "RUN-TOK-01",
+            "input_hash": "INP-TOK-01",
+            "odb_sha256": odb_sha256,
+            "image_sha256": img_sha256,
+            "output_position": "INTEGRATION_POINT",
+            "viewer_rendered": False,  # Not rendered by Viewer
+            "viewer_session_token": "VIEWER-TOKEN-TOK-01",
+        },
+    )
+    with pytest.raises(PermissionError) as exc_b:
+        pipeline.build_and_render(
+            output_dir=report_dir,
+            title="Gate Test Not Rendered",
+            case_id="case_tok",
+            run_id="RUN-TOK-01",
+            input_hash="INP-TOK-01",
+            odb_path=mock_odb,
+            model_info={},
+            results_info=(),
+            acceptance_info={"status": "PASS", "deliverable": True},
+            figures=[fig_not_rendered],
+            require_deliverable=True,
+        )
+    assert "was not rendered by a controlled Viewer session" in str(exc_b.value)
+
+
+def test_odb_rendering_session_nonce_and_token_entropy_verification(tmp_path: Path, monkeypatch):
+    """Verify render_authentic_visualizations stamps fresh cryptographic nonce and authentic token."""
+    from abaqus_ai_agent.execution.odb_rendering import render_authentic_visualizations
+    from abaqus_ai_agent.reporting.visualization_spec import VisualizationSpec
+
+    mock_odb = tmp_path / "nonce_test.odb"
+    mock_odb.write_bytes(b"\x7fSIMULIA_ODB_BINARY_HEADER" + b"\x00" * 1024)
+
+    out_dir = tmp_path / "nonce_out"
+    out_dir.mkdir()
+    target_img = out_dir / "nonce_stress.png"
+    target_img.write_bytes(b"\x89PNG\r\n\x1a\n" + b"\x00" * 64)
+
+    spec = VisualizationSpec(
+        artifact_id="FIG-NONCE",
+        visualization_type="stress_hotspot",
+        field_name="S",
+        component="mises",
+        target_filename="nonce_stress.png",
+    )
+
+    # Monkeypatch headless rendering runner to simulate successful Viewer run
+    monkeypatch.setattr(
+        "abaqus_ai_agent.execution.odb_rendering.render_odb_contours_headless",
+        lambda **kwargs: [target_img],
+    )
+
+    figs_run1 = render_authentic_visualizations(
+        odb_path=mock_odb,
+        specs=[spec],
+        output_dir=out_dir,
+        run_id="RUN-NONCE-1",
+        input_hash="INP-NONCE-1",
+    )
+    assert len(figs_run1) == 1
+    meta1 = figs_run1[0].metadata
+    nonce1 = meta1.get("session_nonce")
+    token1 = meta1.get("viewer_session_token")
+    assert nonce1 and len(nonce1) >= 16
+    assert token1 and token1.startswith("VIEWER-TOKEN-")
+    assert meta1["viewer_rendered"] is True
+
+    # Run 2: Fresh nonce must differ from Run 1
+    figs_run2 = render_authentic_visualizations(
+        odb_path=mock_odb,
+        specs=[spec],
+        output_dir=out_dir,
+        run_id="RUN-NONCE-1",
+        input_hash="INP-NONCE-1",
+    )
+    meta2 = figs_run2[0].metadata
+    nonce2 = meta2.get("session_nonce")
+    token2 = meta2.get("viewer_session_token")
+    assert nonce2 != nonce1
+    assert token2 != token1

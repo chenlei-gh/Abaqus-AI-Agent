@@ -74,8 +74,9 @@ class DeterministicReportPipeline:
                 "No report artifacts were written to disk."
             )
 
-        delivery_mode = "official_delivery" if is_deliverable else "diagnostic_draft"
-        effective_title = title if is_deliverable else f"[DIAGNOSTIC / NON-DELIVERABLE DRAFT] {title}"
+        is_official_delivery = bool(require_deliverable and is_deliverable)
+        delivery_mode = "official_delivery" if is_official_delivery else "diagnostic_draft"
+        effective_title = title if is_official_delivery else f"[DIAGNOSTIC / NON-DELIVERABLE DRAFT] {title}"
 
         target_dir = Path(output_dir)
         target_dir.mkdir(parents=True, exist_ok=True)
@@ -177,7 +178,7 @@ class DeterministicReportPipeline:
             else:
                 img_path = target_dir / spec.target_filename
                 if not img_path.exists():
-                    if require_deliverable or is_deliverable:
+                    if is_official_delivery:
                         raise FileNotFoundError(
                             f"Official engineering delivery blocked: required CAE visualization asset '{spec.target_filename}' "
                             f"({spec.field_name}.{spec.component}) does not exist in target run directory '{target_dir}'. "
@@ -185,6 +186,14 @@ class DeterministicReportPipeline:
                             "authentic CAE results rendered from live ODB extraction are required."
                         )
                     continue
+
+                if is_official_delivery:
+                    raise PermissionError(
+                        f"Official engineering delivery blocked: required figure '{spec.target_filename}' "
+                        f"({spec.field_name}.{spec.component}) was neither admitted with verified provenance "
+                        "nor rendered by a controlled Viewer session in this run. "
+                        "Pre-existing files on disk cannot be automatically adopted or certified as authentic Viewer outputs."
+                    )
 
                 img_bytes = img_path.read_bytes()
                 img_sha256 = hashlib.sha256(img_bytes).hexdigest()
@@ -199,10 +208,10 @@ class DeterministicReportPipeline:
                 if eff_odb_hash:
                     fig_obj.metadata["odb_sha256"] = eff_odb_hash
                     fig_obj.metadata["odb_hash"] = eff_odb_hash
-                session_seed = f"{run_id or 'RUN'}:{eff_odb_hash or 'NO_ODB'}:{spec.target_filename}:{img_sha256}"
-                viewer_token = f"VIEWER-TOKEN-{hashlib.sha256(session_seed.encode('utf-8')).hexdigest()[:16]}"
-                fig_obj.metadata["viewer_session_token"] = viewer_token
-                fig_obj.metadata["viewer_rendered"] = True
+                fig_obj.metadata["viewer_rendered"] = False
+
+            if fig_obj is None:
+                continue
 
             img_p = Path(fig_obj.path)
             if not img_p.is_absolute():
@@ -238,14 +247,14 @@ class DeterministicReportPipeline:
             # Caller or selector supplied effective_specs.
             # In official delivery mode: do not attach extra unrequested / unadmitted figures.
             # If caller provided extra figures that were not admitted against effective_specs, block official delivery!
-            if (require_deliverable or is_deliverable) and figures:
+            if is_official_delivery and figures:
                 unmatched_figs = [f for f in figures if f.path not in used_figure_paths]
                 if unmatched_figs:
                     raise PermissionError(
                         f"Official delivery blocked: caller provided unadmitted / unrequested figure(s) "
                         f"{[f.path for f in unmatched_figs]}. Every figure in official delivery must strictly match an admitted VisualizationSpec."
                     )
-            elif not (require_deliverable or is_deliverable):
+            elif not is_official_delivery:
                 # In diagnostic draft mode: allow unadmitted figures as draft annex
                 for f in figures:
                     if f.path in used_figure_paths:
@@ -270,7 +279,25 @@ class DeterministicReportPipeline:
                         report_figures.append(f)
 
         # 1.5 Final Delivery Gate: Anti-tamper & Cryptographic Lineage Verification
-        if require_deliverable or is_deliverable:
+        if is_official_delivery:
+            # 1. Strict execution context validation (mandatory, non-empty, non-placeholder)
+            if not run_id or str(run_id).strip() in ("RUN-DEFAULT", "DEFAULT", "UNKNOWN", ""):
+                raise PermissionError(
+                    f"Official delivery blocked: current execution run_id is missing or placeholder ({run_id!r})"
+                )
+
+            if not input_hash or not str(input_hash).strip():
+                raise PermissionError(
+                    "Official delivery blocked: current execution input_hash is missing or empty. "
+                    "Authentic engineering delivery requires full provenance traceability."
+                )
+
+            if not eff_odb_hash or not str(eff_odb_hash).strip():
+                raise PermissionError(
+                    "Official delivery blocked: authentic ODB hash is missing or ODB file was not provided. "
+                    "Authentic engineering delivery requires live ODB provenance."
+                )
+
             for fig in report_figures:
                 f_path = Path(fig.path)
                 if not f_path.is_absolute():
@@ -290,11 +317,7 @@ class DeterministicReportPipeline:
                         f"(recorded={rec_sha256!r}, live={live_sha256!r})"
                     )
 
-                # 2. Strict run_id verification (mandatory, non-default, exact match)
-                if not run_id or str(run_id).strip() in ("RUN-DEFAULT", "DEFAULT", "UNKNOWN", ""):
-                    raise PermissionError(
-                        f"Official delivery blocked: current execution run_id is missing or placeholder ({run_id!r})"
-                    )
+                # 2. Strict run_id verification (mandatory, exact match)
                 fig_run_id = f_meta.get("run_id")
                 if not fig_run_id or str(fig_run_id).strip() != str(run_id).strip():
                     raise PermissionError(
@@ -302,23 +325,21 @@ class DeterministicReportPipeline:
                         f"(fig={fig_run_id!r}, current={run_id!r})"
                     )
 
-                # 3. Strict input_hash verification
-                if input_hash and str(input_hash).strip():
-                    fig_input_hash = f_meta.get("input_hash")
-                    if not fig_input_hash or str(fig_input_hash).strip() != str(input_hash).strip():
-                        raise PermissionError(
-                            f"Official delivery blocked: Figure '{f_path.name}' input_hash mismatch "
-                            f"(fig={fig_input_hash!r}, current={input_hash!r})"
-                        )
+                # 3. Strict input_hash verification (mandatory, exact match)
+                fig_input_hash = f_meta.get("input_hash")
+                if not fig_input_hash or str(fig_input_hash).strip() != str(input_hash).strip():
+                    raise PermissionError(
+                        f"Official delivery blocked: Figure '{f_path.name}' input_hash missing or mismatch "
+                        f"(fig={fig_input_hash!r}, current={input_hash!r})"
+                    )
 
-                # 4. Strict odb_hash verification
-                if eff_odb_hash and str(eff_odb_hash).strip():
-                    fig_odb_hash = f_meta.get("odb_sha256") or f_meta.get("odb_hash")
-                    if not fig_odb_hash or str(fig_odb_hash).strip() != str(eff_odb_hash).strip():
-                        raise PermissionError(
-                            f"Official delivery blocked: Figure '{f_path.name}' odb_hash missing or mismatch "
-                            f"(fig={fig_odb_hash!r}, current={eff_odb_hash!r})"
-                        )
+                # 4. Strict odb_hash verification (mandatory, exact match)
+                fig_odb_hash = f_meta.get("odb_sha256") or f_meta.get("odb_hash")
+                if not fig_odb_hash or str(fig_odb_hash).strip() != str(eff_odb_hash).strip():
+                    raise PermissionError(
+                        f"Official delivery blocked: Figure '{f_path.name}' odb_hash missing or mismatch "
+                        f"(fig={fig_odb_hash!r}, current={eff_odb_hash!r})"
+                    )
 
                 # 5. Strict engineering semantic metadata
                 if not f_meta.get("field") and not f_meta.get("field_name"):
@@ -331,13 +352,13 @@ class DeterministicReportPipeline:
                     )
 
                 # 6. Strict controlled Viewer origin
-                has_origin = (
-                    bool(f_meta.get("viewer_session_token"))
-                    or (f_meta.get("viewer_rendered") is True and bool(f_meta.get("odb_sha256") or f_meta.get("odb_hash")))
-                )
-                if not has_origin:
+                if not f_meta.get("viewer_session_token") or not str(f_meta.get("viewer_session_token")).strip():
                     raise PermissionError(
-                        f"Official delivery blocked: Figure '{f_path.name}' lacks controlled Viewer session origin evidence"
+                        f"Official delivery blocked: Figure '{f_path.name}' lacks authentic viewer_session_token evidence"
+                    )
+                if f_meta.get("viewer_rendered") is not True:
+                    raise PermissionError(
+                        f"Official delivery blocked: Figure '{f_path.name}' was not rendered by a controlled Viewer session"
                     )
 
         # 2. Build polymorphic EngineeringReportData
@@ -381,7 +402,7 @@ class DeterministicReportPipeline:
                 "language": language,
                 "sections": list(self.builder.determine_active_sections()),
                 "delivery_mode": delivery_mode,
-                "is_diagnostic_draft": not is_deliverable,
+                "is_diagnostic_draft": not is_official_delivery,
             },
         )
 

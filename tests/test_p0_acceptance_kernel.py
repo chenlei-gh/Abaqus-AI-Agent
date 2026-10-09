@@ -14,6 +14,7 @@ Covers:
 from __future__ import annotations
 
 import dataclasses
+import hashlib
 import json
 from pathlib import Path
 import pytest
@@ -1153,18 +1154,40 @@ def test_p0_d_authentic_cae_visualization_asset_succeeds_in_official_delivery(tm
             target_filename=authentic_filename,
             caption_zh="Mises 应力云图",
             caption_en="von Mises Stress Contour",
+            output_position="INTEGRATION_POINT",
         )
     ]
+
+    h_img = hashlib.sha256(authentic_img.read_bytes()).hexdigest()
+    mock_odb = tmp_path / "authentic.odb"
+    mock_odb.write_bytes(b"\x7fSIMULIA_ODB_BINARY_HEADER" + b"\x00" * 1024)
+    h_odb = hashlib.sha256(mock_odb.read_bytes()).hexdigest()
+    auth_input_hash = "INP-AUTH-ASSET-01"
+
+    fig = specs[0].to_report_figure(str(authentic_img.as_posix()))
+    fig.metadata["image_sha256"] = h_img
+    fig.metadata["sha256"] = h_img
+    fig.metadata["run_id"] = "run_authentic_asset"
+    fig.metadata["input_hash"] = auth_input_hash
+    fig.metadata["odb_sha256"] = h_odb
+    fig.metadata["field"] = specs[0].field_name
+    fig.metadata["component"] = specs[0].component
+    fig.metadata["output_position"] = "INTEGRATION_POINT"
+    fig.metadata["viewer_rendered"] = True
+    fig.metadata["viewer_session_token"] = "VIEWER-TOKEN-AUTH-ASSET"
 
     card, pointer, data = pipeline.build_and_render(
         output_dir=out_dir,
         title="Official Authentic Delivery",
         case_id="case_authentic_asset",
         run_id="run_authentic_asset",
+        input_hash=auth_input_hash,
+        odb_path=mock_odb,
         model_info={"max_mises_mpa": 120.0},
         results_info=(),
         acceptance_info=passed_acc,
         visualization_specs=specs,
+        figures=[fig],
         require_deliverable=True,
     )
 

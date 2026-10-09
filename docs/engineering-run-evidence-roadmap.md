@@ -2186,3 +2186,19 @@ For full requirements backlog, input/output schemas, anti-hallucination constrai
 - **阶段 5：Abaqus 2025 真实真机回归 (Live Abaqus 2025 Certification)**
   - 在受控 Abaqus 2025 环境中执行端到端真机回归，生成可复核的真实 ODB、真实云图与最终工程报告。
   - 分离汇报 CI、单元测试与真机实测结果。
+
+### 28.7 图件凭据闭环与交付门禁加固实施记录 (Figure Provenance Hardening)
+
+- [x] **漏洞 1 闭环：加密安全 Viewer Session Nonce 与不可伪造会话凭据** `[CLOSED]`
+  - `odb_rendering.py` 在受控渲染会话开始时生成 16 字节随机 nonce (`secrets.token_hex(16)`)。
+  - 构造包含 `session_nonce`、`run_id`、`odb_sha256`、`target_filename` 和 `image_sha256` 的加密哈希会话凭证 `viewer_session_token`。
+  - `admit_figure_for_reuse` Category C 强制核验 `viewer_rendered is True` 且 `viewer_session_token` 存在且非空。
+- [x] **漏洞 2 闭环：根除磁盘文件自动洗白风险 (Eliminate Ambient File Adoption)** `[CLOSED]`
+  - `pipeline.py` 在正式交付模式下，对未通过准入白名单且未在当前受控会话由 Viewer 渲染的磁盘同名残留文件一律抛出 `PermissionError` fail-closed，严禁自动打标收编为 Viewer 产物。
+  - 诊断草稿模式下加载磁盘同名文件时，强制标记 `viewer_rendered = False` 且绝不伪造 `viewer_session_token`。
+- [x] **漏洞 3 闭环：正式交付门禁无条件强制检查 (Unconditional Final Delivery Gate)** `[CLOSED]`
+  - 正式交付模式下无条件强制要求 `run_id`（非占位符）、`input_hash`（非空且匹配）和真实 ODB 哈希 `eff_odb_hash`（非空且匹配）。
+  - 图件出具必须满足：物理文件存在、实时哈希抗篡改匹配、`run_id`/`input_hash`/`odb_sha256` 匹配、`output_position` 与 `field` 存在、`viewer_rendered is True`、`viewer_session_token` 真实存在。
+- [x] **负向与全量回归验证** `[QUALIFIED]`
+  - 全仓 979 项自动化回归测试全部通过 (979 passed, 0 failed, 0 skipped)。
+  - `machine_validation/` 黄金基线资产 100% 保持只读未篡改状态。

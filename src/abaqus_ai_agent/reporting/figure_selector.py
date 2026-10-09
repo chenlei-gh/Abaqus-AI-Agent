@@ -190,12 +190,11 @@ def admit_figure_for_reuse(
     # -------------------------------------------------------------------------
     # Category C: Controlled Origin
     # -------------------------------------------------------------------------
-    has_origin = (
-        bool(f_meta.get("viewer_session_token"))
-        or (f_meta.get("viewer_rendered") is True and bool(f_meta.get("odb_sha256") or f_meta.get("odb_hash")))
-    )
-    if not has_origin:
-        return False, "Figure metadata lacks controlled ODB viewer session origin tracking (missing viewer_session_token or viewer_rendered)"
+    if f_meta.get("viewer_rendered") is not True:
+        return False, "Figure metadata indicates it was not rendered by a controlled Abaqus Viewer session"
+    session_token = str(f_meta.get("viewer_session_token") or "").strip()
+    if not session_token:
+        return False, "Figure metadata lacks authentic viewer_session_token evidence"
 
     return True, "Admitted"
 
