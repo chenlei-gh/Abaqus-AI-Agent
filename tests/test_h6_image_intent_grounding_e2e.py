@@ -1,9 +1,19 @@
 import json
+import shutil
 from pathlib import Path
+import pytest
 from tools.h6_image_intent_grounding_e2e import run_h6_grounding_e2e
 
 
 def test_h6_image_intent_grounding_e2e():
+    has_launcher = bool(
+        shutil.which("abaqus")
+        or shutil.which("abaqus.bat")
+        or Path(r"C:\SIMULIA\Commands\abaqus.bat").exists()
+    )
+    if not has_launcher:
+        pytest.skip("Live Abaqus launcher not available for H.6 E2E CAE execution")
+
     evidence = run_h6_grounding_e2e()
     assert evidence["status"] == "PASS"
     assert len(evidence["intents"]) == 2

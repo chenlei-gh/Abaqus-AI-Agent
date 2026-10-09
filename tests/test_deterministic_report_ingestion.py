@@ -301,3 +301,90 @@ def test_ab_qualification_full_llm_report_vs_deterministic_pipeline(tmp_path: Pa
     evidence_file = tmp_path / "ab_report_ingestion_evidence.json"
     evidence_file.write_text(json.dumps(evidence, indent=2, ensure_ascii=False), encoding="utf-8")
     assert evidence_file.exists()
+
+
+def test_p0_2_no_forged_constants_in_adaptive_template():
+    """Verify adaptive template strictly prohibits forged constants (P0-2)."""
+    builder = AdaptiveReportBuilder(
+        physics_domain="contact",
+        objective=AnalysisObjective.BOLTED_SEALING,
+    )
+    # Build report data with zero dummy info
+    report_data = builder.build_report_data(
+        title="Test Report",
+        case_id="case_test",
+        run_id="RUN-TEST",
+        model_info={"name": "TestModel"},
+        results_info=(),
+        acceptance_info={"status": "PASS", "deliverable": True},
+    )
+
+    # 1. Contact diagnostics must not contain forged 18.5 MPa or "CLOSED" status when unverified
+    contact_diag = report_data.contact_diagnostics
+    assert contact_diag is not None
+    assert contact_diag.get("max_cpress_mpa") != 18.5
+    assert "未评估" in str(contact_diag.get("closure_status")) or "证据不足" in str(contact_diag.get("closure_status"))
+
+    # 2. Fatigue builder must not contain forged Goodman-Basquin numbers
+    builder_fatigue = AdaptiveReportBuilder(
+        physics_domain="structural",
+        objective=AnalysisObjective.FATIGUE_DURABILITY,
+    )
+    fatigue_data = builder_fatigue.build_report_data(
+        title="Fatigue Report",
+        case_id="case_fatigue",
+        run_id="RUN-FATIGUE",
+        model_info={"name": "FatigueModel"},
+        results_info=(),
+        acceptance_info={"status": "PASS", "deliverable": True},
+    )
+    fatigue_diag = fatigue_data.fatigue
+    assert fatigue_diag is not None
+    assert fatigue_diag.get("minimum_cycles") != 1.2e6
+    assert fatigue_diag.get("cumulative_damage") != 0.083
+    assert fatigue_diag.get("safety_factor") != 2.4
+    assert "证据不足" in str(fatigue_diag.get("minimum_cycles"))
+
+    # 3. Mesh & solver must not have forged element counts
+    assert report_data.mesh.get("total_elements") != 12890
+    assert report_data.mesh.get("total_nodes") != 18450
+
+
+def test_p0_3_cwd_leakage_blocked_in_report_pipeline(tmp_path: Path):
+    """Verify report pipeline blocks ambient cwd image leakage (P0-3 fail-closed)."""
+    pipeline = DeterministicReportPipeline()
+    ambient_file = Path("ambient_leak_test_fig.svg")
+    try:
+        # Create a file in current working directory
+        ambient_file.write_text("<svg><circle r='10'/></svg>", encoding="utf-8")
+
+        spec = VisualizationSpec(
+            artifact_id="FIG-AMB-01",
+            visualization_type="stress_hotspot",
+            field_name="S",
+            component="mises",
+            target_filename="ambient_leak_test_fig.svg",
+        )
+
+        run_output_dir = tmp_path / "isolated_run_dir"
+        run_output_dir.mkdir(parents=True, exist_ok=True)
+
+        # In deliverable mode, having the file in cwd must NOT satisfy the requirement;
+        # it MUST raise FileNotFoundError fail-closed because it's not in run_output_dir.
+        with pytest.raises(FileNotFoundError) as exc_info:
+            pipeline.build_and_render(
+                output_dir=run_output_dir,
+                title="Delivery Report",
+                case_id="case_leak_test",
+                run_id="RUN-LEAK-TEST",
+                model_info={},
+                results_info=(),
+                acceptance_info={"status": "PASS", "deliverable": True},
+                visualization_specs=[spec],
+                require_deliverable=True,
+            )
+        assert "ambient_leak_test_fig.svg" in str(exc_info.value)
+        assert "Fallback to ambient working directory" in str(exc_info.value)
+    finally:
+        if ambient_file.exists():
+            ambient_file.unlink()

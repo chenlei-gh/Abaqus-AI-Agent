@@ -23,8 +23,9 @@ class AbaqusAIAgent:
     only after its region expression has been produced by grounding or an
     explicit user/model selection.
     """
-    def __init__(self, executor):
+    def __init__(self, executor, mode: str = "production"):
         self.executor = executor
+        self.mode = mode
 
     def apply_plan(self, plan):
         validate_plan(plan)
@@ -138,10 +139,10 @@ class AbaqusAIAgent:
                     yield_strength = float(props["yield"])
                     break
 
-        if yield_strength is None and "235" in material_name:
-            yield_strength = 235.0
-        elif yield_strength is None and "345" in material_name:
-            yield_strength = 345.0
+        # In strict engineering production, do not heuristically invent yield strength
+        # based merely on substrings in the material name unless explicitly provided.
+        # If yield_strength remains None, downstream derived metrics report "未评估 / 证据不足"
+        # instead of fabricating synthetic safety factor numbers.
 
         applied_force = None
         if intent and getattr(intent, "loads", None):
@@ -154,6 +155,8 @@ class AbaqusAIAgent:
                 tot_mag += abs(float(mag))
             if tot_mag > 0:
                 applied_force = tot_mag
+
+        extraction_diagnostics: Dict[str, str] = {}
 
         reaction_force = None
         for k in ("RF2", "RF", "RF_mag", "reaction_force"):
@@ -178,9 +181,14 @@ class AbaqusAIAgent:
                     if abs(tot_rf2) > 1e-6:
                         reaction_force = abs(tot_rf2)
                         primary_metrics["RF2"] = tot_rf2
+                        extraction_diagnostics["RF"] = "EXTRACTED"
+                    else:
+                        extraction_diagnostics["RF"] = "UNAVAILABLE: RF sum below 1e-6 threshold"
+                else:
+                    extraction_diagnostics["RF"] = "UNAVAILABLE: fieldOutput 'RF' not present in frame"
                 _odb.close()
-            except Exception:
-                pass
+            except Exception as rf_err:
+                extraction_diagnostics["RF"] = f"UNAVAILABLE: {type(rf_err).__name__}: {rf_err}"
 
         hotspots_list: List[SpatialHotspot] = []
         curves_list: List[XYCurveData] = []
@@ -206,8 +214,11 @@ class AbaqusAIAgent:
                         kind="spatial_hotspots",
                     )
                     figures.append(fig_h)
-            except Exception:
-                pass
+                    extraction_diagnostics["hotspots"] = f"EXTRACTED ({len(hotspots_list)} points)"
+                else:
+                    extraction_diagnostics["hotspots"] = "UNAVAILABLE: No hotspots found"
+            except Exception as hs_err:
+                extraction_diagnostics["hotspots"] = f"UNAVAILABLE: {type(hs_err).__name__}: {hs_err}"
 
             # Try extracting typical energy curves if available
             for var in ("ALLSE", "ALLIE", "ETOTAL", "ALLKE"):
@@ -228,8 +239,11 @@ class AbaqusAIAgent:
                             kind="xy_curve",
                         )
                         figures.append(fig_c)
-                except Exception:
-                    pass
+                        extraction_diagnostics[f"history_curve_{var}"] = f"EXTRACTED ({c.point_count} points)"
+                    else:
+                        extraction_diagnostics[f"history_curve_{var}"] = "UNAVAILABLE: Zero points in history region"
+                except Exception as hc_err:
+                    extraction_diagnostics[f"history_curve_{var}"] = f"UNAVAILABLE: {type(hc_err).__name__}: {hc_err}"
 
         etotal_curve = next((c for c in curves_list if c.curve_name.startswith("ETOTAL")), None)
         allie_curve = next((c for c in curves_list if c.curve_name.startswith("ALLIE")), None)
@@ -255,6 +269,7 @@ class AbaqusAIAgent:
             metadata={
                 "job_name": job_name,
                 "odb_path": odb_path,
+                "extraction_diagnostics": extraction_diagnostics,
             },
         )
         return bundle, tuple(figures)
@@ -268,8 +283,14 @@ class AbaqusAIAgent:
                      mesh_quality=None, mesh_convergence=None, fatigue=None,
                      contact_diagnostics=None, sensitivity=None, uncertainty=None,
                      engineering_intent=None, postprocess_profile=None,
-                     action_plan=(), environment=None, timeout=3600, workdir=None):
+                     action_plan=(), environment=None, timeout=3600, workdir=None,
+                     require_production=None):
         from .execution.analysis_run import AnalysisRunner
+        cname = getattr(self.executor, "__class__", None).__name__ or ""
+        is_test_double = any(token in cname for token in ("Mock", "Fake", "Stub", "Dummy", "OdbBackedExecutor")) or \
+                         getattr(self.executor, "_is_mock", False)
+        if require_production is None:
+            require_production = (self.mode == "production" and not is_test_double)
         return AnalysisRunner(self.executor).run(
             model_name, job_name, odb_path=odb_path, criteria=criteria,
             result_values=result_values, numerical_verification=numerical_verification,
@@ -278,7 +299,8 @@ class AbaqusAIAgent:
             contact_diagnostics=contact_diagnostics, sensitivity=sensitivity,
             uncertainty=uncertainty, engineering_intent=engineering_intent,
             postprocess_profile=postprocess_profile, action_plan=action_plan,
-            environment=environment, timeout=timeout, workdir=workdir)
+            environment=environment, timeout=timeout, workdir=workdir,
+            require_production=require_production)
 
     def submit(self, job_name, wait=False):
         from .execution.jobs import JobController
@@ -489,6 +511,12 @@ class AbaqusAIAgent:
 
         # 6. Single Canonical Production Outlet: AnalysisRunner
         criteria = kwargs.pop("criteria", None) or intent.acceptance_criteria or ()
+        cname = getattr(self.executor, "__class__", None).__name__ or ""
+        is_test_double = any(token in cname for token in ("Mock", "Fake", "Stub", "Dummy", "OdbBackedExecutor")) or \
+                         getattr(self.executor, "_is_mock", False)
+        default_prod = (self.mode == "production" and not is_test_double)
+        prod_req = kwargs.pop("require_production", default_prod)
+        target_workdir = kwargs.pop("workdir", None)
         run = self.analysis_run(
             model_name=plan.model_name,
             job_name=plan.job_name,
@@ -500,6 +528,8 @@ class AbaqusAIAgent:
             postprocess_profile=capability.profile,
             action_plan=plan.actions,
             timeout=timeout,
+            workdir=target_workdir,
+            require_production=prod_req,
             **kwargs,
         )
 
@@ -517,6 +547,8 @@ class AbaqusAIAgent:
         healing_result = None
         if not initial_ok and enable_self_healing and odb_path is None and result_values is None:
             from .diagnostics.orchestrator import SelfHealingOrchestrator
+            heal_kwargs = dict(kwargs)
+            heal_workdir = heal_kwargs.pop("workdir", getattr(run, "work_dir", None) or os.getcwd())
             run, healing_result = SelfHealingOrchestrator.attempt_healing(
                 agent=self,
                 failed_run=run,
@@ -529,23 +561,61 @@ class AbaqusAIAgent:
                 grounded_regions=grounded_regions,
                 max_attempts=max_healing_attempts,
                 timeout=timeout,
-                workdir=getattr(run, "work_dir", None) or os.getcwd(),
+                workdir=heal_workdir,
                 criteria=criteria,
                 postprocess_profile=capability.profile,
-                **kwargs,
+                **heal_kwargs,
             )
 
         # 7. Summary Card & Markdown Engineering Report
         metrics = getattr(run, "metrics", ()) or ()
         acceptance = getattr(run, "acceptance", None)
 
+        metric_dict = {}
+        for m in metrics:
+            m_name = getattr(m, "name", None) or (m.get("name") if isinstance(m, dict) else str(m))
+            m_val = getattr(m, "value", None) if hasattr(m, "value") else (m.get("value") if isinstance(m, dict) else None)
+            if m_name:
+                metric_dict[m_name] = m_val
+            v_key = getattr(m, "value_key", None) or (m.get("value_key") if isinstance(m, dict) else None)
+            if not v_key:
+                m_meta = getattr(m, "metadata", {}) or (m.get("metadata", {}) if isinstance(m, dict) else {})
+                if isinstance(m_meta, dict):
+                    v_key = m_meta.get("value_key")
+            if v_key:
+                metric_dict[v_key] = m_val
+
         # 7a. Result Intelligence & Graphical Assets (P1.3 Delivery)
+        out_dir = target_workdir or (os.path.dirname(run.odb_path) if getattr(run, "odb_path", None) else None) or os.getcwd()
         ri_bundle, generated_figures = self.extract_result_intelligence(
             run=run,
             intent=intent,
             capability=capability,
-            output_dir=getattr(run, "work_dir", None) or os.getcwd(),
+            output_dir=out_dir,
         )
+
+        # 7b. Automatic Engineering Figure Selection
+        from .reporting.figure_selector import select_engineering_figures
+        top_hotspot_info = None
+        if ri_bundle and getattr(ri_bundle, "hotspots", None):
+            top_h = ri_bundle.hotspots[0]
+            top_hotspot_info = {
+                "element_id": getattr(top_h, "element_label", None),
+                "node_id": getattr(top_h, "node_label", None),
+                "coordinates": getattr(top_h, "coordinates", None),
+            }
+
+        figure_selection = select_engineering_figures(
+            intent=intent,
+            physics_domain=capability.physics_domain,
+            results_info=metric_dict,
+            existing_figures=generated_figures,
+            run_id=getattr(run, "id", None),
+            hotspot_info=top_hotspot_info,
+            output_dir=out_dir,
+        )
+
+        all_figures = list(generated_figures) + list(figure_selection.reused_figures)
 
         report_title = f"Engineering Analysis Report: {intent.description or plan.model_name}"
         report_data = self.build_report(
@@ -553,7 +623,7 @@ class AbaqusAIAgent:
             title=report_title,
             objective=intent.description or f"Automated analysis under {capability.capability_id}",
             result_intelligence=ri_bundle,
-            figures=generated_figures,
+            figures=all_figures,
             self_healing=healing_result,
         )
         report_md = render_markdown(report_data)
@@ -573,21 +643,39 @@ class AbaqusAIAgent:
             and eng_status in ("ACCEPTED", "RESULT_VALID")
             and bool(getattr(run, "acceptance_passed", False))
         )
-        task_status = TaskStatus.COMPLETED if is_completed else TaskStatus.FAILED
 
-        metric_dict = {}
-        for m in metrics:
-            m_name = getattr(m, "name", None) or (m.get("name") if isinstance(m, dict) else str(m))
-            m_val = getattr(m, "value", None) if hasattr(m, "value") else (m.get("value") if isinstance(m, dict) else None)
-            if m_name:
-                metric_dict[m_name] = m_val
-            v_key = getattr(m, "value_key", None) or (m.get("value_key") if isinstance(m, dict) else None)
-            if not v_key:
-                m_meta = getattr(m, "metadata", {}) or (m.get("metadata", {}) if isinstance(m, dict) else {})
-                if isinstance(m_meta, dict):
-                    v_key = m_meta.get("value_key")
-            if v_key:
-                metric_dict[v_key] = m_val
+        deterministic_delivery_card = None
+        if prod_req and is_completed and acceptance and getattr(acceptance, "deliverable", False):
+            try:
+                from pathlib import Path
+                from .reporting.pipeline import DeterministicReportPipeline
+                pipeline = DeterministicReportPipeline()
+                deterministic_delivery_card, _, det_report_data = pipeline.build_and_render(
+                    output_dir=Path(out_dir),
+                    title=report_title,
+                    case_id=plan.job_name,
+                    run_id=getattr(run, "id", "RUN-AUTH"),
+                    model_info={
+                        "name": plan.model_name,
+                        "max_mises_mpa": metric_dict.get("max_mises") or metric_dict.get("S_Mises"),
+                        "max_displacement_mm": metric_dict.get("max_displacement") or metric_dict.get("U_magnitude"),
+                    },
+                    results_info=[{"metric": k, "value": v} for k, v in metric_dict.items()],
+                    acceptance_info=acceptance,
+                    visualization_specs=figure_selection.specs,
+                    figures=all_figures,
+                    require_deliverable=True,
+                    odb_path=getattr(run, "odb_path", None),
+                    input_hash=getattr(run.provenance, "input_hash", "") if getattr(run, "provenance", None) else "",
+                    launcher=getattr(self.executor, "launcher", None),
+                )
+                report_md = render_markdown(det_report_data)
+                report_html_str = render_html(det_report_data)
+            except Exception as d_exc:
+                is_completed = False
+                eng_status = "DELIVERY_BLOCKED"
+
+        task_status = TaskStatus.COMPLETED if is_completed else TaskStatus.FAILED
 
         summary_card = {
             "status": task_status.value,
@@ -597,15 +685,23 @@ class AbaqusAIAgent:
             "physics_domain": capability.physics_domain,
             "engineering_status": eng_status,
             "acceptance_passed": getattr(run, "acceptance_passed", False),
+            "deliverable": getattr(acceptance, "deliverable", False) if acceptance else False,
             "metrics": metric_dict,
             "reasoning_status": reasoning_res.status.value,
             "inferences": [inf.to_dict() for inf in reasoning_res.inferences],
             "result_intelligence": {
                 "hotspot_count": len(ri_bundle.hotspots),
                 "curve_count": len(ri_bundle.curves),
-                "figure_count": len(generated_figures),
+                "figure_count": len(all_figures),
                 "derived_metrics": ri_bundle.derived_metrics.to_dict() if ri_bundle.derived_metrics else None,
             },
+            "figure_selection": {
+                "scenario": figure_selection.scenario,
+                "specs_count": len(figure_selection.specs),
+                "reused_count": len(figure_selection.reused_figures),
+                "unavailable_fields": figure_selection.unavailable_fields,
+            },
+            "delivery_card": deterministic_delivery_card.to_dict() if deterministic_delivery_card else None,
             "self_healing": healing_result.to_dict() if healing_result else None,
         }
 

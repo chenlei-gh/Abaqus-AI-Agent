@@ -152,20 +152,13 @@ with open('%s', 'w') as f:
         executor = BatchExecutor(launcher="abaqus", workdir=str(run_dir))
         try:
             proc = executor.run_nogui(str(cae_script_file), timeout=120)
-        except Exception:
-            pass
+        except Exception as exc:
+            raise RuntimeError(f"Fail-closed: Execution of H.6 CAE script failed: {exc}") from exc
+    else:
+        raise RuntimeError("Fail-closed: Live Abaqus launcher not available to execute H.6 grounding CAE script.")
 
     if not res_json_file.exists():
-        fallback_res = {
-            "fixed_face_count": len(fixed_face),
-            "tip_face_count": len(tip_face),
-            "fixed_set_faces": 1,
-            "tip_set_faces": 1,
-            "status": "PASS",
-        }
-        res_json_file.write_text(json.dumps(fallback_res, indent=2), encoding="utf-8")
-
-    assert res_json_file.exists(), "Grounding results file was not created: %s" % res_json_file
+        raise RuntimeError(f"Fail-closed: Grounding results file was not created by Abaqus: {res_json_file}")
     with open(res_json_file, "r", encoding="utf-8") as f:
         cae_results = json.load(f)
 

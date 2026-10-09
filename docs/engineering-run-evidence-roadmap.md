@@ -2050,4 +2050,139 @@ For full requirements backlog, input/output schemas, anti-hallucination constrai
     2. **真实云图渲染与报告管线打通 (`odb_rendering.py` & `pipeline.py`)**：实现 `render_authentic_visualizations`，由无头 Abaqus Viewer 原生渲染真实云图并验证文件存在且大于 0 字节；报告管线接收 `odb_path` 并自动调度真实渲染，缺少图件坚决 fail-closed 阻断，彻底消除任何合成占位图；
     3. **统一生产验收与 AnalysisRunner 贯穿 (`analysis_run.py`)**：在 `AnalysisRun` 增加 `extractions` 真实溯源列表；`AnalysisRunner.run` 支持 `require_production=True`，严格调用 `evaluate_production_acceptance`；当且仅当 `accepted.deliverable is True` 时方可签发 `ACCEPTED` 与 `acceptance_passed=True`，并自动回填 `.inp` 真实 SHA-256；
     4. **六层通用架构因果防绕过全贯穿测试 (`test_cae_pipeline_integration.py`)**：覆盖外部注入拒绝交付、作业未提交/失败阻断、真实 ODB 提取及 Manifest 授权全链路、伪造 ODB 渲染阻断及全失败路径零文件落盘。
-  - 退出门禁：全套测试套件 946/946 全部通过，全仓零合成假图、零占位伪造，六层架构因果绑定全绿闭环。
+  2053	  - 退出门禁：全套测试套件 946/946 全部通过，全仓零合成假图、零占位伪造，六层架构因果绑定全绿闭环。
+
+---
+
+## 28. 真实工程结果可信闭环与自适应图件匹配整改路线图 (Real-Engineering Grounding & Adaptive Visualization Roadmap)
+
+**版本号：** 2026-10-09  
+**基线提交：** `3772d63616f4d9ded1a85e071abc284fa6987e2e`  
+**核心宗旨：** 停止单纯堆砌功能和测试数量；以真实工程可信度为唯一准绳，实现从“工程意图 → 真实求解 → 原生 ODB 提取 → 门禁验收 → 自动选取最有价值真实云图 → 可溯源工程报告”不可绕过的生产闭环。坚决不动 Case 01–06 案例，坚决不建重复架构，坚决不误删 `machine_validation` 黄金凭据。
+
+---
+
+### 28.1 总体工程边界与红线原则
+
+1. **真实性第一原则**：
+   - 严禁假 PASS：环境缺失、求解未运行、数据不匹配时，坚决判定为 `SKIPPED`、`BLOCKED` 或 `FAIL`，绝不允许伪造字典或合成数据冒充通过。
+   - 严禁伪造数值：正式报告中的最大应力、接触压力、疲劳寿命、网格质量等，必须直接提取自实际计算的真实 ODB 或模型定义，无数据时必须标明“未评估 / 证据不足”，禁止填充默认常数（如 `18.5 MPa`、`1.2e6` 循环等）。
+2. **架构收敛原则**：
+   - 不新建与现有 `validation/preflight.py`、`execution/analysis_run.py`、`execution/odb_extractor.py`、`acceptance.py`、`reporting/pipeline.py` 重复的治理层。
+   - 坚决不动 Case 01–06 存量案例文件，避免无依据的重构导致既有测试破损。
+3. **资产保护红线**：
+   - `machine_validation/` 下受 Git 跟踪的 157 个真实机台基准黄金凭证（Golden Manifests）为最高级别资产，严禁删除；仅允许清理本地未跟踪的临时求解计算缓存（`.odb` / `.log` / `.msg` 等）。
+4. **两阶段预检与物理域解耦边界**：
+   - **两阶段 Preflight**：严格区分“编译前语法/参数检查（Intent 语义、单元一致性、材料非空）”与“求解前模型/网格检查（实际网格质量、拾取区域非空、INP 关键字语法）”。Preflight 不能在模型未生成前虚构几何/网格合法性。
+   - **物理域意图驱动**：通用接触分析（Contact）严禁默认触发螺栓预紧与密封评定；仅当分析意图（Intent）显式要求密封性能或垫片指标时，才激活相应的专用物理判据。
+
+---
+
+### 28.2 核心需求一：通用生产闭环贯通
+
+打通主入口调用链，确保正式执行不可绕过真实验证：
+
+```
+用户工程意图 (EngineeringIntent)
+    ↓
+两阶段预检 (Preflight: 编译前语义检查 → 求解前模型检查)
+    ↓
+真实 Abaqus 求解 (AnalysisRunner.run(require_production=True))
+    ↓
+原生 ODB 提取 (odb_extractor.py: 提取物理场与极值，深度绑定 run_id/odb_sha256)
+    ↓
+生产验收门禁 (evaluate_production_acceptance: 强制执行，无证据/必需门禁跳过则拒绝交付)
+    ↓
+自适应真实图件选择与渲染 (odb_rendering.py + figure_selector.py)
+    ↓
+确定性工程报告生成 (DeterministicReportPipeline: 严格校验 is_deliverable，图件因果强绑定)
+```
+
+1. **真实执行与提取接入**：
+   - 将 `odb_extractor.py` 深度嵌入 `AnalysisRunner` 主调用链，杜绝内联重复提取与硬编码 mock 数据。
+   - 将 `run_id`、输入 INP 哈希、真实 ODB 哈希、Step、Frame、Field、Region 强绑定并存入 `ResultExtraction` 与 `EvidenceManifestV2`。
+2. **生产验收强制闭环**：
+   - `agent.py` 生产模式执行默认开启严格验收；禁止因参数缺省而隐式降级为宽松开发模式。
+   - 任何必需门禁被跳过（`SKIPPED`）、证据篡改（`EVIDENCE_TAMPERED`）、跨运行串用（`EVIDENCE_STALE`）或假 ODB，必须判定为 `RESULT_INVALID` 或 `BLOCKED`，直接拒绝交付（`deliverable=False`）。
+3. **报告生产链路收敛**：
+   - 正式报告必须由 `DeterministicReportPipeline` 统一签发，禁止零散的 HTML 模板绕过验收直接渲染交付物。
+
+---
+
+### 28.3 核心需求二：自适应真实 CAE 图件选择与因果绑定
+
+根据分析物理域、工程结论和真实 ODB 字段，自动决定需要呈现的最优图件，杜绝模板死板套用。
+
+#### 1. 物理域图件自适应映射矩阵
+
+| 分析场景 / 物理域 | 优先自动选取的图件类型 | 主选变量与分量 | 主要工程用途与判定目标 |
+| :--- | :--- | :--- | :--- |
+| **静力结构分析 (Static)** | von Mises 综合应力云图、总变形位移图 | `S (Mises)`, `U (Magnitude)` | 评估强度裕度、定位危险应力集中区与变形量 |
+| **刚度 / 位移分析 (Stiffness)** | 变形放大图、特征方向位移分布图 | `U (U1, U2, U3, Magnitude)` | 验证结构整体刚度，检查关键测点挠度与变形协调 |
+| **通用接触分析 (Contact)** | 接触状态云图、接触压力分布图 | `CPRESS`, `COPEN`, `CSLIP` | 评估接触对贴合范围、局部法向压力与脱离/滑移边界 |
+| **螺栓预紧与密封分析 (Sealing)** | 垫片面接触压力、法向密封比压云图 | `CPRESS` (限定 Sealing Face/Gasket) | 评估密封有效性，对照最小有效密封比压判据 |
+| **稳态 / 瞬态热分析 (Thermal)** | 整体温度云图、局部热流密度矢量/分布 | `NT11`, `HFL` | 评估热冲击、温度场梯度、热流聚集与隔热屏障 |
+| **瞬态动力学分析 (Dynamic)** | 峰值响应瞬间应力云图、塑性应变发展图 | `S (Mises)`, `PEEQ` (指定峰值时刻帧) | 识别冲击载荷下动应力峰值与不可逆塑性损伤累积 |
+| **网格敏感性分析 (Mesh GCI)** | 网格剖分对比图、特征路径应力收敛曲线 | 真实网格拓扑截图 + 路径散点曲线 | 展示网格质量、网格无关性与 Richardson 外推评估 |
+| **高周 / 低周疲劳 (Fatigue)** | 疲劳损伤分布图、临界平面应力幅云图 | 寿命 / 损伤计算场 (基于真实应力范围) | 展示疲劳寿命薄弱部位及关键焊缝/缺口危险点 |
+
+#### 2. 图件来源严格优先级
+
+1. **优先级 1（复用经过校验的本次运行真实原生图）**：当前 `run_id` 下已由 Abaqus/Viewer 导出且 SHA-256 校验合法的图件，直接复用。
+2. **优先级 2（自动调度无头 Viewer 动态渲染）**：本次 ODB 存在合法目标场变量，但尚未生成对应视角图件时，自动调用 `odb_rendering.py` 原生渲染。
+3. **优先级 3（标记不可用，坚决 Fail-Closed）**：若 ODB 缺失目标场输出或 Viewer 崩溃，在报告中明确记录 `FIGURE_UNAVAILABLE` 及确切原因，**严禁静默生成任何假云图、空白图、旧图或占位图**。
+
+#### 3. 最具工程价值画面的自动选取算法
+
+- **危险区域智能对焦**：将提取到的最大应力/接触压力极值网格单元/节点坐标，与相机视口（Camera Viewpoint）自动对齐，保证图件清晰呈现局部危险区。
+- **真实色标与单位规范**：必须包含有效 Legend（色标）、明确单位标注、真实变形缩放系数（Deformation Scale Factor）。
+- **图件因果强绑定元数据**：每张图件必须在 Manifest 和报告元数据中固化：
+  - `run_id`、`input_hash`、`odb_sha256`、`image_sha256`；
+  - `field_name`、`component`、`step_name`、`frame_index` / `time_value`；
+  - 视图类型（`ISO` / `TOP` / `DETAIL`）与对应的数值工程结论。
+
+---
+
+### 28.4 P0 必须整改项矩阵 (阻塞性缺陷)
+
+| 编号 | 缺陷描述 | 源码定位 | 整改要求与退出准则 |
+| :--- | :--- | :--- | :--- |
+| **P0-1** | **假 PASS 回退机制残留** | `tools/h6_image_intent_grounding_e2e.py` | 彻底移除无 Abaqus 时伪造 `status: PASS` 字典逻辑；环境缺失显式标记 `SKIPPED`，断言失败显式判定 `FAIL`，编写反例测试确认无环境绝不 PASS。 |
+| **P0-2** | **报告模板硬编码虚假工程数据** | `src/abaqus_ai_agent/reporting/adaptive_template.py` | 彻底删除 `18.5 MPa`、`1.2e6`、`0.083`、`2.4` 等伪造常数；未计算时统一输出 `未评估 / 证据不足`，保证报告数值 100% 来源于真实数据流。 |
+| **P0-3** | **报告管线工作目录串图漏洞** | `src/abaqus_ai_agent/reporting/pipeline.py` | 彻底移除从 `cwd` 裸搜同名图件的回退路径；所有图件必须位于受控 run 目录且哈希在清单中登记，否则直接拦截。 |
+| **P0-4** | **生产模式默认值偏向宽松** | `execution/analysis_run.py` & `agent.py` | `AnalysisRunner.run(require_production=...)` 及 Agent 主入口默认启用生产严格模式；任何放宽必须由测试环境显式注入。 |
+| **P0-5** | **ODB 真实性仅做表层初筛** | `execution/solver.py` & `execution/odb_extractor.py` | 在轻量大小/文件头初筛基础上，增加原生 Abaqus Python `odbAccess.openOdb()` 结构级与物理场完整性验签，无法解析或缺失目标 Step/Frame 即判定为无效。 |
+| **P0-6** | **Viewer 渲染失败静默降级** | `execution/odb_rendering.py` | 捕获 Viewer 非零退出码与脚本标准错误，发生异常时坚决抛出异常阻断，禁止吞掉异常继续向下执行。 |
+
+---
+
+### 28.5 P1 架构与工程规范整改矩阵
+
+| 编号 | 规范描述 | 源码定位 | 整改要求与退出准则 |
+| :--- | :--- | :--- | :--- |
+| **P1-1** | **后处理结果提取严禁静默吞掉异常** | `src/abaqus_ai_agent/agent.py` | 清理宽泛的 `except Exception: pass`；关键提取失败必须记录确切失败原因并影响最终状态，严禁无证据时赋通过。 |
+| **P1-2** | **报告章节按物理意图动态挂载** | `src/abaqus_ai_agent/reporting/adaptive_template.py` | 解耦通用接触与密封报告；仅在意图显式包含密封要求时生成密封章节，避免无关结论混入正式报告。 |
+| **P1-3** | **测试可信度与环境透明化** | 全仓测试与 CI 监控 | CI 运行结果、本地单元测试通过、真实 Abaqus 求解通过三者严格独立汇报，禁止以本地 mock 测试通过替代真实求解通过。 |
+
+---
+
+### 28.6 实施阶段划分与退出门禁 (Milestones)
+
+- **阶段 0：基线冻结与资产净化 (Baseline Freeze & Asset Sanitization)**
+  - 清理本地未跟踪的求解器日志与 ODB 垃圾缓存；保持 157 个 Git 跟踪黄金凭据完好。
+  - 锁定 954 项本地测试基线，严禁破坏既有通过项。
+- **阶段 1：根除 P0 真实性隐患 (P0 Truthfulness Remediation)**
+  - 完成 P0-1（H.6 假 PASS 根除）、P0-2（自适应模板假数据清理）、P0-3（报告管线串图漏洞封死）。
+  - 编写专门负向测试（缺失图件、缺失数据、伪造参数），确认系统一律 fail-closed。
+- **阶段 2：生产闭环与原生 ODB 验签强化 (Production Loop & Native ODB Hardening)**
+  - 完成 P0-4（生产模式强制默认）、P0-5（原生 ODB 结构级深度验签）、P0-6（渲染异常严格拦截）。
+  - 贯通 `agent.py` → `AnalysisRunner` → `odb_extractor` → `evaluate_production_acceptance` 链路。
+- **阶段 3：工程意图自适应图件选择系统 (Adaptive Figure Selector)**
+  - 落地 `reporting/figure_selector.py`，根据物理域和 ODB 输出场自适应推荐图件规格。
+  - 对接 `DeterministicReportPipeline`，实现按意图自动选择、自动渲染与元数据不可伪造绑定。
+- **阶段 4：P1 细节收口与回归验证 (P1 Polish & Full Regression)**
+  - 消除静默异常捕获，解耦接触与密封章节。
+  - 执行本地全量测试（目标保持 950+ 全部通过，零假 PASS），核对 CI 状态。
+- **阶段 5：Abaqus 2025 真实真机回归 (Live Abaqus 2025 Certification)**
+  - 在受控 Abaqus 2025 环境中执行端到端真机回归，生成可复核的真实 ODB、真实云图与最终工程报告。
+  - 分离汇报 CI、单元测试与真机实测结果。

@@ -54,8 +54,12 @@ class AdaptiveReportBuilder:
         ]
 
         # Domain & Objective Adaptive Sections
-        if self.objective == AnalysisObjective.BOLTED_SEALING or "contact" in self.physics_domain:
+        if self.objective == AnalysisObjective.BOLTED_SEALING:
             sections.append("fastener_preload_diagnostics")
+            sections.append("contact_pressure_and_closure")
+        elif "contact" in self.physics_domain:
+            # General contact analysis focuses on contact pressure and interaction status,
+            # not fastener preload diagnostics or gasket sealing criteria.
             sections.append("contact_pressure_and_closure")
 
         if self.objective == AnalysisObjective.FATIGUE_DURABILITY or "fatigue" in self.physics_domain:
@@ -131,34 +135,57 @@ class AdaptiveReportBuilder:
             if interp_blocks:
                 objective_text = f"{objective_text}\n\n" + "\n\n".join(interp_blocks)
 
-        # Objective-specific diagnostics injection
+        # Objective-specific diagnostics injection (strictly from evidence, no forged constants)
         contact_diag = None
         fatigue_diag = None
         if "contact_pressure_and_closure" in active_sections:
-            contact_diag = {
-                "closure_status": "CLOSED",
-                "max_cpress_mpa": model_info.get("max_cpress_mpa", 18.5),
-                "friction_formulation": "Penalty (Coulomb mu=0.15)",
-                "chatter_status": "NO_CHATTER",
-            }
+            extracted_contact = model_info.get("contact_diagnostics")
+            if isinstance(extracted_contact, dict):
+                contact_diag = dict(extracted_contact)
+            else:
+                contact_diag = {
+                    "max_cpress_mpa": model_info.get("max_cpress_mpa", "未提取 / 证据不足"),
+                    "friction_formulation": model_info.get("friction_formulation", "未指定"),
+                    "chatter_status": model_info.get("chatter_status", "未检测"),
+                }
+                # Only include closure_status when objective is bolted_sealing or domain involves sealing
+                if self.objective == AnalysisObjective.BOLTED_SEALING or "sealing" in self.physics_domain:
+                    contact_diag["closure_status"] = model_info.get("closure_status", "未评估 / 证据不足")
+                else:
+                    contact_diag["closure_status"] = "不适用 (非密封评估意图)"
 
         if "fatigue_life_and_damage" in active_sections:
-            fatigue_diag = {
-                "fatigue_criterion": "Goodman-Basquin",
-                "minimum_cycles": 1.2e6,
-                "cumulative_damage": 0.083,
-                "safety_factor": 2.4,
-            }
+            extracted_fatigue = model_info.get("fatigue_diagnostics") or model_info.get("fatigue")
+            if isinstance(extracted_fatigue, dict):
+                fatigue_diag = dict(extracted_fatigue)
+            else:
+                fatigue_diag = {
+                    "fatigue_criterion": model_info.get("fatigue_criterion", "未指定 / 未评估"),
+                    "minimum_cycles": model_info.get("minimum_cycles", "未计算 / 证据不足"),
+                    "cumulative_damage": model_info.get("cumulative_damage", "未计算 / 证据不足"),
+                    "safety_factor": model_info.get("safety_factor", "未计算 / 证据不足"),
+                }
+
+        resolved_solver = solver_info or {
+            "solver_type": model_info.get("solver_type", "Abaqus/Standard"),
+            "version": model_info.get("solver_version", "未指定 / 运行时检测"),
+            "analysis_type": model_info.get("analysis_type", "未指定"),
+        }
+        resolved_mesh = mesh_info or {
+            "total_elements": model_info.get("total_elements", "未统计"),
+            "total_nodes": model_info.get("total_nodes", "未统计"),
+            "element_type": model_info.get("element_type", "未指定"),
+        }
 
         report_data = EngineeringReportData(
             title=title,
             objective=objective_text,
             model=model_info,
-            solver=solver_info or {"solver_type": "Abaqus/Standard", "version": "2024", "analysis_type": "Static General"},
+            solver=resolved_solver,
             materials=tuple(materials_info),
             boundary_conditions=tuple(bcs_info),
             loads=tuple(loads_info),
-            mesh=mesh_info or {"total_elements": 12890, "total_nodes": 18450, "element_type": "C3D10"},
+            mesh=resolved_mesh,
             results=tuple(results_info),
             figures=tuple(figures),
             acceptance=acceptance_info,

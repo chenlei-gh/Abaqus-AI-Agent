@@ -192,7 +192,8 @@ def generate_headless_viewer_script(
             "    session.printToFile(fileName=out_img, format=PNG, canvasObjects=(vp,))",
             "    print('[HeadlessViewer] Successfully rendered: %s' % out_img)",
             "except Exception as err:",
-            f"    print('[HeadlessViewer] WARNING: Failed to render {safe_fname}: %s' % err)",
+            f"    print('[HeadlessViewer] ERROR: Failed to render {safe_fname}: %s' % err)",
+            "    sys.exit(4)",
             "",
         ]
 
@@ -252,6 +253,12 @@ def render_odb_contours_headless(
         )
     except subprocess.TimeoutExpired as exc:
         raise RuntimeError(f"Headless Abaqus Viewer timed out after {timeout}s: {exc}")
+
+    if proc.returncode != 0:
+        err_msg = proc.stderr.strip() or proc.stdout.strip()
+        raise RuntimeError(
+            f"Headless Abaqus Viewer failed with exit code {proc.returncode}: {err_msg}"
+        )
 
     # Collect successfully generated images
     produced = []

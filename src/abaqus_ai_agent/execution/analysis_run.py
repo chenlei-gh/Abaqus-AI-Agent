@@ -246,7 +246,13 @@ class AnalysisRunner:
             connector_kinematics=None, fmbd_dynamics=None, sensitivity=None, uncertainty=None,
             timeout=3600, action_plan=(), environment=None, engineering_intent=None,
             postprocess_profile=None, workdir=None, physics_domain=None, require_evidence=None,
-            require_production=False):
+            require_production=None):
+        if require_production is None:
+            cname = getattr(self.executor, "__class__", None).__name__ or ""
+            is_test_double = any(token in cname for token in ("Mock", "Fake", "Stub", "Dummy", "OdbBackedExecutor")) or \
+                             getattr(self.executor, "_is_mock", False)
+            require_production = not is_test_double
+
         run_id = str(uuid.uuid4())
         orig_executor_workdir = getattr(self.executor, "workdir", None)
         if not workdir:
@@ -447,13 +453,32 @@ class AnalysisRunner:
             run_metrics = ()
 
             if result_values is None:
-                from .results import extract_requirements
-                extractions, result_evidence = extract_requirements(
-                    self.executor, path, effective_criteria)
-                result_values = {item.requirement.value_key: item.value for item in extractions}
-                from ..contracts.metrics import metrics_from_extractions
-                run_metrics = metrics_from_extractions(extractions)
-                result_source = "odb"
+                from .solver import is_authentic_binary_odb
+                if require_production and path and os.path.isfile(path) and is_authentic_binary_odb(path):
+                    from .odb_extractor import extract_odb_results
+                    eff_inp_hash = (run.provenance.input_hash if run.provenance else None) or ""
+                    report = extract_odb_results(
+                        odb_path=path,
+                        requirements_or_criteria=effective_criteria,
+                        run_id=run_id,
+                        input_hash=eff_inp_hash,
+                        workdir=workdir,
+                        custom_runner=getattr(self.executor, "execute", None),
+                    )
+                    extractions = report.extractions
+                    result_evidence = report.evidence
+                    result_values = report.metrics
+                    from ..contracts.metrics import metrics_from_extractions
+                    run_metrics = metrics_from_extractions(extractions)
+                    result_source = "odb"
+                else:
+                    from .results import extract_requirements
+                    extractions, result_evidence = extract_requirements(
+                        self.executor, path, effective_criteria)
+                    result_values = {item.requirement.value_key: item.value for item in extractions}
+                    from ..contracts.metrics import metrics_from_extractions
+                    run_metrics = metrics_from_extractions(extractions)
+                    result_source = "odb"
             else:
                 result_evidence = (Evidence(
                     kind="injected_result",

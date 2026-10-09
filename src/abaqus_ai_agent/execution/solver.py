@@ -9,6 +9,7 @@ Zero Tolerance for Fake Logs:
 
 from __future__ import annotations
 
+import json
 import os
 import shutil
 import subprocess
@@ -85,8 +86,9 @@ def parse_solver_diagnostics(workdir: Path, job_name: str) -> List[str]:
     return diags
 
 
-def is_authentic_binary_odb(path: Path) -> bool:
+def is_authentic_binary_odb(path: Union[str, Path]) -> bool:
     """Validate that an ODB file is not empty and is not a plaintext JSON or text mock."""
+    path = Path(path)
     if not path.is_file():
         return False
     size = path.stat().st_size
@@ -100,6 +102,74 @@ def is_authentic_binary_odb(path: Path) -> bool:
         return True
     except Exception:
         return False
+
+
+def verify_authentic_odb_structure(
+    path: Union[str, Path],
+    launcher_cmd: Optional[str] = None,
+    timeout: int = 60,
+) -> Dict[str, Any]:
+    """Perform native odbAccess structural verification using headless Abaqus Python (P0-5).
+
+    Verifies that the file can be opened via native odbAccess.openOdb, contains
+    at least one Step, and reports frame and field availability.
+    """
+    path = Path(path).resolve()
+    if not is_authentic_binary_odb(path):
+        return {
+            "verified": False,
+            "error": f"File {path} failed binary pre-filter (corrupt, empty, or plaintext mock)",
+        }
+
+    launcher = find_abaqus_executable(launcher_cmd)
+    if not launcher:
+        # Host is offline or in mock test environment
+        return {
+            "verified": False,
+            "offline": True,
+            "error": "Abaqus executable not found on host to perform native openOdb verification",
+        }
+
+    probe_script = f"""
+import sys, json
+try:
+    from odbAccess import openOdb
+    odb = openOdb({str(path)!r}, readOnly=True)
+    steps = list(odb.steps.keys())
+    step_info = {{}}
+    for s in steps:
+        step_obj = odb.steps[s]
+        n_frames = len(step_obj.frames)
+        fields = list(step_obj.frames[-1].fieldOutputs.keys()) if n_frames > 0 else []
+        step_info[s] = {{'frames': n_frames, 'fields': fields}}
+    odb.close()
+    print("__ODB_VERIFIED__" + json.dumps({{'valid': True, 'steps': step_info}}))
+except Exception as exc:
+    print("__ODB_VERIFIED__" + json.dumps({{'valid': False, 'error': str(exc)}}))
+    sys.exit(1)
+"""
+    try:
+        proc = subprocess.run(
+            [launcher, "python", "-c", probe_script],
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+            shell=(os.name == "nt"),
+        )
+        for line in proc.stdout.splitlines():
+            if line.startswith("__ODB_VERIFIED__"):
+                data = json.loads(line[len("__ODB_VERIFIED__"):])
+                return {
+                    "verified": bool(data.get("valid", False)),
+                    "steps": data.get("steps", {}),
+                    "error": data.get("error"),
+                }
+        return {
+            "verified": False,
+            "error": f"Native probe output missing verification marker. stderr: {proc.stderr.strip()}",
+        }
+    except Exception as exc:
+        return {"verified": False, "error": str(exc)}
 
 
 def find_abaqus_executable(launcher_cmd: Optional[str] = None) -> Optional[str]:

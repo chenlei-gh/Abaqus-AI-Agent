@@ -36,6 +36,7 @@ class DeterministicReportPipeline:
         results_info: Sequence[Any],
         acceptance_info: Any,
         visualization_specs: Sequence[VisualizationSpec] = (),
+        figures: Sequence[ReportFigure] = (),
         interpretation_card: Optional[InterpretationCard] = None,
         language: str = "bilingual",
         materials_info: Sequence[Dict[str, Any]] = (),
@@ -79,13 +80,27 @@ class DeterministicReportPipeline:
         target_dir = Path(output_dir)
         target_dir.mkdir(parents=True, exist_ok=True)
 
+        # Determine effective visualization specs: if not explicitly supplied and no pre-existing figures provided,
+        # automatically invoke the Adaptive Figure Selector based on physics domain & engineering objective.
+        effective_specs: List[VisualizationSpec] = list(visualization_specs)
+        if not effective_specs and not figures and odb_path:
+            from .figure_selector import FigureSelector
+            selector = FigureSelector()
+            selection_res = selector.select_figures(
+                domain=getattr(self.builder, "physics_domain", "structural"),
+                objective=getattr(self.builder, "objective", AnalysisObjective.GENERAL_FEA),
+                odb_path=odb_path,
+                extracted_results=results_info,
+                output_dir=target_dir,
+            )
+            effective_specs = list(selection_res.specs)
+
         # 1. Process and bind authentic CAE visualization figures
         # If visualization specs are requested and images are not yet rendered, invoke headless authentic Viewer if odb_path provided
         missing_specs = []
-        for spec in visualization_specs:
+        for spec in effective_specs:
             img_path = target_dir / spec.target_filename
-            alt_path = Path(spec.target_filename)
-            if not img_path.exists() and not alt_path.is_file():
+            if not img_path.exists():
                 missing_specs.append(spec)
 
         if missing_specs and odb_path:
@@ -102,19 +117,14 @@ class DeterministicReportPipeline:
         report_figures: List[ReportFigure] = []
         fig_pointers: List[ArtifactPointer] = []
 
-        for spec in visualization_specs:
+        for spec in effective_specs:
             img_path = target_dir / spec.target_filename
-            if not img_path.exists():
-                alt_path = Path(spec.target_filename)
-                if alt_path.is_file():
-                    img_path = alt_path
-
             if not img_path.exists():
                 if require_deliverable or is_deliverable:
                     raise FileNotFoundError(
                         f"Official engineering delivery blocked: required CAE visualization asset '{spec.target_filename}' "
-                        f"({spec.field_name}.{spec.component}) does not exist on disk. "
-                        "Synthetic placeholder generation is strictly prohibited for official deliverables; "
+                        f"({spec.field_name}.{spec.component}) does not exist in target run directory '{target_dir}'. "
+                        "Fallback to ambient working directory or synthetic placeholder generation is strictly prohibited; "
                         "authentic CAE results rendered from live ODB extraction are required."
                     )
                 # In diagnostic draft mode: do not synthesize fake CAE images; skip missing asset
@@ -126,6 +136,27 @@ class DeterministicReportPipeline:
 
             report_figures.append(spec.to_report_figure(rel_path))
             fig_pointers.append(spec.to_artifact_pointer(rel_path, len(img_bytes), img_sha256))
+
+        # Include and bind pre-existing / reused authentic figures
+        for f in figures:
+            f_path = Path(f.path)
+            if not f_path.is_absolute():
+                f_path = target_dir / f_path
+            if f_path.is_file():
+                f_bytes = f_path.read_bytes()
+                f_sha = hashlib.sha256(f_bytes).hexdigest()
+                fig_meta = dict(getattr(f, "metadata", {}) or {})
+                art_id = fig_meta.get("artifact_id") or f"FIG-{f.kind}-{run_id}"
+                fig_pointers.append(ArtifactPointer(
+                    artifact_id=art_id,
+                    type="figure",
+                    media_type="image/svg+xml" if f_path.suffix.lower() == ".svg" else "image/png",
+                    location=str(f_path.as_posix()),
+                    size_bytes=len(f_bytes),
+                    checksum_sha256=f_sha,
+                    metadata=fig_meta,
+                ))
+                report_figures.append(f)
 
         # 2. Build polymorphic EngineeringReportData
         report_data = self.builder.build_report_data(

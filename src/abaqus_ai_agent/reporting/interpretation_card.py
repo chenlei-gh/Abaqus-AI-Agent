@@ -112,3 +112,6 @@ class ReportDeliveryCard:
             "size_bytes": self.size_bytes,
             "checksum_sha256": self.checksum_sha256,
         }
+
+    def to_dict(self) -> Dict[str, Any]:
+        return self.to_llm_card()
