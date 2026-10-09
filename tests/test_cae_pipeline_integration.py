@@ -618,45 +618,83 @@ def test_negative_p0_a_production_mode_denies_missing_launcher_or_offline_verifi
 
 def test_negative_p0_b_missing_or_mismatched_provenance_rejected(tmp_path: Path):
     """Negative Test P0-B: Missing or mismatched provenance metadata is strictly rejected from reuse."""
+    import hashlib
     from abaqus_ai_agent.reporting.figure_selector import select_engineering_figures
 
     img_file = tmp_path / "mises_stress_hotspot.png"
-    img_file.write_bytes(b"\x89PNG\r\n\x1a\n" + b"\x00" * 128)
+    img_bytes = b"\x89PNG\r\n\x1a\n" + b"\x00" * 128
+    img_file.write_bytes(img_bytes)
+    valid_img_sha256 = hashlib.sha256(img_bytes).hexdigest()
 
-    # Figure 1: Missing run_id (unknown origin)
+    # Case 1: Missing run_id (unknown origin)
     fig_no_run = ReportFigure(
         kind="stress_hotspot",
         path=str(img_file.as_posix()),
         caption="Unknown origin figure",
         source="S.mises",
-        metadata={"field": "S", "component": "mises"},  # No run_id!
+        metadata={"field": "S", "component": "mises", "input_hash": "INP-01", "odb_hash": "ODB-01", "sha256": valid_img_sha256},
     )
-
     res_no_run = select_engineering_figures(
         physics_domain="static",
         existing_figures=[fig_no_run],
         run_id="RUN-CURR-01",
+        input_hash="INP-01",
+        odb_hash="ODB-01",
     )
-    # Must NOT reuse unknown origin figure
     assert len(res_no_run.reused_figures) == 0
 
-    # Figure 2: Matching run_id, but mismatched odb_hash
-    fig_wrong_odb = ReportFigure(
+    # Case 2: Missing input_hash in metadata or caller
+    fig_no_inp = ReportFigure(
         kind="stress_hotspot",
         path=str(img_file.as_posix()),
-        caption="Wrong ODB figure",
+        caption="Missing input hash figure",
         source="S.mises",
-        metadata={"field": "S", "component": "mises", "run_id": "RUN-CURR-01", "odb_hash": "HASH-OLD-ODB"},
+        metadata={"field": "S", "component": "mises", "run_id": "RUN-CURR-01", "odb_hash": "ODB-01", "sha256": valid_img_sha256},
     )
-    res_wrong_odb = select_engineering_figures(
+    res_no_inp = select_engineering_figures(
         physics_domain="static",
-        existing_figures=[fig_wrong_odb],
+        existing_figures=[fig_no_inp],
         run_id="RUN-CURR-01",
-        odb_hash="HASH-NEW-ODB",
+        input_hash="INP-01",
+        odb_hash="ODB-01",
     )
-    assert len(res_wrong_odb.reused_figures) == 0
+    assert len(res_no_inp.reused_figures) == 0
 
-    # Figure 3: Matching provenance but image file content altered (tampered sha256): rejected
+    # Case 3: Missing odb_hash in metadata or caller
+    fig_no_odb = ReportFigure(
+        kind="stress_hotspot",
+        path=str(img_file.as_posix()),
+        caption="Missing ODB hash figure",
+        source="S.mises",
+        metadata={"field": "S", "component": "mises", "run_id": "RUN-CURR-01", "input_hash": "INP-01", "sha256": valid_img_sha256},
+    )
+    res_no_odb = select_engineering_figures(
+        physics_domain="static",
+        existing_figures=[fig_no_odb],
+        run_id="RUN-CURR-01",
+        input_hash="INP-01",
+        odb_hash="ODB-01",
+    )
+    assert len(res_no_odb.reused_figures) == 0
+
+    # Case 4: Missing image content sha256 in metadata
+    fig_no_sha = ReportFigure(
+        kind="stress_hotspot",
+        path=str(img_file.as_posix()),
+        caption="Missing image sha256 figure",
+        source="S.mises",
+        metadata={"field": "S", "component": "mises", "run_id": "RUN-CURR-01", "input_hash": "INP-01", "odb_hash": "ODB-01"},
+    )
+    res_no_sha = select_engineering_figures(
+        physics_domain="static",
+        existing_figures=[fig_no_sha],
+        run_id="RUN-CURR-01",
+        input_hash="INP-01",
+        odb_hash="ODB-01",
+    )
+    assert len(res_no_sha.reused_figures) == 0
+
+    # Case 5: Matching provenance but image file content altered (tampered sha256)
     fig_tampered = ReportFigure(
         kind="stress_hotspot",
         path=str(img_file.as_posix()),
@@ -666,7 +704,8 @@ def test_negative_p0_b_missing_or_mismatched_provenance_rejected(tmp_path: Path)
             "field": "S",
             "component": "mises",
             "run_id": "RUN-CURR-01",
-            "odb_hash": "HASH-NEW-ODB",
+            "input_hash": "INP-01",
+            "odb_hash": "ODB-01",
             "sha256": "expected_different_sha256_hash",
         },
     )
@@ -674,23 +713,62 @@ def test_negative_p0_b_missing_or_mismatched_provenance_rejected(tmp_path: Path)
         physics_domain="static",
         existing_figures=[fig_tampered],
         run_id="RUN-CURR-01",
-        odb_hash="HASH-NEW-ODB",
+        input_hash="INP-01",
+        odb_hash="ODB-01",
     )
     assert len(res_tampered.reused_figures) == 0
 
-    # Figure 4: Full matching provenance: admitted
+    # Case 6: Step mismatch
+    fig_wrong_step = ReportFigure(
+        kind="stress_hotspot",
+        path=str(img_file.as_posix()),
+        caption="Wrong step figure",
+        source="S.mises",
+        metadata={
+            "field": "S",
+            "component": "mises",
+            "run_id": "RUN-CURR-01",
+            "input_hash": "INP-01",
+            "odb_hash": "ODB-01",
+            "sha256": valid_img_sha256,
+            "step": "Step-2",
+        },
+    )
+    res_wrong_step = select_engineering_figures(
+        physics_domain="static",
+        existing_figures=[fig_wrong_step],
+        run_id="RUN-CURR-01",
+        input_hash="INP-01",
+        odb_hash="ODB-01",
+        step_name="Step-1",
+    )
+    assert len(res_wrong_step.reused_figures) == 0
+
+    # Case 7: Full matching provenance whitelist: strictly admitted
     fig_valid = ReportFigure(
         kind="stress_hotspot",
         path=str(img_file.as_posix()),
         caption="Fully verified figure",
         source="S.mises",
-        metadata={"field": "S", "component": "mises", "run_id": "RUN-CURR-01", "odb_hash": "HASH-NEW-ODB"},
+        metadata={
+            "field": "S",
+            "component": "mises",
+            "run_id": "RUN-CURR-01",
+            "input_hash": "INP-01",
+            "odb_hash": "ODB-01",
+            "sha256": valid_img_sha256,
+            "step": "Step-1",
+            "frame": -1,
+        },
     )
     res_valid = select_engineering_figures(
         physics_domain="static",
         existing_figures=[fig_valid],
         run_id="RUN-CURR-01",
-        odb_hash="HASH-NEW-ODB",
+        input_hash="INP-01",
+        odb_hash="ODB-01",
+        step_name="Step-1",
+        frame_index=-1,
     )
     assert len(res_valid.reused_figures) == 1
 

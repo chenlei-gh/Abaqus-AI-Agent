@@ -102,22 +102,34 @@ def test_contact_and_bolted_sealing_selection():
 
 
 def test_priority_1_reuse_existing_verified_figure(tmp_path: Path):
-    """Priority 1: If verified image already exists, reuse directly without dispatching Viewer."""
+    """Priority 1: If verified image already exists with complete provenance whitelist, reuse directly."""
+    import hashlib
     existing_img = tmp_path / "mises_stress_hotspot.png"
-    existing_img.write_bytes(b"\x89PNG\r\n\x1a\n" + b"\x00" * 128)
+    img_bytes = b"\x89PNG\r\n\x1a\n" + b"\x00" * 128
+    existing_img.write_bytes(img_bytes)
+    img_sha256 = hashlib.sha256(img_bytes).hexdigest()
 
     existing_fig = ReportFigure(
         kind="stress_hotspot",
         path=str(existing_img.as_posix()),
         caption="Existing verified stress hotspot",
         source="S.mises",
-        metadata={"field": "S", "component": "mises", "run_id": "RUN-PRIORITY-1"},
+        metadata={
+            "field": "S",
+            "component": "mises",
+            "run_id": "RUN-PRIORITY-1",
+            "input_hash": "HASH-INPUT-1",
+            "odb_hash": "HASH-ODB-1",
+            "sha256": img_sha256,
+        },
     )
 
     res = select_engineering_figures(
         physics_domain="static",
         existing_figures=[existing_fig],
         run_id="RUN-PRIORITY-1",
+        input_hash="HASH-INPUT-1",
+        odb_hash="HASH-ODB-1",
     )
 
     # Stress hotspot should be in reused_figures, NOT in specs to be generated

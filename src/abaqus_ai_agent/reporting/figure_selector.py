@@ -258,32 +258,47 @@ def select_engineering_figures(
             f_meta = f.metadata or {}
 
             # Strict provenance whitelist admission:
-            # 1. Reject figures with missing or mismatched run_id
+            # All 4 cryptographic & provenance pillars are strictly mandatory for Priority 1 reuse:
+            # 1. run_id: must exist in figure metadata, cannot be default/empty, and must match current run_id
             fig_run_id = f_meta.get("run_id")
-            if not fig_run_id or fig_run_id != r_id:
+            if not fig_run_id or not r_id or fig_run_id != r_id or r_id == "RUN-DEFAULT":
                 continue
 
-            # 2. Reject figures with missing or mismatched input_hash when input_hash is enforced
-            if input_hash:
-                fig_input_hash = f_meta.get("input_hash")
-                if not fig_input_hash or fig_input_hash != input_hash:
-                    continue
+            # 2. input_hash: must exist in caller context and figure metadata, and must match
+            fig_input_hash = f_meta.get("input_hash")
+            if not input_hash or not fig_input_hash or fig_input_hash != input_hash:
+                continue
 
-            # 3. Reject figures with missing or mismatched odb_hash when odb_hash is enforced
-            if eff_odb_hash:
-                fig_odb_hash = f_meta.get("odb_hash")
-                if not fig_odb_hash or fig_odb_hash != eff_odb_hash:
-                    continue
+            # 3. odb_hash: must exist in caller context and figure metadata, and must match
+            fig_odb_hash = f_meta.get("odb_hash") or f_meta.get("odb_sha256")
+            if not eff_odb_hash or not fig_odb_hash or fig_odb_hash != eff_odb_hash:
+                continue
 
-            # 4. Content integrity check: reject figures whose physical image file content doesn't match recorded sha256
+            # 4. Content integrity check: sha256 or image_sha256 must exist and match actual image file on disk
             rec_sha256 = f_meta.get("sha256") or f_meta.get("image_sha256")
-            if rec_sha256:
+            if not rec_sha256:
+                continue
+            try:
+                import hashlib
+                hasher_img = hashlib.sha256()
+                with open(str(f_path), "rb") as _img_fh:
+                    while chunk := _img_fh.read(65536):
+                        hasher_img.update(chunk)
+                if hasher_img.hexdigest() != rec_sha256:
+                    continue
+            except Exception:
+                continue
+
+            # 5. Semantic validity: step and frame if specified in metadata must match
+            fig_step = f_meta.get("step") or f_meta.get("step_name")
+            if fig_step and fig_step != step:
+                continue
+            fig_frame = f_meta.get("frame") or f_meta.get("frame_index")
+            if fig_frame is not None and frame_index is not None:
                 try:
-                    import hashlib
-                    actual_sha = hashlib.sha256(f_path.read_bytes()).hexdigest()
-                    if actual_sha != rec_sha256:
+                    if int(fig_frame) != int(frame_index):
                         continue
-                except Exception:
+                except (ValueError, TypeError):
                     continue
 
             f_field = (f_meta.get("field") or f_meta.get("variable_label") or "").upper()
