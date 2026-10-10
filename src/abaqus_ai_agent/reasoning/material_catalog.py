@@ -370,19 +370,56 @@ def resolve_material_to_definition(
             )
         return res.material_definition
 
-    # 3. String specification (e.g. "Q235", "Steel", "45号钢", "Aluminum_6061_T6")
+    # 3. Structured datasheet dictionary (CAMPUS, TDS, or MaterialRecord serialization)
+    if isinstance(material_input, dict):
+        if (
+            ("general_info" in material_input and ("iso_10350_single_point" in material_input or "iso_11403_multi_point" in material_input))
+            or ("header" in material_input and ("properties" in material_input or "curves" in material_input))
+            or ("identity" in material_input and "properties" in material_input)
+        ):
+            from ..materials.provider import MaterialProvider
+            from ..contracts.material_resolver import MaterialResolver
+
+            try:
+                rec = MaterialProvider.parse_dict(material_input)
+                res = MaterialResolver.resolve(record=rec, target_unit_system=unit_system)
+                if res.is_executable and res.material_definition:
+                    return res.material_definition
+                if fail_closed:
+                    raise ValueError(f"Failed to resolve material datasheet dict: {res.diagnostics}")
+                return res.material_definition
+            except Exception as e:
+                if fail_closed:
+                    raise
+
+    # 4. String specification (e.g. "Q235", "Steel", "PA66_GF30", "Ultramid A3WG6", "45号钢")
     if isinstance(material_input, str):
+        # 4a. Standard catalog profile match
         profile = _find_profile(material_input)
         if profile is not None:
             return profile.to_material_definition(unit_system=unit_system)
+
+        # 4b. Authentic material provider lookup (CAMPUS / TDS / experimental registry)
+        from ..materials.provider import MaterialProvider
+        rec = MaterialProvider.default().find_record(material_input)
+        if rec is not None:
+            from ..contracts.material_resolver import MaterialResolver
+            res = MaterialResolver.resolve(record=rec, target_unit_system=unit_system)
+            if res.is_executable and res.material_definition:
+                return res.material_definition
+            if fail_closed:
+                raise ValueError(
+                    f"Failed to resolve authentic MaterialRecord '{rec.identity.grade}': {res.diagnostics}"
+                )
+
         if fail_closed:
             raise ValueError(
                 f"Unrecognized engineering material '{material_input}'. "
-                "Not found in standard engineering material catalog."
+                "Not found in standard engineering material catalog or authentic material registry."
             )
         return None
 
-    # 4. Dictionary specification
+    # 5. Dictionary specification
     if isinstance(material_input, dict):
         name = str(material_input.get("name", "")).strip()
         profile = _find_profile(name) if name else None

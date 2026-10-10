@@ -302,12 +302,23 @@ def compile_intent_to_actions(
             name=material.name,
             density=material.density,
         ))
-    if material.plastic and material.plastic.hardening_table:
-        actions.append(builders.material_plastic(
-            model=model_name,
-            name=material.name,
-            table=material.plastic.hardening_table,
-        ))
+    if material.plastic:
+        plastic_table: Tuple[Tuple[float, float], ...] = ()
+        if material.plastic.hardening_table:
+            raw_table = tuple(tuple(float(x) for x in pt) for pt in material.plastic.hardening_table)
+            if raw_table and raw_table[0][1] != 0.0 and material.plastic.yield_stress is not None:
+                plastic_table = ((float(material.plastic.yield_stress), 0.0),) + raw_table
+            else:
+                plastic_table = raw_table
+        elif material.plastic.yield_stress is not None and material.plastic.yield_stress > 0:
+            plastic_table = ((float(material.plastic.yield_stress), 0.0),)
+
+        if plastic_table:
+            actions.append(builders.material_plastic(
+                model=model_name,
+                name=material.name,
+                table=plastic_table,
+            ))
     if material.thermal is not None:
         if material.thermal.conductivity is not None:
             actions.append(builders.material_conductivity(

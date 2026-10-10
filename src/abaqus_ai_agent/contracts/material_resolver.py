@@ -4,6 +4,7 @@ Enforces constitutive sanity, anti-hallucination gates, environmental condition 
 and unit system conversions.
 """
 
+import math
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -200,29 +201,65 @@ class MaterialResolver:
             prop_yield = record.get_property("yield_stress", cond_query) or record.get_property("stress_at_yield", cond_query)
             curve_ss = record.get_curve("stress_strain", cond_query)
 
+            sy_val: Optional[float] = None
             if prop_yield is not None:
                 sy_val = cls._convert_stress(prop_yield.value, prop_yield.unit, unit_sys)
-                hardening: List[Tuple[float, float]] = []
 
-                if curve_ss is not None:
-                    # Calibrate true plastic strain from nominal curve: eps_true = ln(1 + eps_eng), sigma_true = sigma_eng * (1 + eps_eng)
-                    # eps_plastic = eps_true - sigma_true / E
-                    raw_pts = curve_ss.points
-                    for e_nom, s_nom in raw_pts:
-                        # normalize nominal strain if provided in %
-                        e_frac = e_nom / 100.0 if curve_ss.x_unit in ("%", "percent") else e_nom
-                        s_target = cls._convert_stress(s_nom, curve_ss.y_unit, unit_sys)
-                        if e_frac > 0 and s_target >= sy_val:
-                            # approximate true plastic strain
-                            eps_true = e_frac
-                            sigma_true = s_target
-                            eps_p = max(0.0, eps_true - (sigma_true / E_val))
-                            if eps_p > 0 and (not hardening or eps_p > hardening[-1][1]):
-                                hardening.append((round(sigma_true, 3), round(eps_p, 5)))
-                    assumptions.append("Polymer tensile curve calibrated into equivalent J2 hardening curve for Abaqus solver.")
-                else:
+            hardening: List[Tuple[float, float]] = []
+
+            if curve_ss is not None:
+                # Calibrate exact true plastic strain from nominal curve:
+                # eps_true = ln(1 + eps_eng), sigma_true = sigma_eng * (1 + eps_eng)
+                # eps_plastic = eps_true - sigma_true / E
+                raw_pts = curve_ss.points
+                converted_pts: List[Tuple[float, float, float]] = []  # (sigma_true, eps_true, eps_p)
+
+                for e_nom, s_nom in raw_pts:
+                    e_frac = e_nom / 100.0 if curve_ss.x_unit in ("%", "percent") else e_nom
+                    if e_frac < -0.99:
+                        continue
+                    s_target = cls._convert_stress(s_nom, curve_ss.y_unit, unit_sys)
+                    sigma_true = s_target * (1.0 + e_frac)
+                    eps_true = math.log(1.0 + e_frac) if e_frac > -0.99 else 0.0
+                    eps_p = eps_true - (sigma_true / E_val)
+                    converted_pts.append((sigma_true, eps_true, eps_p))
+
+                # If yield stress was not explicitly given, deduce from offset proof stress or first plastic point
+                if sy_val is None:
+                    # Look for point where eps_p >= 0.002 (0.2% offset proof stress)
+                    for sig_t, eps_t, ep in converted_pts:
+                        if ep >= 0.002:
+                            sy_val = round(sig_t, 3)
+                            assumptions.append(f"Deduced 0.2% offset yield stress {sy_val} from experimental curve.")
+                            break
+                    if sy_val is None and converted_pts:
+                        # Fallback to point with maximum non-zero curvature / inelasticity
+                        inelastic_pts = [p for p in converted_pts if p[2] > 0.0005]
+                        if inelastic_pts:
+                            sy_val = round(inelastic_pts[0][0], 3)
+                            assumptions.append(f"Deduced initial inelastic yield stress {sy_val} from stress-strain curve.")
+
+                if sy_val is not None:
+                    # First point in Abaqus hardening table must be (initial yield stress, 0.0)
+                    hardening.append((round(sy_val, 3), 0.0))
+                    last_ep = 0.0
+                    last_sig = sy_val
+
+                    for sig_t, eps_t, ep in converted_pts:
+                        if ep > 0.0001 and sig_t >= sy_val:
+                            # Enforce monotonic increase in plastic strain
+                            if ep > (last_ep + 0.0005):
+                                # If stress softens without damage model, clamp to prevent solver non-convergence
+                                clamped_sig = max(sig_t, last_sig)
+                                hardening.append((round(clamped_sig, 3), round(ep, 5)))
+                                last_ep = ep
+                                last_sig = clamped_sig
+
+                    assumptions.append("Polymer/metal tensile curve calibrated into equivalent J2 hardening curve for Abaqus solver.")
+
+            if sy_val is not None:
+                if not hardening:
                     assumptions.append("Single-point yield stress used with ideal perfectly plastic assumption.")
-
                 plastic_props = PlasticProperties(
                     yield_stress=sy_val,
                     plastic_strain=0.0,
