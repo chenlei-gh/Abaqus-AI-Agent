@@ -115,7 +115,17 @@ class AbaqusAIAgent:
             if getattr(intent, "material", None):
                 mats.append(intent.material)
 
+        from .reasoning.material_catalog import resolve_material_to_definition
         for mat in mats:
+            mat_def = resolve_material_to_definition(mat, fail_closed=False)
+            if mat_def is not None:
+                material_name = mat_def.name
+                if mat_def.plastic and mat_def.plastic.yield_stress:
+                    yield_strength = float(mat_def.plastic.yield_stress)
+                    break
+                elif mat_def.metadata.get("yield_strength_mpa"):
+                    yield_strength = float(mat_def.metadata["yield_strength_mpa"])
+                    break
             if isinstance(mat, dict):
                 mat_name = mat.get("name", "")
                 if mat_name:
@@ -128,7 +138,7 @@ class AbaqusAIAgent:
                     yield_strength = float(props["yield"])
                     break
             else:
-                mat_name = getattr(mat, "name", "")
+                mat_name = getattr(mat, "name", "") or (mat if isinstance(mat, str) else "")
                 if mat_name:
                     material_name = mat_name
                 props = getattr(mat, "properties", {}) or {}
@@ -462,6 +472,13 @@ class AbaqusAIAgent:
         effective_mesh = mesh or reasoning_res.inferred_mesh
         effective_material = material or reasoning_res.inferred_material
 
+        from .reasoning.material_catalog import resolve_material_to_definition
+        effective_mat_def = resolve_material_to_definition(
+            effective_material,
+            unit_system=intent.unit_system or "MM_N_MPA",
+            fail_closed=False,
+        )
+
         # 3. Intent Compilation to Action Plan (Fail-closed on missing geometry/material)
         try:
             plan = compile_engineering_intent(
@@ -470,7 +487,7 @@ class AbaqusAIAgent:
                 part_name=part_name,
                 job_name=job_name,
                 geometry=geometry,
-                material=effective_material,
+                material=effective_mat_def or effective_material,
                 mesh=effective_mesh,
                 grounded_regions=grounded_regions,
                 submit_job=submit_job,
@@ -725,6 +742,11 @@ class AbaqusAIAgent:
                 from pathlib import Path
                 from .reporting.pipeline import DeterministicReportPipeline
                 pipeline = DeterministicReportPipeline()
+                materials_payload = []
+                final_mat_def = getattr(plan, "material", None) or effective_mat_def
+                if final_mat_def is not None:
+                    materials_payload.append(final_mat_def.to_dict())
+
                 deterministic_delivery_card, _, det_report_data = pipeline.build_and_render(
                     output_dir=Path(out_dir),
                     title=report_title,
@@ -732,6 +754,8 @@ class AbaqusAIAgent:
                     run_id=getattr(run, "id", "RUN-AUTH"),
                     model_info={
                         "name": plan.model_name,
+                        "material": final_mat_def.name if final_mat_def else "Steel",
+                        "standard_reference": final_mat_def.provenance if final_mat_def else "",
                         "max_mises_mpa": metric_dict.get("max_mises") or metric_dict.get("S_Mises"),
                         "max_displacement_mm": metric_dict.get("max_displacement") or metric_dict.get("U_magnitude"),
                     },
@@ -739,6 +763,7 @@ class AbaqusAIAgent:
                     acceptance_info=acceptance,
                     visualization_specs=figure_selection.specs,
                     figures=all_figures,
+                    materials_info=materials_payload,
                     require_deliverable=True,
                     odb_path=getattr(run, "odb_path", None),
                     input_hash=getattr(run.provenance, "input_hash", "") if getattr(run, "provenance", None) else "",

@@ -315,6 +315,12 @@ def _render_custom_table_for_section(heading, value, is_zh=False):
             m_rows = []
             for m in mat_list:
                 name = m.get("name") or m.get("material_name") or ("标准材料" if is_zh else "Standard Material")
+                ref = m.get("provenance") or m.get("standard_reference") or (m.get("metadata", {}).get("standard_reference") if isinstance(m.get("metadata"), dict) else None)
+                if ref and str(ref) not in str(name):
+                    display_name = f"{name} [{ref}]"
+                else:
+                    display_name = str(name)
+
                 # Elastic
                 elastic = m.get("elastic") if isinstance(m.get("elastic"), dict) else {}
                 e_mod = elastic.get("youngs_modulus") or m.get("elastic_modulus_mpa") or m.get("elastic_modulus_at_operating_temp_mpa") or "-"
@@ -332,7 +338,7 @@ def _render_custom_table_for_section(heading, value, is_zh=False):
                 alpha_str = f"{float(alpha):.2e} 1/K" if isinstance(alpha, (int, float)) else str(alpha)
                 k_cond = thermal.get("conductivity") or m.get("thermal_conductivity_w_m_k") or "-"
                 k_str = f"{float(k_cond):.1f} W/m·K" if isinstance(k_cond, (int, float)) else str(k_cond)
-                m_rows.append([str(name), e_str, str(nu), sy_str, uts_str, alpha_str, k_str])
+                m_rows.append([display_name, e_str, str(nu), sy_str, uts_str, alpha_str, k_str])
             sub_title = "### 材料本构规范与高温温变物性 (Material Constitutive Specifications)" if is_zh else "### Material Constitutive Specifications & Temperature-Dependent Properties"
             th = ["部件 / 材料牌号", "弹性模量 E", "泊松比 ν", "屈服强度 Sy", "抗拉强度 UTS", "热膨胀系数 α", "导热系数 k"] if is_zh else ["Component / Material Grade", "Young's Modulus E", "Poisson's ν", "Yield Strength Sy", "UTS", "Thermal Coeff α", "Conductivity k"]
             lines += [sub_title, "", _format_markdown_table(th, m_rows), ""]

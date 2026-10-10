@@ -7,6 +7,12 @@ from dataclasses import dataclass
 from typing import Any, Dict, Optional, Tuple
 
 from ..contracts.intent_reasoning import InferenceRiskLevel, InferredParameter
+from ..contracts.material import (
+    ElasticProperties,
+    MaterialDefinition,
+    PlasticProperties,
+    ThermalProperties,
+)
 
 
 @dataclass(frozen=True)
@@ -20,6 +26,28 @@ class StandardMaterialProfile:
     yield_strength_mpa: float
     material_family: str
     standard_reference: str = "ISO/GB/ASTM standard reference properties at 20C"
+
+    def to_material_definition(self, unit_system: str = "MM_N_MPA") -> MaterialDefinition:
+        """Convert standard profile into a verified canonical MaterialDefinition."""
+        return MaterialDefinition(
+            name=self.canonical_name,
+            unit_system=unit_system,
+            elastic=ElasticProperties(
+                youngs_modulus=self.youngs_modulus_mpa,
+                poisson_ratio=self.poissons_ratio,
+            ),
+            density=self.density_tonne_mm3,
+            plastic=PlasticProperties(
+                yield_stress=self.yield_strength_mpa,
+            ),
+            provenance=self.standard_reference,
+            metadata={
+                "material_family": self.material_family,
+                "standard_reference": self.standard_reference,
+                "yield_strength_mpa": self.yield_strength_mpa,
+                "canonical_name": self.canonical_name,
+            },
+        )
 
 
 STANDARD_MATERIALS: Tuple[StandardMaterialProfile, ...] = (
@@ -174,12 +202,26 @@ def match_engineering_material(
     if material_input is None:
         return None, None
 
+    if isinstance(material_input, MaterialDefinition):
+        return material_input.to_dict(), None
+
     # Handle dictionary input
     if isinstance(material_input, dict):
-        # If already completely specified with numbers
         name = str(material_input.get("name", ""))
-        e_val = material_input.get("elastic_modulus")
-        nu_val = material_input.get("poisson_ratio")
+        e_val = (
+            material_input.get("elastic_modulus")
+            or material_input.get("youngs_modulus")
+            or material_input.get("E")
+        )
+        nu_val = (
+            material_input.get("poisson_ratio")
+            if material_input.get("poisson_ratio") is not None
+            else (
+                material_input.get("poisson")
+                if material_input.get("poisson") is not None
+                else material_input.get("nu")
+            )
+        )
         if e_val is not None and nu_val is not None:
             # Check if density or yield strength can be enriched
             profile = _find_profile(name)
@@ -187,8 +229,10 @@ def match_engineering_material(
             if profile:
                 if "density" not in enriched:
                     enriched["density"] = profile.density_tonne_mm3
-                if "yield_strength" not in enriched:
+                if "yield_strength" not in enriched and "yield_stress" not in enriched:
                     enriched["yield_strength"] = profile.yield_strength_mpa
+                if "standard_reference" not in enriched and "provenance" not in enriched:
+                    enriched["standard_reference"] = profile.standard_reference
             return enriched, None
         # Dict has only name
         query = name
@@ -204,11 +248,15 @@ def match_engineering_material(
     resolved_dict = {
         "name": profile.canonical_name,
         "elastic_modulus": profile.youngs_modulus_mpa,
+        "youngs_modulus": profile.youngs_modulus_mpa,
         "poisson_ratio": profile.poissons_ratio,
+        "poisson": profile.poissons_ratio,
         "density": profile.density_tonne_mm3,
         "yield_strength": profile.yield_strength_mpa,
+        "yield_stress": profile.yield_strength_mpa,
         "unit": "MPa",
         "material_family": profile.material_family,
+        "standard_reference": profile.standard_reference,
     }
 
     inference = InferredParameter(
@@ -264,3 +312,178 @@ def _find_profile(query: str) -> Optional[StandardMaterialProfile]:
                 return p
 
     return None
+
+
+def resolve_material_to_definition(
+    material_input: Any,
+    unit_system: str = "MM_N_MPA",
+    fail_closed: bool = False,
+) -> Optional[MaterialDefinition]:
+    """Resolve string, dict, MaterialRecord, or MaterialDefinition into canonical MaterialDefinition.
+
+    Guarantees that all materials entering Abaqus execution or reporting are grounded
+    in physically validated constants and standard references (ISO/GB/ASTM).
+    """
+    if material_input is None:
+        if fail_closed:
+            raise ValueError(
+                "Cannot resolve material: missing material specification. "
+                "Provide a recognized material name, dictionary, or MaterialDefinition."
+            )
+        return None
+
+    # 1. Already a MaterialDefinition
+    if isinstance(material_input, MaterialDefinition):
+        profile = _find_profile(material_input.name)
+        if profile is not None and (not material_input.provenance or not material_input.metadata):
+            new_meta = dict(material_input.metadata)
+            new_meta.setdefault("material_family", profile.material_family)
+            new_meta.setdefault("standard_reference", profile.standard_reference)
+            new_meta.setdefault("yield_strength_mpa", profile.yield_strength_mpa)
+            prov = material_input.provenance or profile.standard_reference
+            return MaterialDefinition(
+                name=material_input.name,
+                unit_system=material_input.unit_system or unit_system,
+                elastic=material_input.elastic,
+                density=material_input.density,
+                plastic=material_input.plastic,
+                thermal=material_input.thermal,
+                provenance=prov,
+                assumptions=material_input.assumptions,
+                metadata=new_meta,
+            )
+        return material_input
+
+    # 2. MaterialRecord from experimental / database source
+    if hasattr(material_input, "properties") and hasattr(material_input, "identity"):
+        from ..contracts.material_resolver import MaterialResolver
+
+        res = MaterialResolver.resolve(
+            record=material_input,
+            target_unit_system=unit_system,
+        )
+        if res.is_executable and res.material_definition:
+            return res.material_definition
+        if fail_closed:
+            raise ValueError(
+                f"Failed to resolve MaterialRecord into executable MaterialDefinition: {res.diagnostics}"
+            )
+        return res.material_definition
+
+    # 3. String specification (e.g. "Q235", "Steel", "45号钢", "Aluminum_6061_T6")
+    if isinstance(material_input, str):
+        profile = _find_profile(material_input)
+        if profile is not None:
+            return profile.to_material_definition(unit_system=unit_system)
+        if fail_closed:
+            raise ValueError(
+                f"Unrecognized engineering material '{material_input}'. "
+                "Not found in standard engineering material catalog."
+            )
+        return None
+
+    # 4. Dictionary specification
+    if isinstance(material_input, dict):
+        name = str(material_input.get("name", "")).strip()
+        profile = _find_profile(name) if name else None
+
+        youngs = (
+            material_input.get("youngs_modulus")
+            or material_input.get("elastic_modulus")
+            or material_input.get("E")
+        )
+        nu = (
+            material_input.get("poisson_ratio")
+            if material_input.get("poisson_ratio") is not None
+            else (
+                material_input.get("poisson")
+                if material_input.get("poisson") is not None
+                else material_input.get("nu")
+            )
+        )
+        rho = material_input.get("density") or material_input.get("rho")
+        yield_str = (
+            material_input.get("yield_stress")
+            or material_input.get("yield_strength")
+            or material_input.get("Sy")
+            or material_input.get("fy")
+        )
+
+        # Fallback to standard profile values if not explicitly provided in dict
+        if youngs is None and profile:
+            youngs = profile.youngs_modulus_mpa
+        if nu is None and profile:
+            nu = profile.poissons_ratio
+        if rho is None and profile:
+            rho = profile.density_tonne_mm3
+        if yield_str is None and profile:
+            yield_str = profile.yield_strength_mpa
+
+        canon_name = profile.canonical_name if profile else (name or "CustomMaterial")
+        prov = (
+            material_input.get("provenance")
+            or material_input.get("standard_reference")
+            or (profile.standard_reference if profile else "Custom user-defined material properties")
+        )
+
+        if youngs is not None and nu is not None:
+            elastic = ElasticProperties(
+                youngs_modulus=float(youngs),
+                poisson_ratio=float(nu),
+                temperature_dependence=bool(material_input.get("temperature_dependence", False)),
+            )
+            plastic = None
+            if yield_str is not None:
+                plastic = PlasticProperties(yield_stress=float(yield_str))
+
+            density_val = float(rho) if rho is not None else None
+
+            # Thermal properties if provided
+            cond = material_input.get("conductivity")
+            sh = material_input.get("specific_heat")
+            exp_c = material_input.get("expansion_coefficient") or material_input.get("thermal_expansion")
+            thermal = None
+            if cond is not None or sh is not None or exp_c is not None:
+                thermal = ThermalProperties(
+                    conductivity=float(cond) if cond is not None else None,
+                    specific_heat=float(sh) if sh is not None else None,
+                    expansion_coefficient=float(exp_c) if exp_c is not None else None,
+                )
+
+            meta = dict(material_input.get("metadata", {}))
+            if profile:
+                meta.setdefault("material_family", profile.material_family)
+                meta.setdefault("standard_reference", profile.standard_reference)
+                meta.setdefault("yield_strength_mpa", profile.yield_strength_mpa)
+                meta.setdefault("canonical_name", profile.canonical_name)
+
+            u_sys = material_input.get("unit_system") or unit_system
+            return MaterialDefinition(
+                name=canon_name,
+                unit_system=u_sys,
+                elastic=elastic,
+                density=density_val,
+                plastic=plastic,
+                thermal=thermal,
+                provenance=prov,
+                metadata=meta,
+            )
+        elif profile:
+            return profile.to_material_definition(unit_system=unit_system)
+        elif fail_closed:
+            raise ValueError(
+                f"Cannot resolve material from dict: missing elastic properties in '{material_input}'"
+            )
+        return None
+
+    if fail_closed:
+        raise ValueError(f"Unsupported material input type: {type(material_input)}")
+    return None
+
+
+__all__ = [
+    "StandardMaterialProfile",
+    "STANDARD_MATERIALS",
+    "match_engineering_material",
+    "resolve_material_to_definition",
+]

@@ -11,10 +11,13 @@ from ..contracts.intent_reasoning import PlausibilityCheckResult, PlausibilitySe
 
 def audit_engineering_plausibility(
     intent: EngineeringIntent,
-    material: Optional[Dict[str, Any]] = None,
+    material: Optional[Union[Dict[str, Any], Any]] = None,
     geometry: Any = None,
 ) -> Tuple[PlausibilityCheckResult, ...]:
     """Execute rigorous engineering consistency, rigid body, and load magnitude checks."""
+    if hasattr(material, "to_dict"):
+        material = material.to_dict()
+
     checks: List[PlausibilityCheckResult] = []
 
     # 1. Kinematic Boundary Constraints & Rigid Body Motion Check
@@ -202,7 +205,11 @@ def _check_stress_magnitude_plausibility(
             message="Material properties omitted; skipping order-of-magnitude stress check.",
         )
 
-    yield_str = material.get("yield_strength") or material.get("yield_stress")
+    yield_str = (
+        material.get("yield_strength")
+        or material.get("yield_stress")
+        or (material.get("plastic") or {}).get("yield_stress")
+    )
     if yield_str is None:
         return PlausibilityCheckResult(
             check_name="stress_magnitude_plausibility",
@@ -307,7 +314,11 @@ def _check_unit_consistency(
     """Verify that material modulus and geometry dimensional units are compatible."""
     unit_sys = (intent.unit_system or "MM_N_MPA").upper()
     if material:
-        e_mod = material.get("elastic_modulus")
+        e_mod = (
+            material.get("elastic_modulus")
+            or material.get("youngs_modulus")
+            or (material.get("elastic") or {}).get("youngs_modulus")
+        )
         if e_mod is not None:
             try:
                 e_val = float(e_mod)

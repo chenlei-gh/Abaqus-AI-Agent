@@ -138,6 +138,7 @@ class CompiledAgentPlan:
     actions: Tuple[AbaqusAction, ...]
     cae_script: str
     intent_summary: Dict[str, Any]
+    material: Optional[MaterialDefinition] = None
 
 
 def compile_intent_to_actions(
@@ -145,7 +146,7 @@ def compile_intent_to_actions(
     part_name: str,
     job_name: str,
     geometry: IntentGeometrySpec,
-    material: MaterialDefinition,
+    material: Union[MaterialDefinition, Dict[str, Any], str],
     step: Optional[IntentStepSpec] = None,
     bcs: Sequence[IntentBoundarySpec] = (),
     loads: Sequence[IntentLoadSpec] = (),
@@ -158,12 +159,16 @@ def compile_intent_to_actions(
     moments: Optional[Sequence[MomentLoadSpec]] = None,
     interactions: Optional[Sequence[IntentInteractionSpec]] = None,
     predefined_fields: Optional[Sequence[IntentPredefinedFieldSpec]] = None,
-    fatigue: Optional[IntentFatigueSpec] = None,
     connectors: Optional[Sequence[IntentConnectorSpec]] = None,
     fmbd: Optional[IntentFMBDSpec] = None,
+    fatigue: Optional[IntentFatigueSpec] = None,
     submit_job: bool = False,
 ) -> CompiledAgentPlan:
-    """Compile structured engineering intent into an ordered sequence of AbaqusActions."""
+    """Compile declarative engineering specifications into canonical AbaqusActions and CAE script."""
+    from ..reasoning.material_catalog import resolve_material_to_definition
+    eff_material = resolve_material_to_definition(material, fail_closed=True)
+    material = eff_material
+
     actions: List[AbaqusAction] = []
 
     # 1. Geometry Construction (Native Python CAE Action)
@@ -1243,7 +1248,8 @@ def compile_intent_to_actions(
             "dimensions": [geometry.length, geometry.width, geometry.height],
             "step_file_path": geometry.step_file_path,
         },
-        "material": material.name,
+        "material": material.to_dict(),
+        "material_name": material.name,
         "actions_count": len(actions),
         "grounded_regions_count": len(grounded_regions) if grounded_regions else 0,
         "steps_count": len(defined_steps),
@@ -1265,6 +1271,7 @@ def compile_intent_to_actions(
         actions=tuple(actions),
         cae_script=full_script,
         intent_summary=intent_summary,
+        material=material,
     )
 
 
@@ -1274,7 +1281,7 @@ def compile_engineering_intent(
     part_name: Optional[str] = None,
     job_name: Optional[str] = None,
     geometry: Optional[Union[IntentGeometrySpec, Dict[str, Any]]] = None,
-    material: Optional[Union[MaterialDefinition, Dict[str, Any]]] = None,
+    material: Optional[Union[MaterialDefinition, Dict[str, Any], str]] = None,
     mesh: Optional[IntentMeshSpec] = None,
     grounded_regions: Optional[Dict[str, GroundedRegion]] = None,
     submit_job: bool = False,
@@ -1349,39 +1356,16 @@ def compile_engineering_intent(
         )
 
     # 3. Material Resolution (Fail-closed on complete omission)
-    eff_mat = material if material is not None else intent.material
-    if eff_mat is not None and not isinstance(eff_mat, MaterialDefinition):
-        if isinstance(eff_mat, dict):
-            m = eff_mat
-            m_name = m.get("name", "DefaultMaterial")
-            u_sys = m.get("unit_system") or intent.unit_system or "MM_N_MPA"
-            youngs = m.get("elastic_modulus") or m.get("youngs_modulus") or m.get("E")
-            nu = m.get("poisson_ratio") if m.get("poisson_ratio") is not None else (m.get("nu") if m.get("nu") is not None else 0.3)
-            rho = m.get("density") or m.get("rho")
-            yield_str = m.get("yield_stress") or m.get("yield_strength")
-
-            elastic = None
-            if youngs is not None:
-                elastic = ElasticProperties(youngs_modulus=float(youngs), poisson_ratio=float(nu))
-            plastic = None
-            if yield_str is not None:
-                plastic = PlasticProperties(yield_stress=float(yield_str))
-
-            density_val = float(rho) if rho is not None else (7.85e-9 if "steel" in m_name.lower() or "q235" in m_name.lower() else (2.7e-9 if "al" in m_name.lower() else None))
-
-            eff_mat = MaterialDefinition(
-                name=m_name,
-                unit_system=u_sys,
-                elastic=elastic,
-                density=density_val,
-                plastic=plastic,
-            )
-
-    if eff_mat is None:
+    raw_mat = material if material is not None else intent.material
+    if raw_mat is None:
         raise ValueError(
             "Cannot compile engineering intent: missing material specification. "
             "Provide material via intent.material or explicit material parameter."
         )
+
+    from ..reasoning.material_catalog import resolve_material_to_definition
+    u_sys = intent.unit_system or "MM_N_MPA"
+    eff_mat = resolve_material_to_definition(raw_mat, unit_system=u_sys, fail_closed=True)
 
     # 4. Step & Procedure Resolution
     eff_step = None

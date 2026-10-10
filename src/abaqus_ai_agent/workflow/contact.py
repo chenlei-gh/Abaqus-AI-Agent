@@ -29,6 +29,25 @@ def build_contact_plan(
     region_map must declare 'master_surface' and 'slave_surface', and optionally
     'fixed_base' and 'moving_slider'.
     """
+    from ..reasoning.material_catalog import resolve_material_to_definition
+    mat_def = resolve_material_to_definition(material, fail_closed=False)
+    if mat_def is not None:
+        mat_name = mat_def.name
+        mat_e = mat_def.elastic.youngs_modulus if mat_def.elastic else 210000.0
+        mat_nu = mat_def.elastic.poisson_ratio if mat_def.elastic else 0.3
+        mat_density = mat_def.density
+    elif isinstance(material, dict):
+        mat_name = material.get("name", "DefaultMaterial")
+        mat_e = material.get("youngs_modulus") or material.get("elastic_modulus") or 210000.0
+        mat_nu = (
+            material.get("poisson")
+            if material.get("poisson") is not None
+            else (material.get("poisson_ratio") if material.get("poisson_ratio") is not None else 0.3)
+        )
+        mat_density = material.get("density")
+    else:
+        raise ValueError(f"Cannot resolve material: {material}")
+
     tangential = (
         {"formulation": "PENALTY", "friction": float(friction_coefficient)}
         if friction_coefficient is not None
@@ -37,9 +56,9 @@ def build_contact_plan(
     actions = [
         builders.material_elastic(
             model_name,
-            material["name"],
-            material["youngs_modulus"],
-            material["poisson"],
+            mat_name,
+            mat_e,
+            mat_nu,
         ),
         builders.contact_property(
             model_name,
@@ -60,9 +79,9 @@ def build_contact_plan(
         builders.static_step(model_name, step_name, nlgeom=nlgeom),
     ]
 
-    if material.get("density") is not None:
+    if mat_density is not None:
         actions.append(
-            builders.material_density(model_name, material["name"], material["density"])
+            builders.material_density(model_name, mat_name, mat_density)
         )
 
     if region_map.get("fixed_base"):

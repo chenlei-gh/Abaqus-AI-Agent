@@ -37,7 +37,7 @@ class EngineeringIntent:
     unit: Optional[str] = None
     direction: Optional[str] = None
     analysis_type: Optional[str] = None
-    material: Optional[Dict[str, Any]] = None
+    material: Optional[Union[Dict[str, Any], Any, str]] = None
     boundary_conditions: tuple = ()
     loads: tuple = ()
     contacts: tuple = ()
