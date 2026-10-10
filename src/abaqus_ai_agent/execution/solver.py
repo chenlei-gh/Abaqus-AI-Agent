@@ -373,8 +373,10 @@ except Exception as exc:
 """
     try:
         with tempfile.TemporaryDirectory(prefix="abaqus_odb_probe_") as probe_scratch:
+            probe_file = Path(probe_scratch) / "_odb_probe.py"
+            probe_file.write_text(probe_script, encoding="utf-8")
             proc = subprocess.run(
-                [launcher, "python", "-c", probe_script],
+                [launcher, "python", str(probe_file)],
                 cwd=probe_scratch,
                 capture_output=True,
                 text=True,

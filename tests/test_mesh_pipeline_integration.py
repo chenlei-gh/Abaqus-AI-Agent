@@ -525,3 +525,53 @@ def test_type_hints_resolution_across_core_modules():
                     if meth.__module__ == mod.__name__:
                         m_hints = typing.get_type_hints(meth)
                         assert isinstance(m_hints, dict)
+
+
+def test_verify_authentic_odb_structure_uses_file_based_probe(tmp_path):
+    """Verify verify_authentic_odb_structure writes probe script to file and invokes it without -c flag."""
+    import json
+    from unittest.mock import MagicMock, patch
+    from abaqus_ai_agent.execution.solver import verify_authentic_odb_structure
+
+    mock_odb = tmp_path / "valid_dummy.odb"
+    mock_odb.write_bytes(b"\x7fODB" + b"\x00" * 100)
+
+    probe_output = "__ODB_VERIFIED__" + json.dumps({
+        "valid": True,
+        "steps": {"Step-1": {"frames": [0, 1]}},
+        "mesh_metrics": {
+            "total_elements": 100,
+            "total_nodes": 200,
+            "element_types": {"C3D10": 100},
+            "instances": {"PlateInst": {"elements": 100, "nodes": 200}},
+        },
+    })
+
+    captured_cmds = []
+
+    def mock_subprocess_run(cmd, **kwargs):
+        captured_cmds.append(cmd)
+        probe_path = Path(cmd[2])
+        assert probe_path.is_file(), f"Probe file {probe_path} should exist during execution"
+        assert probe_path.name == "_odb_probe.py"
+        content = probe_path.read_text(encoding="utf-8")
+        assert "from odbAccess import openOdb" in content
+        assert "-c" not in cmd
+        mock_proc = MagicMock()
+        mock_proc.return_code = 0
+        mock_proc.stdout = probe_output
+        mock_proc.stderr = ""
+        return mock_proc
+
+    with patch("abaqus_ai_agent.execution.solver.has_native_odb_access", return_value=False), \
+         patch("abaqus_ai_agent.execution.solver.is_authentic_binary_odb", return_value=True), \
+         patch("abaqus_ai_agent.execution.solver.find_abaqus_executable", return_value="mock_abaqus"), \
+         patch("subprocess.run", side_effect=mock_subprocess_run):
+        res = verify_authentic_odb_structure(mock_odb, launcher_cmd="mock_abaqus")
+
+    assert res["verified"] is True
+    assert len(captured_cmds) == 1
+    cmd = captured_cmds[0]
+    assert cmd[0] == "mock_abaqus"
+    assert cmd[1] == "python"
+    assert cmd[2].endswith("_odb_probe.py")
