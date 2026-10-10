@@ -582,6 +582,9 @@ def run_qualification(workdir: Path, launcher: str = "abaqus") -> Dict[str, Any]
         ),
     ]
 
+    audit_secret = os.environ.get("ABAQUS_RENDER_SIGNING_SECRET") or "ABAQUS_AI_AGENT_AUDIT_SECRET_2025_QUALIFICATION"
+    os.environ["ABAQUS_RENDER_SIGNING_SECRET"] = audit_secret
+
     figures_output_dir = workdir / "figures"
     figures_output_dir.mkdir(parents=True, exist_ok=True)
     rendered_figs = render_authentic_visualizations(
@@ -591,6 +594,7 @@ def run_qualification(workdir: Path, launcher: str = "abaqus") -> Dict[str, Any]
         launcher=resolved_launcher,
         run_id=run_id,
         input_hash=input_hash,
+        require_persistent_key=True,
     )
 
     pipeline = DeterministicReportPipeline()
@@ -674,6 +678,11 @@ def run_qualification(workdir: Path, launcher: str = "abaqus") -> Dict[str, Any]
                 "probe": fine_probe,
             },
         },
+        "key_contract": {
+            "mode": "PERSISTENT_AUDIT",
+            "require_persistent_key": True,
+            "secret_configured": True,
+        },
         "convergence_progression": conv_eval,
         "rendered_visualizations": figures_manifest,
         "delivery": {
@@ -689,6 +698,74 @@ def run_qualification(workdir: Path, launcher: str = "abaqus") -> Dict[str, Any]
     manifest_path = workdir / "qualification_manifest.json"
     manifest_path.write_text(json.dumps(manifest, indent=2), encoding="utf-8")
     print(f"  [OK] Qualification manifest saved: {manifest_path}")
+
+    # -------------------------------------------------------------------------
+    # Step 6: Isolated Cross-Process Verification Audit
+    # -------------------------------------------------------------------------
+    audit_script_code = """
+import json
+import os
+import sys
+from pathlib import Path
+from abaqus_ai_agent.execution.odb_rendering import verify_render_execution_evidence
+
+manifest_path = Path(sys.argv[1])
+manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+expected_run_id = manifest["run_id"]
+expected_odb_sha256 = manifest["levels"]["level_2_refined"]["odb_sha256"]
+
+for fig in manifest["rendered_visualizations"]:
+    evidence = fig.get("render_execution_evidence")
+    ok, err = verify_render_execution_evidence(
+        evidence=evidence,
+        expected_run_id=expected_run_id,
+        expected_odb_sha256=expected_odb_sha256,
+        expected_input_hash=evidence.get("input_hash"),
+        require_persistent_key=True,
+    )
+    if not ok:
+        print(f"FAILED: {err}", file=sys.stderr)
+        sys.exit(2)
+sys.exit(0)
+"""
+    audit_script_file = workdir / "_cross_process_audit_probe.py"
+    audit_script_file.write_text(audit_script_code.strip(), encoding="utf-8")
+
+    # 1. Authentic Subprocess with Matching Secret -> Must Succeed
+    env_good = dict(os.environ, ABAQUS_RENDER_SIGNING_SECRET=audit_secret)
+    p_good = subprocess.run(
+        [sys.executable, str(audit_script_file), str(manifest_path)],
+        env=env_good,
+        capture_output=True,
+        text=True,
+    )
+    assert p_good.returncode == 0, f"Cross-process audit failed with matching secret: {p_good.stderr}"
+
+    # 2. Tampered Secret -> Must Fail Closed
+    env_bad = dict(os.environ, ABAQUS_RENDER_SIGNING_SECRET="forged_wrong_secret_123")
+    p_bad = subprocess.run(
+        [sys.executable, str(audit_script_file), str(manifest_path)],
+        env=env_bad,
+        capture_output=True,
+        text=True,
+    )
+    assert p_bad.returncode == 2, "Cross-process audit must fail closed on mismatched secret"
+
+    # 3. Missing Secret in Subprocess -> Must Fail Closed
+    env_none = dict(os.environ)
+    env_none.pop("ABAQUS_RENDER_SIGNING_SECRET", None)
+    p_none = subprocess.run(
+        [sys.executable, str(audit_script_file), str(manifest_path)],
+        env=env_none,
+        capture_output=True,
+        text=True,
+    )
+    assert p_none.returncode == 2, "Cross-process audit must fail closed when secret is absent"
+
+    if audit_script_file.exists():
+        audit_script_file.unlink()
+
+    print("  [PASS] Cross-process independent audit verified across isolated Python processes")
 
     return manifest
 

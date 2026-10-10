@@ -544,3 +544,64 @@ def test_render_signing_key_lifecycle_and_cross_process_contract(monkeypatch):
     )
     assert not ok_bad
     assert "session_signature mismatch or forged" in msg_bad
+
+
+def test_render_evidence_actual_cross_process_subprocess_audit(tmp_path):
+    """Launch real independent Python subprocesses to verify cross-process audit contract."""
+    import hashlib
+    import json
+    import os
+    import subprocess
+    import sys
+    from abaqus_ai_agent.execution.odb_rendering import (
+        create_render_execution_evidence,
+    )
+
+    shared_secret = "ci_audit_production_signing_secret_999"
+    ev = create_render_execution_evidence(
+        session_nonce="nonce_subprocess_audit_0123456789",
+        run_id="RUN-SUBPROCESS-01",
+        odb_sha256="ODB-SUBPROCESS-SHA",
+        input_hash="INP-SUBPROCESS-HASH",
+        rendered_figures=[{"filename": "contour.png", "image_sha256": "sha_contour"}],
+        require_persistent_key=True,
+        signing_key=hashlib.sha256(shared_secret.encode("utf-8")).digest(),
+    )
+
+    evidence_json_path = tmp_path / "evidence.json"
+    evidence_json_path.write_text(json.dumps(ev.to_dict()), encoding="utf-8")
+
+    probe_script = tmp_path / "probe.py"
+    probe_script.write_text(
+        "import json, sys\n"
+        "from abaqus_ai_agent.execution.odb_rendering import verify_render_execution_evidence\n"
+        "with open(sys.argv[1], 'r', encoding='utf-8') as f:\n"
+        "    ev_data = json.load(f)\n"
+        "ok, msg = verify_render_execution_evidence(\n"
+        "    evidence=ev_data,\n"
+        "    expected_run_id='RUN-SUBPROCESS-01',\n"
+        "    expected_odb_sha256='ODB-SUBPROCESS-SHA',\n"
+        "    expected_input_hash='INP-SUBPROCESS-HASH',\n"
+        "    require_persistent_key=True,\n"
+        ")\n"
+        "if not ok:\n"
+        "    sys.exit(2)\n"
+        "sys.exit(0)\n",
+        encoding="utf-8",
+    )
+
+    # 1. Subprocess with matching secret -> Must return 0
+    env_good = dict(os.environ, ABAQUS_RENDER_SIGNING_SECRET=shared_secret)
+    p_good = subprocess.run([sys.executable, str(probe_script), str(evidence_json_path)], env=env_good, capture_output=True, text=True)
+    assert p_good.returncode == 0
+
+    # 2. Subprocess with mismatch secret -> Must return 2
+    env_bad = dict(os.environ, ABAQUS_RENDER_SIGNING_SECRET="mismatch_secret_xyz")
+    p_bad = subprocess.run([sys.executable, str(probe_script), str(evidence_json_path)], env=env_bad, capture_output=True, text=True)
+    assert p_bad.returncode == 2
+
+    # 3. Subprocess with missing secret -> Must fail closed (return 2)
+    env_none = dict(os.environ)
+    env_none.pop("ABAQUS_RENDER_SIGNING_SECRET", None)
+    p_none = subprocess.run([sys.executable, str(probe_script), str(evidence_json_path)], env=env_none, capture_output=True, text=True)
+    assert p_none.returncode == 2
