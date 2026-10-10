@@ -631,6 +631,27 @@ def test_evaluate_mesh_convergence():
     assert eval_div["diminishing_increment"] is False
     assert eval_div["stress_convergence_status"] == "UNCONVERGED"
 
+    # 4-level converged case (Level 4 delta_34 < 5.0%)
+    l4_converged = {"peak_s11": 30.550, "max_u1": 0.005449, "rf_error_pct": 0.0000}
+    eval_4lvl = evaluate_mesh_convergence(l1, l2, l3, theory_peak=31.331, ultra_probe=l4_converged)
+    assert eval_4lvl["is_monotonic"] is True
+    assert eval_4lvl["diminishing_increment"] is True
+    assert eval_4lvl["delta_34_pct"] < 5.0
+    assert eval_4lvl["stress_convergence_status"] == "CONVERGED"
+    assert len(eval_4lvl["stress_levels_s11"]) == 4
+
+
+def test_generate_cae_script_includes_native_mesh_quality_verification():
+    """Verify generate_cae_script generates native verifyMeshQuality calls for aspect ratio and analysis checks."""
+    from tools.qualify_real_mesh_refinement import generate_cae_script
+
+    script = generate_cae_script("Job_Test", "Model_Test", 10.0, 3.5)
+    assert "verifyMeshQuality" in script
+    assert "ASPECT_RATIO" in script
+    assert "ANALYSIS_CHECKS" in script
+    assert "severely_distorted_elements" in script
+    assert "Job_Test_mesh_quality.json" in script
+
 
 def test_probe_odb_script_filters_in_plane_far_edges():
     """Verify probe script strictly filters in-plane edges for both hole and far-field elements."""

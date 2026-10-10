@@ -100,17 +100,15 @@ def evaluate_mesh_convergence(
     ref_probe: Dict[str, Any],
     fine_probe: Dict[str, Any],
     theory_peak: float = 31.331,
+    ultra_probe: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
-    """Compute mathematical convergence indicators across 3 mesh refinement levels."""
+    """Compute mathematical convergence indicators across 3 or 4 mesh refinement levels."""
     s1 = float(base_probe["peak_s11"])
     s2 = float(ref_probe["peak_s11"])
     s3 = float(fine_probe["peak_s11"])
 
     delta_12 = abs(s2 - s1) / s2 if s2 else 0.0
     delta_23 = abs(s3 - s2) / s3 if s3 else 0.0
-
-    is_monotonic = (s1 < s2 < s3)
-    diminishing_increment = (delta_23 < delta_12)
 
     err_l1 = abs(s1 - theory_peak) / theory_peak
     err_l2 = abs(s2 - theory_peak) / theory_peak
@@ -121,15 +119,36 @@ def evaluate_mesh_convergence(
     u3 = float(fine_probe.get("max_u1", 0.0))
     delta_u_12 = abs(u2 - u1) / u2 if u2 else 0.0
     delta_u_23 = abs(u3 - u2) / u3 if u3 else 0.0
-    u_converged = (delta_u_23 < 0.01)
 
-    rf_ok = all(float(p.get("rf_error_pct", 1.0)) < 0.01 for p in (base_probe, ref_probe, fine_probe))
+    probes = [base_probe, ref_probe, fine_probe]
+    if ultra_probe is not None:
+        probes.append(ultra_probe)
+        s4 = float(ultra_probe["peak_s11"])
+        u4 = float(ultra_probe.get("max_u1", 0.0))
+        delta_34 = abs(s4 - s3) / s4 if s4 else 0.0
+        delta_u_34 = abs(u4 - u3) / u4 if u4 else 0.0
+        err_l4 = abs(s4 - theory_peak) / theory_peak
+
+        is_monotonic = (s1 < s2 < s3 < s4)
+        diminishing_increment = (delta_34 < delta_23 < delta_12)
+        u_converged = (delta_u_34 < 0.01)
+        final_delta = delta_34
+    else:
+        is_monotonic = (s1 < s2 < s3)
+        diminishing_increment = (delta_23 < delta_12)
+        u_converged = (delta_u_23 < 0.01)
+        final_delta = delta_23
+        delta_34 = None
+        delta_u_34 = None
+        err_l4 = None
+
+    rf_ok = all(float(p.get("rf_error_pct", 1.0)) < 0.01 for p in probes)
 
     # Truthful convergence categorization:
     # < 5% sensitivity -> strictly mesh independent
     # Diminishing increments and monotonic -> asymptotic convergence regime
     # Otherwise -> unconverged
-    if delta_23 < 0.05:
+    if final_delta < 0.05:
         stress_status = "CONVERGED"
     elif diminishing_increment and is_monotonic:
         stress_status = "ASYMPTOTIC_APPROACHING"
@@ -137,14 +156,17 @@ def evaluate_mesh_convergence(
         stress_status = "UNCONVERGED"
 
     return {
-        "stress_levels_s11": [s1, s2, s3],
+        "stress_levels_s11": [s1, s2, s3] if ultra_probe is None else [s1, s2, s3, s4],
         "delta_12_pct": round(delta_12 * 100.0, 2),
         "delta_23_pct": round(delta_23 * 100.0, 2),
+        "delta_34_pct": round(delta_34 * 100.0, 2) if delta_34 is not None else None,
+        "final_delta_pct": round(final_delta * 100.0, 2),
         "is_monotonic": is_monotonic,
         "diminishing_increment": diminishing_increment,
-        "theory_error_pct": [round(err_l1 * 100.0, 2), round(err_l2 * 100.0, 2), round(err_l3 * 100.0, 2)],
-        "displacement_levels_u1": [u1, u2, u3],
+        "theory_error_pct": [round(err_l1 * 100.0, 2), round(err_l2 * 100.0, 2), round(err_l3 * 100.0, 2)] + ([round(err_l4 * 100.0, 2)] if err_l4 is not None else []),
+        "displacement_levels_u1": [u1, u2, u3] if ultra_probe is None else [u1, u2, u3, u4],
         "delta_u_23_pct": round(delta_u_23 * 100.0, 3),
+        "delta_u_34_pct": round(delta_u_34 * 100.0, 3) if delta_u_34 is not None else None,
         "displacement_converged": u_converged,
         "reaction_force_equilibrium_ok": rf_ok,
         "stress_convergence_status": stress_status,
@@ -156,6 +178,7 @@ def generate_cae_script(
     model_name: str,
     global_size: float,
     local_size: Optional[float] = None,
+    aspect_ratio_threshold: float = 15.0,
 ) -> str:
     hole_radius = 10.0
     local_seed_block = ""
@@ -170,6 +193,7 @@ if hole_edges:
     return f"""from abaqus import *
 from abaqusConstants import *
 import part, mesh, material, section, assembly, step, load, job
+import json
 
 m = mdb.Model(name='{model_name}')
 s = m.ConstrainedSketch(name='sk', sheetSize=200.0)
@@ -192,6 +216,22 @@ p.seedPart(size={global_size}, deviationFactor=0.1, minSizeFactor=0.1)
 p.setMeshControls(regions=p.cells, elemShape=HEX, technique=SWEEP)
 p.setElementType(regions=(p.cells,), elemTypes=(mesh.ElemType(elemCode=C3D20R, elemLibrary=STANDARD),))
 p.generateMesh()
+
+# Native Abaqus mesh quality verification on authentic generated mesh
+aspect_res = p.verifyMeshQuality(criterion=ASPECT_RATIO, threshold={aspect_ratio_threshold})
+analysis_res = p.verifyMeshQuality(criterion=ANALYSIS_CHECKS)
+mq_data = {{
+    'job': '{job_name}',
+    'source': 'native_abaqus_verifyMeshQuality',
+    'maximum_aspect_ratio': round(float(aspect_res.get('worst', 1.0)), 3),
+    'aspect_failed_count': len(aspect_res.get('failedElements', ())),
+    'aspect_warning_count': len(aspect_res.get('warningElements', ())),
+    'severely_distorted_elements': len(analysis_res.get('failedElements', ())),
+    'analysis_warning_count': len(analysis_res.get('warningElements', ())),
+    'status': 'PASS' if (len(analysis_res.get('failedElements', ())) == 0 and len(aspect_res.get('failedElements', ())) == 0) else 'FAIL',
+}}
+with open('{job_name}_mesh_quality.json', 'w') as f_mq:
+    json.dump(mq_data, f_mq)
 
 m.StaticStep(name='Step-1', previous='Initial')
 
@@ -355,8 +395,14 @@ def run_qualification(workdir: Path, launcher: str = "abaqus") -> Dict[str, Any]
 
     base_metrics = extract_authentic_odb_mesh_metrics(base_odb, launcher_cmd=resolved_launcher)
     base_probe = probe_odb_topology_and_physics(base_odb, launcher=resolved_launcher)
+    base_mq_file = base_dir / f"{base_job}_mesh_quality.json"
+    if not base_mq_file.is_file():
+        raise FileNotFoundError(f"Base native mesh quality audit file not found: {base_mq_file}")
+    base_mq = json.loads(base_mq_file.read_text(encoding="utf-8"))
     print(f"  [OK] Level 1 Discretization: {base_metrics['total_elements']} elements, "
           f"{base_metrics['total_nodes']} nodes, types: {base_metrics['element_types']}")
+    print(f"  [OK] Level 1 Native Quality: status={base_mq['status']}, max_aspect={base_mq['maximum_aspect_ratio']}, "
+          f"severely_distorted={base_mq['severely_distorted_elements']}")
     print(f"  [OK] Level 1 Hole Chord: {base_probe['avg_hole_edge']} mm, Far: {base_probe['avg_far_edge']} mm")
     print(f"  [OK] Level 1 Physics: S11={base_probe['peak_s11']} MPa, RF1={base_probe['total_rf1']} N (error={base_probe['rf_error_pct']}%)")
 
@@ -387,8 +433,14 @@ def run_qualification(workdir: Path, launcher: str = "abaqus") -> Dict[str, Any]
 
     ref_metrics = extract_authentic_odb_mesh_metrics(ref_odb, launcher_cmd=resolved_launcher)
     ref_probe = probe_odb_topology_and_physics(ref_odb, launcher=resolved_launcher)
+    ref_mq_file = ref_dir / f"{ref_job}_mesh_quality.json"
+    if not ref_mq_file.is_file():
+        raise FileNotFoundError(f"Refined native mesh quality audit file not found: {ref_mq_file}")
+    ref_mq = json.loads(ref_mq_file.read_text(encoding="utf-8"))
     print(f"  [OK] Level 2 Discretization: {ref_metrics['total_elements']} elements, "
           f"{ref_metrics['total_nodes']} nodes, types: {ref_metrics['element_types']}")
+    print(f"  [OK] Level 2 Native Quality: status={ref_mq['status']}, max_aspect={ref_mq['maximum_aspect_ratio']}, "
+          f"severely_distorted={ref_mq['severely_distorted_elements']}")
     print(f"  [OK] Level 2 Hole Chord: {ref_probe['avg_hole_edge']} mm, Far: {ref_probe['avg_far_edge']} mm, Ratio={ref_probe['refinement_ratio']}")
     print(f"  [OK] Level 2 Physics: S11={ref_probe['peak_s11']} MPa, RF1={ref_probe['total_rf1']} N (error={ref_probe['rf_error_pct']}%)")
 
@@ -419,106 +471,173 @@ def run_qualification(workdir: Path, launcher: str = "abaqus") -> Dict[str, Any]
 
     fine_metrics = extract_authentic_odb_mesh_metrics(fine_odb, launcher_cmd=resolved_launcher)
     fine_probe = probe_odb_topology_and_physics(fine_odb, launcher=resolved_launcher)
+    fine_mq_file = fine_dir / f"{fine_job}_mesh_quality.json"
+    if not fine_mq_file.is_file():
+        raise FileNotFoundError(f"Fine native mesh quality audit file not found: {fine_mq_file}")
+    fine_mq = json.loads(fine_mq_file.read_text(encoding="utf-8"))
     print(f"  [OK] Level 3 Discretization: {fine_metrics['total_elements']} elements, "
           f"{fine_metrics['total_nodes']} nodes, types: {fine_metrics['element_types']}")
+    print(f"  [OK] Level 3 Native Quality: status={fine_mq['status']}, max_aspect={fine_mq['maximum_aspect_ratio']}, "
+          f"severely_distorted={fine_mq['severely_distorted_elements']}")
     print(f"  [OK] Level 3 Hole Chord: {fine_probe['avg_hole_edge']} mm, Far: {fine_probe['avg_far_edge']} mm, Ratio={fine_probe['refinement_ratio']}")
     print(f"  [OK] Level 3 Physics: S11={fine_probe['peak_s11']} MPa, RF1={fine_probe['total_rf1']} N (error={fine_probe['rf_error_pct']}%)")
 
     # -------------------------------------------------------------------------
-    # 4. Strict Three-Level Convergence & Physics Equilibrium Assertions
+    # 4. Level 4: Ultra-Fine Converged Model (Hole edge local_size = 0.85 mm)
     # -------------------------------------------------------------------------
     print("\n" + "=" * 80)
-    print(" [4/5] Evaluating Multi-Level Mesh Convergence and Physics Integrity")
+    print(" [4/6] Running Level 4 Ultra-Fine Model (global_size = 10.0 mm, hole_edges = 0.85 mm)")
+    print("=" * 80)
+    ultra_dir = workdir / "ultra"
+    ultra_dir.mkdir(parents=True, exist_ok=True)
+    ultra_job = "PlateHole_Ultra"
+    ultra_script = ultra_dir / "run_ultra.py"
+    ultra_script.write_text(
+        generate_cae_script(ultra_job, "Model_Ultra", 10.0, 0.85),
+        encoding="utf-8",
+    )
+
+    b_ultra = BatchExecutor(launcher=resolved_launcher, workdir=str(ultra_dir))
+    res_ultra = b_ultra.run_nogui(str(ultra_script), timeout=180)
+    if res_ultra.return_code != 0:
+        raise RuntimeError(f"Ultra job execution failed (RC={res_ultra.return_code}):\n{res_ultra.stderr}")
+
+    ultra_odb = ultra_dir / f"{ultra_job}.odb"
+    ultra_inp = ultra_dir / f"{ultra_job}.inp"
+    if not ultra_odb.is_file():
+        raise FileNotFoundError(f"Ultra ODB was not generated: {ultra_odb}")
+
+    ultra_metrics = extract_authentic_odb_mesh_metrics(ultra_odb, launcher_cmd=resolved_launcher)
+    ultra_probe = probe_odb_topology_and_physics(ultra_odb, launcher=resolved_launcher)
+    ultra_mq_file = ultra_dir / f"{ultra_job}_mesh_quality.json"
+    if not ultra_mq_file.is_file():
+        raise FileNotFoundError(f"Ultra native mesh quality audit file not found: {ultra_mq_file}")
+    ultra_mq = json.loads(ultra_mq_file.read_text(encoding="utf-8"))
+    print(f"  [OK] Level 4 Discretization: {ultra_metrics['total_elements']} elements, "
+          f"{ultra_metrics['total_nodes']} nodes, types: {ultra_metrics['element_types']}")
+    print(f"  [OK] Level 4 Native Quality: status={ultra_mq['status']}, max_aspect={ultra_mq['maximum_aspect_ratio']}, "
+          f"severely_distorted={ultra_mq['severely_distorted_elements']}")
+    print(f"  [OK] Level 4 Hole Chord: {ultra_probe['avg_hole_edge']} mm, Far: {ultra_probe['avg_far_edge']} mm, Ratio={ultra_probe['refinement_ratio']}")
+    print(f"  [OK] Level 4 Physics: S11={ultra_probe['peak_s11']} MPa, RF1={ultra_probe['total_rf1']} N (error={ultra_probe['rf_error_pct']}%)")
+
+    # -------------------------------------------------------------------------
+    # 5. Strict Four-Level Convergence & Physics Equilibrium Assertions
+    # -------------------------------------------------------------------------
+    print("\n" + "=" * 80)
+    print(" [5/6] Evaluating Multi-Level Mesh Convergence and Physics Integrity")
     print("=" * 80)
     theory = compute_peterson_hole_plate_theory()
     print(f"  [THEORY] Peterson Analytical Reference: Kt_net={theory['kt_net']}, Kt_gross={theory['kt_gross']}, "
           f"Sigma_Peak={theory['sigma_peak_theory']} MPa (gross nominal={theory['sigma_gross']} MPa)")
 
-    conv_eval = evaluate_mesh_convergence(base_probe, ref_probe, fine_probe, theory["sigma_peak_theory"])
-    print(f"  [CONVERGENCE] S11 Increments: L1->L2 = {conv_eval['delta_12_pct']}%, L2->L3 = {conv_eval['delta_23_pct']}% "
-          f"(Diminishing: {conv_eval['diminishing_increment']}, Status: {conv_eval['stress_convergence_status']})")
+    conv_eval = evaluate_mesh_convergence(
+        base_probe, ref_probe, fine_probe, theory["sigma_peak_theory"], ultra_probe=ultra_probe
+    )
+    print(f"  [CONVERGENCE] S11 Increments: L1->L2 = {conv_eval['delta_12_pct']}%, "
+          f"L2->L3 = {conv_eval['delta_23_pct']}%, L3->L4 = {conv_eval['delta_34_pct']}% "
+          f"(Diminishing: {conv_eval['diminishing_increment']}, Final Delta: {conv_eval['final_delta_pct']}%, "
+          f"Status: {conv_eval['stress_convergence_status']})")
     print(f"  [CONVERGENCE] Theoretical Errors: L1={conv_eval['theory_error_pct'][0]}%, "
-          f"L2={conv_eval['theory_error_pct'][1]}%, L3={conv_eval['theory_error_pct'][2]}%")
+          f"L2={conv_eval['theory_error_pct'][1]}%, L3={conv_eval['theory_error_pct'][2]}%, "
+          f"L4={conv_eval['theory_error_pct'][3]}%")
     print(f"  [CONVERGENCE] Max U1: L1={conv_eval['displacement_levels_u1'][0]} -> "
-          f"L2={conv_eval['displacement_levels_u1'][1]} -> L3={conv_eval['displacement_levels_u1'][2]} mm "
-          f"(L2->L3 delta={conv_eval['delta_u_23_pct']}%, Converged: {conv_eval['displacement_converged']})")
+          f"L2={conv_eval['displacement_levels_u1'][1]} -> L3={conv_eval['displacement_levels_u1'][2]} -> "
+          f"L4={conv_eval['displacement_levels_u1'][3]} mm "
+          f"(L3->L4 delta={conv_eval['delta_u_34_pct']}%, Converged: {conv_eval['displacement_converged']})")
 
-    # Monotonic element count growth
-    assert base_metrics["total_elements"] < ref_metrics["total_elements"] < fine_metrics["total_elements"], \
-        "Element count must grow strictly monotonically across refinement levels"
-    assert base_metrics["total_nodes"] < ref_metrics["total_nodes"] < fine_metrics["total_nodes"], \
-        "Node count must grow strictly monotonically across refinement levels"
+    # Native Abaqus mesh quality assertions across all 4 levels
+    for lvl_name, mq in [("Level 1", base_mq), ("Level 2", ref_mq), ("Level 3", fine_mq), ("Level 4", ultra_mq)]:
+        assert mq["status"] == "PASS", f"{lvl_name} mesh quality failed native verification: {mq}"
+        assert mq["severely_distorted_elements"] == 0, f"{lvl_name} contains severely distorted elements"
+        assert mq["aspect_failed_count"] == 0, f"{lvl_name} contains elements exceeding aspect ratio threshold"
 
-    # Monotonic edge chord refinement
-    assert base_probe["avg_hole_edge"] > ref_probe["avg_hole_edge"] > fine_probe["avg_hole_edge"], \
-        "Hole perimeter chord length must decrease strictly monotonically"
+    # Monotonic element count growth across 4 levels
+    assert base_metrics["total_elements"] < ref_metrics["total_elements"] < fine_metrics["total_elements"] < ultra_metrics["total_elements"], \
+        "Element count must grow strictly monotonically across 4 refinement levels"
+    assert base_metrics["total_nodes"] < ref_metrics["total_nodes"] < fine_metrics["total_nodes"] < ultra_metrics["total_nodes"], \
+        "Node count must grow strictly monotonically across 4 refinement levels"
+
+    # Monotonic edge chord refinement across 4 levels
+    assert base_probe["avg_hole_edge"] > ref_probe["avg_hole_edge"] > fine_probe["avg_hole_edge"] > ultra_probe["avg_hole_edge"], \
+        "Hole perimeter chord length must decrease strictly monotonically across 4 refinement levels"
 
     # Monotonic peak stress S11 progression toward theoretical Kt limit
-    assert base_probe["peak_s11"] < ref_probe["peak_s11"] < fine_probe["peak_s11"], \
+    assert base_probe["peak_s11"] < ref_probe["peak_s11"] < fine_probe["peak_s11"] < ultra_probe["peak_s11"], \
         "Peak S11 must increase monotonically with mesh refinement due to gradient capture"
     assert conv_eval["diminishing_increment"], \
-        "Stress increments must diminish (delta_23 < delta_12) indicating asymptotic approach to limit"
+        "Stress increments must diminish across refinement levels indicating asymptotic convergence"
+    assert conv_eval["stress_convergence_status"] == "CONVERGED", \
+        f"Final stress sensitivity must be < 5.0% for strict mesh independence (got {conv_eval['final_delta_pct']}%)"
 
-    # Equilibrium check on all 3 levels (RF error < 0.01%)
-    for lvl_name, probe_res in [("Level 1", base_probe), ("Level 2", ref_probe), ("Level 3", fine_probe)]:
+    # Equilibrium check on all 4 levels (RF error < 0.01%)
+    for lvl_name, probe_res in [("Level 1", base_probe), ("Level 2", ref_probe), ("Level 3", fine_probe), ("Level 4", ultra_probe)]:
         assert probe_res["rf_error_pct"] < 0.01, f"{lvl_name} reaction force equilibrium error exceeds 0.01%"
 
     # Peak stress location check: must occur at transverse hole perimeter (r ~ 10-13 mm)
     assert abs(base_probe["peak_centroid"]["x"]) < 8.0, "Level 1 peak stress must locate near hole perimeter"
     assert abs(ref_probe["peak_centroid"]["x"]) <= 2.0, "Level 2 peak stress must localize to transverse plane (|x| <= 2 mm)"
     assert abs(fine_probe["peak_centroid"]["x"]) <= 2.0, "Level 3 peak stress must localize to transverse plane (|x| <= 2 mm)"
-    for lvl_name, probe_res in [("Level 1", base_probe), ("Level 2", ref_probe), ("Level 3", fine_probe)]:
+    assert abs(ultra_probe["peak_centroid"]["x"]) <= 2.0, "Level 4 peak stress must localize to transverse plane (|x| <= 2 mm)"
+    for lvl_name, probe_res in [("Level 1", base_probe), ("Level 2", ref_probe), ("Level 3", fine_probe), ("Level 4", ultra_probe)]:
         cent = probe_res["peak_centroid"]
         assert 9.5 <= cent["r"] <= 13.0, f"{lvl_name} peak stress must locate on hole boundary (r ~ 10 mm)"
 
-    print("  [PASS] Element count progression: 134 -> 211 -> 370 elements")
-    print("  [PASS] Hole chord progression:    7.654 mm -> 3.473 mm -> 1.743 mm")
-    print("  [PASS] Peak S11 progression:      24.977 MPa -> 27.516 MPa -> 29.519 MPa")
-    print("  [PASS] Reaction force equilibrium: 0.0000% error across all 3 levels")
-    print("  [PASS] Peak stress location:      strictly grounded at transverse hole apex (r ~ 11-12 mm)")
+    print("  [PASS] Element count progression: strictly monotonic growth across 4 levels")
+    print("  [PASS] Hole chord progression:    strictly monotonic refinement down to Level 4")
+    print("  [PASS] Peak S11 progression:      strictly monotonic approach to Peterson limit with diminishing delta")
+    print("  [PASS] Stress Convergence Gate:   STRICTLY CONVERGED (< 5.0% mesh sensitivity)")
+    print("  [PASS] Reaction force equilibrium: 0.0000% error across all 4 levels")
+    print("  [PASS] Native mesh quality check:  PASS on all 4 levels with 0 severely distorted elements")
 
     # -------------------------------------------------------------------------
-    # 5. Report Delivery with Honest Gates & Genuine Physics Evidence
+    # 6. Report Delivery with Certified Gates & Authentic Physics Evidence
     # -------------------------------------------------------------------------
     print("\n" + "=" * 80)
-    print(" [5/5] Generating Engineering Report with Grounded Provenance")
+    print(" [6/6] Generating Certified Engineering Report with Grounded Provenance")
     print("=" * 80)
     report_output_dir = workdir / "report_delivery"
     report_output_dir.mkdir(parents=True, exist_ok=True)
 
-    input_hash = compute_sha256(ref_inp)
-    odb_hash = compute_sha256(ref_odb)
+    input_hash = compute_sha256(ultra_inp)
+    odb_hash = compute_sha256(ultra_odb)
 
-    elem_types_str = ", ".join(f"{k} ({v})" for k, v in sorted(ref_metrics["element_types"].items()))
+    elem_types_str = ", ".join(f"{k} ({v})" for k, v in sorted(ultra_metrics["element_types"].items()))
     mesh_info = {
         "discretization": {
             "seed_size": 10.0,
-            "total_elements": ref_metrics["total_elements"],
-            "total_nodes": ref_metrics["total_nodes"],
+            "total_elements": ultra_metrics["total_elements"],
+            "total_nodes": ultra_metrics["total_nodes"],
             "element_type": elem_types_str,
-            "strategy": "局部孔边种子细化 (Local Hole Edge Refinement: 3.5 mm)",
+            "strategy": "局部孔边多级渐进细化至超细收敛网格 (Local Hole Edge Quad-Refinement: 0.85 mm)",
             "local_refinements": 1,
         },
-        # Truthful audit: quality audit was omitted/unexecuted, no fake numbers
-        "quality_audit": None,
-        "total_elements": ref_metrics["total_elements"],
-        "total_nodes": ref_metrics["total_nodes"],
+        "quality_audit": {
+            "source": ultra_mq["source"],
+            "maximum_aspect_ratio": ultra_mq["maximum_aspect_ratio"],
+            "severely_distorted_elements": ultra_mq["severely_distorted_elements"],
+            "aspect_failed_count": ultra_mq["aspect_failed_count"],
+            "aspect_warning_count": ultra_mq["aspect_warning_count"],
+            "status": ultra_mq["status"],
+        },
+        "total_elements": ultra_metrics["total_elements"],
+        "total_nodes": ultra_metrics["total_nodes"],
         "element_type": elem_types_str,
         "seed_size": 10.0,
     }
 
     # Authentic physics results evaluated from real ODB with calculated tolerances
-    err_rf = ref_probe["rf_error_pct"] / 100.0
+    err_rf = ultra_probe["rf_error_pct"] / 100.0
     err_s11_l2 = round(abs(ref_probe["peak_s11"] - theory["sigma_peak_theory"]) / theory["sigma_peak_theory"], 4)
     err_s11_l3 = round(abs(fine_probe["peak_s11"] - theory["sigma_peak_theory"]) / theory["sigma_peak_theory"], 4)
+    err_s11_l4 = round(abs(ultra_probe["peak_s11"] - theory["sigma_peak_theory"]) / theory["sigma_peak_theory"], 4)
 
     results_info = (
         {
             "name": "Reaction Force Equilibrium (反力平衡校验)",
             "nominal_value": -10000.0,
-            "measured_value": ref_probe["total_rf1"],
+            "measured_value": ultra_probe["total_rf1"],
             "error_ratio": err_rf,
-            "status": "PASS" if ref_probe["rf_error_pct"] < 0.01 else "FAIL",
+            "status": "PASS" if ultra_probe["rf_error_pct"] < 0.01 else "FAIL",
         },
         {
             "name": "Level 2 Hole Peak Stress S11 (中等网格局部峰值应力)",
@@ -535,26 +654,35 @@ def run_qualification(workdir: Path, launcher: str = "abaqus") -> Dict[str, Any]
             "status": "PASS" if err_s11_l3 <= 0.08 else "FAIL",
         },
         {
-            "name": "Multi-Level Convergence Rate (多级应力收敛减速判定)",
+            "name": "Level 4 Hole Peak Stress S11 (超细网格局部峰值应力)",
+            "nominal_value": theory["sigma_peak_theory"],
+            "measured_value": ultra_probe["peak_s11"],
+            "error_ratio": err_s11_l4,
+            "status": "PASS" if err_s11_l4 <= 0.05 else "FAIL",
+        },
+        {
+            "name": "Multi-Level Strict Convergence Rate (四级应力收敛判定 < 5.0%)",
             "nominal_value": 0.0,
-            "measured_value": conv_eval["delta_23_pct"],
-            "error_ratio": conv_eval["delta_23_pct"] / 100.0,
-            "status": "PASS" if conv_eval["diminishing_increment"] and conv_eval["is_monotonic"] else "FAIL",
+            "measured_value": conv_eval["final_delta_pct"],
+            "error_ratio": conv_eval["final_delta_pct"] / 100.0,
+            "status": "PASS" if conv_eval["stress_convergence_status"] == "CONVERGED" else "FAIL",
         },
     )
 
     all_physics_pass = all(r["status"] == "PASS" for r in results_info)
+    mesh_quality_pass = (ultra_mq["status"] == "PASS" and ultra_mq["severely_distorted_elements"] == 0)
+    convergence_pass = (conv_eval["stress_convergence_status"] == "CONVERGED")
 
-    # Truthful gate contract:
-    # When mesh_quality gate is SKIPPED, the report is NOT deliverable as certified final delivery.
-    # It is strictly delivered as a diagnostic draft with deliverable=False and status=PARTIAL_PASS.
+    is_qualified_delivery = (all_physics_pass and mesh_quality_pass and convergence_pass)
+
     acceptance_info = {
-        "status": "PARTIAL_PASS" if all_physics_pass else "FAIL",
-        "deliverable": False,
+        "status": "PASS" if is_qualified_delivery else "PARTIAL_PASS",
+        "deliverable": is_qualified_delivery,
         "gates": {
             "execution": "PASS",
             "physics": "PASS" if all_physics_pass else "FAIL",
-            "mesh_quality": "SKIPPED",  # Honest indication of unexecuted check
+            "mesh_quality": "PASS" if mesh_quality_pass else "FAIL",
+            "convergence": "PASS" if convergence_pass else "FAIL",
         },
     }
 
@@ -593,7 +721,7 @@ def run_qualification(workdir: Path, launcher: str = "abaqus") -> Dict[str, Any]
     figures_output_dir = workdir / "figures"
     figures_output_dir.mkdir(parents=True, exist_ok=True)
     rendered_figs = render_authentic_visualizations(
-        odb_path=ref_odb,
+        odb_path=ultra_odb,
         specs=fig_specs,
         output_dir=figures_output_dir,
         launcher=resolved_launcher,
@@ -606,13 +734,13 @@ def run_qualification(workdir: Path, launcher: str = "abaqus") -> Dict[str, Any]
     delivery_card, report_pointer, report_data = pipeline.build_and_render(
         output_dir=report_output_dir,
         title="Plate with Central Hole Mesh Refinement and Stress Concentration Qualification Report",
-        case_id="Case-Plate-Hole-Refinement-3Level",
+        case_id="Case-Plate-Hole-Refinement-4Level-Converged",
         run_id=run_id,
         input_hash=input_hash,
-        odb_path=ref_odb,
+        odb_path=ultra_odb,
         model_info={
-            "name": "Model_Refined",
-            "description": "Plate 100x100x10 with central hole D=20 under tension (C3D20R Hex Mesh)",
+            "name": "Model_Ultra",
+            "description": "Plate 100x100x10 with central hole D=20 under tension (C3D20R Hex Mesh, 4-Level Converged)",
             "input_hash": input_hash,
             "odb_sha256": odb_hash,
         },
@@ -621,17 +749,18 @@ def run_qualification(workdir: Path, launcher: str = "abaqus") -> Dict[str, Any]
         mesh_info=mesh_info,
         figures=rendered_figs,
         visualization_specs=fig_specs,
-        require_deliverable=False,
+        require_deliverable=True,
     )
 
     html_file = Path(report_pointer.location)
     html_content = html_file.read_text(encoding="utf-8")
     md_content = render_markdown(report_data)
 
-    assert str(ref_metrics["total_elements"]) in html_content
-    assert str(ref_metrics["total_nodes"]) in html_content
-    assert acceptance_info["gates"]["mesh_quality"] == "SKIPPED"
-    assert delivery_card.deliverable is False
+    assert str(ultra_metrics["total_elements"]) in html_content
+    assert str(ultra_metrics["total_nodes"]) in html_content
+    assert acceptance_info["gates"]["mesh_quality"] == "PASS"
+    assert acceptance_info["gates"]["convergence"] == "PASS"
+    assert delivery_card.deliverable is True
     assert len(rendered_figs) == 2
     for f in rendered_figs:
         assert Path(f.path).is_file()
@@ -654,7 +783,7 @@ def run_qualification(workdir: Path, launcher: str = "abaqus") -> Dict[str, Any]
         })
 
     manifest = {
-        "qualification_id": "QUAL-MESH-REFINEMENT-3LEVEL-2025",
+        "qualification_id": "QUAL-MESH-REFINEMENT-4LEVEL-CONVERGED-2025",
         "run_id": run_id,
         "timestamp": datetime.datetime.now().isoformat(),
         "abaqus_launcher": resolved_launcher,
@@ -667,13 +796,15 @@ def run_qualification(workdir: Path, launcher: str = "abaqus") -> Dict[str, Any]
                 "odb_sha256": compute_sha256(base_odb),
                 "metrics": base_metrics,
                 "probe": base_probe,
+                "mesh_quality": base_mq,
             },
             "level_2_refined": {
                 "job": ref_job,
                 "odb_path": str(ref_odb),
-                "odb_sha256": odb_hash,
+                "odb_sha256": compute_sha256(ref_odb),
                 "metrics": ref_metrics,
                 "probe": ref_probe,
+                "mesh_quality": ref_mq,
             },
             "level_3_fine": {
                 "job": fine_job,
@@ -681,6 +812,15 @@ def run_qualification(workdir: Path, launcher: str = "abaqus") -> Dict[str, Any]
                 "odb_sha256": compute_sha256(fine_odb),
                 "metrics": fine_metrics,
                 "probe": fine_probe,
+                "mesh_quality": fine_mq,
+            },
+            "level_4_ultra": {
+                "job": ultra_job,
+                "odb_path": str(ultra_odb),
+                "odb_sha256": odb_hash,
+                "metrics": ultra_metrics,
+                "probe": ultra_probe,
+                "mesh_quality": ultra_mq,
             },
         },
         "key_contract": {
@@ -693,10 +833,11 @@ def run_qualification(workdir: Path, launcher: str = "abaqus") -> Dict[str, Any]
         "delivery": {
             "report_html": str(html_file),
             "report_html_sha256": compute_sha256(html_file),
-            "mesh_quality_gate": "SKIPPED",
+            "mesh_quality_gate": "PASS",
             "physics_gate": "PASS" if all_physics_pass else "FAIL",
-            "deliverable": False,
-            "status": "DIAGNOSTIC_DRAFT",
+            "convergence_gate": "PASS" if convergence_pass else "FAIL",
+            "deliverable": is_qualified_delivery,
+            "status": "QUALIFIED" if is_qualified_delivery else "DIAGNOSTIC_DRAFT",
         },
     }
 
@@ -705,7 +846,7 @@ def run_qualification(workdir: Path, launcher: str = "abaqus") -> Dict[str, Any]
     print(f"  [OK] Qualification manifest saved: {manifest_path}")
 
     # -------------------------------------------------------------------------
-    # Step 6: Isolated Cross-Process Verification Audit
+    # Step 7: Isolated Cross-Process Verification Audit
     # -------------------------------------------------------------------------
     audit_script_code = """
 import json
@@ -717,7 +858,7 @@ from abaqus_ai_agent.execution.odb_rendering import verify_render_execution_evid
 manifest_path = Path(sys.argv[1])
 manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
 expected_run_id = manifest["run_id"]
-expected_odb_sha256 = manifest["levels"]["level_2_refined"]["odb_sha256"]
+expected_odb_sha256 = manifest["levels"]["level_4_ultra"]["odb_sha256"]
 
 for fig in manifest["rendered_visualizations"]:
     evidence = fig.get("render_execution_evidence")
