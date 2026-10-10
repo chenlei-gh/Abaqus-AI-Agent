@@ -483,3 +483,64 @@ def test_admit_figure_and_pipeline_delivery_fails_closed_on_unregistered_or_dupl
             acceptance_info={"status": "PASS", "deliverable": True},
             figures=[fig_dup],
         )
+
+
+def test_render_signing_key_lifecycle_and_cross_process_contract(monkeypatch):
+    """Verify in-process ephemeral vs cross-process persistent key lifecycle contract."""
+    from abaqus_ai_agent.execution.odb_rendering import (
+        create_render_execution_evidence,
+        get_render_signing_key,
+        verify_render_execution_evidence,
+    )
+
+    # 1. Ephemeral in-process default
+    monkeypatch.delenv("ABAQUS_RENDER_SIGNING_SECRET", raising=False)
+    k1 = get_render_signing_key(require_persistent=False)
+    assert len(k1) == 32
+
+    # 2. require_persistent fails closed when environment secret is missing
+    with pytest.raises(RuntimeError, match="Persistent evidence verification requires"):
+        get_render_signing_key(require_persistent=True)
+
+    # 3. Explicit signing_key override takes absolute priority
+    explicit_key = b"explicit_secret_key_32bytes_pad"
+    k_exp = get_render_signing_key(signing_key=explicit_key, require_persistent=True)
+    assert k_exp == explicit_key
+
+    # 4. Environment-controlled secret key enables cross-process audit verification
+    shared_secret = "ci_audit_production_signing_secret_999"
+    monkeypatch.setenv("ABAQUS_RENDER_SIGNING_SECRET", shared_secret)
+    k_env = get_render_signing_key(require_persistent=True)
+    import hashlib
+    assert k_env == hashlib.sha256(shared_secret.encode("utf-8")).digest()
+
+    ev_persistent = create_render_execution_evidence(
+        session_nonce="nonce_persistent_0123456789abcdef",
+        run_id="RUN-PERSISTENT-01",
+        odb_sha256="ODB-PERSISTENT-SHA",
+        input_hash="INP-PERSISTENT-HASH",
+        rendered_figures=[{"filename": "contour.png", "image_sha256": "sha_contour"}],
+        require_persistent_key=True,
+    )
+
+    # Verify successfully in simulated cross-process with same secret
+    ok, msg = verify_render_execution_evidence(
+        evidence=ev_persistent,
+        expected_run_id="RUN-PERSISTENT-01",
+        expected_odb_sha256="ODB-PERSISTENT-SHA",
+        expected_input_hash="INP-PERSISTENT-HASH",
+        require_persistent_key=True,
+    )
+    assert ok, f"Expected valid persistent verification, got: {msg}"
+
+    # Verify fails closed if cross-process verifier uses wrong secret
+    monkeypatch.setenv("ABAQUS_RENDER_SIGNING_SECRET", "wrong_cross_process_secret")
+    ok_bad, msg_bad = verify_render_execution_evidence(
+        evidence=ev_persistent,
+        expected_run_id="RUN-PERSISTENT-01",
+        expected_odb_sha256="ODB-PERSISTENT-SHA",
+        expected_input_hash="INP-PERSISTENT-HASH",
+        require_persistent_key=True,
+    )
+    assert not ok_bad
+    assert "session_signature mismatch or forged" in msg_bad

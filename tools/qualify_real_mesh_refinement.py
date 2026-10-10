@@ -626,7 +626,10 @@ def run_qualification(workdir: Path, launcher: str = "abaqus") -> Dict[str, Any]
     assert len(rendered_figs) == 2
     for f in rendered_figs:
         assert Path(f.path).is_file()
-        assert Path(f.path).name in html_content
+        assert Path(f.path).stat().st_size > 0
+        assert any(rf.path == f.path for rf in report_data.figures)
+        assert f.caption in html_content
+    assert '<img src="data:image/png;base64,' in html_content
 
     figures_manifest = []
     for f in rendered_figs:

@@ -154,11 +154,33 @@ def verify_png_image_integrity(
 _PROCESS_RENDER_SIGNING_KEY: bytes = secrets.token_bytes(32)
 
 
-def get_render_signing_key() -> bytes:
-    """Obtain process-isolated or environment-controlled HMAC secret key for authentic render evidence."""
+def get_render_signing_key(
+    require_persistent: bool = False,
+    signing_key: Optional[bytes] = None,
+) -> bytes:
+    """Obtain process-isolated or environment-controlled HMAC secret key for authentic render evidence.
+
+    Security Model & Lifecycle Contract:
+    1. In-Process Pipeline (Ephemeral):
+       When running inside a single active execution session, the pipeline generates and validates
+       render evidence using `_PROCESS_RENDER_SIGNING_KEY` (a 256-bit CSPRNG key generated per Python process).
+       This guarantees that within the run, artifacts cannot be forged or substituted by external callers.
+    2. Cross-Process / Persistent Audit:
+       When evidence must be verified across distinct processes, in CI audit steps, or during offline review,
+       callers must configure the `ABAQUS_RENDER_SIGNING_SECRET` environment variable or provide an explicit
+       `signing_key`. If `require_persistent=True` is specified and no persistent key is configured,
+       this function fails closed with a RuntimeError rather than silently falling back to a process-local ephemeral key.
+    """
+    if signing_key is not None:
+        return signing_key
     env_secret = os.environ.get("ABAQUS_RENDER_SIGNING_SECRET")
     if env_secret:
         return hashlib.sha256(env_secret.encode("utf-8")).digest()
+    if require_persistent:
+        raise RuntimeError(
+            "Persistent evidence verification requires 'ABAQUS_RENDER_SIGNING_SECRET' environment variable "
+            "or an explicit signing_key to be provided. Ephemeral process key cannot be used for cross-process audit."
+        )
     return _PROCESS_RENDER_SIGNING_KEY
 
 
@@ -237,6 +259,8 @@ def create_render_execution_evidence(
     viewer_duration_sec: float = 0.0,
     input_hash: str = "",
     viewer_script_sha256: str = "",
+    signing_key: Optional[bytes] = None,
+    require_persistent_key: bool = False,
 ) -> RenderExecutionEvidence:
     """Construct authentic RenderExecutionEvidence with HMAC-SHA256 session signature."""
     import datetime
@@ -251,7 +275,7 @@ def create_render_execution_evidence(
         input_hash=input_hash,
         viewer_script_sha256=viewer_script_sha256,
     )
-    key = get_render_signing_key()
+    key = get_render_signing_key(require_persistent=require_persistent_key, signing_key=signing_key)
     sig = hmac.new(key, canonical_payload.encode("utf-8"), hashlib.sha256).hexdigest()
     return RenderExecutionEvidence(
         session_nonce=session_nonce,
@@ -272,6 +296,8 @@ def verify_render_execution_evidence(
     expected_run_id: str,
     expected_odb_sha256: str,
     expected_input_hash: Optional[str] = None,
+    signing_key: Optional[bytes] = None,
+    require_persistent_key: bool = False,
 ) -> Tuple[bool, str]:
     """Verify that a RenderExecutionEvidence matches runtime context and has authentic HMAC signature."""
     if isinstance(evidence, RenderExecutionEvidence):
@@ -321,7 +347,11 @@ def verify_render_execution_evidence(
         input_hash=ev_input_hash,
         viewer_script_sha256=viewer_script_sha,
     )
-    key = get_render_signing_key()
+    try:
+        key = get_render_signing_key(require_persistent=require_persistent_key, signing_key=signing_key)
+    except RuntimeError as exc:
+        return False, str(exc)
+
     expected_sig = hmac.new(key, canonical_payload.encode("utf-8"), hashlib.sha256).hexdigest()
     if not hmac.compare_digest(sig, expected_sig):
         return False, "Evidence session_signature mismatch or forged (invalid HMAC signature)"
@@ -685,6 +715,8 @@ def render_authentic_visualizations(
     timeout: int = 180,
     run_id: Optional[str] = None,
     input_hash: Optional[str] = None,
+    signing_key: Optional[bytes] = None,
+    require_persistent_key: bool = False,
 ) -> List[ReportFigure]:
     """Authentically render and causally bind all requested CAE visualization specs.
 
@@ -841,6 +873,8 @@ def render_authentic_visualizations(
         rendered_figures=rendered_summary,
         input_hash=str(input_hash or ""),
         viewer_script_sha256=viewer_script_sha256,
+        signing_key=signing_key,
+        require_persistent_key=require_persistent_key,
     )
     for f in figures:
         f.metadata["render_execution_evidence"] = render_evidence.to_dict()
