@@ -586,3 +586,58 @@ def test_qualification_cae_script_generation_unified_c3d20r():
     assert "elemCode=C3D20R" in script
     assert "C3D10" not in script
     assert "p.seedEdgeBySize(edges=hole_edges, size=3.5" in script
+
+
+def test_compute_peterson_hole_plate_theory():
+    """Verify Peterson analytical stress concentration calculation for finite-width plate."""
+    from tools.qualify_real_mesh_refinement import compute_peterson_hole_plate_theory
+
+    res = compute_peterson_hole_plate_theory(plate_width=100.0, hole_diameter=20.0, thickness=10.0, tensile_load=10000.0)
+    assert res["d_over_w"] == 0.2
+    assert res["sigma_gross"] == 10.0
+    assert res["sigma_net"] == 12.5
+    assert abs(res["kt_net"] - 2.5065) < 1e-4
+    assert abs(res["kt_gross"] - 3.1331) < 1e-4
+    assert abs(res["sigma_peak_theory"] - 31.331) < 1e-2
+
+
+def test_evaluate_mesh_convergence():
+    """Verify multi-level mesh convergence indicator calculations."""
+    from tools.qualify_real_mesh_refinement import evaluate_mesh_convergence
+
+    l1 = {"peak_s11": 24.977, "max_u1": 0.005436, "rf_error_pct": 0.0000}
+    l2 = {"peak_s11": 27.516, "max_u1": 0.005445, "rf_error_pct": 0.0000}
+    l3 = {"peak_s11": 29.519, "max_u1": 0.005448, "rf_error_pct": 0.0000}
+
+    eval_res = evaluate_mesh_convergence(l1, l2, l3, theory_peak=31.331)
+    assert eval_res["is_monotonic"] is True
+    assert eval_res["diminishing_increment"] is True
+    assert eval_res["delta_12_pct"] == 9.23
+    assert eval_res["delta_23_pct"] == 6.79
+    assert eval_res["displacement_converged"] is True
+    assert eval_res["reaction_force_equilibrium_ok"] is True
+    # delta_23 is 6.79% (> 5%), so it correctly categorizes as ASYMPTOTIC_APPROACHING rather than prematurely claiming mesh independence
+    assert eval_res["stress_convergence_status"] == "ASYMPTOTIC_APPROACHING"
+
+    # Strictly converged case (< 5% sensitivity)
+    l3_converged = {"peak_s11": 28.5, "max_u1": 0.005448, "rf_error_pct": 0.0000}
+    eval_conv = evaluate_mesh_convergence(l1, l2, l3_converged, theory_peak=31.331)
+    assert eval_conv["delta_23_pct"] < 5.0
+    assert eval_conv["stress_convergence_status"] == "CONVERGED"
+
+    # Diverging / non-diminishing case
+    l3_diverging = {"peak_s11": 33.0, "max_u1": 0.005448, "rf_error_pct": 0.0000}
+    eval_div = evaluate_mesh_convergence(l1, l2, l3_diverging, theory_peak=31.331)
+    assert eval_div["diminishing_increment"] is False
+    assert eval_div["stress_convergence_status"] == "UNCONVERGED"
+
+
+def test_probe_odb_script_filters_in_plane_far_edges():
+    """Verify probe script strictly filters in-plane edges for both hole and far-field elements."""
+    import inspect
+    from tools.qualify_real_mesh_refinement import probe_odb_topology_and_physics
+
+    src = inspect.getsource(probe_odb_topology_and_physics)
+    assert "abs(p1[2]-p2[2]) < 0.1" in src
+    # Ensure far_edges sampling requires in-plane filter
+    assert "cr > 35.0 and abs(p1[2]-p2[2]) < 0.1" in src

@@ -47,6 +47,108 @@ def compute_sha256(data: str | bytes | Path) -> str:
     return hashlib.sha256(data).hexdigest()
 
 
+def compute_peterson_hole_plate_theory(
+    plate_width: float = 100.0,
+    hole_diameter: float = 20.0,
+    thickness: float = 10.0,
+    tensile_load: float = 10000.0,
+) -> Dict[str, float]:
+    """Compute Peterson analytical stress concentration solution for a finite-width plate with circular hole.
+
+    Geometry:
+      - Width W = 100 mm, Diameter d = 20 mm, Thickness t = 10 mm
+      - Non-dimensional ratio d / W = 0.20
+
+    Nominal stresses:
+      - Gross section: Ag = W * t = 1000 mm^2, sigma_gross = F / Ag = 10.0 MPa
+      - Net section: Anet = (W - d) * t = 800 mm^2, sigma_net = F / Anet = 12.5 MPa
+
+    Peterson SCF formulation (net section basis):
+      Kt_net = 3.00 - 3.14 * (d/W) + 3.667 * (d/W)^2 - 1.527 * (d/W)^3
+      For d/W = 0.2:
+      Kt_net = 3.00 - 0.628 + 0.14668 - 0.012216 = 2.5065
+
+    Converted to gross nominal stress basis:
+      Kt_gross = Kt_net * (W / (W - d)) = 2.5065 * 1.25 = 3.1331
+      sigma_peak_theory = Kt_gross * sigma_gross = 31.331 MPa
+
+    Note on 3D boundary layer effects:
+      The pure Peterson formulation assumes thin 2D plane stress. In 3D continuum elements
+      (C3D20R with thickness t = 10 mm, nu = 0.3), lateral Poisson contraction produces
+      transverse constraint through the thickness, resulting in mild 3D stress gradients.
+    """
+    ratio = hole_diameter / plate_width
+    kt_net = 3.00 - 3.14 * ratio + 3.667 * (ratio ** 2) - 1.527 * (ratio ** 3)
+    sigma_gross = tensile_load / (plate_width * thickness)
+    sigma_net = tensile_load / ((plate_width - hole_diameter) * thickness)
+    kt_gross = kt_net * (plate_width / (plate_width - hole_diameter))
+    sigma_peak = kt_gross * sigma_gross
+    return {
+        "d_over_w": round(ratio, 4),
+        "sigma_gross": round(sigma_gross, 3),
+        "sigma_net": round(sigma_net, 3),
+        "kt_net": round(kt_net, 4),
+        "kt_gross": round(kt_gross, 4),
+        "sigma_peak_theory": round(sigma_peak, 3),
+    }
+
+
+def evaluate_mesh_convergence(
+    base_probe: Dict[str, Any],
+    ref_probe: Dict[str, Any],
+    fine_probe: Dict[str, Any],
+    theory_peak: float = 31.331,
+) -> Dict[str, Any]:
+    """Compute mathematical convergence indicators across 3 mesh refinement levels."""
+    s1 = float(base_probe["peak_s11"])
+    s2 = float(ref_probe["peak_s11"])
+    s3 = float(fine_probe["peak_s11"])
+
+    delta_12 = abs(s2 - s1) / s2 if s2 else 0.0
+    delta_23 = abs(s3 - s2) / s3 if s3 else 0.0
+
+    is_monotonic = (s1 < s2 < s3)
+    diminishing_increment = (delta_23 < delta_12)
+
+    err_l1 = abs(s1 - theory_peak) / theory_peak
+    err_l2 = abs(s2 - theory_peak) / theory_peak
+    err_l3 = abs(s3 - theory_peak) / theory_peak
+
+    u1 = float(base_probe.get("max_u1", 0.0))
+    u2 = float(ref_probe.get("max_u1", 0.0))
+    u3 = float(fine_probe.get("max_u1", 0.0))
+    delta_u_12 = abs(u2 - u1) / u2 if u2 else 0.0
+    delta_u_23 = abs(u3 - u2) / u3 if u3 else 0.0
+    u_converged = (delta_u_23 < 0.01)
+
+    rf_ok = all(float(p.get("rf_error_pct", 1.0)) < 0.01 for p in (base_probe, ref_probe, fine_probe))
+
+    # Truthful convergence categorization:
+    # < 5% sensitivity -> strictly mesh independent
+    # Diminishing increments and monotonic -> asymptotic convergence regime
+    # Otherwise -> unconverged
+    if delta_23 < 0.05:
+        stress_status = "CONVERGED"
+    elif diminishing_increment and is_monotonic:
+        stress_status = "ASYMPTOTIC_APPROACHING"
+    else:
+        stress_status = "UNCONVERGED"
+
+    return {
+        "stress_levels_s11": [s1, s2, s3],
+        "delta_12_pct": round(delta_12 * 100.0, 2),
+        "delta_23_pct": round(delta_23 * 100.0, 2),
+        "is_monotonic": is_monotonic,
+        "diminishing_increment": diminishing_increment,
+        "theory_error_pct": [round(err_l1 * 100.0, 2), round(err_l2 * 100.0, 2), round(err_l3 * 100.0, 2)],
+        "displacement_levels_u1": [u1, u2, u3],
+        "delta_u_23_pct": round(delta_u_23 * 100.0, 3),
+        "displacement_converged": u_converged,
+        "reaction_force_equilibrium_ok": rf_ok,
+        "stress_convergence_status": stress_status,
+    }
+
+
 def generate_cae_script(
     job_name: str,
     model_name: str,
@@ -165,7 +267,7 @@ try:
             d = math.sqrt((p1[0]-p2[0])**2 + (p1[1]-p2[1])**2 + (p1[2]-p2[2])**2)
             if n1 in hole_node_labels and n2 in hole_node_labels and abs(p1[2]-p2[2]) < 0.1:
                 hole_edges.append(d)
-            elif cr > 35.0:
+            elif cr > 35.0 and abs(p1[2]-p2[2]) < 0.1:
                 far_edges.append(d)
 
     avg_hole = float(sum(hole_edges) / len(hole_edges)) if hole_edges else 0.0
@@ -318,6 +420,19 @@ def run_qualification(workdir: Path, launcher: str = "abaqus") -> Dict[str, Any]
     print("\n" + "=" * 80)
     print(" [4/5] Evaluating Multi-Level Mesh Convergence and Physics Integrity")
     print("=" * 80)
+    theory = compute_peterson_hole_plate_theory()
+    print(f"  [THEORY] Peterson Analytical Reference: Kt_net={theory['kt_net']}, Kt_gross={theory['kt_gross']}, "
+          f"Sigma_Peak={theory['sigma_peak_theory']} MPa (gross nominal={theory['sigma_gross']} MPa)")
+
+    conv_eval = evaluate_mesh_convergence(base_probe, ref_probe, fine_probe, theory["sigma_peak_theory"])
+    print(f"  [CONVERGENCE] S11 Increments: L1->L2 = {conv_eval['delta_12_pct']}%, L2->L3 = {conv_eval['delta_23_pct']}% "
+          f"(Diminishing: {conv_eval['diminishing_increment']}, Status: {conv_eval['stress_convergence_status']})")
+    print(f"  [CONVERGENCE] Theoretical Errors: L1={conv_eval['theory_error_pct'][0]}%, "
+          f"L2={conv_eval['theory_error_pct'][1]}%, L3={conv_eval['theory_error_pct'][2]}%")
+    print(f"  [CONVERGENCE] Max U1: L1={conv_eval['displacement_levels_u1'][0]} -> "
+          f"L2={conv_eval['displacement_levels_u1'][1]} -> L3={conv_eval['displacement_levels_u1'][2]} mm "
+          f"(L2->L3 delta={conv_eval['delta_u_23_pct']}%, Converged: {conv_eval['displacement_converged']})")
+
     # Monotonic element count growth
     assert base_metrics["total_elements"] < ref_metrics["total_elements"] < fine_metrics["total_elements"], \
         "Element count must grow strictly monotonically across refinement levels"
@@ -328,17 +443,17 @@ def run_qualification(workdir: Path, launcher: str = "abaqus") -> Dict[str, Any]
     assert base_probe["avg_hole_edge"] > ref_probe["avg_hole_edge"] > fine_probe["avg_hole_edge"], \
         "Hole perimeter chord length must decrease strictly monotonically"
 
-    # Monotonic peak stress S11 convergence toward theoretical Kt limit (~31.3 MPa)
+    # Monotonic peak stress S11 progression toward theoretical Kt limit
     assert base_probe["peak_s11"] < ref_probe["peak_s11"] < fine_probe["peak_s11"], \
         "Peak S11 must increase monotonically with mesh refinement due to gradient capture"
+    assert conv_eval["diminishing_increment"], \
+        "Stress increments must diminish (delta_23 < delta_12) indicating asymptotic approach to limit"
 
     # Equilibrium check on all 3 levels (RF error < 0.01%)
     for lvl_name, probe_res in [("Level 1", base_probe), ("Level 2", ref_probe), ("Level 3", fine_probe)]:
         assert probe_res["rf_error_pct"] < 0.01, f"{lvl_name} reaction force equilibrium error exceeds 0.01%"
 
     # Peak stress location check: must occur at transverse hole perimeter (r ~ 10-13 mm)
-    # With coarse mesh (L1), 45-deg element span places centroid at x ~ 6 mm.
-    # With refinement (L2, L3), localized apex elements strictly satisfy |x| <= 2.0 mm.
     assert abs(base_probe["peak_centroid"]["x"]) < 8.0, "Level 1 peak stress must locate near hole perimeter"
     assert abs(ref_probe["peak_centroid"]["x"]) <= 2.0, "Level 2 peak stress must localize to transverse plane (|x| <= 2 mm)"
     assert abs(fine_probe["peak_centroid"]["x"]) <= 2.0, "Level 3 peak stress must localize to transverse plane (|x| <= 2 mm)"
@@ -382,29 +497,53 @@ def run_qualification(workdir: Path, launcher: str = "abaqus") -> Dict[str, Any]
         "seed_size": 10.0,
     }
 
-    # Authentic physics results evaluated from real ODB
+    # Authentic physics results evaluated from real ODB with calculated tolerances
+    err_rf = ref_probe["rf_error_pct"] / 100.0
+    err_s11_l2 = round(abs(ref_probe["peak_s11"] - theory["sigma_peak_theory"]) / theory["sigma_peak_theory"], 4)
+    err_s11_l3 = round(abs(fine_probe["peak_s11"] - theory["sigma_peak_theory"]) / theory["sigma_peak_theory"], 4)
+
     results_info = (
         {
             "name": "Reaction Force Equilibrium (反力平衡校验)",
             "nominal_value": -10000.0,
             "measured_value": ref_probe["total_rf1"],
-            "error_ratio": ref_probe["rf_error_pct"] / 100.0,
-            "status": "PASS",
+            "error_ratio": err_rf,
+            "status": "PASS" if ref_probe["rf_error_pct"] < 0.01 else "FAIL",
         },
         {
-            "name": "Hole Peak Stress S11 (孔边应力集中值)",
-            "nominal_value": 31.33,  # Peterson analytical solution
+            "name": "Level 2 Hole Peak Stress S11 (中等网格局部峰值应力)",
+            "nominal_value": theory["sigma_peak_theory"],
             "measured_value": ref_probe["peak_s11"],
-            "status": "PASS",
+            "error_ratio": err_s11_l2,
+            "status": "PASS" if err_s11_l2 <= 0.15 else "FAIL",
+        },
+        {
+            "name": "Level 3 Hole Peak Stress S11 (细网格局部峰值应力)",
+            "nominal_value": theory["sigma_peak_theory"],
+            "measured_value": fine_probe["peak_s11"],
+            "error_ratio": err_s11_l3,
+            "status": "PASS" if err_s11_l3 <= 0.08 else "FAIL",
+        },
+        {
+            "name": "Multi-Level Convergence Rate (多级应力收敛减速判定)",
+            "nominal_value": 0.0,
+            "measured_value": conv_eval["delta_23_pct"],
+            "error_ratio": conv_eval["delta_23_pct"] / 100.0,
+            "status": "PASS" if conv_eval["diminishing_increment"] and conv_eval["is_monotonic"] else "FAIL",
         },
     )
 
+    all_physics_pass = all(r["status"] == "PASS" for r in results_info)
+
+    # Truthful gate contract:
+    # When mesh_quality gate is SKIPPED, the report is NOT deliverable as certified final delivery.
+    # It is strictly delivered as a diagnostic draft with deliverable=False and status=PARTIAL_PASS.
     acceptance_info = {
-        "status": "PASS",
-        "deliverable": True,
+        "status": "PARTIAL_PASS" if all_physics_pass else "FAIL",
+        "deliverable": False,
         "gates": {
             "execution": "PASS",
-            "physics": "PASS",  # Backed by genuine RF equilibrium & stress checks
+            "physics": "PASS" if all_physics_pass else "FAIL",
             "mesh_quality": "SKIPPED",  # Honest indication of unexecuted check
         },
     }
@@ -434,6 +573,7 @@ def run_qualification(workdir: Path, launcher: str = "abaqus") -> Dict[str, Any]
     assert str(ref_metrics["total_elements"]) in html_content
     assert str(ref_metrics["total_nodes"]) in html_content
     assert acceptance_info["gates"]["mesh_quality"] == "SKIPPED"
+    assert delivery_card.deliverable is False
 
     manifest = {
         "qualification_id": "QUAL-MESH-REFINEMENT-3LEVEL-2025",
@@ -441,6 +581,7 @@ def run_qualification(workdir: Path, launcher: str = "abaqus") -> Dict[str, Any]
         "timestamp": datetime.datetime.now().isoformat(),
         "abaqus_launcher": resolved_launcher,
         "element_type": "C3D20R",
+        "theoretical_basis": theory,
         "levels": {
             "level_1_baseline": {
                 "job": base_job,
@@ -464,20 +605,14 @@ def run_qualification(workdir: Path, launcher: str = "abaqus") -> Dict[str, Any]
                 "probe": fine_probe,
             },
         },
-        "convergence_progression": {
-            "elements": [base_metrics["total_elements"], ref_metrics["total_elements"], fine_metrics["total_elements"]],
-            "nodes": [base_metrics["total_nodes"], ref_metrics["total_nodes"], fine_metrics["total_nodes"]],
-            "hole_chords": [base_probe["avg_hole_edge"], ref_probe["avg_hole_edge"], fine_probe["avg_hole_edge"]],
-            "peak_s11_values": [base_probe["peak_s11"], ref_probe["peak_s11"], fine_probe["peak_s11"]],
-            "peak_mises_values": [base_probe["peak_mises"], ref_probe["peak_mises"], fine_probe["peak_mises"]],
-            "rf1_equilibrium_errors_pct": [base_probe["rf_error_pct"], ref_probe["rf_error_pct"], fine_probe["rf_error_pct"]],
-        },
+        "convergence_progression": conv_eval,
         "delivery": {
             "report_html": str(html_file),
             "report_html_sha256": compute_sha256(html_file),
             "mesh_quality_gate": "SKIPPED",
-            "physics_gate": "PASS",
-            "status": "QUALIFIED",
+            "physics_gate": "PASS" if all_physics_pass else "FAIL",
+            "deliverable": False,
+            "status": "DIAGNOSTIC_DRAFT",
         },
     }
 
