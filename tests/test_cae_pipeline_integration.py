@@ -648,7 +648,10 @@ def test_negative_p0_a_production_mode_denies_missing_launcher_or_offline_verifi
     exec_fake_name = FakeOrMockExecutor()
     runner = AnalysisRunner(exec_fake_name)
 
-    # 1. Missing launcher in production mode must fail-closed even if class name has 'Mock'/'Fake'
+    # 1. Missing launcher in host Python environment (no in-process odbAccess, no external launcher)
+    # MUST fail-closed even if class name has 'Mock'/'Fake'
+    monkeypatch.setattr("abaqus_ai_agent.execution.solver.has_native_odb_access", lambda: False)
+    monkeypatch.setattr("abaqus_ai_agent.execution.solver.find_abaqus_executable", lambda *args, **kwargs: None)
     res_no_launcher = runner.run(
         model_name="M1",
         job_name="RealJob",
@@ -676,6 +679,74 @@ def test_negative_p0_a_production_mode_denies_missing_launcher_or_offline_verifi
     assert res_offline.state == AnalysisRunState.FAILED
     assert res_offline.engineering_status == "RESULT_INVALID"
     assert any("odb_native_structure_unverified" in str(d) for d in res_offline.diagnostics)
+
+
+def test_p0_a_production_mode_in_process_native_odb_verification_succeeds_without_launcher(tmp_path: Path, monkeypatch):
+    """Verify that native Abaqus in-process environment (odbAccess present) verifies ODB without launcher."""
+    workdir = tmp_path / "inprocess_native_run"
+    workdir.mkdir()
+
+    executor = MockCaeExecutor(workdir, job_name="InProcessJob")
+    executor.launcher = None  # In-process executor has NO launcher command
+
+    monkeypatch.setattr("abaqus_ai_agent.execution.solver.has_native_odb_access", lambda: True)
+    monkeypatch.setattr(
+        "abaqus_ai_agent.execution.solver._verify_odb_in_process",
+        lambda path, required_fields=None, required_step=None: {
+            "verified": True,
+            "steps": {"Step-1": {"frames": 2, "fields": ["S", "U"]}},
+        },
+    )
+    req = ResultRequirement(
+        name="stress",
+        value_key="max_mises",
+        field="S",
+        component="mises",
+        region="Root",
+        step="Step-1",
+        frame=-1,
+        unit="MPa",
+    )
+    extraction = ResultExtraction(
+        requirement=req,
+        value=180.0,
+        locator={"step": "Step-1", "frame": -1, "field": "S", "component": "mises", "source": "odb"},
+    )
+    monkeypatch.setattr(
+        "abaqus_ai_agent.execution.odb_extractor.extract_odb_results",
+        lambda **kwargs: type("ExtractionReport", (), {
+            "extractions": [extraction],
+            "evidence": (),
+            "metrics": {"max_mises": 180.0},
+        })(),
+    )
+
+    runner = AnalysisRunner(executor)
+    criteria = (
+        {
+            "name": "stress",
+            "value_key": "max_mises",
+            "limit": 250.0,
+            "operator": "<=",
+            "field": "S",
+            "unit": "MPa",
+            "required": True,
+        },
+    )
+
+    run_res = runner.run(
+        model_name="InProcessModel",
+        job_name="InProcessJob",
+        workdir=str(workdir),
+        criteria=criteria,
+        require_production=True,
+    )
+
+    assert not run_res.diagnostics, f"Diagnostics: {run_res.diagnostics}"
+    assert run_res.state == AnalysisRunState.ACCEPTED
+    assert run_res.engineering_status == "RESULT_VALID"
+    assert run_res.acceptance_passed is True
+    assert run_res.metrics[0].value == 180.0
 
 
 def test_negative_p0_b_missing_or_mismatched_provenance_rejected(tmp_path: Path):

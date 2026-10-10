@@ -104,6 +104,71 @@ def is_authentic_binary_odb(path: Union[str, Path]) -> bool:
         return False
 
 
+def has_native_odb_access() -> bool:
+    """Return True if running in a native Abaqus Python environment with odbAccess available."""
+    try:
+        import odbAccess  # noqa: F401
+        return True
+    except ImportError:
+        return False
+
+
+def _verify_odb_in_process(
+    path: Path,
+    required_fields: Optional[Sequence[str]] = None,
+    required_step: Optional[str] = None,
+) -> Dict[str, Any]:
+    """In-process native ODB structural verification using odbAccess."""
+    odb = None
+    try:
+        from odbAccess import openOdb
+        odb = openOdb(str(path), readOnly=True)
+        steps = list(odb.steps.keys())
+        if not steps:
+            return {"verified": False, "error": "ODB contains zero steps"}
+
+        step_info = {}
+        for s in steps:
+            step_obj = odb.steps[s]
+            n_frames = len(step_obj.frames)
+            fields = list(step_obj.frames[-1].fieldOutputs.keys()) if n_frames > 0 else []
+            step_info[s] = {"frames": n_frames, "fields": fields}
+
+        req_step = str(required_step) if required_step else ""
+        if req_step:
+            if req_step not in step_info:
+                return {
+                    "verified": False,
+                    "error": f"Required step '{req_step}' not found in ODB steps: {steps}",
+                }
+            if step_info[req_step]["frames"] <= 0:
+                return {
+                    "verified": False,
+                    "error": f"Required step '{req_step}' has zero frames",
+                }
+
+        req_fields = [str(f).upper() for f in (required_fields or ())]
+        if req_fields:
+            target_s = req_step if req_step else steps[-1]
+            avail_flds = [f.upper() for f in step_info[target_s]["fields"]]
+            missing = [f for f in req_fields if f not in avail_flds]
+            if missing:
+                return {
+                    "verified": False,
+                    "error": f"Required fields missing from step '{target_s}': {missing}",
+                }
+
+        return {"verified": True, "steps": step_info}
+    except Exception as exc:
+        return {"verified": False, "error": str(exc)}
+    finally:
+        if odb is not None:
+            try:
+                odb.close()
+            except Exception:
+                pass
+
+
 def verify_authentic_odb_structure(
     path: Union[str, Path],
     launcher_cmd: Optional[str] = None,
@@ -115,7 +180,7 @@ def verify_authentic_odb_structure(
 
     Verifies that:
     1. File is valid non-empty binary ODB.
-    2. File can be opened via native odbAccess.openOdb.
+    2. File can be opened via native odbAccess.openOdb (in-process if available, else via subprocess).
     3. File contains at least one valid Step, and each Step contains at least one Frame.
     4. Required step (if specified) is present and contains frames.
     5. Required fields (if specified) are present in the last frame of the target/last step.
@@ -127,6 +192,15 @@ def verify_authentic_odb_structure(
             "error": f"File {path} failed binary pre-filter (corrupt, empty, or plaintext mock)",
         }
 
+    # 1. Native in-process path if running directly inside Abaqus Python / CAE environment
+    if has_native_odb_access():
+        return _verify_odb_in_process(
+            path,
+            required_fields=required_fields,
+            required_step=required_step,
+        )
+
+    # 2. External launcher path if running in host Python environment
     launcher = find_abaqus_executable(launcher_cmd)
     if not launcher:
         # Host is offline or in mock test environment

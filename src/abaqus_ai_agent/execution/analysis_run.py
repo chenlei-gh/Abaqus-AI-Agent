@@ -453,7 +453,12 @@ class AnalysisRunner:
             run_metrics = ()
 
             if result_values is None:
-                from .solver import is_authentic_binary_odb, verify_authentic_odb_structure
+                from .solver import (
+                    is_authentic_binary_odb,
+                    verify_authentic_odb_structure,
+                    has_native_odb_access,
+                    find_abaqus_executable,
+                )
                 if require_production:
                     if not path or not os.path.isfile(path) or not is_authentic_binary_odb(path):
                         return run.with_state(
@@ -463,7 +468,8 @@ class AnalysisRunner:
                             diagnostics=({"reason": "odb_not_authentic_binary", "path": path},),
                             artifacts=artifacts,
                         )
-                    launcher = getattr(self.executor, "launcher", None)
+                    eff_launcher = getattr(self.executor, "launcher", None) or find_abaqus_executable()
+                    can_native = has_native_odb_access()
 
                     req_fields = []
                     for c in effective_criteria:
@@ -471,48 +477,31 @@ class AnalysisRunner:
                         if fld:
                             req_fields.append(str(fld).upper())
 
-                    if require_production:
-                        # In genuine production mode, launcher MUST be present and native verification MUST succeed.
-                        # Offline state, missing launcher, or verification errors strictly block delivery.
-                        # Class name is NEVER used as an implicit exemption.
-                        if not launcher:
-                            return run.with_state(
-                                AnalysisRunState.FAILED,
-                                odb_path=path,
-                                engineering_status=EngineeringStatus.RESULT_INVALID.value,
-                                diagnostics=({"reason": "production_launcher_missing", "detail": "Native Abaqus launcher required in production mode"},),
-                                artifacts=artifacts,
-                            )
-                        odb_check = verify_authentic_odb_structure(
-                            path=path,
-                            launcher_cmd=launcher,
-                            required_fields=tuple(set(req_fields)) if req_fields else None,
+                    # In genuine production mode, either in-process native odbAccess must be available,
+                    # or launcher MUST be present and native verification MUST succeed.
+                    # Offline state, missing launcher, or verification errors strictly block delivery.
+                    if not can_native and not eff_launcher:
+                        return run.with_state(
+                            AnalysisRunState.FAILED,
+                            odb_path=path,
+                            engineering_status=EngineeringStatus.RESULT_INVALID.value,
+                            diagnostics=({"reason": "production_launcher_missing", "detail": "Native Abaqus launcher or in-process odbAccess required in production mode"},),
+                            artifacts=artifacts,
                         )
-                        if not odb_check.get("verified", False):
-                            reason = "odb_native_structure_unverified" if odb_check.get("offline", False) else "odb_native_structure_invalid"
-                            return run.with_state(
-                                AnalysisRunState.FAILED,
-                                odb_path=path,
-                                engineering_status=EngineeringStatus.RESULT_INVALID.value,
-                                diagnostics=({"reason": reason, "detail": odb_check.get("error", "Native ODB verification failed or launcher is offline")},),
-                                artifacts=artifacts,
-                            )
-                    else:
-                        # Non-production (test/diagnostics) path: if launcher provided and not offline, enforce check
-                        if launcher:
-                            odb_check = verify_authentic_odb_structure(
-                                path=path,
-                                launcher_cmd=launcher,
-                                required_fields=tuple(set(req_fields)) if req_fields else None,
-                            )
-                            if not odb_check.get("verified", False) and not odb_check.get("offline", False):
-                                return run.with_state(
-                                    AnalysisRunState.FAILED,
-                                    odb_path=path,
-                                    engineering_status=EngineeringStatus.RESULT_INVALID.value,
-                                    diagnostics=({"reason": "odb_native_structure_invalid", "detail": odb_check.get("error")},),
-                                    artifacts=artifacts,
-                                )
+                    odb_check = verify_authentic_odb_structure(
+                        path=path,
+                        launcher_cmd=eff_launcher,
+                        required_fields=tuple(set(req_fields)) if req_fields else None,
+                    )
+                    if not odb_check.get("verified", False):
+                        reason = "odb_native_structure_unverified" if odb_check.get("offline", False) else "odb_native_structure_invalid"
+                        return run.with_state(
+                            AnalysisRunState.FAILED,
+                            odb_path=path,
+                            engineering_status=EngineeringStatus.RESULT_INVALID.value,
+                            diagnostics=({"reason": reason, "detail": odb_check.get("error", "Native ODB verification failed or launcher is offline")},),
+                            artifacts=artifacts,
+                        )
 
                     from .odb_extractor import extract_odb_results
                     eff_inp_hash = (run.provenance.input_hash if run.provenance else None) or ""

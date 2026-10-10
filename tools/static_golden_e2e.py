@@ -289,6 +289,7 @@ run = AnalysisRunner(executor).run(
     model_name=model_name,
     job_name=job_name,
     odb_path=odb_expected_path,
+    workdir=os.getcwd(),
     criteria=criteria,
     timeout=3600,
     action_plan=tuple(actions),
