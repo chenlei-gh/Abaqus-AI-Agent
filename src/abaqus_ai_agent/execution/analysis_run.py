@@ -468,8 +468,12 @@ class AnalysisRunner:
                             diagnostics=({"reason": "odb_not_authentic_binary", "path": path},),
                             artifacts=artifacts,
                         )
-                    eff_launcher = getattr(self.executor, "launcher", None) or find_abaqus_executable()
                     can_native = has_native_odb_access()
+                    configured_launcher = getattr(self.executor, "launcher", None)
+                    if can_native:
+                        eff_launcher = configured_launcher
+                    else:
+                        eff_launcher = configured_launcher or os.environ.get("ABAQUS_BAT_PATH") or find_abaqus_executable()
 
                     req_fields = []
                     for c in effective_criteria:
@@ -505,14 +509,24 @@ class AnalysisRunner:
 
                     from .odb_extractor import extract_odb_results
                     eff_inp_hash = (run.provenance.input_hash if run.provenance else None) or ""
-                    report = extract_odb_results(
-                        odb_path=path,
-                        requirements_or_criteria=effective_criteria,
-                        run_id=run_id,
-                        input_hash=eff_inp_hash,
-                        workdir=workdir,
-                        custom_runner=getattr(self.executor, "execute", None),
-                    )
+                    try:
+                        report = extract_odb_results(
+                            odb_path=path,
+                            requirements_or_criteria=effective_criteria,
+                            run_id=run_id,
+                            input_hash=eff_inp_hash,
+                            workdir=workdir,
+                            launcher_cmd=eff_launcher,
+                            custom_runner=getattr(self.executor, "execute", None) if eff_launcher else None,
+                        )
+                    except Exception as exc:
+                        return run.with_state(
+                            AnalysisRunState.FAILED,
+                            odb_path=path,
+                            engineering_status=EngineeringStatus.RESULT_INVALID.value,
+                            diagnostics=({"reason": "odb_extraction_failed", "detail": str(exc)},),
+                            artifacts=artifacts,
+                        )
                     extractions = report.extractions
                     result_evidence = report.evidence
                     result_values = report.metrics

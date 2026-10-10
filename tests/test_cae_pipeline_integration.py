@@ -682,44 +682,53 @@ def test_negative_p0_a_production_mode_denies_missing_launcher_or_offline_verifi
 
 
 def test_p0_a_production_mode_in_process_native_odb_verification_succeeds_without_launcher(tmp_path: Path, monkeypatch):
-    """Verify that native Abaqus in-process environment (odbAccess present) verifies ODB without launcher."""
+    """Verify that native Abaqus in-process environment (odbAccess present) verifies ODB and extracts results without launcher."""
+    import sys
+    import types
+
     workdir = tmp_path / "inprocess_native_run"
     workdir.mkdir()
 
     executor = MockCaeExecutor(workdir, job_name="InProcessJob")
     executor.launcher = None  # In-process executor has NO launcher command
 
+    class _FakeNativeOdb:
+        def __init__(self, mises_val=180.0):
+            val = type("FieldValue", (), {
+                "mises": mises_val,
+                "data": (mises_val,),
+                "nodeLabel": 101,
+                "elementLabel": 201,
+                "instance": type("Instance", (), {"name": "PART-1-1"})(),
+                "position": "NODAL",
+            })()
+            fo = type("FieldOutput", (), {
+                "values": [val],
+                "getScalarField": lambda self, **kw: self,
+                "getSubset": lambda self, **kw: self,
+            })()
+            frame = type("Frame", (), {"fieldOutputs": {"S": fo}, "frameValue": 1.0})()
+            step = type("Step", (), {
+                "frames": [frame],
+                "historyRegions": {},
+            })()
+            self.steps = {"Step-1": step}
+            elem = type("Element", (), {"type": "C3D8R"})()
+            inst = type("Instance", (), {
+                "elements": [elem],
+                "nodes": [101],
+            })()
+            self.rootAssembly = type("RootAssembly", (), {
+                "instances": {"PART-1-1": inst}
+            })()
+
+        def close(self):
+            pass
+
+    fake_odb_module = types.ModuleType("odbAccess")
+    fake_odb_module.openOdb = lambda path, readOnly=True: _FakeNativeOdb(180.0)
+    monkeypatch.setitem(sys.modules, "odbAccess", fake_odb_module)
     monkeypatch.setattr("abaqus_ai_agent.execution.solver.has_native_odb_access", lambda: True)
-    monkeypatch.setattr(
-        "abaqus_ai_agent.execution.solver._verify_odb_in_process",
-        lambda path, required_fields=None, required_step=None: {
-            "verified": True,
-            "steps": {"Step-1": {"frames": 2, "fields": ["S", "U"]}},
-        },
-    )
-    req = ResultRequirement(
-        name="stress",
-        value_key="max_mises",
-        field="S",
-        component="mises",
-        region="Root",
-        step="Step-1",
-        frame=-1,
-        unit="MPa",
-    )
-    extraction = ResultExtraction(
-        requirement=req,
-        value=180.0,
-        locator={"step": "Step-1", "frame": -1, "field": "S", "component": "mises", "source": "odb"},
-    )
-    monkeypatch.setattr(
-        "abaqus_ai_agent.execution.odb_extractor.extract_odb_results",
-        lambda **kwargs: type("ExtractionReport", (), {
-            "extractions": [extraction],
-            "evidence": (),
-            "metrics": {"max_mises": 180.0},
-        })(),
-    )
 
     runner = AnalysisRunner(executor)
     criteria = (
@@ -747,6 +756,124 @@ def test_p0_a_production_mode_in_process_native_odb_verification_succeeds_withou
     assert run_res.engineering_status == "RESULT_VALID"
     assert run_res.acceptance_passed is True
     assert run_res.metrics[0].value == 180.0
+
+
+def test_non_standard_launcher_propagation_to_verification_and_extraction(tmp_path: Path, monkeypatch):
+    """Verify that a non-standard launcher path is consistently passed to both verification and extraction."""
+    workdir = tmp_path / "custom_launcher_run"
+    workdir.mkdir()
+
+    custom_launcher = "C:/SIMULIA/Commands/abaqus.bat"
+    executor = MockCaeExecutor(workdir, job_name="CustomLauncherJob")
+    executor.launcher = custom_launcher
+
+    calls = {"verified_launcher": None, "extracted_launcher": None}
+
+    def fake_verify(**kwargs):
+        calls["verified_launcher"] = kwargs.get("launcher_cmd")
+        return {"verified": True, "steps": {"Step-1": {"frames": 1, "fields": ["S"]}}}
+
+    req = ResultRequirement(name="stress", value_key="max_mises", field="S", unit="MPa")
+    extraction = ResultExtraction(requirement=req, value=150.0)
+
+    def fake_extract(**kwargs):
+        calls["extracted_launcher"] = kwargs.get("launcher_cmd")
+        return type("ExtractionReport", (), {
+            "extractions": [extraction],
+            "evidence": (),
+            "metrics": {"max_mises": 150.0},
+        })()
+
+    monkeypatch.setattr("abaqus_ai_agent.execution.solver.has_native_odb_access", lambda: False)
+    monkeypatch.setattr("abaqus_ai_agent.execution.solver.verify_authentic_odb_structure", fake_verify)
+    monkeypatch.setattr("abaqus_ai_agent.execution.odb_extractor.extract_odb_results", fake_extract)
+
+    runner = AnalysisRunner(executor)
+    criteria = ({"name": "stress", "value_key": "max_mises", "limit": 200.0, "operator": "<=", "field": "S", "unit": "MPa"},)
+
+    run_res = runner.run(
+        model_name="CustomModel",
+        job_name="CustomLauncherJob",
+        workdir=str(workdir),
+        criteria=criteria,
+        require_production=True,
+    )
+
+    assert run_res.state == AnalysisRunState.ACCEPTED
+    assert calls["verified_launcher"] == custom_launcher
+    assert calls["extracted_launcher"] == custom_launcher
+
+
+def test_production_mode_fails_closed_when_no_launcher_and_not_native(tmp_path: Path, monkeypatch):
+    """Verify strict fail-closed when running in external Python without launcher."""
+    workdir = tmp_path / "offline_run"
+    workdir.mkdir()
+
+    executor = MockCaeExecutor(workdir, job_name="OfflineJob")
+    executor.launcher = None
+
+    monkeypatch.setattr("abaqus_ai_agent.execution.solver.has_native_odb_access", lambda: False)
+    monkeypatch.setattr("abaqus_ai_agent.execution.solver.find_abaqus_executable", lambda cmd=None: None)
+
+    runner = AnalysisRunner(executor)
+    criteria = ({"name": "stress", "value_key": "max_mises", "limit": 200.0, "operator": "<=", "field": "S", "unit": "MPa"},)
+
+    run_res = runner.run(
+        model_name="OfflineModel",
+        job_name="OfflineJob",
+        workdir=str(workdir),
+        criteria=criteria,
+        require_production=True,
+    )
+
+    assert run_res.state == AnalysisRunState.FAILED
+    assert run_res.engineering_status == "RESULT_INVALID"
+    assert any(d.get("reason") == "production_launcher_missing" for d in run_res.diagnostics)
+
+
+def test_in_process_native_extraction_fail_closed_on_missing_field(tmp_path: Path, monkeypatch):
+    """Verify that in-process native extraction fails-closed if required field is missing."""
+    import sys
+    import types
+
+    workdir = tmp_path / "inprocess_fail_run"
+    workdir.mkdir()
+
+    executor = MockCaeExecutor(workdir, job_name="InProcessFailJob")
+    executor.launcher = None
+
+    class _IncompleteNativeOdb:
+        def __init__(self):
+            frame = type("Frame", (), {"fieldOutputs": {"U": None}, "frameValue": 1.0})()
+            step = type("Step", (), {"frames": [frame], "historyRegions": {}})()
+            self.steps = {"Step-1": step}
+            elem = type("Element", (), {"type": "C3D8R"})()
+            inst = type("Instance", (), {"elements": [elem], "nodes": [101]})()
+            self.rootAssembly = type("RootAssembly", (), {"instances": {"PART-1-1": inst}})()
+
+        def close(self):
+            pass
+
+    fake_odb_module = types.ModuleType("odbAccess")
+    fake_odb_module.openOdb = lambda path, readOnly=True: _IncompleteNativeOdb()
+    monkeypatch.setitem(sys.modules, "odbAccess", fake_odb_module)
+    monkeypatch.setattr("abaqus_ai_agent.execution.solver.has_native_odb_access", lambda: True)
+
+    runner = AnalysisRunner(executor)
+    # Require S field which is missing in the ODB
+    criteria = ({"name": "stress", "value_key": "max_mises", "limit": 200.0, "operator": "<=", "field": "S", "unit": "MPa"},)
+
+    run_res = runner.run(
+        model_name="InProcessFailModel",
+        job_name="InProcessFailJob",
+        workdir=str(workdir),
+        criteria=criteria,
+        require_production=True,
+    )
+
+    assert run_res.state == AnalysisRunState.FAILED
+    assert run_res.engineering_status == "RESULT_INVALID"
+    assert any("odb_native_structure_invalid" in str(d) or "odb_extraction_failed" in str(d) for d in run_res.diagnostics)
 
 
 def test_negative_p0_b_missing_or_mismatched_provenance_rejected(tmp_path: Path):
