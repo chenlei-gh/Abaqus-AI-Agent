@@ -430,3 +430,98 @@ def test_agent_actual_element_type_unavailable_when_missing(tmp_path):
     # Must be UNAVAILABLE, not fallback to req_elem_type
     assert actual_elem_type_display == "UNAVAILABLE"
     assert actual_elem_type_display != req_elem_type
+
+
+def test_extract_authentic_odb_mesh_metrics_rejects_missing_attributes_or_empty_mesh(tmp_path):
+    import sys
+    odb_file = tmp_path / "defect_mesh.odb"
+    odb_file.write_bytes(b"\x7fODB" + b"\x00" * 100)
+
+    # Subcase A: Instance missing 'elements' attribute
+    mock_odb_a = MagicMock()
+    mock_odb_a.steps = {"Step-1": MagicMock(frames=[MagicMock(fieldOutputs={"S": MagicMock()})])}
+    inst_a = MagicMock(spec=["nodes"])  # lacks 'elements'
+    inst_a.nodes = [MagicMock() for _ in range(5)]
+    mock_odb_a.rootAssembly = MagicMock(instances={"P-1": inst_a})
+
+    mock_mod = MagicMock(openOdb=MagicMock(return_value=mock_odb_a))
+    orig_module = sys.modules.get("odbAccess")
+    try:
+        sys.modules["odbAccess"] = mock_mod
+        with patch("abaqus_ai_agent.execution.solver.has_native_odb_access", return_value=True), \
+             patch("abaqus_ai_agent.execution.solver.is_authentic_binary_odb", return_value=True):
+            with pytest.raises(ValueError, match="lacks required mesh attributes"):
+                extract_authentic_odb_mesh_metrics(odb_file)
+
+        # Subcase B: Instance with elements > 0 but nodes == 0
+        mock_odb_b = MagicMock()
+        mock_odb_b.steps = {"Step-1": MagicMock(frames=[MagicMock(fieldOutputs={"S": MagicMock()})])}
+        inst_b = MagicMock()
+        inst_b.elements = [MagicMock(type="C3D8R")]
+        inst_b.nodes = []
+        mock_odb_b.rootAssembly = MagicMock(instances={"P-1": inst_b})
+        mock_mod.openOdb = MagicMock(return_value=mock_odb_b)
+
+        with patch("abaqus_ai_agent.execution.solver.has_native_odb_access", return_value=True), \
+             patch("abaqus_ai_agent.execution.solver.is_authentic_binary_odb", return_value=True):
+            with pytest.raises(ValueError, match="incomplete discretization"):
+                extract_authentic_odb_mesh_metrics(odb_file)
+
+        # Subcase C: Element missing 'type' attribute
+        mock_odb_c = MagicMock()
+        mock_odb_c.steps = {"Step-1": MagicMock(frames=[MagicMock(fieldOutputs={"S": MagicMock()})])}
+        elem_no_type = MagicMock(spec=[])  # lacks 'type'
+        inst_c = MagicMock()
+        inst_c.elements = [elem_no_type]
+        inst_c.nodes = [MagicMock()]
+        mock_odb_c.rootAssembly = MagicMock(instances={"P-1": inst_c})
+        mock_mod.openOdb = MagicMock(return_value=mock_odb_c)
+
+        with patch("abaqus_ai_agent.execution.solver.has_native_odb_access", return_value=True), \
+             patch("abaqus_ai_agent.execution.solver.is_authentic_binary_odb", return_value=True):
+            with pytest.raises(ValueError, match="missing 'type' attribute"):
+                extract_authentic_odb_mesh_metrics(odb_file)
+
+        # Subcase D: Total elements and nodes are 0
+        mock_odb_d = MagicMock()
+        mock_odb_d.steps = {"Step-1": MagicMock(frames=[MagicMock(fieldOutputs={"S": MagicMock()})])}
+        inst_d = MagicMock()
+        inst_d.elements = []
+        inst_d.nodes = []
+        mock_odb_d.rootAssembly = MagicMock(instances={"P-1": inst_d})
+        mock_mod.openOdb = MagicMock(return_value=mock_odb_d)
+
+        with patch("abaqus_ai_agent.execution.solver.has_native_odb_access", return_value=True), \
+             patch("abaqus_ai_agent.execution.solver.is_authentic_binary_odb", return_value=True):
+            with pytest.raises(ValueError, match="contains no finite element mesh|non-positive discretization"):
+                extract_authentic_odb_mesh_metrics(odb_file)
+    finally:
+        if orig_module is not None:
+            sys.modules["odbAccess"] = orig_module
+        else:
+            sys.modules.pop("odbAccess", None)
+
+
+def test_type_hints_resolution_across_core_modules():
+    """Verify typing.get_type_hints evaluates cleanly across functions and classes without NameError."""
+    import inspect
+    import typing
+    import abaqus_ai_agent.execution.solver as solver_mod
+    import abaqus_ai_agent.reasoning.plausibility as plausibility_mod
+    import abaqus_ai_agent.contracts.intent as intent_mod
+    import abaqus_ai_agent.contracts.mesh as mesh_mod
+    import abaqus_ai_agent.planning.compiler as compiler_mod
+
+    modules = [solver_mod, plausibility_mod, intent_mod, mesh_mod, compiler_mod]
+    for mod in modules:
+        for name, obj in inspect.getmembers(mod):
+            if inspect.isfunction(obj) and obj.__module__ == mod.__name__:
+                hints = typing.get_type_hints(obj)
+                assert isinstance(hints, dict)
+            elif inspect.isclass(obj) and obj.__module__ == mod.__name__:
+                hints = typing.get_type_hints(obj)
+                assert isinstance(hints, dict)
+                for meth_name, meth in inspect.getmembers(obj, predicate=inspect.isfunction):
+                    if meth.__module__ == mod.__name__:
+                        m_hints = typing.get_type_hints(meth)
+                        assert isinstance(m_hints, dict)

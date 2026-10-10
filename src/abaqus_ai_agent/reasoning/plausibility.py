@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import math
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 from ..contracts.intent import EngineeringIntent
 from ..contracts.intent_reasoning import PlausibilityCheckResult, PlausibilitySeverity

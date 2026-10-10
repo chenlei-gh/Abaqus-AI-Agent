@@ -16,7 +16,7 @@ import subprocess
 import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Sequence
+from typing import Any, Dict, List, Optional, Sequence, Union
 
 
 @dataclass(frozen=True)
@@ -176,20 +176,40 @@ def _verify_odb_in_process(
         elem_types = {}
         instance_details = {}
         for inst_name, inst in root_assy.instances.items():
-            n_elem = len(inst.elements) if hasattr(inst, "elements") else 0
-            n_node = len(inst.nodes) if hasattr(inst, "nodes") else 0
+            if not hasattr(inst, "elements") or not hasattr(inst, "nodes"):
+                return {
+                    "verified": False,
+                    "error": f"ODB instance '{inst_name}' lacks required mesh attributes ('elements' or 'nodes'); cannot verify discretization",
+                }
+            n_elem = len(inst.elements)
+            n_node = len(inst.nodes)
+            if (n_elem > 0 and n_node == 0) or (n_node > 0 and n_elem == 0):
+                return {
+                    "verified": False,
+                    "error": f"ODB instance '{inst_name}' has incomplete discretization (elements={n_elem}, nodes={n_node})",
+                }
             total_elements += n_elem
             total_nodes += n_node
             inst_types = {}
-            if hasattr(inst, "elements"):
-                for elem in inst.elements:
-                    et = str(elem.type)
-                    elem_types[et] = elem_types.get(et, 0) + 1
-                    inst_types[et] = inst_types.get(et, 0) + 1
+            for elem in inst.elements:
+                if not hasattr(elem, "type"):
+                    return {
+                        "verified": False,
+                        "error": f"ODB instance '{inst_name}' element is missing 'type' attribute",
+                    }
+                et = str(elem.type)
+                elem_types[et] = elem_types.get(et, 0) + 1
+                inst_types[et] = inst_types.get(et, 0) + 1
             instance_details[str(inst_name)] = {
                 "elements": n_elem,
                 "nodes": n_node,
                 "element_types": inst_types,
+                "status": "MESHED" if n_elem > 0 else "EMPTY",
+            }
+        if total_elements <= 0 or total_nodes <= 0:
+            return {
+                "verified": False,
+                "error": f"ODB rootAssembly contains no finite element mesh (total_elements={total_elements}, total_nodes={total_nodes})",
             }
         mesh_metrics = {
             "total_elements": total_elements,
@@ -307,21 +327,37 @@ try:
     elem_types = {{}}
     instance_details = {{}}
     for inst_name, inst in root_assy.instances.items():
-        n_elem = len(inst.elements) if hasattr(inst, 'elements') else 0
-        n_node = len(inst.nodes) if hasattr(inst, 'nodes') else 0
+        if not hasattr(inst, 'elements') or not hasattr(inst, 'nodes'):
+            print("__ODB_VERIFIED__" + json.dumps({{'valid': False, 'error': f"ODB instance '{{inst_name}}' lacks required mesh attributes ('elements' or 'nodes')"}}))
+            odb.close()
+            sys.exit(1)
+        n_elem = len(inst.elements)
+        n_node = len(inst.nodes)
+        if (n_elem > 0 and n_node == 0) or (n_node > 0 and n_elem == 0):
+            print("__ODB_VERIFIED__" + json.dumps({{'valid': False, 'error': f"ODB instance '{{inst_name}}' has incomplete discretization (elements={{n_elem}}, nodes={{n_node}})"}}))
+            odb.close()
+            sys.exit(1)
         total_elements += n_elem
         total_nodes += n_node
         inst_types = {{}}
-        if hasattr(inst, 'elements'):
-            for elem in inst.elements:
-                et = str(elem.type)
-                elem_types[et] = elem_types.get(et, 0) + 1
-                inst_types[et] = inst_types.get(et, 0) + 1
+        for elem in inst.elements:
+            if not hasattr(elem, 'type'):
+                print("__ODB_VERIFIED__" + json.dumps({{'valid': False, 'error': f"ODB instance '{{inst_name}}' element missing 'type'"}}))
+                odb.close()
+                sys.exit(1)
+            et = str(elem.type)
+            elem_types[et] = elem_types.get(et, 0) + 1
+            inst_types[et] = inst_types.get(et, 0) + 1
         instance_details[str(inst_name)] = {{
             'elements': n_elem,
             'nodes': n_node,
             'element_types': inst_types,
+            'status': 'MESHED' if n_elem > 0 else 'EMPTY',
         }}
+    if total_elements <= 0 or total_nodes <= 0:
+        print("__ODB_VERIFIED__" + json.dumps({{'valid': False, 'error': f"ODB rootAssembly contains no finite element mesh (total_elements={{total_elements}}, total_nodes={{total_nodes}})"}}))
+        odb.close()
+        sys.exit(1)
     mesh_metrics = {{
         'total_elements': total_elements,
         'total_nodes': total_nodes,
@@ -541,5 +577,11 @@ def extract_authentic_odb_mesh_metrics(
     if not isinstance(mesh_metrics.get("instances"), dict) or len(mesh_metrics["instances"]) == 0:
         raise ValueError(
             f"ODB mesh metrics in {path} contains no instances data; cannot certify authentic discretization"
+        )
+    if mesh_metrics.get("total_elements", 0) <= 0 or mesh_metrics.get("total_nodes", 0) <= 0:
+        raise ValueError(
+            f"ODB mesh metrics in {path} indicates non-positive discretization "
+            f"(elements={mesh_metrics.get('total_elements')}, nodes={mesh_metrics.get('total_nodes')}); "
+            f"cannot certify authentic finite element mesh"
         )
     return mesh_metrics
