@@ -1163,6 +1163,11 @@ def compile_intent_to_actions(
 
     # 11. Mesh Generation Actions
     if geometry.shape == "two_blocks_contact":
+        if getattr(mesh, "local_seeds", None):
+            raise ValueError(
+                f"Geometry shape 'two_blocks_contact' does not currently support local_seeds; "
+                f"received {len(mesh.local_seeds)} local seed specification(s). Fail-closed to avoid silent omission."
+            )
         mesh_elem_code = (
             f"import mesh\nfrom abaqusConstants import *\n"
             f"p_base = mdb.models['{model_name}'].parts['Base']\n"
@@ -1188,7 +1193,10 @@ def compile_intent_to_actions(
                 reg_expr = getattr(ls, "region_expression", None)
                 ls_size = getattr(ls, "size", None)
                 ls_num = getattr(ls, "number", None)
-                ls_c = getattr(ls, "constraint", None) or "FREE"
+                ls_c_raw = getattr(ls, "constraint", None) or "FREE"
+                ls_c_str = str(ls_c_raw).upper()
+                c_map = {"SMOOTH": "FREE", "NONE": "FREE", "CONTROLLED": "FIXED"}
+                ls_c = c_map.get(ls_c_str, ls_c_str)
                 if ls_size is not None:
                     actions.append(builders.local_seed_size(
                         model=model_name,

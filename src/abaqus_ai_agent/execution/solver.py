@@ -160,27 +160,37 @@ def _verify_odb_in_process(
                 }
 
         root_assy = getattr(odb, "rootAssembly", None)
+        if root_assy is None or not hasattr(root_assy, "instances"):
+            return {
+                "verified": False,
+                "error": "ODB rootAssembly or instances collection cannot be accessed",
+            }
+        if len(root_assy.instances) == 0:
+            return {
+                "verified": False,
+                "error": "ODB rootAssembly contains zero instances; cannot extract authentic mesh metrics",
+            }
+
         total_elements = 0
         total_nodes = 0
         elem_types = {}
         instance_details = {}
-        if root_assy is not None and hasattr(root_assy, "instances"):
-            for inst_name, inst in root_assy.instances.items():
-                n_elem = len(inst.elements) if hasattr(inst, "elements") else 0
-                n_node = len(inst.nodes) if hasattr(inst, "nodes") else 0
-                total_elements += n_elem
-                total_nodes += n_node
-                inst_types = {}
-                if hasattr(inst, "elements"):
-                    for elem in inst.elements:
-                        et = str(elem.type)
-                        elem_types[et] = elem_types.get(et, 0) + 1
-                        inst_types[et] = inst_types.get(et, 0) + 1
-                instance_details[str(inst_name)] = {
-                    "elements": n_elem,
-                    "nodes": n_node,
-                    "element_types": inst_types,
-                }
+        for inst_name, inst in root_assy.instances.items():
+            n_elem = len(inst.elements) if hasattr(inst, "elements") else 0
+            n_node = len(inst.nodes) if hasattr(inst, "nodes") else 0
+            total_elements += n_elem
+            total_nodes += n_node
+            inst_types = {}
+            if hasattr(inst, "elements"):
+                for elem in inst.elements:
+                    et = str(elem.type)
+                    elem_types[et] = elem_types.get(et, 0) + 1
+                    inst_types[et] = inst_types.get(et, 0) + 1
+            instance_details[str(inst_name)] = {
+                "elements": n_elem,
+                "nodes": n_node,
+                "element_types": inst_types,
+            }
         mesh_metrics = {
             "total_elements": total_elements,
             "total_nodes": total_nodes,
@@ -283,27 +293,35 @@ try:
             sys.exit(1)
 
     root_assy = getattr(odb, 'rootAssembly', None)
+    if root_assy is None or not hasattr(root_assy, 'instances'):
+        print("__ODB_VERIFIED__" + json.dumps({{'valid': False, 'error': 'ODB rootAssembly or instances collection cannot be accessed'}}))
+        odb.close()
+        sys.exit(1)
+    if len(root_assy.instances) == 0:
+        print("__ODB_VERIFIED__" + json.dumps({{'valid': False, 'error': 'ODB rootAssembly contains zero instances; cannot extract authentic mesh metrics'}}))
+        odb.close()
+        sys.exit(1)
+
     total_elements = 0
     total_nodes = 0
     elem_types = {{}}
     instance_details = {{}}
-    if root_assy is not None and hasattr(root_assy, 'instances'):
-        for inst_name, inst in root_assy.instances.items():
-            n_elem = len(inst.elements) if hasattr(inst, 'elements') else 0
-            n_node = len(inst.nodes) if hasattr(inst, 'nodes') else 0
-            total_elements += n_elem
-            total_nodes += n_node
-            inst_types = {{}}
-            if hasattr(inst, 'elements'):
-                for elem in inst.elements:
-                    et = str(elem.type)
-                    elem_types[et] = elem_types.get(et, 0) + 1
-                    inst_types[et] = inst_types.get(et, 0) + 1
-            instance_details[str(inst_name)] = {{
-                'elements': n_elem,
-                'nodes': n_node,
-                'element_types': inst_types,
-            }}
+    for inst_name, inst in root_assy.instances.items():
+        n_elem = len(inst.elements) if hasattr(inst, 'elements') else 0
+        n_node = len(inst.nodes) if hasattr(inst, 'nodes') else 0
+        total_elements += n_elem
+        total_nodes += n_node
+        inst_types = {{}}
+        if hasattr(inst, 'elements'):
+            for elem in inst.elements:
+                et = str(elem.type)
+                elem_types[et] = elem_types.get(et, 0) + 1
+                inst_types[et] = inst_types.get(et, 0) + 1
+        instance_details[str(inst_name)] = {{
+            'elements': n_elem,
+            'nodes': n_node,
+            'element_types': inst_types,
+        }}
     mesh_metrics = {{
         'total_elements': total_elements,
         'total_nodes': total_nodes,
@@ -509,9 +527,19 @@ def extract_authentic_odb_mesh_metrics(
     if not res.get("verified", False):
         err = res.get("error", "Failed to verify ODB structure")
         raise ValueError(f"Cannot extract authentic mesh metrics from ODB {path}: {err}")
-    return res.get("mesh_metrics", {
-        "total_elements": 0,
-        "total_nodes": 0,
-        "element_types": {},
-        "instances": {},
-    })
+    mesh_metrics = res.get("mesh_metrics")
+    if not isinstance(mesh_metrics, dict):
+        raise ValueError(
+            f"ODB structure verified for {path}, but authentic 'mesh_metrics' payload is missing or invalid"
+        )
+    required_keys = ("total_elements", "total_nodes", "element_types", "instances")
+    missing_keys = [k for k in required_keys if k not in mesh_metrics]
+    if missing_keys:
+        raise ValueError(
+            f"ODB mesh metrics in {path} is incomplete; missing required keys: {missing_keys}"
+        )
+    if not isinstance(mesh_metrics.get("instances"), dict) or len(mesh_metrics["instances"]) == 0:
+        raise ValueError(
+            f"ODB mesh metrics in {path} contains no instances data; cannot certify authentic discretization"
+        )
+    return mesh_metrics

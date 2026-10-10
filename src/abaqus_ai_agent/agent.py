@@ -748,6 +748,7 @@ class AbaqusAIAgent:
                     materials_payload.append(final_mat_def.to_dict())
 
                 # Build grounded mesh discretization and quality payload
+                mesh_extraction_error = None
                 actual_mesh_metrics = (getattr(run, "verification", {}) or {}).get("mesh_metrics") or {}
                 if not actual_mesh_metrics and getattr(run, "odb_path", None):
                     try:
@@ -756,7 +757,8 @@ class AbaqusAIAgent:
                             run.odb_path,
                             launcher_cmd=getattr(self.executor, "launcher", None),
                         )
-                    except Exception:
+                    except Exception as exc:
+                        mesh_extraction_error = str(exc)
                         actual_mesh_metrics = {}
 
                 eff_mesh_spec = getattr(plan, "mesh", None) or effective_mesh
@@ -767,28 +769,80 @@ class AbaqusAIAgent:
                 actual_total_elements = actual_mesh_metrics.get("total_elements")
                 actual_total_nodes = actual_mesh_metrics.get("total_nodes")
                 actual_elem_types = actual_mesh_metrics.get("element_types") or {}
-                elem_type_display = ", ".join(f"{k} ({v})" for k, v in actual_elem_types.items()) if actual_elem_types else req_elem_type
+
+                if actual_elem_types:
+                    actual_elem_type_display = ", ".join(f"{k} ({v})" for k, v in sorted(actual_elem_types.items()))
+                elif actual_total_elements is not None:
+                    actual_elem_type_display = "INCOMPLETE"
+                else:
+                    actual_elem_type_display = "UNAVAILABLE"
 
                 disc_data = {
+                    "requested_seed_size": float(req_global_size),
+                    "requested_element_type": req_elem_type,
                     "seed_size": float(req_global_size),
-                    "total_elements": actual_total_elements if actual_total_elements is not None else "未统计",
-                    "total_nodes": actual_total_nodes if actual_total_nodes is not None else "未统计",
-                    "element_type": elem_type_display,
+                    "total_elements": actual_total_elements if actual_total_elements is not None else "UNAVAILABLE",
+                    "total_nodes": actual_total_nodes if actual_total_nodes is not None else "UNAVAILABLE",
+                    "actual_element_type": actual_elem_type_display,
+                    "element_type": actual_elem_type_display,
                     "strategy": "局部种子约束 (Local Edge Refinement)" if local_seeds_tuple else "全局均匀布种 (Global Unconstrained)",
                     "local_refinements": len(local_seeds_tuple),
+                    "extraction_status": "AUTHENTIC" if actual_total_elements is not None else "FAILED_OR_MISSING",
                 }
+                if mesh_extraction_error:
+                    disc_data["extraction_error"] = mesh_extraction_error
 
-                mq_audit = (getattr(run, "verification", {}) or {}).get("mesh_quality") or {}
+                # Mesh quality gate resolution: must strictly originate from actual mesh quality check
+                mq_audit = (getattr(run, "verification", {}) or {}).get("mesh_quality")
+                if not mq_audit or not isinstance(mq_audit, dict):
+                    mq_audit = (getattr(run, "verification", {}) or {}).get("mesh_gate")
+
+                resolved_gate_status = "NOT_CHECKED"
+                if isinstance(mq_audit, dict) and mq_audit.get("gate_status"):
+                    raw_status = str(mq_audit["gate_status"]).upper()
+                    if "PASS" in raw_status:
+                        resolved_gate_status = "PASS"
+                    elif "WARN" in raw_status:
+                        resolved_gate_status = "WARNING"
+                    elif "BLOCK" in raw_status:
+                        resolved_gate_status = "BLOCKED"
+                    elif "FAIL" in raw_status:
+                        resolved_gate_status = "FAIL"
+                    else:
+                        resolved_gate_status = "NOT_CHECKED"
+                else:
+                    acc_gates = {}
+                    if isinstance(acceptance, dict):
+                        acc_gates = acceptance.get("gates") or {}
+                    elif hasattr(acceptance, "gates"):
+                        acc_gates = getattr(acceptance, "gates") or {}
+                    mq_gate_val = acc_gates.get("mesh_quality")
+                    if mq_gate_val is not None:
+                        val_str = str(mq_gate_val).upper()
+                        if val_str == "PASS":
+                            resolved_gate_status = "PASS"
+                        elif "WARN" in val_str:
+                            resolved_gate_status = "WARNING"
+                        elif "BLOCK" in val_str:
+                            resolved_gate_status = "BLOCKED"
+                        elif "FAIL" in val_str:
+                            resolved_gate_status = "FAIL"
+                        else:
+                            resolved_gate_status = "NOT_CHECKED"
+
+                quality_audit_payload = dict(mq_audit) if isinstance(mq_audit, dict) else {}
+                quality_audit_payload["gate_status"] = resolved_gate_status
+
                 mesh_info_payload = {
                     "discretization": disc_data,
-                    "quality_audit": mq_audit if isinstance(mq_audit, dict) and mq_audit else {
-                        "gate_status": "PASS" if getattr(run, "acceptance_passed", False) else "UNCHECKED",
-                    },
-                    "total_elements": actual_total_elements if actual_total_elements is not None else "未统计",
-                    "total_nodes": actual_total_nodes if actual_total_nodes is not None else "未统计",
-                    "element_type": elem_type_display,
+                    "quality_audit": quality_audit_payload,
+                    "total_elements": actual_total_elements if actual_total_elements is not None else "UNAVAILABLE",
+                    "total_nodes": actual_total_nodes if actual_total_nodes is not None else "UNAVAILABLE",
+                    "element_type": actual_elem_type_display,
                     "seed_size": float(req_global_size),
                 }
+                if mesh_extraction_error:
+                    mesh_info_payload["extraction_error"] = mesh_extraction_error
 
                 deterministic_delivery_card, _, det_report_data = pipeline.build_and_render(
                     output_dir=Path(out_dir),
@@ -801,9 +855,9 @@ class AbaqusAIAgent:
                         "standard_reference": final_mat_def.provenance if final_mat_def else "",
                         "max_mises_mpa": metric_dict.get("max_mises") or metric_dict.get("S_Mises"),
                         "max_displacement_mm": metric_dict.get("max_displacement") or metric_dict.get("U_magnitude"),
-                        "total_elements": actual_total_elements if actual_total_elements is not None else "未统计",
-                        "total_nodes": actual_total_nodes if actual_total_nodes is not None else "未统计",
-                        "element_type": elem_type_display,
+                        "total_elements": actual_total_elements if actual_total_elements is not None else "UNAVAILABLE",
+                        "total_nodes": actual_total_nodes if actual_total_nodes is not None else "UNAVAILABLE",
+                        "element_type": actual_elem_type_display,
                     },
                     results_info=[{"metric": k, "value": v} for k, v in metric_dict.items()],
                     acceptance_info=acceptance,

@@ -62,11 +62,12 @@ def local_seeds_from_geometry_plan(plan, fail_on_unsupported: bool = False):
                     f"Refinement target '{request.target}' requires geometric partitioning "
                     f"(method={request.method}) which cannot be executed as a direct local seed."
                 )
+    c_map = {"smooth": "FREE", "none": "FREE", "controlled": "FIXED"}
     return tuple(
         LocalSeed(
             region_expression=request.target,
             size=request.target_size,
-            constraint=request.transition,
+            constraint=c_map.get(str(request.transition).lower(), "FREE"),
         )
         for request in plan.refinements
         if request.method == "local_seed" and not request.requires_partition

@@ -1,3 +1,4 @@
+import math
 from ..contracts.action import AbaqusAction
 
 
@@ -27,8 +28,8 @@ def section_assignment(model, part, section, region_expression):
     return _action("section_assignment", model, part=part, section=section, region_expression=expr)
 def mesh_controls(model, target, **params): return _action("mesh_controls", model, target, **params)
 def seed_part(model, part, size, deviation_factor=0.1, min_size_factor=0.1):
-    if size is None or float(size) <= 0:
-        raise ValueError(f"seed size must be positive, got {size!r}")
+    if size is None or isinstance(size, bool) or not isinstance(size, (int, float)) or float(size) <= 0 or not math.isfinite(float(size)):
+        raise ValueError(f"seed size must be a positive finite number, got {size!r}")
     return _action("seed_part", model, part=part, size=float(size), deviation_factor=deviation_factor, min_size_factor=min_size_factor)
 def generate_mesh(model, part): return _action("generate_mesh", model, part=part)
 def element_type(model, part, region_expression, elem_code="C3D8R", library="STANDARD"):
@@ -189,8 +190,8 @@ def local_seed_size(model, part, region_expression, size, constraint="FREE"):
     expr = _normalize_region_expr(region_expression)
     if not expr:
         raise ValueError("region_expression is required for local seed")
-    if size is None or float(size) <= 0:
-        raise ValueError(f"local seed size must be positive, got {size!r}")
+    if size is None or isinstance(size, bool) or not isinstance(size, (int, float)) or float(size) <= 0 or not math.isfinite(float(size)):
+        raise ValueError(f"local seed size must be a positive finite number, got {size!r}")
     c_str = str(constraint).upper() if constraint else "FREE"
     if c_str not in ("FREE", "FIXED", "FINISH"):
         raise ValueError(f"local seed constraint must be FREE, FIXED, or FINISH, got {constraint!r}")
@@ -200,8 +201,8 @@ def local_seed_number(model, part, region_expression, number, constraint="FREE")
     expr = _normalize_region_expr(region_expression)
     if not expr:
         raise ValueError("region_expression is required for local seed")
-    if number is None or int(number) < 1:
-        raise ValueError(f"local seed number must be at least 1, got {number!r}")
+    if number is None or isinstance(number, bool) or not isinstance(number, int) or number < 1:
+        raise ValueError(f"local seed number must be an integer >= 1, got {number!r}")
     c_str = str(constraint).upper() if constraint else "FREE"
     if c_str not in ("FREE", "FIXED", "FINISH"):
         raise ValueError(f"local seed constraint must be FREE, FIXED, or FINISH, got {constraint!r}")
