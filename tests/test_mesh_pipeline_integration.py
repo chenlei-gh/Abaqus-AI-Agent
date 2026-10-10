@@ -655,3 +655,13 @@ def test_qualify_real_mesh_refinement_visualizations_binding_contract():
     assert "view_mode=\"FRONT\"" in src
     assert "figures=rendered_figs" in src
     assert "rendered_visualizations" in src
+
+
+def test_qualify_real_mesh_refinement_fails_closed_when_signing_secret_missing(monkeypatch, tmp_path):
+    """Verify qualify_real_mesh_refinement strictly fails closed without hardcoded fallback secrets."""
+    import tools.qualify_real_mesh_refinement as qual_mod
+
+    monkeypatch.delenv("ABAQUS_RENDER_SIGNING_SECRET", raising=False)
+    with pytest.raises(RuntimeError, match="Hardcoded fallback secrets are strictly prohibited"):
+        qual_mod.run_qualification(workdir=tmp_path, launcher="dummy_launcher")
+        qual_mod.run_qualification(workdir=tmp_path, launcher="dummy_launcher")
