@@ -316,8 +316,8 @@ def run_qualification(workdir: Path, launcher: str = "abaqus") -> Dict[str, Any]
     if not audit_secret:
         raise RuntimeError(
             "Persistent evidence qualification requires 'ABAQUS_RENDER_SIGNING_SECRET' environment variable "
-            "or --signing-secret CLI parameter to be set with an authentic external signing secret. "
-            "Hardcoded fallback secrets are strictly prohibited."
+            "to be set with an authentic external signing secret. "
+            "CLI arguments and hardcoded fallback secrets are strictly prohibited to prevent credential leaks."
         )
 
     workdir = Path(workdir).resolve()
@@ -779,10 +779,6 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Abaqus 2025 Real-Machine Grounded Mesh Refinement Qualification")
     parser.add_argument("--workdir", default="runs/real_mesh_qualification", help="Output directory")
     parser.add_argument("--launcher", default="abaqus", help="Abaqus launcher executable")
-    parser.add_argument("--signing-secret", default=None, help="External signing secret for authentic audit evidence")
     args = parser.parse_args()
-
-    if args.signing_secret:
-        os.environ["ABAQUS_RENDER_SIGNING_SECRET"] = args.signing_secret
 
     run_qualification(workdir=Path(args.workdir), launcher=args.launcher)

@@ -662,6 +662,35 @@ def test_qualify_real_mesh_refinement_fails_closed_when_signing_secret_missing(m
     import tools.qualify_real_mesh_refinement as qual_mod
 
     monkeypatch.delenv("ABAQUS_RENDER_SIGNING_SECRET", raising=False)
-    with pytest.raises(RuntimeError, match="Hardcoded fallback secrets are strictly prohibited"):
+    with pytest.raises(RuntimeError, match="CLI arguments and hardcoded fallback secrets are strictly prohibited"):
         qual_mod.run_qualification(workdir=tmp_path, launcher="dummy_launcher")
-        qual_mod.run_qualification(workdir=tmp_path, launcher="dummy_launcher")
+
+
+def test_qualify_real_mesh_refinement_cli_rejects_signing_secret_flag():
+    """Verify CLI interface rejects --signing-secret to prevent credential leaks via argv/history."""
+    import subprocess
+    import sys
+    from pathlib import Path
+
+    script_path = Path(__file__).resolve().parent.parent / "tools" / "qualify_real_mesh_refinement.py"
+    proc = subprocess.run(
+        [sys.executable, str(script_path), "--signing-secret", "super_secret_val"],
+        capture_output=True,
+        text=True,
+    )
+    assert proc.returncode != 0
+    assert "unrecognized arguments: --signing-secret" in proc.stderr
+
+
+def test_qualify_real_mesh_refinement_manifest_contract_no_secret_leak():
+    """Verify qualify_real_mesh_refinement manifest structure strictly contains only boolean flag."""
+    import inspect
+    import tools.qualify_real_mesh_refinement as qual_mod
+
+    src = inspect.getsource(qual_mod.run_qualification)
+    assert '"secret_configured": True' in src
+    assert "secret_configured" in src
+    assert '"secret":' not in src
+    assert '"signing_secret":' not in src
+    key_contract_block = src.split('"key_contract"')[1].split('"convergence_progression"')[0]
+    assert "audit_secret" not in key_contract_block
