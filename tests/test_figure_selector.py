@@ -130,6 +130,7 @@ def test_priority_1_reuse_existing_verified_figure(tmp_path: Path):
         session_nonce=p1_nonce,
         run_id="RUN-PRIORITY-1",
         odb_sha256="HASH-ODB-1",
+        input_hash="HASH-INPUT-1",
         rendered_figures=[{"filename": existing_img.name, "image_sha256": img_sha256}],
     )
     existing_fig = ReportFigure(

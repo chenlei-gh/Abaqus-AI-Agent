@@ -1189,6 +1189,7 @@ def test_p0_d_authentic_cae_visualization_asset_succeeds_in_official_delivery(tm
         session_nonce=auth_nonce,
         run_id="run_authentic_asset",
         odb_sha256=h_odb,
+        input_hash=auth_input_hash,
         rendered_figures=[{"filename": authentic_img.name, "image_sha256": h_img}],
     )
     fig.metadata["output_position"] = "INTEGRATION_POINT"

@@ -641,3 +641,17 @@ def test_probe_odb_script_filters_in_plane_far_edges():
     assert "abs(p1[2]-p2[2]) < 0.1" in src
     # Ensure far_edges sampling requires in-plane filter
     assert "cr > 35.0 and abs(p1[2]-p2[2]) < 0.1" in src
+
+
+def test_qualify_real_mesh_refinement_visualizations_binding_contract():
+    """Verify qualify_real_mesh_refinement binds authentic visualizations with cryptographic evidence."""
+    import inspect
+    import tools.qualify_real_mesh_refinement as qual_mod
+
+    src = inspect.getsource(qual_mod.run_qualification)
+    assert "render_authentic_visualizations(" in src
+    assert "FIG-S11-" in src
+    assert "FIG-MISES-" in src
+    assert "view_mode=\"FRONT\"" in src
+    assert "figures=rendered_figs" in src
+    assert "rendered_visualizations" in src

@@ -413,13 +413,21 @@ class DeterministicReportPipeline:
                     )
 
                 ev_figs = rev_data.get("rendered_figures") or []
-                matching_ev_fig = next((rf for rf in ev_figs if Path(rf.get("filename", "")).name == f_path.name), None)
-                if matching_ev_fig:
-                    rf_sha = matching_ev_fig.get("image_sha256")
-                    if rf_sha and rf_sha != live_sha256:
-                        raise PermissionError(
-                            f"Official delivery blocked: Figure '{f_path.name}' content sha256 mismatch with signed evidence: {live_sha256} != {rf_sha}"
-                        )
+                matching_ev_figs = [rf for rf in ev_figs if Path(rf.get("filename", "")).name == f_path.name]
+                if not matching_ev_figs:
+                    raise PermissionError(
+                        f"Official delivery blocked: Figure '{f_path.name}' is not registered in signed RenderExecutionEvidence rendered_figures manifest"
+                    )
+                if len(matching_ev_figs) > 1:
+                    raise PermissionError(
+                        f"Official delivery blocked: Figure '{f_path.name}' has duplicate entries in signed RenderExecutionEvidence rendered_figures manifest"
+                    )
+                matching_ev_fig = matching_ev_figs[0]
+                rf_sha = matching_ev_fig.get("image_sha256")
+                if not rf_sha or rf_sha != live_sha256:
+                    raise PermissionError(
+                        f"Official delivery blocked: Figure '{f_path.name}' content sha256 mismatch with signed evidence: {live_sha256} != {rf_sha}"
+                    )
 
         # 2. Build polymorphic EngineeringReportData
         report_data = self.builder.build_report_data(

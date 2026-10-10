@@ -299,9 +299,18 @@ def verify_render_execution_evidence(
         return False, f"Evidence run_id mismatch: {run_id!r} != {expected_run_id!r}"
     if odb_sha != str(expected_odb_sha256).strip():
         return False, f"Evidence odb_sha256 mismatch: {odb_sha!r} != {expected_odb_sha256!r}"
-    if expected_input_hash and ev_input_hash:
+    if expected_input_hash is not None and str(expected_input_hash).strip():
+        if not ev_input_hash:
+            return False, "Evidence lacks required input_hash"
         if ev_input_hash != str(expected_input_hash).strip():
             return False, f"Evidence input_hash mismatch: {ev_input_hash!r} != {expected_input_hash!r}"
+    elif ev_input_hash and expected_input_hash is not None:
+        if ev_input_hash != str(expected_input_hash).strip():
+            return False, f"Evidence input_hash mismatch: {ev_input_hash!r} != {expected_input_hash!r}"
+
+    fig_names = [Path(str(rf.get("filename", ""))).name for rf in figs if isinstance(rf, dict) and rf.get("filename")]
+    if len(fig_names) != len(set(fig_names)):
+        return False, "Evidence rendered_figures contains duplicate filenames"
 
     canonical_payload = compute_evidence_canonical_payload(
         session_nonce=nonce,

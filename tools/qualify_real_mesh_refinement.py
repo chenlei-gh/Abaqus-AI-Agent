@@ -31,12 +31,14 @@ if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
 from abaqus_ai_agent.execution.batch import BatchExecutor, resolve_default_launcher
+from abaqus_ai_agent.execution.odb_rendering import render_authentic_visualizations
 from abaqus_ai_agent.execution.solver import (
     extract_authentic_odb_mesh_metrics,
     verify_authentic_odb_structure,
 )
 from abaqus_ai_agent.reporting.pipeline import DeterministicReportPipeline
 from abaqus_ai_agent.reporting.renderer import render_html, render_markdown
+from abaqus_ai_agent.reporting.visualization_spec import VisualizationSpec
 
 
 def compute_sha256(data: str | bytes | Path) -> str:
@@ -548,12 +550,57 @@ def run_qualification(workdir: Path, launcher: str = "abaqus") -> Dict[str, Any]
         },
     }
 
+    # Generate authentic CAE visualizations (S11 and Mises contours) with cryptographic RenderExecutionEvidence
+    fig_specs = [
+        VisualizationSpec(
+            artifact_id=f"FIG-S11-{run_id}",
+            visualization_type="stress_contour",
+            field_name="S",
+            component="S11",
+            step_name="Step-1",
+            frame_index=-1,
+            view_mode="FRONT",
+            target_filename=f"{run_id}_hole_plate_s11_contour.png",
+            caption_zh="带孔板孔边横向拉伸正应力 S11 云图 (Front 视角)",
+            caption_en="Plate with Hole Transverse Normal Stress S11 Contour (Front View)",
+            region="WHOLE_MODEL",
+            output_position="INTEGRATION_POINT",
+        ),
+        VisualizationSpec(
+            artifact_id=f"FIG-MISES-{run_id}",
+            visualization_type="stress_hotspot",
+            field_name="S",
+            component="mises",
+            step_name="Step-1",
+            frame_index=-1,
+            view_mode="FRONT",
+            target_filename=f"{run_id}_hole_plate_mises_contour.png",
+            caption_zh="带孔板 von Mises 等效应力云图及应力集中区域 (Front 视角)",
+            caption_en="Plate with Hole von Mises Equivalent Stress Contour (Front View)",
+            region="WHOLE_MODEL",
+            output_position="INTEGRATION_POINT",
+        ),
+    ]
+
+    figures_output_dir = workdir / "figures"
+    figures_output_dir.mkdir(parents=True, exist_ok=True)
+    rendered_figs = render_authentic_visualizations(
+        odb_path=ref_odb,
+        specs=fig_specs,
+        output_dir=figures_output_dir,
+        launcher=resolved_launcher,
+        run_id=run_id,
+        input_hash=input_hash,
+    )
+
     pipeline = DeterministicReportPipeline()
     delivery_card, report_pointer, report_data = pipeline.build_and_render(
         output_dir=report_output_dir,
         title="Plate with Central Hole Mesh Refinement and Stress Concentration Qualification Report",
         case_id="Case-Plate-Hole-Refinement-3Level",
         run_id=run_id,
+        input_hash=input_hash,
+        odb_path=ref_odb,
         model_info={
             "name": "Model_Refined",
             "description": "Plate 100x100x10 with central hole D=20 under tension (C3D20R Hex Mesh)",
@@ -563,6 +610,8 @@ def run_qualification(workdir: Path, launcher: str = "abaqus") -> Dict[str, Any]
         results_info=results_info,
         acceptance_info=acceptance_info,
         mesh_info=mesh_info,
+        figures=rendered_figs,
+        visualization_specs=fig_specs,
         require_deliverable=False,
     )
 
@@ -574,6 +623,23 @@ def run_qualification(workdir: Path, launcher: str = "abaqus") -> Dict[str, Any]
     assert str(ref_metrics["total_nodes"]) in html_content
     assert acceptance_info["gates"]["mesh_quality"] == "SKIPPED"
     assert delivery_card.deliverable is False
+    assert len(rendered_figs) == 2
+    for f in rendered_figs:
+        assert Path(f.path).is_file()
+        assert Path(f.path).name in html_content
+
+    figures_manifest = []
+    for f in rendered_figs:
+        fig_meta = f.metadata or {}
+        figures_manifest.append({
+            "path": f.path,
+            "filename": Path(f.path).name,
+            "image_sha256": fig_meta.get("image_sha256"),
+            "field": fig_meta.get("field"),
+            "component": fig_meta.get("component"),
+            "viewer_session_token": fig_meta.get("viewer_session_token"),
+            "render_execution_evidence": fig_meta.get("render_execution_evidence"),
+        })
 
     manifest = {
         "qualification_id": "QUAL-MESH-REFINEMENT-3LEVEL-2025",
@@ -606,6 +672,7 @@ def run_qualification(workdir: Path, launcher: str = "abaqus") -> Dict[str, Any]
             },
         },
         "convergence_progression": conv_eval,
+        "rendered_visualizations": figures_manifest,
         "delivery": {
             "report_html": str(html_file),
             "report_html_sha256": compute_sha256(html_file),

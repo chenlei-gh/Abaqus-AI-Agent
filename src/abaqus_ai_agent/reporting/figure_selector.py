@@ -232,11 +232,15 @@ def admit_figure_for_reuse(
         return False, f"Render execution evidence invalid: {ev_reason}"
 
     ev_figs = rev_data.get("rendered_figures") or []
-    matching_ev_fig = next((rf for rf in ev_figs if Path(rf.get("filename", "")).name == f_path.name), None)
-    if matching_ev_fig:
-        rf_sha = matching_ev_fig.get("image_sha256")
-        if rf_sha and rf_sha != live_sha256:
-            return False, f"Figure content sha256 mismatch with signed evidence: {live_sha256} != {rf_sha}"
+    matching_ev_figs = [rf for rf in ev_figs if Path(rf.get("filename", "")).name == f_path.name]
+    if not matching_ev_figs:
+        return False, f"Figure '{f_path.name}' is not registered in signed RenderExecutionEvidence manifest"
+    if len(matching_ev_figs) > 1:
+        return False, f"Figure '{f_path.name}' has duplicate entries in signed RenderExecutionEvidence manifest"
+    matching_ev_fig = matching_ev_figs[0]
+    rf_sha = matching_ev_fig.get("image_sha256")
+    if not rf_sha or rf_sha != live_sha256:
+        return False, f"Figure content sha256 mismatch with signed evidence: {live_sha256} != {rf_sha}"
 
     return True, "Admitted"
 

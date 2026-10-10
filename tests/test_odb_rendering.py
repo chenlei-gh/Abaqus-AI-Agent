@@ -249,3 +249,237 @@ def test_render_authentic_visualizations_success_and_lineage_binding(tmp_path, m
     assert fig.metadata["odb_path"] == str(valid_odb.resolve())
     assert len(fig.metadata["odb_sha256"]) == 64
     assert len(fig.metadata["image_sha256"]) == 64
+
+
+def test_verify_render_execution_evidence_input_hash_strictness():
+    """Verify input_hash strict fail-closed enforcement in verify_render_execution_evidence."""
+    from abaqus_ai_agent.execution.odb_rendering import (
+        create_render_execution_evidence,
+        verify_render_execution_evidence,
+    )
+
+    ev_no_hash = create_render_execution_evidence(
+        session_nonce="nonce123456789012345678901234567",
+        run_id="RUN-STRICT-01",
+        odb_sha256="ODB-SHA-1",
+        input_hash="",
+        rendered_figures=[{"filename": "a.png", "image_sha256": "sha_a"}],
+    )
+    ok, reason = verify_render_execution_evidence(
+        evidence=ev_no_hash,
+        expected_run_id="RUN-STRICT-01",
+        expected_odb_sha256="ODB-SHA-1",
+        expected_input_hash="INPUT-REQUIRED-01",
+    )
+    assert not ok
+    assert "Evidence lacks required input_hash" in reason
+
+    ev_mismatch = create_render_execution_evidence(
+        session_nonce="nonce123456789012345678901234567",
+        run_id="RUN-STRICT-01",
+        odb_sha256="ODB-SHA-1",
+        input_hash="INPUT-A",
+        rendered_figures=[{"filename": "a.png", "image_sha256": "sha_a"}],
+    )
+    ok_m, reason_m = verify_render_execution_evidence(
+        evidence=ev_mismatch,
+        expected_run_id="RUN-STRICT-01",
+        expected_odb_sha256="ODB-SHA-1",
+        expected_input_hash="INPUT-B",
+    )
+    assert not ok_m
+    assert "Evidence input_hash mismatch" in reason_m
+
+
+def test_verify_render_execution_evidence_duplicate_filenames_rejected():
+    """Verify duplicate filenames in rendered_figures are rejected."""
+    from abaqus_ai_agent.execution.odb_rendering import (
+        create_render_execution_evidence,
+        verify_render_execution_evidence,
+    )
+
+    ev_dup = create_render_execution_evidence(
+        session_nonce="nonce123456789012345678901234567",
+        run_id="RUN-DUP-01",
+        odb_sha256="ODB-SHA-1",
+        input_hash="INP-1",
+        rendered_figures=[
+            {"filename": "dup.png", "image_sha256": "sha_1"},
+            {"filename": "dup.png", "image_sha256": "sha_2"},
+        ],
+    )
+    ok, reason = verify_render_execution_evidence(
+        evidence=ev_dup,
+        expected_run_id="RUN-DUP-01",
+        expected_odb_sha256="ODB-SHA-1",
+        expected_input_hash="INP-1",
+    )
+    assert not ok
+    assert "duplicate filenames" in reason
+
+
+def test_admit_figure_and_pipeline_delivery_fails_closed_on_unregistered_or_duplicate_figure(tmp_path):
+    """Verify admit_figure_for_reuse and DeterministicReportPipeline reject unregistered or duplicate figures."""
+    import hashlib
+    from abaqus_ai_agent.contracts.report import ReportFigure
+    from abaqus_ai_agent.execution.odb_rendering import (
+        MINIMAL_VALID_PNG_BYTES,
+        compute_viewer_session_token,
+        create_render_execution_evidence,
+    )
+    from abaqus_ai_agent.reporting import AdaptiveReportBuilder, AnalysisObjective
+    from abaqus_ai_agent.reporting.figure_selector import admit_figure_for_reuse
+    from abaqus_ai_agent.reporting.pipeline import DeterministicReportPipeline
+    from abaqus_ai_agent.reporting.visualization_spec import VisualizationSpec
+
+    nonce = "0123456789abcdef0123456789abcdef"
+    run_id = "RUN-FAIL-CLOSED-01"
+    inp_hash = "INP-FC-1"
+
+    mock_odb = tmp_path / "mock.odb"
+    mock_odb.write_bytes(b"\x7fSIMULIA_ODB_BINARY_HEADER" + b"\x00" * 1024)
+    odb_sha = hashlib.sha256(mock_odb.read_bytes()).hexdigest()
+
+    img_path = tmp_path / "test_fig.png"
+    img_path.write_bytes(MINIMAL_VALID_PNG_BYTES)
+    img_sha = hashlib.sha256(MINIMAL_VALID_PNG_BYTES).hexdigest()
+
+    token = compute_viewer_session_token(
+        session_nonce=nonce,
+        run_id=run_id,
+        odb_sha256=odb_sha,
+        target_filename=img_path.name,
+        image_sha256=img_sha,
+    )
+
+    # 1. Unregistered figure in manifest
+    ev_unregistered = create_render_execution_evidence(
+        session_nonce=nonce,
+        run_id=run_id,
+        odb_sha256=odb_sha,
+        input_hash=inp_hash,
+        rendered_figures=[{"filename": "other_file.png", "image_sha256": "other_sha"}],
+    )
+    fig_unreg = ReportFigure(
+        kind="stress_hotspot",
+        path=str(img_path.as_posix()),
+        caption="Unregistered figure",
+        source="S.mises",
+        metadata={
+            "field": "S",
+            "component": "mises",
+            "step": "Step-1",
+            "frame": -1,
+            "region": "WHOLE_MODEL",
+            "output_position": "INTEGRATION_POINT",
+            "run_id": run_id,
+            "input_hash": inp_hash,
+            "odb_hash": odb_sha,
+            "odb_sha256": odb_sha,
+            "sha256": img_sha,
+            "image_sha256": img_sha,
+            "viewer_rendered": True,
+            "session_nonce": nonce,
+            "viewer_session_token": token,
+            "render_execution_evidence": ev_unregistered.to_dict(),
+        },
+    )
+
+    ok, reason = admit_figure_for_reuse(
+        figure=fig_unreg,
+        current_run_id=run_id,
+        current_input_hash=inp_hash,
+        current_odb_hash=odb_sha,
+        target_field="S",
+        target_component="mises",
+    )
+    assert not ok
+    assert "is not registered in signed RenderExecutionEvidence manifest" in reason
+
+    # Pipeline delivery check
+    pipeline = DeterministicReportPipeline(
+        builder=AdaptiveReportBuilder(
+            physics_domain="structural",
+            objective=AnalysisObjective.STATIC_STRENGTH,
+        )
+    )
+    spec = VisualizationSpec(
+        artifact_id="FIG-S-01",
+        visualization_type="stress_hotspot",
+        field_name="S",
+        component="mises",
+        target_filename=img_path.name,
+    )
+
+    with pytest.raises(PermissionError, match="is not registered in signed RenderExecutionEvidence"):
+        pipeline.build_and_render(
+            output_dir=tmp_path / "out_unreg",
+            title="Unregistered Test",
+            case_id="case_unreg",
+            run_id=run_id,
+            input_hash=inp_hash,
+            odb_path=mock_odb,
+            model_info={},
+            results_info=(),
+            acceptance_info={"status": "PASS", "deliverable": True},
+            figures=[fig_unreg],
+        )
+
+    # 2. Duplicate figure entries in manifest
+    ev_duplicate_manifest = {
+        "session_nonce": nonce,
+        "run_id": run_id,
+        "odb_sha256": odb_sha,
+        "timestamp_utc": "2026-10-10T12:00:00Z",
+        "rendered_figures": [
+            {"filename": img_path.name, "image_sha256": img_sha},
+            {"filename": img_path.name, "image_sha256": img_sha},
+        ],
+        "exit_code": 0,
+        "viewer_duration_sec": 0.5,
+        "input_hash": inp_hash,
+        "viewer_script_sha256": "",
+        "session_signature": "mock_sig",
+    }
+    # Direct check against figure_selector and pipeline with duplicate entries in dict
+    fig_dup = ReportFigure(
+        kind="stress_hotspot",
+        path=str(img_path.as_posix()),
+        caption="Duplicate entry figure",
+        source="S.mises",
+        metadata={
+            "field": "S",
+            "component": "mises",
+            "step": "Step-1",
+            "frame": -1,
+            "region": "WHOLE_MODEL",
+            "output_position": "INTEGRATION_POINT",
+            "run_id": run_id,
+            "input_hash": inp_hash,
+            "odb_hash": odb_sha,
+            "odb_sha256": odb_sha,
+            "sha256": img_sha,
+            "image_sha256": img_sha,
+            "viewer_rendered": True,
+            "session_nonce": nonce,
+            "viewer_session_token": token,
+            "render_execution_evidence": ev_duplicate_manifest,
+        },
+    )
+
+    with pytest.raises(
+        PermissionError,
+        match=r"(Evidence rendered_figures contains duplicate filenames|has duplicate entries in signed RenderExecutionEvidence)",
+    ):
+        pipeline.build_and_render(
+            output_dir=tmp_path / "out_dup",
+            title="Duplicate Test",
+            case_id="case_dup",
+            run_id=run_id,
+            input_hash=inp_hash,
+            odb_path=mock_odb,
+            model_info={},
+            results_info=(),
+            acceptance_info={"status": "PASS", "deliverable": True},
+            figures=[fig_dup],
+        )

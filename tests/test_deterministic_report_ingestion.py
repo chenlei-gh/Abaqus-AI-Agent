@@ -159,6 +159,7 @@ def test_visualization_spec_and_deterministic_figure_binding(tmp_path: Path):
         session_nonce=t_nonce,
         run_id=test_run_id,
         odb_sha256=odb_sha256,
+        input_hash=test_input_hash,
         rendered_figures=[{"filename": img_file.name, "image_sha256": img_sha256}],
     )
     fig.metadata["output_position"] = "INTEGRATION_POINT"
@@ -309,6 +310,7 @@ def test_ab_qualification_full_llm_report_vs_deterministic_pipeline(tmp_path: Pa
         session_nonce=ab_nonce_1,
         run_id=ab_run_id,
         odb_sha256=odb_sha_ab,
+        input_hash=ab_input_hash,
         rendered_figures=[{"filename": f1_path.name, "image_sha256": f1_sha}],
     )
     fig1.metadata["output_position"] = "INTEGRATION_POINT"
@@ -340,6 +342,7 @@ def test_ab_qualification_full_llm_report_vs_deterministic_pipeline(tmp_path: Pa
         session_nonce=ab_nonce_2,
         run_id=ab_run_id,
         odb_sha256=odb_sha_ab,
+        input_hash=ab_input_hash,
         rendered_figures=[{"filename": f2_path.name, "image_sha256": f2_sha}],
     )
     fig2.metadata["output_position"] = "NODAL"

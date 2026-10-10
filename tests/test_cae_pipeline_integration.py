@@ -894,6 +894,7 @@ def test_negative_p0_b_missing_or_mismatched_provenance_rejected(tmp_path: Path)
         session_nonce=valid_nonce,
         run_id="RUN-CURR-01",
         odb_sha256="ODB-01",
+        input_hash="INP-01",
         rendered_figures=[{"filename": img_file.name, "image_sha256": valid_img_sha256}],
     )
     fig_valid = ReportFigure(
