@@ -13,6 +13,7 @@ import json
 import os
 import shutil
 import subprocess
+import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence
@@ -259,25 +260,27 @@ except Exception as exc:
     sys.exit(1)
 """
     try:
-        proc = subprocess.run(
-            [launcher, "python", "-c", probe_script],
-            capture_output=True,
-            text=True,
-            timeout=timeout,
-            shell=(os.name == "nt"),
-        )
-        for line in proc.stdout.splitlines():
-            if line.startswith("__ODB_VERIFIED__"):
-                data = json.loads(line[len("__ODB_VERIFIED__"):])
-                return {
-                    "verified": bool(data.get("valid", False)),
-                    "steps": data.get("steps", {}),
-                    "error": data.get("error"),
-                }
-        return {
-            "verified": False,
-            "error": f"Native probe output missing verification marker. stderr: {proc.stderr.strip()}",
-        }
+        with tempfile.TemporaryDirectory(prefix="abaqus_odb_probe_") as probe_scratch:
+            proc = subprocess.run(
+                [launcher, "python", "-c", probe_script],
+                cwd=probe_scratch,
+                capture_output=True,
+                text=True,
+                timeout=timeout,
+                shell=(os.name == "nt"),
+            )
+            for line in proc.stdout.splitlines():
+                if line.startswith("__ODB_VERIFIED__"):
+                    data = json.loads(line[len("__ODB_VERIFIED__"):])
+                    return {
+                        "verified": bool(data.get("valid", False)),
+                        "steps": data.get("steps", {}),
+                        "error": data.get("error"),
+                    }
+            return {
+                "verified": False,
+                "error": f"Native probe output missing verification marker. stderr: {proc.stderr.strip()}",
+            }
     except Exception as exc:
         return {"verified": False, "error": str(exc)}
 

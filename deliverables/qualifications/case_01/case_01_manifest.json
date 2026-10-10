@@ -1,0 +1,16 @@
+{
+  "case": "Case_01_3D_Cantilever_Static",
+  "status": "DELIVERABLE",
+  "deliverable": true,
+  "report": {
+    "path": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\deliverables\\qualifications\\case_01\\report.html",
+    "size_bytes": 68172,
+    "sha256": "2a44c3dcedae9fe60a1ee8497c5b531800aaa7fdbd994b466644f57276493a0d"
+  },
+  "figures_count": 2,
+  "key_metrics": {
+    "max_mises_mpa": 471.214,
+    "max_displacement_mm": 2.0686
+  },
+  "acceptance_status": "PASS"
+}

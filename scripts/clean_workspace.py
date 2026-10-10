@@ -158,7 +158,11 @@ def collect_candidates(root: Path, tracked: set[str]) -> tuple[list[Candidate], 
             if "test_assets" in p.parts:
                 continue
 
-            if p.is_dir() and p.name in CACHE_DIR_NAMES:
+            # Protect deliverables/ and qualifications completely
+            if "deliverables" in p.parts or "qualifications" in p.parts or "case_01_qualification" in p.parts:
+                continue
+
+            if p.is_dir() and (p.name in CACHE_DIR_NAMES or p.name == "MagicMock"):
                 cache_dirs.append(p)
                 continue
 
