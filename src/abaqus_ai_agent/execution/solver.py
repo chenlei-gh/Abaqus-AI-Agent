@@ -159,7 +159,36 @@ def _verify_odb_in_process(
                     "error": f"Required fields missing from step '{target_s}': {missing}",
                 }
 
-        return {"verified": True, "steps": step_info}
+        root_assy = getattr(odb, "rootAssembly", None)
+        total_elements = 0
+        total_nodes = 0
+        elem_types = {}
+        instance_details = {}
+        if root_assy is not None and hasattr(root_assy, "instances"):
+            for inst_name, inst in root_assy.instances.items():
+                n_elem = len(inst.elements) if hasattr(inst, "elements") else 0
+                n_node = len(inst.nodes) if hasattr(inst, "nodes") else 0
+                total_elements += n_elem
+                total_nodes += n_node
+                inst_types = {}
+                if hasattr(inst, "elements"):
+                    for elem in inst.elements:
+                        et = str(elem.type)
+                        elem_types[et] = elem_types.get(et, 0) + 1
+                        inst_types[et] = inst_types.get(et, 0) + 1
+                instance_details[str(inst_name)] = {
+                    "elements": n_elem,
+                    "nodes": n_node,
+                    "element_types": inst_types,
+                }
+        mesh_metrics = {
+            "total_elements": total_elements,
+            "total_nodes": total_nodes,
+            "element_types": elem_types,
+            "instances": instance_details,
+        }
+
+        return {"verified": True, "steps": step_info, "mesh_metrics": mesh_metrics}
     except Exception as exc:
         return {"verified": False, "error": str(exc)}
     finally:
@@ -253,8 +282,37 @@ try:
             odb.close()
             sys.exit(1)
 
+    root_assy = getattr(odb, 'rootAssembly', None)
+    total_elements = 0
+    total_nodes = 0
+    elem_types = {{}}
+    instance_details = {{}}
+    if root_assy is not None and hasattr(root_assy, 'instances'):
+        for inst_name, inst in root_assy.instances.items():
+            n_elem = len(inst.elements) if hasattr(inst, 'elements') else 0
+            n_node = len(inst.nodes) if hasattr(inst, 'nodes') else 0
+            total_elements += n_elem
+            total_nodes += n_node
+            inst_types = {{}}
+            if hasattr(inst, 'elements'):
+                for elem in inst.elements:
+                    et = str(elem.type)
+                    elem_types[et] = elem_types.get(et, 0) + 1
+                    inst_types[et] = inst_types.get(et, 0) + 1
+            instance_details[str(inst_name)] = {{
+                'elements': n_elem,
+                'nodes': n_node,
+                'element_types': inst_types,
+            }}
+    mesh_metrics = {{
+        'total_elements': total_elements,
+        'total_nodes': total_nodes,
+        'element_types': elem_types,
+        'instances': instance_details,
+    }}
+
     odb.close()
-    print("__ODB_VERIFIED__" + json.dumps({{'valid': True, 'steps': step_info}}))
+    print("__ODB_VERIFIED__" + json.dumps({{'valid': True, 'steps': step_info, 'mesh_metrics': mesh_metrics}}))
 except Exception as exc:
     print("__ODB_VERIFIED__" + json.dumps({{'valid': False, 'error': str(exc)}}))
     sys.exit(1)
@@ -275,6 +333,7 @@ except Exception as exc:
                     return {
                         "verified": bool(data.get("valid", False)),
                         "steps": data.get("steps", {}),
+                        "mesh_metrics": data.get("mesh_metrics", {}),
                         "error": data.get("error"),
                     }
             return {
@@ -428,3 +487,31 @@ def execute_abaqus_batch_job(
         diagnostics=diags,
         artifacts=artifacts,
     )
+
+
+def extract_authentic_odb_mesh_metrics(
+    path: Union[str, Path],
+    launcher_cmd: Optional[str] = None,
+    timeout: int = 60,
+) -> Dict[str, Any]:
+    """Extract authentic finite element discretization metrics directly from an ODB.
+
+    Returns:
+        Dict containing total_elements, total_nodes, element_types, instances breakdown.
+    Raises:
+        FileNotFoundError if ODB does not exist.
+        ValueError if ODB is corrupt or verification fails.
+    """
+    path = Path(path).resolve()
+    if not path.is_file():
+        raise FileNotFoundError(f"ODB file not found: {path}")
+    res = verify_authentic_odb_structure(path=path, launcher_cmd=launcher_cmd, timeout=timeout)
+    if not res.get("verified", False):
+        err = res.get("error", "Failed to verify ODB structure")
+        raise ValueError(f"Cannot extract authentic mesh metrics from ODB {path}: {err}")
+    return res.get("mesh_metrics", {
+        "total_elements": 0,
+        "total_nodes": 0,
+        "element_types": {},
+        "instances": {},
+    })

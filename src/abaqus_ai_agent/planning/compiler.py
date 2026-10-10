@@ -11,6 +11,7 @@ import math
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
 
+from ..contracts.mesh import LocalSeed, MeshSpecification
 from ..contracts.action import AbaqusAction
 from ..contracts.fatigue import IntentFatigueSpec
 from ..contracts.connector import (
@@ -103,6 +104,33 @@ class IntentMeshSpec:
     global_size: float = 2.5
     deviation_factor: float = 0.1
     element_library: str = "STANDARD"  # "STANDARD", "EXPLICIT"
+    local_seeds: Tuple[LocalSeed, ...] = ()
+
+    def __post_init__(self):
+        if self.global_size is None or float(self.global_size) <= 0:
+            raise ValueError(f"global_size must be positive, got {self.global_size!r}")
+        if self.deviation_factor is None or not (0.0 <= float(self.deviation_factor) <= 1.0):
+            raise ValueError(f"deviation_factor must be in [0, 1], got {self.deviation_factor!r}")
+        lib_str = str(self.element_library).upper()
+        if lib_str not in ("STANDARD", "EXPLICIT"):
+            raise ValueError(f"element_library must be STANDARD or EXPLICIT, got {self.element_library!r}")
+        if self.element_library != lib_str:
+            object.__setattr__(self, "element_library", lib_str)
+        if not isinstance(self.local_seeds, tuple):
+            norm_seeds = []
+            for s in self.local_seeds:
+                if isinstance(s, LocalSeed):
+                    norm_seeds.append(s)
+                elif isinstance(s, dict):
+                    norm_seeds.append(LocalSeed(
+                        region_expression=s["region_expression"],
+                        size=s.get("size"),
+                        number=s.get("number"),
+                        constraint=s.get("constraint"),
+                    ))
+                else:
+                    raise TypeError(f"Invalid local seed item: {s!r}")
+            object.__setattr__(self, "local_seeds", tuple(norm_seeds))
 
 
 @dataclass(frozen=True)
@@ -1155,6 +1183,30 @@ def compile_intent_to_actions(
             size=mesh.global_size,
             deviation_factor=mesh.deviation_factor,
         ))
+        if mesh.local_seeds:
+            for ls in mesh.local_seeds:
+                reg_expr = getattr(ls, "region_expression", None)
+                ls_size = getattr(ls, "size", None)
+                ls_num = getattr(ls, "number", None)
+                ls_c = getattr(ls, "constraint", None) or "FREE"
+                if ls_size is not None:
+                    actions.append(builders.local_seed_size(
+                        model=model_name,
+                        part=part_name,
+                        region_expression=reg_expr,
+                        size=ls_size,
+                        constraint=ls_c,
+                    ))
+                elif ls_num is not None:
+                    actions.append(builders.local_seed_number(
+                        model=model_name,
+                        part=part_name,
+                        region_expression=reg_expr,
+                        number=ls_num,
+                        constraint=ls_c,
+                    ))
+                else:
+                    raise ValueError(f"Local seed requires either size or number: {ls}")
         if mesh.element_type.startswith("C3D10") or mesh.element_type.startswith("C3D4"):
             mesh_elem_code = (
                 f"import mesh\nfrom abaqusConstants import *\n"
@@ -1494,16 +1546,65 @@ def compile_engineering_intent(
     if eff_mesh is None and intent.mesh_requirements:
         if isinstance(intent.mesh_requirements, IntentMeshSpec):
             eff_mesh = intent.mesh_requirements
+        elif isinstance(intent.mesh_requirements, MeshSpecification):
+            ms = intent.mesh_requirements
+            eff_elem_type = "C3D8R"
+            eff_lib = "STANDARD"
+            if ms.element_types:
+                et0 = ms.element_types[0]
+                eff_elem_type = et0.get("elem_code", et0.get("elemCode", "C3D8R"))
+                eff_lib = et0.get("elem_library", et0.get("elemLibrary", "STANDARD"))
+            eff_mesh = IntentMeshSpec(
+                element_type=eff_elem_type,
+                global_size=float(ms.global_size),
+                deviation_factor=float(ms.deviation_factor),
+                element_library=eff_lib,
+                local_seeds=ms.local_seeds,
+            )
         elif isinstance(intent.mesh_requirements, dict):
             m_req = intent.mesh_requirements
+            raw_local_seeds = m_req.get("local_seeds", ())
+            parsed_local_seeds = []
+            for item in raw_local_seeds:
+                if isinstance(item, LocalSeed):
+                    parsed_local_seeds.append(item)
+                elif isinstance(item, dict):
+                    parsed_local_seeds.append(LocalSeed(
+                        region_expression=item["region_expression"],
+                        size=item.get("size"),
+                        number=item.get("number"),
+                        constraint=item.get("constraint"),
+                    ))
+                else:
+                    raise TypeError(f"Invalid local seed item in dict: {item!r}")
+            raw_g_size = m_req.get("global_size", 2.5)
+            if raw_g_size is None or float(raw_g_size) <= 0:
+                raise ValueError(f"Explicit mesh requirement global_size must be positive, got {raw_g_size!r}")
             eff_mesh = IntentMeshSpec(
                 element_type=m_req.get("element_type", "C3D8R"),
-                global_size=float(m_req.get("global_size", 2.5)),
+                global_size=float(raw_g_size),
                 deviation_factor=float(m_req.get("deviation_factor", 0.1)),
                 element_library=m_req.get("element_library", "STANDARD"),
+                local_seeds=tuple(parsed_local_seeds),
             )
+        else:
+            raise TypeError(f"Unsupported mesh_requirements type: {type(intent.mesh_requirements)}")
     if eff_mesh is None:
         eff_mesh = IntentMeshSpec()
+
+    # Check unresolvable partition requirements in mesh metadata
+    geom_plan = intent.metadata.get("geometry_mesh_plan")
+    if geom_plan is not None:
+        unresolved_partitions = [
+            ref for ref in getattr(geom_plan, "refinements", ())
+            if getattr(ref, "requires_partition", False) or getattr(ref, "method", "") == "partition_then_seed"
+        ]
+        if unresolved_partitions:
+            targets = [r.target for r in unresolved_partitions]
+            raise ValueError(
+                f"Mesh refinement requires unexecuted geometric partitioning for targets: {targets}. "
+                "Fail-closed: cannot silently omit partition-dependent local mesh refinement."
+            )
 
     # 8. Multi-domain special contracts
     eff_grounded = grounded_regions or intent.metadata.get("grounded_regions")

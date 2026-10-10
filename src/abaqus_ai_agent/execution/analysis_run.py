@@ -778,6 +778,8 @@ class AnalysisRunner:
                 verification_map["engineering_checks"] = getattr(engineering_checks, "to_dict", lambda: str(engineering_checks))()
             if mesh_quality is not None:
                 verification_map["mesh_quality"] = getattr(mesh_quality, "to_dict", lambda: str(mesh_quality))()
+            if locals().get("odb_check") and isinstance(odb_check, dict) and odb_check.get("mesh_metrics"):
+                verification_map["mesh_metrics"] = odb_check["mesh_metrics"]
             if mesh_convergence is not None:
                 verification_map["mesh_convergence"] = getattr(mesh_convergence, "to_dict", lambda: str(mesh_convergence))()
             if fatigue is not None:

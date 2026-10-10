@@ -26,7 +26,10 @@ def section_assignment(model, part, section, region_expression):
     expr = _normalize_region_expr(region_expression)
     return _action("section_assignment", model, part=part, section=section, region_expression=expr)
 def mesh_controls(model, target, **params): return _action("mesh_controls", model, target, **params)
-def seed_part(model, part, size, deviation_factor=0.1, min_size_factor=0.1): return _action("seed_part", model, part=part, size=size, deviation_factor=deviation_factor, min_size_factor=min_size_factor)
+def seed_part(model, part, size, deviation_factor=0.1, min_size_factor=0.1):
+    if size is None or float(size) <= 0:
+        raise ValueError(f"seed size must be positive, got {size!r}")
+    return _action("seed_part", model, part=part, size=float(size), deviation_factor=deviation_factor, min_size_factor=min_size_factor)
 def generate_mesh(model, part): return _action("generate_mesh", model, part=part)
 def element_type(model, part, region_expression, elem_code="C3D8R", library="STANDARD"):
     expr = _normalize_region_expr(region_expression)
@@ -184,10 +187,25 @@ def tie(model, name, master_expression, slave_expression):
 
 def local_seed_size(model, part, region_expression, size, constraint="FREE"):
     expr = _normalize_region_expr(region_expression)
-    return _action("local_seed_size", model, expr, part=part, region_expression=expr, size=size, constraint=constraint)
+    if not expr:
+        raise ValueError("region_expression is required for local seed")
+    if size is None or float(size) <= 0:
+        raise ValueError(f"local seed size must be positive, got {size!r}")
+    c_str = str(constraint).upper() if constraint else "FREE"
+    if c_str not in ("FREE", "FIXED", "FINISH"):
+        raise ValueError(f"local seed constraint must be FREE, FIXED, or FINISH, got {constraint!r}")
+    return _action("local_seed_size", model, expr, part=part, region_expression=expr, size=float(size), constraint=c_str)
+
 def local_seed_number(model, part, region_expression, number, constraint="FREE"):
     expr = _normalize_region_expr(region_expression)
-    return _action("local_seed_number", model, expr, part=part, region_expression=expr, number=number, constraint=constraint)
+    if not expr:
+        raise ValueError("region_expression is required for local seed")
+    if number is None or int(number) < 1:
+        raise ValueError(f"local seed number must be at least 1, got {number!r}")
+    c_str = str(constraint).upper() if constraint else "FREE"
+    if c_str not in ("FREE", "FIXED", "FINISH"):
+        raise ValueError(f"local seed constraint must be FREE, FIXED, or FINISH, got {constraint!r}")
+    return _action("local_seed_number", model, expr, part=part, region_expression=expr, number=int(number), constraint=c_str)
 def inspect_geometry(model, part, min_edge_length=None, min_face_size=None): return _action("inspect_geometry", model, part=part, min_edge_length=min_edge_length, min_face_size=min_face_size)
 def ignore_entity(model, part, region_expression): return _action("ignore_entity", model, region_expression, part=part, region_expression=region_expression)
 def restore_entity(model, part, region_expression): return _action("restore_entity", model, region_expression, part=part, region_expression=region_expression)

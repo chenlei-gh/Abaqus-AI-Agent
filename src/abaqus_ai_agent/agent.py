@@ -747,6 +747,49 @@ class AbaqusAIAgent:
                 if final_mat_def is not None:
                     materials_payload.append(final_mat_def.to_dict())
 
+                # Build grounded mesh discretization and quality payload
+                actual_mesh_metrics = (getattr(run, "verification", {}) or {}).get("mesh_metrics") or {}
+                if not actual_mesh_metrics and getattr(run, "odb_path", None):
+                    try:
+                        from .execution.solver import extract_authentic_odb_mesh_metrics
+                        actual_mesh_metrics = extract_authentic_odb_mesh_metrics(
+                            run.odb_path,
+                            launcher_cmd=getattr(self.executor, "launcher", None),
+                        )
+                    except Exception:
+                        actual_mesh_metrics = {}
+
+                eff_mesh_spec = getattr(plan, "mesh", None) or effective_mesh
+                req_global_size = getattr(eff_mesh_spec, "global_size", 2.5) if eff_mesh_spec else 2.5
+                req_elem_type = getattr(eff_mesh_spec, "element_type", "C3D8R") if eff_mesh_spec else "C3D8R"
+                local_seeds_tuple = getattr(eff_mesh_spec, "local_seeds", ()) or ()
+
+                actual_total_elements = actual_mesh_metrics.get("total_elements")
+                actual_total_nodes = actual_mesh_metrics.get("total_nodes")
+                actual_elem_types = actual_mesh_metrics.get("element_types") or {}
+                elem_type_display = ", ".join(f"{k} ({v})" for k, v in actual_elem_types.items()) if actual_elem_types else req_elem_type
+
+                disc_data = {
+                    "seed_size": float(req_global_size),
+                    "total_elements": actual_total_elements if actual_total_elements is not None else "未统计",
+                    "total_nodes": actual_total_nodes if actual_total_nodes is not None else "未统计",
+                    "element_type": elem_type_display,
+                    "strategy": "局部种子约束 (Local Edge Refinement)" if local_seeds_tuple else "全局均匀布种 (Global Unconstrained)",
+                    "local_refinements": len(local_seeds_tuple),
+                }
+
+                mq_audit = (getattr(run, "verification", {}) or {}).get("mesh_quality") or {}
+                mesh_info_payload = {
+                    "discretization": disc_data,
+                    "quality_audit": mq_audit if isinstance(mq_audit, dict) and mq_audit else {
+                        "gate_status": "PASS" if getattr(run, "acceptance_passed", False) else "UNCHECKED",
+                    },
+                    "total_elements": actual_total_elements if actual_total_elements is not None else "未统计",
+                    "total_nodes": actual_total_nodes if actual_total_nodes is not None else "未统计",
+                    "element_type": elem_type_display,
+                    "seed_size": float(req_global_size),
+                }
+
                 deterministic_delivery_card, _, det_report_data = pipeline.build_and_render(
                     output_dir=Path(out_dir),
                     title=report_title,
@@ -758,12 +801,16 @@ class AbaqusAIAgent:
                         "standard_reference": final_mat_def.provenance if final_mat_def else "",
                         "max_mises_mpa": metric_dict.get("max_mises") or metric_dict.get("S_Mises"),
                         "max_displacement_mm": metric_dict.get("max_displacement") or metric_dict.get("U_magnitude"),
+                        "total_elements": actual_total_elements if actual_total_elements is not None else "未统计",
+                        "total_nodes": actual_total_nodes if actual_total_nodes is not None else "未统计",
+                        "element_type": elem_type_display,
                     },
                     results_info=[{"metric": k, "value": v} for k, v in metric_dict.items()],
                     acceptance_info=acceptance,
                     visualization_specs=figure_selection.specs,
                     figures=all_figures,
                     materials_info=materials_payload,
+                    mesh_info=mesh_info_payload,
                     require_deliverable=True,
                     odb_path=getattr(run, "odb_path", None),
                     input_hash=getattr(run.provenance, "input_hash", "") if getattr(run, "provenance", None) else "",

@@ -49,8 +49,19 @@ def plan_geometry_mesh(geometry, global_size, critical_regions=(), refinement_fa
     return GeometryMeshPlan(float(global_size), tuple(refinements), tuple(reviews), tuple(warnings), tuple(evidence))
 
 
-def local_seeds_from_geometry_plan(plan):
-    """Convert only directly seedable plan items into LocalSeed contracts."""
+def local_seeds_from_geometry_plan(plan, fail_on_unsupported: bool = False):
+    """Convert only directly seedable plan items into LocalSeed contracts.
+
+    If fail_on_unsupported is True, raises ValueError if any refinement in the plan
+    requires geometric partitioning or an unsupported method, preventing silent omission.
+    """
+    if fail_on_unsupported:
+        for request in plan.refinements:
+            if request.requires_partition or request.method != "local_seed":
+                raise ValueError(
+                    f"Refinement target '{request.target}' requires geometric partitioning "
+                    f"(method={request.method}) which cannot be executed as a direct local seed."
+                )
     return tuple(
         LocalSeed(
             region_expression=request.target,
@@ -62,11 +73,11 @@ def local_seeds_from_geometry_plan(plan):
     )
 
 
-def mesh_specification_from_geometry_plan(part, plan, **kwargs):
+def mesh_specification_from_geometry_plan(part, plan, fail_on_unsupported: bool = False, **kwargs):
     """Build MeshSpecification without silently executing blocked refinements."""
     return MeshSpecification(
         part=part,
         global_size=plan.global_size,
-        local_seeds=local_seeds_from_geometry_plan(plan),
+        local_seeds=local_seeds_from_geometry_plan(plan, fail_on_unsupported=fail_on_unsupported),
         **kwargs
     )
