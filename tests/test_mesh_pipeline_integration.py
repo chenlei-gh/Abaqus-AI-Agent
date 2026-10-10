@@ -575,3 +575,14 @@ def test_verify_authentic_odb_structure_uses_file_based_probe(tmp_path):
     assert cmd[0] == "mock_abaqus"
     assert cmd[1] == "python"
     assert cmd[2].endswith("_odb_probe.py")
+
+
+def test_qualification_cae_script_generation_unified_c3d20r():
+    """Verify qualify_real_mesh_refinement script generation specifies HEX SWEEP and C3D20R."""
+    from tools.qualify_real_mesh_refinement import generate_cae_script
+
+    script = generate_cae_script("Job_Test", "Model_Test", 10.0, 3.5)
+    assert "elemShape=HEX, technique=SWEEP" in script
+    assert "elemCode=C3D20R" in script
+    assert "C3D10" not in script
+    assert "p.seedEdgeBySize(edges=hole_edges, size=3.5" in script
