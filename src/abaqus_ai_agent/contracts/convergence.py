@@ -456,14 +456,25 @@ def evaluate_multi_level_mesh_convergence(
             )
 
     # P1-1: Strict classification of non-negative stress invariants vs signed stress quantities.
-    # Only mathematically non-negative equivalent stress invariants (e.g. von Mises, Tresca, octahedral shear) skip sign reversal checks.
-    # Broad 'octahedral' (without shear), normal stresses (S11, S22), shear stresses, pressure, and hydrostatic stress must check sign consistency.
+    # Deterministic whitelist of mathematically non-negative equivalent stress invariants.
+    # Strips common extraction prefixes (peak_, max_, min_, avg_).
+    # All other stress quantities (e.g. normal stresses S11/S22, shear stresses, pressure, hydrostatic,
+    # broad octahedral without shear, or composite names like dev_vm) are treated as signed and checked for sign reversal.
     k_stress = stress_key.lower().replace("-", "_").strip()
-    is_non_negative_invariant = (
-        any(v in k_stress for v in ("mises", "vm"))
-        or ("tresca" in k_stress)
-        or ("octahedral_shear" in k_stress or "oct_shear" in k_stress)
-    )
+    for prefix in ("peak_", "max_", "min_", "avg_"):
+        if k_stress.startswith(prefix):
+            k_stress = k_stress[len(prefix):]
+            break
+
+    NON_NEGATIVE_STRESS_INVARIANTS = {
+        "mises",
+        "von_mises",
+        "vm",
+        "tresca",
+        "octahedral_shear",
+        "oct_shear",
+    }
+    is_non_negative_invariant = k_stress in NON_NEGATIVE_STRESS_INVARIANTS
     if not is_non_negative_invariant:
         sign_reversal = any((stresses[i] * stresses[i + 1]) < 0.0 for i in range(len(stresses) - 1))
     else:

@@ -581,3 +581,42 @@ def test_multi_level_convergence_signed_pressure_and_hydrostatic_detect_sign_rev
     assert res_h.converged is False
     assert res_h.status == "SIGN_REVERSAL"
     assert any("reversed sign across refinement levels" in d for d in res_h.diagnostics)
+
+
+def test_multi_level_convergence_deterministic_stress_invariant_whitelist():
+    """Verify that only whitelisted equivalent stress invariants skip sign reversal.
+    
+    Non-whitelisted strings with partial substrings (e.g. dev_vm, some_mises_component, octahedral_normal)
+    must remain signed and trigger SIGN_REVERSAL on sign change.
+    """
+    # 1. Non-whitelisted field containing 'vm' substring but not canonical invariant: 'dev_vm'
+    probes_dev_vm = [
+        {"dev_vm": 100.0, "max_u1": 0.050, "rf_error_pct": 0.0, "seed_size": 10.0},
+        {"dev_vm": -110.0, "max_u1": 0.051, "rf_error_pct": 0.0, "seed_size": 5.0},
+        {"dev_vm": -112.0, "max_u1": 0.052, "rf_error_pct": 0.0, "seed_size": 2.5},
+    ]
+    res_dev = evaluate_multi_level_mesh_convergence(probes=probes_dev_vm, stress_key="dev_vm")
+    assert res_dev.converged is False
+    assert res_dev.status == "SIGN_REVERSAL"
+    assert any("reversed sign across refinement levels" in d for d in res_dev.diagnostics)
+
+    # 2. Non-whitelisted field containing 'mises' substring: 'some_mises_component'
+    probes_mises_comp = [
+        {"some_mises_component": 80.0, "max_u1": 0.050, "rf_error_pct": 0.0, "seed_size": 10.0},
+        {"some_mises_component": -90.0, "max_u1": 0.051, "rf_error_pct": 0.0, "seed_size": 5.0},
+        {"some_mises_component": -92.0, "max_u1": 0.052, "rf_error_pct": 0.0, "seed_size": 2.5},
+    ]
+    res_comp = evaluate_multi_level_mesh_convergence(probes=probes_mises_comp, stress_key="some_mises_component")
+    assert res_comp.converged is False
+    assert res_comp.status == "SIGN_REVERSAL"
+
+    # 3. Canonical invariant with prefix: 'peak_vm', 'max_tresca', 'oct_shear'
+    for inv_key in ("peak_vm", "max_tresca", "oct_shear", "von_mises"):
+        probes_inv = [
+            {inv_key: 100.0, "max_u1": 0.050, "rf_error_pct": 0.0, "seed_size": 10.0},
+            {inv_key: 105.0, "max_u1": 0.051, "rf_error_pct": 0.0, "seed_size": 5.0},
+            {inv_key: 106.0, "max_u1": 0.0515, "rf_error_pct": 0.0, "seed_size": 2.5},
+        ]
+        res_inv = evaluate_multi_level_mesh_convergence(probes=probes_inv, stress_key=inv_key, tolerance=0.05)
+        assert res_inv.converged is True
+        assert res_inv.status == "CONVERGED"

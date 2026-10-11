@@ -131,6 +131,13 @@ class MaterialCondition:
             raise ValueError(
                 f"Unrecognized temperature unit '{self.temperature_unit}'; supported units are 'C', 'K', 'F'."
             )
+        # Check absolute zero physical lower bound
+        if norm_unit in ("C", "CELSIUS") and self.temperature < -273.15:
+            raise ValueError(f"Temperature {self.temperature} °C is below absolute zero (-273.15 °C)")
+        elif norm_unit in ("K", "KELVIN") and self.temperature < 0.0:
+            raise ValueError(f"Temperature {self.temperature} K is below absolute zero (0.0 K)")
+        elif norm_unit in ("F", "FAHRENHEIT") and self.temperature < -459.67:
+            raise ValueError(f"Temperature {self.temperature} °F is below absolute zero (-459.67 °F)")
 
     @property
     def temperature_in_c(self) -> float:
@@ -198,8 +205,13 @@ class MaterialCondition:
             raise ValueError("temperature_unit must be explicitly provided as a non-empty string in data dictionary")
         if "temperature" not in data or data.get("temperature") is None:
             raise ValueError("temperature must be explicitly provided in data dictionary")
+        raw_temp = data["temperature"]
+        if isinstance(raw_temp, bool) or not isinstance(raw_temp, (int, float)):
+            raise ValueError(f"temperature must be a finite number, got {type(raw_temp).__name__} ({raw_temp})")
+        if not math.isfinite(raw_temp):
+            raise ValueError(f"temperature must be a finite number, got {raw_temp}")
         return cls(
-            temperature=float(data["temperature"]),
+            temperature=float(raw_temp),
             temperature_unit=unit,
             humidity_state=data.get("humidity_state", "dry"),
             relative_humidity=float(data["relative_humidity"]) if data.get("relative_humidity") is not None else None,

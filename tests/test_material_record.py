@@ -398,3 +398,54 @@ def test_material_condition_explicit_temperature_unit_required():
     # 3. from_dict missing temperature must raise ValueError
     with pytest.raises(ValueError, match="temperature must be explicitly provided in data dictionary"):
         MaterialCondition.from_dict({"temperature_unit": "C"})
+
+    # 4. from_dict rejects boolean temperature values (preventing True/False -> 1.0/0.0 coercion)
+    with pytest.raises(ValueError, match="temperature must be a finite number"):
+        MaterialCondition.from_dict({"temperature": True, "temperature_unit": "C"})
+
+    with pytest.raises(ValueError, match="temperature must be a finite number"):
+        MaterialCondition.from_dict({"temperature": False, "temperature_unit": "C"})
+
+    # 5. Direct constructor rejects boolean temperature
+    with pytest.raises(ValueError, match="temperature must be a finite number"):
+        MaterialCondition(temperature=True, temperature_unit="C")  # type: ignore
+
+    with pytest.raises(ValueError, match="temperature must be a finite number"):
+        MaterialCondition(temperature=False, temperature_unit="C")  # type: ignore
+
+
+def test_material_condition_absolute_zero_physical_bounds():
+    """Verify that temperatures below absolute zero are strictly rejected for C, K, and F."""
+    import pytest
+    from abaqus_ai_agent.contracts.material_record import MaterialCondition
+
+    # 1. Celsius: absolute zero is -273.15 °C
+    with pytest.raises(ValueError, match="below absolute zero"):
+        MaterialCondition(temperature=-273.16, temperature_unit="C")
+
+    with pytest.raises(ValueError, match="below absolute zero"):
+        MaterialCondition.from_dict({"temperature": -300.0, "temperature_unit": "C"})
+
+    # Exactly at absolute zero is allowed
+    cond_abs_c = MaterialCondition(temperature=-273.15, temperature_unit="C")
+    assert cond_abs_c.temperature == -273.15
+
+    # 2. Kelvin: absolute zero is 0.0 K
+    with pytest.raises(ValueError, match="below absolute zero"):
+        MaterialCondition(temperature=-0.01, temperature_unit="K")
+
+    with pytest.raises(ValueError, match="below absolute zero"):
+        MaterialCondition.from_dict({"temperature": -10.0, "temperature_unit": "K"})
+
+    cond_abs_k = MaterialCondition(temperature=0.0, temperature_unit="K")
+    assert cond_abs_k.temperature == 0.0
+
+    # 3. Fahrenheit: absolute zero is -459.67 °F
+    with pytest.raises(ValueError, match="below absolute zero"):
+        MaterialCondition(temperature=-459.68, temperature_unit="F")
+
+    with pytest.raises(ValueError, match="below absolute zero"):
+        MaterialCondition.from_dict({"temperature": -500.0, "temperature_unit": "F"})
+
+    cond_abs_f = MaterialCondition(temperature=-459.67, temperature_unit="F")
+    assert cond_abs_f.temperature == -459.67
