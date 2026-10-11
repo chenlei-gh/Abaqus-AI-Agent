@@ -202,3 +202,57 @@ def test_material_resolver_blocks_unphysical_elastic_properties():
     res_rho = MaterialResolver.resolve(rec_bad_rho)
     assert res_rho.status == "BLOCKED"
     assert any("Invalid density" in d for d in res_rho.diagnostics)
+
+
+def test_material_resolver_interpolates_rp02_and_clamps_softening():
+    cond = MaterialCondition(temperature=23.0)
+    source = MaterialSource(
+        provider="TDS",
+        source_type="datasheet_pdf",
+        locator="test://rp02-test",
+        retrieved_at="2026-10-10T00:00:00Z",
+    )
+    # Stress-strain curve with explicit post-yield softening:
+    # E = 10000 MPa
+    # Point 1: eps=0.001 (0.1%), sig=10.0 MPa -> eps_p = 0.001 - 10/10000 = 0.0
+    # Point 2: eps=0.0035 (0.35%), sig=25.0 MPa -> eps_p = 0.0035 - 25/10000 = 0.001
+    # Point 3: eps=0.006 (0.6%), sig=30.0 MPa -> eps_p = 0.006 - 30/10000 = 0.003
+    # 0.002 is halfway between Point 2 (eps_p=0.001, sig=25) and Point 3 (eps_p=0.003, sig=30)
+    # Expected Rp0.2 interpolated = 25 + 0.5 * (30 - 25) = 27.5 MPa
+    # Point 4: eps=0.010, sig=22.0 MPa -> softening!
+    rec = MaterialRecord(
+        identity=MaterialIdentity(polymer_family="Polymer", manufacturer="Test", grade="Softening-Grade"),
+        source=source,
+        properties=(MaterialProperty(name="youngs_modulus", value=10000.0, unit="MPa", quantity="stress", condition=cond),),
+        curves=(
+            MaterialCurve(
+                curve_type="stress_strain",
+                x_name="strain",
+                x_unit="%",
+                y_name="stress",
+                y_unit="MPa",
+                condition=cond,
+                points=(
+                    (0.0, 0.0),
+                    (0.1, 10.0),
+                    (0.35, 25.0),
+                    (0.6, 35.0),
+                    (1.0, 32.0),  # Softening from 35.0 to 32.0 (both above yield)
+                ),
+            ),
+        ),
+    )
+    res = MaterialResolver.resolve(rec, constitutive_intent="elastoplastic")
+    assert res.is_executable
+    mat = res.material_definition
+    assert mat is not None
+    assert mat.plastic is not None
+    # Check linear interpolation of Rp0.2 (interpolated between 25.0875 and 35.21 at eps_p=0.002)
+    assert mat.plastic.yield_stress == pytest.approx(32.05, abs=0.2)
+    # First point of hardening table must be (sy, 0.0)
+    assert mat.plastic.hardening_table[0][1] == 0.0
+    # Softening point must be clamped to prevent negative slope
+    stresses_in_table = [pt[0] for pt in mat.plastic.hardening_table]
+    for i in range(len(stresses_in_table) - 1):
+        assert stresses_in_table[i + 1] >= stresses_in_table[i]  # Monotonically non-decreasing
+    assert any("softening" in a.lower() for a in res.assumptions)

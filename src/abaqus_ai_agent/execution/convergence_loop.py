@@ -140,6 +140,18 @@ class AdaptiveMeshConvergenceController:
                     diagnostics=tuple(diagnostics),
                 )
 
+            if not isinstance(probe, dict) or not probe:
+                diagnostics.append(f"Level {level} returned invalid or empty probe dictionary.")
+                return AdaptiveConvergenceRun(
+                    status="ERROR",
+                    levels_executed=level - 1,
+                    final_mesh_spec=current_spec,
+                    convergence_result=conv_result,
+                    probes=tuple(probes),
+                    final_run=last_run,
+                    diagnostics=tuple(diagnostics),
+                )
+
             last_run = run_obj
             probes.append(probe)
 
@@ -151,6 +163,20 @@ class AdaptiveMeshConvergenceController:
                     theory_peak=self.theory_peak,
                     tolerance=self.tolerance,
                 )
+
+                if conv_result.status == "INCOMPLETE_EVIDENCE":
+                    diagnostics.append(
+                        f"Level {level} produced incomplete or invalid convergence evidence: {conv_result.diagnostics}"
+                    )
+                    return AdaptiveConvergenceRun(
+                        status="ERROR",
+                        levels_executed=level,
+                        final_mesh_spec=current_spec,
+                        convergence_result=conv_result,
+                        probes=tuple(probes),
+                        final_run=last_run,
+                        diagnostics=tuple(diagnostics),
+                    )
 
                 if conv_result.converged:
                     diagnostics.append(f"Convergence achieved at level {level} (final delta={conv_result.final_delta_pct}%).")

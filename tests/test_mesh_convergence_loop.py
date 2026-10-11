@@ -200,3 +200,53 @@ def test_multi_level_convergence_oscillatory_sequence_blocked():
     assert res_osc.converged is False
     assert res_osc.status == "OSCILLATORY_APPROACH"
     assert any("non-monotonic oscillation" in d for d in res_osc.diagnostics)
+
+
+def test_multi_level_convergence_rejects_negative_rf_error():
+    # Negative reaction force error must be rejected as invalid/incomplete evidence
+    probes_neg_rf = [
+        {"peak_s11": 30.0, "max_u1": 0.050, "rf_error_pct": 0.0},
+        {"peak_s11": 31.0, "max_u1": 0.051, "rf_error_pct": -0.05},  # Invalid negative error
+    ]
+    res = evaluate_multi_level_mesh_convergence(probes=probes_neg_rf)
+    assert res.converged is False
+    assert res.status == "INCOMPLETE_EVIDENCE"
+    assert any("must be non-negative" in d for d in res.diagnostics)
+
+
+def test_multi_level_convergence_compressive_stress_support():
+    # Signed compressive stress (negative S11): magnitude increases asymptotically towards limit
+    probes_comp = [
+        {"peak_s11": -100.0, "max_u1": -0.050, "rf_error_pct": 0.0},
+        {"peak_s11": -110.0, "max_u1": -0.052, "rf_error_pct": 0.0},
+        {"peak_s11": -112.0, "max_u1": -0.0525, "rf_error_pct": 0.0},
+    ]
+    res = evaluate_multi_level_mesh_convergence(probes=probes_comp, tolerance=0.05)
+    assert res.converged is True
+    assert res.status == "CONVERGED"
+    assert res.is_monotonic is True
+    assert res.diminishing_increment is True
+    assert res.final_delta_pct == pytest.approx(1.79, abs=0.1)
+
+
+def test_adaptive_mesh_convergence_controller_error_on_incomplete_evidence():
+    base_mesh = IntentMeshSpec(global_size=10.0)
+    controller = AdaptiveMeshConvergenceController(
+        base_mesh_spec=base_mesh,
+        tolerance=0.05,
+        max_levels=3,
+    )
+
+    def mock_broken_runner(level, mesh_spec):
+        # Level 2 returns probe missing reaction force balance metric
+        probe = {
+            "peak_s11": 25.0 + level,
+            "max_u1": 0.05,
+            # Missing rf_error_pct
+        }
+        return {"run": level}, probe
+
+    result = controller.execute_loop(mock_broken_runner)
+    assert result.is_converged is False
+    assert result.status == "ERROR"
+    assert any("incomplete or invalid convergence evidence" in d for d in result.diagnostics)

@@ -248,14 +248,25 @@ class MaterialResolver:
 
                 # If yield stress was not explicitly given, deduce from offset proof stress or first plastic point
                 if sy_val is None:
-                    # Look for point where eps_p >= 0.002 (0.2% offset proof stress)
-                    for sig_t, eps_t, ep in converted_pts:
+                    # Look for point where eps_p crosses 0.002 (0.2% offset proof stress ISO 6892 / ASTM E8)
+                    for k in range(len(converted_pts)):
+                        sig_t, eps_t, ep = converted_pts[k]
                         if ep >= 0.002:
-                            sy_val = round(sig_t, 3)
-                            assumptions.append(f"Deduced 0.2% offset yield stress {sy_val} from experimental curve.")
+                            if k > 0 and converted_pts[k - 1][2] < 0.002:
+                                sig_prev, _, ep_prev = converted_pts[k - 1]
+                                frac = (0.002 - ep_prev) / max(ep - ep_prev, 1e-12)
+                                interp_sy = sig_prev + frac * (sig_t - sig_prev)
+                                sy_val = round(interp_sy, 3)
+                                assumptions.append(
+                                    f"Deduced linearly interpolated 0.2% offset proof stress Rp0.2={sy_val} from experimental curve."
+                                )
+                            else:
+                                sy_val = round(sig_t, 3)
+                                assumptions.append(f"Deduced 0.2% offset yield stress {sy_val} from experimental curve.")
                             break
+
                     if sy_val is None and converted_pts:
-                        # Fallback to point with maximum non-zero curvature / inelasticity
+                        # Fallback to point with onset of inelasticity (eps_p > 0.0005)
                         inelastic_pts = [p for p in converted_pts if p[2] > 0.0005]
                         if inelastic_pts:
                             sy_val = round(inelastic_pts[0][0], 3)
@@ -266,18 +277,26 @@ class MaterialResolver:
                     hardening.append((round(sy_val, 3), 0.0))
                     last_ep = 0.0
                     last_sig = sy_val
+                    softening_encountered = False
 
                     for sig_t, eps_t, ep in converted_pts:
                         if ep > 0.0001 and sig_t >= sy_val:
                             # Enforce monotonic increase in plastic strain
                             if ep > (last_ep + 0.0005):
+                                if sig_t < last_sig:
+                                    softening_encountered = True
                                 # If stress softens without damage model, clamp to prevent solver non-convergence
                                 clamped_sig = max(sig_t, last_sig)
                                 hardening.append((round(clamped_sig, 3), round(ep, 5)))
                                 last_ep = ep
                                 last_sig = clamped_sig
 
-                    assumptions.append("Polymer/metal tensile curve calibrated into equivalent J2 hardening curve for Abaqus solver.")
+                    if softening_encountered:
+                        assumptions.append(
+                            "Post-yield stress softening in experimental curve was clamped to prevent ill-conditioned non-convergence in standard J2 plasticity."
+                        )
+                    else:
+                        assumptions.append("Polymer/metal tensile curve calibrated into equivalent J2 hardening curve for Abaqus solver.")
 
             if sy_val is not None:
                 if sy_val <= 0 or not math.isfinite(sy_val):

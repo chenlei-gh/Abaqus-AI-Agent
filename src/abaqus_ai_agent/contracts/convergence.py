@@ -215,9 +215,12 @@ def evaluate_multi_level_mesh_convergence(
         else:
             try:
                 s_val = float(raw_s)
-                if not isfinite(s_val) or s_val <= 0:
+                if not isfinite(s_val):
                     missing_evidence = True
-                    diagnostics.append(f"Level {idx + 1} invalid stress value {s_val}; must be finite positive.")
+                    diagnostics.append(f"Level {idx + 1} non-finite stress value {s_val}.")
+                elif abs(s_val) < 1e-12:
+                    missing_evidence = True
+                    diagnostics.append(f"Level {idx + 1} stress magnitude is zero; cannot evaluate relative sensitivity.")
                 else:
                     stresses.append(s_val)
             except (ValueError, TypeError):
@@ -253,9 +256,9 @@ def evaluate_multi_level_mesh_convergence(
         else:
             try:
                 rf_val = float(raw_rf)
-                if not isfinite(rf_val):
+                if not isfinite(rf_val) or rf_val < 0.0:
                     missing_evidence = True
-                    diagnostics.append(f"Level {idx + 1} non-finite reaction force error {rf_val}.")
+                    diagnostics.append(f"Level {idx + 1} invalid reaction force error {rf_val}; must be non-negative finite value.")
                 else:
                     rf_errors.append(rf_val)
             except (ValueError, TypeError):
@@ -285,19 +288,23 @@ def evaluate_multi_level_mesh_convergence(
         denom = max(abs(s_curr), 1e-12)
         stress_deltas.append(abs(s_curr - s_prev) / denom)
 
-    # Calculate displacement deltas
+    # Calculate displacement deltas (with small-displacement absolute threshold)
     u_deltas: List[float] = []
     for i in range(len(displacements) - 1):
         u_prev, u_curr = displacements[i], displacements[i + 1]
-        denom = max(abs(u_curr), 1e-12)
-        u_deltas.append(abs(u_curr - u_prev) / denom)
+        if abs(u_curr) < 1e-7 and abs(u_prev) < 1e-7:
+            u_deltas.append(0.0)
+        else:
+            denom = max(abs(u_curr), 1e-9)
+            u_deltas.append(abs(u_curr - u_prev) / denom)
 
     final_delta = stress_deltas[-1] if stress_deltas else 1.0
     final_u_delta = u_deltas[-1] if u_deltas else 1.0
 
-    # Monotonicity check: strictly increasing or strictly decreasing towards limit
-    is_strictly_inc = all(stresses[i] < stresses[i + 1] for i in range(len(stresses) - 1))
-    is_strictly_dec = all(stresses[i] > stresses[i + 1] for i in range(len(stresses) - 1))
+    # Monotonicity check on stress magnitudes: strictly increasing or strictly decreasing towards limit
+    abs_stresses = [abs(s) for s in stresses]
+    is_strictly_inc = all(abs_stresses[i] < abs_stresses[i + 1] for i in range(len(abs_stresses) - 1))
+    is_strictly_dec = all(abs_stresses[i] > abs_stresses[i + 1] for i in range(len(abs_stresses) - 1))
     is_monotonic = is_strictly_inc or is_strictly_dec
 
     # Diminishing increments check: delta_{k+1} < delta_k
@@ -308,7 +315,7 @@ def evaluate_multi_level_mesh_convergence(
         diminishing_increment = True
 
     u_converged = final_u_delta <= displacement_tolerance
-    rf_ok = all(rf_val <= rf_tolerance_pct for rf_val in rf_errors)
+    rf_ok = all(0.0 <= rf_val <= rf_tolerance_pct for rf_val in rf_errors)
 
     # Theory error if theory_peak is provided
     theory_errors: Optional[Tuple[float, ...]] = None
