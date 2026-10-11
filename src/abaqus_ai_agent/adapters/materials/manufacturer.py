@@ -97,7 +97,7 @@ class ManufacturerAdapter:
                     )
                 )
 
-        default_cond = MaterialCondition(temperature=23.0, humidity_state="dry")
+        default_cond = MaterialCondition(temperature=23.0, temperature_unit="C", humidity_state="dry")
         return MaterialRecord(
             identity=identity,
             source=source,

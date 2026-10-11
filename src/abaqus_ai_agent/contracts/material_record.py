@@ -104,7 +104,7 @@ class MaterialSource:
 class MaterialCondition:
     """Testing or operating environmental state."""
     temperature: float                       # in declared unit (e.g. 23.0)
-    temperature_unit: str = "C"              # "C", "K", or "F"
+    temperature_unit: str                    # "C", "K", or "F" (strictly required, no default)
     humidity_state: str = "dry"              # "dry", "conditioned", "saturated", "ambient"
     relative_humidity: Optional[float] = None  # in %, e.g. 50.0
     test_standard: Optional[str] = None      # e.g. "ISO 527-1/-2", "ISO 178", "ISO 1183"
@@ -191,9 +191,15 @@ class MaterialCondition:
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "MaterialCondition":
-        unit = data.get("temperature_unit") if "temperature_unit" in data else "C"
+        if "temperature_unit" not in data or data.get("temperature_unit") is None:
+            raise ValueError("temperature_unit must be explicitly provided in data dictionary")
+        unit = data["temperature_unit"]
+        if not isinstance(unit, str) or not unit.strip():
+            raise ValueError("temperature_unit must be explicitly provided as a non-empty string in data dictionary")
+        if "temperature" not in data or data.get("temperature") is None:
+            raise ValueError("temperature must be explicitly provided in data dictionary")
         return cls(
-            temperature=float(data.get("temperature", 23.0)),
+            temperature=float(data["temperature"]),
             temperature_unit=unit,
             humidity_state=data.get("humidity_state", "dry"),
             relative_humidity=float(data["relative_humidity"]) if data.get("relative_humidity") is not None else None,
@@ -287,7 +293,7 @@ class MaterialRecord:
     source: MaterialSource
     properties: Tuple[MaterialProperty, ...] = ()
     curves: Tuple[MaterialCurve, ...] = ()
-    default_condition: MaterialCondition = field(default_factory=lambda: MaterialCondition(temperature=23.0, humidity_state="dry"))
+    default_condition: MaterialCondition = field(default_factory=lambda: MaterialCondition(temperature=23.0, temperature_unit="C", humidity_state="dry"))
     metadata: Dict[str, Any] = field(default_factory=dict)
 
     def get_property(self, name: str, condition: Optional[MaterialCondition] = None) -> Optional[MaterialProperty]:
@@ -339,6 +345,6 @@ class MaterialRecord:
             source=MaterialSource.from_dict(data["source"]),
             properties=tuple(MaterialProperty.from_dict(p) for p in data.get("properties", [])),
             curves=tuple(MaterialCurve.from_dict(c) for c in data.get("curves", [])),
-            default_condition=MaterialCondition.from_dict(data.get("default_condition", {})),
+            default_condition=MaterialCondition.from_dict(data["default_condition"]) if data.get("default_condition") else MaterialCondition(temperature=23.0, temperature_unit="C", humidity_state="dry"),
             metadata=dict(data.get("metadata", {})),
         )

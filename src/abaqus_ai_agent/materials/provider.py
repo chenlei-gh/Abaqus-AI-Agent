@@ -201,7 +201,7 @@ class MaterialProvider:
 
     def _load_builtins(self) -> None:
         """Register authentic engineering materials with ISO/ASTM physical curves."""
-        cond_23c = MaterialCondition(temperature=23.0, humidity_state="dry", test_standard="ISO 527")
+        cond_23c = MaterialCondition(temperature=23.0, temperature_unit="C", humidity_state="dry", test_standard="ISO 527")
 
         # 1. BASF Ultramid A3WG6 (PA66-GF30)
         ultramid = MaterialRecord(
@@ -258,7 +258,7 @@ class MaterialProvider:
         self.register_record(ultramid, aliases=("pa66_gf30", "pa66_30gf", "ultramid_a3wg6", "basf_pa66_gf30"))
 
         # 2. Covestro Makrolon 2800 (Polycarbonate)
-        cond_pc = MaterialCondition(temperature=23.0, humidity_state="dry", test_standard="ISO 527")
+        cond_pc = MaterialCondition(temperature=23.0, temperature_unit="C", humidity_state="dry", test_standard="ISO 527")
         makrolon = MaterialRecord(
             identity=MaterialIdentity(
                 polymer_family="PC",
@@ -305,7 +305,7 @@ class MaterialProvider:
         self.register_record(makrolon, aliases=("makrolon_2800", "pc_makrolon", "polycarbonate_makrolon"))
 
         # 3. Aluminum 6061-T6 (MMPDS / ASTM B221 with true plastic hardening curve)
-        cond_metal = MaterialCondition(temperature=20.0, humidity_state="dry", test_standard="ASTM E8M")
+        cond_metal = MaterialCondition(temperature=20.0, temperature_unit="C", humidity_state="dry", test_standard="ASTM E8M")
         al6061 = MaterialRecord(
             identity=MaterialIdentity(
                 polymer_family="Aluminum_Alloy",

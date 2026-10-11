@@ -329,9 +329,9 @@ def execute_l2_material_workflow(workdir: Path, live_solver: bool = True) -> Dic
     curves = (
         MaterialCurve(
             curve_type="stress_strain",
-            x_name="strain",
+            x_name="engineering_strain",
             x_unit="mm/mm",
-            y_name="stress",
+            y_name="engineering_stress",
             y_unit="MPa",
             points=curve_pts,
             condition=cond_23_dry,

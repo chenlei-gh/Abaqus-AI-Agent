@@ -429,8 +429,54 @@ def test_adaptive_convergence_controller_strict_validation():
     with pytest.raises(ValueError, match="min_seed_size must be a positive finite float"):
         AdaptiveMeshConvergenceController(base_mesh_spec=base_mesh, min_seed_size=0.0)
 
-    with pytest.raises(ValueError, match="theory_peak must be a finite float"):
-        AdaptiveMeshConvergenceController(base_mesh_spec=base_mesh, theory_peak=float("nan"))
+
+def test_multi_level_convergence_rejects_mixed_concrete_mesh_keys():
+    # P0-1: Splicing different concrete metric keys across levels is strictly prohibited
+    # 1. Mixing total_elements and total_nodes
+    probes_mixed_counts = [
+        {"peak_s11": 25.0, "max_u1": 0.05, "rf_error_pct": 0.0, "total_elements": 100},
+        {"peak_s11": 28.0, "max_u1": 0.051, "rf_error_pct": 0.0, "total_nodes": 200},  # Different key!
+        {"peak_s11": 30.0, "max_u1": 0.052, "rf_error_pct": 0.0, "total_elements": 300},
+    ]
+    res_count = evaluate_multi_level_mesh_convergence(probes=probes_mixed_counts)
+    assert res_count.converged is False
+    assert res_count.status == "INVALID_DATA"
+    assert any("Mixed or spliced concrete keys across levels" in d for d in res_count.diagnostics)
+
+    # 2. Mixing seed_size and mesh_size
+    probes_mixed_sizes = [
+        {"peak_s11": 25.0, "max_u1": 0.05, "rf_error_pct": 0.0, "seed_size": 10.0},
+        {"peak_s11": 28.0, "max_u1": 0.051, "rf_error_pct": 0.0, "mesh_size": 5.0},  # Different key!
+        {"peak_s11": 30.0, "max_u1": 0.052, "rf_error_pct": 0.0, "seed_size": 2.5},
+    ]
+    res_size = evaluate_multi_level_mesh_convergence(probes=probes_mixed_sizes)
+    assert res_size.converged is False
+    assert res_size.status == "INVALID_DATA"
+    assert any("Mixed or spliced concrete keys across levels" in d for d in res_size.diagnostics)
+
+
+def test_multi_level_convergence_stress_semantic_invariants():
+    # P1-1: Strict classification of non-negative stress invariants
+    # 1. Broad 'octahedral' without shear is treated as signed -> sign flip triggers SIGN_REVERSAL
+    probes_oct_flip = [
+        {"octahedral": 100.0, "max_u1": 0.05, "rf_error_pct": 0.0, "seed_size": 10.0},
+        {"octahedral": -110.0, "max_u1": 0.051, "rf_error_pct": 0.0, "seed_size": 5.0},
+        {"octahedral": -112.0, "max_u1": 0.0515, "rf_error_pct": 0.0, "seed_size": 2.5},
+    ]
+    res_oct = evaluate_multi_level_mesh_convergence(probes=probes_oct_flip, stress_key="octahedral")
+    assert res_oct.converged is False
+    assert res_oct.status == "SIGN_REVERSAL"
+    assert any("reversed sign" in d for d in res_oct.diagnostics)
+
+    # 2. 'octahedral_shear' is mathematically non-negative invariant -> skips sign reversal check
+    probes_oct_shear = [
+        {"octahedral_shear": 50.0, "max_u1": 0.05, "rf_error_pct": 0.0, "seed_size": 10.0},
+        {"octahedral_shear": 55.0, "max_u1": 0.051, "rf_error_pct": 0.0, "seed_size": 5.0},
+        {"octahedral_shear": 56.0, "max_u1": 0.0515, "rf_error_pct": 0.0, "seed_size": 2.5},
+    ]
+    res_shear = evaluate_multi_level_mesh_convergence(probes=probes_oct_shear, stress_key="octahedral_shear", tolerance=0.05)
+    assert res_shear.converged is True
+    assert res_shear.status == "CONVERGED"
 
 
 def test_multi_level_convergence_invariants_bypass_sign_flip():

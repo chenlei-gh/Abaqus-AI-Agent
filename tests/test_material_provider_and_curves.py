@@ -72,7 +72,7 @@ def test_material_provider_resolve_with_true_stress_strain():
 
 def test_material_resolver_deduces_yield_stress_from_curve():
     """When single-point yield_stress is omitted, deduce from offset/inelasticity."""
-    cond_rt = MaterialCondition(temperature=23.0, humidity_state="dry")
+    cond_rt = MaterialCondition(temperature=23.0, temperature_unit="C", humidity_state="dry")
     record = MaterialRecord(
         identity=MaterialIdentity(
             polymer_family="POM",
@@ -159,7 +159,7 @@ def test_compiler_consumes_material_record_hardening():
 
 
 def test_material_resolver_blocks_unphysical_elastic_properties():
-    cond = MaterialCondition(temperature=23.0)
+    cond = MaterialCondition(temperature=23.0, temperature_unit="C")
     source = MaterialSource(
         provider="TDS",
         source_type="datasheet_pdf",
@@ -205,7 +205,7 @@ def test_material_resolver_blocks_unphysical_elastic_properties():
 
 
 def test_material_resolver_interpolates_rp02_and_clamps_softening():
-    cond = MaterialCondition(temperature=23.0)
+    cond = MaterialCondition(temperature=23.0, temperature_unit="C")
     source = MaterialSource(
         provider="TDS",
         source_type="datasheet_pdf",
@@ -227,9 +227,9 @@ def test_material_resolver_interpolates_rp02_and_clamps_softening():
         curves=(
             MaterialCurve(
                 curve_type="stress_strain",
-                x_name="strain",
+                x_name="engineering_strain",
                 x_unit="%",
-                y_name="stress",
+                y_name="engineering_stress",
                 y_unit="MPa",
                 condition=cond,
                 points=(
@@ -259,7 +259,7 @@ def test_material_resolver_interpolates_rp02_and_clamps_softening():
 
 
 def test_material_resolver_rejects_unknown_stress_and_density_units():
-    cond = MaterialCondition(temperature=23.0)
+    cond = MaterialCondition(temperature=23.0, temperature_unit="C")
     source = MaterialSource(
         provider="TDS",
         source_type="datasheet_pdf",
@@ -293,7 +293,7 @@ def test_material_resolver_rejects_unknown_stress_and_density_units():
 
 
 def test_material_resolver_avoids_duplicate_conversion_for_true_strain_curves():
-    cond = MaterialCondition(temperature=23.0)
+    cond = MaterialCondition(temperature=23.0, temperature_unit="C")
     source = MaterialSource(
         provider="TDS",
         source_type="datasheet_pdf",
@@ -332,7 +332,7 @@ def test_material_resolver_avoids_duplicate_conversion_for_true_strain_curves():
 
 
 def test_material_resolver_polymer_family_aware_poisson_ratio():
-    cond = MaterialCondition(temperature=23.0)
+    cond = MaterialCondition(temperature=23.0, temperature_unit="C")
     source = MaterialSource(
         provider="TDS",
         source_type="datasheet_pdf",
@@ -389,7 +389,7 @@ def test_material_condition_normalizes_kelvin_temperature():
 
 
 def test_material_resolver_blocks_unphysical_thermal_properties():
-    cond = MaterialCondition(temperature=23.0)
+    cond = MaterialCondition(temperature=23.0, temperature_unit="C")
     source = MaterialSource(
         provider="TDS",
         source_type="datasheet_pdf",
@@ -412,7 +412,7 @@ def test_material_resolver_blocks_unphysical_thermal_properties():
 
 def test_material_resolver_deletes_unauthorized_thermal_conductivity_fallback():
     # P0-2: When expansion is provided but conductivity is omitted, conductivity must remain None (no 0.25 fallback)
-    cond = MaterialCondition(temperature=23.0)
+    cond = MaterialCondition(temperature=23.0, temperature_unit="C")
     source = MaterialSource(
         provider="TDS",
         source_type="datasheet_pdf",
@@ -438,7 +438,7 @@ def test_material_resolver_deletes_unauthorized_thermal_conductivity_fallback():
 
 def test_material_resolver_converts_thermal_conductivity_and_expansion_units():
     # P0-2: Support unit conversions for thermal properties
-    cond = MaterialCondition(temperature=23.0)
+    cond = MaterialCondition(temperature=23.0, temperature_unit="C")
     source = MaterialSource(
         provider="TDS",
         source_type="datasheet_pdf",
@@ -477,7 +477,7 @@ def test_material_resolver_converts_thermal_conductivity_and_expansion_units():
 
 def test_material_resolver_blocks_unrecognized_temperature_unit():
     # P0-1: Unknown target temperature unit -> BLOCKED
-    cond = MaterialCondition(temperature=23.0)
+    cond = MaterialCondition(temperature=23.0, temperature_unit="C")
     source = MaterialSource(
         provider="TDS",
         source_type="datasheet_pdf",
@@ -498,7 +498,7 @@ def test_material_resolver_blocks_unrecognized_temperature_unit():
 
 def test_material_resolver_blocks_dual_axis_mismatched_stress_strain():
     # P0-3: One axis says true, other says nominal -> BLOCKED
-    cond = MaterialCondition(temperature=23.0)
+    cond = MaterialCondition(temperature=23.0, temperature_unit="C")
     source = MaterialSource(
         provider="TDS",
         source_type="datasheet_pdf",
@@ -525,12 +525,12 @@ def test_material_resolver_blocks_dual_axis_mismatched_stress_strain():
     )
     res = MaterialResolver.resolve(rec, constitutive_intent="elastoplastic")
     assert res.status == "BLOCKED"
-    assert any("Ambiguous stress-strain curve axis definitions" in d for d in res.diagnostics)
+    assert any("Ambiguous or generic stress-strain curve type" in d for d in res.diagnostics)
 
 
 def test_material_resolver_blocks_non_monotonic_strain_curve():
     # P0-3: Strain points with backward step or duplicate -> BLOCKED
-    cond = MaterialCondition(temperature=23.0)
+    cond = MaterialCondition(temperature=23.0, temperature_unit="C")
     source = MaterialSource(
         provider="TDS",
         source_type="datasheet_pdf",
@@ -546,9 +546,9 @@ def test_material_resolver_blocks_non_monotonic_strain_curve():
         curves=(
             MaterialCurve(
                 curve_type="stress_strain",
-                x_name="strain",
+                x_name="engineering_strain",
                 x_unit="%",
-                y_name="stress",
+                y_name="engineering_stress",
                 y_unit="MPa",
                 condition=cond,
                 points=(
@@ -567,7 +567,7 @@ def test_material_resolver_blocks_non_monotonic_strain_curve():
 
 def test_material_resolver_blocks_composite_without_poisson_unassisted():
     # P0-4 & P1-6: Composite material family missing Poisson's ratio must fail-closed in both unassisted and assisted modes
-    cond = MaterialCondition(temperature=23.0)
+    cond = MaterialCondition(temperature=23.0, temperature_unit="C")
     source = MaterialSource(
         provider="TDS",
         source_type="datasheet_pdf",
@@ -593,7 +593,7 @@ def test_material_resolver_blocks_composite_without_poisson_unassisted():
 
 def test_material_resolver_grades_yield_stress_divergence():
     # P1-5: Datasheet yield stress differs by >25% from curve Rp0.2
-    cond = MaterialCondition(temperature=23.0)
+    cond = MaterialCondition(temperature=23.0, temperature_unit="C")
     source = MaterialSource(
         provider="TDS",
         source_type="datasheet_pdf",
@@ -641,11 +641,14 @@ def test_material_condition_strict_temperature_and_unit_validation():
     # P0-3: Strict finite temperature and non-empty valid temperature unit
     import math
 
-    with pytest.raises(ValueError, match="temperature must be a finite number"):
-        MaterialCondition(temperature=float("nan"))
+    with pytest.raises(TypeError):
+        MaterialCondition(temperature=23.0)  # temperature_unit strictly required
 
     with pytest.raises(ValueError, match="temperature must be a finite number"):
-        MaterialCondition(temperature=float("inf"))
+        MaterialCondition(temperature=float("nan"), temperature_unit="C")
+
+    with pytest.raises(ValueError, match="temperature must be a finite number"):
+        MaterialCondition(temperature=float("inf"), temperature_unit="C")
 
     with pytest.raises(ValueError, match="temperature_unit must be explicitly provided as a non-empty string"):
         MaterialCondition(temperature=23.0, temperature_unit=None)
@@ -661,12 +664,15 @@ def test_material_condition_strict_temperature_and_unit_validation():
 
     # from_dict validation
     with pytest.raises(ValueError, match="temperature must be a finite number"):
-        MaterialCondition.from_dict({"temperature": float("nan")})
+        MaterialCondition.from_dict({"temperature": float("nan"), "temperature_unit": "C"})
 
-    with pytest.raises(ValueError, match="temperature_unit must be explicitly provided as a non-empty string"):
+    with pytest.raises(ValueError, match="temperature_unit must be explicitly provided"):
+        MaterialCondition.from_dict({"temperature": 23.0})
+
+    with pytest.raises(ValueError, match="temperature_unit must be explicitly provided"):
         MaterialCondition.from_dict({"temperature": 23.0, "temperature_unit": None})
 
-    with pytest.raises(ValueError, match="temperature_unit must be explicitly provided as a non-empty string"):
+    with pytest.raises(ValueError, match="temperature_unit must be explicitly provided"):
         MaterialCondition.from_dict({"temperature": 23.0, "temperature_unit": ""})
 
     with pytest.raises(ValueError, match="Unrecognized temperature unit"):
@@ -675,7 +681,7 @@ def test_material_condition_strict_temperature_and_unit_validation():
 
 def test_material_resolver_blocks_vague_or_non_stress_strain_curve_axes():
     # P1-2: Curve axes missing stress/strain semantics or ambiguous
-    cond = MaterialCondition(temperature=23.0)
+    cond = MaterialCondition(temperature=23.0, temperature_unit="C")
     source = MaterialSource(
         provider="TDS",
         source_type="datasheet_pdf",
@@ -750,4 +756,119 @@ def test_material_resolver_blocks_vague_or_non_stress_strain_curve_axes():
     )
     res_c = MaterialResolver.resolve(rec_conflict, constitutive_intent="elastoplastic")
     assert res_c.status == "BLOCKED"
-    assert any("Conflicting stress-strain curve axis definitions" in d for d in res_c.diagnostics)
+    assert any("Ambiguous or generic stress-strain curve type" in d or "Conflicting" in d for d in res_c.diagnostics)
+
+    # 4. Generic strain + stress (neither true nor engineering explicitly declared) -> BLOCKED
+    rec_generic = MaterialRecord(
+        identity=MaterialIdentity(polymer_family="Steel", manufacturer="Generic", grade="Generic-Axes"),
+        source=source,
+        properties=(
+            MaterialProperty(name="youngs_modulus", value=200000.0, unit="MPa", quantity="stress", condition=cond),
+        ),
+        curves=(
+            MaterialCurve(
+                curve_type="stress_strain",
+                x_name="strain",
+                x_unit="1",
+                y_name="stress",
+                y_unit="MPa",
+                condition=cond,
+                points=((0.001, 100.0), (0.005, 250.0)),
+            ),
+        ),
+    )
+    res_generic = MaterialResolver.resolve(rec_generic, constitutive_intent="elastoplastic")
+    assert res_generic.status == "BLOCKED"
+    assert any("Ambiguous or generic stress-strain curve type" in d for d in res_generic.diagnostics)
+
+    # 5. Single axis declared engineering while other is generic -> BLOCKED
+    rec_single_eng = MaterialRecord(
+        identity=MaterialIdentity(polymer_family="Steel", manufacturer="Generic", grade="Single-Eng"),
+        source=source,
+        properties=(
+            MaterialProperty(name="youngs_modulus", value=200000.0, unit="MPa", quantity="stress", condition=cond),
+        ),
+        curves=(
+            MaterialCurve(
+                curve_type="stress_strain",
+                x_name="engineering_strain",
+                x_unit="1",
+                y_name="stress",  # Missing engineering/nominal designation!
+                y_unit="MPa",
+                condition=cond,
+                points=((0.001, 100.0), (0.005, 250.0)),
+            ),
+        ),
+    )
+    res_single_eng = MaterialResolver.resolve(rec_single_eng, constitutive_intent="elastoplastic")
+    assert res_single_eng.status == "BLOCKED"
+    assert any("Ambiguous or generic stress-strain curve type" in d for d in res_single_eng.diagnostics)
+
+    # 6. Mismatched: true strain with engineering stress -> BLOCKED
+    rec_mismatched = MaterialRecord(
+        identity=MaterialIdentity(polymer_family="Steel", manufacturer="Generic", grade="Mismatched-Axes"),
+        source=source,
+        properties=(
+            MaterialProperty(name="youngs_modulus", value=200000.0, unit="MPa", quantity="stress", condition=cond),
+        ),
+        curves=(
+            MaterialCurve(
+                curve_type="stress_strain",
+                x_name="true_strain",
+                x_unit="1",
+                y_name="engineering_stress",
+                y_unit="MPa",
+                condition=cond,
+                points=((0.001, 100.0), (0.005, 250.0)),
+            ),
+        ),
+    )
+    res_mismatched = MaterialResolver.resolve(rec_mismatched, constitutive_intent="elastoplastic")
+    assert res_mismatched.status == "BLOCKED"
+    assert any("Ambiguous or generic stress-strain curve type" in d for d in res_mismatched.diagnostics)
+
+    # 7. Both axes declared true -> Valid true stress-strain curve
+    rec_valid_true = MaterialRecord(
+        identity=MaterialIdentity(polymer_family="Steel", manufacturer="Generic", grade="Valid-True"),
+        source=source,
+        properties=(
+            MaterialProperty(name="youngs_modulus", value=200000.0, unit="MPa", quantity="stress", condition=cond),
+        ),
+        curves=(
+            MaterialCurve(
+                curve_type="stress_strain",
+                x_name="true_strain",
+                x_unit="1",
+                y_name="true_stress",
+                y_unit="MPa",
+                condition=cond,
+                points=((0.001, 100.0), (0.005, 250.0)),
+            ),
+        ),
+    )
+    res_valid_true = MaterialResolver.resolve(rec_valid_true, constitutive_intent="elastoplastic")
+    assert res_valid_true.is_executable
+    assert any("avoided duplicate logarithmic/engineering conversion" in a for a in res_valid_true.assumptions)
+
+    # 8. Both axes declared nominal/engineering -> Valid engineering stress-strain curve
+    rec_valid_nom = MaterialRecord(
+        identity=MaterialIdentity(polymer_family="Steel", manufacturer="Generic", grade="Valid-Nominal"),
+        source=source,
+        properties=(
+            MaterialProperty(name="youngs_modulus", value=200000.0, unit="MPa", quantity="stress", condition=cond),
+        ),
+        curves=(
+            MaterialCurve(
+                curve_type="stress_strain",
+                x_name="nominal_strain",
+                x_unit="1",
+                y_name="nominal_stress",
+                y_unit="MPa",
+                condition=cond,
+                points=((0.001, 100.0), (0.005, 250.0)),
+            ),
+        ),
+    )
+    res_valid_nom = MaterialResolver.resolve(rec_valid_nom, constitutive_intent="elastoplastic")
+    assert res_valid_nom.is_executable
+    assert not any("avoided duplicate logarithmic/engineering conversion" in a for a in res_valid_nom.assumptions)

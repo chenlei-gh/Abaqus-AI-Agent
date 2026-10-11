@@ -458,27 +458,18 @@ class MaterialResolver:
                 x_has_eng = any(w in x_name_lower for w in ("eng", "nominal"))
                 y_has_eng = any(w in y_name_lower for w in ("eng", "nominal"))
 
-                if x_has_true and y_has_true:
-                    if x_has_eng or y_has_eng:
-                        return MaterialResolutionResult(
-                            status="BLOCKED",
-                            material_definition=None,
-                            diagnostics=(
-                                f"Conflicting stress-strain curve axis definitions: x_name='{curve_ss.x_name}' "
-                                f"or y_name='{curve_ss.y_name}' contains conflicting true and engineering designations.",
-                            ),
-                            evidence_source=record.source.locator,
-                        )
+                if x_has_true and y_has_true and not (x_has_eng or y_has_eng):
                     is_already_true = True
-                elif (not x_has_true) and (not y_has_true):
+                elif x_has_eng and y_has_eng and not (x_has_true or y_has_true):
                     is_already_true = False
                 else:
                     return MaterialResolutionResult(
                         status="BLOCKED",
                         material_definition=None,
                         diagnostics=(
-                            f"Ambiguous stress-strain curve axis definitions: x_name='{curve_ss.x_name}' "
-                            f"and y_name='{curve_ss.y_name}' have mismatched true vs engineering designations.",
+                            f"Ambiguous or generic stress-strain curve type: both axes must explicitly declare "
+                            "either 'true' or 'engineering'/'nominal' designations; generic 'strain'/'stress' "
+                            f"or mismatched/conflicting axes (x_name='{curve_ss.x_name}', y_name='{curve_ss.y_name}') are strictly prohibited.",
                         ),
                         evidence_source=record.source.locator,
                     )

@@ -31,7 +31,7 @@ def test_material_record_lifecycle_and_serialization():
         retrieved_at="2026-10-03T00:00:00Z",
         source_version="5.2",
     )
-    cond_rt = MaterialCondition(temperature=23.0, humidity_state="dry", test_standard="ISO 527")
+    cond_rt = MaterialCondition(temperature=23.0, temperature_unit="C", humidity_state="dry", test_standard="ISO 527")
     prop_e = MaterialProperty(name="youngs_modulus", value=8500.0, unit="MPa", quantity="stress", condition=cond_rt)
     prop_sy = MaterialProperty(name="yield_stress", value=175.0, unit="MPa", quantity="stress", condition=cond_rt)
     prop_rho = MaterialProperty(name="density", value=1.36, unit="g/cm3", quantity="density", condition=cond_rt)
@@ -287,6 +287,7 @@ def test_material_resolver_unsupported_creep_fails_closed():
 def test_material_condition_matches_multi_dimensional():
     base = MaterialCondition(
         temperature=23.0,
+        temperature_unit="C",
         humidity_state="dry",
         strain_rate=0.001,
         frequency=1.0,
@@ -295,6 +296,7 @@ def test_material_condition_matches_multi_dimensional():
     # Target with matching parameters
     target_match = MaterialCondition(
         temperature=23.2,
+        temperature_unit="C",
         humidity_state="dry",
         strain_rate=0.0011,
         frequency=1.05,
@@ -303,15 +305,15 @@ def test_material_condition_matches_multi_dimensional():
     assert base.matches(target_match)
 
     # Temperature mismatch
-    target_temp_mismatch = MaterialCondition(temperature=28.0, humidity_state="dry")
+    target_temp_mismatch = MaterialCondition(temperature=28.0, temperature_unit="C", humidity_state="dry")
     assert not base.matches(target_temp_mismatch)
 
     # Humidity mismatch
-    target_hum_mismatch = MaterialCondition(temperature=23.0, humidity_state="conditioned")
+    target_hum_mismatch = MaterialCondition(temperature=23.0, temperature_unit="C", humidity_state="conditioned")
     assert not base.matches(target_hum_mismatch)
 
     # Strain rate mismatch
-    target_sr_mismatch = MaterialCondition(temperature=23.0, humidity_state="dry", strain_rate=0.1)
+    target_sr_mismatch = MaterialCondition(temperature=23.0, temperature_unit="C", humidity_state="dry", strain_rate=0.1)
     assert not base.matches(target_sr_mismatch)
 
 
@@ -368,13 +370,31 @@ def test_material_record_strict_unmatched_condition_fails_closed():
     })
 
     # Exact room temp match succeeds
-    matched = record.get_property("youngs_modulus", MaterialCondition(temperature=23.0, humidity_state="dry"))
+    matched = record.get_property("youngs_modulus", MaterialCondition(temperature=23.0, temperature_unit="C", humidity_state="dry"))
     assert matched is not None
     assert matched.value == 8500.0
 
     # Mismatched condition returns None (fail-closed), never silently returns candidates[0]!
-    unmatched_temp = record.get_property("youngs_modulus", MaterialCondition(temperature=80.0, humidity_state="dry"))
+    unmatched_temp = record.get_property("youngs_modulus", MaterialCondition(temperature=80.0, temperature_unit="C", humidity_state="dry"))
     assert unmatched_temp is None
 
-    unmatched_humid = record.get_property("youngs_modulus", MaterialCondition(temperature=23.0, humidity_state="conditioned"))
+    unmatched_humid = record.get_property("youngs_modulus", MaterialCondition(temperature=23.0, temperature_unit="C", humidity_state="conditioned"))
     assert unmatched_humid is None
+
+
+def test_material_condition_explicit_temperature_unit_required():
+    """Verify that omitting temperature_unit raises TypeError and from_dict rejects missing unit."""
+    import pytest
+    from abaqus_ai_agent.contracts.material_record import MaterialCondition
+
+    # 1. Missing temperature_unit parameter must raise TypeError
+    with pytest.raises(TypeError):
+        MaterialCondition(temperature=23.0)  # type: ignore
+
+    # 2. from_dict missing temperature_unit must raise ValueError
+    with pytest.raises(ValueError, match="temperature_unit must be explicitly provided in data dictionary"):
+        MaterialCondition.from_dict({"temperature": 23.0})
+
+    # 3. from_dict missing temperature must raise ValueError
+    with pytest.raises(ValueError, match="temperature must be explicitly provided in data dictionary"):
+        MaterialCondition.from_dict({"temperature_unit": "C"})
