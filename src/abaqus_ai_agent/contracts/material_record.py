@@ -116,11 +116,15 @@ class MaterialCondition:
     def temperature_in_c(self) -> float:
         """Normalized temperature in degrees Celsius."""
         u = (self.temperature_unit or "C").strip().upper()
-        if u == "K":
+        if u in ("C", "CELSIUS"):
+            return self.temperature
+        elif u in ("K", "KELVIN"):
             return self.temperature - 273.15
-        elif u == "F":
+        elif u in ("F", "FAHRENHEIT"):
             return (self.temperature - 32.0) * 5.0 / 9.0
-        return self.temperature
+        raise ValueError(
+            f"Unrecognized temperature unit '{self.temperature_unit}'; supported units are 'C', 'K', 'F'."
+        )
 
     def matches(self, other: "MaterialCondition", temp_tol: float = 0.5) -> bool:
         """Check if this condition satisfies the requested target condition."""

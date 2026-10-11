@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
 
@@ -44,10 +45,21 @@ class AdaptiveMeshConvergenceController:
         theory_peak: Optional[float] = None,
         min_seed_size: float = 0.05,
     ) -> None:
+        if not math.isfinite(tolerance) or tolerance <= 0.0:
+            raise ValueError(f"tolerance must be a positive finite float, got {tolerance}")
+        if not isinstance(max_levels, int) or max_levels < 2:
+            raise ValueError(f"max_levels must be an integer >= 2, got {max_levels}")
+        if not math.isfinite(refinement_ratio) or not (0.0 < refinement_ratio < 1.0):
+            raise ValueError(f"refinement_ratio must be a finite float strictly in (0.0, 1.0), got {refinement_ratio}")
+        if not math.isfinite(min_seed_size) or min_seed_size <= 0.0:
+            raise ValueError(f"min_seed_size must be a positive finite float, got {min_seed_size}")
+        if theory_peak is not None and not math.isfinite(theory_peak):
+            raise ValueError(f"theory_peak must be a finite float if provided, got {theory_peak}")
+
         self.base_mesh_spec = base_mesh_spec
         self.tolerance = tolerance
-        self.max_levels = max(2, max_levels)
-        self.refinement_ratio = max(0.1, min(0.9, refinement_ratio))
+        self.max_levels = max_levels
+        self.refinement_ratio = refinement_ratio
         self.refinement_target = refinement_target
         self.stress_key = stress_key
         self.displacement_key = displacement_key
@@ -154,6 +166,16 @@ class AdaptiveMeshConvergenceController:
                 )
 
             last_run = run_obj
+            # Ensure physical mesh metric is attached to probe if step_runner did not supply one
+            has_mesh_metric = any(
+                k in probe for k in ("seed_size", "mesh_size", "global_size", "total_elements", "total_nodes")
+            )
+            if not has_mesh_metric:
+                if current_spec.local_seeds and current_spec.local_seeds[0].size is not None:
+                    probe["seed_size"] = current_spec.local_seeds[0].size
+                elif current_spec.global_size is not None:
+                    probe["global_size"] = current_spec.global_size
+
             probes.append(probe)
 
             if level >= 2:

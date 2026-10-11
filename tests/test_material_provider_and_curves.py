@@ -407,4 +407,226 @@ def test_material_resolver_blocks_unphysical_thermal_properties():
     )
     res_tc = MaterialResolver.resolve(rec_bad_tc)
     assert res_tc.status == "BLOCKED"
-    assert any("Invalid thermal conductivity" in d for d in res_tc.diagnostics)
+    assert any("Thermal conductivity must be a positive" in d or "Invalid thermal conductivity" in d for d in res_tc.diagnostics)
+
+
+def test_material_resolver_deletes_unauthorized_thermal_conductivity_fallback():
+    # P0-2: When expansion is provided but conductivity is omitted, conductivity must remain None (no 0.25 fallback)
+    cond = MaterialCondition(temperature=23.0)
+    source = MaterialSource(
+        provider="TDS",
+        source_type="datasheet_pdf",
+        locator="test://no-tc-fallback",
+        retrieved_at="2026-10-10T00:00:00Z",
+    )
+    rec = MaterialRecord(
+        identity=MaterialIdentity(polymer_family="POM", manufacturer="Test", grade="POM-ExpansionOnly"),
+        source=source,
+        properties=(
+            MaterialProperty(name="youngs_modulus", value=3000.0, unit="MPa", quantity="stress", condition=cond),
+            MaterialProperty(name="expansion_coefficient", value=1.1e-4, unit="1/K", quantity="expansion_coefficient", condition=cond),
+        ),
+    )
+    res = MaterialResolver.resolve(rec)
+    assert res.is_executable
+    mat = res.material_definition
+    assert mat is not None
+    assert mat.thermal is not None
+    assert mat.thermal.conductivity is None  # Strict removal of 0.25 fallback
+    assert mat.thermal.expansion_coefficient == pytest.approx(1.1e-4)
+
+
+def test_material_resolver_converts_thermal_conductivity_and_expansion_units():
+    # P0-2: Support unit conversions for thermal properties
+    cond = MaterialCondition(temperature=23.0)
+    source = MaterialSource(
+        provider="TDS",
+        source_type="datasheet_pdf",
+        locator="test://thermal-units",
+        retrieved_at="2026-10-10T00:00:00Z",
+    )
+    # 1. Unknown thermal conductivity unit -> BLOCKED
+    rec_bad_unit = MaterialRecord(
+        identity=MaterialIdentity(polymer_family="Steel", manufacturer="Generic", grade="Bad-TC-Unit"),
+        source=source,
+        properties=(
+            MaterialProperty(name="youngs_modulus", value=200000.0, unit="MPa", quantity="stress", condition=cond),
+            MaterialProperty(name="thermal_conductivity", value=15.0, unit="widgets/second", quantity="thermal_conductivity", condition=cond),
+        ),
+    )
+    res_bu = MaterialResolver.resolve(rec_bad_unit)
+    assert res_bu.status == "BLOCKED"
+    assert any("Unrecognized or unsupported thermal conductivity unit" in d for d in res_bu.diagnostics)
+
+    # 2. Valid conversions: mW/(mm*K) and ppm/K
+    rec_valid = MaterialRecord(
+        identity=MaterialIdentity(polymer_family="Steel", manufacturer="Generic", grade="Good-Thermal"),
+        source=source,
+        properties=(
+            MaterialProperty(name="youngs_modulus", value=200000.0, unit="MPa", quantity="stress", condition=cond),
+            MaterialProperty(name="thermal_conductivity", value=45.0, unit="W/(m*K)", quantity="thermal_conductivity", condition=cond),
+            MaterialProperty(name="expansion_coefficient", value=12.0, unit="ppm/K", quantity="expansion_coefficient", condition=cond),
+        ),
+    )
+    res_val = MaterialResolver.resolve(rec_valid)
+    assert res_val.is_executable
+    mat = res_val.material_definition
+    assert mat.thermal.conductivity == pytest.approx(45.0)
+    assert mat.thermal.expansion_coefficient == pytest.approx(1.2e-5)
+
+
+def test_material_resolver_blocks_unrecognized_temperature_unit():
+    # P0-1: Unknown target temperature unit -> BLOCKED
+    cond = MaterialCondition(temperature=23.0)
+    source = MaterialSource(
+        provider="TDS",
+        source_type="datasheet_pdf",
+        locator="test://temp-unit",
+        retrieved_at="2026-10-10T00:00:00Z",
+    )
+    rec = MaterialRecord(
+        identity=MaterialIdentity(polymer_family="Steel", manufacturer="Generic", grade="S355"),
+        source=source,
+        properties=(
+            MaterialProperty(name="youngs_modulus", value=210000.0, unit="MPa", quantity="stress", condition=cond),
+        ),
+    )
+    res = MaterialResolver.resolve(rec, target_temperature=100.0, target_temperature_unit="RankineBogus")
+    assert res.status == "BLOCKED"
+    assert any("Invalid target temperature" in d for d in res.diagnostics)
+
+
+def test_material_resolver_blocks_dual_axis_mismatched_stress_strain():
+    # P0-3: One axis says true, other says nominal -> BLOCKED
+    cond = MaterialCondition(temperature=23.0)
+    source = MaterialSource(
+        provider="TDS",
+        source_type="datasheet_pdf",
+        locator="test://mismatched-axes",
+        retrieved_at="2026-10-10T00:00:00Z",
+    )
+    rec = MaterialRecord(
+        identity=MaterialIdentity(polymer_family="Steel", manufacturer="Generic", grade="Axis-Mismatch"),
+        source=source,
+        properties=(
+            MaterialProperty(name="youngs_modulus", value=200000.0, unit="MPa", quantity="stress", condition=cond),
+        ),
+        curves=(
+            MaterialCurve(
+                curve_type="stress_strain",
+                x_name="true_strain",
+                x_unit="1",
+                y_name="nominal_stress",  # Conflict!
+                y_unit="MPa",
+                condition=cond,
+                points=((0.001, 200.0), (0.005, 300.0)),
+            ),
+        ),
+    )
+    res = MaterialResolver.resolve(rec, constitutive_intent="elastoplastic")
+    assert res.status == "BLOCKED"
+    assert any("Ambiguous stress-strain curve axis definitions" in d for d in res.diagnostics)
+
+
+def test_material_resolver_blocks_non_monotonic_strain_curve():
+    # P0-3: Strain points with backward step or duplicate -> BLOCKED
+    cond = MaterialCondition(temperature=23.0)
+    source = MaterialSource(
+        provider="TDS",
+        source_type="datasheet_pdf",
+        locator="test://non-monotonic-strain",
+        retrieved_at="2026-10-10T00:00:00Z",
+    )
+    rec = MaterialRecord(
+        identity=MaterialIdentity(polymer_family="Steel", manufacturer="Generic", grade="Non-Monotonic"),
+        source=source,
+        properties=(
+            MaterialProperty(name="youngs_modulus", value=200000.0, unit="MPa", quantity="stress", condition=cond),
+        ),
+        curves=(
+            MaterialCurve(
+                curve_type="stress_strain",
+                x_name="strain",
+                x_unit="%",
+                y_name="stress",
+                y_unit="MPa",
+                condition=cond,
+                points=(
+                    (0.0, 0.0),
+                    (0.5, 100.0),
+                    (0.4, 120.0),  # Backward step in strain!
+                    (1.0, 200.0),
+                ),
+            ),
+        ),
+    )
+    res = MaterialResolver.resolve(rec, constitutive_intent="elastoplastic")
+    assert res.status == "BLOCKED"
+    assert any("Non-monotonic or duplicate strain point" in d for d in res.diagnostics)
+
+
+def test_material_resolver_blocks_composite_without_poisson_unassisted():
+    # P1-6: Composite material family missing Poisson's ratio must fail-closed in unassisted mode
+    cond = MaterialCondition(temperature=23.0)
+    source = MaterialSource(
+        provider="TDS",
+        source_type="datasheet_pdf",
+        locator="test://cfrp-composite",
+        retrieved_at="2026-10-10T00:00:00Z",
+    )
+    rec_cfrp = MaterialRecord(
+        identity=MaterialIdentity(polymer_family="CFRP_Carbon_Fiber_Composite", manufacturer="Toray", grade="T700"),
+        source=source,
+        properties=(
+            MaterialProperty(name="youngs_modulus", value=120000.0, unit="MPa", quantity="stress", condition=cond),
+        ),
+    )
+    res_cfrp = MaterialResolver.resolve(rec_cfrp, allow_assisted_assumptions=False)
+    assert res_cfrp.status == "BLOCKED"
+    assert any("composite material family" in d for d in res_cfrp.diagnostics)
+
+
+def test_material_resolver_grades_yield_stress_divergence():
+    # P1-5: Datasheet yield stress differs by >25% from curve Rp0.2
+    cond = MaterialCondition(temperature=23.0)
+    source = MaterialSource(
+        provider="TDS",
+        source_type="datasheet_pdf",
+        locator="test://yield-conflict",
+        retrieved_at="2026-10-10T00:00:00Z",
+    )
+    # E = 100,000 MPa, Curve Rp0.2 will be ~300 MPa
+    # But datasheet says yield_stress = 150 MPa (50% difference)
+    rec = MaterialRecord(
+        identity=MaterialIdentity(polymer_family="Steel", manufacturer="Generic", grade="Yield-Conflict"),
+        source=source,
+        properties=(
+            MaterialProperty(name="youngs_modulus", value=100000.0, unit="MPa", quantity="stress", condition=cond),
+            MaterialProperty(name="yield_stress", value=150.0, unit="MPa", quantity="stress", condition=cond),
+        ),
+        curves=(
+            MaterialCurve(
+                curve_type="stress_strain",
+                x_name="engineering_strain",
+                x_unit="1",
+                y_name="engineering_stress",
+                y_unit="MPa",
+                condition=cond,
+                points=(
+                    (0.0, 0.0),
+                    (0.001, 100.0),
+                    (0.005, 300.0),  # eps_p = 0.005 - 300/100000 = 0.002 -> curve Rp0.2 ~ 300 MPa
+                    (0.010, 350.0),
+                ),
+            ),
+        ),
+    )
+    # Unassisted mode must strictly block
+    res_unassisted = MaterialResolver.resolve(rec, constitutive_intent="elastoplastic", allow_assisted_assumptions=False)
+    assert res_unassisted.status == "BLOCKED"
+    assert any("exceeding 25% threshold" in d for d in res_unassisted.diagnostics)
+
+    # Assisted mode records diagnostic and flags uncertified delivery
+    res_assisted = MaterialResolver.resolve(rec, constitutive_intent="elastoplastic", allow_assisted_assumptions=True)
+    assert res_assisted.is_executable
+    assert any("uncertified for final delivery" in a for a in res_assisted.assumptions)

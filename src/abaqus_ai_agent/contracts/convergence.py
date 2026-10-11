@@ -178,11 +178,11 @@ def evaluate_multi_level_mesh_convergence(
         probes: Ordered sequence of extraction probe dicts from coarsest to finest.
         stress_key: Field key for stress measure (e.g. "peak_s11", "max_mises"). Strict match required.
         displacement_key: Field key for displacement measure (e.g. "max_u1", "max_displacement"). Strict match required.
-        theory_peak: Optional theoretical reference value for analytical error calculation.
+        theory_peak: Optional theoretical reference value for analytical error calculation. Must be finite if provided.
         tolerance: Final relative stress delta threshold for strict convergence (default 5.0%).
         displacement_tolerance: Final relative displacement delta threshold (default 1.0%).
         rf_tolerance_pct: Maximum allowed reaction force balance error percentage (default 0.01%).
-        abs_displacement_tolerance: Absolute displacement threshold for microscopic near-zero deformation (default 1e-6).
+        abs_displacement_tolerance: Absolute displacement threshold for microscopic near-zero deformation in solver length units (e.g. 1e-6 mm = 1 nm under MM_N_MPA).
         min_levels: Minimum number of distinct mesh refinement levels required for convergence certification (default 3).
     """
     for name, val in [
@@ -195,6 +195,8 @@ def evaluate_multi_level_mesh_convergence(
             raise ValueError(f"Convergence threshold '{name}' must be a non-negative finite float, got {val}")
     if min_levels < 2:
         raise ValueError(f"min_levels must be >= 2, got {min_levels}")
+    if theory_peak is not None and not isfinite(theory_peak):
+        raise ValueError(f"theory_peak must be a finite float if provided, got {theory_peak}")
 
     diagnostics: List[str] = []
     missing_evidence = False
@@ -202,6 +204,7 @@ def evaluate_multi_level_mesh_convergence(
     stresses: List[float] = []
     displacements: List[float] = []
     rf_errors: List[float] = []
+    mesh_metrics: List[Tuple[Optional[float], Optional[int]]] = []
 
     for idx, p in enumerate(probes):
         # 1. Strict stress evidence extraction (P0-1: strict key match, no quantity mixing fallback)
@@ -266,7 +269,34 @@ def evaluate_multi_level_mesh_convergence(
                 missing_evidence = True
                 diagnostics.append(f"Level {idx + 1} non-numeric reaction force error {raw_rf}.")
 
-    if missing_evidence or len(stresses) != len(probes) or len(displacements) != len(probes) or len(rf_errors) != len(probes):
+        # 4. Physical mesh refinement evidence extraction (P0-4: mandatory mesh scale or count metric)
+        raw_size = p.get("seed_size") or p.get("mesh_size") or p.get("global_size")
+        raw_count = p.get("total_elements") or p.get("total_nodes")
+        ext_size: Optional[float] = None
+        ext_count: Optional[int] = None
+        if raw_size is not None:
+            try:
+                s_val = float(raw_size)
+                if isfinite(s_val) and s_val > 0.0:
+                    ext_size = s_val
+            except (ValueError, TypeError):
+                pass
+        if raw_count is not None:
+            try:
+                c_val = int(raw_count)
+                if c_val > 0:
+                    ext_count = c_val
+            except (ValueError, TypeError):
+                pass
+
+        if ext_size is None and ext_count is None:
+            missing_evidence = True
+            diagnostics.append(
+                f"Level {idx + 1} missing physical mesh refinement evidence ('seed_size', 'mesh_size', 'global_size', 'total_elements', or 'total_nodes')."
+            )
+        mesh_metrics.append((ext_size, ext_count))
+
+    if missing_evidence or len(stresses) != len(probes) or len(displacements) != len(probes) or len(rf_errors) != len(probes) or len(mesh_metrics) != len(probes):
         return MultiLevelConvergenceResult(
             status="INCOMPLETE_EVIDENCE",
             converged=False,
@@ -302,11 +332,34 @@ def evaluate_multi_level_mesh_convergence(
             diagnostics=tuple(diagnostics),
         )
 
-    # Check for duplicate mesh sizes if sizes are recorded in probes
-    probe_sizes = [p.get("seed_size") or p.get("mesh_size") or p.get("global_size") for p in probes]
-    if all(s is not None for s in probe_sizes):
-        if len(set(probe_sizes)) != len(probe_sizes):
-            diagnostics.append("Duplicate mesh seed sizes detected across levels; mesh did not undergo distinct physical refinement.")
+    # P0-4: Strict physical mesh refinement sequence validation (sizes strictly decreasing or counts strictly increasing)
+    sizes = [m[0] for m in mesh_metrics]
+    counts = [m[1] for m in mesh_metrics]
+
+    if all(s is not None for s in sizes):
+        if not all(sizes[i] > sizes[i + 1] for i in range(len(sizes) - 1)):
+            diagnostics.append(
+                f"Mesh sizes across levels {sizes} do not exhibit strictly decreasing refinement sequence."
+            )
+            return MultiLevelConvergenceResult(
+                status="INVALID_DATA",
+                converged=False,
+                stress_levels=tuple(round(s, 4) for s in stresses),
+                deltas_pct=(),
+                final_delta_pct=100.0,
+                is_monotonic=False,
+                diminishing_increment=False,
+                displacement_levels=tuple(round(u, 5) for u in displacements),
+                displacement_deltas_pct=(),
+                displacement_converged=False,
+                reaction_force_equilibrium_ok=False,
+                diagnostics=tuple(diagnostics),
+            )
+    elif all(c is not None for c in counts):
+        if not all(counts[i] < counts[i + 1] for i in range(len(counts) - 1)):
+            diagnostics.append(
+                f"Mesh element/node counts across levels {counts} do not exhibit strictly increasing refinement sequence."
+            )
             return MultiLevelConvergenceResult(
                 status="INVALID_DATA",
                 converged=False,
@@ -322,8 +375,15 @@ def evaluate_multi_level_mesh_convergence(
                 diagnostics=tuple(diagnostics),
             )
 
-    # P0-3: Signed stress component sign consistency check across all levels
-    sign_reversal = any((stresses[i] * stresses[i + 1]) < 0.0 for i in range(len(stresses) - 1))
+    # P0-3 & P1-4: Signed stress component sign consistency check across all levels (invariants bypass sign flip check)
+    is_invariant = any(
+        inv in stress_key.lower()
+        for inv in ("mises", "tresca", "pressure", "invariant", "magnitude", "hydrostatic")
+    )
+    if not is_invariant:
+        sign_reversal = any((stresses[i] * stresses[i + 1]) < 0.0 for i in range(len(stresses) - 1))
+    else:
+        sign_reversal = False
 
     # Calculate stress deltas
     stress_deltas: List[float] = []
