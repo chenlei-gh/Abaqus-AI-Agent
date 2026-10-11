@@ -103,7 +103,7 @@ class MaterialSource:
 class MaterialCondition:
     """Testing or operating environmental state."""
     temperature: float                       # in declared unit (e.g. 23.0)
-    temperature_unit: str = "C"              # "C" or "K"
+    temperature_unit: str = "C"              # "C", "K", or "F"
     humidity_state: str = "dry"              # "dry", "conditioned", "saturated", "ambient"
     relative_humidity: Optional[float] = None  # in %, e.g. 50.0
     test_standard: Optional[str] = None      # e.g. "ISO 527-1/-2", "ISO 178", "ISO 1183"
@@ -112,9 +112,19 @@ class MaterialCondition:
     frequency: Optional[float] = None        # in Hz, e.g. for dynamic mechanical analysis (DMA)
     stress_level: Optional[float] = None     # in MPa, e.g. sustained stress for isochronous curves
 
+    @property
+    def temperature_in_c(self) -> float:
+        """Normalized temperature in degrees Celsius."""
+        u = (self.temperature_unit or "C").strip().upper()
+        if u == "K":
+            return self.temperature - 273.15
+        elif u == "F":
+            return (self.temperature - 32.0) * 5.0 / 9.0
+        return self.temperature
+
     def matches(self, other: "MaterialCondition", temp_tol: float = 0.5) -> bool:
         """Check if this condition satisfies the requested target condition."""
-        if abs(self.temperature - other.temperature) > temp_tol:
+        if abs(self.temperature_in_c - other.temperature_in_c) > temp_tol:
             return False
         if self.humidity_state.lower() != other.humidity_state.lower():
             return False

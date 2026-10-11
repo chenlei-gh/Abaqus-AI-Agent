@@ -168,19 +168,23 @@ def test_multi_level_convergence_fails_closed_on_missing_evidence():
 
 
 def test_multi_level_convergence_status_semantic_consistency():
-    # Stress delta is small (2.0% <= 5.0%), but displacement failed to converge
+    # 3 levels: Stress delta is small and increments diminish (L1: 28.0 -> L2: 30.0 -> L3: 30.6)
+    # delta 1 = 2.0 / 30.0 = 6.67%, delta 2 = 0.6 / 30.6 = 1.96% <= 5% (diminishing)
+    # But displacement failed to converge (u delta = 36.3% > 1.0%)
     probes_u_unconverged = [
-        {"peak_s11": 30.0, "max_u1": 0.050, "rf_error_pct": 0.0},
-        {"peak_s11": 30.6, "max_u1": 0.080, "rf_error_pct": 0.0},  # u delta = 37.5% > 1.0%
+        {"peak_s11": 28.0, "max_u1": 0.050, "rf_error_pct": 0.0},
+        {"peak_s11": 30.0, "max_u1": 0.051, "rf_error_pct": 0.0},
+        {"peak_s11": 30.6, "max_u1": 0.080, "rf_error_pct": 0.0},
     ]
     res_u = evaluate_multi_level_mesh_convergence(probes=probes_u_unconverged, tolerance=0.05)
     assert res_u.converged is False
     assert res_u.status == "DISPLACEMENT_UNCONVERGED"
 
-    # Stress delta is small, but reaction force equilibrium failed
+    # Stress delta is small and increments diminish, but reaction force equilibrium failed
     probes_rf_unconverged = [
-        {"peak_s11": 30.0, "max_u1": 0.050, "rf_error_pct": 0.0},
-        {"peak_s11": 30.6, "max_u1": 0.0501, "rf_error_pct": 0.05},  # rf error 0.05% > 0.01%
+        {"peak_s11": 28.0, "max_u1": 0.050, "rf_error_pct": 0.0},
+        {"peak_s11": 30.0, "max_u1": 0.0501, "rf_error_pct": 0.0},
+        {"peak_s11": 30.6, "max_u1": 0.0502, "rf_error_pct": 0.05},  # rf error 0.05% > 0.01%
     ]
     res_rf = evaluate_multi_level_mesh_convergence(probes=probes_rf_unconverged, tolerance=0.05)
     assert res_rf.converged is False
@@ -227,6 +231,109 @@ def test_multi_level_convergence_compressive_stress_support():
     assert res.is_monotonic is True
     assert res.diminishing_increment is True
     assert res.final_delta_pct == pytest.approx(1.79, abs=0.1)
+
+
+def test_multi_level_convergence_blocks_quantity_mixing():
+    # P0-1: Level 2 has max_mises instead of peak_s11 -> must fail closed with INCOMPLETE_EVIDENCE
+    probes_mixed_stress = [
+        {"peak_s11": 25.0, "max_u1": 0.05, "rf_error_pct": 0.0},
+        {"max_mises": 28.0, "max_u1": 0.051, "rf_error_pct": 0.0},
+        {"peak_s11": 30.0, "max_u1": 0.052, "rf_error_pct": 0.0},
+    ]
+    res_s = evaluate_multi_level_mesh_convergence(probes=probes_mixed_stress, stress_key="peak_s11")
+    assert res_s.converged is False
+    assert res_s.status == "INCOMPLETE_EVIDENCE"
+    assert any("fallback across different quantities is strictly prohibited" in d for d in res_s.diagnostics)
+
+    # Missing displacement key max_u1 in level 3
+    probes_mixed_u = [
+        {"peak_s11": 25.0, "max_u1": 0.05, "rf_error_pct": 0.0},
+        {"peak_s11": 28.0, "max_u1": 0.051, "rf_error_pct": 0.0},
+        {"peak_s11": 30.0, "max_displacement": 0.052, "rf_error_pct": 0.0},
+    ]
+    res_u = evaluate_multi_level_mesh_convergence(probes=probes_mixed_u, displacement_key="max_u1")
+    assert res_u.converged is False
+    assert res_u.status == "INCOMPLETE_EVIDENCE"
+    assert any("fallback across different quantities is strictly prohibited" in d for d in res_u.diagnostics)
+
+
+def test_multi_level_convergence_strictly_requires_minimum_three_levels():
+    # P0-2: Exactly 2 levels cannot claim CONVERGED under default min_levels=3
+    probes_two_levels = [
+        {"peak_s11": 30.0, "max_u1": 0.05, "rf_error_pct": 0.0},
+        {"peak_s11": 30.5, "max_u1": 0.0502, "rf_error_pct": 0.0},  # delta = 1.6% <= 5%
+    ]
+    res = evaluate_multi_level_mesh_convergence(probes=probes_two_levels, tolerance=0.05)
+    assert res.converged is False
+    assert res.status == "UNCONVERGED"
+    assert any("minimum 3 strictly required" in d for d in res.diagnostics)
+
+
+def test_multi_level_convergence_rejects_signed_stress_reversal():
+    # P0-3: Sign of S11 flips between positive and negative -> SIGN_REVERSAL
+    probes_sign_flip = [
+        {"peak_s11": 100.0, "max_u1": 0.05, "rf_error_pct": 0.0},
+        {"peak_s11": -110.0, "max_u1": 0.051, "rf_error_pct": 0.0},
+        {"peak_s11": -112.0, "max_u1": 0.0515, "rf_error_pct": 0.0},
+    ]
+    res = evaluate_multi_level_mesh_convergence(probes=probes_sign_flip, tolerance=0.05)
+    assert res.converged is False
+    assert res.status == "SIGN_REVERSAL"
+    assert any("reversed sign" in d for d in res.diagnostics)
+
+
+def test_multi_level_convergence_threshold_validation():
+    # P0-4: Parameter validity checks (NaN, Inf, negative)
+    probes = [
+        {"peak_s11": 30.0, "max_u1": 0.05, "rf_error_pct": 0.0},
+        {"peak_s11": 31.0, "max_u1": 0.051, "rf_error_pct": 0.0},
+        {"peak_s11": 31.5, "max_u1": 0.0515, "rf_error_pct": 0.0},
+    ]
+    with pytest.raises(ValueError, match="must be a non-negative finite float"):
+        evaluate_multi_level_mesh_convergence(probes, tolerance=-0.05)
+
+    with pytest.raises(ValueError, match="must be a non-negative finite float"):
+        evaluate_multi_level_mesh_convergence(probes, displacement_tolerance=float("nan"))
+
+    with pytest.raises(ValueError, match="must be a non-negative finite float"):
+        evaluate_multi_level_mesh_convergence(probes, rf_tolerance_pct=float("inf"))
+
+    with pytest.raises(ValueError, match="min_levels must be >= 2"):
+        evaluate_multi_level_mesh_convergence(probes, min_levels=1)
+
+
+def test_adaptive_convergence_controller_detects_mesh_stagnation():
+    # P1: Controller must detect stagnation when seed reaches min_seed_size
+    base_mesh = IntentMeshSpec(global_size=0.1)
+    controller = AdaptiveMeshConvergenceController(
+        base_mesh_spec=base_mesh,
+        tolerance=0.01,
+        max_levels=4,
+        refinement_ratio=0.5,
+        min_seed_size=0.1,  # Already at min_seed_size -> refinement cannot shrink further
+    )
+
+    def mock_step_runner(level, spec):
+        return {"run": level}, {"peak_s11": 20.0, "max_u1": 0.05, "rf_error_pct": 0.0}
+
+    res = controller.execute_loop(mock_step_runner)
+    assert res.is_converged is False
+    assert res.status == "REFINEMENT_STAGNATED"
+    assert any("hit min_seed_size" in d for d in res.diagnostics)
+
+
+def test_adaptive_convergence_controller_handles_corrupt_probe():
+    # P1: Controller aborts on corrupt non-dict probe
+    base_mesh = IntentMeshSpec(global_size=5.0)
+    controller = AdaptiveMeshConvergenceController(base_mesh_spec=base_mesh)
+
+    def mock_bad_runner(level, spec):
+        return {"run": level}, "NOT_A_DICT"  # Invalid return type
+
+    res = controller.execute_loop(mock_bad_runner)
+    assert res.is_converged is False
+    assert res.status == "ERROR"
+    assert any("invalid or empty probe dictionary" in d for d in res.diagnostics)
 
 
 def test_adaptive_mesh_convergence_controller_error_on_incomplete_evidence():

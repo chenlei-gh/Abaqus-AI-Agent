@@ -35,8 +35,8 @@ class MeshConvergencePolicy:
     require_quality_pass: bool = False
 
     def __post_init__(self):
-        if self.tolerance < 0:
-            raise ValueError("tolerance must be >= 0")
+        if not isfinite(self.tolerance) or self.tolerance < 0:
+            raise ValueError("tolerance must be a non-negative finite value")
         if self.minimum_points < 2:
             raise ValueError("minimum_points must be >= 2")
 
@@ -169,33 +169,32 @@ def evaluate_multi_level_mesh_convergence(
     tolerance: float = 0.05,
     displacement_tolerance: float = 0.01,
     rf_tolerance_pct: float = 0.01,
+    abs_displacement_tolerance: float = 1e-6,
+    min_levels: int = 3,
 ) -> MultiLevelConvergenceResult:
     """Assess mathematical and physics convergence across 3+ mesh refinement levels.
 
     Args:
         probes: Ordered sequence of extraction probe dicts from coarsest to finest.
-        stress_key: Field key for stress measure (e.g. "peak_s11", "max_mises").
-        displacement_key: Field key for displacement measure (e.g. "max_u1", "max_displacement").
+        stress_key: Field key for stress measure (e.g. "peak_s11", "max_mises"). Strict match required.
+        displacement_key: Field key for displacement measure (e.g. "max_u1", "max_displacement"). Strict match required.
         theory_peak: Optional theoretical reference value for analytical error calculation.
         tolerance: Final relative stress delta threshold for strict convergence (default 5.0%).
         displacement_tolerance: Final relative displacement delta threshold (default 1.0%).
         rf_tolerance_pct: Maximum allowed reaction force balance error percentage (default 0.01%).
+        abs_displacement_tolerance: Absolute displacement threshold for microscopic near-zero deformation (default 1e-6).
+        min_levels: Minimum number of distinct mesh refinement levels required for convergence certification (default 3).
     """
-    if len(probes) < 2:
-        return MultiLevelConvergenceResult(
-            status="UNCONVERGED",
-            converged=False,
-            stress_levels=(),
-            deltas_pct=(),
-            final_delta_pct=100.0,
-            is_monotonic=False,
-            diminishing_increment=False,
-            displacement_levels=(),
-            displacement_deltas_pct=(),
-            displacement_converged=False,
-            reaction_force_equilibrium_ok=False,
-            diagnostics=("Insufficient refinement levels (minimum 2 required, 3+ recommended).",),
-        )
+    for name, val in [
+        ("tolerance", tolerance),
+        ("displacement_tolerance", displacement_tolerance),
+        ("rf_tolerance_pct", rf_tolerance_pct),
+        ("abs_displacement_tolerance", abs_displacement_tolerance),
+    ]:
+        if not isfinite(val) or val < 0.0:
+            raise ValueError(f"Convergence threshold '{name}' must be a non-negative finite float, got {val}")
+    if min_levels < 2:
+        raise ValueError(f"min_levels must be >= 2, got {min_levels}")
 
     diagnostics: List[str] = []
     missing_evidence = False
@@ -205,13 +204,14 @@ def evaluate_multi_level_mesh_convergence(
     rf_errors: List[float] = []
 
     for idx, p in enumerate(probes):
-        # 1. Strict stress evidence extraction (no default zero fallback)
+        # 1. Strict stress evidence extraction (P0-1: strict key match, no quantity mixing fallback)
         raw_s = p.get(stress_key)
         if raw_s is None:
-            raw_s = p.get("max_stress", p.get("max_mises"))
-        if raw_s is None:
             missing_evidence = True
-            diagnostics.append(f"Level {idx + 1} missing required stress evidence key '{stress_key}'.")
+            diagnostics.append(
+                f"Level {idx + 1} missing required stress evidence key '{stress_key}'; "
+                "fallback across different quantities is strictly prohibited."
+            )
         else:
             try:
                 s_val = float(raw_s)
@@ -227,13 +227,14 @@ def evaluate_multi_level_mesh_convergence(
                 missing_evidence = True
                 diagnostics.append(f"Level {idx + 1} non-numeric stress value {raw_s}.")
 
-        # 2. Strict displacement evidence extraction (no default zero fallback)
+        # 2. Strict displacement evidence extraction (P0-1: strict key match, no fallback)
         raw_u = p.get(displacement_key)
         if raw_u is None:
-            raw_u = p.get("max_displacement")
-        if raw_u is None:
             missing_evidence = True
-            diagnostics.append(f"Level {idx + 1} missing required displacement evidence key '{displacement_key}'.")
+            diagnostics.append(
+                f"Level {idx + 1} missing required displacement evidence key '{displacement_key}'; "
+                "fallback across different quantities is strictly prohibited."
+            )
         else:
             try:
                 u_val = float(raw_u)
@@ -246,7 +247,7 @@ def evaluate_multi_level_mesh_convergence(
                 missing_evidence = True
                 diagnostics.append(f"Level {idx + 1} non-numeric displacement value {raw_u}.")
 
-        # 3. Strict reaction force equilibrium evidence extraction (no default zero fallback)
+        # 3. Strict reaction force equilibrium evidence extraction (no default zero fallback, non-negative)
         raw_rf = p.get("rf_error_pct")
         if raw_rf is None:
             raw_rf = p.get("rf_error")
@@ -281,6 +282,49 @@ def evaluate_multi_level_mesh_convergence(
             diagnostics=tuple(diagnostics),
         )
 
+    # P0-2: Require minimum levels for convergence certification
+    if len(probes) < min_levels:
+        diagnostics.append(
+            f"Insufficient refinement levels ({len(probes)} provided, minimum {min_levels} strictly required for asymptotic convergence certification)."
+        )
+        return MultiLevelConvergenceResult(
+            status="UNCONVERGED",
+            converged=False,
+            stress_levels=tuple(round(s, 4) for s in stresses),
+            deltas_pct=(),
+            final_delta_pct=100.0,
+            is_monotonic=False,
+            diminishing_increment=False,
+            displacement_levels=tuple(round(u, 5) for u in displacements),
+            displacement_deltas_pct=(),
+            displacement_converged=False,
+            reaction_force_equilibrium_ok=False,
+            diagnostics=tuple(diagnostics),
+        )
+
+    # Check for duplicate mesh sizes if sizes are recorded in probes
+    probe_sizes = [p.get("seed_size") or p.get("mesh_size") or p.get("global_size") for p in probes]
+    if all(s is not None for s in probe_sizes):
+        if len(set(probe_sizes)) != len(probe_sizes):
+            diagnostics.append("Duplicate mesh seed sizes detected across levels; mesh did not undergo distinct physical refinement.")
+            return MultiLevelConvergenceResult(
+                status="INVALID_DATA",
+                converged=False,
+                stress_levels=tuple(round(s, 4) for s in stresses),
+                deltas_pct=(),
+                final_delta_pct=100.0,
+                is_monotonic=False,
+                diminishing_increment=False,
+                displacement_levels=tuple(round(u, 5) for u in displacements),
+                displacement_deltas_pct=(),
+                displacement_converged=False,
+                reaction_force_equilibrium_ok=False,
+                diagnostics=tuple(diagnostics),
+            )
+
+    # P0-3: Signed stress component sign consistency check across all levels
+    sign_reversal = any((stresses[i] * stresses[i + 1]) < 0.0 for i in range(len(stresses) - 1))
+
     # Calculate stress deltas
     stress_deltas: List[float] = []
     for i in range(len(stresses) - 1):
@@ -288,15 +332,16 @@ def evaluate_multi_level_mesh_convergence(
         denom = max(abs(s_curr), 1e-12)
         stress_deltas.append(abs(s_curr - s_prev) / denom)
 
-    # Calculate displacement deltas (with small-displacement absolute threshold)
+    # P0-4 & P1: Calculate displacement deltas with explicit absolute tolerance contract
     u_deltas: List[float] = []
     for i in range(len(displacements) - 1):
         u_prev, u_curr = displacements[i], displacements[i + 1]
-        if abs(u_curr) < 1e-7 and abs(u_prev) < 1e-7:
+        abs_diff = abs(u_curr - u_prev)
+        if (abs(u_curr) < abs_displacement_tolerance and abs(u_prev) < abs_displacement_tolerance) or (abs_diff < abs_displacement_tolerance):
             u_deltas.append(0.0)
         else:
             denom = max(abs(u_curr), 1e-9)
-            u_deltas.append(abs(u_curr - u_prev) / denom)
+            u_deltas.append(abs_diff / denom)
 
     final_delta = stress_deltas[-1] if stress_deltas else 1.0
     final_u_delta = u_deltas[-1] if u_deltas else 1.0
@@ -321,19 +366,24 @@ def evaluate_multi_level_mesh_convergence(
     theory_errors: Optional[Tuple[float, ...]] = None
     if theory_peak is not None and abs(theory_peak) > 1e-12:
         theory_errors = tuple(round(abs(s - theory_peak) / abs(theory_peak) * 100.0, 2) for s in stresses)
+        if (theory_peak * stresses[-1]) < 0.0:
+            diagnostics.append("Theoretical reference value has opposite sign to measured stress response.")
 
-    # Check for suspected stress singularity: stress keeps exploding without diminishing delta
-    if is_strictly_inc and len(stress_deltas) >= 2 and not diminishing_increment and final_delta > tolerance:
+    # Status adjudication
+    if sign_reversal:
+        status = "SIGN_REVERSAL"
+        converged = False
+        diagnostics.append("Signed stress component reversed sign across refinement levels; asymptotic convergence cannot be claimed.")
+    elif is_strictly_inc and len(stress_deltas) >= 2 and not diminishing_increment and final_delta > tolerance:
         status = "SINGULARITY_SUSPECTED"
         converged = False
         diagnostics.append("Stress diverges with non-diminishing increments; suspected stress singularity (sharp reentrant corner or point load).")
     elif final_delta <= tolerance:
-        # For 3+ levels, strict asymptotic convergence requires both monotonic progression and diminishing increments
-        if len(probes) >= 3 and not is_monotonic:
+        if not is_monotonic:
             status = "OSCILLATORY_APPROACH"
             converged = False
             diagnostics.append("Stress variations exhibit non-monotonic oscillation; asymptotic convergence cannot be claimed.")
-        elif len(probes) >= 3 and not diminishing_increment:
+        elif not diminishing_increment:
             status = "NON_DIMINISHING_DELTA"
             converged = False
             diagnostics.append("Stress deltas do not diminish monotonically across refinement levels; asymptotic convergence cannot be claimed.")

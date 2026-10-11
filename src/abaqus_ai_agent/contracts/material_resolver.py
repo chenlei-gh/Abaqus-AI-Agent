@@ -46,8 +46,14 @@ class MaterialResolver:
             pa_val = val
         elif u in ("psi",):
             pa_val = val * 6894.757
+        elif u in ("bar",):
+            pa_val = val * 1e5
+        elif u in ("mbar",):
+            pa_val = val * 100.0
         else:
-            pa_val = val  # fallback assume matching
+            raise ValueError(
+                f"Unrecognized or unsupported stress unit '{from_unit}'; unknown unit fallback is strictly rejected."
+            )
 
         # Convert Pa to target system stress
         if target_system.name in ("MM_N_MPA", "SI_MM"):
@@ -65,8 +71,12 @@ class MaterialResolver:
             kg_m3 = val
         elif u in ("tonne/mm3", "tonne/mm^3", "t/mm3"):
             kg_m3 = val * 1e12
+        elif u in ("mg/mm3", "mg/mm^3"):
+            kg_m3 = val * 1000.0
         else:
-            kg_m3 = val
+            raise ValueError(
+                f"Unrecognized or unsupported density unit '{from_unit}'; unknown unit fallback is strictly rejected."
+            )
 
         # Convert kg/m3 to target system density
         if target_system.name in ("MM_N_MPA", "SI_MM"):
@@ -106,13 +116,13 @@ class MaterialResolver:
         req_temp = target_temperature if target_temperature is not None else record.default_condition.temperature
 
         # 1. Environmental Condition Preflight
-        # Check temperature compatibility
+        # Check temperature compatibility in normalized Celsius
         available_temps = {
-            p.condition.temperature for p in record.properties if p.condition is not None
+            p.condition.temperature_in_c for p in record.properties if p.condition is not None
         }
-        available_temps.add(record.default_condition.temperature)
+        available_temps.add(record.default_condition.temperature_in_c)
         for c in record.curves:
-            available_temps.add(c.condition.temperature)
+            available_temps.add(c.condition.temperature_in_c)
 
         temp_diff = min(abs(req_temp - t) for t in available_temps)
         # Strict anti-extrapolation: even under assisted mode, refuse extreme thermal shift (> 50C)
@@ -152,7 +162,7 @@ class MaterialResolver:
                 diag_msg += f", duration={operating_duration}"
             diag_msg += ")."
             if fallback_prop and fallback_prop.condition:
-                diag_msg += f" Closest available test condition was T={fallback_prop.condition.temperature}C, {fallback_prop.condition.humidity_state}."
+                diag_msg += f" Closest available test condition was T={fallback_prop.condition.temperature_in_c}C, {fallback_prop.condition.humidity_state}."
             return MaterialResolutionResult(
                 status="BLOCKED",
                 material_definition=None,
@@ -160,7 +170,15 @@ class MaterialResolver:
                 evidence_source=record.source.locator,
             )
 
-        E_val = cls._convert_stress(prop_e.value, prop_e.unit, unit_sys)
+        try:
+            E_val = cls._convert_stress(prop_e.value, prop_e.unit, unit_sys)
+        except ValueError as ve:
+            return MaterialResolutionResult(
+                status="BLOCKED",
+                material_definition=None,
+                diagnostics=(str(ve),),
+                evidence_source=record.source.locator,
+            )
         if E_val <= 0 or not math.isfinite(E_val):
             return MaterialResolutionResult(
                 status="BLOCKED",
@@ -173,9 +191,49 @@ class MaterialResolver:
         if prop_nu is not None:
             nu_val = prop_nu.value
         else:
-            # Standard engineering polymer default estimate with explicit assumption
-            nu_val = 0.35 if "PA" in record.identity.polymer_family or "POM" in record.identity.polymer_family else 0.38
-            assumptions.append(f"Poisson's ratio not in datasheet; assumed standard engineering polymer value nu={nu_val}.")
+            # P0-7: Material-family-aware Poisson's ratio derivation with strict unassisted gate
+            fam = record.identity.polymer_family.upper()
+            fam_tokens = set(fam.replace("-", " ").replace("_", " ").replace("/", " ").split())
+
+            def _match_keywords(kw_list: Tuple[str, ...]) -> bool:
+                for kw in kw_list:
+                    k = kw.upper()
+                    if len(k) <= 2:
+                        if k in fam_tokens:
+                            return True
+                    else:
+                        if k in fam:
+                            return True
+                return False
+
+            is_metal = _match_keywords(("STEEL", "FE", "IRON", "AL", "ALUMINUM", "ALUMINIUM", "TI", "TITANIUM", "COPPER", "BRASS"))
+            is_polymer = _match_keywords(("PA", "POM", "PBT", "PC", "PP", "PE", "ABS", "PEEK", "PPS", "PLASTIC", "POLYMER"))
+
+            if is_metal:
+                if _match_keywords(("STEEL", "FE", "IRON")):
+                    nu_val = 0.30
+                elif _match_keywords(("AL", "ALUMINUM", "ALUMINIUM")):
+                    nu_val = 0.33
+                elif _match_keywords(("TI", "TITANIUM")):
+                    nu_val = 0.34
+                else:
+                    nu_val = 0.34
+                assumptions.append(f"Poisson's ratio not in datasheet; assumed standard metal alloy value nu={nu_val}.")
+            elif is_polymer:
+                nu_val = 0.35 if _match_keywords(("PA", "POM")) else 0.38
+                assumptions.append(f"Poisson's ratio not in datasheet; assumed standard engineering polymer value nu={nu_val}.")
+            else:
+                if not allow_assisted_assumptions:
+                    return MaterialResolutionResult(
+                        status="BLOCKED",
+                        material_definition=None,
+                        diagnostics=(
+                            f"Missing Poisson's ratio for unclassified material family '{record.identity.polymer_family}'; unassisted assumption is strictly prohibited.",
+                        ),
+                        evidence_source=record.source.locator,
+                    )
+                nu_val = 0.33
+                assumptions.append(f"Poisson's ratio not in datasheet for unclassified material '{record.identity.polymer_family}'; used generic engineering assumption nu={nu_val}.")
 
         if not (-0.99 <= nu_val < 0.5) or not math.isfinite(nu_val):
             return MaterialResolutionResult(
@@ -195,7 +253,15 @@ class MaterialResolver:
         prop_rho = record.get_property("density", cond_query)
         density_val: Optional[float] = None
         if prop_rho is not None:
-            density_val = cls._convert_density(prop_rho.value, prop_rho.unit, unit_sys)
+            try:
+                density_val = cls._convert_density(prop_rho.value, prop_rho.unit, unit_sys)
+            except ValueError as ve:
+                return MaterialResolutionResult(
+                    status="BLOCKED",
+                    material_definition=None,
+                    diagnostics=(str(ve),),
+                    evidence_source=record.source.locator,
+                )
             if density_val <= 0 or not math.isfinite(density_val):
                 return MaterialResolutionResult(
                     status="BLOCKED",
@@ -210,7 +276,21 @@ class MaterialResolver:
         thermal_props: Optional[ThermalProperties] = None
         if prop_tc is not None or prop_exp is not None:
             tc_val = prop_tc.value if prop_tc else 0.25  # standard polymer fallback
+            if tc_val <= 0 or not math.isfinite(tc_val):
+                return MaterialResolutionResult(
+                    status="BLOCKED",
+                    material_definition=None,
+                    diagnostics=(f"Invalid thermal conductivity tc={tc_val}; must be a finite positive number.",),
+                    evidence_source=record.source.locator,
+                )
             exp_val = prop_exp.value if prop_exp else None
+            if exp_val is not None and not math.isfinite(exp_val):
+                return MaterialResolutionResult(
+                    status="BLOCKED",
+                    material_definition=None,
+                    diagnostics=(f"Invalid thermal expansion coefficient {exp_val}; must be finite.",),
+                    evidence_source=record.source.locator,
+                )
             thermal_props = ThermalProperties(
                 conductivity=tc_val,
                 expansion_coefficient=exp_val,
@@ -224,27 +304,77 @@ class MaterialResolver:
             curve_ss = record.get_curve("stress_strain", cond_query)
 
             sy_val: Optional[float] = None
+            explicit_sy: Optional[float] = None
             if prop_yield is not None:
-                sy_val = cls._convert_stress(prop_yield.value, prop_yield.unit, unit_sys)
+                try:
+                    sy_val = cls._convert_stress(prop_yield.value, prop_yield.unit, unit_sys)
+                    explicit_sy = sy_val
+                except ValueError as ve:
+                    return MaterialResolutionResult(
+                        status="BLOCKED",
+                        material_definition=None,
+                        diagnostics=(str(ve),),
+                        evidence_source=record.source.locator,
+                    )
 
             hardening: List[Tuple[float, float]] = []
 
             if curve_ss is not None:
-                # Calibrate exact true plastic strain from nominal curve:
-                # eps_true = ln(1 + eps_eng), sigma_true = sigma_eng * (1 + eps_eng)
-                # eps_plastic = eps_true - sigma_true / E
+                # P0-6: Detect curve type (true vs engineering) and enforce strain unit validity
+                x_unit_lower = (curve_ss.x_unit or "").strip().lower()
+                valid_strain_units = ("%", "percent", "1", "mm/mm", "in/in", "m/m", "")
+                if x_unit_lower not in valid_strain_units:
+                    return MaterialResolutionResult(
+                        status="BLOCKED",
+                        material_definition=None,
+                        diagnostics=(
+                            f"Unrecognized strain unit '{curve_ss.x_unit}' in stress-strain curve; must be dimensionless or strain dimension.",
+                        ),
+                        evidence_source=record.source.locator,
+                    )
+
+                x_name_lower = (curve_ss.x_name or "").lower()
+                y_name_lower = (curve_ss.y_name or "").lower()
+                is_already_true = ("true" in x_name_lower or "true" in y_name_lower)
+
                 raw_pts = curve_ss.points
                 converted_pts: List[Tuple[float, float, float]] = []  # (sigma_true, eps_true, eps_p)
 
                 for e_nom, s_nom in raw_pts:
-                    e_frac = e_nom / 100.0 if curve_ss.x_unit in ("%", "percent") else e_nom
+                    if not (math.isfinite(e_nom) and math.isfinite(s_nom)):
+                        return MaterialResolutionResult(
+                            status="BLOCKED",
+                            material_definition=None,
+                            diagnostics=(f"Non-finite point ({e_nom}, {s_nom}) detected in stress-strain curve.",),
+                            evidence_source=record.source.locator,
+                        )
+                    e_frac = e_nom / 100.0 if x_unit_lower in ("%", "percent") else e_nom
                     if e_frac < -0.99:
                         continue
-                    s_target = cls._convert_stress(s_nom, curve_ss.y_unit, unit_sys)
-                    sigma_true = s_target * (1.0 + e_frac)
-                    eps_true = math.log(1.0 + e_frac) if e_frac > -0.99 else 0.0
+                    try:
+                        s_target = cls._convert_stress(s_nom, curve_ss.y_unit, unit_sys)
+                    except ValueError as ve:
+                        return MaterialResolutionResult(
+                            status="BLOCKED",
+                            material_definition=None,
+                            diagnostics=(str(ve),),
+                            evidence_source=record.source.locator,
+                        )
+
+                    if is_already_true:
+                        sigma_true = s_target
+                        eps_true = e_frac
+                    else:
+                        sigma_true = s_target * (1.0 + e_frac)
+                        eps_true = math.log(1.0 + e_frac) if e_frac > -0.99 else 0.0
+
                     eps_p = eps_true - (sigma_true / E_val)
                     converted_pts.append((sigma_true, eps_true, eps_p))
+
+                if is_already_true:
+                    assumptions.append(
+                        "Experimental curve identified as true stress-true strain; avoided duplicate logarithmic/engineering conversion."
+                    )
 
                 # If yield stress was not explicitly given, deduce from offset proof stress or first plastic point
                 if sy_val is None:
@@ -271,6 +401,18 @@ class MaterialResolver:
                         if inelastic_pts:
                             sy_val = round(inelastic_pts[0][0], 3)
                             assumptions.append(f"Deduced initial inelastic yield stress {sy_val} from stress-strain curve.")
+                elif explicit_sy is not None and converted_pts:
+                    # Check for large divergence between explicit datasheet yield and curve-derived Rp0.2
+                    for k in range(len(converted_pts)):
+                        sig_t, eps_t, ep = converted_pts[k]
+                        if ep >= 0.002:
+                            curve_rp02 = sig_t
+                            rel_diff = abs(curve_rp02 - explicit_sy) / max(explicit_sy, 1e-12)
+                            if rel_diff > 0.25:
+                                diagnostics.append(
+                                    f"Explicit datasheet yield stress ({explicit_sy}) differs from curve Rp0.2 ({curve_rp02}) by {rel_diff * 100.0:.1f}%."
+                                )
+                            break
 
                 if sy_val is not None:
                     # First point in Abaqus hardening table must be (initial yield stress, 0.0)

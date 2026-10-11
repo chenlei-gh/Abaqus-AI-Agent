@@ -123,6 +123,7 @@ class AdaptiveMeshConvergenceController:
             displacement_key=self.displacement_key,
             theory_peak=self.theory_peak,
             tolerance=self.tolerance,
+            min_levels=3,
         )
 
         for level in range(1, self.max_levels + 1):
@@ -162,6 +163,7 @@ class AdaptiveMeshConvergenceController:
                     displacement_key=self.displacement_key,
                     theory_peak=self.theory_peak,
                     tolerance=self.tolerance,
+                    min_levels=3,
                 )
 
                 if conv_result.status == "INCOMPLETE_EVIDENCE":
@@ -203,7 +205,22 @@ class AdaptiveMeshConvergenceController:
                     )
 
             if level < self.max_levels:
-                current_spec = self.next_mesh_spec(current_spec)
+                next_spec = self.next_mesh_spec(current_spec)
+                # Check for refinement stagnation (hitting min_seed_size)
+                if next_spec == current_spec:
+                    diagnostics.append(
+                        f"Refinement stagnated at level {level}: mesh specification did not change (hit min_seed_size {self.min_seed_size})."
+                    )
+                    return AdaptiveConvergenceRun(
+                        status="REFINEMENT_STAGNATED",
+                        levels_executed=level,
+                        final_mesh_spec=current_spec,
+                        convergence_result=conv_result,
+                        probes=tuple(probes),
+                        final_run=last_run,
+                        diagnostics=tuple(diagnostics),
+                    )
+                current_spec = next_spec
 
         diagnostics.append(
             f"Maximum refinement levels ({self.max_levels}) reached without achieving {self.tolerance * 100.0}% convergence."

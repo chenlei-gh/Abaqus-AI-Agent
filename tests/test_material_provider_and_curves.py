@@ -256,3 +256,155 @@ def test_material_resolver_interpolates_rp02_and_clamps_softening():
     for i in range(len(stresses_in_table) - 1):
         assert stresses_in_table[i + 1] >= stresses_in_table[i]  # Monotonically non-decreasing
     assert any("softening" in a.lower() for a in res.assumptions)
+
+
+def test_material_resolver_rejects_unknown_stress_and_density_units():
+    cond = MaterialCondition(temperature=23.0)
+    source = MaterialSource(
+        provider="TDS",
+        source_type="datasheet_pdf",
+        locator="test://bad-units",
+        retrieved_at="2026-10-10T00:00:00Z",
+    )
+    # 1. Unknown stress unit
+    rec_bad_stress = MaterialRecord(
+        identity=MaterialIdentity(polymer_family="Steel", manufacturer="Generic", grade="Bad-Unit"),
+        source=source,
+        properties=(
+            MaterialProperty(name="youngs_modulus", value=200000.0, unit="furlong_per_sec", quantity="stress", condition=cond),
+        ),
+    )
+    res_s = MaterialResolver.resolve(rec_bad_stress)
+    assert res_s.status == "BLOCKED"
+    assert any("Unrecognized or unsupported stress unit" in d for d in res_s.diagnostics)
+
+    # 2. Unknown density unit
+    rec_bad_dens = MaterialRecord(
+        identity=MaterialIdentity(polymer_family="Steel", manufacturer="Generic", grade="Bad-Dens"),
+        source=source,
+        properties=(
+            MaterialProperty(name="youngs_modulus", value=200000.0, unit="MPa", quantity="stress", condition=cond),
+            MaterialProperty(name="density", value=7.8, unit="bushels", quantity="density", condition=cond),
+        ),
+    )
+    res_d = MaterialResolver.resolve(rec_bad_dens)
+    assert res_d.status == "BLOCKED"
+    assert any("Unrecognized or unsupported density unit" in d for d in res_d.diagnostics)
+
+
+def test_material_resolver_avoids_duplicate_conversion_for_true_strain_curves():
+    cond = MaterialCondition(temperature=23.0)
+    source = MaterialSource(
+        provider="TDS",
+        source_type="datasheet_pdf",
+        locator="test://true-strain",
+        retrieved_at="2026-10-10T00:00:00Z",
+    )
+    rec_true = MaterialRecord(
+        identity=MaterialIdentity(polymer_family="Steel", manufacturer="Generic", grade="True-Curve"),
+        source=source,
+        properties=(
+            MaterialProperty(name="youngs_modulus", value=200000.0, unit="MPa", quantity="stress", condition=cond),
+            MaterialProperty(name="poissons_ratio", value=0.3, unit="", quantity="dimensionless", condition=cond),
+        ),
+        curves=(
+            MaterialCurve(
+                curve_type="stress_strain",
+                x_name="true_plastic_strain",
+                x_unit="1",
+                y_name="true_stress",
+                y_unit="MPa",
+                condition=cond,
+                points=(
+                    (0.002, 350.0),
+                    (0.010, 420.0),
+                    (0.050, 500.0),
+                ),
+            ),
+        ),
+    )
+    res = MaterialResolver.resolve(rec_true, constitutive_intent="elastoplastic")
+    assert res.is_executable
+    mat = res.material_definition
+    assert mat is not None
+    assert mat.plastic is not None
+    assert any("avoided duplicate logarithmic/engineering conversion" in a for a in res.assumptions)
+
+
+def test_material_resolver_polymer_family_aware_poisson_ratio():
+    cond = MaterialCondition(temperature=23.0)
+    source = MaterialSource(
+        provider="TDS",
+        source_type="datasheet_pdf",
+        locator="test://nu-derivation",
+        retrieved_at="2026-10-10T00:00:00Z",
+    )
+    # 1. Steel without nu in datasheet -> 0.30
+    rec_steel = MaterialRecord(
+        identity=MaterialIdentity(polymer_family="Steel", manufacturer="Generic", grade="S355"),
+        source=source,
+        properties=(
+            MaterialProperty(name="youngs_modulus", value=210000.0, unit="MPa", quantity="stress", condition=cond),
+        ),
+    )
+    res_st = MaterialResolver.resolve(rec_steel)
+    assert res_st.is_executable
+    assert res_st.material_definition.elastic.poisson_ratio == 0.30
+    assert any("assumed standard metal alloy value nu=0.3" in a for a in res_st.assumptions)
+
+    # 2. Aluminum without nu in datasheet -> 0.33
+    rec_al = MaterialRecord(
+        identity=MaterialIdentity(polymer_family="Aluminum", manufacturer="Generic", grade="6061"),
+        source=source,
+        properties=(
+            MaterialProperty(name="youngs_modulus", value=70000.0, unit="MPa", quantity="stress", condition=cond),
+        ),
+    )
+    res_al = MaterialResolver.resolve(rec_al)
+    assert res_al.is_executable
+    assert res_al.material_definition.elastic.poisson_ratio == 0.33
+
+    # 3. Unknown material without nu and allow_assisted_assumptions=False -> BLOCKED
+    rec_unknown = MaterialRecord(
+        identity=MaterialIdentity(polymer_family="ExoticCompositeMetaMaterial", manufacturer="Generic", grade="X1"),
+        source=source,
+        properties=(
+            MaterialProperty(name="youngs_modulus", value=50000.0, unit="MPa", quantity="stress", condition=cond),
+        ),
+    )
+    res_unk = MaterialResolver.resolve(rec_unknown, allow_assisted_assumptions=False)
+    assert res_unk.status == "BLOCKED"
+    assert any("unassisted assumption is strictly prohibited" in d for d in res_unk.diagnostics)
+
+
+def test_material_condition_normalizes_kelvin_temperature():
+    cond_c = MaterialCondition(temperature=20.0, temperature_unit="C")
+    cond_k = MaterialCondition(temperature=293.15, temperature_unit="K")
+    assert cond_c.matches(cond_k) is True
+    assert cond_k.matches(cond_c) is True
+
+    # 100 C vs 293.15 K (20 C) -> should NOT match
+    cond_hot_c = MaterialCondition(temperature=100.0, temperature_unit="C")
+    assert cond_hot_c.matches(cond_k) is False
+
+
+def test_material_resolver_blocks_unphysical_thermal_properties():
+    cond = MaterialCondition(temperature=23.0)
+    source = MaterialSource(
+        provider="TDS",
+        source_type="datasheet_pdf",
+        locator="test://bad-thermal",
+        retrieved_at="2026-10-10T00:00:00Z",
+    )
+    # Non-positive thermal conductivity
+    rec_bad_tc = MaterialRecord(
+        identity=MaterialIdentity(polymer_family="Steel", manufacturer="Generic", grade="Bad-TC"),
+        source=source,
+        properties=(
+            MaterialProperty(name="youngs_modulus", value=200000.0, unit="MPa", quantity="stress", condition=cond),
+            MaterialProperty(name="thermal_conductivity", value=-15.0, unit="W/m-K", quantity="thermal_conductivity", condition=cond),
+        ),
+    )
+    res_tc = MaterialResolver.resolve(rec_bad_tc)
+    assert res_tc.status == "BLOCKED"
+    assert any("Invalid thermal conductivity" in d for d in res_tc.diagnostics)
