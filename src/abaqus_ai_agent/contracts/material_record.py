@@ -5,6 +5,7 @@ standardized ISO properties, and experimental multi-point curves.
 """
 
 from dataclasses import dataclass, field
+import math
 from typing import Any, Dict, List, Optional, Tuple
 
 
@@ -112,16 +113,35 @@ class MaterialCondition:
     frequency: Optional[float] = None        # in Hz, e.g. for dynamic mechanical analysis (DMA)
     stress_level: Optional[float] = None     # in MPa, e.g. sustained stress for isochronous curves
 
+    def __post_init__(self):
+        if (
+            not isinstance(self.temperature, (int, float))
+            or isinstance(self.temperature, bool)
+            or not math.isfinite(self.temperature)
+        ):
+            raise ValueError(f"temperature must be a finite number, got {self.temperature}")
+        if (
+            self.temperature_unit is None
+            or not isinstance(self.temperature_unit, str)
+            or not self.temperature_unit.strip()
+        ):
+            raise ValueError("temperature_unit must be explicitly provided as a non-empty string")
+        norm_unit = self.temperature_unit.strip().upper()
+        if norm_unit not in ("C", "CELSIUS", "K", "KELVIN", "F", "FAHRENHEIT"):
+            raise ValueError(
+                f"Unrecognized temperature unit '{self.temperature_unit}'; supported units are 'C', 'K', 'F'."
+            )
+
     @property
     def temperature_in_c(self) -> float:
         """Normalized temperature in degrees Celsius."""
-        u = (self.temperature_unit or "C").strip().upper()
-        if u in ("C", "CELSIUS"):
-            return self.temperature
-        elif u in ("K", "KELVIN"):
-            return self.temperature - 273.15
-        elif u in ("F", "FAHRENHEIT"):
-            return (self.temperature - 32.0) * 5.0 / 9.0
+        norm_unit = self.temperature_unit.strip().upper()
+        if norm_unit in ("C", "CELSIUS"):
+            return float(self.temperature)
+        elif norm_unit in ("K", "KELVIN"):
+            return float(self.temperature) - 273.15
+        elif norm_unit in ("F", "FAHRENHEIT"):
+            return (float(self.temperature) - 32.0) * 5.0 / 9.0
         raise ValueError(
             f"Unrecognized temperature unit '{self.temperature_unit}'; supported units are 'C', 'K', 'F'."
         )
@@ -171,9 +191,10 @@ class MaterialCondition:
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "MaterialCondition":
+        unit = data.get("temperature_unit") if "temperature_unit" in data else "C"
         return cls(
             temperature=float(data.get("temperature", 23.0)),
-            temperature_unit=data.get("temperature_unit", "C"),
+            temperature_unit=unit,
             humidity_state=data.get("humidity_state", "dry"),
             relative_humidity=float(data["relative_humidity"]) if data.get("relative_humidity") is not None else None,
             test_standard=data.get("test_standard"),

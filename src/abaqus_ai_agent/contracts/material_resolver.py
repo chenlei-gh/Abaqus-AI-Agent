@@ -289,20 +289,15 @@ class MaterialResolver:
                 return False
 
             if is_composite:
-                if not allow_assisted_assumptions:
-                    return MaterialResolutionResult(
-                        status="BLOCKED",
-                        material_definition=None,
-                        diagnostics=(
-                            f"Missing Poisson's ratio for composite material family '{record.identity.polymer_family}'; "
-                            "unassisted assumption is strictly prohibited as composite or anisotropic materials cannot assume isotropic default Poisson's ratio.",
-                        ),
-                        evidence_source=record.source.locator,
-                    )
-                nu_val = 0.30
-                assumptions.append(
-                    f"Poisson's ratio not in datasheet for composite '{record.identity.polymer_family}'; "
-                    f"assumed provisional isotropic nu={nu_val}; uncertified for structural delivery."
+                return MaterialResolutionResult(
+                    status="BLOCKED",
+                    material_definition=None,
+                    diagnostics=(
+                        f"Missing Poisson's ratio for composite material family '{record.identity.polymer_family}'; "
+                        "unassisted assumption is strictly prohibited as composite or anisotropic materials cannot assume isotropic default Poisson's ratio, "
+                        "and strict engineering gate forbids default assumption even in assisted mode.",
+                    ),
+                    evidence_source=record.source.locator,
                 )
             else:
                 is_metal = _match_keywords(("STEEL", "FE", "IRON", "AL", "ALUMINUM", "ALUMINIUM", "TI", "TITANIUM", "COPPER", "BRASS"))
@@ -442,10 +437,38 @@ class MaterialResolver:
 
                 x_name_lower = (curve_ss.x_name or "").lower()
                 y_name_lower = (curve_ss.y_name or "").lower()
+
+                x_is_strain = any(s in x_name_lower for s in ("strain", "eps"))
+                y_is_stress = any(s in y_name_lower for s in ("stress", "sig"))
+
+                if not x_is_strain or not y_is_stress:
+                    return MaterialResolutionResult(
+                        status="BLOCKED",
+                        material_definition=None,
+                        diagnostics=(
+                            f"Ambiguous stress-strain curve axis definitions: x_name='{curve_ss.x_name}' "
+                            f"must express strain semantics ('strain' or 'eps'), and y_name='{curve_ss.y_name}' "
+                            "must express stress semantics ('stress' or 'sig').",
+                        ),
+                        evidence_source=record.source.locator,
+                    )
+
                 x_has_true = "true" in x_name_lower
                 y_has_true = "true" in y_name_lower
+                x_has_eng = any(w in x_name_lower for w in ("eng", "nominal"))
+                y_has_eng = any(w in y_name_lower for w in ("eng", "nominal"))
 
                 if x_has_true and y_has_true:
+                    if x_has_eng or y_has_eng:
+                        return MaterialResolutionResult(
+                            status="BLOCKED",
+                            material_definition=None,
+                            diagnostics=(
+                                f"Conflicting stress-strain curve axis definitions: x_name='{curve_ss.x_name}' "
+                                f"or y_name='{curve_ss.y_name}' contains conflicting true and engineering designations.",
+                            ),
+                            evidence_source=record.source.locator,
+                        )
                     is_already_true = True
                 elif (not x_has_true) and (not y_has_true):
                     is_already_true = False

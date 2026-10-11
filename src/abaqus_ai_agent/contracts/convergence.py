@@ -200,6 +200,7 @@ def evaluate_multi_level_mesh_convergence(
 
     diagnostics: List[str] = []
     missing_evidence = False
+    invalid_data = False
 
     stresses: List[float] = []
     displacements: List[float] = []
@@ -269,32 +270,83 @@ def evaluate_multi_level_mesh_convergence(
                 missing_evidence = True
                 diagnostics.append(f"Level {idx + 1} non-numeric reaction force error {raw_rf}.")
 
-        # 4. Physical mesh refinement evidence extraction (P0-4: mandatory mesh scale or count metric)
-        raw_size = p.get("seed_size") or p.get("mesh_size") or p.get("global_size")
-        raw_count = p.get("total_elements") or p.get("total_nodes")
-        ext_size: Optional[float] = None
-        ext_count: Optional[int] = None
-        if raw_size is not None:
-            try:
-                s_val = float(raw_size)
-                if isfinite(s_val) and s_val > 0.0:
-                    ext_size = s_val
-            except (ValueError, TypeError):
-                pass
-        if raw_count is not None:
-            try:
-                c_val = int(raw_count)
-                if c_val > 0:
-                    ext_count = c_val
-            except (ValueError, TypeError):
-                pass
+        # 4. Physical mesh refinement evidence extraction (P0-1 & P0-2: strict metric extraction, no masking or float truncation)
+        size_key_found = None
+        for k in ("seed_size", "mesh_size", "global_size"):
+            if k in p:
+                size_key_found = k
+                break
 
-        if ext_size is None and ext_count is None:
+        ext_size: Optional[float] = None
+        if size_key_found is not None:
+            raw_size = p[size_key_found]
+            if raw_size is not None:
+                if isinstance(raw_size, bool):
+                    invalid_data = True
+                    diagnostics.append(
+                        f"Level {idx + 1} mesh size '{size_key_found}' is boolean; must be a positive finite number."
+                    )
+                else:
+                    try:
+                        s_val = float(raw_size)
+                        if not isfinite(s_val) or s_val <= 0.0:
+                            invalid_data = True
+                            diagnostics.append(
+                                f"Level {idx + 1} mesh size '{size_key_found}' has invalid non-positive or non-finite value {raw_size}."
+                            )
+                        else:
+                            ext_size = s_val
+                    except (ValueError, TypeError):
+                        invalid_data = True
+                        diagnostics.append(
+                            f"Level {idx + 1} mesh size '{size_key_found}' has non-numeric value {raw_size}."
+                        )
+
+        count_key_found = None
+        for k in ("total_elements", "total_nodes"):
+            if k in p:
+                count_key_found = k
+                break
+
+        ext_count: Optional[int] = None
+        if count_key_found is not None:
+            raw_count = p[count_key_found]
+            if raw_count is not None:
+                if isinstance(raw_count, bool) or not isinstance(raw_count, int):
+                    invalid_data = True
+                    diagnostics.append(
+                        f"Level {idx + 1} mesh count '{count_key_found}' must be a strict positive integer, got {type(raw_count).__name__} ({raw_count})."
+                    )
+                elif raw_count <= 0:
+                    invalid_data = True
+                    diagnostics.append(
+                        f"Level {idx + 1} mesh count '{count_key_found}' must be > 0, got {raw_count}."
+                    )
+                else:
+                    ext_count = raw_count
+
+        if ext_size is None and ext_count is None and not invalid_data:
             missing_evidence = True
             diagnostics.append(
                 f"Level {idx + 1} missing physical mesh refinement evidence ('seed_size', 'mesh_size', 'global_size', 'total_elements', or 'total_nodes')."
             )
         mesh_metrics.append((ext_size, ext_count))
+
+    if invalid_data:
+        return MultiLevelConvergenceResult(
+            status="INVALID_DATA",
+            converged=False,
+            stress_levels=tuple(round(s, 4) for s in stresses),
+            deltas_pct=(),
+            final_delta_pct=100.0,
+            is_monotonic=False,
+            diminishing_increment=False,
+            displacement_levels=tuple(round(u, 5) for u in displacements),
+            displacement_deltas_pct=(),
+            displacement_converged=False,
+            reaction_force_equilibrium_ok=False,
+            diagnostics=tuple(diagnostics),
+        )
 
     if missing_evidence or len(stresses) != len(probes) or len(displacements) != len(probes) or len(rf_errors) != len(probes) or len(mesh_metrics) != len(probes):
         return MultiLevelConvergenceResult(
@@ -332,11 +384,36 @@ def evaluate_multi_level_mesh_convergence(
             diagnostics=tuple(diagnostics),
         )
 
-    # P0-4: Strict physical mesh refinement sequence validation (sizes strictly decreasing or counts strictly increasing)
+    # P0-1: Consistent metric sequence validation across levels (cannot mix sizes and counts)
     sizes = [m[0] for m in mesh_metrics]
     counts = [m[1] for m in mesh_metrics]
 
-    if all(s is not None for s in sizes):
+    has_full_sizes = all(s is not None for s in sizes)
+    has_full_counts = all(c is not None for c in counts)
+
+    if not has_full_sizes and not has_full_counts:
+        diagnostics.append(
+            "Mesh refinement evidence across levels is inconsistent: levels must consistently provide either "
+            "a complete mesh size metric sequence ('seed_size', 'mesh_size', 'global_size') or "
+            "a complete element/node count metric sequence ('total_elements', 'total_nodes'). "
+            "Mixed or incomplete metric types across levels cannot certify asymptotic refinement."
+        )
+        return MultiLevelConvergenceResult(
+            status="INVALID_DATA",
+            converged=False,
+            stress_levels=tuple(round(s, 4) for s in stresses),
+            deltas_pct=(),
+            final_delta_pct=100.0,
+            is_monotonic=False,
+            diminishing_increment=False,
+            displacement_levels=tuple(round(u, 5) for u in displacements),
+            displacement_deltas_pct=(),
+            displacement_converged=False,
+            reaction_force_equilibrium_ok=False,
+            diagnostics=tuple(diagnostics),
+        )
+
+    if has_full_sizes:
         if not all(sizes[i] > sizes[i + 1] for i in range(len(sizes) - 1)):
             diagnostics.append(
                 f"Mesh sizes across levels {sizes} do not exhibit strictly decreasing refinement sequence."
@@ -355,7 +432,8 @@ def evaluate_multi_level_mesh_convergence(
                 reaction_force_equilibrium_ok=False,
                 diagnostics=tuple(diagnostics),
             )
-    elif all(c is not None for c in counts):
+
+    if has_full_counts:
         if not all(counts[i] < counts[i + 1] for i in range(len(counts) - 1)):
             diagnostics.append(
                 f"Mesh element/node counts across levels {counts} do not exhibit strictly increasing refinement sequence."
@@ -375,12 +453,12 @@ def evaluate_multi_level_mesh_convergence(
                 diagnostics=tuple(diagnostics),
             )
 
-    # P0-3 & P1-4: Signed stress component sign consistency check across all levels (invariants bypass sign flip check)
-    is_invariant = any(
-        inv in stress_key.lower()
-        for inv in ("mises", "tresca", "pressure", "invariant", "magnitude", "hydrostatic")
-    )
-    if not is_invariant:
+    # P1-1: Strict classification of non-negative stress invariants vs signed stress quantities.
+    # Only mathematically non-negative equivalent stress invariants skip sign reversal checks.
+    # Signed quantities like normal stresses (S11, S22), shear stresses, pressure, and hydrostatic stress must check sign consistency.
+    non_negative_invariants = ("mises", "tresca", "octahedral", "vm")
+    is_non_negative_invariant = any(inv in stress_key.lower() for inv in non_negative_invariants)
+    if not is_non_negative_invariant:
         sign_reversal = any((stresses[i] * stresses[i + 1]) < 0.0 for i in range(len(stresses) - 1))
     else:
         sign_reversal = False

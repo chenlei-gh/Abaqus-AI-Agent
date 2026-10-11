@@ -453,3 +453,85 @@ def test_multi_level_convergence_rejects_non_finite_theory_peak():
     ]
     with pytest.raises(ValueError, match="theory_peak must be a finite float"):
         evaluate_multi_level_mesh_convergence(probes=probes, theory_peak=float("inf"))
+
+
+def test_multi_level_convergence_rejects_mixed_metric_types():
+    # P0-1: Level 1 has seed_size, Level 2 has total_elements, Level 3 has seed_size -> INVALID_DATA
+    probes_mixed = [
+        {"peak_s11": 25.0, "max_u1": 0.050, "rf_error_pct": 0.0, "seed_size": 10.0},
+        {"peak_s11": 28.0, "max_u1": 0.051, "rf_error_pct": 0.0, "total_elements": 500},
+        {"peak_s11": 30.0, "max_u1": 0.052, "rf_error_pct": 0.0, "seed_size": 2.5},
+    ]
+    res = evaluate_multi_level_mesh_convergence(probes=probes_mixed)
+    assert res.converged is False
+    assert res.status == "INVALID_DATA"
+    assert any("Mesh refinement evidence across levels is inconsistent" in d for d in res.diagnostics)
+
+
+def test_multi_level_convergence_rejects_invalid_zero_or_negative_mesh_size():
+    # P0-2: seed_size = 0 or negative must not be masked or skipped -> INVALID_DATA
+    probes_zero_size = [
+        {"peak_s11": 25.0, "max_u1": 0.050, "rf_error_pct": 0.0, "seed_size": 0.0},
+        {"peak_s11": 28.0, "max_u1": 0.051, "rf_error_pct": 0.0, "seed_size": 5.0},
+        {"peak_s11": 30.0, "max_u1": 0.052, "rf_error_pct": 0.0, "seed_size": 2.5},
+    ]
+    res_zero = evaluate_multi_level_mesh_convergence(probes=probes_zero_size)
+    assert res_zero.converged is False
+    assert res_zero.status == "INVALID_DATA"
+    assert any("non-positive or non-finite" in d for d in res_zero.diagnostics)
+
+    probes_neg_size = [
+        {"peak_s11": 25.0, "max_u1": 0.050, "rf_error_pct": 0.0, "seed_size": 10.0},
+        {"peak_s11": 28.0, "max_u1": 0.051, "rf_error_pct": 0.0, "seed_size": -5.0},
+        {"peak_s11": 30.0, "max_u1": 0.052, "rf_error_pct": 0.0, "seed_size": 2.5},
+    ]
+    res_neg = evaluate_multi_level_mesh_convergence(probes=probes_neg_size)
+    assert res_neg.converged is False
+    assert res_neg.status == "INVALID_DATA"
+    assert any("non-positive or non-finite" in d for d in res_neg.diagnostics)
+
+
+def test_multi_level_convergence_rejects_float_or_boolean_element_count():
+    # P0-2: Float total_elements=1.5 or boolean total_elements=True must not be truncated -> INVALID_DATA
+    probes_float_count = [
+        {"peak_s11": 25.0, "max_u1": 0.050, "rf_error_pct": 0.0, "total_elements": 1.5},
+        {"peak_s11": 28.0, "max_u1": 0.051, "rf_error_pct": 0.0, "total_elements": 500},
+        {"peak_s11": 30.0, "max_u1": 0.052, "rf_error_pct": 0.0, "total_elements": 1000},
+    ]
+    res_float = evaluate_multi_level_mesh_convergence(probes=probes_float_count)
+    assert res_float.converged is False
+    assert res_float.status == "INVALID_DATA"
+    assert any("must be a strict positive integer" in d for d in res_float.diagnostics)
+
+    probes_bool_count = [
+        {"peak_s11": 25.0, "max_u1": 0.050, "rf_error_pct": 0.0, "total_elements": True},
+        {"peak_s11": 28.0, "max_u1": 0.051, "rf_error_pct": 0.0, "total_elements": 500},
+        {"peak_s11": 30.0, "max_u1": 0.052, "rf_error_pct": 0.0, "total_elements": 1000},
+    ]
+    res_bool = evaluate_multi_level_mesh_convergence(probes=probes_bool_count)
+    assert res_bool.converged is False
+    assert res_bool.status == "INVALID_DATA"
+    assert any("must be a strict positive integer" in d for d in res_bool.diagnostics)
+
+
+def test_multi_level_convergence_signed_pressure_and_hydrostatic_detect_sign_reversal():
+    # P1-1: Pressure and hydrostatic stress are signed physical quantities and must trigger SIGN_REVERSAL
+    probes_pressure_rev = [
+        {"pressure": 50.0, "max_u1": 0.050, "rf_error_pct": 0.0, "seed_size": 10.0},
+        {"pressure": -10.0, "max_u1": 0.051, "rf_error_pct": 0.0, "seed_size": 5.0},
+        {"pressure": -12.0, "max_u1": 0.052, "rf_error_pct": 0.0, "seed_size": 2.5},
+    ]
+    res_p = evaluate_multi_level_mesh_convergence(probes=probes_pressure_rev, stress_key="pressure")
+    assert res_p.converged is False
+    assert res_p.status == "SIGN_REVERSAL"
+    assert any("reversed sign across refinement levels" in d for d in res_p.diagnostics)
+
+    probes_hydro_rev = [
+        {"hydrostatic": -30.0, "max_u1": 0.050, "rf_error_pct": 0.0, "seed_size": 10.0},
+        {"hydrostatic": 40.0, "max_u1": 0.051, "rf_error_pct": 0.0, "seed_size": 5.0},
+        {"hydrostatic": 45.0, "max_u1": 0.052, "rf_error_pct": 0.0, "seed_size": 2.5},
+    ]
+    res_h = evaluate_multi_level_mesh_convergence(probes=probes_hydro_rev, stress_key="hydrostatic")
+    assert res_h.converged is False
+    assert res_h.status == "SIGN_REVERSAL"
+    assert any("reversed sign across refinement levels" in d for d in res_h.diagnostics)
