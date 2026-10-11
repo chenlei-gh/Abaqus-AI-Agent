@@ -156,3 +156,49 @@ def test_compiler_consumes_material_record_hardening():
     assert len(table) >= 2
     assert table[0][1] == 0.0
     assert "mat.Plastic(table=" in plan.cae_script
+
+
+def test_material_resolver_blocks_unphysical_elastic_properties():
+    cond = MaterialCondition(temperature=23.0)
+    source = MaterialSource(
+        provider="TDS",
+        source_type="datasheet_pdf",
+        locator="test://unphysical",
+        retrieved_at="2026-10-10T00:00:00Z",
+    )
+    # 1. Non-positive Young's modulus
+    rec_bad_e = MaterialRecord(
+        identity=MaterialIdentity(polymer_family="Steel", manufacturer="Generic", grade="Zero-E"),
+        source=source,
+        properties=(MaterialProperty(name="youngs_modulus", value=-1000.0, unit="MPa", quantity="stress", condition=cond),),
+    )
+    res_e = MaterialResolver.resolve(rec_bad_e)
+    assert res_e.status == "BLOCKED"
+    assert any("Invalid Young's modulus" in d for d in res_e.diagnostics)
+
+    # 2. Thermodynamically impossible Poisson's ratio (nu >= 0.5)
+    rec_bad_nu = MaterialRecord(
+        identity=MaterialIdentity(polymer_family="Steel", manufacturer="Generic", grade="Bad-Nu"),
+        source=source,
+        properties=(
+            MaterialProperty(name="youngs_modulus", value=200000.0, unit="MPa", quantity="stress", condition=cond),
+            MaterialProperty(name="poissons_ratio", value=0.55, unit="", quantity="dimensionless", condition=cond),
+        ),
+    )
+    res_nu = MaterialResolver.resolve(rec_bad_nu)
+    assert res_nu.status == "BLOCKED"
+    assert any("Thermodynamically invalid Poisson's ratio" in d for d in res_nu.diagnostics)
+
+    # 3. Non-positive density
+    rec_bad_rho = MaterialRecord(
+        identity=MaterialIdentity(polymer_family="Steel", manufacturer="Generic", grade="Bad-Rho"),
+        source=source,
+        properties=(
+            MaterialProperty(name="youngs_modulus", value=200000.0, unit="MPa", quantity="stress", condition=cond),
+            MaterialProperty(name="poissons_ratio", value=0.3, unit="", quantity="dimensionless", condition=cond),
+            MaterialProperty(name="density", value=-7.8, unit="g/cm3", quantity="density", condition=cond),
+        ),
+    )
+    res_rho = MaterialResolver.resolve(rec_bad_rho)
+    assert res_rho.status == "BLOCKED"
+    assert any("Invalid density" in d for d in res_rho.diagnostics)

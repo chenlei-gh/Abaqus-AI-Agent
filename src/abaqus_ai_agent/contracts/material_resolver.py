@@ -161,6 +161,13 @@ class MaterialResolver:
             )
 
         E_val = cls._convert_stress(prop_e.value, prop_e.unit, unit_sys)
+        if E_val <= 0 or not math.isfinite(E_val):
+            return MaterialResolutionResult(
+                status="BLOCKED",
+                material_definition=None,
+                diagnostics=(f"Invalid Young's modulus E={E_val}; must be a finite positive number.",),
+                evidence_source=record.source.locator,
+            )
 
         prop_nu = record.get_property("poissons_ratio", cond_query) or record.get_property("poisson_ratio", cond_query)
         if prop_nu is not None:
@@ -169,6 +176,14 @@ class MaterialResolver:
             # Standard engineering polymer default estimate with explicit assumption
             nu_val = 0.35 if "PA" in record.identity.polymer_family or "POM" in record.identity.polymer_family else 0.38
             assumptions.append(f"Poisson's ratio not in datasheet; assumed standard engineering polymer value nu={nu_val}.")
+
+        if not (-0.99 <= nu_val < 0.5) or not math.isfinite(nu_val):
+            return MaterialResolutionResult(
+                status="BLOCKED",
+                material_definition=None,
+                diagnostics=(f"Thermodynamically invalid Poisson's ratio nu={nu_val}; isotropic elasticity requires -1.0 < nu < 0.5.",),
+                evidence_source=record.source.locator,
+            )
 
         elastic_props = ElasticProperties(
             youngs_modulus=E_val,
@@ -181,6 +196,13 @@ class MaterialResolver:
         density_val: Optional[float] = None
         if prop_rho is not None:
             density_val = cls._convert_density(prop_rho.value, prop_rho.unit, unit_sys)
+            if density_val <= 0 or not math.isfinite(density_val):
+                return MaterialResolutionResult(
+                    status="BLOCKED",
+                    material_definition=None,
+                    diagnostics=(f"Invalid density rho={density_val}; must be a finite positive number.",),
+                    evidence_source=record.source.locator,
+                )
 
         # 4. Thermal properties
         prop_tc = record.get_property("thermal_conductivity", cond_query)
@@ -258,8 +280,32 @@ class MaterialResolver:
                     assumptions.append("Polymer/metal tensile curve calibrated into equivalent J2 hardening curve for Abaqus solver.")
 
             if sy_val is not None:
+                if sy_val <= 0 or not math.isfinite(sy_val):
+                    return MaterialResolutionResult(
+                        status="BLOCKED",
+                        material_definition=None,
+                        diagnostics=(f"Invalid yield stress sy={sy_val}; must be a finite positive number.",),
+                        evidence_source=record.source.locator,
+                    )
                 if not hardening:
                     assumptions.append("Single-point yield stress used with ideal perfectly plastic assumption.")
+                else:
+                    # Validate hardening table integrity: first point (sy, 0.0), monotonic ep, finite values
+                    if hardening[0][1] != 0.0 or hardening[0][0] <= 0:
+                        return MaterialResolutionResult(
+                            status="BLOCKED",
+                            material_definition=None,
+                            diagnostics=("Hardening table first point must have zero plastic strain and positive stress.",),
+                            evidence_source=record.source.locator,
+                        )
+                    for k in range(len(hardening) - 1):
+                        if hardening[k + 1][1] <= hardening[k][1]:
+                            return MaterialResolutionResult(
+                                status="BLOCKED",
+                                material_definition=None,
+                                diagnostics=("Hardening table plastic strain values must be strictly monotonically increasing.",),
+                                evidence_source=record.source.locator,
+                            )
                 plastic_props = PlasticProperties(
                     yield_stress=sy_val,
                     plastic_strain=0.0,

@@ -133,3 +133,70 @@ def test_adaptive_mesh_convergence_controller_budget_exhaustion():
     assert result.is_converged is False
     assert result.status == "BUDGET_EXHAUSTED"
     assert result.levels_executed == 2
+
+
+def test_multi_level_convergence_fails_closed_on_missing_evidence():
+    # 1. Missing reaction force equilibrium evidence
+    probes_missing_rf = [
+        {"peak_s11": 25.0, "max_u1": 0.050},
+        {"peak_s11": 26.0, "max_u1": 0.051},
+    ]
+    res_rf = evaluate_multi_level_mesh_convergence(probes=probes_missing_rf)
+    assert res_rf.converged is False
+    assert res_rf.status == "INCOMPLETE_EVIDENCE"
+    assert any("missing reaction force equilibrium" in d for d in res_rf.diagnostics)
+
+    # 2. Missing stress evidence
+    probes_missing_stress = [
+        {"max_u1": 0.050, "rf_error_pct": 0.0},
+        {"peak_s11": 26.0, "max_u1": 0.051, "rf_error_pct": 0.0},
+    ]
+    res_s = evaluate_multi_level_mesh_convergence(probes=probes_missing_stress)
+    assert res_s.converged is False
+    assert res_s.status == "INCOMPLETE_EVIDENCE"
+    assert any("missing required stress evidence" in d for d in res_s.diagnostics)
+
+    # 3. Missing displacement evidence
+    probes_missing_u = [
+        {"peak_s11": 25.0, "rf_error_pct": 0.0},
+        {"peak_s11": 26.0, "max_u1": 0.051, "rf_error_pct": 0.0},
+    ]
+    res_u = evaluate_multi_level_mesh_convergence(probes=probes_missing_u)
+    assert res_u.converged is False
+    assert res_u.status == "INCOMPLETE_EVIDENCE"
+    assert any("missing required displacement evidence" in d for d in res_u.diagnostics)
+
+
+def test_multi_level_convergence_status_semantic_consistency():
+    # Stress delta is small (2.0% <= 5.0%), but displacement failed to converge
+    probes_u_unconverged = [
+        {"peak_s11": 30.0, "max_u1": 0.050, "rf_error_pct": 0.0},
+        {"peak_s11": 30.6, "max_u1": 0.080, "rf_error_pct": 0.0},  # u delta = 37.5% > 1.0%
+    ]
+    res_u = evaluate_multi_level_mesh_convergence(probes=probes_u_unconverged, tolerance=0.05)
+    assert res_u.converged is False
+    assert res_u.status == "DISPLACEMENT_UNCONVERGED"
+
+    # Stress delta is small, but reaction force equilibrium failed
+    probes_rf_unconverged = [
+        {"peak_s11": 30.0, "max_u1": 0.050, "rf_error_pct": 0.0},
+        {"peak_s11": 30.6, "max_u1": 0.0501, "rf_error_pct": 0.05},  # rf error 0.05% > 0.01%
+    ]
+    res_rf = evaluate_multi_level_mesh_convergence(probes=probes_rf_unconverged, tolerance=0.05)
+    assert res_rf.converged is False
+    assert res_rf.status == "EQUILIBRIUM_UNCONVERGED"
+
+
+def test_multi_level_convergence_oscillatory_sequence_blocked():
+    # 3 levels: non-monotonic and non-diminishing increments (oscillatory)
+    # L1: 30.0 -> L2: 35.0 (delta = 14.3%) -> L3: 34.0 (delta = 2.9% <= 5%)
+    # Even though final delta is 2.9%, sequence oscillates (up then down) with non-monotonicity
+    probes_osc = [
+        {"peak_s11": 30.0, "max_u1": 0.050, "rf_error_pct": 0.0},
+        {"peak_s11": 35.0, "max_u1": 0.0501, "rf_error_pct": 0.0},
+        {"peak_s11": 34.0, "max_u1": 0.0502, "rf_error_pct": 0.0},
+    ]
+    res_osc = evaluate_multi_level_mesh_convergence(probes=probes_osc, tolerance=0.05)
+    assert res_osc.converged is False
+    assert res_osc.status == "OSCILLATORY_APPROACH"
+    assert any("non-monotonic oscillation" in d for d in res_osc.diagnostics)
