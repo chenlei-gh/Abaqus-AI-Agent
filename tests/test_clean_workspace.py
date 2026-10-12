@@ -374,3 +374,47 @@ def test_clean_returns_error_on_manifest_export_failure(tmp_path, monkeypatch):
 
     rc = main()
     assert rc == 1, "Exit code must be 1 when manifest export fails"
+
+
+def test_clean_preserves_machine_validation_ephemeral_assets(tmp_path, monkeypatch):
+    """C4 contract: machine_validation/ must be completely protected from candidate scanning and deletion,
+    even if it contains untracked solver ephemeral artifacts (.odb, .log, .sta, .dat, .msg, .env)."""
+    root = tmp_path / "repo"
+    root.mkdir()
+    subprocess.run(["git", "init"], cwd=root, check=True, capture_output=True)
+
+    mv_dir = root / "machine_validation" / "historical_workdir"
+    mv_dir.mkdir(parents=True)
+
+    odb_file = mv_dir / "Job-benchmark.odb"
+    odb_file.write_bytes(b"critical benchmark odb data")
+
+    log_file = mv_dir / "Job-benchmark.log"
+    log_file.write_text("critical solver log", encoding="utf-8")
+
+    sta_file = mv_dir / "Job-benchmark.sta"
+    sta_file.write_text("critical status file", encoding="utf-8")
+
+    dat_file = mv_dir / "Job-benchmark.dat"
+    dat_file.write_text("critical dat file", encoding="utf-8")
+
+    msg_file = mv_dir / "Job-benchmark.msg"
+    msg_file.write_text("critical diagnostic msg", encoding="utf-8")
+
+    # 1. Verification in collect_candidates: untracked artifacts in machine_validation must NOT be candidates
+    candidates, cache_dirs, _ = collect_candidates(root, set())
+    assert len(candidates) == 0, f"Expected 0 candidates from machine_validation, got {len(candidates)}"
+    assert len(cache_dirs) == 0, f"Expected 0 cache_dirs from machine_validation, got {len(cache_dirs)}"
+
+    # 2. Execution phase with --clean: files must remain completely untouched
+    from scripts.clean_workspace import main
+    monkeypatch.setattr("sys.argv", ["clean_workspace.py", "--root", str(root), "--clean"])
+
+    rc = main()
+    assert rc == 0
+    assert odb_file.is_file(), "Untracked ODB in machine_validation must NOT be deleted"
+    assert odb_file.read_bytes() == b"critical benchmark odb data"
+    assert log_file.is_file(), "Untracked LOG in machine_validation must NOT be deleted"
+    assert sta_file.is_file(), "Untracked STA in machine_validation must NOT be deleted"
+    assert dat_file.is_file(), "Untracked DAT in machine_validation must NOT be deleted"
+    assert msg_file.is_file(), "Untracked MSG in machine_validation must NOT be deleted"

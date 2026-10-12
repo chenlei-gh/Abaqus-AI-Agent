@@ -174,9 +174,8 @@ def collect_candidates(root: Path, tracked: set[str]) -> tuple[list[Candidate], 
     cache_dirs: list[Path] = []
     protected_count = len(tracked)
 
-    mv_dir = root / "machine_validation"
     runs_dir = root / "runs"
-    search_dirs = [root, mv_dir, runs_dir, root / "legacy_job_artifacts"]
+    search_dirs = [root, runs_dir, root / "legacy_job_artifacts"]
 
     for base_dir in search_dirs:
         if not base_dir.exists():
@@ -197,20 +196,20 @@ def collect_candidates(root: Path, tracked: set[str]) -> tuple[list[Candidate], 
             if is_tracked(p, root, tracked):
                 continue
 
-            # Protect p2_cases/ subfolder completely
-            if "p2_cases" in p.parts:
-                continue
-
-            # Protect test_assets/ completely
-            if "test_assets" in p.parts:
-                continue
-
-            # Protect validation_assets/ completely if present
-            if "validation_assets" in p.parts:
-                continue
-
-            # Protect deliverables/ and qualifications completely
-            if "deliverables" in p.parts or "qualifications" in p.parts or "case_01_qualification" in p.parts:
+            # C4 contract: machine_validation/, validation_assets/, test_assets/, deliverables/,
+            # and qualification directories are strictly protected and completely excluded from candidate scans
+            if any(
+                part in p.parts
+                for part in (
+                    "machine_validation",
+                    "validation_assets",
+                    "test_assets",
+                    "deliverables",
+                    "qualifications",
+                    "case_01_qualification",
+                    "p2_cases",
+                )
+            ):
                 continue
 
             # C7 contract: cache dirs strictly limited to CACHE_DIR_NAMES and verified for absence of protected assets
@@ -239,7 +238,7 @@ def collect_candidates(root: Path, tracked: set[str]) -> tuple[list[Candidate], 
                 scope = (
                     "runs"
                     if "runs" in p.parts
-                    else ("root" if p.parent == root else ("machine_validation" if "machine_validation" in p.parts else "legacy"))
+                    else ("root" if p.parent == root else "legacy")
                 )
                 size = p.stat().st_size if p.exists() else 0
                 sha = compute_sha256(p)
@@ -284,7 +283,6 @@ def main() -> int:
     tracked = get_tracked_paths(root)
     candidates, cache_dirs, protected_count = collect_candidates(root, tracked)
 
-    mv_count = sum(1 for c in candidates if c.scope == "machine_validation")
     runs_count = sum(1 for c in candidates if c.scope == "runs")
     root_count = sum(1 for c in candidates if c.scope == "root")
     legacy_count = sum(1 for c in candidates if c.scope == "legacy")
@@ -295,7 +293,6 @@ def main() -> int:
     print(f"Mode:                 {'EXECUTE CLEAN' if args.clean else 'DRY-RUN'}")
     print(f"Git-tracked (kept):   {protected_count} items")
     print(f"Candidate files:      {len(candidates)}")
-    print(f"  - machine_validation: {mv_count}")
     print(f"  - runs/ (runtime):    {runs_count}")
     print(f"  - project-root:       {root_count}")
     print(f"  - legacy_artifacts:   {legacy_count}")
@@ -415,16 +412,6 @@ def main() -> int:
     runs_dir = root / "runs"
     if runs_dir.exists() and not runs_dir.is_symlink():
         for d in sorted(runs_dir.glob("*"), reverse=True):
-            if d.is_dir() and not d.is_symlink() and not any(d.iterdir()):
-                try:
-                    d.rmdir()
-                except OSError:
-                    pass
-
-    # Clean empty workdir subdirectories in machine_validation
-    mv_dir = root / "machine_validation"
-    if mv_dir.exists() and not mv_dir.is_symlink():
-        for d in sorted(mv_dir.glob("*_workdir*"), reverse=True):
             if d.is_dir() and not d.is_symlink() and not any(d.iterdir()):
                 try:
                     d.rmdir()
