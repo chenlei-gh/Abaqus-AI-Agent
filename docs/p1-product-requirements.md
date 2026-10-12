@@ -116,8 +116,8 @@ Phase 4 才开始正式产品化：MCP / Agent Tool、UI / HITL 工作台、部�
 
 **版本:** 2026-10-04  
 **基线状态:** 20 L4 / 0 L3 物理工程领域已全部通过真实机全链路合格认证 (Agent Full-Chain Qualified)  
-**最新进展:** P1.0 基础设施与产品主入口已完成代码加固与 Post-Hardening 真实 Abaqus 2025 求解器端到端复验（100% QUALIFIED, 726/726 PASS）  
-**战略阶段:** Phase P1 — 商业产品化与自主工程智能体 (Commercial Productization & Autonomous Engineering Agent)
+**最新进展:** 全仓 1129 项自动化回归测试 100% 通过（0 失败）；Phase 2 Package B 工业级实战案例已达成 6/10 QUALIFIED（Case 01~06 密码学签名与断言验证闭环）  
+**战略阶段:** Phase 2 — 工程能力深度与真实复杂工程实战 (Package B 案例攻坚)
 
 ---
 
@@ -567,29 +567,59 @@ PHASE 2 架构
 |---|---|---|---|---|
 | 1 | **Bolted Pipe Flange Connection** 螺栓管法兰连接 | 螺栓预紧、垫片、接触、压力、轴对称/3D 对照 | Connector/Contact/Preload/Static | Abaqus 2025 Example Problems (🟢 **QUALIFIED**) |
 | 2 | **Reactor Pressure Vessel Bolted Closure** 反应堆压力容器螺栓闭合结构 | 54 根大直径 M180 螺栓预紧 + 金属锥面密封环接触 + 17.5 MPa 内压 + ASME Sec.III 评定 | Contact/Preload/Multi-step/Plasticity | Abaqus 2025 Example Problems & ASME BPVC (🟢 **QUALIFIED**) |
-| 3 | **Exhaust Manifold Assemblage** 发动机排气歧管总成 | 多部件接触、7 螺栓、300→980 K 热循环、摩擦滑移 | Thermal-Structural/Contact/Preload | Abaqus 2025 Example Problems |
-| 4 | **Automotive Front Subframe Multi-Axis Durability** 汽车副车架多轴耐久疲劳 | 多轴时域载荷谱、衬套刚柔连接(CONN3D2)、ASTM E1049 雨流计数与 Goodman 疲劳 | Multi-step/Connector/Fatigue/Assembly | SAE / Abaqus Engineering Benchmarks |
-| 5 | **Laminated Composite Cylindrical Panel Buckling** 开孔层合复合材料圆柱板屈曲 | 多层铺层、各向异性、初始缺陷、特征屈曲、Riks 后屈曲 | Composite/Buckling/Nonlinear/Riks | Abaqus 2025 Example Problems |
-| 6 | **Stacked Sheet Metal Assembly Submodeling** 多层钣金紧固总成子模型 | 多层薄板、紧固件、全局→局部子模型、局部应力梯度 | Assembly/Submodel/Mesh Strategy | Abaqus 2025 Example Problems |
-| 7 | **Automotive Jounce Bumper** 汽车悬架缓冲块 | 高可压缩橡胶/泡沫、大变形、初始过盈、自接触、接触压缩 | Nonlinear Rubber/Self-Contact/Explicit | Abaqus 2025 Example Problems |
-| 8 | **Axisymmetric Threaded Connection** 轴对称螺纹连接 | 螺纹接触、过盈/缩径、压力渗透、轴向/弯曲/内压工况 | Contact/Connector/Pressure Penetration | Abaqus 2025 Example Problems |
-| 9 | **Cylinder Head Thermomechanical Direct Cyclic Analysis** 气缸盖热机械循环 | 周期热载荷、结构约束、循环响应、热机械疲劳相关结果 | Thermal-Structural/Direct Cyclic/Fatigue Context | Abaqus 2025 Example Problems |
-| 10 | **Thin-Walled Elbow Elastic-Plastic Collapse** 薄壁弯头弹塑性失稳 | 内压 + 面内弯曲、几何非线性、材料塑性、极限承载能力 | Nonlinear/Plasticity/Structural Collapse | Abaqus 2025 Example Problems |
+| 3 | **Exhaust Manifold Assemblage** 发动机排气歧管总成 | 多部件接触、7 螺栓、300→980 K 热循环、摩擦滑移 | Thermal-Structural/Contact/Preload | Abaqus 2025 Example Problems (🟢 **QUALIFIED**) |
+| 4 | **Automotive Front Subframe Multi-Axis Durability** 汽车副车架多轴耐久疲劳 | 多轴时域载荷谱、衬套刚柔连接(CONN3D2)、ASTM E1049 雨流计数与 Goodman 疲劳 | Multi-step/Connector/Fatigue/Assembly | SAE / Abaqus Engineering Benchmarks (🟢 **QUALIFIED**) |
+| 5 | **Laminated Composite Cylindrical Panel Buckling** 开孔层合复合材料圆柱板屈曲 | 多层铺层、各向异性、初始缺陷、特征屈曲、Riks 后屈曲 | Composite/Buckling/Nonlinear/Riks | Abaqus 2025 Example Problems (🟢 **QUALIFIED**) |
+| 6 | **Stacked Sheet Metal Assembly Submodeling** 多层钣金紧固总成子模型 | 多层薄板、紧固件、全局→局部子模型、局部应力梯度 | Assembly/Submodel/Mesh Strategy | Abaqus 2025 Example Problems (🟢 **QUALIFIED**) |
+| 7 | **Automotive Jounce Bumper** 汽车悬架缓冲块 | 高可压缩橡胶/泡沫、大变形、初始过盈、自接触、接触压缩 | Nonlinear Rubber/Self-Contact/Explicit | Abaqus 2025 Example Problems (🟡 **PENDING - 下一攻坚优先级**) |
+| 8 | **Axisymmetric Threaded Connection** 轴对称螺纹连接 | 螺纹接触、过盈/缩径、压力渗透、轴向/弯曲/内压工况 | Contact/Connector/Pressure Penetration | Abaqus 2025 Example Problems (⚪ **PRE_RESERVED**) |
+| 9 | **Cylinder Head Thermomechanical Direct Cyclic Analysis** 气缸盖热机械循环 | 周期热载荷、结构约束、循环响应、热机械疲劳相关结果 | Thermal-Structural/Direct Cyclic/Fatigue Context | Abaqus 2025 Example Problems (⚪ **PRE_RESERVED**) |
+| 10 | **Thin-Walled Elbow Elastic-Plastic Collapse** 薄壁弯头弹塑性失稳 | 内压 + 面内弯曲、几何非线性、材料塑性、极限承载能力 | Nonlinear/Plasticity/Structural Collapse | Abaqus 2025 Example Problems (⚪ **PRE_RESERVED**) |
 
-### 案例来源与选择原则
+### 11.2.1 案例筛选背景与五维量化准则
 
-上述案例优先取自 **Abaqus 2025 官方 Example Problems**，并要求每个案例具有明确工程应用背景、可获得的输入模型/参数/参考结果或实验对照。官方案例库覆盖法兰连接、压力容器、排气歧管、复合材料屈曲、钣金子模型、橡胶自接触、螺纹连接、气囊冲击等复杂工程问题；其中部分案例明确引用实验研究或工业模型。
+根据架构裁决，Package B 不应作为盲目的功能扩张实验，而必须作为 **Phase 2 最终硬门槛与工程内核冻结基准 (Engineering Kernel Freeze Gate)**。
 
-### 每个案例的强制交付物
+每一个入选案例必须经过以下五维指标的严格量化评估：
+1. **工程复杂度 (Engineering Complexity, 1~5 星)**：是否具备真实的工业模型复杂度（如接触非线性、预紧力、多步骤加载、材料非线性、多部件装配体等）。
+2. **能力覆盖度 (20 L4 Capability Coverage, 1~5 星)**：能否有效覆盖已通过 L4 验收的 20 项核心物理能力。
+3. **组合价值 (Multi-Physics Composition Value, 1~5 星)**：是否体现多物理域或多步骤组合（如 Preload $\to$ Static, Contact + Plasticity, Thermal $\to$ Structural $\to$ Fatigue 等）。
+4. **公开参考基准可得性 (Reference Benchmark Availability, 1~5 星)**：是否有权威公开出版物、Abaqus 官方 Example Problems、ASME/SAE/ISO 规范解或实验数据作为绝对校准对照。
+5. **新物理域风险 (New Domain Risk, 低/中/高)**：**必须为“低”**。严禁为了凑案例而强行引入当前无内核支撑的冷门物理域（如显式多组分气体充气流体腔、粒子流动力学等）。
 
-1. **Problem Package**：来源、工程问题描述、几何/模型文件、材料、单位制、载荷、边界、分析步骤、预期输出、参考结果。
-2. **Agent Input**：以自然语言或结构化工程需求正式导入，不允许只执行预制 `.inp`。
-3. **Compiled Model**：由项目现有 Intent → Compiler → Preflight 链路生成/整理实际求解模型。
-4. **Real Abaqus 2025 Run**：真实机求解，保留 `.inp/.odb/.sta/.msg/.dat/.log` 等可审计工件。
-5. **Verification & Acceptance**：必须经过现有 Evidence V2 + Single-Exit Acceptance；任何缺证据、求解失败或结果异常均不得伪装为成功。
-6. **Result Intelligence**：提取该案例真正有工程意义的关键指标，而不是只输出最大 Mises。
-7. **Engineering Report**：生成可独立交付的 Markdown/HTML 工程报告，包含问题复述、模型假设、材料/边界、网格、求解状态、关键结果、参考结果对照、限制与结论。
-8. **Reproducibility Manifest**：记录来源、运行参数、Abaqus 版本、工件 SHA-256、运行 ID 和最终 Acceptance 状态。
+### 11.2.2 候选案例池评估与筛选分析表
+
+| 序号 | 候选案例名称 | 工业领域 | 复杂度 | 能力覆盖 | 组合价值 | 参考基准 | 新域风险 | 综合裁决与当前状态 |
+| :--- | :--- | :--- | :---: | :---: | :---: | :---: | :---: | :--- |
+| **01** | **螺栓管法兰垫片密封分析** | 压力容器/管道 | ★★★★★ | ★★★★★ | ★★★★★ | ★★★★★ | **低** | 🟢 **入选并闭环 (Case 01, QUALIFIED)** |
+| **02** | **反应堆压力容器螺栓闭合结构** | 核电/重型装备 | ★★★★★ | ★★★★★ | ★★★★★ | ★★★★★ | **低** | 🟢 **入选并闭环 (Case 02, QUALIFIED)** |
+| **03** | **重载发动机排气歧管热机械接触** | 汽车动力总成 | ★★★★★ | ★★★★★ | ★★★★★ | ★★★★★ | **低** | 🟢 **入选并闭环 (Case 03, QUALIFIED)** |
+| *--* | *侧气帘安全气囊冲击试验* | *汽车被动安全* | *★★★★★* | *★★☆☆☆* | *★★☆☆☆* | *★★★★☆* | **极高** | ❌ **排除 (依赖冷门流体腔充气模型)** |
+| **04** | **汽车副车架多轴耐久与疲劳分析** (替换项) | 汽车底盘结构 | ★★★★★ | ★★★★★ | ★★★★★ | ★★★★★ | **低** | 🟢 **入选并闭环 (Case 04, QUALIFIED, 替换气囊)** |
+| **05** | **开孔层合复合材料圆柱壳屈曲分析** | 航空航天结构 | ★★★★☆ | ★★★★★ | ★★★★☆ | ★★★★★ | **低** | 🟢 **入选并闭环 (Case 05, QUALIFIED)** |
+| **06** | **多层钣金装配体子模型精细化分析** | 车身/通用机械 | ★★★★☆ | ★★★★★ | ★★★★☆ | ★★★★★ | **低** | 🟢 **入选并闭环 (Case 06, QUALIFIED)** |
+| **07** | **悬架超弹性缓冲块大变形自接触** | 汽车底盘工程 | ★★★★☆ | ★★★★★ | ★★★★☆ | ★★★★★ | **低** | 🟡 **入选 (Case 07, PENDING - 下一攻坚优先级)** |
+| **08** | **石油套管特殊螺纹接头弹塑性接触** | 油气能源工程 | ★★★★★ | ★★★★★ | ★★★★★ | ★★★★★ | **低** | ⚪ **入选 (Case 08, PRE_RESERVED)** |
+| **09** | **内燃机气缸盖热机械低周疲劳评定** | 发动机工程 | ★★★★★ | ★★★★★ | ★★★★★ | ★★★★★ | **低** | ⚪ **入选 (Case 09, PRE_RESERVED)** |
+| **10** | **薄壁管道弯头弹塑性失稳极限承载** | 化工/核电管道 | ★★★★☆ | ★★★★★ | ★★★★☆ | ★★★★★ | **低** | ⚪ **入选 (Case 10, PRE_RESERVED)** |
+
+#### 关键剔除与替换论证 (Airbag Impactor $\to$ Subframe Fatigue)
+- **剔除原因**：Abaqus 官方侧气帘案例 (`simaexa-c-airbag.htm`) 深度依赖 `*AIRBAG INFLATOR`、`*FLUID CAVITY` 与多组分热力学气体状态方程（EOS），且存在高度特异性的薄织物褶皱自接触显式算法。该领域并不属于主流通用结构工程核心，若在此阶段引入会导致大量流体腔特化逻辑侵入核心编译器，违背“基于已有能力组合，不新增物理域”的铁律。
+- **替换方案**：**汽车副车架多轴耐久与疲劳分析 (Automotive Front Subframe Multi-Axis Durability & Fatigue)**。完整利用系统已具备的装配体接触、铰接连接器（CONN3D2 / Bushes）、多通道时域工况加载、ASTM E1049 雨流计数法与 Goodman 修正，直接对冲高价值的整车底盘疲劳工程场景。
+
+### 11.2.3 案例来源与选择原则
+
+上述案例优先取自 **Abaqus 2025 官方 Example Problems**，并要求每个案例具有明确工程应用背景、可获得的输入模型/参数/参考结果或实验对照。官方案例库覆盖法兰连接、压力容器、排气歧管、复合材料屈曲、钣金子模型、橡胶自接触、螺纹连接等复杂工程问题；其中部分案例明确引用实验研究或工业模型。
+
+### 11.2.4 每个案例的强制交付物与文件规范
+
+每个正式实战案例必须产生以下标准受控文件：
+1. **问题定义与标准参数**：`test_assets/engineering_cases/case_XX_.../problem_statement.json`。
+2. **端到端执行驱动与物理提取**：`tools/p2_case_XX_..._e2e.py`。
+3. **密码学验签清单**：`machine_validation/p2_cases/case_XX_..._manifest.json`（含工件 SHA-256、Abaqus 2025 运行标记与 Acceptance 状态）。
+4. **独立工程交付报告**：单文件 HTML 与 Markdown 格式（含 Base64 嵌入矢量 SVG 与应力/接触/变形云图）。
+5. **自动化回归断言**：全量测试纳入 `tests/test_p2_package_b_cases.py`。
+6. **统一资产注册表记录**：在 `validation_assets/registry.json` 中统一登记元数据、官方参考源及资格状态。
 
 ### 10 案例的统一验收门槛
 
@@ -699,7 +729,7 @@ Benchmark 必须区分软件回归与真实 Abaqus 物理验证。
 | Phase 2 (Package A) | REQ-P2-003 FMBD 工程场景深度 | 🟢 **QUALIFIED** (Gate 14, 刚柔耦合, 能量耗散 < 1%) |
 | Phase 2 (Package A) | REQ-P2-004 多物理 / 多工况组合验证 | 🟢 **QUALIFIED** (热-固传递, 预紧模态应力刚化, 库伦摩擦接触) |
 | Phase 2 (Package A) | REQ-P2-005 Phase 2 组合 Golden Matrix 收口 | 🟢 **QUALIFIED** (`p2_package_a_manifest.json` 密码学验签) |
-| Phase 2 (Package B) | REQ-P2-006 10 个真实复杂工程问题实战终验包 | 🟡 **IN PROGRESS (3/10 QUALIFIED)**: Case 1 法兰连接、Case 2 RPV 反应堆闭合结构、Case 3 发动机排气歧管热机械接触闭环 |
+| Phase 2 (Package B) | REQ-P2-006 10 个真实复杂工程问题实战终验包 | 🟡 **IN PROGRESS (6/10 QUALIFIED)**: Case 01~06 全部闭环 (法兰垫片密封、RPV螺栓闭合、排气歧管热机械接触、副车架多轴耐久、开孔复合材料壳屈曲、钣金装配子模型)；Case 07~10 待推进 |
 | Phase 3 | Planning | ⚪ POST-FREEZE ROADMAP |
 | Phase 3 | Clarification | ⚪ POST-FREEZE ROADMAP |
 | Phase 3 | Iteration | ⚪ POST-FREEZE ROADMAP |

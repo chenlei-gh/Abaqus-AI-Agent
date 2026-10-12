@@ -2316,9 +2316,9 @@ For full requirements backlog, input/output schemas, anti-hallucination constrai
 - [x] **阶段 F-1：Git 交付与远程 CI 验证 (Git Delivery & Remote CI Gate)**
   - 代码提交并推送到 `origin/main`（Commit `a80dc87`，工作区干净）。
   - GitHub Actions CI 矩阵通过（Run #984，6/6 任务全部 PASS）。
-2319	- [ ] **阶段 F-2：Abaqus 2025 真机实测与 Viewer 抓图验证 (Live Abaqus Gate - Pending Lab Machine)**
-  2320	  - 明确区分代码/自动化测试验证与 Abaqus 2025 真机实测状态。
-  2321	  - 在配备 Abaqus 2025 的 Windows 真机环境中，独立验证端到端真实求解、ODB 云图提取与报告交付闭环。
+- [ ] **阶段 F-2：Abaqus 2025 真机实测与 Viewer 抓图验证 (Live Abaqus Gate - Pending Lab Machine)**
+  - 明确区分代码/自动化测试验证与 Abaqus 2025 真机实测状态。
+  - 在配备 Abaqus 2025 的 Windows 真机环境中，独立验证端到端真实求解、ODB 云图提取与报告交付闭环。
 
 ---
 
@@ -2627,4 +2627,50 @@ Abaqus-AI-Agent/
   - 经用户显式授权，执行 `clean_workspace.py --clean`；
   - 成功清理 `runs/` 下累积的 `2,765` 个临时求解器产物及 `.pytest_cache/`，释放 `13.8 MiB`；
   - 失败 `0` 个，受控核心资产与未跟踪可复现脚本 `0` 个受损；
-  - 全仓自动化回归测试达 **1123 项通过**（0 失败）。
+  - 全仓自动化回归测试达 **1129 项通过**（0 失败，覆盖 C1–C10 契约全部 13 项安全测试）。
+
+---
+
+## 31. Phase 2 Package B 剩余实战案例 (Case 07 ~ Case 10) 实施规划与最新基线状态 (Remaining Engineering Cases & Next Phased Implementation Plan)
+
+**项目：** `chenlei-gh/Abaqus-AI-Agent`  
+**基线状态：** 全仓 1129 项自动化测试 100% PASS，Git 工作区完全干净（同步至 commit `3216375`）  
+**当前核心主线：** Phase 2 Package B 工业级实战案例（目标：10/10 QUALIFIED 达成 Engineering Kernel Freeze）  
+**单一权威源 (SSOT) 说明：** 本路线图负责记录工程执行演进、测试流水与交付证据；有关 Package B 的核心需求规格、五维评分准则、候选案例池评估以及交付物格式规范，统一以 [`docs/p1-product-requirements.md` 第 11.2 节](p1-product-requirements.md#112-package-b10-个真实复杂工程项目正式实战) 为准。
+
+### 31.1 Package B 10 大案例当前进展与权威基线状态
+
+| 案例编号 | 案例名称 | 物理领域与核心难点 | 官方/权威参考来源 | 当前状态 | 交付资产与测试索引 |
+| :--- | :--- | :--- | :--- | :---: | :--- |
+| **Case 01** | 螺栓管法兰连接垫片密封 | 螺栓预紧、垫片非线性受压密封、内压作用 | Abaqus 2025 Example 1.1.1 | 🟢 **QUALIFIED** | `case_01_flange_manifest.json`<br>`tests/test_p2_package_b_cases.py` |
+| **Case 02** | 反应堆压力容器 (RPV) 螺栓闭合 | 54 根 M180 螺栓、金属密封环锥面接触、ASME 评定 | Abaqus 2025 Example 1.1.2 & ASME BPVC | 🟢 **QUALIFIED** | `case_02_rpv_manifest.json`<br>`tests/test_p2_package_b_cases.py` |
+| **Case 03** | 重载发动机排气歧管热机接触 | 瞬态热-机耦合接触、7 螺栓预紧、高温滑移 | Abaqus 2025 Example 1.1.18 & SAE | 🟢 **QUALIFIED** | `case_03_manifold_manifest.json`<br>`tests/test_p2_package_b_cases.py` |
+| **Case 04** | 汽车副车架多轴耐久与疲劳 | 多轴时域时程谱、CONN3D2 衬套、雨流计数/Goodman | SAE Technical Papers & ASTM E1049 | 🟢 **QUALIFIED** | `case_04_subframe_manifest.json`<br>`tests/test_p2_package_b_cases.py` |
+| **Case 05** | 开孔复合材料圆柱壳屈曲 | 各向异性多层铺层、特征值屈曲、Riks 后屈曲 | NASA SP-8007 & Abaqus 2025 Example | 🟢 **QUALIFIED** | `case_05_composite_buckling_manifest.json`<br>`tests/test_p2_package_b_cases.py` |
+| **Case 06** | 多工序钣金装配与子模型 | 冲压回弹、焊点装配、局部子模型缺口应力 | Numisheet Benchmark & Abaqus 2025 Example | 🟢 **QUALIFIED** | `case_06_sheet_metal_manifest.json`<br>`tests/test_p2_package_b_cases.py` |
+| **Case 07** | **汽车悬架超弹性缓冲块大变形自接触** | Mooney-Rivlin/Ogden 超弹性本构、大变形折叠自接触、非线性刚度硬化曲线 | Abaqus 2025 Example Problems 1.1.X / Benchmarks | 🟡 **PENDING (下一攻坚优先级)** | `test_assets/engineering_cases/case_07_...`<br>待开发 |
+| **Case 08** | **石油套管特殊螺纹接头弹塑性接触** | 螺纹高阶多牙微滑移接触、弹塑性过盈连接、高压密封压力渗透判据 | Abaqus 2025 Example Problems & ISO 13679 | ⚪ **PRE_RESERVED** | 待开发 |
+| **Case 09** | **内燃机气缸盖热机械低周疲劳评定** | 瞬态热传导、弹塑性蠕变循环、Coffin-Manson / Morrow 低周疲劳评定 | Abaqus 2025 Example Problems | ⚪ **PRE_RESERVED** | 待开发 |
+| **Case 10** | **薄壁管道弯头弹塑性失稳极限承载** | 几何与材料双重非线性、面内弯曲截面卵形化 (Brazier 效应)、弧长法 (Riks) 极限垮塌荷载 | Abaqus 2025 Example Problems | ⚪ **PRE_RESERVED** | 待开发 |
+
+### 31.2 Case 07 实施需求与设计规范 (Immediate Work Item: Case 07)
+
+**1. 物理问题与工程目标**：
+- 汽车悬架多孔/致密橡胶/聚氨酯缓冲块（Jounce Bumper），在极端压缩工况下承受剧烈大变形。
+- 材料采用超弹性本构模型（如 Mooney-Rivlin / Ogden / Polynomial Strain Energy），呈现高非线性刚度渐进硬化行为。
+- 几何特征具备多波纹外形，受压折叠时发生强非线性面-面自接触 (Self-Contact)。
+
+**2. 交付与验证准则 (Exit Criteria)**：
+- 产出 `test_assets/engineering_cases/case_07_jounce_bumper_self_contact/problem_statement.json`。
+- 实现 E2E 执行驱动及无头 ODB 提取脚本。
+- 生成密码学签名防篡改凭证 `case_07_jounce_bumper_manifest.json` 与 Evidence V2 审计摘要。
+- 产出独立单文件 HTML 交付报告（嵌入矢量 SVG 与应力/接触云图）。
+- 在 `validation_assets/registry.json` 中更新资格状态为 `QUALIFIED`，并登记 official reference。
+- 在 `tests/test_p2_package_b_cases.py` 补充物理验收断言与负向探针（接触自穿透、材料参数失效应阻断）。
+
+### 31.3 后续未完成事项全景看板 (Pending Roadmap Matrix)
+
+1. **Phase 2 Package B 剩余案例开发 (Case 07 ~ 10)** $\to$ 达成 10/10 QUALIFIED 并触发 **Engineering Kernel Freeze**。
+2. **阶段 F-2：Abaqus 2025 真机实测与 Viewer 抓图验证 (Live Abaqus Gate)** $\to$ 在实验室物理机上作为常驻门禁持续验证。
+3. **空间拾取进阶演进 (Track GA-2A.5)** $\to$ 视口屏幕点击 $(u,v) \to$ 空间射线投射 $\to$ 物理几何全链路 Golden 闭环。
+4. **Phase 3 & Phase 4 远期产品化演进** $\to$ Agent 自主性需求澄清、求解故障自愈多轮编排及商业级工程工作台。
