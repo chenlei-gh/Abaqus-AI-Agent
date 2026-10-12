@@ -93,3 +93,58 @@ def test_cli_assets_subcommand(capsys):
     captured = capsys.readouterr()
     c3_data = json.loads(captured.out)
     assert c3_data["case_id"] == "CASE_03_EXHAUST_MANIFOLD_THERMO_MECHANICAL"
+
+
+def test_registry_boundary_and_authority_division():
+    """Verify distinct namespace boundaries between runtime golden_registry and canonical assets registry."""
+    from abaqus_ai_agent.golden_registry import standard_golden_catalog
+    repo = get_repo_root()
+    with open(repo / "validation_assets" / "registry.json", "r", encoding="utf-8") as fh:
+        assets_data = json.load(fh)
+
+    golden_ids = {case.case_id for case in standard_golden_catalog.all_cases()}
+    asset_ids = {case["case_id"] for case in assets_data["cases"]}
+
+    # Ensure no namespace collision: golden cases use snake_case runtime IDs (e.g. static_cantilever),
+    # while engineering asset cases use uppercase prefix CASE_NN_*.
+    collision = golden_ids.intersection(asset_ids)
+    assert not collision, f"Namespace collision detected between golden_registry and registry.json: {collision}"
+
+
+def test_cross_registry_references_provenance():
+    """Ensure all qualified cases in registry.json map bidirectionally to official_examples.json."""
+    repo = get_repo_root()
+    with open(repo / "validation_assets" / "registry.json", "r", encoding="utf-8") as fh:
+        assets_data = json.load(fh)
+    with open(repo / "validation_assets" / "references" / "official_examples.json", "r", encoding="utf-8") as fh:
+        ref_data = json.load(fh)
+
+    ref_map = {r["ref_id"]: r for r in ref_data["references"]}
+
+    qualified_cases = [c for c in assets_data["cases"] if c.get("qualification_status") == "QUALIFIED"]
+    for case in qualified_cases:
+        ref_id = case["reference_source"]
+        assert ref_id in ref_map, f"Case {case['case_id']} references unknown benchmark {ref_id}"
+        # Bidirectional check: the official reference must list this case in associated_cases
+        assert case["case_id"] in ref_map[ref_id]["associated_cases"], (
+            f"Official reference {ref_id} does not associate {case['case_id']}"
+        )
+
+
+def test_case_manifests_single_source_of_truth():
+    """Ensure individual case_manifest.json metrics and registry.json criteria keys are identical."""
+    repo = get_repo_root()
+    with open(repo / "validation_assets" / "registry.json", "r", encoding="utf-8") as fh:
+        assets_data = json.load(fh)
+
+    qualified_cases = [c for c in assets_data["cases"] if c.get("qualification_status") == "QUALIFIED"]
+    for case in qualified_cases:
+        manifest_file = repo / case["case_dir"] / "case_manifest.json"
+        assert manifest_file.is_file()
+        with open(manifest_file, "r", encoding="utf-8") as fh:
+            m_data = json.load(fh)
+
+        # Verified metrics keys must match exactly between canonical registry criteria and case manifest
+        assert set(m_data["verified_metrics"].keys()) == set(case["acceptance_criteria"].keys()), (
+            f"Criteria divergence detected for {case['case_id']}"
+        )

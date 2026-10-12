@@ -343,12 +343,30 @@ def main() -> int:
         try:
             if not c.path.exists():
                 continue
-            # Re-verify size hasn't changed since candidate collection
+
+            # 1. Path boundary check: ensure candidate path is strictly within repo root
+            try:
+                c.path.resolve().relative_to(root.resolve())
+            except ValueError:
+                failed_files += 1
+                print(f"Safety abort: path outside repository root, skipping {c.path}")
+                continue
+
+            # 2. File size re-verification
             current_size = c.path.stat().st_size
             if current_size != c.size:
                 failed_files += 1
-                print(f"Safety abort: file modified since audit scan, skipping {c.path}")
+                print(f"Safety abort: file modified since audit scan (size mismatch), skipping {c.path}")
                 continue
+
+            # 3. Content SHA-256 re-verification to prevent deletion if modified/tampered after candidate collection
+            if c.sha256:
+                current_sha = compute_sha256(c.path)
+                if current_sha != c.sha256:
+                    failed_files += 1
+                    print(f"Safety abort: file content modified since audit scan (sha256 mismatch), skipping {c.path}")
+                    continue
+
             c.path.unlink()
             deleted_files += 1
         except OSError as e:

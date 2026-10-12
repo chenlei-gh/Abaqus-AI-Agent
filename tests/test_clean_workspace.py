@@ -136,3 +136,75 @@ def test_clean_workspace_cli_dry_run_and_manifest_export(tmp_path):
     assert data["candidate_count"] == 1
     assert data["candidates"][0]["relative_path"] == "runs/run_3/analysis.log"
     assert len(data["candidates"][0]["sha256"]) == 64
+
+
+def test_clean_aborts_on_content_tampering_with_same_size(tmp_path, monkeypatch):
+    """When a candidate's content is tampered with exact same byte size, SHA-256 check must abort deletion."""
+    root = tmp_path / "repo"
+    root.mkdir()
+    runs_dir = root / "runs" / "run_tamper"
+    runs_dir.mkdir(parents=True)
+
+    log_file = runs_dir / "Job-tamper.log"
+    initial_bytes = b"ORIGINAL_SOLVER_LOG_BYTES_0001"
+    log_file.write_bytes(initial_bytes)
+
+    # Initialize a git repo so git ls-files succeeds
+    subprocess.run(["git", "init"], cwd=root, check=True, capture_output=True)
+
+    # Collect candidates
+    candidates, _, _ = collect_candidates(root, set())
+    assert len(candidates) == 1
+    c = candidates[0]
+    assert c.size == len(initial_bytes)
+    assert c.sha256 == compute_sha256(log_file)
+
+    # Tamper file with EXACT same byte size but different content
+    tampered_bytes = b"TAMPERED_OUTPUT_LOG_BYTES_0001"
+    assert len(tampered_bytes) == len(initial_bytes)
+    log_file.write_bytes(tampered_bytes)
+    assert log_file.stat().st_size == len(initial_bytes)
+    assert compute_sha256(log_file) != c.sha256
+
+    # Mock collect_candidates to return the candidate captured prior to tampering
+    from scripts.clean_workspace import main
+    monkeypatch.setattr(
+        "scripts.clean_workspace.collect_candidates",
+        lambda r, t: ([c], [], 0),
+    )
+    monkeypatch.setattr(
+        "sys.argv",
+        ["clean_workspace.py", "--root", str(root), "--clean"],
+    )
+    rc = main()
+    # Must fail/return 1 due to safety abort
+    assert rc == 1
+    # File must NOT be deleted
+    assert log_file.is_file()
+    assert log_file.read_bytes() == tampered_bytes
+
+
+def test_clean_aborts_on_path_outside_root(tmp_path, monkeypatch):
+    """Candidate located outside the repository root must trigger path boundary abort."""
+    root = tmp_path / "repo"
+    root.mkdir()
+    outside_file = tmp_path / "outside.log"
+    outside_file.write_bytes(b"outside")
+
+    c = Candidate(
+        path=outside_file,
+        scope="external",
+        size=len(b"outside"),
+        sha256=compute_sha256(outside_file),
+        reason="test outside",
+    )
+
+    subprocess.run(["git", "init"], cwd=root, check=True, capture_output=True)
+
+    from scripts.clean_workspace import main
+    monkeypatch.setattr("scripts.clean_workspace.collect_candidates", lambda r, t: ([c], [], 0))
+    monkeypatch.setattr("sys.argv", ["clean_workspace.py", "--root", str(root), "--clean"])
+
+    rc = main()
+    assert rc == 1
+    assert outside_file.is_file()

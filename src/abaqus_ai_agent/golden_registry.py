@@ -1,9 +1,16 @@
 """Unified Golden Case Registry and Catalog.
 
-Defines the strongly typed registry of all real-machine engineering Golden Cases
-(P0 Baseline, P1 Physics & Verification, MBD Rigid-Body and Multi-Body Dynamics).
+Defines the strongly typed runtime verification engine registry for solver-level
+Golden Cases (P0 Baseline, P1 Physics & Verification, MBD Rigid-Body and Multi-Body Dynamics).
 Each definition captures analytical references, solvers, expected artifacts,
 and nominal acceptance criteria alongside negative strict gates.
+
+ARCHITECTURAL DIVISION & SINGLE SOURCE OF TRUTH BOUNDARY:
+- golden_registry.py: Exclusive authority for typed runtime solver verification rules,
+  strict negative gates, numerical evaluation operators, and P0/P1/MBD benchmark criteria.
+- validation_assets/registry.json: Exclusive authority for high-level engineering application
+  packages (Case 01 to Case 10+), physical asset indexing, official references provenance
+  (references/official_examples.json), and delivery report assets.
 """
 
 from dataclasses import dataclass, field
