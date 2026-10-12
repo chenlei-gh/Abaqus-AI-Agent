@@ -360,12 +360,12 @@ def main() -> int:
                 continue
 
             # 3. Content SHA-256 re-verification to prevent deletion if modified/tampered after candidate collection
-            if c.sha256:
-                current_sha = compute_sha256(c.path)
-                if current_sha != c.sha256:
-                    failed_files += 1
-                    print(f"Safety abort: file content modified since audit scan (sha256 mismatch), skipping {c.path}")
-                    continue
+            # Strict C6 contract: if candidate hash is empty, recomputation fails, or hash mismatches, abort deletion.
+            current_sha = compute_sha256(c.path)
+            if not c.sha256 or not current_sha or current_sha != c.sha256:
+                failed_files += 1
+                print(f"Safety abort: invalid or mismatched sha256 checksum, skipping {c.path}")
+                continue
 
             c.path.unlink()
             deleted_files += 1

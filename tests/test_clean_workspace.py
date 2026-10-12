@@ -208,3 +208,48 @@ def test_clean_aborts_on_path_outside_root(tmp_path, monkeypatch):
     rc = main()
     assert rc == 1
     assert outside_file.is_file()
+
+
+def test_clean_aborts_on_empty_or_failed_hash(tmp_path, monkeypatch):
+    """C6 contract: when candidate hash is empty or recomputation returns empty, clean must abort."""
+    root = tmp_path / "repo"
+    root.mkdir()
+    runs_dir = root / "runs" / "run_empty_hash"
+    runs_dir.mkdir(parents=True)
+    log_file = runs_dir / "Job.log"
+    log_file.write_bytes(b"some solver output")
+
+    # Case 1: Candidate with empty sha256
+    c_empty = Candidate(
+        path=log_file,
+        scope="runs",
+        size=len(b"some solver output"),
+        sha256="",
+        reason="empty hash test",
+    )
+
+    subprocess.run(["git", "init"], cwd=root, check=True, capture_output=True)
+
+    from scripts.clean_workspace import main
+    monkeypatch.setattr("scripts.clean_workspace.collect_candidates", lambda r, t: ([c_empty], [], 0))
+    monkeypatch.setattr("sys.argv", ["clean_workspace.py", "--root", str(root), "--clean"])
+
+    rc = main()
+    assert rc == 1
+    assert log_file.is_file(), "File must not be deleted if candidate hash is empty"
+
+    # Case 2: Recomputation fails (returns empty string)
+    c_valid = Candidate(
+        path=log_file,
+        scope="runs",
+        size=len(b"some solver output"),
+        sha256=compute_sha256(log_file),
+        reason="recomputation failure test",
+    )
+    monkeypatch.setattr("scripts.clean_workspace.collect_candidates", lambda r, t: ([c_valid], [], 0))
+    # Mock compute_sha256 during deletion to return empty string (simulating read failure)
+    monkeypatch.setattr("scripts.clean_workspace.compute_sha256", lambda p: "")
+
+    rc = main()
+    assert rc == 1
+    assert log_file.is_file(), "File must not be deleted if sha256 recomputation fails"
