@@ -123,6 +123,7 @@ def test_ga261_probe_evidence_manifest_integrity():
     assert p3["net_shear_force"] < 1e-6
 
 
+@pytest.mark.live
 def test_ga261_live_abaqus_real_machine(tmp_path: Path):
     """Live solver probe execution test on host machine when Abaqus 2025 is available."""
     launcher, is_live = check_launcher("abaqus")

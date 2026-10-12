@@ -30,3 +30,6 @@ filterwarnings = [
     "ignore::DeprecationWarning:setuptools.*",
     "ignore::DeprecationWarning:pkg_resources.*",
 ]
+markers = [
+    "live: tests requiring real Abaqus solver subprocess execution on physical host",
+]

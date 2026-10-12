@@ -107,6 +107,7 @@ def test_ga263_golden_evidence_manifest_structure():
     assert len(five["layer_5_evidence_traceability"]["script_sha256"]) == 64
 
 
+@pytest.mark.live
 def test_ga263_golden_case_live_abaqus_real_machine(tmp_path: Path):
     """Verify GA-2.6.3 Golden Case executes on real live Abaqus 2025 and extracts physical evidence."""
     launcher, is_live = check_launcher("abaqus")

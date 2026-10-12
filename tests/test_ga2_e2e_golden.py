@@ -68,6 +68,7 @@ def test_ga2_golden_case_e2e_offline(tmp_path: Path):
     assert res["max_displacement_mm"] > 0
 
 
+@pytest.mark.live
 def test_ga2_golden_case_live_abaqus_real_machine(tmp_path: Path):
     """Verify GA-2 Golden Case executes on real live Abaqus 2025 and extracts physical ODB evidence."""
     launcher, is_live = _check_launcher_availability("abaqus")
