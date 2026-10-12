@@ -24,10 +24,12 @@ from typing import Any, Dict, List, Optional, Sequence, Set, Tuple, Union
 import zlib
 
 try:
-    from PIL import Image as _PILImage
+    from PIL import Image as _PILImage, ImageChops as _PILImageChops, ImageStat as _PILImageStat
     _HAS_PIL = True
 except ImportError:
     _PILImage = None
+    _PILImageChops = None
+    _PILImageStat = None
     _HAS_PIL = False
 
 from ..contracts.report import ReportFigure
@@ -196,6 +198,59 @@ def verify_gif_image_integrity(
         raise ValueError(f"Corrupt GIF image data: failed to decode raster payload: {exc}")
 
     return width, height
+
+
+def calculate_frame_difference(im1: Any, im2: Any) -> float:
+    """Calculate the normalized pixel difference ratio between two PIL images in [0.0, 1.0]."""
+    if _PILImageChops is None or _PILImageStat is None or not _HAS_PIL:
+        return 1.0
+    try:
+        thumb_size = (160, 120)
+        t1 = im1.convert("L").resize(thumb_size)
+        t2 = im2.convert("L").resize(thumb_size)
+        diff = _PILImageChops.difference(t1, t2)
+        stat = _PILImageStat.Stat(diff)
+        mean_diff = stat.mean[0]  # range 0 to 255
+        return mean_diff / 255.0
+    except Exception:
+        return 1.0
+
+
+def prune_static_animation_frames(
+    frames: List[Any],
+    motion_threshold: float = 0.005,
+    max_static_tail: int = 1,
+) -> List[Any]:
+    """Prune prolonged stationary frames (e.g. tail resting state) from an animation sequence.
+
+    Addresses the defect where simulation dynamics cease early, causing the resulting GIF
+    to appear stationary/frozen across the majority of playback time.
+    Ensures at least 2 frames are preserved so animation validity is guaranteed.
+    """
+    if len(frames) <= 2:
+        return frames
+
+    # 1. Compute consecutive frame differences
+    diffs = []
+    for i in range(len(frames) - 1):
+        d = calculate_frame_difference(frames[i], frames[i + 1])
+        diffs.append(d)
+
+    # 2. Check for static tail (consecutive stationary frames at the end)
+    tail_static_count = 0
+    for d in reversed(diffs):
+        if d < motion_threshold:
+            tail_static_count += 1
+        else:
+            break
+
+    # If there is a significant static tail (more than max_static_tail frames)
+    if tail_static_count > max_static_tail:
+        prune_count = tail_static_count - max_static_tail
+        keep_len = max(2, len(frames) - prune_count)
+        frames = frames[:keep_len]
+
+    return frames
 
 
 def verify_image_integrity(
@@ -461,6 +516,9 @@ class ContourPlotRequest:
     animation_frames: int = 12
     animation_duration_ms: int = 120
     is_ping_pong: Optional[bool] = None
+    viewport_zoom_factor: Optional[float] = None
+    active_motion_only: bool = True
+    motion_threshold: float = 0.005
 
 
 def generate_headless_viewer_script(
@@ -692,13 +750,22 @@ def generate_headless_viewer_script(
                     f"        raise ValueError('Failed to set primary variable \"{v_label}\" at outputPosition {pos}: ' + str(_pos_err))",
                 ]
 
-        # View Orientation
+        # View Orientation & Safe Centering Margin
         v_orient = req.view_orientation
+        eff_zoom = (
+            req.viewport_zoom_factor
+            if req.viewport_zoom_factor is not None
+            else (0.80 if is_anim else 0.85)
+        )
         code_lines += [
-            f"    # 4. Camera view orientation: {v_orient}",
+            f"    # 4. Camera view orientation & safe margin centering: {v_orient}",
             f"    if {v_orient!r} in session.views:",
             f"        vp.view.setValues(session.views[{v_orient!r}])",
             "    vp.view.fitView()",
+            "    try:",
+            f"        vp.view.zoom(factor={float(eff_zoom)})",
+            "    except Exception as _zm_err:",
+            "        print('[HeadlessViewer] WARNING: Viewport zoom adjustment bypassed: %s' % _zm_err)",
             "",
         ]
 
@@ -839,6 +906,10 @@ def render_odb_contours_headless(
                             except Exception:
                                 pass
                         if frames:
+                            if getattr(req, "active_motion_only", True):
+                                m_thresh = float(getattr(req, "motion_threshold", 0.005) or 0.005)
+                                frames = prune_static_animation_frames(frames, motion_threshold=m_thresh)
+
                             dur = max(20, int(getattr(req, "animation_duration_ms", 100)))
                             # Ping-pong loop for scale-factor / static deformation; forward loop for irreversible time-history dynamics
                             use_ping_pong = req.is_ping_pong if req.is_ping_pong is not None else False
@@ -1072,6 +1143,9 @@ def render_odb_animation_headless(
     duration_ms: int = 100,
     plot_state: str = "CONTOURS_ON_DEF",
     is_ping_pong: Optional[bool] = None,
+    viewport_zoom_factor: Optional[float] = None,
+    active_motion_only: bool = True,
+    motion_threshold: float = 0.005,
     launcher: Optional[str] = None,
     timeout: int = 240,
 ) -> Path:
@@ -1100,6 +1174,9 @@ def render_odb_animation_headless(
         animation_frames=frames,
         animation_duration_ms=duration_ms,
         is_ping_pong=is_ping_pong,
+        viewport_zoom_factor=viewport_zoom_factor,
+        active_motion_only=active_motion_only,
+        motion_threshold=motion_threshold,
         caption=f"{variable_label} animation",
     )
 

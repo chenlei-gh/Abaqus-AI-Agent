@@ -2837,3 +2837,55 @@ Abaqus-AI-Agent/
 - [x] **自动化测试全量回归守护**：
   - 42 项专项测试（覆盖动画生成、帧数控制、ping-pong 开关、GIF 二进制魔数校验、HTML Base64 嵌入等）全部通过；
   - 全仓自动化回归测试达 **1147 passed**（0 failed, 0 skipped）。
+
+---
+
+## 34. Phase P1.3++: 视口防裁剪自适应居中与动图全时程动态感知治理 (Viewport Safe Fit & Active Motion Animation Governance)
+
+**需求对应：** 用户针对仿真结果可视化与交付报告的缺陷反馈与需求升级：
+1. **视口居中与防裁剪（Bounding Box Fit & Centering Margin）**：解决图像/模型未完整处于界面中央、边缘部分被视口截断或被图例（Legend）/坐标系遮挡的问题；
+2. **动图全时程动态感知与无缝循环（Active Motion Window & Continuous Looping）**：解决动图“只有前面几秒在运动，后半大部分时间完全静止定格”的问题，使动图在整段播放循环中始终呈现生动的物理运动。
+
+**实施原则：** 核心产品仓库先行落地、外围工程项目严格隔离（暂不做任何调整）、免第三方外部播放器、无头自动化静默执行。  
+**当前状态：** 🟢 **IMPLEMENTED & VERIFIED** (全仓 1150 项自动化回归测试 100% PASS)
+
+### 34.1 核心缺陷根因与治理契约
+
+| 缺陷场景 | 根因定位 | 治理方案与架构契约 | 验收标准 |
+|---|---|---|---|
+| **视口裁剪与偏置** | 1. `fitView()` 紧贴几何包围盒极值，三维 Iso 投影、大变形位移及图例覆盖易导致模型边缘被截断；<br>2. 报告展示层缺少自适应弹性居中与安全约束。 | 1. 引擎层引入 `viewport_zoom_factor` 自适应安全缩放系数（静态云图默认 0.85，动画多帧默认 0.80），在 `fitView()` 后执行 `vp.view.zoom(factor=...)`，四周预留 15%~20% 安全留白；<br>2. 报告渲染层 `.figure-img` 与 `.report-figure` 强制 `display: block; margin: 0 auto; object-fit: contain; overflow: hidden;`。 | 模型整体处于视口中心，几何边缘与图例、坐标系互不重叠，无任何视口外截断。 |
+| **动图后半程长时间定格** | 求解时长较长或加载后段进入静止/平衡态时，机械全局等间距采样导致后半程 60%~80% 帧完全相同，播放时停滞数秒。 | 1. 在图像编译合成层引入 `prune_static_animation_frames` 算法；<br>2. 基于 PIL 像素差分（`calculate_frame_difference`）智能识别连续静止死帧，执行静止尾段修剪（Static Tail Pruning，仅保留最多 1 帧过渡）；<br>3. 保证裁剪后最低保留 $\ge 2$ 帧有效帧，维持动画完整性。 | 动图在整段播放时程中连续生动呈现动态物理演化，无无意义长时间死等定格，循环平滑流畅。 |
+
+### 34.2 统一架构更新与接口参数规范
+
+1. **`ContourPlotRequest` 契约扩展**：
+   - `viewport_zoom_factor: Optional[float] = None`（默认 None 时，静态云图自适应为 0.85，多帧动画自适应为 0.80）；
+   - `active_motion_only: bool = True`（默认开启活跃运动感知，智能修剪尾部及冗余静止死帧）；
+   - `motion_threshold: float = 0.005`（连续帧静止判定敏感度阈值）。
+2. **`generate_headless_viewer_script` 安全缩放注入**：
+   ```python
+   vp.view.fitView()
+   try:
+       vp.view.zoom(factor=float(eff_zoom))
+   except Exception as _zm_err:
+       print('[HeadlessViewer] WARNING: Viewport zoom adjustment bypassed: %s' % _zm_err)
+   ```
+3. **`render_odb_animation_headless` 顶层透传**：
+   - 暴露 `viewport_zoom_factor`、`active_motion_only`、`motion_threshold` 参数，供上层与 Agent 统一调度。
+4. **`renderer.py` 报告呈现加固**：
+   - CSS 强化 `.figure-img { display: block; margin: 0 auto; max-width: 100%; height: auto; object-fit: contain; }`。
+
+### 34.3 实施与代码落地记录
+
+- [x] **`src/abaqus_ai_agent/execution/odb_rendering.py`**：
+  - 扩展 `ContourPlotRequest` 支持 `viewport_zoom_factor`, `active_motion_only`, `motion_threshold`；
+  - 实现 `calculate_frame_difference` 与 `prune_static_animation_frames` 图像差分与冗余静止帧修剪算法；
+  - 在 `generate_headless_viewer_script` 注入 `vp.view.zoom(factor=eff_zoom)` 居中留白防裁切；
+  - 在动图编译流程自动执行动态感知裁剪与平滑循环。
+- [x] **`src/abaqus_ai_agent/reporting/renderer.py`**：
+  - 加固 `.report-figure` 与 `.figure-img` CSS 弹性居中防溢出样式。
+- [x] **`src/abaqus_ai_agent/agent.py`**：
+  - `export_odb_animation` 接口支持防裁剪缩放与运动感知参数透传。
+- [x] **自动化测试回归**：
+  - 新增专项测试 `test_contour_plot_request_safe_margin_and_motion_detection_defaults`、`test_generate_headless_viewer_script_safe_margin_zoom`、`test_prune_static_animation_frames_and_difference` 全部通过；
+  - 全仓自动化回归测试达 **1150 passed**（0 failed, 0 skipped）。

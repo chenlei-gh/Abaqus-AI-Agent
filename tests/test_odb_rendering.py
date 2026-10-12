@@ -644,6 +644,101 @@ def test_render_odb_animation_headless_missing_odb(tmp_path):
         )
 
 
+def test_contour_plot_request_safe_margin_and_motion_detection_defaults():
+    """Verify default and custom parameters for viewport zoom and active motion detection."""
+    req_default = ContourPlotRequest(output_filename="mises.png")
+    assert req_default.viewport_zoom_factor is None
+    assert req_default.active_motion_only is True
+    assert req_default.motion_threshold == 0.005
+
+    req_custom = ContourPlotRequest(
+        output_filename="anim.gif",
+        viewport_zoom_factor=0.75,
+        active_motion_only=False,
+        motion_threshold=0.01,
+    )
+    assert req_custom.viewport_zoom_factor == 0.75
+    assert req_custom.active_motion_only is False
+    assert req_custom.motion_threshold == 0.01
+
+
+def test_generate_headless_viewer_script_safe_margin_zoom():
+    """Verify generated script applies viewport zoom factor to prevent clipping and fit centered."""
+    req_static = ContourPlotRequest(
+        output_filename="stress.png",
+        variable_label="S",
+        view_orientation="Iso",
+    )
+    req_anim = ContourPlotRequest(
+        output_filename="deform.gif",
+        variable_label="U",
+        is_animation=True,
+    )
+    req_explicit_zoom = ContourPlotRequest(
+        output_filename="zoomed.png",
+        variable_label="S",
+        viewport_zoom_factor=0.78,
+    )
+
+    script = generate_headless_viewer_script(
+        odb_path="dummy.odb",
+        requests=[req_static, req_anim, req_explicit_zoom],
+        output_dir="dummy_out",
+    )
+
+    # 1. Static contour default zoom is 0.85
+    assert "vp.view.fitView()" in script
+    assert "vp.view.zoom(factor=0.85)" in script
+
+    # 2. Animation default zoom is 0.80 to accommodate large kinematic displacements
+    assert "vp.view.zoom(factor=0.8)" in script
+
+    # 3. Explicit override factor is respected
+    assert "vp.view.zoom(factor=0.78)" in script
+
+
+def test_prune_static_animation_frames_and_difference():
+    """Verify static tail pruning removes dead stationary frames while keeping minimum valid sequence."""
+    from PIL import Image
+    from abaqus_ai_agent.execution.odb_rendering import (
+        calculate_frame_difference,
+        prune_static_animation_frames,
+    )
+
+    # Create synthetic frames: 3 moving frames + 5 completely static tail frames
+    f1 = Image.new("RGB", (64, 64), color=(255, 0, 0))
+    f2 = Image.new("RGB", (64, 64), color=(0, 255, 0))
+    f3 = Image.new("RGB", (64, 64), color=(0, 0, 255))
+    # Static tail: 5 identical white frames
+    f_tail = [Image.new("RGB", (64, 64), color=(255, 255, 255)) for _ in range(5)]
+
+    all_frames = [f1, f2, f3] + f_tail
+
+    # Check differences
+    diff_dyn = calculate_frame_difference(f1, f2)
+    assert diff_dyn > 0.05
+
+    diff_stat = calculate_frame_difference(f_tail[0], f_tail[1])
+    assert diff_stat < 0.001
+
+    # Pruning: with max_static_tail=1, 3 redundant tail frames should be pruned (keeping 1 tail transition)
+    pruned_1 = prune_static_animation_frames(all_frames, motion_threshold=0.005, max_static_tail=1)
+    # Result should be: f1, f2, f3, f_tail[0], f_tail[1] -> 5 frames
+    assert len(pruned_1) == 5
+    assert pruned_1[-1] is f_tail[1]
+
+    # Pruning: with max_static_tail=0, all 4 redundant tail frames are pruned
+    pruned_0 = prune_static_animation_frames(all_frames, motion_threshold=0.005, max_static_tail=0)
+    # Result should be: f1, f2, f3, f_tail[0] -> 4 frames
+    assert len(pruned_0) == 4
+    assert pruned_0[-1] is f_tail[0]
+
+    # Minimal frame guarantee: 2 static frames should not be pruned to 0 or 1
+    two_static = [Image.new("RGB", (64, 64), color=(100, 100, 100)) for _ in range(2)]
+    pruned_min = prune_static_animation_frames(two_static, motion_threshold=0.005, max_static_tail=0)
+    assert len(pruned_min) == 2
+
+
 def test_render_odb_animation_headless_and_agent_integration(tmp_path, monkeypatch):
     """Verify end-to-end headless animation generation and AbaqusAIAgent helper integration."""
     from abaqus_ai_agent.agent import AbaqusAIAgent

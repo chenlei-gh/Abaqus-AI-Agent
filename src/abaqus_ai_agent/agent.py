@@ -77,6 +77,9 @@ class AbaqusAIAgent:
         view_orientation: str = "Iso",
         frames: int = 24,
         duration_ms: int = 100,
+        viewport_zoom_factor: Optional[float] = None,
+        active_motion_only: bool = True,
+        motion_threshold: float = 0.005,
         launcher: Optional[str] = None,
         timeout: int = 240,
     ) -> Any:
@@ -98,6 +101,9 @@ class AbaqusAIAgent:
             view_orientation=view_orientation,
             frames=frames,
             duration_ms=duration_ms,
+            viewport_zoom_factor=viewport_zoom_factor,
+            active_motion_only=active_motion_only,
+            motion_threshold=motion_threshold,
             launcher=eff_launcher,
             timeout=timeout,
         )
