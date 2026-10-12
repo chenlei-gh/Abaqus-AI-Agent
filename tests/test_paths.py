@@ -373,10 +373,11 @@ def test_subdirectory_containment_and_run_id_validation(tmp_path):
 
 
 def test_validate_identifier_cross_platform_posix_altsep_none(monkeypatch, tmp_path):
-    """P0-2 Cross-platform Contract: In POSIX environments where os.altsep is None,
+    """P0-2 Cross-platform Contract: In pure POSIX environments where os.sep is '/' and os.altsep is None,
     _validate_identifier must NOT treat empty string as separator, and must allow valid identifiers.
     """
     import os
+    monkeypatch.setattr(os, "sep", "/")
     monkeypatch.setattr(os, "altsep", None)
     ext_root = tmp_path / "ProjectPosixTest"
     ctx = create_external_project_context(ext_root)
