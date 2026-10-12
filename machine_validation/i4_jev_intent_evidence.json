@@ -1,6 +1,6 @@
 {
   "schema_version": "jev_intent_routing_v1",
-  "verified_at": "2026-10-09T02:31:36.597986+00:00",
+  "verified_at": "2026-10-12T07:22:48.905944+00:00",
   "total_prompts": 3,
   "passed_prompts": 3,
   "all_passed": true,
@@ -76,10 +76,6 @@
             {
               "value": 2.5,
               "unit": "mm"
-            },
-            {
-              "value": 600.0,
-              "unit": "M"
             }
           ],
           "loads": [
@@ -194,7 +190,12 @@
       "unit_system": "MM_N_MPA",
       "is_well_constrained": false,
       "completeness_score": 3.0,
-      "extracted_material": null,
+      "extracted_material": {
+        "name": "Linear_Elastic",
+        "elastic_modulus": 200000.0,
+        "poisson_ratio": 0.3,
+        "unit": "MPa"
+      },
       "boundary_conditions_count": 0,
       "loads_count": 1,
       "acceptance_criteria_count": 0,
@@ -242,18 +243,18 @@
           "levels": {}
         },
         "extracted_parameters": {
-          "dimensions": [
-            {
-              "value": 10.0,
-              "unit": "M"
-            }
-          ],
           "loads": [
             {
               "magnitude": 10.0,
               "unit": "MPA"
             }
-          ]
+          ],
+          "material": {
+            "name": "Linear_Elastic",
+            "elastic_modulus": 200000.0,
+            "poisson_ratio": 0.3,
+            "unit": "MPa"
+          }
         }
       }
     }

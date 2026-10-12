@@ -1,0 +1,16 @@
+{
+  "case_id": "CASE_02_REACTOR_PRESSURE_VESSEL_CLOSURE",
+  "name": "Nuclear Reactor Pressure Vessel (RPV) Bolted Closure Head Joint",
+  "category": "P2_PACKAGE_B",
+  "domain": "nuclear_pressure_vessel_closure",
+  "reference": "validation_assets/references/official_examples.json#REF_ABQ_RPV_CLOSURE",
+  "status": "QUALIFIED",
+  "source_input": "test_assets/engineering_cases/case_02_reactor_pressure_vessel_closure/problem_statement.json",
+  "primary_manifest": "machine_validation/p2_cases/case_02_rpv_manifest.json",
+  "primary_report": "machine_validation/p2_cases/case_02_rpv_report.html",
+  "verified_metrics": {
+    "stud_preload_retention": 0.942,
+    "seal_ring_contact_pressure_mpa": 78.4,
+    "primary_stress_intensity_pm_pb": "PASSED_ASME_NB"
+  }
+}

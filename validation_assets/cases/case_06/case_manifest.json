@@ -1,0 +1,16 @@
+{
+  "case_id": "CASE_06_SHEET_METAL_SUBMODELING",
+  "name": "多工序钣金冲压成形-回弹-拼焊装配与全局-局部子模型缺口应力分析",
+  "category": "P2_PACKAGE_B",
+  "domain": "automotive_body_structures",
+  "reference": "validation_assets/references/official_examples.json#REF_NUMISHEET_SUBMODELING",
+  "status": "QUALIFIED",
+  "source_input": "test_assets/engineering_cases/case_06_sheet_metal_submodeling/problem_statement.json",
+  "primary_manifest": "machine_validation/p2_cases/case_06_sheet_metal_submodeling/case_06_sheet_metal_manifest.json",
+  "primary_report": "machine_validation/p2_cases/case_06_sheet_metal_submodeling/case_06_sheet_metal_submodeling_report.html",
+  "verified_metrics": {
+    "springback_deflection_mm": 1.74,
+    "submodel_boundary_driven_displacement_error": 0.0084,
+    "weld_notch_fatigue_safety_margin": 1.42
+  }
+}

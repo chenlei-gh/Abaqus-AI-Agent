@@ -1,0 +1,16 @@
+{
+  "case_id": "CASE_05_COMPOSITE_CYLINDER_BUCKLING",
+  "name": "开孔层合复合材料圆柱壳特征值屈曲与 Riks 后屈曲分析",
+  "category": "P2_PACKAGE_B",
+  "domain": "aerospace_composite_structures",
+  "reference": "validation_assets/references/official_examples.json#REF_NASA_SP8007_COMPOSITE_BUCKLING",
+  "status": "QUALIFIED",
+  "source_input": "test_assets/engineering_cases/case_05_composite_buckling/problem_statement.json",
+  "primary_manifest": "machine_validation/p2_cases/case_05_composite_buckling/case_05_composite_buckling_manifest.json",
+  "primary_report": "machine_validation/p2_cases/case_05_composite_buckling/case_05_composite_buckling_report.html",
+  "verified_metrics": {
+    "eigenvalue_bifurcation_factor": 1.142,
+    "riks_limit_load_ratio": 0.865,
+    "tsai_wu_failure_index": 0.78
+  }
+}

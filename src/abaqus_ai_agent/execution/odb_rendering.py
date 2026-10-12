@@ -58,6 +58,12 @@ MINIMAL_VALID_PNG_BYTES: bytes = (
     b"\x00\x00\x00\x00IEND\xaeB`\x82"
 )
 
+# Minimal 2x2 standard authentic GIF byte stream
+MINIMAL_VALID_GIF_BYTES: bytes = (
+    b"GIF87a\x02\x00\x02\x00\x80\x00\x00\xff\x00\x00\x00\x00\x00,\x00\x00"
+    b"\x00\x00\x02\x00\x02\x00\x00\x02\x02\x84Q\x00;"
+)
+
 
 def verify_png_image_integrity(
     file_path_or_bytes: Union[str, Path, bytes],
@@ -149,6 +155,65 @@ def verify_png_image_integrity(
         raise ValueError(f"Corrupt PNG image data: failed to decode raster payload: {exc}")
 
     return width, height
+
+
+def verify_gif_image_integrity(
+    file_path_or_bytes: Union[str, Path, bytes],
+) -> Tuple[int, int]:
+    """Verify that input data represents an authentic, non-corrupt GIF with positive dimensions."""
+    if isinstance(file_path_or_bytes, (str, Path)):
+        p = Path(file_path_or_bytes)
+        if not p.is_file():
+            raise FileNotFoundError(f"Image file does not exist: {p}")
+        data = p.read_bytes()
+    elif isinstance(file_path_or_bytes, (bytes, bytearray)):
+        data = bytes(file_path_or_bytes)
+    else:
+        raise TypeError(f"Expected file path or bytes, got {type(file_path_or_bytes)}")
+
+    if len(data) < 13:
+        raise ValueError(f"Truncated GIF image: data length is only {len(data)} bytes")
+
+    if not (data.startswith(b"GIF87a") or data.startswith(b"GIF89a")):
+        raise ValueError(f"Invalid GIF magic signature: {data[:6]!r}. File is not an authentic GIF.")
+
+    width, height = struct.unpack("<HH", data[6:10])
+    if width <= 0 or height <= 0:
+        raise ValueError(f"Invalid GIF dimensions: width={width}, height={height}")
+
+    if not _HAS_PIL or _PILImage is None:
+        raise RuntimeError("Official delivery requires Pillow for full GIF decoding")
+
+    try:
+        im = _PILImage.open(io.BytesIO(data))
+        if im.format != "GIF":
+            raise ValueError(f"Decoded image format is {im.format!r}, expected 'GIF'")
+        im.load()
+        dec_w, dec_h = im.size
+        if dec_w != width or dec_h != height:
+            raise ValueError(f"Raster dimension mismatch: header ({width}x{height}) vs decoded ({dec_w}x{dec_h})")
+    except Exception as exc:
+        raise ValueError(f"Corrupt GIF image data: failed to decode raster payload: {exc}")
+
+    return width, height
+
+
+def verify_image_integrity(
+    file_path_or_bytes: Union[str, Path, bytes],
+) -> Tuple[int, int]:
+    """Verify authentic image integrity, dispatching to PNG or GIF validator based on format."""
+    if isinstance(file_path_or_bytes, (str, Path)):
+        p = Path(file_path_or_bytes)
+        if p.suffix.lower() == ".gif":
+            return verify_gif_image_integrity(p)
+        return verify_png_image_integrity(p)
+    elif isinstance(file_path_or_bytes, (bytes, bytearray)):
+        data = bytes(file_path_or_bytes)
+        if data.startswith(b"GIF87a") or data.startswith(b"GIF89a"):
+            return verify_gif_image_integrity(data)
+        return verify_png_image_integrity(data)
+    else:
+        raise TypeError(f"Expected file path or bytes, got {type(file_path_or_bytes)}")
 
 
 _PROCESS_RENDER_SIGNING_KEY: bytes = secrets.token_bytes(32)
@@ -378,7 +443,7 @@ def compute_viewer_session_token(
 
 @dataclass
 class ContourPlotRequest:
-    """Specification for capturing an authentic finite element contour plot from an ODB."""
+    """Specification for capturing an authentic finite element contour plot or animation from an ODB."""
 
     output_filename: str
     variable_label: str = "S"
@@ -392,6 +457,9 @@ class ContourPlotRequest:
     caption: str = ""
     description: str = ""
     region: str = "WHOLE_MODEL"
+    is_animation: bool = False
+    animation_frames: int = 12
+    animation_duration_ms: int = 120
 
 
 def generate_headless_viewer_script(
@@ -469,6 +537,8 @@ def generate_headless_viewer_script(
                 f"Must be one of {sorted(VALID_OUTPUT_POSITIONS)}"
             )
         pos = pos_raw
+        if (req.variable_label or "").upper() in ("U", "UR", "RF", "RM", "COORD", "ANIMATION"):
+            pos = "NODAL"
 
         plot_state_raw = (req.plot_state or "CONTOURS_ON_DEF").strip().upper()
         if plot_state_raw not in VALID_PLOT_STATES:
@@ -477,6 +547,12 @@ def generate_headless_viewer_script(
                 f"Must be one of {sorted(VALID_PLOT_STATES)}"
             )
         p_state = plot_state_raw
+
+        is_mesh_plot = (
+            p_state == "UNDEFORMED"
+            or (req.variable_label or "").upper() in ("MESH", "GRID", "UNDEFORMED", "NONE", "")
+        )
+        is_anim = bool(req.is_animation or safe_fname.lower().endswith(".gif"))
 
         code_lines += [
             f"# ---------------------------------------------------------------------------",
@@ -497,12 +573,28 @@ def generate_headless_viewer_script(
             code_lines.append("    if len(odb.steps) == 0:")
             code_lines.append("        raise ValueError('Target ODB contains zero steps')")
             code_lines.append("    last_step_key = list(odb.steps.keys())[-1]")
+            code_lines.append("    target_step = odb.steps[last_step_key]")
             code_lines.append(f"    vp.odbDisplay.setFrame(step=last_step_key, frame={int(req.frame_index)})")
 
-        code_lines += [
-            "    # 2. Display mode (Contour on Deformed / Undeformed)",
-            f"    vp.odbDisplay.display.setValues(plotState=({p_state},))",
-        ]
+        if is_mesh_plot:
+            code_lines += [
+                "    # 2. Mesh topology display mode (Undeformed with visible mesh element edges)",
+                "    vp.odbDisplay.display.setValues(plotState=(UNDEFORMED,))",
+                "    vp.odbDisplay.commonOptions.setValues(renderStyle=SHADED, visibleEdges=ALL)",
+                "    try:",
+                "        vp.viewportAnnotationOptions.setValues(legend=OFF)",
+                "    except Exception:",
+                "        pass",
+            ]
+        else:
+            code_lines += [
+                "    # 2. Display mode (Contour on Deformed / Undeformed)",
+                f"    vp.odbDisplay.display.setValues(plotState=({p_state},))",
+                "    try:",
+                "        vp.viewportAnnotationOptions.setValues(legend=ON)",
+                "    except Exception:",
+                "        pass",
+            ]
 
         if req.region and req.region != "WHOLE_MODEL":
             code_lines += [
@@ -527,75 +619,77 @@ def generate_headless_viewer_script(
             ]
 
         # Deformation scale factor
-        if req.deformation_scale_factor is not None:
-            code_lines.append(
-                f"    vp.odbDisplay.commonOptions.setValues(deformationScaling=USER_SPECIFIED, uniformScaleFactor={float(req.deformation_scale_factor)})"
-            )
-        else:
-            code_lines.append(
-                "    vp.odbDisplay.commonOptions.setValues(deformationScaling=AUTO)"
-            )
+        if not is_mesh_plot:
+            if req.deformation_scale_factor is not None:
+                code_lines.append(
+                    f"    vp.odbDisplay.commonOptions.setValues(deformationScaling=UNIFORM, uniformScaleFactor={float(req.deformation_scale_factor)})"
+                )
+            else:
+                code_lines.append(
+                    "    vp.odbDisplay.commonOptions.setValues(deformationScaling=AUTO)"
+                )
 
-        # Primary Variable setup
-        v_label = req.variable_label
-        inv = req.component_or_invariant
+        # Primary Variable setup (skipped for pure mesh plot)
+        if not is_mesh_plot:
+            v_label = req.variable_label
+            inv = req.component_or_invariant
 
-        code_lines.append(f"    # 3. Field variable configuration: {v_label}")
-        if inv:
-            inv_upper = inv.upper()
-            inv_title = inv.title()
-            code_lines += [
-                "    try:",
-                f"        vp.odbDisplay.setPrimaryVariable(",
-                f"            variableLabel={v_label!r},",
-                f"            outputPosition={pos},",
-                f"            refinement=(INVARIANT, {inv_title!r})",
-                "        )",
-                "    except Exception:",
-                "        try:",
-                f"            vp.odbDisplay.setPrimaryVariable(",
-                f"                variableLabel={v_label!r},",
-                f"                outputPosition={pos},",
-                f"                refinement=(INVARIANT, {inv_upper!r})",
-                "            )",
-                "        except Exception:",
-                "            try:",
-                f"                vp.odbDisplay.setPrimaryVariable(",
-                f"                    variableLabel={v_label!r},",
-                f"                    outputPosition={pos},",
-                f"                    refinement=(INVARIANT, {inv!r})",
-                "                )",
-                "            except Exception:",
-                "                try:",
-                f"                    vp.odbDisplay.setPrimaryVariable(",
-                f"                        variableLabel={v_label!r},",
-                f"                        outputPosition={pos},",
-                f"                        refinement=(COMPONENT, {inv!r})",
-                "                    )",
-                "                except Exception:",
-                "                    try:",
-                f"                        vp.odbDisplay.setPrimaryVariable(",
-                f"                            variableLabel={v_label!r},",
-                f"                            outputPosition={pos},",
-                f"                            refinement=(COMPONENT, {inv_upper!r})",
-                "                        )",
-                "                    except Exception:",
-                "                        try:",
-                f"                            vp.odbDisplay.setPrimaryVariable(",
-                f"                                variableLabel={v_label!r},",
-                f"                                outputPosition={pos},",
-                f"                                refinement=(COMPONENT, {inv_title!r})",
-                "                            )",
-                "                        except Exception:",
-                f"                            raise ValueError('Failed to set primary variable \"{v_label}\" with invariant/component \"{inv}\"')",
-            ]
-        else:
-            code_lines += [
-                "    try:",
-                f"        vp.odbDisplay.setPrimaryVariable(variableLabel={v_label!r}, outputPosition={pos})",
-                "    except Exception as _pos_err:",
-                f"        raise ValueError('Failed to set primary variable \"{v_label}\" at outputPosition {pos}: ' + str(_pos_err))",
-            ]
+            code_lines.append(f"    # 3. Field variable configuration: {v_label}")
+            if inv:
+                inv_upper = inv.upper()
+                inv_title = inv.title()
+                code_lines += [
+                    "    try:",
+                    f"        vp.odbDisplay.setPrimaryVariable(",
+                    f"            variableLabel={v_label!r},",
+                    f"            outputPosition={pos},",
+                    f"            refinement=(INVARIANT, {inv_title!r})",
+                    "        )",
+                    "    except Exception:",
+                    "        try:",
+                    f"            vp.odbDisplay.setPrimaryVariable(",
+                    f"                variableLabel={v_label!r},",
+                    f"                outputPosition={pos},",
+                    f"                refinement=(INVARIANT, {inv_upper!r})",
+                    "            )",
+                    "        except Exception:",
+                    "            try:",
+                    f"                vp.odbDisplay.setPrimaryVariable(",
+                    f"                    variableLabel={v_label!r},",
+                    f"                    outputPosition={pos},",
+                    f"                    refinement=(INVARIANT, {inv!r})",
+                    "                )",
+                    "            except Exception:",
+                    "                try:",
+                    f"                    vp.odbDisplay.setPrimaryVariable(",
+                    f"                        variableLabel={v_label!r},",
+                    f"                        outputPosition={pos},",
+                    f"                        refinement=(COMPONENT, {inv!r})",
+                    "                    )",
+                    "                except Exception:",
+                    "                    try:",
+                    f"                        vp.odbDisplay.setPrimaryVariable(",
+                    f"                            variableLabel={v_label!r},",
+                    f"                            outputPosition={pos},",
+                    f"                            refinement=(COMPONENT, {inv_upper!r})",
+                    "                        )",
+                    "                    except Exception:",
+                    "                        try:",
+                    f"                            vp.odbDisplay.setPrimaryVariable(",
+                    f"                                variableLabel={v_label!r},",
+                    f"                                outputPosition={pos},",
+                    f"                                refinement=(COMPONENT, {inv_title!r})",
+                    "                            )",
+                    "                        except Exception:",
+                    f"                            raise ValueError('Failed to set primary variable \"{v_label}\" with invariant/component \"{inv}\"')",
+                ]
+            else:
+                code_lines += [
+                    "    try:",
+                    f"        vp.odbDisplay.setPrimaryVariable(variableLabel={v_label!r}, outputPosition={pos})",
+                    "    except Exception as _pos_err:",
+                    f"        raise ValueError('Failed to set primary variable \"{v_label}\" at outputPosition {pos}: ' + str(_pos_err))",
+                ]
 
         # View Orientation
         v_orient = req.view_orientation
@@ -605,10 +699,45 @@ def generate_headless_viewer_script(
             f"        vp.view.setValues(session.views[{v_orient!r}])",
             "    vp.view.fitView()",
             "",
-            f"    # 5. Export authentic PNG",
-            f"    out_img = {target_path_expr}",
-            "    session.printToFile(fileName=out_img, format=PNG, canvasObjects=(vp,))",
-            "    print('[HeadlessViewer] Successfully rendered: %s' % out_img)",
+        ]
+
+        if is_anim:
+            code_lines += [
+                f"    # 5. Export authentic multi-frame animation sequence",
+                f"    anim_frames_dir = os.path.join(out_dir, '_anim_frames_{idx}')",
+                "    if not os.path.exists(anim_frames_dir):",
+                "        os.makedirs(anim_frames_dir)",
+                "    n_total_frames = len(target_step.frames)",
+                "    if n_total_frames > 2:",
+                "        sample_count = min(15, n_total_frames)",
+                "        stride = max(1, n_total_frames // sample_count)",
+                "        chosen_indices = list(range(0, n_total_frames, stride))",
+                "        if (n_total_frames - 1) not in chosen_indices:",
+                "            chosen_indices.append(n_total_frames - 1)",
+                "        for f_seq, f_idx in enumerate(chosen_indices[:16]):",
+                "            vp.odbDisplay.setFrame(step=target_step.name, frame=f_idx)",
+                "            frame_target = os.path.join(anim_frames_dir, 'frame_%03d' % f_seq)",
+                "            session.printToFile(fileName=frame_target, format=PNG, canvasObjects=(vp,))",
+                "    else:",
+                "        eff_last_idx = len(target_step.frames) - 1",
+                f"        eff_f = eff_last_idx if {int(req.frame_index)} == -1 else {int(req.frame_index)}",
+                "        vp.odbDisplay.setFrame(step=target_step.name, frame=eff_f)",
+                "        for f_seq in range(12):",
+                "            scale_v = 0.05 + 0.95 * (float(f_seq) / 11.0)",
+                "            vp.odbDisplay.commonOptions.setValues(deformationScaling=UNIFORM, uniformScaleFactor=scale_v)",
+                "            frame_target = os.path.join(anim_frames_dir, 'frame_%03d' % f_seq)",
+                "            session.printToFile(fileName=frame_target, format=PNG, canvasObjects=(vp,))",
+                f"    print('[HeadlessViewer] Successfully rendered animation frame sequence in: %s' % anim_frames_dir)",
+            ]
+        else:
+            code_lines += [
+                f"    # 5. Export authentic static snapshot",
+                f"    out_img = {target_path_expr}",
+                "    session.printToFile(fileName=out_img, format=PNG, canvasObjects=(vp,))",
+                "    print('[HeadlessViewer] Successfully rendered: %s' % out_img)",
+            ]
+
+        code_lines += [
             "except Exception as err:",
             f"    print('[HeadlessViewer] ERROR: Failed to render {safe_fname}: %s' % err)",
             "    sys.exit(4)",
@@ -661,8 +790,12 @@ def render_odb_contours_headless(
         )
         script_path.write_text(script_content, encoding="utf-8")
 
-        cmd = [str(resolved_launcher), "viewer", "-noGUI", str(script_path)]
-        use_shell = (os.name == "nt")
+        if os.name == "nt" and str(resolved_launcher).lower().endswith((".bat", ".cmd")):
+            cmd = ["cmd.exe", "/c", "call", str(resolved_launcher), "viewer", "-noGUI", str(script_path)]
+            use_shell = False
+        else:
+            cmd = [str(resolved_launcher), "viewer", "-noGUI", str(script_path)]
+            use_shell = (os.name == "nt")
 
         try:
             proc = subprocess.run(
@@ -685,10 +818,39 @@ def render_odb_contours_headless(
 
         # Collect only freshly generated images from scratch sandbox and transfer to out_dir
         produced = []
-        for req in requests:
-            scratch_target = scratch_dir / Path(req.output_filename).name
+        for idx, req in enumerate(requests):
+            safe_fname = Path(req.output_filename).name
+            scratch_target = scratch_dir / safe_fname
+            is_anim = bool(req.is_animation or safe_fname.lower().endswith(".gif"))
+
+            if is_anim and (not scratch_target.exists() or scratch_target.stat().st_size == 0):
+                anim_dir = scratch_dir / f"_anim_frames_{idx}"
+                if anim_dir.exists() and _HAS_PIL and _PILImage is not None:
+                    frame_files = sorted(list(anim_dir.glob("*.png")) + list(anim_dir.glob("*.PNG")))
+                    if frame_files:
+                        frames = []
+                        for ff in frame_files:
+                            try:
+                                im = _PILImage.open(ff).convert("RGB")
+                                frames.append(im)
+                            except Exception:
+                                pass
+                        if frames:
+                            dur = max(50, int(getattr(req, "animation_duration_ms", 120)))
+                            # Ping-pong loop for seamless oscillation
+                            ping_pong = frames + frames[-2:0:-1]
+                            p_frames = [f.convert("P", palette=_PILImage.ADAPTIVE) for f in ping_pong]
+                            p_frames[0].save(
+                                scratch_target,
+                                save_all=True,
+                                append_images=p_frames[1:],
+                                duration=dur,
+                                loop=0,
+                                disposal=2,
+                            )
+
             if scratch_target.exists() and scratch_target.stat().st_size > 0:
-                verify_png_image_integrity(scratch_target)
+                verify_image_integrity(scratch_target)
                 final_target = out_dir / scratch_target.name
                 shutil.copy2(scratch_target, final_target)
                 produced.append(final_target)
@@ -762,16 +924,26 @@ def render_authentic_visualizations(
         elif "SECTION" in vm or "ISOMETRIC" in vm:
             v_orient = "Iso"
 
+        target_name = Path(spec.target_filename).name
+        is_anim = bool(target_name.lower().endswith(".gif") or getattr(spec, "field_name", "") == "ANIMATION")
+        is_mesh = bool(getattr(spec, "field_name", "") in ("MESH", "GRID", "UNDEFORMED"))
+
+        out_pos = getattr(spec, "output_position", "INTEGRATION_POINT") or "INTEGRATION_POINT"
+        if is_anim and getattr(spec, "field_name", "") == "ANIMATION":
+            out_pos = "NODAL"
+
         req = ContourPlotRequest(
             output_filename=spec.target_filename,
-            variable_label=spec.field_name,
+            variable_label="U" if is_anim and getattr(spec, "field_name", "") == "ANIMATION" else spec.field_name,
             component_or_invariant=spec.component,
-            output_position=getattr(spec, "output_position", "INTEGRATION_POINT") or "INTEGRATION_POINT",
+            output_position=out_pos,
             step_name=spec.step_name,
             frame_index=spec.frame_index,
+            plot_state="UNDEFORMED" if is_mesh else "CONTOURS_ON_DEF",
             view_orientation=v_orient,
             caption=getattr(spec, "caption_zh", "") or getattr(spec, "caption_en", ""),
             region=getattr(spec, "region", "WHOLE_MODEL") or "WHOLE_MODEL",
+            is_animation=is_anim,
         )
         requests.append(req)
 
@@ -797,7 +969,7 @@ def render_authentic_visualizations(
                 f"failed to render from ODB {odb} in this viewer session. Placeholder images are strictly forbidden."
             )
 
-        verify_png_image_integrity(target_path)
+        verify_image_integrity(target_path)
 
         h_img = hashlib.sha256()
         with open(target_path, "rb") as f:

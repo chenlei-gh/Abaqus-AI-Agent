@@ -259,8 +259,9 @@ class AnalysisRunner:
             if orig_executor_workdir:
                 workdir = orig_executor_workdir
             else:
-                runs_root = os.path.abspath("runs")
-                workdir = os.path.join(runs_root, run_id)
+                from ..paths import resolve_runs_root
+                runs_root = resolve_runs_root()
+                workdir = os.path.join(str(runs_root), run_id)
         os.makedirs(workdir, exist_ok=True)
         workdir = os.path.abspath(workdir)
 

@@ -389,13 +389,21 @@ class JevIntentRouter:
         params: Dict[str, Any] = {}
         prompt_lower = prompt.lower()
 
-        # Dimensions: e.g. 100mm, 500 mm
-        dim_matches = re.findall(r"(\d+(?:\.\d+)?)\s*(mm|m|inch|毫米|米)", prompt, re.IGNORECASE)
+        # Dimensions: e.g. 100mm, 500 mm, 2 m (strictly avoid matching MPa, m/s, mN, etc.)
+        dim_matches = re.findall(
+            r"(\d+(?:\.\d+)?)\s*(mm|inch|毫米|米|m(?![a-zA-Z]))",
+            prompt,
+            re.IGNORECASE,
+        )
         if dim_matches:
             params["dimensions"] = [{"value": float(m[0]), "unit": m[1]} for m in dim_matches]
 
-        # Loads: e.g. 1000N, 50kN, 2.5 MPa
-        load_matches = re.findall(r"(\d+(?:\.\d+)?)\s*(kn|n|mpa|kpa|牛|千牛)", prompt, re.IGNORECASE)
+        # Loads: e.g. 1000N, 50kN, 2.5 MPa (strictly avoid matching nm, ns, etc.)
+        load_matches = re.findall(
+            r"(\d+(?:\.\d+)?)\s*(kn|mpa|kpa|千牛|牛|n(?![a-zA-Z]))",
+            prompt,
+            re.IGNORECASE,
+        )
         if load_matches:
             params["loads"] = [{"magnitude": float(m[0]), "unit": m[1].upper()} for m in load_matches]
 
@@ -419,6 +427,13 @@ class JevIntentRouter:
                 "name": "Rubber_Hyperelastic",
                 "elastic_modulus": 10.0,
                 "poisson_ratio": 0.499,
+                "unit": "MPa",
+            }
+        elif any(w in prompt_lower for w in ("elastic", "弹性")):
+            params["material"] = {
+                "name": "Linear_Elastic",
+                "elastic_modulus": 200000.0,
+                "poisson_ratio": 0.3,
                 "unit": "MPa",
             }
 

@@ -113,13 +113,19 @@ def admit_figure_for_reuse(
     except Exception as exc:
         return False, f"Failed to compute live hash for {f_path}: {exc}"
 
-    # 5. Image binary integrity (validate PNG magic signature & positive dimensions)
+    # 5. Image binary integrity (validate PNG or GIF magic signature & positive dimensions)
     if f_path.suffix.lower() == ".png":
         try:
             from ..execution.odb_rendering import verify_png_image_integrity
             verify_png_image_integrity(f_path)
         except Exception as png_err:
             return False, f"Figure physical file is corrupt or not a valid PNG: {png_err}"
+    elif f_path.suffix.lower() == ".gif":
+        try:
+            from ..execution.odb_rendering import verify_gif_image_integrity
+            verify_gif_image_integrity(f_path)
+        except Exception as gif_err:
+            return False, f"Figure physical file is corrupt or not a valid GIF: {gif_err}"
 
     # -------------------------------------------------------------------------
     # Category B: Engineering Semantics
@@ -133,7 +139,7 @@ def admit_figure_for_reuse(
         return False, f"Field output variable mismatch: fig has {fig_f!r}, requested {target_f!r}"
 
     # 2. Invariant / Component
-    if target_component:
+    if target_component and target_f not in ("MESH", "GRID", "UNDEFORMED"):
         target_c = target_component.strip().lower()
         fig_c = (f_meta.get("component") or f_meta.get("component_or_invariant") or "").strip().lower()
         if not fig_c:
@@ -289,6 +295,8 @@ class FigureSelector:
         odb_hash: Optional[str] = None,
         output_dir: Optional[Union[str, Path]] = None,
         hotspot_info: Optional[Dict[str, Any]] = None,
+        include_mesh: bool = False,
+        include_animation: bool = False,
     ) -> FigureSelectionResult:
         avail_fields = None
         if odb_path and os.path.exists(str(odb_path)):
@@ -317,6 +325,8 @@ class FigureSelector:
             odb_hash=odb_hash,
             hotspot_info=hotspot_info,
             output_dir=output_dir,
+            include_mesh=include_mesh,
+            include_animation=include_animation,
         )
 
 
@@ -408,6 +418,8 @@ def select_engineering_figures(
     frame_index: int = -1,
     hotspot_info: Optional[Dict[str, Any]] = None,
     output_dir: Optional[Union[str, Path]] = None,
+    include_mesh: bool = False,
+    include_animation: bool = False,
 ) -> FigureSelectionResult:
     """Select the most engineering-relevant authentic CAE visualizations.
 
@@ -651,12 +663,34 @@ def select_engineering_figures(
             ),
         ]
 
+    if include_mesh:
+        candidates.append((
+            "mesh_discretization",
+            "MESH",
+            "",
+            "mesh_discretization.png",
+            "有限元空间网格离散与单元拓扑结构图",
+            "Finite element mesh discretization and element topology",
+            "ISOMETRIC",
+        ))
+    if include_animation:
+        candidates.append((
+            "deformation_animation",
+            "ANIMATION",
+            "magnitude",
+            "deformation_animation.gif",
+            "载荷加载全程变形位移时程演化动图",
+            "Transient/step structural deformation animation",
+            "AUTO_FIT",
+        ))
+
     selected_specs: List[VisualizationSpec] = []
     reused: List[ReportFigure] = []
     unavailable: List[Dict[str, str]] = []
     already_reused_paths = set()
 
     for kind, f_name, comp, filename, zh, en, view_mode in candidates:
+        cand_output_pos = "NODAL" if f_name.upper() in ("U", "UR", "RF", "RM", "NT", "NT11", "COORD", "ANIMATION") else "INTEGRATION_POINT"
         # Priority 1: Check if already exists in verified existing_figures for THIS run
         admitted_fig = None
         if existing_figures:
@@ -673,7 +707,7 @@ def select_engineering_figures(
                     target_step=step,
                     target_frame=frame_index,
                     target_region="WHOLE_MODEL",
-                    target_output_position="INTEGRATION_POINT",
+                    target_output_position=cand_output_pos,
                     resolved_actual_frame=resolved_actual_frame,
                 )
                 if is_adm:
@@ -686,7 +720,8 @@ def select_engineering_figures(
             continue
 
         # Priority 3: Check ODB field availability
-        if avail_set is not None and f_name.upper() not in avail_set:
+        is_topo_or_anim = f_name.upper() in ("MESH", "GRID", "UNDEFORMED", "ANIMATION")
+        if not is_topo_or_anim and avail_set is not None and f_name.upper() not in avail_set:
             unavailable.append({
                 "field": f_name,
                 "kind": kind,
@@ -706,7 +741,7 @@ def select_engineering_figures(
             actual_frame_index=resolved_actual_frame,
             view_mode=view_mode,
             region="WHOLE_MODEL",
-            output_position="INTEGRATION_POINT",
+            output_position=cand_output_pos,
             element_id=elem_id if is_hotspot else None,
             node_id=node_id if is_hotspot else None,
             hotspot_location=hotspot_coords if is_hotspot else None,

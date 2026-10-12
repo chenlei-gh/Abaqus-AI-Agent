@@ -1,0 +1,84 @@
+{
+  "catalog_version": "1.0.0",
+  "catalog_description": "Abaqus Official Example Problems & Industry Authority Benchmarks Reference Catalog",
+  "references": [
+    {
+      "ref_id": "REF_ABQ_BOLTED_FLANGE",
+      "authority": "Dassault Systemes / SIMULIA",
+      "document": "Abaqus 2025 Example Problems Manual",
+      "section": "1.1.1 Axisymmetric and three-dimensional analysis of bolted pipe flange connections",
+      "physics_domain": "pressure_vessel_piping",
+      "associated_cases": ["CASE_01_BOLTED_PIPE_FLANGE"],
+      "benchmark_metrics": [
+        "Bolt preload loss under internal fluid pressure (< 15%)",
+        "Gasket minimum sealing stress (> 10 MPa)",
+        "Flange hub peak von Mises stress (< 355 MPa yield)"
+      ]
+    },
+    {
+      "ref_id": "REF_ABQ_RPV_CLOSURE",
+      "authority": "Dassault Systemes & ASME BPVC",
+      "document": "Abaqus 2025 Example Problems & ASME BPVC Section III Division 1 Subsection NB",
+      "section": "1.1.2 Axisymmetric and 3D Analysis of a Reactor Pressure Vessel Bolted Closure Joint",
+      "physics_domain": "nuclear_pressure_vessel_closure",
+      "associated_cases": ["CASE_02_REACTOR_PRESSURE_VESSEL_CLOSURE"],
+      "benchmark_metrics": [
+        "Stud bolt preload retention (> 90%)",
+        "Double-cone metallic seal contact closure (> 50 MPa)",
+        "Primary membrane + bending stress intensity Pm+Pb within ASME limits"
+      ]
+    },
+    {
+      "ref_id": "REF_ABQ_EXHAUST_MANIFOLD",
+      "authority": "Dassault Systemes & SAE International",
+      "document": "Abaqus 2025 Example Problems & SAE Heavy-Duty Exhaust System Durability Standards",
+      "section": "1.1.18 Thermal-Stress Analysis of an Exhaust Manifold",
+      "physics_domain": "engine_thermo_mechanical_contact",
+      "associated_cases": ["CASE_03_EXHAUST_MANIFOLD_THERMO_MECHANICAL"],
+      "benchmark_metrics": [
+        "Non-uniform thermal distribution (95 deg C to 650 deg C)",
+        "Differential thermal expansion gasket slip retention",
+        "Peak fillet thermal stress (< 450 MPa)"
+      ]
+    },
+    {
+      "ref_id": "REF_SAE_SUBFRAME_DURABILITY",
+      "authority": "SAE International & ASTM",
+      "document": "SAE Technical Papers on Chassis Structural Durability; ASTM E1049-85 (Rainflow Counting); ISO 12107",
+      "section": "Automotive Chassis Front Subframe Multi-Axis Road Load Durability",
+      "physics_domain": "chassis_durability_fatigue",
+      "associated_cases": ["CASE_04_AUTOMOTIVE_SUBFRAME_FATIGUE"],
+      "benchmark_metrics": [
+        "Cumulative Palmgren-Miner damage D_total <= 0.85 across 300,000 km durability schedule",
+        "Goodman mean stress correction safety margin > 1.20",
+        "Control arm bushing bracket and welded HAZ peak stress within endurance limit"
+      ]
+    },
+    {
+      "ref_id": "REF_NASA_SP8007_COMPOSITE_BUCKLING",
+      "authority": "NASA & Dassault Systemes",
+      "document": "NASA SP-8007 'Buckling of Thin-Walled Circular Cylinders' & Abaqus 2025 Example Problems",
+      "section": "Buckling of a composite shell with a circular hole (*BUCKLE & *STATIC, RIKS)",
+      "physics_domain": "aerospace_composite_structures",
+      "associated_cases": ["CASE_05_COMPOSITE_CYLINDER_BUCKLING"],
+      "benchmark_metrics": [
+        "Subspace eigenvalue bifurcation load factor lambda_1",
+        "Nonlinear Riks post-buckling load limit with 10% geometric imperfection",
+        "Knockdown factor correlation against NASA SP-8007 empirical design bounds"
+      ]
+    },
+    {
+      "ref_id": "REF_NUMISHEET_SUBMODELING",
+      "authority": "Numisheet Steering Committee & Dassault Systemes",
+      "document": "Numisheet Benchmark (U-Bend Forming & Springback) & Abaqus 2025 Example Problems",
+      "section": "Global-Local Submodeling of a Spot-Welded Joint & Hat-Section Forming (*SUBMODELING)",
+      "physics_domain": "automotive_body_structures",
+      "associated_cases": ["CASE_06_SHEET_METAL_SUBMODELING"],
+      "benchmark_metrics": [
+        "Deep drawing elastoplastic strain and residual stress under Swift hardening",
+        "Unloading springback normal deflection correlation",
+        "Submodel notch stress concentration factor Kt and weld nugget fatigue margin"
+      ]
+    }
+  ]
+}

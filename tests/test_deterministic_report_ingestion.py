@@ -262,7 +262,8 @@ def test_ab_qualification_full_llm_report_vs_deterministic_pipeline(tmp_path: Pa
     f1_sha = hashlib.sha256(f1_bytes).hexdigest()
 
     f2_path = tmp_path / "transient_evolution.gif"
-    f2_bytes = b"GIF89a" + b"\x00" * 200
+    from abaqus_ai_agent.execution.odb_rendering import MINIMAL_VALID_GIF_BYTES
+    f2_bytes = MINIMAL_VALID_GIF_BYTES
     f2_path.write_bytes(f2_bytes)
     f2_sha = hashlib.sha256(f2_bytes).hexdigest()
 

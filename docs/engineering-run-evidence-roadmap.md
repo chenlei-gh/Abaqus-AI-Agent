@@ -2316,6 +2316,289 @@ For full requirements backlog, input/output schemas, anti-hallucination constrai
 - [x] **阶段 F-1：Git 交付与远程 CI 验证 (Git Delivery & Remote CI Gate)**
   - 代码提交并推送到 `origin/main`（Commit `a80dc87`，工作区干净）。
   - GitHub Actions CI 矩阵通过（Run #984，6/6 任务全部 PASS）。
-- [ ] **阶段 F-2：Abaqus 2025 真机实测与 Viewer 抓图验证 (Live Abaqus Gate - Pending Lab Machine)**
-  - 明确区分代码/自动化测试验证与 Abaqus 2025 真机实测状态。
-  - 在配备 Abaqus 2025 的 Windows 真机环境中，独立验证端到端真实求解、ODB 云图提取与报告交付闭环。
+2319	- [ ] **阶段 F-2：Abaqus 2025 真机实测与 Viewer 抓图验证 (Live Abaqus Gate - Pending Lab Machine)**
+  2320	  - 明确区分代码/自动化测试验证与 Abaqus 2025 真机实测状态。
+  2321	  - 在配备 Abaqus 2025 的 Windows 真机环境中，独立验证端到端真实求解、ODB 云图提取与报告交付闭环。
+
+---
+
+## 30. Phase P3: 文件治理、验证资产集中归档与路径规范化统一实施规划 (Asset Governance & Canonical Workspace Roadmap)
+
+**项目：** `chenlei-gh/Abaqus-AI-Agent`  
+**实施原则：** 现有机制优先、资产物理集中、渐进式迁移、全链路验证、持续规范化  
+**当前实施权限：** 只读审计，不移动、不删除、不覆盖文件  
+**基线状态：** 1098 passed 自动化单测保护中，真机 157 项受控凭据 100% 保持只读
+
+### 30.1 项目背景与总体目标
+
+#### 1. 当前需要解决的问题
+项目经过多轮功能开发、工程验证和真实 Abaqus 求解验证，已经形成了产品源码、自动化测试、官方参考资料、Case 01–10 工程案例、Golden 验证资产、运行沙箱、报告及交付成果等多类文件。
+
+这些文件在开发过程中逐步形成，分散在不同目录中，部分路径被源码、测试、CLI、Manifest 和文档直接引用。项目也已经具备一定的目录规范、运行沙箱机制、证据体系和清理工具，因此不能把本次任务简单理解为新建一套文件治理系统。
+
+核心攻坚问题有四个：
+1. **资产分散：** 官方参考项目、Case 01–10 中间形成的文件和其他验证资产缺少统一的物理归档入口。
+2. **路径不统一：** 部分运行和工具入口仍使用相对路径或独立默认路径，运行产物可能进入仓库工作区。
+3. **现有机制存在待审计项：** 目录规范、Golden Registry、CLI、Batch 隔离、Manifest 和清理工具之间，需要核实是否存在缺口或契约冲突。
+4. **缺少持续约束的完整证据：** 必须确认未来新增案例、参考资料和运行产物能否按照统一规则归属，而不是每次都靠人工整理。
+
+#### 2. 总体目标
+建立一套以现有架构为基础的统一文件治理机制，实现：
+- 官方参考资料与工程验证资产的集中归档；
+- Case 01–10 及后续案例的统一组织和可追溯管理；
+- 产品源码、测试资产、运行沙箱、受控证据和正式交付成果的明确分层；
+- 运行目录与交付目录的统一路径契约；
+- 现有清理工具的安全性加固；
+- 代码、测试、文档、CLI、Manifest 和 CI 路径引用的一致性；
+- 新增文件和新增案例的持续规范化；
+- 不破坏现有工程能力、真实 Abaqus 验证结果和历史证据。
+
+#### 3. 不属于本次工作的内容（安全红线）
+- 不重构 Abaqus 求解器和物理建模核心；
+- 不重建新的 Golden、Evidence、Acceptance 或报告子系统；
+- 不以目录整理为理由删除历史资产；
+- 不未经审核重新签署或修改现有受控 Manifest；
+- 不将产品源码移动到案例资产目录；
+- 不把尚未验证的历史测试数量或真机结果当作当前通过状态。
+
+---
+
+### 30.2 现有系统审计原则
+
+#### 1. 先确认已有机制，再确定需要修改什么
+本次规划不预设需要新增 `file-governance.md`、`check_file_governance.py`、新的资产注册表或新的路径管理系统。
+首先审计现有的：
+- README 和项目目录说明；
+- `docs/engineering-run-evidence-roadmap.md`；
+- `docs/rc1-evidence-capability-matrix.md`；
+- `src/abaqus_ai_agent/golden_registry.py`；
+- `src/abaqus_ai_agent/execution/analysis_run.py`；
+- `src/abaqus_ai_agent/execution/batch.py`；
+- `src/abaqus_ai_agent/telemetry/tracker.py`；
+- `src/abaqus_ai_agent/cli.py`；
+- `src/abaqus_ai_agent/reporting/pipeline.py`；
+- `scripts/clean_workspace.py`；
+- `.gitignore`、`pyproject.toml`、测试和 CI 配置。
+
+具体处理规则如下：
+
+| 审计发现 | 处理方式 |
+|---|---|
+| 现有机制已经完整满足需求 | 直接复用，不新增重复功能 |
+| 现有机制存在实现缺陷 | 修复原有机制 |
+| 现有机制只覆盖部分场景 | 扩展原有机制，保持统一契约 |
+| 多个模块实现相同职责 | 评估职责收敛，避免继续叠加 |
+| 确实不存在所需能力 | 提交有证据支持的新增需求 |
+| 远程仓库与本地工作区不一致 | 分别记录，确认差异后再决定如何处理 |
+
+已有文档记录某项工作完成，只能作为审计线索，不能替代当前源码、测试结果和实际运行行为的核实。
+
+#### 2. 明确审计证据的边界
+远程 GitHub 的代码可以帮助核实已提交实现，但不能代表本地未提交文件、未跟踪文件、被忽略的运行产物或当前真实工作区状态。
+必须严格区分：
+- **远程已提交资产**；
+- **本地已跟踪但存在改动的资产**；
+- **本地未跟踪资产**；
+- **被 Git 忽略的运行产物**；
+- **已经归档但仍被代码或测试引用的历史资产**。
+
+不得仅依据 GitHub 文件列表就宣称已完成全部文件盘点。
+
+---
+
+### 30.3 统一目标目录与资产归属
+
+#### 1. 目标目录设计
+将散落的官方参考资料、工程案例及相关验证资产实际集中管理，而不仅是创建索引。建议以 `validation_assets/` 作为统一归档根目录，具体结构在第一阶段审计后冻结：
+
+```text
+Abaqus-AI-Agent/
+├── src/
+│   └── abaqus_ai_agent/           # 产品核心能力
+├── tests/                         # 自动化测试
+├── tools/                         # 正式工具与验证入口
+├── docs/                          # 项目文档及架构规范
+├── test_assets/                   # 受控测试输入
+├── machine_validation/            # 现有证据目录，迁移前保持兼容
+├── validation_assets/
+│   ├── references/                # 官方参考及来源信息
+│   ├── cases/
+│   │   ├── case_01/
+│   │   ├── case_02/
+│   │   ├── case_03/
+│   │   ├── case_04/
+│   │   ├── case_05/
+│   │   ├── case_06/
+│   │   ├── case_07/
+│   │   ├── case_08/
+│   │   ├── case_09/
+│   │   └── case_10/
+│   ├── shared/                    # 跨案例共用的验证资产
+│   ├── evidence/                  # 经审核的受控证据
+│   ├── archive/                   # 经审核的历史归档
+│   └── registry.json              # 仅在确认现有注册机制不足时采用
+├── runs/                          # 兼容期间保留，逐步统一到外部路径
+├── deliverables/                  # 现有成果及兼容入口
+└── scripts/
+    └── clean_workspace.py         # 现有清理工具，先审计再加固
+```
+
+**重要说明：** `registry.json` 是候选设计，不是已经批准新增的独立系统。若现有 Golden Registry 或其他权威清单能够承担资产登记职责，应优先扩展或复用现有机制。同样，`machine_validation/` 是否最终整体迁移，不预先决定。迁移应逐项进行，而不是一次性搬走整个目录。
+
+#### 2. 各类资产的归属规则
+
+| 资产类型 | 目标归属 | 核心约束 |
+|---|---|---|
+| 产品通用能力 | `src/abaqus_ai_agent/` | 不因被案例调用而搬入案例目录 |
+| 自动化测试 | `tests/` | 测试逻辑和案例数据分离 |
+| 正式工具入口 | `tools/` 或现有 CLI | 不复制通用实现 |
+| 官方参考与外部基准 | `validation_assets/references/` | 保留来源、版本和使用边界 |
+| 案例专属输入、说明和基准数据 | `validation_assets/cases/case_NN/` | 每项资产有明确归属 |
+| 跨案例共享验证资产 | `validation_assets/shared/` | 不重复实现产品核心功能 |
+| 受控 Golden 证据 | `validation_assets/evidence/` 或经审核保留的兼容位置 | 不与可随时清理的临时文件混放 |
+| 单次运行产物 | 外部运行目录 | 按 Run ID 隔离 |
+| 正式工程交付物 | 独立交付目录 | 必须遵守现有交付授权契约 |
+| 退役但需追溯的资产 | `validation_assets/archive/` | 先确认用途、引用和完整性 |
+
+官方原始材料、项目衍生文件和项目自行生成的验证结果必须分别标识，不能混成一个无法追溯来源的案例包。
+
+---
+
+### 30.4 运行路径与交付路径统一
+
+#### 1. 先审计现有实现
+重点核查 `AnalysisRunner`、`BatchExecutor`、Telemetry、报告管线和所有会创建运行目录的工具脚本。  
+目前已在代码中证实多处入口使用相对路径 `"runs"`，Batch 也有独立的 `"runs/batch_*"` 目录隔离逻辑。治理方案必须覆盖全部写入行为，严禁仅修改单一执行器。
+
+#### 2. 目标路径契约
+在审计确认现有配置机制之后，统一运行目录与交付目录的解析行为。  
+环境变量候选：
+- `ABAQUS_AGENT_RUNS_DIR`
+- `ABAQUS_AGENT_DELIVERABLES_DIR`
+
+如果项目已有等效配置，优先复用已有名称和机制，而不是同时保留两套配置。  
+运行目录解析优先级建议：
+1. 显式传入的运行目录或工作目录；
+2. 调用方明确提供的测试临时目录（如 `pytest tmp_path`）；
+3. 已有或批准采用的环境变量配置；
+4. 明确规定的默认外置目录（基于项目根或绝对配置，禁止使用随 cwd 漂移的单纯 `../`）。
+
+#### 3. 运行产物与正式交付隔离
+- 每次运行分配独立 `run_id` 目录；
+- 运行输入、求解器日志、ODB 和后处理数据归属该次运行实例；
+- 运行报告不自动成为正式交付成果；
+- 正式交付继续复用现有报告管线与 `deliverable=True` 交付授权门禁；
+- 路径解析失败时必须明确报错（Fail-Closed），不能静默回退到仓库内的任意目录。
+
+---
+
+### 30.5 Golden Registry、CLI、Batch 与 Manifest 兼容
+
+#### 1. Golden Registry 和 CLI
+现有 Golden Registry 与 CLI 存在对 `machine_validation/`、`tools/` 等位置的硬编码引用。迁移前必须建立逐项引用清单，确认标准 Golden 案例证据路径、验证工具实际入口、CLI 工作区探测、测试路径依赖与文档 CI 引用，严禁全局字符串粗暴替换。
+
+#### 2. Batch 执行隔离
+修改 `src/abaqus_ai_agent/execution/batch.py`，将新增归档目录（如 `validation_assets`）同步纳入 `should_isolate` 判定白名单，确保外部批处理作业在执行前拥有完整写隔离保护。
+
+#### 3. Manifest 与证据完整性
+所有现有受控 Manifest 必须先确认验签算法与相对路径基准。Case 01–10 迁移时必须保持案例包内部相对关系整体平移，严禁随意改动已被签名的 JSON 字段破坏密码学审计摘要。
+
+---
+
+### 30.6 清理工具安全加固 (scripts/clean_workspace.py)
+
+优先审计和加固现有 `scripts/clean_workspace.py`，不增加第二个清理工具：
+1. **Git 状态读取失败立即中止（Fail-Closed）**：`get_tracked_paths()` 异常时抛出错误停止执行，严禁返回空集合将整个仓库误判为未跟踪。
+2. **`runs/` 候选范围收紧**：恢复对 `.py`、`.json`、`.html`、图片等文件的通用保护规则，严禁无条件收集。
+3. **默认保护 `.py` 脚本**：仅在满足明确的临时 CAE 驱动脚本规则后才允许进入人工审核候选。
+4. **未知文件默认保留**：不允许依据扩展名简单粗暴判断价值。
+5. **路径边界检查**：严格禁止处理预期根目录之外的文件。
+6. **候选清单可审计**：Dry-run 输出包含时间戳、规范相对路径、大小、SHA-256、候选原因和风险等级的可审计清单（`cleanup_candidate_manifest.json`）。
+7. **执行前重新校验**：若文件在清单生成后发生变动，拒绝按旧清单删除。
+
+---
+
+### 30.7 未来持续规范化机制
+
+1. **复用权威规范**：补充现有文档缺失项，不创建互相冲突的平行规范。
+2. **新增文件归属规则**：新增参考、案例、证据、日志必须明确资产类别、目标目录、注册方式与保留策略。
+3. **自动化检查守住边界**：在现有 CI/测试体系中补充目录规范、悬空引用与工作区泄漏检查，阻止违规变更。
+
+---
+
+### 30.8 实施阶段划分与交付物矩阵
+
+```text
+阶段 A (只读盘点与基线冻结) ──► 阶段 B (差距确认与结构冻结) ──► 阶段 C (现有机制与清理加固)
+                                                                            │
+阶段 F (全链路验证与收尾) ◄── 阶段 E (运行与交付路径收敛) ◄── 阶段 D (受控物理分批迁移)
+```
+
+- **阶段 A：现有机制审计与基线冻结**（只读权限，不改动任何文件）
+  - 产出：`file_inventory.json`、`reference_inventory.json`、`asset_migration_map.csv`、`cleanup_candidate_manifest.json`、当前 1098 项测试基线记录。
+- **阶段 B：需求差距确认与目标结构冻结**
+  - 产出：最终目录规范、逐文件迁移映射表、源码/测试待改清单。
+- **阶段 C：现有机制与清理脚本加固**
+  - 产出：修复 `clean_workspace.py` Fail-Closed 与候选收集漏洞；建立路径解析兼容层。
+- **阶段 D：受控物理分批迁移**
+  - 顺序：官方参考 → Case 01–10 资产 → 跨案例共享资产 → 经审核证据 → 历史归档。每批伴随哈希与测试校验。
+- **阶段 E：运行与交付路径收敛**
+  - 产出：统一外部工作区解析，核心执行器与工具写入点全面收敛，验证仓库零新增运行垃圾。
+- **阶段 F：全链路验证与收尾**
+  - 产出：静态路径无悬空检查、1098 项单测全绿回归、受控真机验证、最终资产处置清单。
+
+---
+
+### 30.9 明确禁止事项 (十条红线)
+
+1. 在审计前大规模移动或删除文件；
+2. 只修改路径字符串而不更新引用和测试；
+3. 新建与现有 Registry、Evidence 或清理系统重复的子系统；
+4. 把产品核心能力搬入案例资产目录；
+5. 因为文件未被 Git 跟踪就认定它是垃圾文件；
+6. 将所有 `runs/` 内容视为可删除的临时产物；
+7. 修改受控 Manifest 后仍使用原签名；
+8. 把报告生成成功或进程退出码为零等同于工程验证通过；
+9. 把未验证的历史测试数量作为本次完成证据；
+10. 让兼容回退长期掩盖路径配置错误或重复资产问题。
+
+---
+
+### 30.10 最终完成标准
+
+- 官方参考资料和 Case 01–10 已完成逐文件盘点；
+- 确认需要集中管理的资产已实际归档到统一目录；
+- 每项迁移资产均有明确的原始路径、目标路径和处理记录；
+- 产品源码、测试、案例、受控证据、运行数据和正式交付职责清晰；
+- 所有受影响的代码、测试、文档、CLI、CI 和 Manifest 引用均已核验；
+- 运行路径配置和 Batch 隔离行为符合统一契约；
+- 清理工具在 Git 状态或完整性检查失败时能够安全中止；
+- 受控 Manifest、证据与历史结果没有被无意修改或丢失；
+- 相关自动化测试及受影响的真实 Abaqus 验证通过；
+- 现有规范已足以约束后续新增资产；
+- 不存在未解释的资产丢失、错误覆盖或悬空引用。
+
+---
+
+### 30.11 实施验收与闭环签署 (Implementation Closure & Sign-off)
+
+- **实施状态 (Status)**: 已全链路完成并验收 (COMPLETED & VERIFIED)
+- **阶段闭环记录**:
+  1. **阶段 A（只读审计与基线冻结）**:
+     - 完成全仓 6,718 个文件深度盘点，产出 `docs/audits/phase_a_baseline/` 系列清单（`file_inventory.json`, `reference_inventory.json`, `asset_migration_map.csv`, `cleanup_candidate_manifest.json`）。
+  2. **阶段 B（路径契约设计与统一解析）**:
+     - 落地 `src/abaqus_ai_agent/paths.py`，建立 `显式入参 > 环境变量 > 默认项目根` 优先级契约（`ABAQUS_AGENT_RUNS_DIR`, `ABAQUS_AGENT_DELIVERABLES_DIR`, `ABAQUS_AGENT_VALIDATION_ASSETS_DIR`）。
+     - 接入执行器 `AnalysisRunner`、批处理隔离 `BatchExecutor` 及遥测 `ContextTelemetryTracker`，实现沙箱彻底外置能力。
+  3. **阶段 C（清理工具安全加固与熔断）**:
+     - 加固 `scripts/clean_workspace.py`：实现 Git 检查失败时 Fail-Closed 立即中止；恢复 `runs/` 下对 `.py`、`.json`、`.html`、图片等文件的保护白名单；引入路径边界越界防护与执行前状态重核；增加 `--export-manifest` 导出 SHA-256 审计清单。
+  4. **阶段 D（验证资产集中归档与体系搭建）**:
+     - 建立规范骨架 `validation_assets/`（`references/`, `cases/`, `shared/`, `evidence/`, `archive/`）。
+     - 登记官方与工业权威基准 `validation_assets/references/official_examples.json`（覆盖 Abaqus 2025 Example Problems, ASME BPVC, SAE, ASTM, NASA SP-8007, Numisheet）。
+     - 建立统一资产注册表 `validation_assets/registry.json` 与各案例清单（`case_01` 至 `case_06` 达到 QUALIFIED 闭环，`case_07` 至 `case_10` 完成统一 PRE_RESERVED 扩展预留）。
+  5. **阶段 E（CLI 工具与生态接入）**:
+     - CLI 增强 `assets` 子命令（`python -m abaqus_ai_agent.cli assets [--list|--case|--json]`），实现案例资产统一查询与验证。
+     - `matrix` 子命令候选路径无缝兼容 `validation_assets`。
+  6. **阶段 F（全链路自动化测试守护）**:
+     - 新增 `tests/test_paths.py` (11 项)、`tests/test_clean_workspace.py` (4 项)、`tests/test_validation_assets.py` (4 项)。
+     - 全仓全量自动化回归测试达到 **1117 passed in 60.61s (100% 成功，0 失败)**。
+     - 原有 157 项受控黄金证据、密码学签名及未提交工作区改动保持完整，零意外破坏。

@@ -1,0 +1,16 @@
+{
+  "case_id": "CASE_03_EXHAUST_MANIFOLD_THERMO_MECHANICAL",
+  "name": "Heavy-Duty Diesel Engine Exhaust Manifold Thermo-Mechanical Contact Analysis",
+  "category": "P2_PACKAGE_B",
+  "domain": "engine_thermo_mechanical_contact",
+  "reference": "validation_assets/references/official_examples.json#REF_ABQ_EXHAUST_MANIFOLD",
+  "status": "QUALIFIED",
+  "source_input": "test_assets/engineering_cases/case_03_exhaust_manifold_thermo_mechanical/problem_statement.json",
+  "primary_manifest": "machine_validation/p2_cases/case_03_manifold_manifest.json",
+  "primary_report": "machine_validation/p2_cases/case_03_manifold_report.html",
+  "verified_metrics": {
+    "peak_temperature_c": 648.2,
+    "fillet_thermal_mises_stress_mpa": 412.0,
+    "flange_slip_clearance_mm": 0.54
+  }
+}

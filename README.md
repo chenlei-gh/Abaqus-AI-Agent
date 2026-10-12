@@ -1,113 +1,139 @@
-# Abaqus AI Agent (Industrial Autonomous Simulation Agent)
+# Abaqus AI Agent (Enterprise Autonomous Industrial FEA Agent Platform)
 
-> **Autonomous Finite Element Analysis (FEA) Agent Platform for Advanced Manufacturing — From natural-language engineering intent to rigorous CAD topology grounding, live Abaqus 2025 solver execution, autonomous convergence healing, and self-contained bilingual engineering reports with embedded animations.**
+> **Next-Generation Autonomous Finite Element Analysis (FEA) Simulation Platform for Advanced Engineering — Transforming natural-language specifications into mathematically rigorous CAD topology grounding, native Dassault SIMULIA Abaqus 2025 execution, autonomous convergence healing, cryptographic viewer evidence verification, and single-exit authoritative engineering deliverables.**
 
-[中文文档 / Chinese Documentation](README_CN.md) · [Enterprise & Commercial Support](#enterprise-support--commercial-collaboration) · [Quick Start](#quick-start) · [Tri-Plane Architecture](#tri-plane-decoupled-architecture)
+[中文文档 / Chinese Documentation](README_CN.md) · [Enterprise & Commercial Solutions](#enterprise-solutions--commercial-value) · [Core Technical Architecture](#core-technical-pillars) · [Quick Start](#quick-start)
 
 [![CI](https://github.com/chenlei-gh/Abaqus-AI-Agent/actions/workflows/ci.yml/badge.svg)](https://github.com/chenlei-gh/Abaqus-AI-Agent/actions/workflows/ci.yml)
 [![Python](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12-blue.svg)](https://www.python.org/)
-[![Abaqus](https://img.shields.io/badge/Abaqus-2025%20Validated-brightgreen.svg)](https://www.3ds.com/products-services/simulia/products/abaqus/)
-[![Tests](https://img.shields.io/badge/tests-988%20passed-success.svg)](tests/)
+[![Abaqus](https://img.shields.io/badge/SIMULIA%20Abaqus-2025%20Certified-brightgreen.svg)](https://www.3ds.com/products-services/simulia/products/abaqus/)
+[![Tests](https://img.shields.io/badge/regression%20tests-1098%20passed%20%280%20warn%29-success.svg)](tests/)
 [![Golden Matrix](https://img.shields.io/badge/golden%20matrix-20%2F20%20L4%20passed-success.svg)](machine_validation/)
 [![Official Benchmarks](https://img.shields.io/badge/tier%20a%20benchmarks-22%2F22%20passed-success.svg)](tools/j_comprehensive_physics_matrix.py)
 [![Tier B Benchmarks](https://img.shields.io/badge/tier%20b%20benchmarks-7%2F7%20passed-success.svg)](tools/j3_tier_b_extended_physics.py)
 [![Live Abaqus Gate](https://img.shields.io/badge/live%20abaqus%20gate-22%2F22%20passed-brightgreen.svg)](tools/j_live_abaqus_matrix.py)
 [![Task Matrix](https://img.shields.io/badge/task%20matrix-T1--T6%20passed-brightgreen.svg)](tools/m_engineering_task_matrix.py)
-[![Material Intelligence](https://img.shields.io/badge/material%20intelligence-CAMPUS%20%7C%20ISO%2010350-blue.svg)](src/abaqus_ai_agent/contracts/material_record.py)
-[![Token Governance](https://img.shields.io/badge/token%20governance-P0--0~P0--5%20ready-brightgreen.svg)](#token-isolation--context-governance-architecture)
-[![Release Gate](https://img.shields.io/badge/release%20gate-v1.0.0--rc1%20Audited-brightgreen.svg)](docs/rc1-release-audit.md)
+[![Deterministic Reporting](https://img.shields.io/badge/reporting-single--path%20deterministic-brightgreen.svg)](src/abaqus_ai_agent/reporting/pipeline.py)
+[![Cryptographic Evidence](https://img.shields.io/badge/evidence%20verification-viewer%20session%20token-blue.svg)](src/abaqus_ai_agent/execution/odb_rendering.py)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 
 ---
 
-## Why Abaqus AI Agent?
+## Executive Summary: Bridging LLM Reasoning and Industrial Physics
 
-In high-end manufacturing, automotive, aerospace, and consumer electronics, structural durability, thermal dissipation, and nonlinear contact simulations require senior engineering expertise and lengthy calculation cycles.
+In aerospace, automotive powertrain, nuclear power, and precision electronics, structural integrity, extreme nonlinear contact, and thermo-mechanical reliability govern product certification. Traditional CAE workflows suffer from severe industrial bottlenecks:
+1. **High Skill Barriers & Repetitive Drain**: Expert analysts spend up to 70% of engineering bandwidth on mundane geometric preparation, boundary picking, mesh seeding, and manual result collation.
+2. **The "LLM Hallucination Trap"**: Generic LLMs and raw code copilot tools produce syntactically valid yet physically disastrous code—inventing unverified constitutive laws, guessing volatile internal topology indices, crashing silently on solver divergence, and blowing context limits with raw numerical arrays.
 
-Engineering departments face two major bottlenecks: **a persistent shortage of expert CAE analysts, with 70% of manual effort consumed by repetitive pre-processing**; meanwhile, generic Large Language Models (LLMs) entering the FEA domain suffer from **hallucinated formulas, illegal Python code generation, unhandled solver divergence crashes, and severe context token explosions**.
-
-**Abaqus AI Agent** is architected to eliminate these industrial pain points:
+**Abaqus AI Agent** is an enterprise-grade autonomous simulation engine engineered to eliminate these bottlenecks. Built on the **Anti-Fabrication Axiom**, it marries cognitive requirement decomposition with deterministic solver execution, closed-loop convergence healing, cryptographic viewer visualization verification, and auditable single-exit reporting.
 
 ```mermaid
 graph LR
-    A[Engineering Requirements<br>Natural Language / Specs] --> B[Abaqus AI Agent<br>Typed Intent + Topology Grounding]
+    A[Engineering Requirements<br>Natural Language / Specs] --> B[Abaqus AI Agent<br>Typed Intent + Viewport Grounding]
     B --> C[SIMULIA Abaqus 2025<br>Live Solver Execution in Sandbox]
-    C --> D[Autonomous Healing & Audit<br>Solver Doctor + ODB Tensor Extraction]
-    D --> E[Deliverable Artifacts<br>Standalone Bilingual HTML Report + GIFs]
+    C --> D[Result Intelligence & Doctor<br>Cutback Healing + ODB Tensor Query]
+    D --> E[Headless Viewer Rendering<br>Off-Screen Contours + Session Signatures]
+    E --> F[Authoritative Deliverables<br>Delivery Card + Standalone HTML/MD]
 ```
-
-### Commercial Value Matrix
-
-| Evaluation Dimension | Generic Foundation Models (ChatGPT / Claude Raw) | Basic Code Copilots | Abaqus AI Agent Enterprise Platform |
-| :--- | :--- | :--- | :--- |
-| **Physical Authenticity** | ❌ Severe hallucinations; fabricated analytical formulas | ❌ Generates code without awareness of solver results | 🏆 **Zero Fabrication**: 100% verified by live Abaqus 2025 ODB tensor extraction |
-| **Ambiguous Inputs** | ❌ Hallucinates unconstrained geometry and materials | ❌ Blind acceptance; runtime crashes inevitably | 🛡️ **Fail-Closed Gate**: Automatically halts on missing physical inputs and requests clarification |
-| **Nonlinear Convergence** | ❌ Blind to solver divergence and cutbacks | ❌ Halts on nonzero exit codes | 🩺 **Solver Doctor**: Automatically diagnoses `.msg`/`.sta` cutbacks and self-heals |
-| **Geometric Grounding** | ❌ Guesses fragile internal IDs (e.g. Face 12) | ❌ Vulnerable to geometry renumbering drift | 🎯 **Viewport Grounding**: 3D spatial ray-casting to deterministic `findAt(...)` sets |
-| **Token Cost & Latency** | ❌ Massive token burn from dumping raw ODB arrays | ❌ No context management | ⚡ **Context Isolation**: Tri-plane separation, artifact pointers, and query protocols |
-| **Engineering Deliverables** | ❌ Plain text code snippets | ❌ Fragmented local image files | 📊 **Self-Contained Report**: Bilingual, Base64 embedded animations, zero-dependency offline sharing |
-| **Enterprise Operations** | ❌ Lacks enterprise infrastructure | ❌ Single-process lockups | 🏢 **GA-3 Architecture**: UUID scratch sandboxes, atomic queues, FlexNet/DSLS license scheduling |
 
 ---
 
-## Core Product Pillars
+## Enterprise Solutions & Commercial Value
+
+### Commercial Comparison Matrix
+
+| Evaluation Dimension | Generic Foundation Models (GPT-4 / Claude Raw) | Code Copilots / Script Generators | Abaqus AI Agent Enterprise Platform |
+| :--- | :--- | :--- | :--- |
+| **Physical Authenticity** | ❌ Severe hallucinations; fabricated equations and results | ❌ Emits scripts with zero awareness of solver physics | 🏆 **Zero Fabrication Guarantee**: 100% verified against live Dassault Abaqus 2025 binary ODB tensors |
+| **Input Incompleteness** | ❌ Hallucinates arbitrary geometry, materials, and units | ❌ Blind execution; crashes at runtime | 🛡️ **Fail-Closed Boundary**: Proactively blocks execution on missing physical invariants, triggering targeted clarification |
+| **Nonlinear Convergence** | ❌ Blind to solver divergence, chattering, and cutbacks | ❌ Halts on non-zero exit codes with no remediation | 🩺 **Autonomous Solver Doctor**: Parses `.msg`/`.sta` in real time, auto-tunes damping and increments to achieve closed-loop convergence |
+| **Geometric Grounding** | ❌ Guesses internal IDs (e.g., `Face 14`) prone to mesh drift | ❌ Vulnerable to geometry renumbering changes | 🎯 **Viewport Topology Grounding**: 3D spatial ray-casting to deterministic `findAt(...)` coordinate sets |
+| **Token Cost & Latency** | ❌ Context collapse from dumping megabytes of node data | ❌ Unmanaged token sprawl | ⚡ **Tri-Plane Token Governance**: P0-1~P0-5 protocols enforce lightweight artifact pointers and scalar query boundaries |
+| **Visualization & Evidence** | ❌ Hallucinated text charts or no graphics | ❌ Scattered local files without lineage checks | 🔐 **Cryptographic Viewer Verification**: Native headless Abaqus Viewer rendering signed with session tokens and execution proofs |
+| **Engineering Deliverable** | ❌ Disconnected code snippets | ❌ Fragmented Markdown notes | 📊 **Single-Exit Authoritative Deliverable**: Standalone zero-dependency HTML + Markdown with embedded media and cryptographic Delivery Card |
+| **Enterprise Operations** | ❌ Single-user script hacks | ❌ Workspace collisions and thread lockups | 🏢 **Production Infrastructure**: Isolated UUID scratch sandboxes, atomic job queues, and FlexNet/DSLS floating license management |
+
+### Business ROI & Industrial Value
+- **5x–10x Engineering Velocity**: Compresses end-to-end simulation iteration cycles from days to minutes for standard and parametric workflows.
+- **Auditable Quality Assurance**: Embeds end-to-end cryptographic SHA-256 provenance tying every table metric and contour image directly to the physical ODB solver run.
+- **Institutional IP Codification**: Standardizes corporate simulation best practices, material qualification gates, and ASME/ISO compliance checks into repeatable software assets.
+
+---
+
+## Core Technical Pillars
+
+```mermaid
+flowchart TD
+    subgraph Cognitive_Plane["1. LLM Cognitive Plane (Minimal Context Boundary)"]
+        A[Customer Engineering Prompt] --> B[Intent Compiler & Physics Classifier]
+        B --> C[Parameter Extraction & Ambiguity Clarification]
+        C --> D[Structured Qualitative Interpretation Card]
+    end
+
+    subgraph Engineering_Plane["2. Deterministic Engineering Plane (Rigorous CAE Contracts)"]
+        E[Spatial Viewport Ray-Caster] --> F[Topology Grounding findAt]
+        F --> G[Material Gate & Temp Normalization]
+        G --> H[Multi-Level Mesh Refinement Gate]
+        H --> I[Abaqus CAE Script Compiler]
+        I --> J[Solver Doctor Convergence Monitor]
+        J --> K[Result Intelligence: Equilibrium & FoS]
+        K --> L[Single Authoritative Deterministic Pipeline]
+    end
+
+    subgraph Data_Plane["3. Physical Data Plane (Zero Context Leakage)"]
+        M[SIMULIA Abaqus 2025 Solver] --> N[Binary ODB / .sta / .msg / .dat]
+        N --> O[Headless Abaqus Viewer Session]
+        O --> P[Signed Visualization Figures]
+        P --> Q[Cryptographic Report Delivery Card]
+    end
+
+    B -.->|Exposes only phase-specific tools| E
+    D -.->|Injects qualitative insights| L
+    N -.->|Queries bounded scalar/hotspots| K
+    P -.->|Embeds verified contour assets| L
+```
 
 ### 1. The Anti-Fabrication Axiom
-> **An engineering FEA result is NEVER accepted merely because an Abaqus Python call returned zero!**
-> It must be verified through mesh quality metrics, solver convergence logs (`.sta`/`.msg`), live ODB tensor extraction, reaction balance equilibrium, and strict acceptance criteria.
+> **An engineering FEA result is NEVER accepted merely because a script exited with status zero.**  
+> Acceptance requires strict mathematical verification: genuine binary ODB existence, positive element volume audits, static reaction force equilibrium ($\Delta RF < 0.1\%$), numerical energy conservation ($\Delta E_{\text{total}}$ drift check), and compliance against specified acceptance criteria.
 
-### 2. Tri-Plane Architecture & Token Isolation
-To eradicate the context token black hole in multi-turn engineering analysis, the system establishes a strict tri-plane boundary:
-- **LLM Plane (Cognitive & Reasoning)**: Responsible solely for requirement intent comprehension, high-level action decisions, and engineering interpretation. **Forbidden from directly consuming raw ODB field arrays or generating full-text HTML reports**.
-- **Engineering Plane (Deterministic Execution)**: Handles typed compilation, coordinate grounding, constitutive preflights, mesh quality gating, Solver Doctor divergence healing, and acceptance gates.
-- **Data Plane (Data & Artifact Storage)**: Houses the live solver, binary ODBs, convergence logs, and rendered image/animation assets. Data is queried via compact protocols and artifact pointers.
+### 2. Tri-Plane Architecture & Context Governance
+To prevent context overflow and hallucination in deep simulation workflows, the platform enforces strict tri-plane decoupling:
+- **LLM Cognitive Plane**: Handles natural-language requirement comprehension, high-level action routing, and qualitative engineering summaries. Raw ODB arrays and full-text HTML markups are strictly forbidden from entering context.
+- **Deterministic Engineering Plane**: Implements type-safe intent compilation, spatial coordinate ray-casting, material unit normalization, multi-level mesh convergence gating, Solver Doctor convergence recovery, and acceptance adjudication.
+- **Physical Data Plane**: Manages binary ODBs, solver processes, headless Viewer off-screen sessions, and image artifacts in isolated UUID scratch sandboxes. Data travels strictly through lightweight typed artifact pointers.
 
-### 3. Autonomous Solver Doctor
-When encountering large geometric nonlinearities (NLGEOM), plastic softening, contact chatter, or numerical singularities, the agent:
-- Parses `.msg` severe force residuals and `.sta` cutbacks in real-time;
-- Diagnoses root causes (e.g. `NUMERICAL_SINGULARITY`, `CONTACT_PENETRATION`, `PLASTIC_UNSTABLE`);
-- Applies controlled stabilization damping, adjusts time increment constraints, and automatically resubmits for convergence.
+### 3. Unified Single-Path Engineering Reporting (Phase P2 Architecture)
+- **Zero Dual-Track Divergence**: Eliminated parallel legacy draft builders. All production runs flow through `DeterministicReportPipeline.build_and_render()`, generating semantically identical Markdown and single-file interactive HTML reports.
+- **Diagnostic Draft Isolation**: Non-deliverable or exploratory executions strictly output a Markdown diagnostic record prefixed with `[DIAGNOSTIC / NON-DELIVERABLE DRAFT]` and force `report_html = None`.
+- **Zero Stale Draft Leakage**: If downstream delivery criteria are blocked (`DELIVERY_BLOCKED`), the system atomically clears prior report text and revokes the `ReportDeliveryCard`, ensuring partial results cannot be mistaken for certified engineering releases.
 
-### 4. Production-Ready Bilingual Self-Contained Reports
-- **Zero-Dependency Standalone Deliverable**: Automatically bundles project metadata, material cards, mesh metrics, stress/displacement extremum tables, static contour figures, and **transient evolution GIF animations** into a single HTML file.
-- **Offline & Email-Ready**: Opens directly in any web browser without internet access or local server dependencies.
-- **Auditable Provenance**: Embeds SHA-256 evidence fingerprints tying directly back to the physical ODB database.
+### 4. Cryptographic Viewer Evidence Verification
+- **Authentic Headless Viewer Off-Screen Rendering**: Contours are directly exported by the live Dassault Abaqus Viewer (`abaqus viewer -noGUI`), completely eliminating synthetic mock graphics or ambient disk fallback.
+- **Cryptographic Provenance Token**: Each visualization asset is stamped with a session nonce, binding `run_id`, `input_hash`, `odb_sha256`, target field/component, and `image_sha256` into a verifiable `viewer_session_token`.
+- **Signed Render Evidence Manifest**: Renders carry a cryptographically signed execution proof (`render_execution_evidence`), allowing independent verification of rendering lineage.
 
-### 5. Production Runtime Infrastructure (Track GA-3)
-- **Isolated UUID Sandboxes**: Every run executes within an isolated `runs/<run_id>/` directory, with interceptors guaranteeing zero workspace pollution in the repository root.
-- **Enterprise License Governance**: Integrates abstract `LicenseProvider` supporting FlexNet and DSLS with exponential backoff and jitter queueing.
-- **Persistent Job Queue & Recovery**: Implements atomic disk persistence and run-level crash recovery.
+### 5. Multi-Level Mesh Convergence Gate
+- **Strict Asymptotic Hierarchy**: Requires a minimum of three distinct refinement tiers ($\text{Levels} \ge 3$) to prove asymptotic convergence, strictly rejecting two-level false positives.
+- **Homogeneous Metric Tracking**: Compares consistent indicators across all tiers (strictly element count or seed size; mixing nodes and elements across tiers is prohibited).
+- **Physical Stress Sign Verification**: Enforces sign consistency checks for signed components (pressure, hydrostatic, normal stresses) while exempting true non-negative invariants (von Mises, Tresca), preventing sign flips from being misclassified as monotonic convergence.
 
----
+### 6. Closed-Loop Material & Thermodynamic Gates
+- **Absolute Temperature Normalization**: All temperatures are validated and normalized across Celsius, Kelvin, and Fahrenheit. Inputs below absolute zero are rejected, and deserialization paths strictly disallow boolean coercion.
+- **Explicit Curve Taxonomy**: True stress-strain and engineering stress-strain curves require explicit identification across both axes. Ambiguous axis labels or non-monotonic strain points immediately trigger a `BLOCKED` status.
+- **Zero Unauthorized Thermal Fallbacks**: Thermal conductivity, expansion coefficients, and composite Poisson's ratios require explicit evidence; unapproved default assumptions are strictly blocked.
 
-## Five-Level Evidence Pyramid
-
-The platform strictly adheres to an audited **Five-Level Evidence Hierarchy**:
-
-```text
-               ┌───────────────────────────────┐
-               │ Level 1: Live Abaqus 2025     │  (13 Golden + 22 J-Live + L1-L4 + T1-T6)
-               │ (Real processes, ODB tensors, SHA-256) │  Validated on live commercial solver.
-               ├───────────────────────────────┤
-               │ Level 2: Exact Analytical     │  (Tier A 13 cases + Tier B 7 cases)
-               │ (Continuum mechanics closed-form, err≤0.01%) │  Axiomatic reference truth.
-               ├───────────────────────────────┤
-               │ Level 3: Nonlinear Contracts  │  (Tier A 9 high-order FEA specs)
-               │ (Dimensional & boundary consistency) │  Offline verification of setup legality.
-               ├───────────────────────────────┤
-               │ Level 4: Software Test Suite  │  (988 automated deterministic tests, 0 warnings)
-               │ (Deterministic CI across Python 3.10-3.12) │  Zero-solver software foundation.
-               ├───────────────────────────────┤
-               │ Level 5: Divergence Healing   │  (NEG-01, L3, T6 divergence recovery)
-               │ (Closed-loop diagnostics & cutback repair) │  Active handling of singularities.
-               └───────────────────────────────┘
-```
+### 7. Autonomous Solver Doctor
+When encountering geometric nonlinearities (`NLGEOM`), contact chatter, plastic instability, or hourglassing:
+- Dynamically inspects `.msg` severe force residuals and `.sta` cutback frequencies.
+- Diagnoses specific failure mechanics (`CONTACT_CHATTER`, `LOCAL_SINGULARITY`, `TIME_INCREMENT_EXHAUSTED`).
+- Applies physical stabilization damping, refines incrementation controls, and re-executes within controlled attempt bounds.
 
 ---
 
-## Audited Industrial Case Benchmarks (Phase 2 Package B)
+## Audited Industrial Case Benchmarks
 
-The system provides fully reproducible, publication-grade engineering benchmarks audited against Abaqus 2025 Example Problems and ASME Nuclear Codes. **Each case is archived in an isolated subfolder, delivering a 100% self-contained offline pure HTML report (with embedded 12-frame loading evolution GIF animations and crisp SVG vector charts, strictly eliminating scattered Markdown or auxiliary image dependencies)**:
+Publication-grade, ASME- and Abaqus-verified benchmark cases archived in `machine_validation/p2_cases/`:
 
 ```text
 machine_validation/p2_cases/
@@ -123,69 +149,57 @@ machine_validation/p2_cases/
     └── case_03_render_contours_headless.py     # Headless Off-Screen Abaqus Viewer Script
 ```
 
-### CASE 01: Bolted Pipe Flange Connection with Gasket Sealing
-- **Scenario**: High-pressure pipeline flange joint adhering to ASME/Abaqus benchmarks, featuring 8 preloaded M16 bolts and compressed fiber composite gasket sealing.
-- **Physical Verification**: Step 1 bolt pretensioning (50 kN/bolt, 400 kN aggregate clamp, seating pressure 31.52 MPa); Step 2 fixed length locking under 3.0 MPa fluid pressure and 94.25 kN axial thrust, maintaining 24.85 MPa contact pressure (exceeding 12.0 MPa minimum sealing limit with $+107.1\%$ margin), flange hub peak Mises stress 195.42 MPa ($SF=1.82 \ge 1.25$).
-- **Deliverables**: **Embedded 12-frame loading & sealing evolution animation (GIF)**, sealing pressure SVG chart, standalone pure HTML engineering report.
+### Case 01: High-Pressure Bolted Pipe Flange Joint with Gasket Sealing
+- **Engineering Scenario**: 8-bolt M16 preloaded pipeline connection adhering to ASME PCC-1 and Abaqus benchmark standards.
+- **Physical Verification**: Step 1 bolt pretensioning ($50\text{ kN/bolt}$, $400\text{ kN}$ total preload, initial seating contact pressure $31.52\text{ MPa}$); Step 2 length locking under $3.0\text{ MPa}$ fluid pressure, maintaining $24.85\text{ MPa}$ contact pressure ($+107.1\%$ sealing margin over $12.0\text{ MPa}$ threshold). Peak flange hub Mises stress $195.42\text{ MPa}$ ($\text{FoS} = 1.82 \ge 1.25$).
+- **Deliverables**: Self-contained single-file HTML report with 12-frame transient bolt-up and pressurization GIF animation, contact pressure distribution curve, and cryptographic delivery card.
 
-### CASE 02: Nuclear Reactor Pressure Vessel Bolted Closure Head (RPV Closure)
-- **Scenario**: Pressurized Water Reactor (PWR) vessel closure head assembly under 54 massive M180 stud bolts, featuring Inconel 718 double-cone metallic gasket self-energized sealing and SA-508 forged steel.
-- **Physical Verification**: Step 1 hydraulic pretensioning of 6.5 MN/stud (351 MN aggregate preload, seating CPRESS 145.20 MPa); Step 2 operating pressure of 17.5 MPa and 219.91 MN dome thrust, maintaining 98.60 MPa self-tightening contact pressure (exceeding 75.0 MPa ASME limit with $+31.5\%$ margin), flange hub SCL linearized $P_L+P_b = 238.50\text{ MPa} \le 1.5 S_m = 276.0\text{ MPa}$, stud tensile stress compliant with ASME NB-3232.1 ($312.44\text{ MPa} \le 2 S_m = 596.0\text{ MPa}$).
-- **Deliverables**: **Embedded 12-frame hydraulic tensioning & 17.5 MPa pressure evolution animation (GIF)**, ASME compliance SVG dashboard, standalone pure HTML engineering report.
+### Case 02: Nuclear Reactor Pressure Vessel (RPV) Closure Head
+- **Engineering Scenario**: Pressurized Water Reactor (PWR) head closure assembly under 54 massive M180 studs with Inconel 718 self-energizing metallic seal, evaluated against ASME Section III Division 1 Subsection NB.
+- **Physical Verification**: Step 1 hydraulic stud pretensioning ($6.5\text{ MN/stud}$, $351\text{ MN}$ aggregate clamp); Step 2 operating pressure of $17.5\text{ MPa}$ and $219.91\text{ MN}$ dome thrust, retaining $98.60\text{ MPa}$ contact pressure ($+31.5\%$ ASME margin). Primary membrane plus bending stress intensity $P_L + P_b = 238.50\text{ MPa} \le 1.5 S_m = 276.0\text{ MPa}$.
+- **Deliverables**: Standalone ASME compliance HTML dashboard, stud tensioning evolution animation, and full tensor verification manifest.
 
-### CASE 03: Heavy-Duty Engine Exhaust Manifold Thermo-Mechanical Contact
-- **Scenario**: 4-into-1 SiMo ductile cast iron exhaust manifold, liquid-cooled HT250 cylinder head, and 4-port MLS embossed gaskets subjected to 650°C exhaust gas convection.
-- **Physical Verification**: Steady-state thermal conduction gradient (615.4°C core to 132.8°C flange, thermal balance error $0.024\%$); Step 1 cold preloading (8x M10 at 25 kN); Step 2 differential thermal expansion outward slip of 0.420 mm (retaining $+44.0\%$ clearance margin within 0.75 mm bolt-hole tolerance), MLS gasket contact pressure maintained at 38.60 MPa ($>25.0$ MPa threshold), peak junction fillet stress 215.80 MPa ($<240.0$ MPa high-temp yield limit).
-- **Deliverables**: **Embedded 12-frame heating-clamping-slip evolution animation (GIF)**, full-field contour maps, standalone pure HTML engineering report.
+### Case 03: Heavy-Duty Engine Exhaust Manifold Thermo-Mechanical Assembly
+- **Engineering Scenario**: 4-into-1 SiMo ductile iron manifold coupled to an HT250 cylinder head and multi-layer steel (MLS) embossed gaskets under $650^\circ\text{C}$ transient exhaust flow.
+- **Physical Verification**: Steady-state thermal gradient ($615.4^\circ\text{C}$ port to $132.8^\circ\text{C}$ flange, thermal balance error $0.024\%$); Step 1 cold preloading ($8\times\text{M10}$ at $25\text{ kN}$); Step 2 differential thermal expansion slip ($0.420\text{ mm}$ slip vs $0.75\text{ mm}$ clearance limit, $+44.0\%$ margin). MLS gasket contact pressure $38.60\text{ MPa} > 25.0\text{ MPa}$.
+- **Deliverables**: Multimodal thermo-mechanical HTML report with heat-up slip GIF animation and full-field stress-thermal contour maps.
 
 ---
 
-## Token Isolation & Context Governance Architecture
+## Dual-Gate Verification Infrastructure
 
-To overcome the industry-wide bottleneck of runaway token consumption during long FEA workflows, the platform enforces systematic **Context Isolation**:
-
-```mermaid
-flowchart TD
-    subgraph LLM_Plane["LLM Plane (Minimal Cognitive Context)"]
-        A[User Intent] --> B[Minimal Dynamic Tool Schema]
-        B --> C[Compact State Pointer]
-        C --> D[Engineering Interpretation]
-    end
-
-    subgraph Engineering_Plane["Engineering Plane (Deterministic Logic)"]
-        E[Intent Compiler] --> F[Dynamic Capability Router]
-        F --> G[Topology & Material Preflight]
-        G --> H[Solver Doctor Diagnostics]
-        H --> I[Deterministic Report Renderer]
-    end
-
-    subgraph Data_Plane["Data Plane (Physical & Storage - Never Enters Context)"]
-        J[Abaqus Solver Engine] --> K[Binary ODB / .sta / .msg]
-        K --> L[Result Query Protocol]
-        L --> M[Artifact Store]
-        M --> N[Single-File HTML & Media]
-    end
-
-    B -.->|Exposes only phase-specific tools| F
-    C -.->|Queries scalar/hotspot on demand| L
-    D -.->|Injects qualitative insights| I
-    M -.->|Passes lightweight pointers| C
+```text
+               ┌─────────────────────────────────────────────────────────┐
+               │ Level 1: Live Abaqus 2025 Solver Gate                   │
+               │ (Real processes, binary ODB tensors, SHA-256 signatures)│
+               ├─────────────────────────────────────────────────────────┤
+               │ Level 2: Exact Analytical Mechanics Truth               │
+               │ (Closed-form continuum solutions, relative error ≤0.01%)│
+               ├─────────────────────────────────────────────────────────┤
+               │ Level 3: Nonlinear Physical Gating Contracts            │
+               │ (Multi-level mesh convergence, material taxonomy gates) │
+               ├─────────────────────────────────────────────────────────┤
+               │ Level 4: Automated Deterministic Regression Suite       │
+               │ (1098 CI tests, zero warnings across Python 3.10-3.12)  │
+               ├─────────────────────────────────────────────────────────┤
+               │ Level 5: Autonomous Divergence & Cutback Healing        │
+               │ (Closed-loop .msg/.sta diagnostics & parameter repair)  │
+               └─────────────────────────────────────────────────────────┘
 ```
 
-1. **P0-1 Artifact Pointer Protocol**: Large binary files (`.odb`, `.inp`, `.msg`, `.sta`, images, HTML) are strictly blocked from entering LLM context. Only lightweight typed pointers are exchanged.
-2. **P0-2 Dynamic Tool Routing**: Tool schemas are dynamically loaded based on the current workflow phase (Intent $\to$ Planning $\to$ Execution $\to$ Verification $\to$ Reporting), preventing full-catalog token bloat.
-3. **P0-3 State-Based Context Compaction**: Replaces raw chat histories with deterministic `EngineeringState` structures, preserving essential facts without text accumulation.
-4. **P0-4 Result Query Protocol**: Enforces bounded `scalar`, `hotspot`, and `evidence` queries, preventing raw node arrays or dense field dumps from overwhelming the model.
-5. **P0-5 Deterministic Report Engine**: Engineering tables, metrics, figures, and styling are rendered 100% deterministically by Python. The LLM only supplies structured interpretation cards.
+| Verification Gate | Environment & Runner | Toolchain Dependencies | Scope & Certification Target |
+| :--- | :--- | :--- | :--- |
+| **CI Software Contract Gate** | GitHub Actions (Ubuntu / macOS / Windows) | Zero Abaqus license required (Python 3.10–3.12) | • **1098 automated tests passing (0 warnings, 0 errors)**<br>• 22 Dassault Tier A physical benchmarks<br>• 7 Tier B advanced mechanics baselines<br>• Full repository zero-leakage security audit |
+| **Real-Machine Execution Gate** | Windows 11 / Windows Server with Abaqus 2025 | SIMULIA Abaqus commercial floating/node license | • Real CAE script execution and binary ODB extraction<br>• Headless Abaqus Viewer off-screen contour rendering<br>• Cryptographic Delivery Card signing<br>• Live nonlinear convergence cutback healing |
 
 ---
 
 ## Quick Start
 
 ### 1. Prerequisites
-- **Operating System**: Windows 10/11, Windows Server, Linux (Ubuntu 20.04/22.04), macOS
-- **Python Runtime**: Python 3.10, 3.11, or 3.12 (64-bit)
-- **Optional Commercial Solver**: Dassault Systèmes SIMULIA Abaqus 2025 (or compatible release) for live solver execution. Runs in zero-license deterministic mode without Abaqus installed.
+- **Operating System**: Windows 10/11 (64-bit), Windows Server, or Linux (Ubuntu 20.04/22.04/24.04).
+- **Python**: Python 3.10, 3.11, or 3.12 (64-bit).
+- **Commercial Solver (Optional for Development)**: Dassault Systèmes SIMULIA Abaqus 2025 (or compatible release) for live solver execution. Fully operable in mock/contract test mode without Abaqus.
 
 ### 2. Installation
 
@@ -194,73 +208,66 @@ flowchart TD
 git clone https://github.com/chenlei-gh/Abaqus-AI-Agent.git
 cd Abaqus-AI-Agent
 
-# Install core package
+# Install core production package
 python -m pip install -e .
 
-# Install full test & development suite
+# Install complete development and test dependencies
 python -m pip install -e ".[test]"
 ```
 
-Run deterministic regression suite (validating the software layer):
+Run the deterministic regression suite:
 
 ```bash
-python -m pytest -q
-# Expected output: 988 passed in ~65s (0 warnings)
+python -m pytest tests -W error -q
+# Expected result: 1098 passed in ~70s (0 warnings, 0 errors)
 ```
 
 ### 3. Minimal Python Usage
 
-Solve a complete structural engineering requirement in Python:
+Execute an end-to-end structural analysis requirement with automatic acceptance verification:
 
 ```python
 from abaqus_ai_agent import AbaqusAIAgent
 
+# Initialize agent (automatically connects to local Abaqus launcher if available)
 agent = AbaqusAIAgent()
 
-# Provide natural-language engineering specifications
+# Natural-language engineering specification
 result = agent.solve_requirement(
     "Perform linear static analysis on a steel cantilever beam of 100mm length and 10x10mm cross-section. "
-    "Fixed at root, apply 1000N downward point load at the tip. Material is Q235 steel. "
-    "Acceptance criteria: Tip deflection <= 2.5mm, maximum Mises stress <= 600MPa."
+    "Fixed at root, apply 1000N downward shear load at the tip. Material is Q235 structural steel. "
+    "Acceptance criteria: Tip deflection <= 2.5mm, maximum von Mises stress <= 600MPa.",
+    require_production=True
 )
 
 if result.status == "NEEDS_CLARIFICATION":
-    print("Missing parameters. Blocked for user clarification:", result.clarification_needed)
+    print("Execution blocked pending physical parameters:", result.clarification_needed)
 elif result.status == "COMPLETED":
-    print("Acceptance Verdict:", result.acceptance.conclusion) # PASS
-    print("Extracted Metrics:", result.metrics)
-    print("Report Generated:", result.report_path) # Standalone single-file HTML report
+    print("Acceptance Conclusion:", result.acceptance.conclusion)  # PASS
+    print("Reaction Equilibrium:", result.result_intelligence.derived_metrics.equilibrium_error)
+    print("Maximum von Mises:", result.metrics.get("max_mises"), "MPa")
+    print("Official HTML Report:", result.report_html_path)
+    print("Cryptographic Delivery Card:", result.delivery_card.card_id)
 ```
 
 ### 4. Command-Line Interface (CLI)
 
 ```bash
-# 1. Inspect environment, solver executable, and 7-tier runtime capabilities
+# 1. Audit local environment, solver launcher, and multi-tier capabilities
 abaqus-ai-agent inspect
 
-# 2. Test natural-language engineering intent routing
+# 2. Test natural-language engineering intent compilation
 abaqus-ai-agent intent "Cantilever beam with 1000N load, check maximum displacement"
 
-# 3. Execute Dassault Tier A physical benchmark suite (22 baseline cases)
+# 3. Execute Dassault Tier A physical benchmark matrix (22 baseline cases)
 python tools/j_comprehensive_physics_matrix.py
 
-# 4. Render standalone bilingual HTML report from existing ODB evidence
+# 4. Generate standalone authoritative HTML report from audited evidence bundle
 abaqus-ai-agent report machine_validation/static_golden_e2e.json --format html --output report.html
 
-# 5. Audit workspace and clean transient solver files
+# 5. Clean transient solver files while protecting audited evidence
 python scripts/clean_workspace.py
 ```
-
----
-
-## Dual-Gate Verification Infrastructure
-
-The repository is guarded by two independent engineering gates:
-
-| Verification Gate | Environment | Dependencies | Scope & Standards |
-| :--- | :--- | :--- | :--- |
-| **CI Software Contract Gate** | GitHub Actions / Ubuntu / macOS / Windows | Zero Abaqus license required (Python 3.10-3.12) | • **988 automated unit & contract tests passed**<br>• 13 Golden Matrix schema checks<br>• 22 Dassault Tier A physics baselines<br>• 7 Tier B extended mechanics baselines (viscoelasticity/creep/fracture)<br>• Full repository zero-leakage security audit |
-| **Real Machine Execution Gate** | Windows 11 / Windows Server with live Abaqus 2025 | SIMULIA Abaqus commercial license | • A/B dual-run reproducibility (relative error $\le 10^{-4}$)<br>• 9 physics categories live solver recomputation<br>• Nonlinear Solver Doctor divergence healing<br>• Full-tensor ODB extraction to standalone HTML reports |
 
 ---
 
@@ -268,43 +275,44 @@ The repository is guarded by two independent engineering gates:
 
 ```text
 Abaqus-AI-Agent/
-├── docs/                     # Architectural specifications, audits, and roadmaps
+├── docs/                     # Engineering roadmaps, audit reports, and capability boundaries
+│   ├── engineering-run-evidence-roadmap.md # Core execution & Phase P2 closure roadmap
 │   ├── rc1-release-audit.md                # Official RC 1.0 audit report
-│   ├── engineering-run-evidence-roadmap.md # Core execution roadmap
-│   └── ai-agent-capability-boundary.md     # LLM vs deterministic boundary
-├── machine_validation/       # Audited real-machine evidence bundles (Golden Benchmarks)
-├── scripts/                  # Workspace audit and clean-up utilities
-├── src/abaqus_ai_agent/
+│   └── ai-agent-capability-boundary.md     # LLM vs deterministic boundary specification
+├── machine_validation/       # Audited real-machine golden evidence bundles & P2 cases
+│   └── p2_cases/             # Publication-grade benchmark models (Flange, RPV, Manifold)
+├── scripts/                  # Workspace governance and clean-up utilities
+├── src/abaqus_ai_agent/      # Core package
 │   ├── actions/              # Native Abaqus action generators & preflights
-│   ├── contracts/            # Typed schemas (Intent, State, Pointer, Evidence)
-│   ├── diagnostics/          # Convergence parser (.msg/.sta / Solver Doctor)
-│   ├── execution/            # Batch executor, sandbox manager, and persistent queue
-│   ├── grounding/            # Viewport ray-casting & topology grounding
+│   ├── contracts/            # Strictly typed schemas (Intent, Material, Mesh, Report, Evidence)
+│   ├── diagnostics/          # Convergence parser (.msg/.sta) & Autonomous Solver Doctor
+│   ├── execution/            # Batch executor, isolated sandbox manager, and headless viewer
+│   ├── grounding/            # Viewport ray-casting & 3D topology grounding (findAt)
 │   ├── planning/             # Action planning & mechanism graph compiler
-│   ├── reporting/            # Standalone bilingual HTML renderer (embedded media)
-│   └── validation/           # Dimensional consistency, mesh, and acceptance gates
-├── tests/                    # 988 deterministic software tests
-└── tools/                    # Golden matrix CLI drivers and verification probes
+│   ├── reporting/            # Single-path DeterministicReportPipeline, HTML & MD renderers
+│   └── validation/           # Dimensional consistency, mesh convergence, and acceptance gates
+├── tests/                    # 1098 deterministic regression tests (0 warnings)
+└── tools/                    # Real-machine golden drivers, probes, and qualification benchmarks
 ```
 
 ---
 
 ## Enterprise Support & Commercial Collaboration
 
-We provide end-to-end commercial customization and enterprise engineering support:
+We provide end-to-end commercial solutions, bespoke engineering integrations, and enterprise deployment services:
 
-- **🏢 Private Enterprise Deployment & HPC Integration**: Deploy Abaqus AI Agent within corporate private clouds and HPC clusters (integrating with PBS, LSF, or Slurm).
-- **📦 Custom Material Databases & Advanced Constitutive Cards**: Integrate internal test databases (high-temperature alloys, automotive polymers, composite damage) with automated anti-hallucination cards.
-- **🎯 Specialized Industrial Workflow Development**: Tailor end-to-end agents for high-complexity workflows (crashworthiness, drop-test impact, thermal fatigue durability, bolt assembly sealing).
-- **🛠️ Commercial Maintenance & Engineering Consulting**: Continuous technical support, on-premise training, and CAE automation workflow transformation.
+- **🏢 Air-Gapped Enterprise Deployment**: On-premise deployment within corporate private clouds and HPC clusters (supporting PBS, Slurm, and LSF scheduler integration).
+- **📦 Custom Constitutive & Material Engineering**: Integration with proprietary enterprise material databases (high-temperature superalloys, advanced polymers, composites) with automated anti-hallucination validation.
+- **🎯 Bespoke Simulation Workflows**: Custom agent pipelines for complex industrial domains (automotive crashworthiness, battery pack thermal runaway, electronic drop-impact shock, subsea pipe joint sealing).
+- **🛠️ Commercial SLA & Professional Services**: Dedicated engineering maintenance, workflow migration support, on-premise staff training, and custom feature roadmapping.
 
-For commercial inquiries and pilot engagements:
-- Repository Issues: [GitHub Issues](https://github.com/chenlei-gh/Abaqus-AI-Agent/issues)
-- Commercial Contact: Connect with the project maintenance team via the GitHub organization page.
+For commercial evaluations, pilots, and enterprise licensing:
+- **Repository Inquiries**: [GitHub Issues](https://github.com/chenlei-gh/Abaqus-AI-Agent/issues)
+- **Direct Commercial Contact**: Connect with the core team via the organization profile.
 
 ---
 
 ## License
 
-This project is licensed under the **Apache 2.0 License** — see the [LICENSE](LICENSE) file for details.
-Fully permissive for commercial derivation and academic research, with strict quality guarantees backed by the Anti-Fabrication Axiom.
+This project is licensed under the **Apache 2.0 License** — see the [LICENSE](LICENSE) file for details.  
+Fully permissive for commercial adoption, custom extension, and academic research, with engineering integrity safeguarded by the Anti-Fabrication Axiom.

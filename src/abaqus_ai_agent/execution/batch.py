@@ -73,20 +73,12 @@ class BatchExecutor:
                 should_isolate = True
             else:
                 norm_parts = os.path.normpath(cand).split(os.sep)
-                if any(p in ("machine_validation", "test_assets", "src", "legacy_job_artifacts") for p in norm_parts):
+                if any(p in ("machine_validation", "validation_assets", "test_assets", "src", "legacy_job_artifacts") for p in norm_parts):
                     should_isolate = True
 
         if should_isolate:
-            # Find repo root if possible
-            current_root = os.path.abspath(".")
-            if not (os.path.isfile(os.path.join(current_root, "pyproject.toml")) and os.path.isdir(os.path.join(current_root, "src"))):
-                # Search upwards
-                p = Path(effective_workdir or current_root).resolve()
-                for parent in [p] + list(p.parents):
-                    if (parent / "pyproject.toml").is_file() and (parent / "src").is_dir():
-                        current_root = str(parent)
-                        break
-            effective_workdir = os.path.abspath(os.path.join(current_root, "runs", f"batch_{uuid.uuid4().hex[:8]}"))
+            from ..paths import resolve_runs_root
+            effective_workdir = os.path.abspath(os.path.join(str(resolve_runs_root()), f"batch_{uuid.uuid4().hex[:8]}"))
             os.makedirs(effective_workdir, exist_ok=True)
             self.workdir = effective_workdir
         else:

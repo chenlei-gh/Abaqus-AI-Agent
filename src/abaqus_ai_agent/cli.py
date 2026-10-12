@@ -103,6 +103,12 @@ def _build_parser() -> argparse.ArgumentParser:
     p_ask.add_argument("--json", action="store_true", help="Output typed intent and JEV decisions as JSON.")
     p_ask.add_argument("--dry-run", action="store_true", help="Synthesize plan and intent contracts without executing solver.")
 
+    # 9. assets (Canonical validation assets and case registry)
+    p_assets = subparsers.add_parser("assets", help="Inspect and query canonical validation assets and Case 01-10 registry.")
+    p_assets.add_argument("--list", action="store_true", help="List all registered cases (default).")
+    p_assets.add_argument("--case", help="Filter and display details for a specific case_id.")
+    p_assets.add_argument("--json", action="store_true", help="Output machine-readable JSON format.")
+
     return parser
 
 
@@ -327,6 +333,8 @@ def handle_matrix(args: argparse.Namespace) -> int:
     for c in cases_to_validate:
         # resolve candidate paths
         rel = Path(c.default_evidence_json)
+        from .paths import resolve_validation_assets_root
+        val_root = resolve_validation_assets_root()
         candidates = [
             workdir / rel.name,
             workdir / rel,
@@ -334,6 +342,8 @@ def handle_matrix(args: argparse.Namespace) -> int:
             workdir_arg / rel.name,
             workdir_arg / rel,
             workdir / "machine_validation" / rel.name,
+            val_root / "evidence" / rel.name,
+            val_root / rel.name,
         ]
         ev_path = None
         for cand in candidates:
@@ -934,6 +944,63 @@ def handle_memory(args: argparse.Namespace) -> int:
     return 0
 
 
+def handle_assets(args: argparse.Namespace) -> int:
+    """Inspect and query validation assets registry."""
+    from .paths import get_repo_root, resolve_validation_assets_root
+
+    repo = get_repo_root()
+    val_root = resolve_validation_assets_root()
+    registry_file = val_root / "registry.json"
+    if not registry_file.is_file():
+        registry_file = repo / "validation_assets" / "registry.json"
+
+    if not registry_file.is_file():
+        print(f"Error: Registry file not found at {registry_file}", file=sys.stderr)
+        return 1
+
+    with open(registry_file, "r", encoding="utf-8") as fh:
+        data = json.load(fh)
+
+    cases = data.get("cases", [])
+
+    if args.case:
+        target = args.case.upper()
+        found = next(
+            (c for c in cases if c.get("case_id", "").upper() == target or target in c.get("case_id", "").upper()),
+            None,
+        )
+        if not found:
+            print(f"Error: Case '{args.case}' not found in validation registry.", file=sys.stderr)
+            return 2
+        if args.json:
+            print(json.dumps(found, indent=2, ensure_ascii=False))
+        else:
+            print(f"=== Case Asset: {found.get('case_id')} ===")
+            print(f"Name:          {found.get('case_name')}")
+            print(f"Domain:        {found.get('physics_domain')}")
+            print(f"Status:        {found.get('qualification_status')}")
+            print(f"Reference:     {found.get('reference_source')}")
+            print(f"Directory:     {found.get('case_dir')}")
+            print(f"Manifest:      {found.get('evidence_manifest')}")
+            print("Input Assets:")
+            for inp in found.get("input_assets", []):
+                print(f"  - {inp}")
+            print("Acceptance Criteria:")
+            for k, v in found.get("acceptance_criteria", {}).items():
+                print(f"  - {k}: {v}")
+        return 0
+
+    if args.json:
+        print(json.dumps(data, indent=2, ensure_ascii=False))
+        return 0
+
+    print(f"=== Canonical Validation Assets Registry ({len(cases)} Cases) ===")
+    for c in cases:
+        status_tag = f"[{c.get('qualification_status', 'UNKNOWN'):12s}]"
+        print(f"{status_tag} {c.get('case_id', ''):40s} {c.get('case_name', '')}")
+    return 0
+
+
 def main(argv: Optional[Sequence[str]] = None) -> int:
     parser = _build_parser()
     args = parser.parse_args(argv)
@@ -947,6 +1014,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         "fmbd": handle_fmbd,
         "memory": handle_memory,
         "ask": handle_ask,
+        "assets": handle_assets,
     }
 
     handler = handlers.get(args.subcommand)

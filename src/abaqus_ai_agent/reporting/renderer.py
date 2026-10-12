@@ -1034,6 +1034,23 @@ def render_markdown(report, language=None):
             tbl_lines = _render_custom_table_for_section(heading, value, is_zh=is_zh)
             if tbl_lines:
                 lines += tbl_lines
+                if heading == "7. Mesh" and report.figures:
+                    for figure in report.figures:
+                        f_kind = getattr(figure, "kind", "") or ""
+                        f_meta = getattr(figure, "metadata", {}) or {}
+                        f_field = (f_meta.get("field") or f_meta.get("field_name") or "").upper()
+                        if "mesh" in f_kind.lower() or f_field in ("MESH", "GRID"):
+                            sub_m_t = "### 有限元网格空间离散几何拓扑图 (Mesh Discretization Topology)" if is_zh else "### Finite Element Mesh Discretization Topology"
+                            lines += [
+                                sub_m_t,
+                                "",
+                                "![%s](%s)" % (figure.caption or "有限元网格划分拓扑图", figure.path),
+                                "",
+                            ]
+                            interp = f_meta.get("description") or f_meta.get("interpretation") or f_meta.get("engineering_notes")
+                            if interp:
+                                lead = "**图面工程技术解读 (Technical Figure Analysis)**:" if is_zh else "**Technical Figure Analysis**:"
+                                lines += [f"> {lead} {interp}", ""]
                 sum_title = "结构化工程底层数据载荷 (Structured Engineering Data Payload JSON)" if is_zh else "Structured Engineering Data Payload (JSON)"
                 lines += [
                     "<details>",
@@ -1346,6 +1363,19 @@ def render_html(report, language=None):
             tbl_lines = _render_custom_table_for_section(heading, value, is_zh=is_zh)
             if tbl_lines:
                 body_parts.append(_render_section_lines_to_html(tbl_lines, is_zh=is_zh))
+                if heading == "7. Mesh" and report.figures:
+                    for figure in report.figures:
+                        f_kind = getattr(figure, "kind", "") or ""
+                        f_meta = getattr(figure, "metadata", {}) or {}
+                        f_field = (f_meta.get("field") or f_meta.get("field_name") or "").upper()
+                        if "mesh" in f_kind.lower() or f_field in ("MESH", "GRID"):
+                            sub_t = "有限元网格空间离散几何拓扑图 (Mesh Discretization Topology)" if is_zh else "Finite Element Mesh Discretization Topology"
+                            body_parts.append(f'<h3 class="subsection-heading">{html.escape(sub_t)}</h3>')
+                            body_parts.append(_render_html_figure(figure.caption or "有限元网格划分拓扑图", figure.path, is_zh=is_zh))
+                            interp = f_meta.get("description") or f_meta.get("interpretation") or f_meta.get("engineering_notes")
+                            if interp:
+                                lead = "图面工程技术解读 (Technical Figure Analysis):" if is_zh else "Technical Figure Analysis:"
+                                body_parts.append(f'<blockquote class="report-quote"><strong>{html.escape(lead)}</strong> {_format_inline_markdown(interp)}</blockquote>')
                 sum_title = "结构化工程底层数据载荷 (Structured Engineering Data Payload JSON)" if is_zh else "Structured Engineering Data Payload (JSON)"
                 json_data = json.dumps(_plain(value), indent=2, ensure_ascii=False, default=str)
                 body_parts.append(

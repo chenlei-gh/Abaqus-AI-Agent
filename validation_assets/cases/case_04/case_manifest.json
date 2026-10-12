@@ -1,0 +1,16 @@
+{
+  "case_id": "CASE_04_AUTOMOTIVE_SUBFRAME_FATIGUE",
+  "name": "Automotive Front Subframe Multi-Axis Durability and Fatigue Life Evaluation",
+  "category": "P2_PACKAGE_B",
+  "domain": "chassis_durability_fatigue",
+  "reference": "validation_assets/references/official_examples.json#REF_SAE_SUBFRAME_DURABILITY",
+  "status": "QUALIFIED",
+  "source_input": "test_assets/engineering_cases/case_04_subframe_fatigue/problem_statement.json",
+  "primary_manifest": "machine_validation/p2_cases/case_04_subframe_durability/case_04_subframe_manifest.json",
+  "primary_report": "machine_validation/p2_cases/case_04_subframe_durability/case_04_subframe_report.html",
+  "verified_metrics": {
+    "palmgren_miner_cumulative_damage": 0.634,
+    "goodman_safety_factor": 1.48,
+    "target_durability_km": 300000
+  }
+}

@@ -33,6 +33,14 @@ from .execution.artifacts import JobArtifact, JobArtifacts
 from .execution.batch import BatchExecutor, BatchResult
 from .workflow import AnalysisWorkflow
 
+from .paths import (
+    get_repo_root,
+    resolve_runs_root,
+    resolve_deliverables_root,
+    resolve_validation_assets_root,
+    create_run_workdir,
+)
+
 __version__ = "0.2.2"
 
 from .golden_registry import (

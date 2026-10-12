@@ -1,0 +1,195 @@
+{
+  "registry_version": "1.0.0",
+  "generated_at": "2026-10-12T07:30:00Z",
+  "canonical_root": "validation_assets",
+  "cases": [
+    {
+      "case_id": "CASE_01_BOLTED_PIPE_FLANGE",
+      "case_name": "Bolted Pipe Flange Connection with Gasket Sealing",
+      "physics_domain": "pressure_vessel_piping",
+      "reference_source": "REF_ABQ_BOLTED_FLANGE",
+      "qualification_status": "QUALIFIED",
+      "runner": "tools/run_p2_package_b_validation.py --case case_01",
+      "input_assets": [
+        "test_assets/engineering_cases/case_01_bolted_pipe_flange/problem_statement.json"
+      ],
+      "evidence_manifest": "machine_validation/p2_cases/case_01_flange_manifest.json",
+      "report_assets": [
+        "machine_validation/p2_cases/case_01_flange_report.html",
+        "machine_validation/p2_cases/Case_01_Bolted_Flange_Report.html"
+      ],
+      "case_dir": "validation_assets/cases/case_01",
+      "acceptance_criteria": {
+        "bolt_preload_retention": ">= 0.85",
+        "gasket_min_contact_stress_mpa": ">= 10.0",
+        "peak_mises_stress_mpa": "< 355.0"
+      }
+    },
+    {
+      "case_id": "CASE_02_REACTOR_PRESSURE_VESSEL_CLOSURE",
+      "case_name": "Nuclear Reactor Pressure Vessel (RPV) Bolted Closure Head Joint",
+      "physics_domain": "nuclear_pressure_vessel_closure",
+      "reference_source": "REF_ABQ_RPV_CLOSURE",
+      "qualification_status": "QUALIFIED",
+      "runner": "tools/run_p2_package_b_validation.py --case case_02",
+      "input_assets": [
+        "test_assets/engineering_cases/case_02_reactor_pressure_vessel_closure/problem_statement.json"
+      ],
+      "evidence_manifest": "machine_validation/p2_cases/case_02_rpv_manifest.json",
+      "report_assets": [
+        "machine_validation/p2_cases/case_02_rpv_report.html",
+        "machine_validation/p2_cases/Case_02_RPV_Closure_Report.html"
+      ],
+      "case_dir": "validation_assets/cases/case_02",
+      "acceptance_criteria": {
+        "stud_preload_retention": ">= 0.90",
+        "seal_ring_contact_pressure_mpa": ">= 50.0",
+        "primary_stress_intensity_pm_pb": "<= Sm_limit"
+      }
+    },
+    {
+      "case_id": "CASE_03_EXHAUST_MANIFOLD_THERMO_MECHANICAL",
+      "case_name": "Heavy-Duty Diesel Engine Exhaust Manifold Thermo-Mechanical Contact Analysis",
+      "physics_domain": "engine_thermo_mechanical_contact",
+      "reference_source": "REF_ABQ_EXHAUST_MANIFOLD",
+      "qualification_status": "QUALIFIED",
+      "runner": "tools/run_p2_package_b_validation.py --case case_03",
+      "input_assets": [
+        "test_assets/engineering_cases/case_03_exhaust_manifold_thermo_mechanical/problem_statement.json"
+      ],
+      "evidence_manifest": "machine_validation/p2_cases/case_03_manifold_manifest.json",
+      "report_assets": [
+        "machine_validation/p2_cases/case_03_manifold_report.html",
+        "machine_validation/p2_cases/Case_03_Exhaust_Manifold_Report.html",
+        "machine_validation/p2_cases/case_03_exhaust_manifold/assets"
+      ],
+      "case_dir": "validation_assets/cases/case_03",
+      "acceptance_criteria": {
+        "peak_temperature_c": "<= 650.0",
+        "fillet_thermal_mises_stress_mpa": "<= 450.0",
+        "flange_slip_clearance_mm": "<= 0.8"
+      }
+    },
+    {
+      "case_id": "CASE_04_AUTOMOTIVE_SUBFRAME_FATIGUE",
+      "case_name": "Automotive Front Subframe Multi-Axis Durability and Fatigue Life Evaluation",
+      "physics_domain": "chassis_durability_fatigue",
+      "reference_source": "REF_SAE_SUBFRAME_DURABILITY",
+      "qualification_status": "QUALIFIED",
+      "runner": "tools/run_p2_package_b_validation.py --case case_04",
+      "input_assets": [
+        "test_assets/engineering_cases/case_04_subframe_fatigue/problem_statement.json"
+      ],
+      "evidence_manifest": "machine_validation/p2_cases/case_04_subframe_durability/case_04_subframe_manifest.json",
+      "report_assets": [
+        "machine_validation/p2_cases/case_04_subframe_durability/case_04_subframe_report.html",
+        "machine_validation/p2_cases/Case_04_Subframe_Durability_Report.html",
+        "machine_validation/p2_cases/case_04_subframe_durability/assets"
+      ],
+      "case_dir": "validation_assets/cases/case_04",
+      "acceptance_criteria": {
+        "palmgren_miner_cumulative_damage": "<= 0.85",
+        "goodman_safety_factor": ">= 1.20",
+        "target_durability_km": ">= 300000"
+      }
+    },
+    {
+      "case_id": "CASE_05_COMPOSITE_CYLINDER_BUCKLING",
+      "case_name": "开孔层合复合材料圆柱壳特征值屈曲与 Riks 后屈曲分析",
+      "physics_domain": "aerospace_composite_structures",
+      "reference_source": "REF_NASA_SP8007_COMPOSITE_BUCKLING",
+      "qualification_status": "QUALIFIED",
+      "runner": "tools/run_p2_package_b_validation.py --case case_05",
+      "input_assets": [
+        "test_assets/engineering_cases/case_05_composite_buckling/problem_statement.json"
+      ],
+      "evidence_manifest": "machine_validation/p2_cases/case_05_composite_buckling/case_05_composite_buckling_manifest.json",
+      "report_assets": [
+        "machine_validation/p2_cases/case_05_composite_buckling/case_05_composite_buckling_report.html",
+        "machine_validation/p2_cases/Case_05_Composite_Buckling_Report.html",
+        "machine_validation/p2_cases/case_05_composite_buckling/assets"
+      ],
+      "case_dir": "validation_assets/cases/case_05",
+      "acceptance_criteria": {
+        "eigenvalue_bifurcation_factor": ">= 1.05",
+        "riks_limit_load_ratio": ">= 0.80",
+        "tsai_wu_failure_index": "< 1.0"
+      }
+    },
+    {
+      "case_id": "CASE_06_SHEET_METAL_SUBMODELING",
+      "case_name": "多工序钣金冲压成形-回弹-拼焊装配与全局-局部子模型缺口应力分析",
+      "physics_domain": "automotive_body_structures",
+      "reference_source": "REF_NUMISHEET_SUBMODELING",
+      "qualification_status": "QUALIFIED",
+      "runner": "tools/run_p2_package_b_validation.py --case case_06",
+      "input_assets": [
+        "test_assets/engineering_cases/case_06_sheet_metal_submodeling/problem_statement.json"
+      ],
+      "evidence_manifest": "machine_validation/p2_cases/case_06_sheet_metal_submodeling/case_06_sheet_metal_manifest.json",
+      "report_assets": [
+        "machine_validation/p2_cases/case_06_sheet_metal_submodeling/case_06_sheet_metal_submodeling_report.html",
+        "machine_validation/p2_cases/Case_06_Sheet_Metal_Submodeling_Report.html",
+        "machine_validation/p2_cases/case_06_sheet_metal_submodeling/assets"
+      ],
+      "case_dir": "validation_assets/cases/case_06",
+      "acceptance_criteria": {
+        "springback_deflection_mm": "<= 2.5",
+        "submodel_boundary_driven_displacement_error": "<= 0.02",
+        "weld_notch_fatigue_safety_margin": ">= 1.25"
+      }
+    },
+    {
+      "case_id": "CASE_07_RESERVED",
+      "case_name": "Case 07 Industrial Benchmark (Reserved)",
+      "physics_domain": "structural_mechanics",
+      "reference_source": "TBD",
+      "qualification_status": "PRE_RESERVED",
+      "runner": "TBD",
+      "input_assets": [],
+      "evidence_manifest": "",
+      "report_assets": [],
+      "case_dir": "validation_assets/cases/case_07",
+      "acceptance_criteria": {}
+    },
+    {
+      "case_id": "CASE_08_RESERVED",
+      "case_name": "Case 08 Industrial Benchmark (Reserved)",
+      "physics_domain": "structural_mechanics",
+      "reference_source": "TBD",
+      "qualification_status": "PRE_RESERVED",
+      "runner": "TBD",
+      "input_assets": [],
+      "evidence_manifest": "",
+      "report_assets": [],
+      "case_dir": "validation_assets/cases/case_08",
+      "acceptance_criteria": {}
+    },
+    {
+      "case_id": "CASE_09_RESERVED",
+      "case_name": "Case 09 Industrial Benchmark (Reserved)",
+      "physics_domain": "structural_mechanics",
+      "reference_source": "TBD",
+      "qualification_status": "PRE_RESERVED",
+      "runner": "TBD",
+      "input_assets": [],
+      "evidence_manifest": "",
+      "report_assets": [],
+      "case_dir": "validation_assets/cases/case_09",
+      "acceptance_criteria": {}
+    },
+    {
+      "case_id": "CASE_10_RESERVED",
+      "case_name": "Case 10 Industrial Benchmark (Reserved)",
+      "physics_domain": "structural_mechanics",
+      "reference_source": "TBD",
+      "qualification_status": "PRE_RESERVED",
+      "runner": "TBD",
+      "input_assets": [],
+      "evidence_manifest": "",
+      "report_assets": [],
+      "case_dir": "validation_assets/cases/case_10",
+      "acceptance_criteria": {}
+    }
+  ]
+}

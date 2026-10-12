@@ -626,6 +626,14 @@ class AbaqusAIAgent:
         if run and getattr(run, "provenance", None):
             eff_odb_hash = getattr(run.provenance, "odb_hash", None)
 
+        req_text = str(requirement if isinstance(requirement, str) else getattr(intent, "description", "") or "")
+        req_lower = req_text.lower()
+        wants_mesh_kw = any(w in req_lower for w in ("网格", "mesh", "离散", "discretization"))
+        wants_anim_kw = any(w in req_lower for w in ("动图", "动画", "anim", "时程", "gif", "演化"))
+        req_prod = bool(kwargs.get("require_production", False))
+        inc_mesh = bool(kwargs.get("include_mesh", req_prod or wants_mesh_kw))
+        inc_anim = bool(kwargs.get("include_animation", req_prod or wants_anim_kw))
+
         figure_selection = select_engineering_figures(
             intent=intent,
             physics_domain=capability.physics_domain,
@@ -637,6 +645,8 @@ class AbaqusAIAgent:
             odb_hash=eff_odb_hash,
             hotspot_info=top_hotspot_info,
             output_dir=out_dir,
+            include_mesh=inc_mesh,
+            include_animation=inc_anim,
         )
 
         all_figures = list(generated_figures) + list(figure_selection.reused_figures)

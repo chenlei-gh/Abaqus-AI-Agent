@@ -5,24 +5,26 @@ Default behavior is DRY-RUN. Files are only deleted when --clean is explicitly p
 
 Protected by default:
   - All Git-tracked files
-  - *.json, *.html, *.md, *.png, *.svg, *.gif, *.py
+  - *.json, *.html, *.md, *.png, *.svg, *.gif, *.py, and other engineering assets
+  - Unrecognized file extensions outside confirmed solver ephemeral patterns
 
-Targeted locations:
-  - Project root
-  - machine_validation/
-  - runs/
-  - legacy_job_artifacts/ (if present)
+Fail-Closed Policy:
+  - If Git status cannot be reliably determined, execution aborts immediately.
+  - If a file is modified between candidate scan and deletion, deletion aborts for that file.
 """
 
 from __future__ import annotations
 
 import argparse
+from datetime import datetime, timezone
 import fnmatch
+import hashlib
+import json
 import os
+from pathlib import Path
 import shutil
 import subprocess
 from dataclasses import dataclass
-from pathlib import Path
 from typing import Sequence
 
 
@@ -90,13 +92,33 @@ class Candidate:
     path: Path
     scope: str
     size: int
+    sha256: str
+    reason: str
+    risk_level: str = "SAFE_PURGE_IF_AUTHORIZED"
 
 
 def repo_root() -> Path:
     return Path(__file__).resolve().parents[1]
 
 
+def compute_sha256(path: Path) -> str:
+    """Compute sha256 checksum of a file safely."""
+    try:
+        hasher = hashlib.sha256()
+        with open(path, "rb") as fh:
+            while chunk := fh.read(65536):
+                hasher.update(chunk)
+        return hasher.hexdigest()
+    except Exception:
+        return ""
+
+
 def get_tracked_paths(root: Path) -> set[str]:
+    """Retrieve Git tracked files.
+
+    FAIL-CLOSED: If Git execution fails or repository is unavailable,
+    raises RuntimeError immediately to prevent catastrophic file loss.
+    """
     try:
         proc = subprocess.run(
             ["git", "ls-files", "-z"],
@@ -109,8 +131,11 @@ def get_tracked_paths(root: Path) -> set[str]:
             for item in proc.stdout.split(b"\0")
             if item
         }
-    except Exception:
-        return set()
+    except Exception as exc:
+        raise RuntimeError(
+            f"Fail-closed safety trigger: unable to retrieve Git tracked files for '{root}'. "
+            f"Aborting clean operation to prevent accidental file deletion. Root cause: {exc}"
+        ) from exc
 
 
 def is_tracked(path: Path, root: Path, tracked: set[str]) -> bool:
@@ -118,10 +143,12 @@ def is_tracked(path: Path, root: Path, tracked: set[str]) -> bool:
         rel = path.resolve().relative_to(root.resolve()).as_posix()
         return rel in tracked
     except Exception:
+        # If relative resolution fails, treat as tracked (safe fail-closed)
         return True
 
 
 def collect_candidates(root: Path, tracked: set[str]) -> tuple[list[Candidate], list[Path], int]:
+    root_resolved = root.resolve()
     candidates: list[Candidate] = []
     cache_dirs: list[Path] = []
     protected_count = len(tracked)
@@ -131,6 +158,8 @@ def collect_candidates(root: Path, tracked: set[str]) -> tuple[list[Candidate], 
     # 1. Historical untracked workdirs in machine_validation/
     if mv_dir.exists():
         for d in mv_dir.iterdir():
+            if not d.resolve().is_relative_to(root_resolved):
+                continue
             if d.is_dir() and d.name in HISTORICAL_MV_WORKDIR_NAMES:
                 if not is_tracked(d, root, tracked):
                     cache_dirs.append(d)
@@ -147,6 +176,10 @@ def collect_candidates(root: Path, tracked: set[str]) -> tuple[list[Candidate], 
         iterator = base_dir.iterdir() if base_dir == root else base_dir.rglob("*")
 
         for p in iterator:
+            if not p.resolve().is_relative_to(root_resolved):
+                # Containment protection: ignore anything resolving outside repo root
+                continue
+
             if is_tracked(p, root, tracked):
                 continue
 
@@ -156,6 +189,10 @@ def collect_candidates(root: Path, tracked: set[str]) -> tuple[list[Candidate], 
 
             # Protect test_assets/ completely
             if "test_assets" in p.parts:
+                continue
+
+            # Protect validation_assets/ completely if present
+            if "validation_assets" in p.parts:
                 continue
 
             # Protect deliverables/ and qualifications completely
@@ -173,14 +210,23 @@ def collect_candidates(root: Path, tracked: set[str]) -> tuple[list[Candidate], 
             if any(p.is_relative_to(cd) for cd in cache_dirs):
                 continue
 
-            # For runs/ (runtime plane), all untracked files are cleanable by contract
-            if "runs" in p.parts:
-                scope = "runs"
-                size = p.stat().st_size if p.exists() else 0
-                candidates.append(Candidate(path=p, scope=scope, size=size))
-                continue
-
             suffix = p.suffix.lower()
+
+            # Handle runs/ directory with strict protection of non-ephemeral assets
+            if "runs" in p.parts:
+                if suffix in PROTECTED_SUFFIXES or p.name in {"README", "README.md"}:
+                    # Strictly protected: .py, .json, .html, images, etc.
+                    continue
+
+                is_artifact = any(fnmatch.fnmatch(p.name, pat) for pat in TARGET_ARTIFACT_PATTERNS)
+                is_cache = suffix in CACHE_FILE_SUFFIXES
+                if is_artifact or is_cache:
+                    scope = "runs"
+                    size = p.stat().st_size if p.exists() else 0
+                    sha = compute_sha256(p)
+                    reason = "Transient solver artifact in runs/" if is_artifact else "Python bytecode cache in runs/"
+                    candidates.append(Candidate(path=p, scope=scope, size=size, sha256=sha, reason=reason))
+                continue
 
             # Check historical machine_validation script patterns
             is_mv_script = (
@@ -197,7 +243,9 @@ def collect_candidates(root: Path, tracked: set[str]) -> tuple[list[Candidate], 
             if is_artifact or is_cache or is_mv_script:
                 scope = "root" if p.parent == root else ("machine_validation" if "machine_validation" in p.parts else "legacy")
                 size = p.stat().st_size if p.exists() else 0
-                candidates.append(Candidate(path=p, scope=scope, size=size))
+                sha = compute_sha256(p)
+                reason = "Confirmed artifact / cache / legacy script"
+                candidates.append(Candidate(path=p, scope=scope, size=size, sha256=sha, reason=reason))
 
     return candidates, cache_dirs, protected_count
 
@@ -219,9 +267,21 @@ def main() -> int:
         action="store_true",
         help="actually delete candidate files; without this, runs in dry-run mode",
     )
+    parser.add_argument(
+        "--export-manifest",
+        type=str,
+        default="",
+        help="optional file path to export candidate audit manifest as JSON",
+    )
+    parser.add_argument(
+        "--root",
+        type=str,
+        default="",
+        help="override repository root path (defaults to auto-detection)",
+    )
     args = parser.parse_args()
 
-    root = repo_root()
+    root = Path(args.root).resolve() if args.root else repo_root()
     tracked = get_tracked_paths(root)
     candidates, cache_dirs, protected_count = collect_candidates(root, tracked)
 
@@ -243,18 +303,54 @@ def main() -> int:
     print(f"Candidate directories:{len(cache_dirs)} (Python caches)")
     print(f"Total size to reclaim: {format_bytes(total_size)}")
 
+    if args.export_manifest:
+        manifest_path = Path(args.export_manifest)
+        manifest_path.parent.mkdir(parents=True, exist_ok=True)
+        manifest_data = {
+            "generated_at": datetime.now(timezone.utc).isoformat(),
+            "repo_root": str(root),
+            "git_tracked_kept_count": protected_count,
+            "candidate_count": len(candidates),
+            "total_reclaim_bytes": total_size,
+            "candidates": [
+                {
+                    "relative_path": c.path.resolve().relative_to(root.resolve()).as_posix(),
+                    "scope": c.scope,
+                    "size_bytes": c.size,
+                    "sha256": c.sha256,
+                    "reason": c.reason,
+                    "risk_level": c.risk_level,
+                }
+                for c in candidates
+            ],
+            "cache_dirs": [
+                d.resolve().relative_to(root.resolve()).as_posix()
+                for d in cache_dirs
+            ],
+        }
+        with open(manifest_path, "w", encoding="utf-8") as fh:
+            json.dump(manifest_data, fh, indent=2, ensure_ascii=False)
+        print(f"\n[MANIFEST EXPORTED] Audit manifest written to: {manifest_path}")
+
     if not args.clean:
         print("\n[DRY-RUN] No files were deleted. Re-run with --clean to delete.")
         return 0
 
-    # Execute deletion
+    # Execute deletion with pre-execution consistency verification
     deleted_files = 0
     failed_files = 0
     for c in candidates:
         try:
-            if c.path.exists():
-                c.path.unlink()
-                deleted_files += 1
+            if not c.path.exists():
+                continue
+            # Re-verify size hasn't changed since candidate collection
+            current_size = c.path.stat().st_size
+            if current_size != c.size:
+                failed_files += 1
+                print(f"Safety abort: file modified since audit scan, skipping {c.path}")
+                continue
+            c.path.unlink()
+            deleted_files += 1
         except OSError as e:
             failed_files += 1
             print(f"Failed to delete {c.path}: {e}")

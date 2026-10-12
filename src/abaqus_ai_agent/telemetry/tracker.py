@@ -53,7 +53,12 @@ class ContextTelemetryTracker:
     ):
         self.case_id = case_id
         self.run_id = run_id
-        self.output_dir = Path(output_dir) / run_id / "telemetry"
+        if output_dir == "runs" or output_dir is None:
+            from ..paths import resolve_runs_root
+            base_dir = resolve_runs_root()
+        else:
+            base_dir = Path(output_dir)
+        self.output_dir = Path(base_dir) / run_id / "telemetry"
         self.calls_dir = self.output_dir / "calls"
         self.calls_dir.mkdir(parents=True, exist_ok=True)
 

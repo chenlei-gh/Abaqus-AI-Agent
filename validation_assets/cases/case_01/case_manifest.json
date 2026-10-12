@@ -1,0 +1,16 @@
+{
+  "case_id": "CASE_01_BOLTED_PIPE_FLANGE",
+  "name": "Bolted Pipe Flange Connection with Gasket Sealing",
+  "category": "P2_PACKAGE_B",
+  "domain": "pressure_vessel_piping",
+  "reference": "validation_assets/references/official_examples.json#REF_ABQ_BOLTED_FLANGE",
+  "status": "QUALIFIED",
+  "source_input": "test_assets/engineering_cases/case_01_bolted_pipe_flange/problem_statement.json",
+  "primary_manifest": "machine_validation/p2_cases/case_01_flange_manifest.json",
+  "primary_report": "machine_validation/p2_cases/case_01_flange_report.html",
+  "verified_metrics": {
+    "bolt_preload_retention": 0.887,
+    "gasket_min_contact_stress_mpa": 14.2,
+    "peak_mises_stress_mpa": 318.5
+  }
+}
