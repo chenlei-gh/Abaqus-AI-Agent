@@ -418,3 +418,51 @@ def test_clean_preserves_machine_validation_ephemeral_assets(tmp_path, monkeypat
     assert sta_file.is_file(), "Untracked STA in machine_validation must NOT be deleted"
     assert dat_file.is_file(), "Untracked DAT in machine_validation must NOT be deleted"
     assert msg_file.is_file(), "Untracked MSG in machine_validation must NOT be deleted"
+
+
+def test_clean_never_touches_external_project_directory(tmp_path, monkeypatch):
+    """REQ-ISO-004: Workspace cleaner must NEVER scan, touch, or delete external project assets.
+    Even if an external project directory contains solver ephemeral files (.odb, .log),
+    clean_workspace.py operates exclusively within the repository boundaries.
+    """
+    repo_root = tmp_path / "repo"
+    repo_root.mkdir()
+    subprocess.run(["git", "init"], cwd=repo_root, check=True, capture_output=True)
+
+    # External project directory outside the repo
+    ext_project = tmp_path / "ExternalProject"
+    ext_solver_dir = ext_project / "solver" / "run_001"
+    ext_solver_dir.mkdir(parents=True)
+
+    ext_odb = ext_solver_dir / "Job-ext.odb"
+    ext_odb.write_bytes(b"external customer odb data")
+    ext_log = ext_solver_dir / "Job-ext.log"
+    ext_log.write_text("external solver log", encoding="utf-8")
+
+    # 1. Normal scan must only find candidates inside repo_root, 0 from external project
+    candidates, cache_dirs, _ = collect_candidates(repo_root, set())
+    assert len(candidates) == 0
+
+    # 2. Even if clean runs with --clean, external files remain untouched
+    from scripts.clean_workspace import main
+    monkeypatch.setattr("sys.argv", ["clean_workspace.py", "--root", str(repo_root), "--clean"])
+
+    rc = main()
+    assert rc == 0
+    assert ext_odb.is_file()
+    assert ext_log.is_file()
+
+    # 3. If someone maliciously or mistakenly crafts a candidate pointing to the external project,
+    # the fail-closed boundary check in execution MUST abort and fail.
+    malicious_cand = Candidate(
+        path=ext_odb,
+        scope="external",
+        size=len(b"external customer odb data"),
+        sha256=compute_sha256(ext_odb),
+        reason="external solver file",
+    )
+    monkeypatch.setattr("scripts.clean_workspace.collect_candidates", lambda r, t: ([malicious_cand], [], 0))
+    monkeypatch.setattr("sys.argv", ["clean_workspace.py", "--root", str(repo_root), "--clean"])
+    rc_malicious = main()
+    assert rc_malicious == 1, "Must return 1 on boundary violation"
+    assert ext_odb.is_file(), "External project ODB must NEVER be deleted"

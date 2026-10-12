@@ -39,6 +39,11 @@ from .paths import (
     resolve_deliverables_root,
     resolve_validation_assets_root,
     create_run_workdir,
+    ExternalProjectContext,
+    create_external_project_context,
+    resolve_project_root,
+    assert_path_outside_repo,
+    ENV_PROJECT_ROOT,
 )
 
 __version__ = "0.2.2"

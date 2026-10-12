@@ -2674,3 +2674,32 @@ Abaqus-AI-Agent/
 2. **阶段 F-2：Abaqus 2025 真机实测与 Viewer 抓图验证 (Live Abaqus Gate)** $\to$ 在实验室物理机上作为常驻门禁持续验证。
 3. **空间拾取进阶演进 (Track GA-2A.5)** $\to$ 视口屏幕点击 $(u,v) \to$ 空间射线投射 $\to$ 物理几何全链路 Golden 闭环。
 4. **Phase 3 & Phase 4 远期产品化演进** $\to$ Agent 自主性需求澄清、求解故障自愈多轮编排及商业级工程工作台。
+5. **核心仓库与外部工程项目空间隔离机制 (REQ-ISO-001~005)** $\to$ 实施 P0-1~P2 全链路路径审计、A/B 资产分类、外部工程沙箱与交付闭环（详见 PRD 第 15 章）。
+
+---
+
+## 32. 核心仓库与外部工程项目空间隔离实施规划 (Core vs. External Project Isolation Implementation Plan)
+
+**需求对应：** [`docs/p1-product-requirements.md` 第 15 章 (REQ-ISO-001~005)](p1-product-requirements.md#十五核心仓库与外部工程项目空间隔离需求规范-core-vs-external-project-isolation-v10)  
+**当前状态：** 🟡 **PLANNED** (需求规范已冻结并纳入基线，待执行阶段审计与验证)  
+**实施原则：** 核心资产完整受控、外部工程完全隔离、全链路路径一致、清理防线绝对保护、复用现有执行与报告管线。
+
+### 32.1 六阶段分步实施路线 (P0-1 ~ P2)
+
+- [ ] **P0-1：全链路路径审计 (Path Audit)**
+  - 追踪所有模型读取、临时脚本、Abaqus 求解、ODB 提取、云图渲染、报告生成与清理脚本的路径调用点；
+  - 梳理各模块工作目录默认值，标记所有潜在使用相对路径或静默回退的点。
+- [ ] **P0-2：资产分类与路径契约设计 (Contract Design)**
+  - 在 `src/abaqus_ai_agent/paths.py` 扩充统一外部工程项目上下文接口（支持 `input/`、`working/`、`solver/`、`evidence/`、`delivery/` 分层）；
+  - 严禁对核心仓库内部目录形成依赖。
+- [ ] **P0-3：路径安全防御与清理加固 (Security Hardening)**
+  - 增加防路径穿越断言与禁止向核心仓库静默回退的 Fail-Closed 机制；
+  - 确保清理器（`clean_workspace.py`）严格受限在内部授权缓存，对外部工程目录和受控资产 100% 免疫。
+- [ ] **P1-1：工程运行链路贯通 (E2E Integration)**
+  - 接入现有 `AnalysisRun`、Evidence V2、Acceptance 与报告管线，使外部工程项目端到端能够完整落盘在外部目录中。
+- [ ] **P1-2：交付物验证与可编辑性检查 (Delivery & Model Verification)**
+  - 验证最终 `.cae`、`.odb`、HTML 报告及交付 Manifest 真实存在；
+  - 验证最终交付的 `.cae` 模型在 Abaqus 中可被重新打开且拓扑完整。
+- [ ] **P2：回归测试与真机验收 (Regression & Live Gate)**
+  - 编写路径越界、防回退、防覆盖的针对性负向自动化测试；
+  - 在配备 Abaqus 2025 的真实物理机上完成 1 个典型外部工程项目的端到端验证闭环。

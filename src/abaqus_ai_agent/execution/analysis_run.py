@@ -48,6 +48,11 @@ class AnalysisRun:
     action_plan: Tuple[Any, ...] = ()
     model_snapshot: Optional[Any] = None
     runtime: Optional[Dict[str, Any]] = None
+
+    @property
+    def work_dir(self) -> Optional[str]:
+        """Convenience property for resolving execution workdir."""
+        return self.metadata.get("workdir")
     solver: str = "standard"
     inputs: Tuple[Any, ...] = ()
     outputs: Optional[Dict[str, Any]] = None
@@ -246,7 +251,7 @@ class AnalysisRunner:
             connector_kinematics=None, fmbd_dynamics=None, sensitivity=None, uncertainty=None,
             timeout=3600, action_plan=(), environment=None, engineering_intent=None,
             postprocess_profile=None, workdir=None, physics_domain=None, require_evidence=None,
-            require_production=None):
+            require_production=None, project_context=None):
         if require_production is None:
             cname = getattr(self.executor, "__class__", None).__name__ or ""
             is_test_double = any(token in cname for token in ("Mock", "Fake", "Stub", "Dummy", "OdbBackedExecutor")) or \
@@ -256,7 +261,9 @@ class AnalysisRunner:
         run_id = str(uuid.uuid4())
         orig_executor_workdir = getattr(self.executor, "workdir", None)
         if not workdir:
-            if orig_executor_workdir:
+            if project_context is not None:
+                workdir = str(project_context.create_run_solver_dir(run_id))
+            elif orig_executor_workdir:
                 workdir = orig_executor_workdir
             else:
                 from ..paths import resolve_runs_root
@@ -278,6 +285,9 @@ class AnalysisRunner:
         runtime_environment = dict(getattr(runtime, "metadata", {}) or {}) if runtime else {}
         if environment:
             runtime_environment.update(dict(environment))
+        if project_context is not None:
+            runtime_environment["project_root"] = str(project_context.project_root)
+            runtime_environment["project_name"] = str(project_context.project_name)
         normalized_action_plan = _normalize_action_plan(action_plan)
         provenance = AnalysisProvenance(
             run_id=run_id,
@@ -301,6 +311,7 @@ class AnalysisRunner:
         run = AnalysisRun(
             run_id, model_name, job_name, AnalysisRunState.PREFLIGHTED,
             provenance=provenance,
+            metadata={"workdir": workdir},
         )
 
         # Preflight Plan Hard Gate (P1-1): Verify plan before job creation/submission

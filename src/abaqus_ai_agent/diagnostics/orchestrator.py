@@ -40,7 +40,10 @@ class SelfHealingOrchestrator:
                     texts["log"] = texts["log"] or art.get(".log", {}).get("tail", "")
 
         # 2. From filesystem if executor/workdir available
-        wd = workdir or getattr(run, "work_dir", None) or os.getcwd()
+        wd = workdir or getattr(run, "work_dir", None)
+        if not wd:
+            from ..paths import resolve_runs_root
+            wd = str(resolve_runs_root() / getattr(run, "id", "diag_scratch"))
         job = getattr(run, "job_name", "")
         if job and os.path.exists(wd):
             for suffix, key in ((".msg", "msg"), (".sta", "sta"), (".dat", "dat"), (".log", "log")):

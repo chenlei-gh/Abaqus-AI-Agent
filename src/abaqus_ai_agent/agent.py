@@ -80,7 +80,10 @@ class AbaqusAIAgent:
         from .results.spatial_hotspots import extract_spatial_hotspots
         from .visualization.engine import render_hotspots_svg, render_xy_curve_svg, save_chart_figure
 
-        out_dir = output_dir or getattr(run, "work_dir", None) or os.getcwd()
+        out_dir = output_dir or getattr(run, "work_dir", None)
+        if not out_dir:
+            from .paths import resolve_deliverables_root
+            out_dir = str(resolve_deliverables_root())
         os.makedirs(out_dir, exist_ok=True)
 
         job_name = getattr(run, "job_name", "Job") or "Job"
@@ -294,7 +297,7 @@ class AbaqusAIAgent:
                      contact_diagnostics=None, sensitivity=None, uncertainty=None,
                      engineering_intent=None, postprocess_profile=None,
                      action_plan=(), environment=None, timeout=3600, workdir=None,
-                     require_production=None):
+                     require_production=None, project_context=None):
         from .execution.analysis_run import AnalysisRunner
         cname = getattr(self.executor, "__class__", None).__name__ or ""
         is_test_double = any(token in cname for token in ("Mock", "Fake", "Stub", "Dummy", "OdbBackedExecutor")) or \
@@ -310,7 +313,7 @@ class AbaqusAIAgent:
             uncertainty=uncertainty, engineering_intent=engineering_intent,
             postprocess_profile=postprocess_profile, action_plan=action_plan,
             environment=environment, timeout=timeout, workdir=workdir,
-            require_production=require_production)
+            require_production=require_production, project_context=project_context)
 
     def submit(self, job_name, wait=False):
         from .execution.jobs import JobController
@@ -528,6 +531,7 @@ class AbaqusAIAgent:
 
         # 6. Single Canonical Production Outlet: AnalysisRunner
         criteria = kwargs.pop("criteria", None) or intent.acceptance_criteria or ()
+        project_context = kwargs.pop("project_context", None)
         cname = getattr(self.executor, "__class__", None).__name__ or ""
         is_test_double = any(token in cname for token in ("Mock", "Fake", "Stub", "Dummy", "OdbBackedExecutor")) or \
                          getattr(self.executor, "_is_mock", False)
@@ -547,6 +551,7 @@ class AbaqusAIAgent:
             timeout=timeout,
             workdir=target_workdir,
             require_production=prod_req,
+            project_context=project_context,
             **kwargs,
         )
 
@@ -565,7 +570,10 @@ class AbaqusAIAgent:
         if not initial_ok and enable_self_healing and odb_path is None and result_values is None:
             from .diagnostics.orchestrator import SelfHealingOrchestrator
             heal_kwargs = dict(kwargs)
-            heal_workdir = heal_kwargs.pop("workdir", getattr(run, "work_dir", None) or os.getcwd())
+            heal_workdir = heal_kwargs.pop("workdir", getattr(run, "work_dir", None))
+            if not heal_workdir:
+                from .paths import resolve_runs_root
+                heal_workdir = str(resolve_runs_root() / getattr(run, "id", "heal_scratch"))
             run, healing_result = SelfHealingOrchestrator.attempt_healing(
                 agent=self,
                 failed_run=run,
@@ -603,7 +611,13 @@ class AbaqusAIAgent:
                 metric_dict[v_key] = m_val
 
         # 7a. Result Intelligence & Graphical Assets (P1.3 Delivery)
-        out_dir = target_workdir or (os.path.dirname(run.odb_path) if getattr(run, "odb_path", None) else None) or os.getcwd()
+        if project_context is not None:
+            out_dir = str(project_context.delivery_dir)
+        else:
+            out_dir = target_workdir or (os.path.dirname(run.odb_path) if getattr(run, "odb_path", None) else None)
+            if not out_dir:
+                from .paths import resolve_deliverables_root
+                out_dir = str(resolve_deliverables_root())
         ri_bundle, generated_figures = self.extract_result_intelligence(
             run=run,
             intent=intent,
