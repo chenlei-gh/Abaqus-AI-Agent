@@ -878,18 +878,89 @@ class AbaqusAIAgent:
                 report_html_str = None
                 delivery_block_error = f"Official delivery blocked: {d_exc}"
         else:
-            # Non-deliverable draft or diagnostic report path (Single authoritative build, zero stale leakage)
-            draft_title = report_title if is_completed else f"[DIAGNOSTIC / NON-DELIVERABLE DRAFT] {report_title}"
-            report_data = self.build_report(
-                run,
-                title=draft_title,
-                objective=intent.description or f"Automated analysis under {capability.capability_id}",
-                result_intelligence=ri_bundle,
-                figures=list(figure_selection.reused_figures),
-                self_healing=healing_result,
-            )
-            report_md = render_markdown(report_data)
-            report_html_str = render_html(report_data)
+            # Non-deliverable diagnostic report path:
+            # Strictly preserves diagnostic and failure context, but does NOT construct
+            # a secondary authoritative deliverable or render HTML.
+            draft_title = f"[DIAGNOSTIC / NON-DELIVERABLE DRAFT] {report_title}"
+            report_html_str = None  # Official deliverable HTML reports are exclusively produced by official pipeline
+
+            diag_lines = [
+                f"# {draft_title}\n",
+                "> **工程交付警告 (Engineering Delivery Notice)**: "
+                "本产物为非正式诊断记录/测试草稿（未通过生产级正式交付管线认证或未签署 Delivery Card），"
+                "禁止作为正式工程报告交付。\n",
+                "## 1. 任务与求解状态 (Task & Execution Diagnostics)",
+                f"- **Task Status**: {'COMPLETED' if is_completed else 'FAILED'}",
+                f"- **Engineering Status**: {eng_status}",
+                f"- **Acceptance Passed**: {bool(getattr(run, 'acceptance_passed', False))}",
+                f"- **Physics Capability**: {getattr(capability, 'capability_id', 'UNKNOWN')} ({getattr(capability, 'physics_domain', 'UNKNOWN')})",
+                f"- **Job Name**: {getattr(plan, 'job_name', 'N/A')}",
+                f"- **Model Name**: {getattr(plan, 'model_name', 'N/A')}",
+                f"- **ODB Path**: {getattr(run, 'odb_path', 'UNAVAILABLE')}\n",
+                "## 2. 关键工程指标与验证维度 (Key Metrics & Verification Dimension)",
+            ]
+            if metric_dict:
+                diag_lines.append("| 指标名称 (Metric) | 数值 (Value) |")
+                diag_lines.append("| :--- | :--- |")
+                for k, v in sorted(metric_dict.items()):
+                    diag_lines.append(f"| `{k}` | `{v}` |")
+                diag_lines.append("")
+            else:
+                diag_lines.append("*未提取到有效工程标量指标 (No valid engineering metrics extracted).*\n")
+
+            diag_lines.append("## 3. 验收准则判定 (Acceptance Verdict)")
+            if acceptance:
+                acc_status = getattr(acceptance, "status", "UNKNOWN")
+                diag_lines.append(f"- **Overall Acceptance Status**: `{acc_status}`")
+                if hasattr(acceptance, "criteria") and acceptance.criteria:
+                    diag_lines.append("| 准则项 (Criterion) | 实测值 (Actual) | 限制值 (Limit) | 判定 (Verdict) |")
+                    diag_lines.append("| :--- | :--- | :--- | :--- |")
+                    for c in acceptance.criteria:
+                        c_name = getattr(c, "name", str(c))
+                        c_act = getattr(c, "actual", "N/A")
+                        c_op = getattr(c, "operator", "")
+                        c_lim = getattr(c, "limit", "N/A")
+                        c_pass = "PASS" if getattr(c, "passed", False) else "FAIL"
+                        diag_lines.append(f"| {c_name} | {c_act} | {c_op} {c_lim} | {c_pass} |")
+                    diag_lines.append("")
+                if hasattr(acceptance, "audit_summary") and acceptance.audit_summary:
+                    diag_lines.append(f"- **Audit Summary**: {acceptance.audit_summary}\n")
+            else:
+                diag_lines.append("*未关联验收评定对象 (No acceptance evaluation associated).*\n")
+
+            if ri_bundle:
+                diag_lines.append("## 4. 衍生智能与图件资产 (Result Intelligence Diagnostics)")
+                hs_count = len(getattr(ri_bundle, "hotspots", ()))
+                cv_count = len(getattr(ri_bundle, "curves", ()))
+                diag_lines.append(f"- **Hotspots Count**: {hs_count}")
+                diag_lines.append(f"- **History Curves Count**: {cv_count}")
+                dm = getattr(ri_bundle, "derived_metrics", None)
+                if dm and getattr(dm, "safety_factor", None):
+                    sf = dm.safety_factor
+                    max_s = getattr(sf, "max_stress", "N/A")
+                    diag_lines.append(f"- **Nominal Safety Factor (FoS)**: `{sf.factor_of_safety:.2f}` (Yield: `{sf.yield_strength}` MPa, Max Stress: `{max_s}` MPa)")
+                diag_lines.append("")
+
+            if healing_result:
+                diag_lines.append("## 5. 自愈审计上下文 (Self-Healing Context)")
+                is_healed = getattr(healing_result, "healed", False)
+                heal_status = "HEALED" if is_healed else getattr(healing_result, "final_status", "UNRESOLVED")
+                attempts = getattr(healing_result, "total_attempts", 0)
+                diag_lines.append(f"- **Healing Status**: {heal_status}")
+                diag_lines.append(f"- **Total Attempts**: {attempts}\n")
+
+            diag_errs = []
+            if not is_completed:
+                diag_errs.append(f"Engineering status: {eng_status}")
+            if delivery_block_error:
+                diag_errs.append(delivery_block_error)
+            if diag_errs:
+                diag_lines.append("## 6. 异常与阻断诊断 (Blockers & Errors)")
+                for err in diag_errs:
+                    diag_lines.append(f"- ⚠️ {err}")
+                diag_lines.append("")
+
+            report_md = "\n".join(diag_lines)
 
         task_status = TaskStatus.COMPLETED if is_completed else TaskStatus.FAILED
 

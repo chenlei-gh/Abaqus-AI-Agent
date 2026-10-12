@@ -2289,7 +2289,7 @@ For full requirements backlog, input/output schemas, anti-hallucination constrai
 
 | 优先级 | 缺陷描述 | 源码定位 | 整改要求与退出准则 |
 | :--- | :--- | :--- | :--- |
-| **P0-1** | **`agent.py` 双重报告构建与覆盖** | `src/abaqus_ai_agent/agent.py` | 消除双轨生成逻辑，收敛为唯一的正式报告管线调用；确保仅产出一份正式交付报告。 |
+| **P0-1** | **`agent.py` 双重报告构建与覆盖** | `src/abaqus_ai_agent/agent.py` | 消除双轨生成逻辑，正式交付唯一走 `DeterministicReportPipeline`；非正式模式严禁调用 `self.build_report()` 组装平行完整报告或生成第二套 HTML，非正式草稿收敛为诊断信息并强制冠以 `[DIAGNOSTIC / NON-DELIVERABLE DRAFT]`。 |
 | **P0-2** | **`all_figures` 与 `figure_selection.specs` 冲突** | `src/abaqus_ai_agent/agent.py` & `reporting/figure_selector.py` | 明确正式报告必需图（带 Spec + 强凭证校验）与辅助产物的边界；合法辅助图不阻断正式交付，未授权图片绝不混入正式报告。 |
 | **P0-3** | **正式管线异常时残留旧报告内容** | `src/abaqus_ai_agent/agent.py` | 管线异常或 `DELIVERY_BLOCKED` 时，彻底清空任何早期报告字符串，返回纯诊断信息，杜绝旧报告被误作正式交付凭证。 |
 | **P0-4** | **验收状态、报告状态与交付卡片语义撕裂** | `src/abaqus_ai_agent/acceptance.py` & `reporting/pipeline.py` | 统一最终交付结论映射：`PASS`（全条件满足）、`FAIL`（物理失败优先）、`BLOCKED`（缺条件/证据）、`INCOMPLETE`（未完成），杜绝状态互斥或掩盖。 |
@@ -2302,8 +2302,8 @@ For full requirements backlog, input/output schemas, anti-hallucination constrai
   - 追踪用户请求入口到报告交付全链路（成功路径与失败路径）。
   - 建立模块资产清单：保留、保留并修复、整合、废弃。
 - [x] **阶段 B：报告生成入口与数据契约统一 (Unify Entry & Data Contract)**
-  - 明确 `DeterministicReportPipeline` 为唯一正式交付管道。
-  - 统一由 `EngineeringReportData` 作为单源码承载结构。
+  - 明确 `DeterministicReportPipeline` 为唯一正式交付管道，统一由 `EngineeringReportData` 作为单源码承载结构。
+  - 收敛非正式/测试模式分支：彻底移除平行的 `self.build_report()` 模板组装与 HTML 渲染，收敛为轻量结构化诊断摘要，标题强制冠以 `[DIAGNOSTIC / NON-DELIVERABLE DRAFT]` 并附醒目交付警告，防范草稿冒充正式报告。
 - [x] **阶段 C：工程图片链路与规格冲突攻坚 (Fix Figures & Specs Conflict)**
   - 解决 `all_figures` 与 `figure_selection.specs` 边界问题。
   - 保持 `figure_selector.py` 证据校验（run_id, input_hash, odb_sha, png 校验, session token）。

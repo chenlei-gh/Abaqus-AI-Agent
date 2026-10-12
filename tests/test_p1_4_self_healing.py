@@ -452,9 +452,12 @@ def test_solve_requirement_self_healing_end_to_end():
     assert result.summary_card.get("self_healing", {}).get("healed") is True
     assert result.summary_card.get("self_healing", {}).get("total_attempts") == 1
 
-    # Report verification: Chapter 14b must be rendered
+    # Report verification: Diagnostic Draft in Test Double Mode
     assert result.report_markdown is not None
-    assert "14b. Solver Diagnostics & Self-Healing Audit" in result.report_markdown
+    assert "[DIAGNOSTIC / NON-DELIVERABLE DRAFT]" in result.report_markdown
+    assert "自愈审计上下文 (Self-Healing Context)" in result.report_markdown
+    assert "HEALED" in result.report_markdown
+    assert result.report_html is None
 
 
 def test_solve_requirement_self_healing_disabled():

@@ -340,8 +340,8 @@ def test_solve_requirement_delivers_result_intelligence():
     assert result.status == TaskStatus.COMPLETED
     assert result.result_intelligence is not None
     assert result.report_markdown is not None
-    assert result.report_html is not None
-    assert "<!doctype html>" in result.report_html
+    assert result.report_html is None  # Non-deliverable mock test does not emit secondary HTML report
+    assert "[DIAGNOSTIC / NON-DELIVERABLE DRAFT]" in result.report_markdown
     assert "result_intelligence" in result.summary_card
     assert result.summary_card["result_intelligence"]["derived_metrics"] is not None
 

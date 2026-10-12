@@ -295,7 +295,9 @@ def test_corrupt_png_image_integrity_fail_closed(tmp_path: Path):
 
 
 def test_non_deliverable_draft_diagnostic_contract(tmp_path: Path, monkeypatch):
-    """P0-4 Diagnostic Draft: When task is in test mode, produces draft with clear diagnostic context."""
+    """P0-4 Diagnostic Draft: When task is in test mode, produces draft with clear diagnostic context
+    and strictly forbids issuing official HTML reports or unflagged authoritative titles.
+    """
     agent = AbaqusAIAgent(executor=MockExecutor(), mode="test")
 
     mock_run = MagicMock(spec=AnalysisRun)
@@ -320,11 +322,19 @@ def test_non_deliverable_draft_diagnostic_contract(tmp_path: Path, monkeypatch):
 
     task_res = agent.solve_requirement(_build_test_intent(), workdir=str(tmp_path))
 
-    # In test double mode with MockExecutor, solver succeeds in test mode
+    # 1. Lifecycle is completed, but official delivery is NOT authorized
     assert task_res.status == TaskStatus.COMPLETED
     assert task_res.summary_card["delivery_card"] is None, "Non-production mode must not issue official delivery card"
+
+    # 2. Strict single-pipeline contract: No official HTML report generated on non-deliverable path
+    assert task_res.report_html is None, "Non-deliverable path must not generate secondary HTML report"
+
+    # 3. Explicit anti-masquerade check: Title must be unambiguously marked as diagnostic draft
     assert task_res.report_markdown is not None
-    assert "Engineering Analysis Report" in task_res.report_markdown
+    assert task_res.report_markdown.startswith("# [DIAGNOSTIC / NON-DELIVERABLE DRAFT]")
+    assert "[DIAGNOSTIC / NON-DELIVERABLE DRAFT]" in task_res.report_markdown
+    assert "Engineering Delivery Notice" in task_res.report_markdown
+    assert "禁止作为正式工程报告交付" in task_res.report_markdown
 
 
 def test_single_source_data_consistency_markdown_and_html():
