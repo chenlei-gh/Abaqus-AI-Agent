@@ -95,6 +95,7 @@ def test_candidate_sha256_and_manifest_structure(tmp_path):
     assert c.size == len(test_content)
     assert c.scope == "runs"
     assert c.risk_level == "SAFE_PURGE_IF_AUTHORIZED"
+    assert c.protection_decision == "UNPROTECTED_EPHEMERAL_CANDIDATE"
 
 
 def test_clean_workspace_cli_dry_run_and_manifest_export(tmp_path):
@@ -135,6 +136,7 @@ def test_clean_workspace_cli_dry_run_and_manifest_export(tmp_path):
         data = json.load(fh)
     assert data["candidate_count"] == 1
     assert data["candidates"][0]["relative_path"] == "runs/run_3/analysis.log"
+    assert data["candidates"][0]["protection_decision"] == "UNPROTECTED_EPHEMERAL_CANDIDATE"
     assert len(data["candidates"][0]["sha256"]) == 64
 
 
@@ -253,3 +255,122 @@ def test_clean_aborts_on_empty_or_failed_hash(tmp_path, monkeypatch):
     rc = main()
     assert rc == 1
     assert log_file.is_file(), "File must not be deleted if sha256 recomputation fails"
+
+
+def test_clean_aborts_when_root_is_not_git_toplevel(tmp_path):
+    """C2 contract: execution must abort fail-closed if --root is not the Git repository toplevel."""
+    repo_root = tmp_path / "repo"
+    repo_root.mkdir()
+    subprocess.run(["git", "init"], cwd=repo_root, check=True, capture_output=True)
+
+    sub_dir = repo_root / "subdir"
+    sub_dir.mkdir()
+
+    with pytest.raises(RuntimeError) as exc_info:
+        get_tracked_paths(sub_dir)
+    assert "Fail-closed safety trigger" in str(exc_info.value)
+    assert "is not the Git repository toplevel root" in str(exc_info.value)
+
+
+def test_clean_skips_symlinks(tmp_path, monkeypatch):
+    """C3 contract: candidate paths that are symlinks must be rejected/skipped and abort deletion."""
+    root = tmp_path / "repo"
+    root.mkdir()
+    runs_dir = root / "runs" / "run_symlink"
+    runs_dir.mkdir(parents=True)
+    log_file = runs_dir / "Job.log"
+    log_file.write_bytes(b"ephemeral log")
+
+    subprocess.run(["git", "init"], cwd=root, check=True, capture_output=True)
+
+    # 1. In collect_candidates, a symlink must be ignored
+    orig_is_symlink = Path.is_symlink
+    monkeypatch.setattr(Path, "is_symlink", lambda self: True if self.name == "Job.log" else orig_is_symlink(self))
+    candidates, _, _ = collect_candidates(root, set())
+    assert not any(c.path.name == "Job.log" for c in candidates), "Symlinks must be skipped in collect_candidates"
+
+    # 2. In execution phase, if candidate is detected as symlink, deletion must abort with failure
+    c = Candidate(
+        path=log_file,
+        scope="runs",
+        size=len(b"ephemeral log"),
+        sha256=compute_sha256(log_file),
+        reason="symlink test",
+    )
+    from scripts.clean_workspace import main
+    monkeypatch.setattr("scripts.clean_workspace.collect_candidates", lambda r, t: ([c], [], 0))
+    monkeypatch.setattr("sys.argv", ["clean_workspace.py", "--root", str(root), "--clean"])
+
+    rc = main()
+    assert rc == 1, "Exit code must be 1 on symlink abort"
+    assert log_file.is_file(), "Symlink target must not be deleted"
+
+
+def test_clean_preserves_cache_dir_with_protected_file(tmp_path):
+    """C7 contract: cache directories containing protected files (.py, .json, etc.) must NEVER be collected or deleted."""
+    root = tmp_path / "repo"
+    root.mkdir()
+    subprocess.run(["git", "init"], cwd=root, check=True, capture_output=True)
+
+    cache_dir = root / "__pycache__"
+    cache_dir.mkdir()
+    bytecode = cache_dir / "module.cpython-312.pyc"
+    bytecode.write_bytes(b"dummy bytecode")
+
+    # Inject a protected script into __pycache__
+    protected_script = cache_dir / "critical_tool.py"
+    protected_script.write_text("print('critical')", encoding="utf-8")
+
+    candidates, cache_dirs, _ = collect_candidates(root, set())
+    assert cache_dir not in cache_dirs, "Cache dir with protected files must NOT be in cache_dirs"
+    assert not any(c.path == protected_script for c in candidates), "Protected file must NOT be a candidate"
+
+    # Also test .pytest_cache with protected markdown / json
+    pytest_cache = root / ".pytest_cache"
+    pytest_cache.mkdir()
+    protected_notes = pytest_cache / "notes.md"
+    protected_notes.write_text("# Important notes", encoding="utf-8")
+
+    _, cache_dirs2, _ = collect_candidates(root, set())
+    assert pytest_cache not in cache_dirs2, ".pytest_cache with protected file must NOT be in cache_dirs"
+
+
+def test_clean_returns_error_on_dir_deletion_failure(tmp_path, monkeypatch):
+    """C9 contract: directory deletion failures must be counted and return non-zero exit code."""
+    root = tmp_path / "repo"
+    root.mkdir()
+    subprocess.run(["git", "init"], cwd=root, check=True, capture_output=True)
+
+    cache_dir = root / "__pycache__"
+    cache_dir.mkdir()
+    (cache_dir / "test.pyc").write_bytes(b"bytecode")
+
+    from scripts.clean_workspace import main
+    monkeypatch.setattr("scripts.clean_workspace.collect_candidates", lambda r, t: ([], [cache_dir], 0))
+    monkeypatch.setattr("sys.argv", ["clean_workspace.py", "--root", str(root), "--clean"])
+
+    def mock_rmtree(d):
+        raise OSError("Simulated permission denied deleting directory")
+
+    monkeypatch.setattr("shutil.rmtree", mock_rmtree)
+
+    rc = main()
+    assert rc == 1, "Exit code must be 1 when directory deletion fails"
+
+
+def test_clean_returns_error_on_manifest_export_failure(tmp_path, monkeypatch):
+    """C8 contract: manifest export failure must abort with non-zero exit code."""
+    root = tmp_path / "repo"
+    root.mkdir()
+    subprocess.run(["git", "init"], cwd=root, check=True, capture_output=True)
+
+    from scripts.clean_workspace import main
+    monkeypatch.setattr("sys.argv", ["clean_workspace.py", "--root", str(root), "--export-manifest", "invalid/path/manifest.json"])
+
+    def mock_open(*args, **kwargs):
+        raise OSError("Disk full / permission denied")
+
+    monkeypatch.setattr("builtins.open", mock_open)
+
+    rc = main()
+    assert rc == 1, "Exit code must be 1 when manifest export fails"

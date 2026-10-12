@@ -52,24 +52,6 @@ TARGET_ARTIFACT_PATTERNS = (
     "*.env",
 )
 
-HISTORICAL_MV_SCRIPT_PATTERNS = (
-    "*_script.py",
-)
-
-HISTORICAL_MV_WORKDIR_NAMES = {
-    "ga2_golden_workdir",
-    "ga263_workdir",
-    "ga3_qualification_workdir",
-    "multi_physics_workdir",
-    "p1_2_reasoning_workdir",
-    "p1_product_solve_workdir",
-    "p2_cases_workdir",
-    "real_failure_workdir",
-    "Connector_L4_Golden",
-    "live_benchmarks_run",
-    "live_phase_l_run",
-}
-
 PROTECTED_SUFFIXES = {
     ".json",
     ".html",
@@ -95,6 +77,7 @@ class Candidate:
     sha256: str
     reason: str
     risk_level: str = "SAFE_PURGE_IF_AUTHORIZED"
+    protection_decision: str = "UNPROTECTED_EPHEMERAL_CANDIDATE"
 
 
 def repo_root() -> Path:
@@ -116,10 +99,28 @@ def compute_sha256(path: Path) -> str:
 def get_tracked_paths(root: Path) -> set[str]:
     """Retrieve Git tracked files.
 
-    FAIL-CLOSED: If Git execution fails or repository is unavailable,
-    raises RuntimeError immediately to prevent catastrophic file loss.
+    FAIL-CLOSED: If Git execution fails, repository is unavailable, or root is not the
+    repository toplevel, raises RuntimeError immediately to prevent catastrophic file loss.
     """
     try:
+        proc_top = subprocess.run(
+            ["git", "rev-parse", "--show-toplevel"],
+            cwd=root,
+            check=True,
+            capture_output=True,
+        )
+        git_toplevel = Path(proc_top.stdout.decode("utf-8").strip()).resolve()
+        try:
+            is_same = os.path.samefile(git_toplevel, root.resolve())
+        except OSError:
+            is_same = git_toplevel == root.resolve()
+
+        if not is_same:
+            raise RuntimeError(
+                f"Fail-closed safety trigger: provided root '{root.resolve()}' is not the "
+                f"Git repository toplevel root '{git_toplevel}'."
+            )
+
         proc = subprocess.run(
             ["git", "ls-files", "-z"],
             cwd=root,
@@ -133,9 +134,29 @@ def get_tracked_paths(root: Path) -> set[str]:
         }
     except Exception as exc:
         raise RuntimeError(
-            f"Fail-closed safety trigger: unable to retrieve Git tracked files for '{root}'. "
+            f"Fail-closed safety trigger: unable to verify Git repository or retrieve tracked files for '{root}'. "
             f"Aborting clean operation to prevent accidental file deletion. Root cause: {exc}"
         ) from exc
+
+
+def is_safe_cache_dir(d: Path, root: Path, tracked: set[str]) -> bool:
+    """A cache dir is only safe to delete if it is not a symlink and contains NO protected or tracked files."""
+    if d.is_symlink() or not d.is_dir():
+        return False
+    try:
+        for item in d.rglob("*"):
+            if item.is_symlink():
+                return False
+            if is_tracked(item, root, tracked):
+                return False
+            if item.is_file():
+                if item.suffix.lower() in PROTECTED_SUFFIXES or item.name in {"README", "README.md"}:
+                    return False
+                if item.suffix.lower() not in CACHE_FILE_SUFFIXES:
+                    return False
+        return True
+    except Exception:
+        return False
 
 
 def is_tracked(path: Path, root: Path, tracked: set[str]) -> bool:
@@ -154,17 +175,6 @@ def collect_candidates(root: Path, tracked: set[str]) -> tuple[list[Candidate], 
     protected_count = len(tracked)
 
     mv_dir = root / "machine_validation"
-
-    # 1. Historical untracked workdirs in machine_validation/
-    if mv_dir.exists():
-        for d in mv_dir.iterdir():
-            if not d.resolve().is_relative_to(root_resolved):
-                continue
-            if d.is_dir() and d.name in HISTORICAL_MV_WORKDIR_NAMES:
-                if not is_tracked(d, root, tracked):
-                    cache_dirs.append(d)
-
-    # 2. Scopes: project root, machine_validation/, runs/, and legacy_job_artifacts/
     runs_dir = root / "runs"
     search_dirs = [root, mv_dir, runs_dir, root / "legacy_job_artifacts"]
 
@@ -178,6 +188,10 @@ def collect_candidates(root: Path, tracked: set[str]) -> tuple[list[Candidate], 
         for p in iterator:
             if not p.resolve().is_relative_to(root_resolved):
                 # Containment protection: ignore anything resolving outside repo root
+                continue
+
+            # C3 contract: reject and ignore symlinks immediately
+            if p.is_symlink():
                 continue
 
             if is_tracked(p, root, tracked):
@@ -199,52 +213,37 @@ def collect_candidates(root: Path, tracked: set[str]) -> tuple[list[Candidate], 
             if "deliverables" in p.parts or "qualifications" in p.parts or "case_01_qualification" in p.parts:
                 continue
 
-            if p.is_dir() and (p.name in CACHE_DIR_NAMES or p.name == "MagicMock"):
-                cache_dirs.append(p)
+            # C7 contract: cache dirs strictly limited to CACHE_DIR_NAMES and verified for absence of protected assets
+            if p.is_dir() and p.name in CACHE_DIR_NAMES:
+                if is_safe_cache_dir(p, root, tracked):
+                    cache_dirs.append(p)
                 continue
 
-            if not p.is_file() and not p.is_symlink():
+            if not p.is_file():
                 continue
 
-            # Check if parent is inside a candidate dir to avoid double counting
+            # Check if parent is inside a candidate cache dir to avoid double counting
             if any(p.is_relative_to(cd) for cd in cache_dirs):
                 continue
 
             suffix = p.suffix.lower()
 
-            # Handle runs/ directory with strict protection of non-ephemeral assets
-            if "runs" in p.parts:
-                if suffix in PROTECTED_SUFFIXES or p.name in {"README", "README.md"}:
-                    # Strictly protected: .py, .json, .html, images, etc.
-                    continue
-
-                is_artifact = any(fnmatch.fnmatch(p.name, pat) for pat in TARGET_ARTIFACT_PATTERNS)
-                is_cache = suffix in CACHE_FILE_SUFFIXES
-                if is_artifact or is_cache:
-                    scope = "runs"
-                    size = p.stat().st_size if p.exists() else 0
-                    sha = compute_sha256(p)
-                    reason = "Transient solver artifact in runs/" if is_artifact else "Python bytecode cache in runs/"
-                    candidates.append(Candidate(path=p, scope=scope, size=size, sha256=sha, reason=reason))
-                continue
-
-            # Check historical machine_validation script patterns
-            is_mv_script = (
-                "machine_validation" in p.parts
-                and any(fnmatch.fnmatch(p.name, pat) for pat in HISTORICAL_MV_SCRIPT_PATTERNS)
-            )
-
-            if not is_mv_script and (suffix in PROTECTED_SUFFIXES or p.name in {"README", "README.md"}):
+            # Strict C4 & C5 protection: any file with protected suffix or README is permanently protected
+            if suffix in PROTECTED_SUFFIXES or p.name in {"README", "README.md"}:
                 continue
 
             is_artifact = any(fnmatch.fnmatch(p.name, pat) for pat in TARGET_ARTIFACT_PATTERNS)
             is_cache = suffix in CACHE_FILE_SUFFIXES
 
-            if is_artifact or is_cache or is_mv_script:
-                scope = "root" if p.parent == root else ("machine_validation" if "machine_validation" in p.parts else "legacy")
+            if is_artifact or is_cache:
+                scope = (
+                    "runs"
+                    if "runs" in p.parts
+                    else ("root" if p.parent == root else ("machine_validation" if "machine_validation" in p.parts else "legacy"))
+                )
                 size = p.stat().st_size if p.exists() else 0
                 sha = compute_sha256(p)
-                reason = "Confirmed artifact / cache / legacy script"
+                reason = "Transient solver artifact" if is_artifact else "Python bytecode cache"
                 candidates.append(Candidate(path=p, scope=scope, size=size, sha256=sha, reason=reason))
 
     return candidates, cache_dirs, protected_count
@@ -304,33 +303,38 @@ def main() -> int:
     print(f"Total size to reclaim: {format_bytes(total_size)}")
 
     if args.export_manifest:
-        manifest_path = Path(args.export_manifest)
-        manifest_path.parent.mkdir(parents=True, exist_ok=True)
-        manifest_data = {
-            "generated_at": datetime.now(timezone.utc).isoformat(),
-            "repo_root": str(root),
-            "git_tracked_kept_count": protected_count,
-            "candidate_count": len(candidates),
-            "total_reclaim_bytes": total_size,
-            "candidates": [
-                {
-                    "relative_path": c.path.resolve().relative_to(root.resolve()).as_posix(),
-                    "scope": c.scope,
-                    "size_bytes": c.size,
-                    "sha256": c.sha256,
-                    "reason": c.reason,
-                    "risk_level": c.risk_level,
-                }
-                for c in candidates
-            ],
-            "cache_dirs": [
-                d.resolve().relative_to(root.resolve()).as_posix()
-                for d in cache_dirs
-            ],
-        }
-        with open(manifest_path, "w", encoding="utf-8") as fh:
-            json.dump(manifest_data, fh, indent=2, ensure_ascii=False)
-        print(f"\n[MANIFEST EXPORTED] Audit manifest written to: {manifest_path}")
+        try:
+            manifest_path = Path(args.export_manifest)
+            manifest_path.parent.mkdir(parents=True, exist_ok=True)
+            manifest_data = {
+                "generated_at": datetime.now(timezone.utc).isoformat(),
+                "repo_root": str(root),
+                "git_tracked_kept_count": protected_count,
+                "candidate_count": len(candidates),
+                "total_reclaim_bytes": total_size,
+                "candidates": [
+                    {
+                        "relative_path": c.path.resolve().relative_to(root.resolve()).as_posix(),
+                        "scope": c.scope,
+                        "size_bytes": c.size,
+                        "sha256": c.sha256,
+                        "reason": c.reason,
+                        "risk_level": c.risk_level,
+                        "protection_decision": c.protection_decision,
+                    }
+                    for c in candidates
+                ],
+                "cache_dirs": [
+                    d.resolve().relative_to(root.resolve()).as_posix()
+                    for d in cache_dirs
+                ],
+            }
+            with open(manifest_path, "w", encoding="utf-8") as fh:
+                json.dump(manifest_data, fh, indent=2, ensure_ascii=False)
+            print(f"\n[MANIFEST EXPORTED] Audit manifest written to: {manifest_path}")
+        except Exception as exc:
+            print(f"Safety abort: failed to export audit manifest to '{args.export_manifest}': {exc}")
+            return 1
 
     if not args.clean:
         print("\n[DRY-RUN] No files were deleted. Re-run with --clean to delete.")
@@ -339,9 +343,17 @@ def main() -> int:
     # Execute deletion with pre-execution consistency verification
     deleted_files = 0
     failed_files = 0
+    failed_dirs = 0
+
     for c in candidates:
         try:
             if not c.path.exists():
+                continue
+
+            # C3 contract: refuse symlinks
+            if c.path.is_symlink():
+                failed_files += 1
+                print(f"Safety abort: candidate path is a symlink, skipping {c.path}")
                 continue
 
             # 1. Path boundary check: ensure candidate path is strictly within repo root
@@ -373,23 +385,37 @@ def main() -> int:
             failed_files += 1
             print(f"Failed to delete {c.path}: {e}")
 
+    # C7 contract: Cache directories deletion with re-verification and failure tracking
     for d in cache_dirs:
         try:
-            if d.exists():
-                shutil.rmtree(d)
+            if not d.exists():
+                continue
+            if d.is_symlink():
+                failed_dirs += 1
+                print(f"Safety abort: cache directory is a symlink, skipping {d}")
+                continue
+            if not is_safe_cache_dir(d, root, tracked):
+                failed_dirs += 1
+                print(f"Safety abort: cache dir contains protected or non-cache files, skipping {d}")
+                continue
+            shutil.rmtree(d)
         except OSError as e:
+            failed_dirs += 1
             print(f"Failed to delete cache dir {d}: {e}")
 
     # Clean legacy_job_artifacts directory if empty
     legacy_dir = root / "legacy_job_artifacts"
-    if legacy_dir.exists() and not any(legacy_dir.iterdir()):
-        legacy_dir.rmdir()
+    if legacy_dir.exists() and not legacy_dir.is_symlink() and not any(legacy_dir.iterdir()):
+        try:
+            legacy_dir.rmdir()
+        except OSError:
+            pass
 
     # Clean empty run subdirectories in runs/
     runs_dir = root / "runs"
-    if runs_dir.exists():
+    if runs_dir.exists() and not runs_dir.is_symlink():
         for d in sorted(runs_dir.glob("*"), reverse=True):
-            if d.is_dir() and not any(d.iterdir()):
+            if d.is_dir() and not d.is_symlink() and not any(d.iterdir()):
                 try:
                     d.rmdir()
                 except OSError:
@@ -397,16 +423,17 @@ def main() -> int:
 
     # Clean empty workdir subdirectories in machine_validation
     mv_dir = root / "machine_validation"
-    if mv_dir.exists():
+    if mv_dir.exists() and not mv_dir.is_symlink():
         for d in sorted(mv_dir.glob("*_workdir*"), reverse=True):
-            if d.is_dir() and not any(d.iterdir()):
+            if d.is_dir() and not d.is_symlink() and not any(d.iterdir()):
                 try:
                     d.rmdir()
                 except OSError:
                     pass
 
-    print(f"\n[CLEAN COMPLETE] Deleted {deleted_files} files (failed: {failed_files}).")
-    return 1 if failed_files else 0
+    total_failures = failed_files + failed_dirs
+    print(f"\n[CLEAN COMPLETE] Deleted {deleted_files} files (failed files: {failed_files}, failed dirs: {failed_dirs}).")
+    return 1 if total_failures else 0
 
 
 if __name__ == "__main__":
