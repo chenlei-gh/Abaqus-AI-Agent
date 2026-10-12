@@ -1,5 +1,6 @@
 import os
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, Union
 
 from .actions.runner import execute
@@ -526,11 +527,8 @@ class AbaqusAIAgent:
                 },
             )
 
-        # 5. Apply Plan Actions to CAE Environment
-        self.apply_plan(plan)
-
-        # 6. Single Canonical Production Outlet: AnalysisRunner
-        criteria = kwargs.pop("criteria", None) or intent.acceptance_criteria or ()
+        # 4.5. Production Mode Isolation Gate (REQ-ISO-003):
+        # Validate workspace isolation BEFORE applying plan actions or invoking CAE commands.
         project_context = kwargs.pop("project_context", None)
         cname = getattr(self.executor, "__class__", None).__name__ or ""
         is_test_double = any(token in cname for token in ("Mock", "Fake", "Stub", "Dummy", "OdbBackedExecutor")) or \
@@ -538,6 +536,44 @@ class AbaqusAIAgent:
         default_prod = (self.mode == "production" and not is_test_double)
         prod_req = kwargs.pop("require_production", default_prod)
         target_workdir = kwargs.pop("workdir", None)
+
+        # Enforce strict project_context containment on explicit workdir (REQ-ISO-002, REQ-ISO-003)
+        if project_context is not None and target_workdir:
+            cand_workdir = Path(target_workdir).resolve()
+            project_context.assert_within_subdir(cand_workdir, project_context.solver_dir)
+            target_workdir = str(cand_workdir)
+
+        # Strict Production Mode Isolation (REQ-ISO-003):
+        # In real production mode, solver execution inside the core repository is strictly forbidden.
+        if prod_req and not is_test_double:
+            if project_context is None:
+                from .paths import get_repo_root, resolve_runs_root, resolve_project_root, create_external_project_context
+                ext_root = resolve_project_root(fail_closed=False)
+                if ext_root:
+                    project_context = create_external_project_context(ext_root, project_name=plan.job_name or "Project")
+                elif target_workdir:
+                    repo_r = get_repo_root().resolve()
+                    cand_target = Path(target_workdir).resolve()
+                    if cand_target == repo_r or cand_target.is_relative_to(repo_r):
+                        raise PermissionError(
+                            f"Production execution blocked (REQ-ISO-003): Target workdir '{cand_target}' "
+                            f"resides inside the core repository '{repo_r}'. Production runs must use an external project context."
+                        )
+                else:
+                    runs_root = resolve_runs_root().resolve()
+                    repo_r = get_repo_root().resolve()
+                    if runs_root == repo_r or runs_root.is_relative_to(repo_r):
+                        raise PermissionError(
+                            "Production execution blocked (REQ-ISO-003): Production mode requires an explicit "
+                            "ExternalProjectContext or external ABAQUS_AGENT_RUNS_DIR / ABAQUS_AGENT_PROJECT_ROOT. "
+                            "Defaulting to internal repository runs/ is strictly prohibited."
+                        )
+
+        # 5. Apply Plan Actions to CAE Environment
+        self.apply_plan(plan)
+
+        # 6. Single Canonical Production Outlet: AnalysisRunner
+        criteria = kwargs.pop("criteria", None) or intent.acceptance_criteria or ()
         run = self.analysis_run(
             model_name=plan.model_name,
             job_name=plan.job_name,
@@ -759,7 +795,6 @@ class AbaqusAIAgent:
 
         if is_official:
             try:
-                from pathlib import Path
                 from .reporting.pipeline import DeterministicReportPipeline
                 pipeline = DeterministicReportPipeline()
                 materials_payload = []

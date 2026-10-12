@@ -292,3 +292,165 @@ def test_agent_solve_requirement_with_external_project_context(tmp_path, monkeyp
     report_file = ctx.delivery_dir / "report.html"
     assert report_file.is_file(), "Report HTML must be placed in external delivery_dir"
     ctx.assert_within_project(report_file)
+
+
+def test_workdir_cannot_bypass_project_context_solver_dir(tmp_path):
+    """P0-1 Contract: When project_context is passed, an explicit workdir MUST be
+    strictly validated to reside inside project_context.solver_dir.
+    Any attempt to route workdir to repo runs/, other project subdirs, or external locations MUST fail.
+    """
+    from abaqus_ai_agent.execution.client import AbaqusExecutor
+    from abaqus_ai_agent.execution.analysis_run import AnalysisRunner
+
+    class DummyExecutor(AbaqusExecutor):
+        def execute(self, code, timeout=120):
+            return {}
+
+    ext_root = tmp_path / "ProjectAlpha"
+    ctx = create_external_project_context(ext_root)
+    runner = AnalysisRunner(DummyExecutor())
+
+    # 1. Attempt to pass workdir escaping into project delivery_dir
+    illegal_workdir_delivery = ctx.delivery_dir / "escaped_run"
+    with pytest.raises(PermissionError) as exc_info:
+        runner.run(
+            model_name="M",
+            job_name="J",
+            workdir=str(illegal_workdir_delivery),
+            project_context=ctx,
+            require_production=False,
+        )
+    assert "Subdirectory boundary violation" in str(exc_info.value)
+
+    # 2. Attempt to pass workdir escaping completely outside the project
+    illegal_workdir_outside = tmp_path / "arbitrary_dir"
+    with pytest.raises(PermissionError) as exc_info2:
+        runner.run(
+            model_name="M",
+            job_name="J",
+            workdir=str(illegal_workdir_outside),
+            project_context=ctx,
+            require_production=False,
+        )
+    assert "Subdirectory boundary violation" in str(exc_info2.value)
+
+    # 3. Legitimate workdir inside solver_dir succeeds
+    legal_workdir = ctx.solver_dir / "custom_run_01"
+    run = runner.run(
+        model_name="M",
+        job_name="J",
+        workdir=str(legal_workdir),
+        project_context=ctx,
+        require_production=False,
+    )
+    assert Path(run.work_dir).resolve() == legal_workdir.resolve()
+    assert Path(run.work_dir).is_dir()
+    # Evidence dir is also populated in provenance environment
+    assert run.provenance.environment.get("evidence_dir") is not None
+    assert Path(run.provenance.environment["evidence_dir"]).resolve().is_relative_to(ctx.evidence_dir.resolve())
+
+
+def test_subdirectory_containment_and_run_id_validation(tmp_path):
+    """P0-2 Contract: run_id and subdirectories enforce strict boundary checks."""
+    ext_root = tmp_path / "ProjectSubdirTest"
+    ctx = create_external_project_context(ext_root)
+
+    # 1. Malicious run_id with path traversal
+    for bad_id in ("../escaped", "run/nested", "..\\win_escaped", "run\\slash", "run*bad", " "):
+        with pytest.raises(ValueError) as exc:
+            ctx.create_run_solver_dir(bad_id)
+        assert "Path traversal" in str(exc.value) or "invalid characters" in str(exc.value)
+
+        with pytest.raises(ValueError) as exc2:
+            ctx.create_run_evidence_dir(bad_id)
+        assert "Path traversal" in str(exc2.value) or "invalid characters" in str(exc2.value)
+
+    # 2. Legitimate run_id creates valid isolated subdirs
+    s_dir = ctx.create_run_solver_dir("run-001_A.b")
+    assert s_dir.is_relative_to(ctx.solver_dir)
+    e_dir = ctx.create_run_evidence_dir("run-001_A.b")
+    assert e_dir.is_relative_to(ctx.evidence_dir)
+
+
+def test_prepare_working_copy_overwrite_protection_and_containment(tmp_path):
+    """P0-2 Contract: prepare_working_copy strictly protects input/ and working/ boundaries
+    and forbids accidental overwrite of existing working copies without overwrite=True.
+    """
+    ext_root = tmp_path / "ProjectCopyTest"
+    ctx = create_external_project_context(ext_root)
+
+    # Create original input file
+    input_file = ctx.input_dir / "assembly.cae"
+    input_file.write_bytes(b"ORIGINAL_INPUT_BYTES_001")
+
+    # 1. Attempt path traversal in source_filename
+    with pytest.raises(ValueError):
+        ctx.prepare_working_copy("../escape.cae")
+
+    with pytest.raises(ValueError):
+        ctx.prepare_working_copy("assembly.cae", target_filename="../escape.cae")
+
+    # 2. Normal copy succeeds
+    dest = ctx.prepare_working_copy("assembly.cae", "assembly_working.cae")
+    assert dest == ctx.working_dir / "assembly_working.cae"
+    assert dest.read_bytes() == b"ORIGINAL_INPUT_BYTES_001"
+    # Original remains untouched
+    assert input_file.read_bytes() == b"ORIGINAL_INPUT_BYTES_001"
+
+    # 3. Duplicate attempt without overwrite=True MUST raise FileExistsError
+    with pytest.raises(FileExistsError) as fe_info:
+        ctx.prepare_working_copy("assembly.cae", "assembly_working.cae", overwrite=False)
+    assert "already exists" in str(fe_info.value)
+
+    # 4. Explicit overwrite=True succeeds
+    input_file.write_bytes(b"UPDATED_INPUT_BYTES_002")
+    dest_overwritten = ctx.prepare_working_copy("assembly.cae", "assembly_working.cae", overwrite=True)
+    assert dest_overwritten.read_bytes() == b"UPDATED_INPUT_BYTES_002"
+
+
+def test_agent_production_mode_blocks_execution_in_repo_runs(tmp_path):
+    """P0-3 Contract: When executing with a non-test-double executor in production mode,
+    falling back to internal repository runs/ or executing in the repo is strictly blocked.
+    """
+    from abaqus_ai_agent.agent import AbaqusAIAgent
+    from abaqus_ai_agent.execution.client import AbaqusExecutor
+    from abaqus_ai_agent.contracts.intent import EngineeringIntent
+    from abaqus_ai_agent.paths import get_repo_root
+
+    class RealSimulatedClient(AbaqusExecutor):
+        """Simulates a real production client without test double naming markers."""
+        def execute(self, code, timeout=120):
+            return {}
+
+    real_client = RealSimulatedClient()
+    agent = AbaqusAIAgent(executor=real_client, mode="production")
+
+    intent = EngineeringIntent(
+        id="INT-PROD-BLOCK",
+        kind="linear_static",
+        analysis_type="linear_static",
+        description="Production mode block test",
+        unit_system="MM_N_MPA",
+        material={"name": "Steel", "youngs_modulus": 210000.0, "poisson_ratio": 0.3},
+        metadata={"geometry": {"shape": "cantilever_box", "length": 100.0, "width": 10.0, "height": 10.0}},
+        loads=({"type": "concentrated_force", "region": "TipFace", "magnitude": 1000.0},),
+        boundary_conditions=({"type": "encastre", "region": "RootFace"},),
+    )
+
+    # 1. No project_context and no workdir -> would fallback to repo runs/ -> must fail
+    with pytest.raises(PermissionError) as exc_info:
+        agent.solve_requirement(
+            intent,
+            require_production=True,
+        )
+    assert "Production execution blocked" in str(exc_info.value)
+
+    # 2. workdir explicitly passed pointing inside the repo -> must fail
+    repo_workdir = get_repo_root() / "runs" / "illegal_run"
+    with pytest.raises(PermissionError) as exc_info2:
+        agent.solve_requirement(
+            intent,
+            workdir=str(repo_workdir),
+            require_production=True,
+        )
+    assert "Production execution blocked" in str(exc_info2.value)

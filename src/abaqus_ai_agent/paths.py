@@ -14,6 +14,7 @@ Contract Resolution Order:
 from __future__ import annotations
 
 import os
+import re
 from dataclasses import dataclass
 from pathlib import Path
 import shutil
@@ -45,46 +46,89 @@ class ExternalProjectContext:
     evidence_dir: Path
     delivery_dir: Path
 
-    def create_run_solver_dir(self, run_id: str, ensure_exists: bool = True) -> Path:
-        """Create an isolated solver run scratch sandbox under solver/<run_id>/."""
-        target = (self.solver_dir / run_id).resolve()
-        self.assert_within_project(target)
-        if ensure_exists:
-            target.mkdir(parents=True, exist_ok=True)
-        return target
-
-    def create_run_evidence_dir(self, run_id: str, ensure_exists: bool = True) -> Path:
-        """Create an isolated evidence audit directory under evidence/<run_id>/."""
-        target = (self.evidence_dir / run_id).resolve()
-        self.assert_within_project(target)
-        if ensure_exists:
-            target.mkdir(parents=True, exist_ok=True)
-        return target
-
-    def prepare_working_copy(self, source_filename: str, target_filename: Optional[str] = None) -> Path:
-        """Safely duplicate a source model from input/ to working/ (Zero In-Place Mutation).
-
-        Guarantees that user original input files are never modified in-place.
-        """
-        source_path = (self.input_dir / source_filename).resolve()
-        self.assert_within_project(source_path)
-        if not source_path.is_file():
-            raise FileNotFoundError(
-                f"Cannot prepare working copy: source file '{source_filename}' not found in input dir '{self.input_dir}'."
-            )
-        dest_name = target_filename or source_filename
-        dest_path = (self.working_dir / dest_name).resolve()
-        self.assert_within_project(dest_path)
-        shutil.copy2(source_path, dest_path)
-        return dest_path
-
-    def assert_within_project(self, target_path: Path) -> None:
+    def assert_within_project(self, target_path: Path) -> Path:
         """Enforce strict path containment to prevent path traversal outside project_root."""
         resolved = target_path.resolve()
         if not resolved.is_relative_to(self.project_root.resolve()):
             raise PermissionError(
                 f"Path traversal security violation: path '{resolved}' escapes project root '{self.project_root}'."
             )
+        return resolved
+
+    def assert_within_subdir(self, target_path: Path, subdir: Path) -> Path:
+        """Enforce strict path containment within a designated sub-directory (REQ-ISO-002)."""
+        resolved = target_path.resolve()
+        resolved_subdir = subdir.resolve()
+        if not resolved.is_relative_to(resolved_subdir):
+            raise PermissionError(
+                f"Subdirectory boundary violation (REQ-ISO-002): path '{resolved}' "
+                f"escapes designated sub-directory '{resolved_subdir}'."
+            )
+        return resolved
+
+    def _validate_identifier(self, name: str, field_name: str) -> None:
+        """Reject path separators, dot-dot traversal, and malicious characters."""
+        if not name or not isinstance(name, str):
+            raise ValueError(f"Invalid {field_name}: identifier must be a non-empty string.")
+        if any(sep in name for sep in ("/", "\\", os.sep, os.altsep or "")):
+            raise ValueError(f"Path traversal security violation: {field_name} '{name}' contains path separators.")
+        if ".." in name:
+            raise ValueError(f"Path traversal security violation: {field_name} '{name}' contains relative traversal '..'.")
+        if not re.match(r"^[a-zA-Z0-9_.-]+$", name):
+            raise ValueError(f"Security violation: {field_name} '{name}' contains invalid characters.")
+
+    def create_run_solver_dir(self, run_id: str, ensure_exists: bool = True) -> Path:
+        """Create an isolated solver run scratch sandbox under solver/<run_id>/."""
+        self._validate_identifier(run_id, "run_id")
+        target = (self.solver_dir / run_id).resolve()
+        self.assert_within_subdir(target, self.solver_dir)
+        if ensure_exists:
+            target.mkdir(parents=True, exist_ok=True)
+        return target
+
+    def create_run_evidence_dir(self, run_id: str, ensure_exists: bool = True) -> Path:
+        """Create an isolated evidence audit directory under evidence/<run_id>/."""
+        self._validate_identifier(run_id, "run_id")
+        target = (self.evidence_dir / run_id).resolve()
+        self.assert_within_subdir(target, self.evidence_dir)
+        if ensure_exists:
+            target.mkdir(parents=True, exist_ok=True)
+        return target
+
+    def prepare_working_copy(
+        self,
+        source_filename: str,
+        target_filename: Optional[str] = None,
+        overwrite: bool = False,
+    ) -> Path:
+        """Safely duplicate a source model from input/ to working/ (Zero In-Place Mutation).
+
+        Guarantees that user original input files are never modified in-place.
+        Prevents accidental overwrite of existing working copies unless overwrite=True.
+        """
+        self._validate_identifier(source_filename, "source_filename")
+        if target_filename:
+            self._validate_identifier(target_filename, "target_filename")
+
+        source_path = (self.input_dir / source_filename).resolve()
+        self.assert_within_subdir(source_path, self.input_dir)
+        if not source_path.is_file():
+            raise FileNotFoundError(
+                f"Cannot prepare working copy: source file '{source_filename}' not found in input dir '{self.input_dir}'."
+            )
+
+        dest_name = target_filename or source_filename
+        dest_path = (self.working_dir / dest_name).resolve()
+        self.assert_within_subdir(dest_path, self.working_dir)
+
+        if dest_path.exists() and not overwrite:
+            raise FileExistsError(
+                f"Working copy overwrite violation: destination '{dest_path}' already exists. "
+                "Set overwrite=True to explicitly permit replacing an existing working copy."
+            )
+
+        shutil.copy2(source_path, dest_path)
+        return dest_path
 
 
 def assert_path_outside_repo(path: Union[str, Path], repo_root: Optional[Path] = None) -> Path:

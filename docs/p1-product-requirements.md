@@ -742,7 +742,7 @@ Benchmark 必须区分软件回归与真实 Abaqus 物理验证。
 | Phase 4 | Deployment | ⚪ POST-FREEZE ROADMAP |
 | Phase 4 | Benchmark | ⚪ POST-FREEZE ROADMAP |
 | Phase 4 | Release | ⚪ POST-FREEZE ROADMAP |
-| 全阶段基础设施 | REQ-ISO-001~005 核心仓库与外部工程项目隔离 | 🟡 **PLANNED** (需求规范已冻结并纳入基线，待执行 P0/P1/P2 阶段验证) |
+| 全阶段基础设施 | REQ-ISO-001~005 核心仓库与外部工程项目隔离 | 🟢 **IMPLEMENTED (CODE & AUTOMATION)** (P0/P1 代码架构与 23 项隔离专项自动化测试已闭环，1142 项全量回归通过；待具备 Abaqus 2025 许可环境执行 P2 物理真机端到端验证) |
 
 > **冻结规则：** 后续开发必须先在本表归属需求；不得因为发现单个功能缺口而重新发明 Phase 或改变总体路线。已有能力优先复用；只有真实缺口才新增代码。
 
@@ -834,14 +834,14 @@ Agent 执行器必须具备感知并统一传递完整工程路径上下文的�
 - 关键物理量缺失时严禁伪造数值。
 - 未通过验收的中间诊断材料严禁冒充正式工程交付物。
 
-## 15.7 代码整改与分阶段实施计划
+## 15.7 代码整改与分阶段实施状态
 
-- **P0-1：全链路路径审计 (Path Audit)**：全面追踪输入读取、模型修改、脚本生成、求解、ODB 提取、云图渲染、报告输出与清理工具的读写路径来源。
-- **P0-2：资产分类与路径契约 (Contract Design)**：在现有 `paths.py` 与配置层中统一扩展外部项目路径上下文契约，明确 A/B 类资产访问规则。
-- **P0-3：路径安全防御与清理加固 (Security Hardening)**：收紧清理器范围，实现路径穿越拦截与禁止回退至仓库的 Fail-Closed 机制。
-- **P1-1：工程运行链路贯通 (E2E Integration)**：复用现有 `AnalysisRun`、Evidence、Acceptance 与报告管线，使其无缝适配外部项目上下文。
-- **P1-2：交付物验证与可编辑性检查 (Delivery & Model Verification)**：验证正式交付物完整性，核实最终 CAE 模型重新打开的完整性与拓扑有效性。
-- **P2：回归测试与真机验收 (Regression & Live Gate)**：执行自动化回归测试矩阵，并在配备 Abaqus 2025 的物理环境中完成代表性工程项目的端到端验证。
+- **P0-1：全链路路径审计 (Path Audit)** [✅ **COMPLETED**]：全面追踪输入读取、模型修改、脚本生成、求解、ODB 提取、云图渲染、报告输出与清理工具的读写路径来源。
+- **P0-2：资产分类与路径契约 (Contract Design)** [✅ **COMPLETED**]：在 `paths.py` 中落地 `ExternalProjectContext`，建立 `input/`、`working/`、`solver/`、`evidence/`、`delivery/` 严格子目录级约束，增设 `_validate_identifier` 防穿越与 `prepare_working_copy` 防覆盖保护。
+- **P0-3：路径安全防御与清理加固 (Security Hardening)** [✅ **COMPLETED**]：在 `analysis_run.py` 强制校验显式 `workdir` 必须在 `solver_dir` 内；在 `agent.py` 实施前置生产隔离门禁 Fail-Closed 拦截向仓库内静默回退；`clean_workspace.py` 已收紧并经过负向测试。
+- **P1-1：工程运行链路贯通 (E2E Integration)** [✅ **COMPLETED**]：复用现有 `AnalysisRun`、`agent.py` 求解和报告链路，注入 `evidence_dir` 至运行时环境，测试验证外部目录产物生成。
+- **P1-2：交付物验证与可编辑性检查 (Delivery & Model Verification)** [🔄 **PARTIALLY COMPLETED**]：自动化测试验证了模拟环境下的交付产物路径与生成；真实 CAE 模型重新打开完整性待 P2 物理机验证。
+- **P2：回归测试与真机验收 (Regression & Live Gate)** [🔄 **AUTOMATION COMPLETED / LIVE GATE PENDING**]：完成 23 项隔离专项测试与 14 项清理契约测试，1142 项自动化回归 100% 通过；待在具备 Abaqus 2025 许可的物理环境中完成实际工程项目的端到端真机闭环。
 
 ## 15.8 最终验收准则
 

@@ -1,4 +1,5 @@
 import os
+from pathlib import Path
 import uuid
 from dataclasses import dataclass, field
 from enum import Enum
@@ -260,10 +261,17 @@ class AnalysisRunner:
 
         run_id = str(uuid.uuid4())
         orig_executor_workdir = getattr(self.executor, "workdir", None)
-        if not workdir:
-            if project_context is not None:
+        run_evidence_dir = None
+        if project_context is not None:
+            if workdir:
+                cand_path = Path(workdir).resolve()
+                project_context.assert_within_subdir(cand_path, project_context.solver_dir)
+                workdir = str(cand_path)
+            else:
                 workdir = str(project_context.create_run_solver_dir(run_id))
-            elif orig_executor_workdir:
+            run_evidence_dir = project_context.create_run_evidence_dir(run_id)
+        elif not workdir:
+            if orig_executor_workdir:
                 workdir = orig_executor_workdir
             else:
                 from ..paths import resolve_runs_root
@@ -288,6 +296,8 @@ class AnalysisRunner:
         if project_context is not None:
             runtime_environment["project_root"] = str(project_context.project_root)
             runtime_environment["project_name"] = str(project_context.project_name)
+            if run_evidence_dir is not None:
+                runtime_environment["evidence_dir"] = str(run_evidence_dir)
         normalized_action_plan = _normalize_action_plan(action_plan)
         provenance = AnalysisProvenance(
             run_id=run_id,
