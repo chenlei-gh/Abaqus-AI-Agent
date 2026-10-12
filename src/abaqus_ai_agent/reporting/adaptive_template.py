@@ -91,6 +91,8 @@ class AdaptiveReportBuilder:
         loads_info: Sequence[Dict[str, Any]] = (),
         bcs_info: Sequence[Dict[str, Any]] = (),
         language: str = "bilingual",
+        result_intelligence: Optional[Any] = None,
+        self_healing: Optional[Any] = None,
     ) -> EngineeringReportData:
         """Deterministically assemble the polymorphic EngineeringReportData."""
         active_sections = self.determine_active_sections()
@@ -193,6 +195,8 @@ class AdaptiveReportBuilder:
             fatigue=fatigue_diag,
             assumptions=tuple(assumptions),
             limitations=tuple(limitations),
+            result_intelligence=result_intelligence,
+            self_healing=self_healing,
             metadata=meta,
         )
 

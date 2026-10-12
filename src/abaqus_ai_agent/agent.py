@@ -640,18 +640,7 @@ class AbaqusAIAgent:
         )
 
         all_figures = list(generated_figures) + list(figure_selection.reused_figures)
-
         report_title = f"Engineering Analysis Report: {intent.description or plan.model_name}"
-        report_data = self.build_report(
-            run,
-            title=report_title,
-            objective=intent.description or f"Automated analysis under {capability.capability_id}",
-            result_intelligence=ri_bundle,
-            figures=all_figures,
-            self_healing=healing_result,
-        )
-        report_md = render_markdown(report_data)
-        report_html_str = render_html(report_data)
 
         eng_status = getattr(run, "engineering_status", "EXECUTED")
         run_state = getattr(run, "state", None)
@@ -736,8 +725,15 @@ class AbaqusAIAgent:
                     eng_status = "RESULT_INVALID"
                     break
 
+        # Determine whether this run qualifies for official authoritative delivery
+        is_official = bool(prod_req and is_completed and acceptance and getattr(acceptance, "deliverable", False))
+
         deterministic_delivery_card = None
-        if prod_req and is_completed and acceptance and getattr(acceptance, "deliverable", False):
+        delivery_block_error = None
+        report_md = None
+        report_html_str = None
+
+        if is_official:
             try:
                 from pathlib import Path
                 from .reporting.pipeline import DeterministicReportPipeline
@@ -862,19 +858,38 @@ class AbaqusAIAgent:
                     results_info=[{"metric": k, "value": v} for k, v in metric_dict.items()],
                     acceptance_info=acceptance,
                     visualization_specs=figure_selection.specs,
-                    figures=all_figures,
+                    figures=list(figure_selection.reused_figures),
                     materials_info=materials_payload,
                     mesh_info=mesh_info_payload,
                     require_deliverable=True,
                     odb_path=getattr(run, "odb_path", None),
                     input_hash=getattr(run.provenance, "input_hash", "") if getattr(run, "provenance", None) else "",
                     launcher=getattr(self.executor, "launcher", None),
+                    result_intelligence=ri_bundle,
+                    self_healing=healing_result,
                 )
                 report_md = render_markdown(det_report_data)
                 report_html_str = render_html(det_report_data)
             except Exception as d_exc:
                 is_completed = False
                 eng_status = "DELIVERY_BLOCKED"
+                deterministic_delivery_card = None
+                report_md = None
+                report_html_str = None
+                delivery_block_error = f"Official delivery blocked: {d_exc}"
+        else:
+            # Non-deliverable draft or diagnostic report path (Single authoritative build, zero stale leakage)
+            draft_title = report_title if is_completed else f"[DIAGNOSTIC / NON-DELIVERABLE DRAFT] {report_title}"
+            report_data = self.build_report(
+                run,
+                title=draft_title,
+                objective=intent.description or f"Automated analysis under {capability.capability_id}",
+                result_intelligence=ri_bundle,
+                figures=list(figure_selection.reused_figures),
+                self_healing=healing_result,
+            )
+            report_md = render_markdown(report_data)
+            report_html_str = render_html(report_data)
 
         task_status = TaskStatus.COMPLETED if is_completed else TaskStatus.FAILED
 
@@ -906,6 +921,12 @@ class AbaqusAIAgent:
             "self_healing": healing_result.to_dict() if healing_result else None,
         }
 
+        err_list = []
+        if not is_completed:
+            err_list.append(f"Engineering status: {eng_status}")
+            if delivery_block_error:
+                err_list.append(delivery_block_error)
+
         return EngineeringTaskResult(
             status=task_status,
             intent=intent,
@@ -918,6 +939,6 @@ class AbaqusAIAgent:
             report_markdown=report_md,
             report_html=report_html_str,
             result_intelligence=ri_bundle,
-            errors=() if is_completed else (f"Engineering status: {eng_status}",),
+            errors=tuple(err_list),
             metadata={"self_healing": healing_result.to_dict() if healing_result else None},
         )

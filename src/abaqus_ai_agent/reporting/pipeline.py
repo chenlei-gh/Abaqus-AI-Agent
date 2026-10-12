@@ -50,6 +50,8 @@ class DeterministicReportPipeline:
         odb_path: Optional[Union[str, Path]] = None,
         input_hash: Optional[str] = None,
         launcher: Optional[str] = None,
+        result_intelligence: Optional[Any] = None,
+        self_healing: Optional[Any] = None,
     ) -> Tuple[ReportDeliveryCard, ArtifactPointer, EngineeringReportData]:
         """Compile report, render HTML & Markdown, register artifacts, and produce LLM card."""
         # 0. Early Delivery Gate: Verify authorization BEFORE any file creation or disk I/O.
@@ -444,6 +446,8 @@ class DeterministicReportPipeline:
             bcs_info=bcs_info,
             mesh_info=mesh_info,
             language=language,
+            result_intelligence=result_intelligence,
+            self_healing=self_healing,
         )
 
         # 3. Deterministically render Semantic HTML (Single authoritative deliverable, atomic publication)

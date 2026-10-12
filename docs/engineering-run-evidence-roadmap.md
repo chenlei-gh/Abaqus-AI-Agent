@@ -2239,3 +2239,80 @@ For full requirements backlog, input/output schemas, anti-hallucination constrai
   - 新增假图/损坏 PNG 拒绝、重复文件名拦截、旧报告锁定拦截、门禁失败原子零泄露、签名篡改拦截等专项负向测试。
   - 全仓 988 项自动化回归测试全部通过 (988 passed, 0 failed, 0 skipped)。
   - `machine_validation/` 黄金基线资产 100% 保持只读未篡改状态。
+
+---
+
+## 29. Phase P2: 统一正式工程报告系统收敛与交付闭环 (Report System Convergence & Single Delivery Pipeline)
+
+**版本号：** 2026-10-12  
+**基线提交：** `92e8bb419c17b046db41b82117b3c344108e3091` (`Tighten temperature bounds and stress invariants`)  
+**战略目的：** 只保留一条正式工程报告生成与交付路径，充分复用现有模块，消除重复实现、契约冲突和历史遗留设计，确保报告内容、真实 ODB 结果、工程图片、验收结论及最终交付状态严格一致。
+
+### 29.1 唯一正式报告架构原则 (Iron Rules)
+
+1. **唯一正式报告生成流**：
+   ```text
+   工程需求与分析任务
+       ↓
+   Intent / PhysicsDomain / ResultRequirement
+       ↓
+   模型构建、预检与求解
+       ↓
+   真实求解产物：ODB、求解日志及相关文件
+       ↓
+   结果提取与工程证据整理
+       ↓
+   结果验收与必要的工程判定 (evaluate_production_acceptance)
+       ↓
+   统一报告内容组装 (EngineeringReportData)
+       ↓
+   工程图片生成、筛选及证据校验 (figure_selector + odb_rendering)
+       ↓
+   统一报告渲染 (renderer: Markdown & HTML 驱动自同一规范化数据)
+       ↓
+   报告完整性与交付资格校验 (DeterministicReportPipeline)
+       ↓
+   唯一正式报告及明确的交付状态 (ReportDeliveryCard / ArtifactPointer)
+   ```
+2. **消除双轨制与重复构建**：
+   - 严禁先生成一份普通报告字符串，再生成另一份确定性报告并覆盖前者。
+   - 不为两种报告维护重复的数据模型、模板、渲染器、验收规则或交付状态。
+   - Markdown 和 HTML 交付物必须由同一份规范化报告数据渲染。
+   - 诊断文本与任务失败状态卡片可保留，但不得作为另一条报告交付路径，亦不得误标为合格工程报告。
+3. **能力收敛不减损**：
+   - 严格保留真实 ODB 读取、Viewer 工程图片生成、图片与运行/ODB/场变量因果绑定、交付门禁强校验、原子化发布能力。
+   - 严禁新建冗余的 `ReportService`、`EvidenceStoreV2`、新的报告状态机或独立编排层。
+4. **零假图与 Fail-Closed 门禁**：
+   - 必需图片缺失、损坏、哈希不匹配或证据失效时，正式报告交付坚决被拒（`PermissionError` 或 `DELIVERY_BLOCKED`），严禁用占位图或旧图糊弄通过。
+
+### 29.2 核心缺陷与工程冲突攻坚矩阵 (P0 / P1)
+
+| 优先级 | 缺陷描述 | 源码定位 | 整改要求与退出准则 |
+| :--- | :--- | :--- | :--- |
+| **P0-1** | **`agent.py` 双重报告构建与覆盖** | `src/abaqus_ai_agent/agent.py` | 消除双轨生成逻辑，收敛为唯一的正式报告管线调用；确保仅产出一份正式交付报告。 |
+| **P0-2** | **`all_figures` 与 `figure_selection.specs` 冲突** | `src/abaqus_ai_agent/agent.py` & `reporting/figure_selector.py` | 明确正式报告必需图（带 Spec + 强凭证校验）与辅助产物的边界；合法辅助图不阻断正式交付，未授权图片绝不混入正式报告。 |
+| **P0-3** | **正式管线异常时残留旧报告内容** | `src/abaqus_ai_agent/agent.py` | 管线异常或 `DELIVERY_BLOCKED` 时，彻底清空任何早期报告字符串，返回纯诊断信息，杜绝旧报告被误作正式交付凭证。 |
+| **P0-4** | **验收状态、报告状态与交付卡片语义撕裂** | `src/abaqus_ai_agent/acceptance.py` & `reporting/pipeline.py` | 统一最终交付结论映射：`PASS`（全条件满足）、`FAIL`（物理失败优先）、`BLOCKED`（缺条件/证据）、`INCOMPLETE`（未完成），杜绝状态互斥或掩盖。 |
+| **P1-1** | **AnalysisRun 到报告组装的证据链路完整性** | `src/abaqus_ai_agent/execution/analysis_run.py` & `contracts/report.py` | 确保 `AnalysisRun` 内的提取证据、输入哈希与工件清单无损传递至 `EngineeringReportData`，不出现局部变量丢失。 |
+| **P1-2** | **统一渲染器单源码驱动** | `src/abaqus_ai_agent/reporting/renderer.py` | Markdown 与 HTML 由统一的 `EngineeringReportData` 实例渲染，杜绝在两个渲染器中维护各自独立的组装逻辑。 |
+
+### 29.3 六阶段收敛实施路线 (Phased Implementation Plan)
+
+- [x] **阶段 A：真实调用图与代码资产审计 (Audit & Trace)**
+  - 追踪用户请求入口到报告交付全链路（成功路径与失败路径）。
+  - 建立模块资产清单：保留、保留并修复、整合、废弃。
+- [x] **阶段 B：报告生成入口与数据契约统一 (Unify Entry & Data Contract)**
+  - 明确 `DeterministicReportPipeline` 为唯一正式交付管道。
+  - 统一由 `EngineeringReportData` 作为单源码承载结构。
+- [x] **阶段 C：工程图片链路与规格冲突攻坚 (Fix Figures & Specs Conflict)**
+  - 解决 `all_figures` 与 `figure_selection.specs` 边界问题。
+  - 保持 `figure_selector.py` 证据校验（run_id, input_hash, odb_sha, png 校验, session token）。
+- [x] **阶段 D：验收与交付状态严格闭环 (Acceptance & Delivery Alignment)**
+  - 封堵正式报告失败时旧字符串残留漏洞。
+  - 确保四维判定模型（PASS/FAIL/BLOCKED/INCOMPLETE）穿透到最终任务结果。
+- [x] **阶段 E：反例测试驱动与全量回归 (TDD Negative Matrix & Regression)**
+  - 补充双报告消除、辅助图容忍、必需图缺失阻断、状态一致性、旧报告清空等反例测试。
+  - 执行全仓 regression tests（1098 项全部通过，0 failed, 0 warnings）。
+- [ ] **阶段 F：真机验证与 Git 交付 (Live Abaqus Gate & Release)**
+  - 明确区分代码单测验证与 Abaqus 2025 真机实测状态。
+  - 提交并推送代码，核验 CI 矩阵全绿。
