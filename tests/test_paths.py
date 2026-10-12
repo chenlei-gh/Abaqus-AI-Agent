@@ -372,6 +372,27 @@ def test_subdirectory_containment_and_run_id_validation(tmp_path):
     assert e_dir.is_relative_to(ctx.evidence_dir)
 
 
+def test_validate_identifier_cross_platform_posix_altsep_none(monkeypatch, tmp_path):
+    """P0-2 Cross-platform Contract: In POSIX environments where os.altsep is None,
+    _validate_identifier must NOT treat empty string as separator, and must allow valid identifiers.
+    """
+    import os
+    monkeypatch.setattr(os, "altsep", None)
+    ext_root = tmp_path / "ProjectPosixTest"
+    ctx = create_external_project_context(ext_root)
+
+    # Legitimate identifiers must succeed without false positives
+    ctx._validate_identifier("run_abc_123", "run_id")
+    ctx._validate_identifier("flange.inp", "source_filename")
+    ctx._validate_identifier("assembly.cae", "target_filename")
+    ctx._validate_identifier("123e4567-e89b-12d3-a456-426614174000", "run_id")
+
+    # Path traversal with / or \ must still be rejected
+    for bad in ("run/abc", "run\\abc", "../escape", "..\\escape"):
+        with pytest.raises(ValueError):
+            ctx._validate_identifier(bad, "run_id")
+
+
 def test_prepare_working_copy_overwrite_protection_and_containment(tmp_path):
     """P0-2 Contract: prepare_working_copy strictly protects input/ and working/ boundaries
     and forbids accidental overwrite of existing working copies without overwrite=True.

@@ -70,7 +70,8 @@ class ExternalProjectContext:
         """Reject path separators, dot-dot traversal, and malicious characters."""
         if not name or not isinstance(name, str):
             raise ValueError(f"Invalid {field_name}: identifier must be a non-empty string.")
-        if any(sep in name for sep in ("/", "\\", os.sep, os.altsep or "")):
+        seps = {s for s in ("/", "\\", os.sep, os.altsep) if s}
+        if any(sep in name for sep in seps):
             raise ValueError(f"Path traversal security violation: {field_name} '{name}' contains path separators.")
         if ".." in name:
             raise ValueError(f"Path traversal security violation: {field_name} '{name}' contains relative traversal '..'.")
