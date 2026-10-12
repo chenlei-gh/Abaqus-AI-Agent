@@ -2313,6 +2313,9 @@ For full requirements backlog, input/output schemas, anti-hallucination constrai
 - [x] **阶段 E：反例测试驱动与全量回归 (TDD Negative Matrix & Regression)**
   - 补充双报告消除、辅助图容忍、必需图缺失阻断、状态一致性、旧报告清空等反例测试。
   - 执行全仓 regression tests（1098 项全部通过，0 failed, 0 warnings）。
-- [ ] **阶段 F：真机验证与 Git 交付 (Live Abaqus Gate & Release)**
-  - 明确区分代码单测验证与 Abaqus 2025 真机实测状态。
-  - 提交并推送代码，核验 CI 矩阵全绿。
+- [x] **阶段 F-1：Git 交付与远程 CI 验证 (Git Delivery & Remote CI Gate)**
+  - 代码提交并推送到 `origin/main`（Commit `a80dc87`，工作区干净）。
+  - GitHub Actions CI 矩阵通过（Run #984，6/6 任务全部 PASS）。
+- [ ] **阶段 F-2：Abaqus 2025 真机实测与 Viewer 抓图验证 (Live Abaqus Gate - Pending Lab Machine)**
+  - 明确区分代码/自动化测试验证与 Abaqus 2025 真机实测状态。
+  - 在配备 Abaqus 2025 的 Windows 真机环境中，独立验证端到端真实求解、ODB 云图提取与报告交付闭环。
