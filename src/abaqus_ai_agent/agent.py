@@ -67,6 +67,41 @@ class AbaqusAIAgent:
         from .contracts.report import EngineeringReportData
         return EngineeringReportData.from_analysis(run, title=title, objective=objective, **sections)
 
+    def export_odb_animation(
+        self,
+        odb_path: Any,
+        output_path: Optional[Any] = None,
+        field_name: str = "U",
+        component: Optional[str] = "magnitude",
+        step_name: Optional[str] = None,
+        view_orientation: str = "Iso",
+        frames: int = 24,
+        duration_ms: int = 100,
+        launcher: Optional[str] = None,
+        timeout: int = 240,
+    ) -> Any:
+        """Export authentic finite element contour/deformation animation from ODB via headless Abaqus Viewer."""
+        from pathlib import Path
+        from .execution.odb_rendering import render_odb_animation_headless
+        if output_path is None:
+            from .paths import resolve_deliverables_root
+            odb_stem = Path(odb_path).stem
+            output_path = resolve_deliverables_root() / f"{odb_stem}_{field_name}_animation.gif"
+
+        eff_launcher = launcher or getattr(self.executor, "launcher", None)
+        return render_odb_animation_headless(
+            odb_path=odb_path,
+            output_path=output_path,
+            variable_label=field_name,
+            component_or_invariant=component,
+            step_name=step_name,
+            view_orientation=view_orientation,
+            frames=frames,
+            duration_ms=duration_ms,
+            launcher=eff_launcher,
+            timeout=timeout,
+        )
+
     def extract_result_intelligence(
         self,
         run: Any,
@@ -680,9 +715,17 @@ class AbaqusAIAgent:
         req_lower = req_text.lower()
         wants_mesh_kw = any(w in req_lower for w in ("网格", "mesh", "离散", "discretization"))
         wants_anim_kw = any(w in req_lower for w in ("动图", "动画", "anim", "时程", "gif", "演化"))
+        physics_domain_lower = str(capability.physics_domain or "").lower()
+        intent_kind_lower = str(getattr(intent, "kind", "") or "").lower()
+        intent_desc_lower = str(getattr(intent, "description", "") or "").lower()
+        is_dynamic_case = (
+            any(k in physics_domain_lower for k in ("dynamic", "transient", "mbd", "explicit", "vibration"))
+            or any(k in intent_kind_lower for k in ("dynamic", "transient", "mbd", "explicit", "vibration"))
+            or any(k in intent_desc_lower for k in ("dynamic", "mbd", "multibody", "瞬态", "动力学", "多体"))
+        )
         req_prod = bool(kwargs.get("require_production", False))
         inc_mesh = bool(kwargs.get("include_mesh", req_prod or wants_mesh_kw))
-        inc_anim = bool(kwargs.get("include_animation", req_prod or wants_anim_kw))
+        inc_anim = bool(kwargs.get("include_animation", req_prod or wants_anim_kw or is_dynamic_case))
 
         figure_selection = select_engineering_figures(
             intent=intent,

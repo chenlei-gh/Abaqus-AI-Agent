@@ -2674,7 +2674,8 @@ Abaqus-AI-Agent/
 2. **阶段 F-2：Abaqus 2025 真机实测与 Viewer 抓图验证 (Live Abaqus Gate)** $\to$ 在实验室物理机上作为常驻门禁持续验证。
 3. **空间拾取进阶演进 (Track GA-2A.5)** $\to$ 视口屏幕点击 $(u,v) \to$ 空间射线投射 $\to$ 物理几何全链路 Golden 闭环。
 4. **Phase 3 & Phase 4 远期产品化演进** $\to$ Agent 自主性需求澄清、求解故障自愈多轮编排及商业级工程工作台。
-5. **核心仓库与外部工程项目空间隔离机制 (REQ-ISO-001~005)** $\to$ P0/P1 代码架构与 23 项隔离专项自动化测试已闭环，1142 项全量自动化回归通过；待真机物理求解环境触发 P2 端到端验证（详见 PRD 第 15 章与本路线图第 32 节）。
+5. **核心仓库与外部工程项目空间隔离机制 (REQ-ISO-001~005)** $\to$ P0/P1 代码架构与 23 项隔离专项自动化测试已闭环，全仓全量自动化回归通过；待真机物理求解环境触发 P2 端到端验证（详见 PRD 第 15 章与本路线图第 32 节）。
+6. **Abaqus 原生无头动画渲染与单文件 HTML 报告交付闭环 (方案 A)** $\to$ 核心功能已完整落地并闭环，42 项动画及报告测试全绿，全仓 1147 项自动化测试 100% PASS（详见本路线图第 33 节）。
 
 ---
 
@@ -2765,3 +2766,74 @@ Abaqus-AI-Agent/
 | **能量可信度** | 系统机械能变化符合重力保守场特征，数值耗散与阻尼漂移在工程可信阈值内。 |
 | **空间绝对隔离** | 核心仓库 `runs/` 与工作区零产物泄漏，所有输入、过程、求解和交付物 100% 位于 `D:\AbaqusProjects\Jansen_Mechanism\`。 |
 | **报告与证据闭环** | 正式 HTML 报告图件与数据源自真实 ODB，生成防篡改 Evidence Manifest，最终 CAE 可被 Abaqus/CAE 重新加载。 |
+
+---
+
+## 33. Phase P1.3+: Abaqus 原生静默无头动画渲染与单文件 HTML 报告交付闭环 (方案 A 实施规划与最新基线状态)
+
+**需求对应：** 用户针对仿真结果可视化与交付报告的新增调整需求（HTML 动态仿真动图、全景 3D 效果、关键时程展示与免手动打开 Abaqus 纯自动交付）  
+**实施策略：** 采纳**方案 A（Abaqus 原生静默无头动画渲染与单文件 HTML 报告嵌入）**  
+**当前状态：** 🟢 **IMPLEMENTED (CODE & AUTOMATION BASELINE VERIFIED)** (全仓 1147 项回归测试 100% PASS)  
+**工程原则：** 核心产品仓库先行落地、外围工程项目严格隔离（暂不做任何调整）、免第三方外部播放器、无头自动化静默执行。
+
+### 33.1 核心需求痛点与方案裁决
+
+1. **痛点与工程诉求**：
+   - 传统的离线 CAE 报告仅展示静态峰值应力云图，无法直观展现动力学/时程大变形机构运动过程、应力波传播及接触状态演化；
+   - 拒绝要求工程师手动打开 Abaqus CAE 录屏或手动导出动图，要求由 AI Agent 纯无头（Headless）静默完成全流程；
+   - 交付物必须为单一独立的 HTML 文件，严禁依赖外挂视频文件、外置播放器插件或网络图床，保证跨平台即开即播。
+2. **方案裁决（采纳方案 A）**：
+   - **方案 A 原生无头渲染路线**：由 Agent 后台调度真实 `abaqus viewer -noGUI <script.py>`，从物理 ODB 导出高保真变形/应力序列帧，并在 Python 端使用 PIL 自适应调色板（Adaptive Palette）合成为高保真动态 GIF。
+   - **报告自包含内嵌**：将生成的动态 GIF 转换为 Base64 Data URI，直接嵌入单文件 HTML 报告，附带 `[Abaqus 原生仿真动图 / Simulation Animation]` 标识，彻底打通“无头求解 $\to$ 原生提取 $\to$ 动图渲染 $\to$ 独立报告”交付闭环。
+
+### 33.2 方案 A 架构契约与关键规则
+
+```text
+真实求解产物 (.odb)
+       │
+       ▼
+[ODB 动画规格规划]
+  - 动力学/瞬态/MBD：时程演化，单向循环播放 (is_ping_pong=False, loop=0)
+  - 稳态静力学：比例缩放，平滑往复展示 (is_ping_pong=True)
+  - 自定义帧数采样 (req.animation_frames, 默认 20~30 帧) 与视角配置 (ISO/FRONT/TOP)
+       │
+       ▼
+[无头 Abaqus Viewer 批处理调度] (abaqus viewer -noGUI)
+  - 静默离屏视口渲染，高精度导出序列帧 PNG
+  - 纯净沙盒隔离，错误码 fail-closed 拦截
+       │
+       ▼
+[动图合成与完整性校验]
+  - PIL 自适应量化调色板 (im.convert("P", palette=ADAPTIVE)) 杜绝闪烁与失真
+  - verify_gif_image_integrity 校验 GIF87a/GIF89a 魔数与非零尺寸
+       │
+       ▼
+[单文件 HTML 报告交付]
+  - Base64 Data URI 深度内嵌
+  - 离线免依赖开箱即播，受控验收单出口放行
+```
+
+1. **时程与物理工况自动规划规则**：
+   - **瞬态动力学与多体工况 (Dynamic / Transient / MBD / Explicit)**：真实反映不可逆物理时间演化，默认强制开启单向循环播放模式（`is_ping_pong=False`, `loop=0`），坚决杜绝将时间历程强制倒放的伪物理现象；
+   - **单工况静力学 (Static)**：基于主特征模态或载荷比例缩放，采用平滑往复 ping-pong 动画展示变形趋势；
+   - **多视角与帧率自适应**：支持按需自定义采样帧率，默认生成 20~30 帧紧凑流畅动图，平衡视觉保真度与报告体积。
+2. **外围工程项目边界隔离约束**：
+   - 本次无头动画渲染能力变更全部集中于核心产品仓库内部（`src/` 与 `tests/`）；
+   - 外围实际工程项目（如 `D:\AbaqusProjects\Jansen_Mechanism`）作为独立用户项目空间，**遵照用户明确指示，先不做任何调整**，后续在用户显式授权后再行按需验证。
+
+### 33.3 实施与代码落地记录
+
+- [x] **核心渲染引擎加固 (`src/abaqus_ai_agent/execution/odb_rendering.py`)**：
+  - 修复硬编码 15 帧限制，支持 `req.animation_frames` 自定义采样（默认 20~30 帧）；
+  - 完善 `render_odb_animation_headless(...)` 批处理接口，执行离屏无头渲染与校验；
+  - 实现 `verify_gif_image_integrity(...)` 二进制魔数与 IHDR 完整性检验；
+  - 采用 PIL `ADAPTIVE` 调色板消除颜色失真与闪烁。
+- [x] **Agent 产品主入口贯穿 (`src/abaqus_ai_agent/agent.py`)**：
+  - 在 `AbaqusAIAgent` 暴露 `export_odb_animation(odb_path, ...)` 顶层便捷接口；
+  - 在 `solve_requirement()` 中自动探测动力学工况（`dynamic`, `mbd`, `transient`, `explicit`），默认开启 `include_animation=True`。
+- [x] **统一报告渲染器嵌入 (`src/abaqus_ai_agent/reporting/renderer.py`)**：
+  - GIF 动图以 Base64 Data URI 原生内嵌，带有 `[Abaqus 原生仿真动图 / Simulation Animation]` 醒目标识；
+  - 兼容静态云图与动态动画共存，保证交付单文件 HTML 跨终端离线即开即播。
+- [x] **自动化测试全量回归守护**：
+  - 42 项专项测试（覆盖动画生成、帧数控制、ping-pong 开关、GIF 二进制魔数校验、HTML Base64 嵌入等）全部通过；
+  - 全仓自动化回归测试达 **1147 passed**（0 failed, 0 skipped）。

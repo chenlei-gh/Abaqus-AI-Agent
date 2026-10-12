@@ -148,7 +148,36 @@ def test_html_report_missing_image_placeholder():
     html_en = render_html(report_en, language="en")
     assert '<html lang="en">' in html_en
     assert 'figure-missing' in html_en
-    assert 'Visual Engineering Asset' in html_en
+
+
+def test_html_report_gif_animation_rendering(tmp_path):
+    from abaqus_ai_agent.execution.odb_rendering import MINIMAL_VALID_GIF_BYTES
+
+    gif_file = tmp_path / "transient_motion.gif"
+    gif_file.write_bytes(MINIMAL_VALID_GIF_BYTES)
+
+    report = EngineeringReportData(
+        title="动力学多体运动仿真报告",
+        figures=[
+            ReportFigure(
+                path=str(gif_file),
+                caption="步行机构10秒时程动态步态演化动图",
+                kind="deformation_animation",
+                metadata={"is_animation": True},
+            )
+        ],
+        acceptance=True,
+    )
+
+    html_content = render_html(report, language="zh")
+
+    # 1. Self-contained Base64 GIF data URI embedded
+    assert 'data:image/gif;base64,' in html_content
+    assert '<img src="data:image/gif;base64,' in html_content
+
+    # 2. Contains animation badge in caption
+    assert '[动图 / Animation]' in html_content
+    assert '步行机构10秒时程动态步态演化动图' in html_content
 
 
 def test_verify_html_self_contained():

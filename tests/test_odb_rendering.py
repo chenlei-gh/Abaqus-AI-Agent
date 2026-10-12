@@ -605,3 +605,101 @@ def test_render_evidence_actual_cross_process_subprocess_audit(tmp_path):
     env_none.pop("ABAQUS_RENDER_SIGNING_SECRET", None)
     p_none = subprocess.run([sys.executable, str(probe_script), str(evidence_json_path)], env=env_none, capture_output=True, text=True)
     assert p_none.returncode == 2
+
+
+def test_generate_headless_viewer_script_animation_options():
+    """Verify headless viewer script generation handles animation parameters and sampling."""
+    req_anim = ContourPlotRequest(
+        output_filename="motion.gif",
+        variable_label="U",
+        component_or_invariant="Magnitude",
+        is_animation=True,
+        animation_frames=30,
+        animation_duration_ms=80,
+        is_ping_pong=False,
+    )
+
+    script = generate_headless_viewer_script(
+        odb_path="dummy.odb",
+        requests=[req_anim],
+        output_dir="dummy_out",
+    )
+
+    assert "target_samples = 30" in script
+    assert "_anim_frames_0" in script
+    assert "session.printToFile(fileName=frame_target, format=PNG, canvasObjects=(vp,))" in script
+    assert "target_step.frames" in script
+
+
+def test_render_odb_animation_headless_missing_odb(tmp_path):
+    """Verify render_odb_animation_headless fails closed when ODB does not exist."""
+    from abaqus_ai_agent.execution.odb_rendering import render_odb_animation_headless
+
+    non_existent = tmp_path / "does_not_exist.odb"
+    out_gif = tmp_path / "anim.gif"
+    with pytest.raises(FileNotFoundError, match="Target ODB file does not exist"):
+        render_odb_animation_headless(
+            odb_path=non_existent,
+            output_path=out_gif,
+        )
+
+
+def test_render_odb_animation_headless_and_agent_integration(tmp_path, monkeypatch):
+    """Verify end-to-end headless animation generation and AbaqusAIAgent helper integration."""
+    from abaqus_ai_agent.agent import AbaqusAIAgent
+    from abaqus_ai_agent.execution.odb_rendering import (
+        MINIMAL_VALID_GIF_BYTES,
+        render_odb_animation_headless,
+        verify_gif_image_integrity,
+    )
+
+    valid_odb = tmp_path / "authentic.odb"
+    valid_odb.write_bytes(b"\x89HDF\r\n\x1a\n" + b"\x00" * 4096)
+
+    out_gif = tmp_path / "test_motion.gif"
+
+    def mock_headless_render(odb_path, requests, output_dir, **kwargs):
+        out_gif.write_bytes(MINIMAL_VALID_GIF_BYTES)
+        return [out_gif]
+
+    monkeypatch.setattr(
+        "abaqus_ai_agent.execution.odb_rendering.render_odb_contours_headless",
+        mock_headless_render,
+    )
+
+    result_path = render_odb_animation_headless(
+        odb_path=valid_odb,
+        output_path=out_gif,
+        variable_label="U",
+        component_or_invariant="Magnitude",
+        frames=20,
+        duration_ms=90,
+    )
+
+    assert result_path == out_gif
+    assert result_path.is_file()
+    w, h = verify_gif_image_integrity(result_path)
+    assert w > 0 and h > 0
+
+    # Also verify AbaqusAIAgent.export_odb_animation wrapper
+    agent = AbaqusAIAgent(executor=None)
+    out_agent_gif = tmp_path / "agent_motion.gif"
+
+    def mock_agent_headless_render(odb_path, requests, output_dir, **kwargs):
+        out_agent_gif.write_bytes(MINIMAL_VALID_GIF_BYTES)
+        return [out_agent_gif]
+
+    monkeypatch.setattr(
+        "abaqus_ai_agent.execution.odb_rendering.render_odb_contours_headless",
+        mock_agent_headless_render,
+    )
+
+    agent_result = agent.export_odb_animation(
+        odb_path=valid_odb,
+        output_path=out_agent_gif,
+        field_name="S",
+        component="Mises",
+        frames=15,
+    )
+    assert agent_result == out_agent_gif
+    assert agent_result.is_file()

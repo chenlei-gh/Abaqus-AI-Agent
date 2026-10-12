@@ -460,6 +460,7 @@ class ContourPlotRequest:
     is_animation: bool = False
     animation_frames: int = 12
     animation_duration_ms: int = 120
+    is_ping_pong: Optional[bool] = None
 
 
 def generate_headless_viewer_script(
@@ -702,19 +703,21 @@ def generate_headless_viewer_script(
         ]
 
         if is_anim:
+            target_anim_frames = max(2, int(getattr(req, "animation_frames", 20) or 20))
             code_lines += [
                 f"    # 5. Export authentic multi-frame animation sequence",
                 f"    anim_frames_dir = os.path.join(out_dir, '_anim_frames_{idx}')",
                 "    if not os.path.exists(anim_frames_dir):",
                 "        os.makedirs(anim_frames_dir)",
                 "    n_total_frames = len(target_step.frames)",
+                f"    target_samples = {target_anim_frames}",
                 "    if n_total_frames > 2:",
-                "        sample_count = min(15, n_total_frames)",
+                "        sample_count = min(target_samples, n_total_frames)",
                 "        stride = max(1, n_total_frames // sample_count)",
                 "        chosen_indices = list(range(0, n_total_frames, stride))",
                 "        if (n_total_frames - 1) not in chosen_indices:",
                 "            chosen_indices.append(n_total_frames - 1)",
-                "        for f_seq, f_idx in enumerate(chosen_indices[:16]):",
+                f"        for f_seq, f_idx in enumerate(chosen_indices[:target_samples]):",
                 "            vp.odbDisplay.setFrame(step=target_step.name, frame=f_idx)",
                 "            frame_target = os.path.join(anim_frames_dir, 'frame_%03d' % f_seq)",
                 "            session.printToFile(fileName=frame_target, format=PNG, canvasObjects=(vp,))",
@@ -722,8 +725,8 @@ def generate_headless_viewer_script(
                 "        eff_last_idx = len(target_step.frames) - 1",
                 f"        eff_f = eff_last_idx if {int(req.frame_index)} == -1 else {int(req.frame_index)}",
                 "        vp.odbDisplay.setFrame(step=target_step.name, frame=eff_f)",
-                "        for f_seq in range(12):",
-                "            scale_v = 0.05 + 0.95 * (float(f_seq) / 11.0)",
+                f"        for f_seq in range({target_anim_frames}):",
+                f"            scale_v = 0.05 + 0.95 * (float(f_seq) / float(max(1, {target_anim_frames} - 1)))",
                 "            vp.odbDisplay.commonOptions.setValues(deformationScaling=UNIFORM, uniformScaleFactor=scale_v)",
                 "            frame_target = os.path.join(anim_frames_dir, 'frame_%03d' % f_seq)",
                 "            session.printToFile(fileName=frame_target, format=PNG, canvasObjects=(vp,))",
@@ -836,10 +839,14 @@ def render_odb_contours_headless(
                             except Exception:
                                 pass
                         if frames:
-                            dur = max(50, int(getattr(req, "animation_duration_ms", 120)))
-                            # Ping-pong loop for seamless oscillation
-                            ping_pong = frames + frames[-2:0:-1]
-                            p_frames = [f.convert("P", palette=_PILImage.ADAPTIVE) for f in ping_pong]
+                            dur = max(20, int(getattr(req, "animation_duration_ms", 100)))
+                            # Ping-pong loop for scale-factor / static deformation; forward loop for irreversible time-history dynamics
+                            use_ping_pong = req.is_ping_pong if req.is_ping_pong is not None else False
+                            if use_ping_pong and len(frames) > 2:
+                                anim_seq = frames + frames[-2:0:-1]
+                            else:
+                                anim_seq = frames
+                            p_frames = [f.convert("P", palette=_PILImage.ADAPTIVE) for f in anim_seq]
                             p_frames[0].save(
                                 scratch_target,
                                 save_all=True,
@@ -1052,3 +1059,60 @@ def render_authentic_visualizations(
         f.metadata["render_execution_evidence"] = render_evidence.to_dict()
 
     return figures
+
+
+def render_odb_animation_headless(
+    odb_path: Union[str, Path],
+    output_path: Union[str, Path],
+    variable_label: str = "U",
+    component_or_invariant: Optional[str] = "magnitude",
+    step_name: Optional[str] = None,
+    view_orientation: str = "Iso",
+    frames: int = 24,
+    duration_ms: int = 100,
+    plot_state: str = "CONTOURS_ON_DEF",
+    is_ping_pong: Optional[bool] = None,
+    launcher: Optional[str] = None,
+    timeout: int = 240,
+) -> Path:
+    """Headless entry point to render an authentic Abaqus Viewer animation directly from an ODB.
+
+    Executes off-screen headless Abaqus Viewer (`abaqus viewer -noGUI`), captures genuine
+    step/frame field contours or deformation evolution, and compiles into an authentic,
+    high-framerate, self-contained GIF image verified by Pillow.
+    """
+    odb = Path(odb_path).resolve()
+    if not odb.is_file():
+        raise FileNotFoundError(f"Target ODB file does not exist: {odb}")
+
+    out_file = Path(output_path).resolve()
+    out_dir = out_file.parent
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    req = ContourPlotRequest(
+        output_filename=out_file.name,
+        variable_label=variable_label,
+        component_or_invariant=component_or_invariant,
+        step_name=step_name,
+        plot_state=plot_state,
+        view_orientation=view_orientation,
+        is_animation=True,
+        animation_frames=frames,
+        animation_duration_ms=duration_ms,
+        is_ping_pong=is_ping_pong,
+        caption=f"{variable_label} animation",
+    )
+
+    produced = render_odb_contours_headless(
+        odb_path=odb,
+        requests=[req],
+        output_dir=out_dir,
+        launcher=launcher,
+        timeout=timeout,
+    )
+
+    if not produced or not out_file.is_file() or out_file.stat().st_size == 0:
+        raise RuntimeError(f"Failed to produce authentic animation at {out_file}")
+
+    verify_gif_image_integrity(out_file)
+    return out_file

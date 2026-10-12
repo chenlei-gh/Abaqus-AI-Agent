@@ -383,6 +383,12 @@ P1.0 产品主入口已彻底消除高层自然语言需求与底层 20 个 L4 �
   - 包含工程合格性评定结论（安全系数 $SF = \sigma_{\text{yield}}/\sigma_{\max}$、刚度变形校核、疲劳预期寿命）；
   - 包含密码学级 `EvidenceManifestV2` 数字验签徽章（可追溯 INP/ODB 的 SHA-256 与运行 ID）。
 
+#### REQ-P1-033: 原生静默无头动画渲染与单文件 HTML 即开即播 (方案 A 闭环)
+- 调度真实 `abaqus viewer -noGUI` 后台无头渲染，从物理 ODB 导出变形/应力时程序列帧并由 PIL 自适应调色板（Adaptive Palette）合成高保真 GIF 动图；
+- 动图自动转换为 Base64 Data URI 原生内嵌至单文件独立 HTML 报告，带有 `[Abaqus 原生仿真动图 / Simulation Animation]` 官方标注，离线免依赖开箱即播；
+- 动力学与 MBD 工况默认开启物理单向时程循环播放（`loop=0`），杜绝倒放 ping-pong；静力学工况支持往复平滑变形动画；
+- 变更范围严格收敛于核心仓库，外围工程项目保持物理隔离与暂不调整。
+
 ---
 
 ## 七、P1.4 求解故障智能诊断与自愈闭环 (Solver Doctor)
@@ -440,9 +446,10 @@ P1.0 产品主入口已彻底消除高层自然语言需求与底层 20 个 L4 �
 | **REQ-P1-021** | 透明网格推荐与依据记录 | P1.2 | 几何特征尺寸 | 网格尺寸、单元类型、依据 | Tier B | 严禁无依据默认 5mm C3D8R | 🚧 **READY** |
 | **REQ-P1-022** | 载荷/约束边界歧义消除 | P1.2 | 约束与载荷集合 | 欠约束告警、对称面建议 | Tier B | 刚体机构未约束阻断求解 | 🚧 **READY** |
 | **REQ-P1-023** | 需求澄清标准协议 | P1.2 | 残缺/冲突需求 | `NEEDS_CLARIFICATION` | Tier B | 明确输出缺失字段与推荐选项 | 🚧 **READY** |
-| **REQ-P1-030** | 无头自动化 ODB 云图提取 | P1.3 | 真实 ODB 场变量 | 高清 PNG 云图与 Hotspot | Tier A | 缺失场变量无法生成伪造云图 | 📋 **PLANNED** |
-| **REQ-P1-031** | 动力学历程曲线与守恒图表 | P1.3 | 真实 ODB 历史变量 | 能量守恒曲线、P-u 曲线 | Tier A | 伪能比 $>5\%$ 标红阻断 | 📋 **PLANNED** |
-| **REQ-P1-032** | 独立交付级工程报告生成 | P1.3 | 任务结果与验签凭证 | 单文件独立 HTML 报告 | Tier B | 验签失败报告显示 TAMPERED | 📋 **PLANNED** |
+| **REQ-P1-030** | 无头自动化 ODB 云图提取 | P1.3 | 真实 ODB 场变量 | 高清 PNG 云图与 Hotspot | Tier A | 缺失场变量无法生成伪造云图 | 🟢 **QUALIFIED** |
+| **REQ-P1-031** | 动力学历程曲线与守恒图表 | P1.3 | 真实 ODB 历史变量 | 能量守恒曲线、P-u 曲线 | Tier A | 伪能比 $>5\%$ 标红阻断 | 🟢 **QUALIFIED** |
+| **REQ-P1-032** | 独立交付级工程报告生成 | P1.3 | 任务结果与验签凭证 | 单文件独立 HTML 报告 | Tier B | 验签失败报告显示 TAMPERED | 🟢 **QUALIFIED** |
+| **REQ-P1-033** | 原生静默无头动画渲染与 HTML 内嵌 | P1.3+ | 真实 ODB 场/时程变量 | Base64 嵌入动图单文件报告 | Tier A | 方案 A 原生无头批处理渲染与自适应量化 | 🟢 **QUALIFIED** |
 | **REQ-P1-040** | 求解器发散特征深度诊断 | P1.4 | `.msg`, `.sta` 日志 | 发散根因诊断报告 | Tier A | 无法识别的发散安全退出 | 📋 **PLANNED** |
 | **REQ-P1-041** | 受控自愈策略库与自动重算 | P1.4 | 发散诊断结果 | 修复配置与自愈重算 | Tier A | 稳定能量超限即判定自愈无效 | 📋 **PLANNED** |
 | **REQ-P1-042** | 自愈审计追踪与防伪红线 | P1.4 | 修复前后两次 Run | 完整 Diff 对比明细 | Tier B | 严禁静默覆盖首次失败记录 | 📋 **PLANNED** |
@@ -742,7 +749,8 @@ Benchmark 必须区分软件回归与真实 Abaqus 物理验证。
 | Phase 4 | Deployment | ⚪ POST-FREEZE ROADMAP |
 | Phase 4 | Benchmark | ⚪ POST-FREEZE ROADMAP |
 | Phase 4 | Release | ⚪ POST-FREEZE ROADMAP |
-| 全阶段基础设施 | REQ-ISO-001~005 核心仓库与外部工程项目隔离 | 🟢 **IMPLEMENTED (CODE & AUTOMATION)** (P0/P1 代码架构与 23 项隔离专项自动化测试已闭环，1142 项全量回归通过；待具备 Abaqus 2025 许可环境执行 P2 物理真机端到端验证) |
+| 全阶段基础设施 | REQ-ISO-001~005 核心仓库与外部工程项目隔离 | 🟢 **IMPLEMENTED (CODE & AUTOMATION)** (P0/P1 代码架构与 23 项隔离专项自动化测试已闭环，全仓全量回归通过；待具备 Abaqus 2025 许可环境执行 P2 物理真机端到端验证) |
+| 全阶段基础设施 | 方案 A 原生静默无头动画渲染与单文件 HTML 报告交付 | 🟢 **IMPLEMENTED (CODE & AUTOMATION)** (42 项动画及报告测试全绿，全仓 1147 项全量回归通过) |
 
 > **冻结规则：** 后续开发必须先在本表归属需求；不得因为发现单个功能缺口而重新发明 Phase 或改变总体路线。已有能力优先复用；只有真实缺口才新增代码。
 
