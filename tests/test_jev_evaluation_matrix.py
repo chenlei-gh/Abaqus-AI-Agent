@@ -225,7 +225,7 @@ def test_jev_live_mode_authentic_payload_success():
             "solver": {"choice": "abaqus_standard", "confidence": 0.97},
             "well_constrained": {"probability": 0.98},
             "has_acceptance_criteria": {"probability": 0.95},
-            "completeness": {"score": 4.8, "levels": {5: 0.9}},
+            "completeness": {"score": 4.8, "levels": {4: 0.02, 5: 0.98}},
         }
     }
     with patch("urllib.request.urlopen", return_value=_make_mock_response(valid_payload)):
@@ -320,6 +320,33 @@ def test_jev_shadow_mode_handles_live_error_gracefully():
     diff = res.decision_bundle.shadow_diff
     assert diff["status"] == "LIVE_FAILED"
     assert "Network timed out" in diff["error"]
+
+
+def test_jev_shadow_mode_deep_sanitization():
+    """Shadow mode must deeply sanitize error logs, scrubbing URLs, query parameters, tokens, and credentials."""
+    router = JevIntentRouter(
+        api_key="sk-test",
+        api_url="https://example.com/intent/judge",
+        mode="shadow",
+    )
+
+    sensitive_error = urllib.error.URLError(
+        "Failed to connect to https://internal.corp.com:8443/v1/judge?api_key=sk-secretKey999&user=alice with Bearer secret-tok-123"
+    )
+    with patch("urllib.request.urlopen", side_effect=sensitive_error):
+        res = router.route(
+            "100mm悬臂梁端部施加1000N垂直载荷，材料为结构钢，固定根部，校核端部挠度不超过2.5mm。"
+        )
+
+    assert res.status == "ROUTED"
+    diff = res.decision_bundle.shadow_diff
+    assert diff["status"] == "LIVE_FAILED"
+    err = diff["error"]
+    assert "https://" not in err
+    assert "sk-secretKey999" not in err
+    assert "secret-tok-123" not in err
+    assert "[REDACTED_URL]" in err
+    assert "[REDACTED]" in err
 
 
 # ==============================================================================
@@ -598,6 +625,40 @@ def test_nested_distribution_and_levels_validation():
     }
     with patch("urllib.request.urlopen", return_value=_make_mock_response(invalid_levels_payload)):
         with pytest.raises(ExternalIntentApiError, match="Completeness level key out of range"):
+            router.route("100mm steel bar with 1000N load")
+
+    # 3. Distribution probability sum not normalized (~= 1.0)
+    unnormalized_dist_payload = {
+        "answers": {
+            "physics": {
+                "choice": "linear_static",
+                "confidence": 0.9,
+                "distribution": {"linear_static": 0.5, "steady_thermal": 0.2},
+            },
+            "units": {"choice": "MM_N_MPA", "confidence": 0.9},
+            "solver": {"choice": "abaqus_standard", "confidence": 0.9},
+            "well_constrained": {"probability": 0.9},
+            "has_acceptance_criteria": {"probability": 0.9},
+            "completeness": {"score": 4.0},
+        }
+    }
+    with patch("urllib.request.urlopen", return_value=_make_mock_response(unnormalized_dist_payload)):
+        with pytest.raises(ExternalIntentApiError, match="probability distribution must sum to 1.0"):
+            router.route("100mm steel bar with 1000N load")
+
+    # 4. Levels probability sum not normalized (~= 1.0)
+    unnormalized_levels_payload = {
+        "answers": {
+            "physics": {"choice": "linear_static", "confidence": 0.9},
+            "units": {"choice": "MM_N_MPA", "confidence": 0.9},
+            "solver": {"choice": "abaqus_standard", "confidence": 0.9},
+            "well_constrained": {"probability": 0.9},
+            "has_acceptance_criteria": {"probability": 0.9},
+            "completeness": {"score": 4.0, "levels": {4: 0.2, 5: 0.3}},
+        }
+    }
+    with patch("urllib.request.urlopen", return_value=_make_mock_response(unnormalized_levels_payload)):
+        with pytest.raises(ExternalIntentApiError, match="Completeness score levels distribution must sum to 1.0"):
             router.route("100mm steel bar with 1000N load")
 
 

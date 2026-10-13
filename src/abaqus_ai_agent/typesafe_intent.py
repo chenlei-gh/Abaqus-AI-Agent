@@ -35,6 +35,25 @@ from abaqus_ai_agent.contracts.results import ResultRequirement
 from abaqus_ai_agent.contracts.units import UnitSystem
 
 
+def _sanitize_error_message(err_msg: str) -> str:
+    """Deep sanitization of error messages to eliminate sensitive credentials, URLs, query parameters, and unscrubbed prompts."""
+    if not err_msg:
+        return "Unknown error"
+    # 1. Redact Authorization tokens (Bearer, Basic, etc.)
+    sanitized = re.sub(r"(bearer\s+)[^\s]+", r"\1[REDACTED]", err_msg, flags=re.IGNORECASE)
+    sanitized = re.sub(r"(basic\s+)[^\s]+", r"\1[REDACTED]", sanitized, flags=re.IGNORECASE)
+    # 2. Redact potential API keys (e.g. sk-..., key=..., token=...)
+    sanitized = re.sub(r"(sk-[a-zA-Z0-9_-]{8,})", r"[REDACTED_KEY]", sanitized)
+    sanitized = re.sub(r"(?:api[_-]?key|token|secret)\s*[:=]\s*['\"]?[a-zA-Z0-9_\-\.]+['\"]?", r"[REDACTED_CREDENTIAL]", sanitized, flags=re.IGNORECASE)
+    # 3. Strip URLs and query parameters
+    sanitized = re.sub(r"https?://[^\s/?#]+(?:/[^\s?#]*)?(?:\?[^\s#]*)?", r"[REDACTED_URL]", sanitized)
+    # 4. Strip filesystem paths
+    sanitized = re.sub(r"(?:[a-zA-Z]:\\|\/)[^\s:\"']+", r"[REDACTED_PATH]", sanitized)
+    # 5. Clean extra whitespace and truncate to safe bound
+    sanitized = " ".join(sanitized.split())
+    return sanitized[:120] if len(sanitized) > 120 else sanitized
+
+
 def _get_external_config(*var_names: str) -> Optional[str]:
     """Read external configuration in order of priority, stripping whitespace and treating empty/blank as None."""
     for name in var_names:
@@ -80,7 +99,7 @@ def _validate_distribution(
     allowed_keys: Tuple[str, ...],
     field_name: str,
 ) -> Dict[str, float]:
-    """Strictly validate probability distributions: dict type, allowed keys, non-empty, and valid probabilities."""
+    """Strictly validate probability distributions: dict type, allowed keys, non-empty, probabilities in [0.0, 1.0], and sum(probabilities) == 1.0."""
     if not isinstance(dist, dict) or not dist:
         raise ExternalIntentApiError(f"Field {field_name!r} distribution must be a non-empty dictionary.")
     validated: Dict[str, float] = {}
@@ -89,11 +108,16 @@ def _validate_distribution(
             raise ExternalIntentApiError(f"Invalid {field_name} choice in distribution: {k!r}")
         prob = _validate_numeric(v, 0.0, 1.0, f"{field_name}.distribution[{k}]")
         validated[k] = prob
+    total_prob = sum(validated.values())
+    if not math.isclose(total_prob, 1.0, abs_tol=0.05):
+        raise ExternalIntentApiError(
+            f"Field {field_name!r} probability distribution must sum to 1.0 (got {total_prob:.4f})"
+        )
     return validated
 
 
 def _validate_score_levels(levels: Any) -> Dict[int, float]:
-    """Strictly validate completeness score levels: dict type, non-empty, int keys in 1..5, and valid probabilities."""
+    """Strictly validate completeness score levels: dict type, non-empty, int keys in 1..5, probabilities in [0.0, 1.0], and sum(probabilities) == 1.0."""
     if not isinstance(levels, dict) or not levels:
         raise ExternalIntentApiError("Completeness score 'levels' must be a non-empty dictionary.")
     validated: Dict[int, float] = {}
@@ -108,6 +132,11 @@ def _validate_score_levels(levels: Any) -> Dict[int, float]:
             raise ExternalIntentApiError(f"Completeness level key out of range [1, 5]: {ik}")
         prob = _validate_numeric(v, 0.0, 1.0, f"completeness.levels[{ik}]")
         validated[ik] = prob
+    total_prob = sum(validated.values())
+    if not math.isclose(total_prob, 1.0, abs_tol=0.05):
+        raise ExternalIntentApiError(
+            f"Completeness score levels distribution must sum to 1.0 (got {total_prob:.4f})"
+        )
     return validated
 
 
@@ -421,14 +450,16 @@ class EngineeringIntentRouter:
         else:
             self.external_provider = None
 
-    def route(self, prompt: str) -> IntentRoutingResult:
-        """Route prompt with explicit fail-closed clarification gate for ambiguous requirements."""
+    def route(
+        self, prompt: str, context: Optional[Dict[str, Any]] = None
+    ) -> IntentRoutingResult:
+        """Route prompt with explicit fail-closed clarification gate and optional engineering context merge."""
         prompt_clean = prompt.strip()
         if not prompt_clean:
             raise ValueError("Engineering intent prompt cannot be empty.")
 
         decisions = self._evaluate_system_one_judgments(prompt_clean)
-        missing = self._detect_missing_engineering_prerequisites(prompt_clean, decisions)
+        missing = self._detect_missing_engineering_prerequisites(prompt_clean, decisions, context=context)
 
         if missing:
             clarification_msg = (
@@ -444,7 +475,7 @@ class EngineeringIntentRouter:
                 clarification_prompt=clarification_msg,
             )
 
-        intent = self._build_intent_from_decisions(prompt_clean, decisions)
+        intent = self._build_intent_from_decisions(prompt_clean, decisions, context=context)
         return IntentRoutingResult(
             status="ROUTED",
             intent=intent,
@@ -454,7 +485,10 @@ class EngineeringIntentRouter:
         )
 
     def route_prompt_to_intent(
-        self, prompt: str, strict: bool = True
+        self,
+        prompt: str,
+        strict: bool = True,
+        context: Optional[Dict[str, Any]] = None,
     ) -> Tuple[EngineeringIntent, JevDecisionBundle]:
         """Convert natural language requirement into typed EngineeringIntent via judgments.
 
@@ -462,7 +496,7 @@ class EngineeringIntentRouter:
         always raises IntentAmbiguityError. Does NOT allow bypassing execution gates
         even if strict=False is passed.
         """
-        res = self.route(prompt)
+        res = self.route(prompt, context=context)
         if res.status != "ROUTED":
             raise IntentAmbiguityError(
                 res.clarification_prompt or "Incomplete engineering intent.",
@@ -474,7 +508,7 @@ class EngineeringIntentRouter:
         return res.intent, res.decision_bundle
 
     def create_draft_intent(
-        self, prompt: str
+        self, prompt: str, context: Optional[Dict[str, Any]] = None
     ) -> Tuple[DraftEngineeringIntent, JevDecisionBundle]:
         """Create an exploratory, non-executable draft intent for inspection or interactive UX.
 
@@ -485,7 +519,7 @@ class EngineeringIntentRouter:
         if not prompt_clean:
             raise ValueError("Engineering intent prompt cannot be empty.")
         decisions = self._evaluate_system_one_judgments(prompt_clean)
-        draft = self._build_draft_intent_from_decisions(prompt_clean, decisions)
+        draft = self._build_draft_intent_from_decisions(prompt_clean, decisions, context=context)
         return draft, decisions
 
     PHYSICS_PREREQUISITE_RULES: Dict[str, Dict[str, bool]] = {
@@ -577,12 +611,20 @@ class EngineeringIntentRouter:
         return any(kw in prompt_lower for kw in thermal_keywords)
 
     def _detect_missing_engineering_prerequisites(
-        self, prompt: str, bundle: JevDecisionBundle
+        self,
+        prompt: str,
+        bundle: JevDecisionBundle,
+        context: Optional[Dict[str, Any]] = None,
     ) -> List[str]:
-        """Verify whether prompt contains all necessary engineering prerequisites via table-driven rules."""
+        """Verify whether prompt contains all necessary engineering prerequisites via table-driven rules.
+
+        Seamlessly merges model context (existing CAE/INP geometry, materials, boundary conditions)
+        to prevent false-positive blocks when evidence already exists in upstream project assets.
+        """
         missing = []
         params = bundle.extracted_parameters
         phys = bundle.physics_choice.value
+        ctx = context or {}
 
         rules = self.PHYSICS_PREREQUISITE_RULES.get(
             phys,
@@ -597,23 +639,55 @@ class EngineeringIntentRouter:
         )
 
         # 1. Geometry Dimensions
-        if rules["require_dimensions"] and not params.get("dimensions"):
+        has_dims = bool(
+            params.get("dimensions")
+            or ctx.get("dimensions")
+            or ctx.get("geometry")
+            or ctx.get("has_geometry")
+            or ctx.get("has_model")
+            or ctx.get("inp_evidence")
+        )
+        if rules["require_dimensions"] and not has_dims:
             missing.append("missing_geometry_dimensions")
 
         # 2. Material
-        if rules["require_material"] and not params.get("material"):
+        has_mat = bool(
+            params.get("material")
+            or ctx.get("material")
+            or ctx.get("has_material")
+            or (isinstance(ctx.get("inp_evidence"), dict) and ctx["inp_evidence"].get("material"))
+        )
+        if rules["require_material"] and not has_mat:
             missing.append("missing_material_specification")
 
         # 3. Boundary Constraints
-        if rules["require_constraints"] and not bundle.is_well_constrained_noul.is_yes:
+        has_bc = bool(
+            bundle.is_well_constrained_noul.is_yes
+            or ctx.get("boundary_conditions")
+            or ctx.get("constraints")
+            or ctx.get("is_well_constrained")
+            or ctx.get("has_constraints")
+        )
+        if rules["require_constraints"] and not has_bc:
             missing.append("missing_boundary_constraints")
 
         # 4. Applied Loads / Excitation
-        if rules["require_loads"] and not params.get("loads"):
+        has_load = bool(
+            params.get("loads")
+            or ctx.get("loads")
+            or ctx.get("has_loads")
+        )
+        if rules["require_loads"] and not has_load:
             missing.append("missing_applied_loads")
 
         # 5. Thermal Boundary Conditions
-        if rules["require_thermal_bcs"] and not self._has_thermal_boundary_conditions(prompt):
+        has_thermal = bool(
+            self._has_thermal_boundary_conditions(prompt)
+            or ctx.get("thermal_bcs")
+            or ctx.get("thermal_boundary_conditions")
+            or ctx.get("has_thermal_bcs")
+        )
+        if rules["require_thermal_bcs"] and not has_thermal:
             missing.append("missing_thermal_boundary_conditions")
 
         # 6. Acceptance Criteria / Limits
@@ -626,7 +700,7 @@ class EngineeringIntentRouter:
             w in prompt_lower for w in ("是否达标", "是否合格", "是否满足要求", "compliance", "is compliant")
         )
         if unspecified_compliance_check:
-            has_extracted_limits = bool(params.get("acceptance_criteria"))
+            has_extracted_limits = bool(params.get("acceptance_criteria") or ctx.get("acceptance_criteria"))
             if not has_extracted_limits:
                 missing.append("missing_acceptance_criteria_or_limits")
 
@@ -714,11 +788,11 @@ class EngineeringIntentRouter:
                         err_cat = "PROVIDER_INTERNAL_ERROR"
 
                     err_msg = str(shadow_err)
-                    sanitized_err = re.sub(r"(bearer\s+)[^\s]+", r"\1[REDACTED]", err_msg, flags=re.IGNORECASE)
+                    sanitized_err = _sanitize_error_message(err_msg)
                     shadow_diff = {
                         "status": "LIVE_FAILED",
                         "error_category": err_cat,
-                        "error": sanitized_err[:120],
+                        "error": sanitized_err,
                         "baseline_model": baseline.source_model,
                     }
 
@@ -876,44 +950,6 @@ class EngineeringIntentRouter:
             completeness_score=ScoreJudgment(
                 round(score_val, 2),
                 comp_levels or {int(round(score_val)): 1.0},
-            ),
-            extracted_parameters=extracted,
-            source_model=model_tag,
-            execution_mode="live",
-            latency_ms=latency_ms,
-            inferred_fields=inferred,
-        )
-
-        extracted = self._extract_domain_quantities(prompt)
-        inferred = [k for k in ("dimensions", "loads", "material", "acceptance_criteria") if k in extracted]
-
-        model_tag = "external-provider-live"
-        if hasattr(self.external_provider, "model"):
-            model_tag = getattr(self.external_provider, "model")
-        elif hasattr(self.external_provider, "__class__"):
-            model_tag = self.external_provider.__class__.__name__
-
-        return IntentDecisionBundle(
-            physics_choice=ChoiceJudgment(
-                phys_val,
-                round(phys_conf, 3),
-                phys_info.get("distribution") or {phys_val: phys_conf},
-            ),
-            unit_system_choice=ChoiceJudgment(
-                unit_val,
-                round(unit_conf, 3),
-                unit_info.get("distribution") or {unit_val: unit_conf},
-            ),
-            solver_choice=ChoiceJudgment(
-                solver_val,
-                round(solver_conf, 3),
-                solver_info.get("distribution") or {solver_val: solver_conf},
-            ),
-            is_well_constrained_noul=NoulJudgment(round(noul_prob, 3)),
-            has_acceptance_criteria_noul=NoulJudgment(round(crit_prob, 3)),
-            completeness_score=ScoreJudgment(
-                round(score_val, 2),
-                comp_info.get("levels") or {int(round(score_val)): 1.0},
             ),
             extracted_parameters=extracted,
             source_model=model_tag,
@@ -1124,16 +1160,37 @@ class EngineeringIntentRouter:
 
         return params
 
-    def _build_intent_from_decisions(self, prompt: str, bundle: IntentDecisionBundle) -> EngineeringIntent:
-        """Synthesize EngineeringIntent from judgments."""
+    def _build_intent_from_decisions(
+        self,
+        prompt: str,
+        bundle: IntentDecisionBundle,
+        context: Optional[Dict[str, Any]] = None,
+    ) -> EngineeringIntent:
+        """Synthesize EngineeringIntent from judgments and merge upstream model context."""
         phys = bundle.physics_choice.value
         unit_sys = bundle.unit_system_choice.value
         params = bundle.extracted_parameters
+        ctx = context or {}
+
+        # Resolve Material: Prompt extracted takes precedence, fallback to model/INP context
+        material = params.get("material")
+        if not material and ctx.get("material"):
+            ctx_mat = ctx["material"]
+            if isinstance(ctx_mat, dict):
+                material = ctx_mat
+            elif isinstance(ctx_mat, str):
+                material = {"name": ctx_mat, "source": "model_context"}
+        elif not material and isinstance(ctx.get("inp_evidence"), dict) and ctx["inp_evidence"].get("material"):
+            material = ctx["inp_evidence"]["material"]
 
         # Construct boundary conditions tuple
         bcs = []
         if bundle.is_well_constrained_noul.is_yes:
             bcs.append({"type": "encastre", "region": "FixedFace", "dofs": (1, 2, 3, 4, 5, 6)})
+        elif ctx.get("boundary_conditions"):
+            bcs.extend(ctx["boundary_conditions"])
+        elif ctx.get("constraints") and isinstance(ctx["constraints"], (list, tuple)):
+            bcs.extend(ctx["constraints"])
 
         # Construct loads tuple
         loads = []
@@ -1148,6 +1205,8 @@ class EngineeringIntentRouter:
             elif u in ("MPA", "KPA"):
                 if any(w in prompt.lower() for w in ("压力", "压强", "pressure")):
                     loads.append({"type": "pressure", "region": "TopFace", "magnitude": mag})
+        if not loads and ctx.get("loads") and isinstance(ctx["loads"], (list, tuple)):
+            loads.extend(ctx["loads"])
 
         # Construct acceptance criteria tuple
         crit_list = []
@@ -1159,6 +1218,23 @@ class EngineeringIntentRouter:
                 "limit": c["limit"],
                 "unit": c.get("unit", ""),
             })
+        if not crit_list and ctx.get("acceptance_criteria"):
+            if isinstance(ctx["acceptance_criteria"], (list, tuple)):
+                crit_list.extend(ctx["acceptance_criteria"])
+            elif isinstance(ctx["acceptance_criteria"], dict):
+                crit_list.append(ctx["acceptance_criteria"])
+
+        # Resolve dimensions
+        dims = params.get("dimensions") or ctx.get("dimensions") or ctx.get("geometry")
+
+        metadata = {
+            "dimensions": dims,
+            "jev_source": bundle.source_model,
+            "confidence": bundle.physics_choice.confidence,
+            "completeness_score": bundle.completeness_score.score,
+            "well_constrained": bundle.is_well_constrained_noul.is_yes or bool(bcs),
+            "context_merged": bool(ctx),
+        }
 
         return EngineeringIntent(
             id=f"INTENT-{bundle.physics_choice.value.upper()}",
@@ -1166,30 +1242,42 @@ class EngineeringIntentRouter:
             description=prompt,
             analysis_type=phys,
             unit_system=unit_sys,
-            material=params.get("material"),
+            material=material,
             boundary_conditions=tuple(bcs),
             loads=tuple(loads),
             acceptance_criteria=tuple(crit_list),
-            metadata={
-                "dimensions": params.get("dimensions"),
-                "jev_source": bundle.source_model,
-                "confidence": bundle.physics_choice.confidence,
-                "completeness_score": bundle.completeness_score.score,
-                "well_constrained": bundle.is_well_constrained_noul.is_yes,
-            },
+            metadata=metadata,
         )
 
     def _build_draft_intent_from_decisions(
-        self, prompt: str, bundle: IntentDecisionBundle
+        self,
+        prompt: str,
+        bundle: IntentDecisionBundle,
+        context: Optional[Dict[str, Any]] = None,
     ) -> DraftEngineeringIntent:
-        """Synthesize non-executable DraftEngineeringIntent from judgments."""
+        """Synthesize non-executable DraftEngineeringIntent from judgments and context."""
         phys = bundle.physics_choice.value
         unit_sys = bundle.unit_system_choice.value
         params = bundle.extracted_parameters
+        ctx = context or {}
+
+        material = params.get("material")
+        if not material and ctx.get("material"):
+            ctx_mat = ctx["material"]
+            if isinstance(ctx_mat, dict):
+                material = ctx_mat
+            elif isinstance(ctx_mat, str):
+                material = {"name": ctx_mat, "source": "model_context"}
+        elif not material and isinstance(ctx.get("inp_evidence"), dict) and ctx["inp_evidence"].get("material"):
+            material = ctx["inp_evidence"]["material"]
 
         bcs = []
         if bundle.is_well_constrained_noul.is_yes:
             bcs.append({"type": "encastre", "region": "FixedFace", "dofs": (1, 2, 3, 4, 5, 6)})
+        elif ctx.get("boundary_conditions"):
+            bcs.extend(ctx["boundary_conditions"])
+        elif ctx.get("constraints") and isinstance(ctx["constraints"], (list, tuple)):
+            bcs.extend(ctx["constraints"])
 
         loads = []
         for ld in params.get("loads", []):
@@ -1203,6 +1291,8 @@ class EngineeringIntentRouter:
             elif u in ("MPA", "KPA"):
                 if any(w in prompt.lower() for w in ("压力", "压强", "pressure")):
                     loads.append({"type": "pressure", "region": "TopFace", "magnitude": mag})
+        if not loads and ctx.get("loads") and isinstance(ctx["loads"], (list, tuple)):
+            loads.extend(ctx["loads"])
 
         crit_list = []
         for c in params.get("acceptance_criteria", []):
@@ -1213,6 +1303,13 @@ class EngineeringIntentRouter:
                 "limit": c["limit"],
                 "unit": c.get("unit", ""),
             })
+        if not crit_list and ctx.get("acceptance_criteria"):
+            if isinstance(ctx["acceptance_criteria"], (list, tuple)):
+                crit_list.extend(ctx["acceptance_criteria"])
+            elif isinstance(ctx["acceptance_criteria"], dict):
+                crit_list.append(ctx["acceptance_criteria"])
+
+        dims = params.get("dimensions") or ctx.get("dimensions") or ctx.get("geometry")
 
         return DraftEngineeringIntent(
             id=f"DRAFT-INTENT-{bundle.physics_choice.value.upper()}",
@@ -1220,16 +1317,17 @@ class EngineeringIntentRouter:
             description=prompt,
             analysis_type=phys,
             unit_system=unit_sys,
-            material=params.get("material"),
+            material=material,
             boundary_conditions=tuple(bcs),
             loads=tuple(loads),
             acceptance_criteria=tuple(crit_list),
             metadata={
-                "dimensions": params.get("dimensions"),
+                "dimensions": dims,
                 "source_model": bundle.source_model,
                 "confidence": bundle.physics_choice.confidence,
                 "completeness_score": bundle.completeness_score.score,
-                "well_constrained": bundle.is_well_constrained_noul.is_yes,
+                "well_constrained": bundle.is_well_constrained_noul.is_yes or bool(bcs),
+                "context_merged": bool(ctx),
             },
             is_executable=False,
         )

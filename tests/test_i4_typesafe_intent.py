@@ -68,8 +68,8 @@ def test_jev_intent_router_thermal_prompt():
     assert draft.analysis_type == "steady_thermal"
 
 
-def test_jev_intent_e2e_runner():
-    out_file = ROOT / "machine_validation" / "i4_jev_intent_evidence.json"
+def test_jev_intent_e2e_runner(tmp_path: Path):
+    out_file = tmp_path / "i4_jev_intent_evidence.json"
     manifest = run_jev_intent_e2e(out_file)
 
     assert manifest["schema_version"] == "jev_intent_routing_v1"
@@ -97,3 +97,36 @@ def test_jev_intent_ambiguity_fails_closed():
     with pytest.raises(Exception) as excinfo:
         router.route_prompt_to_intent(ambiguous_prompt, strict=True)
     assert "Missing prerequisites" in str(excinfo.value)
+
+
+def test_jev_intent_context_merge_unblocks_existing_model_evidence():
+    """Verify that upstream model context (geometry, material, constraints) satisfies prerequisites without prompt duplication."""
+    router = JevIntentRouter()
+    # Prompt only specifies load and constraint, omitting dimensions and material
+    prompt = "固定悬臂梁端部，施加1000N向下集中载荷。"
+
+    # Without context -> fails closed due to missing dimensions & material
+    res_no_ctx = router.route(prompt)
+    assert res_no_ctx.status == "NEEDS_CLARIFICATION"
+    assert "missing_geometry_dimensions" in res_no_ctx.missing_requirements
+    assert "missing_material_specification" in res_no_ctx.missing_requirements
+
+    # With model context -> prerequisites satisfied, successfully routes and merges context
+    model_context = {
+        "dimensions": [{"value": 200.0, "unit": "mm"}],
+        "material": {
+            "name": "Aluminum_6061",
+            "elastic_modulus": 70000.0,
+            "poisson_ratio": 0.33,
+            "unit": "MPa",
+        },
+    }
+    res_with_ctx = router.route(prompt, context=model_context)
+    assert res_with_ctx.status == "ROUTED"
+    assert res_with_ctx.intent is not None
+    assert res_with_ctx.intent.material is not None
+    assert res_with_ctx.intent.material["name"] == "Aluminum_6061"
+    assert res_with_ctx.intent.metadata.get("context_merged") is True
+    assert res_with_ctx.intent.metadata.get("dimensions") == [{"value": 200.0, "unit": "mm"}]
+    assert len(res_with_ctx.intent.loads) > 0
+    assert len(res_with_ctx.intent.boundary_conditions) > 0

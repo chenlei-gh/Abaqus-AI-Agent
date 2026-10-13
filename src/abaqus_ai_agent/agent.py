@@ -550,8 +550,9 @@ class AbaqusAIAgent:
         intent = None
         if isinstance(requirement, str):
             jev_mode = kwargs.pop("jev_mode", None)
+            context = kwargs.pop("context", None)
             router = JevIntentRouter(mode=jev_mode)
-            routing_res = router.route(requirement)
+            routing_res = router.route(requirement, context=context)
             if routing_res.status == "NEEDS_CLARIFICATION":
                 return EngineeringTaskResult(
                     status=TaskStatus.NEEDS_CLARIFICATION,

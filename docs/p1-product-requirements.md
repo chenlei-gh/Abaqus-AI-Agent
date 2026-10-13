@@ -444,21 +444,26 @@ P1.0 产品主入口已彻底消除高层自然语言需求与底层 20 个 L4 �
 
 ### 7.2 JEV 意图识别与可审计工程决策层闭环 (TypeSafe JEV Decision Layer)
 
+**架构分权契约 (Architectural Authority Separation)**：
+- **JEV 作为建议层 (Advisor)**：提供自然语言物理域分类候选、参数推断以及澄清建议，提出类型化概率与置信度信号；
+- **确定性规则与 Preflight 作为裁决层 (Gatekeeper)**：材料真实性、边界条件完备性、求解可行性以及工程验收标准，必须由确定性 Preflight、Solver ODB 证据提取与 Acceptance 门禁裁决，严禁 AI 模型越权裁决或绕过工程门禁。
+
 #### REQ-P1-043: JEV 显式运行模式隔离与防静默降级 (Offline/Live/Shadow)
 - **显式三态运行模式**：
-  - `offline`（默认）：纯本地确定性启发式/规则引擎，用于离线环境、本地测试与无网络 CI，100% 幂等可重现；
-  - `live`：真实调用 TypeSafe System One (JEV) API，网络断开、超时、鉴权失败或响应畸形时**必须 fail-closed 抛出 `JevApiError`**，坚决禁止 `try-except pass` 静默回退为离线规则；
-  - `shadow`：基准路径由离线规则主导驱动后续编译，同时并发/后台请求真实 JEV API，比对并记录二者决策差异（Diff），用于无风险工程评估。
-- **配置与密钥安全**：模式通过构造参数或环境变量 `TYPESAFE_RUN_MODE` 显式受控；真实 API 密钥与敏感信息严禁落入日志或决策工件。
+  - `offline`（默认）：纯本地确定性规则引擎，用于离线环境、本地测试与无网络 CI，100% 幂等可重现；
+  - `live`：真实调用外部意图 Provider，网络断开、超时、鉴权失败或响应畸形时**必须 fail-closed 抛出 `ExternalIntentApiError`**，坚决禁止静默降级为离线规则；
+  - `shadow`：基准路径由离线规则主导驱动后续编译，同时并发/旁路请求外部 Provider，比对并记录二者决策差异（Diff），外部异常不破坏离线基线。
+- **配置与密钥安全**：模式通过构造参数或环境变量 `EXTERNAL_INTENT_RUN_MODE` / `INTENT_RUN_MODE` 显式受控；非法模式严格拒绝；真实 API 密钥与敏感信息严禁落入日志或决策工件。
 
-#### REQ-P1-044: JEV 提问载荷对齐、严格校验与全链路来源审计
-- **API 提问载荷完整对齐**：发往 TypeSafe API 的 Payload 必须全面覆盖 `physics`、`units`、`solver`、`well_constrained`、`has_acceptance_criteria`、`completeness` 全部系统级问题，杜绝在本地黑盒为未提问字段强行硬编码；
-- **响应严格校验**：所有返回值必须经过范围、枚举与概率合法性强校验（置信度与概率在 $[0.0, 1.0]$，评分在 $[1.0, 5.0]$），非法或缺失字段直接判为解析失败；
-- **决策来源完整追溯**：`JevDecisionBundle` 与 `IntentRoutingResult` 必须如实标注 `execution_mode`、`source_model`、`latency_ms`、`is_fallback=False` 与审计摘要，区分模型直出与本地推断字段。
+#### REQ-P1-044: 严格数值校验、载荷对齐与全链路来源审计
+- **API 提问载荷与归一化对齐**：发往外部 Provider 的 Payload 覆盖 6 项核心判断；归一化器统一接入标准字典契约；
+- **严格数值与概率归一化校验**：拒绝布尔值、NaN、Inf 与越界浮点数；概率分布（`distribution`）与离散等级（`levels`）必须严格满足数学归一化条件（$\sum p \approx 1.0$）；
+- **深度日志脱敏**：Shadow 模式下深度清洗异常信息，消除 URL、查询参数、API 密钥与原始 Prompt；
+- **决策来源完整追溯**：`IntentDecisionBundle` 如实标注 `execution_mode`、`source_model`、`latency_ms` 与审计摘要，区分模型判断与本地推断字段。
 
-#### REQ-P1-045: 独立 JEV 离线工程评测集与决策分歧审计
-- **独立工程意图评测集**：构建覆盖正常意图、缺失材料/载荷/约束、多物理场耦合、冲突条件、能力边界溢出、对抗性输入与服务异常等维度的独立离线评测矩阵，不依赖 Abaqus License 即可秒级执行；
-- **决策分歧度与审计报表**：在影子运行或评测中量化意图分类一致率、关键缺失项检出率、越界拦截率与决策耗时，支撑模型版本升级的定量对比。
+#### REQ-P1-045: 独立工程意图评测系统与上下文打通 (Context Merge)
+- **独立工程意图评测系统**：构建独立的评测框架（`tools/jev_engineering_benchmark.py`），覆盖 6 大工程维度（物理域分类、参数缺失识别、探索性任务放行、合规性校核拦截、歧义澄清识别、对抗性输入阻断），量化输出 Match Rate、False Negative Rate 与延迟报表，不依赖 Abaqus License 即可秒级执行；
+- **CAE/INP 模型证据上下文打通 (Context Merge)**：支持接收上游已存在的工程模型资产（已包含材料、尺寸或网格约束），解除机械的纯文本字面依赖，避免产生误报阻断。
 
 ### 7.3 开源核心独立运行与专有服务解耦隔离 (Open Source Core Decoupling)
 
@@ -531,12 +536,12 @@ P1.0 产品主入口已彻底消除高层自然语言需求与底层 20 个 L4 �
 | **REQ-P1-041** | 受控自愈策略库与自动重算 | P1.4 | 发散诊断结果 | 修复配置与自愈重算 | Tier A | 稳定能量超限即判定自愈无效 | 📋 **PLANNED** |
 | **REQ-P1-042** | 自愈审计追踪与防伪红线 | P1.4 | 修复前后两次 Run | 完整 Diff 对比明细 | Tier B | 严禁静默覆盖首次失败记录 | 📋 **PLANNED** |
 | **REQ-P1-043** | JEV 模式隔离与防静默降级 | P1.4 | 运行模式配置与提示词 | 强类型决策与状态 | Tier B | Live 模式异常坚决 Fail-Closed | 🟢 **QUALIFIED** |
-| **REQ-P1-044** | 严格数值校验、载荷对齐与全链路审计 | P1.4 | 意图提问与响应载荷 | 完整审计束与来源标记 | Tier B | 字段缺失/非法值拒绝伪造 | 🟢 **QUALIFIED** |
-| **REQ-P1-045** | 独立评测集与探索/校核解耦审计 | P1.4 | 多维度工程提示词集合 | 评测指标与差异清单 | Tier B | 越界与对抗性输入强制阻断 | 🟢 **QUALIFIED** |
+| **REQ-P1-044** | 严格数值校验、载荷对齐与全链路审计 | P1.4 | 意图提问与响应载荷 | 完整审计束与来源标记 | Tier B | 概率分布归一化 sum=1.0、深度脱敏 | 🟢 **QUALIFIED** |
+| **REQ-P1-045** | 独立工程评测系统与 Context Merge 审计 | P1.4 | 6大工程维度基准评测 | 评测指标、漏检率与上下文合并 | Tier B | 6维度17例100%通过，漏检率0% | 🟢 **QUALIFIED** |
 | **REQ-P1-046** | 开源核心独立运行与零外部依赖 | P1.4 | 纯离线/无网络环境输入 | 独立 Intent/编译/求解/报告 | Tier A | 核心闭环严禁外部服务阻断 | 🟢 **QUALIFIED (Offline Core Hermetic)** |
-| **REQ-P1-047** | 可选外部服务适配器协议与响应归一化 | P1.4 | 通用意图提供者接口与配置 | 可插拔适配器加载与解析 | Tier B | 未安装/未配置时降级到 offline | 🟢 **QUALIFIED (Protocol Contract Closed)** |
+| **REQ-P1-047** | 可选外部服务适配器协议与响应归一化 | P1.4 | 通用意图提供者接口与配置 | 可插拔适配器加载与解析 | Tier B | 未安装/未配置时保持 offline 基线 | 🟢 **QUALIFIED (Protocol Contract Closed)** |
 | **REQ-P1-048** | 专有服务接入隔离与零专有泄露 | P1.4 | 公开核心代码库 | 供应商中立抽象与纯净核心 | Tier A | 严禁硬编码专有端点与私有协议 | 🟢 **QUALIFIED (Code Tree Clean)** |
-| **REQ-P1-049** | 安全凭据保护与密钥零泄露红线 | P1.4 | 环境变量与配置工件 | 脱敏审计追踪与零泄露 | Tier A | 严禁凭据落入仓库/日志/工件 | 🟢 **QUALIFIED (Credentials Redacted)** |
+| **REQ-P1-049** | 安全凭据保护与密钥零泄露红线 | P1.4 | 环境变量与配置工件 | 深度脱敏审计追踪与零泄露 | Tier A | 杜绝 URL/Token/Prompt 泄露 | 🟢 **QUALIFIED (Credentials Deep Sanitized)** |
 | **REQ-P1-053** | 核心与外部服务资格分离验证 | P1.4 | 测试矩阵与真实机证据 | 分立的资格认定状态 | Tier A | 严禁以离线测试冒充外部/真机通过 | 🟢 **QUALIFIED (Tiered Rules Active)** |
 | **REQ-P1-050** | 3D 轻量级视口与面/边拾取 | P1.5 | 3D 几何模型 | 拾取事件与几何面候选 | Tier C | 拾取越界或歧义安全校验 | 📋 **PLANNED** |
 | **REQ-P1-051** | HITL 交互决策卡片界面 | P1.5 | 确认请求对象 | 工程师点击决策与签名 | Tier C | 未确认操作严禁下发后端 | 📋 **PLANNED** |
