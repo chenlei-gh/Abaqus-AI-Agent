@@ -777,51 +777,111 @@ def compile_intent_to_actions(
         plane = bc.plane or (target_semantic.split("_")[-1] if "SYMMETRY_PLANE" in target_semantic else "X")
 
         if gr is not None:
+            named_set, named_surf = _extract_gr_named_selector(gr)
             pts, _ = _extract_gr_pts_and_anchor(gr)
-            find_at_str = ", ".join(f"(({p[0]}, {p[1]}, {p[2]}),)" for p in pts)
+            find_at_str = ", ".join(f"(({p[0]}, {p[1]}, {p[2]}),)" for p in pts) if pts else ""
             if bc.bc_type in ("SYMMETRY", "XSYMM", "YSYMM", "ZSYMM"):
                 method_name = {"X": "XsymmBC", "Y": "YsymmBC", "Z": "ZsymmBC"}.get(plane, "XsymmBC")
-                bc_code = (
-                    f"a = mdb.models['{model_name}'].rootAssembly\n"
-                    f"f = a.instances['{inst_name}'].faces\n"
-                    f"symm_faces = f.findAt({find_at_str})\n"
-                    f"region = a.Set(faces=symm_faces, name='{bc.region}')\n"
-                    f"mdb.models['{model_name}'].{method_name}(name='{bc.name}', createStepName='{bc_step}', region=region)\n"
-                )
-                actions.append(builders.python_action(model_name, bc_code))
-                actions.append(builders.symmetry_bc(
-                    model=model_name,
-                    name=bc.name,
-                    region_expression=f"mdb.models['{model_name}'].rootAssembly.sets['{bc.region}']",
-                    step=bc_step,
-                    plane=plane,
-                ))
+                if named_set:
+                    bc_code = (
+                        f"a = mdb.models['{model_name}'].rootAssembly\n"
+                        f"region = a.sets['{named_set}']\n"
+                        f"mdb.models['{model_name}'].{method_name}(name='{bc.name}', createStepName='{bc_step}', region=region)\n"
+                    )
+                    actions.append(builders.python_action(model_name, bc_code))
+                    actions.append(builders.symmetry_bc(
+                        model=model_name,
+                        name=bc.name,
+                        region_expression=f"mdb.models['{model_name}'].rootAssembly.sets['{named_set}']",
+                        step=bc_step,
+                        plane=plane,
+                    ))
+                else:
+                    bc_code = (
+                        f"a = mdb.models['{model_name}'].rootAssembly\n"
+                        f"f = a.instances['{inst_name}'].faces\n"
+                        f"symm_faces = f.findAt({find_at_str})\n"
+                        f"region = a.Set(faces=symm_faces, name='{bc.region}')\n"
+                        f"mdb.models['{model_name}'].{method_name}(name='{bc.name}', createStepName='{bc_step}', region=region)\n"
+                    )
+                    actions.append(builders.python_action(model_name, bc_code))
+                    actions.append(builders.symmetry_bc(
+                        model=model_name,
+                        name=bc.name,
+                        region_expression=f"mdb.models['{model_name}'].rootAssembly.sets['{bc.region}']",
+                        step=bc_step,
+                        plane=plane,
+                    ))
             elif bc.bc_type == "ENCASTRE":
-                bc_code = (
-                    f"a = mdb.models['{model_name}'].rootAssembly\n"
-                    f"f = a.instances['{inst_name}'].faces\n"
-                    f"fixed_faces = f.findAt({find_at_str})\n"
-                    f"region = a.Set(faces=fixed_faces, name='{bc.region}')\n"
-                    f"mdb.models['{model_name}'].EncastreBC(name='{bc.name}', createStepName='{bc_step}', region=region)\n"
-                )
-                actions.append(builders.python_action(model_name, bc_code))
-                actions.append(builders.fixed_bc(
-                    model=model_name,
-                    name=bc.name,
-                    region_expression=f"mdb.models['{model_name}'].rootAssembly.sets['{bc.region}']",
-                    step=bc_step,
-                ))
+                if named_set:
+                    bc_code = (
+                        f"a = mdb.models['{model_name}'].rootAssembly\n"
+                        f"region = a.sets['{named_set}']\n"
+                        f"mdb.models['{model_name}'].EncastreBC(name='{bc.name}', createStepName='{bc_step}', region=region)\n"
+                    )
+                    actions.append(builders.python_action(model_name, bc_code))
+                    actions.append(builders.fixed_bc(
+                        model=model_name,
+                        name=bc.name,
+                        region_expression=f"mdb.models['{model_name}'].rootAssembly.sets['{named_set}']",
+                        step=bc_step,
+                    ))
+                elif named_surf:
+                    bc_code = (
+                        f"a = mdb.models['{model_name}'].rootAssembly\n"
+                        f"region = a.surfaces['{named_surf}']\n"
+                        f"mdb.models['{model_name}'].EncastreBC(name='{bc.name}', createStepName='{bc_step}', region=region)\n"
+                    )
+                    actions.append(builders.python_action(model_name, bc_code))
+                    actions.append(builders.fixed_bc(
+                        model=model_name,
+                        name=bc.name,
+                        region_expression=f"mdb.models['{model_name}'].rootAssembly.surfaces['{named_surf}']",
+                        step=bc_step,
+                    ))
+                else:
+                    bc_code = (
+                        f"a = mdb.models['{model_name}'].rootAssembly\n"
+                        f"f = a.instances['{inst_name}'].faces\n"
+                        f"fixed_faces = f.findAt({find_at_str})\n"
+                        f"region = a.Set(faces=fixed_faces, name='{bc.region}')\n"
+                        f"mdb.models['{model_name}'].EncastreBC(name='{bc.name}', createStepName='{bc_step}', region=region)\n"
+                    )
+                    actions.append(builders.python_action(model_name, bc_code))
+                    actions.append(builders.fixed_bc(
+                        model=model_name,
+                        name=bc.name,
+                        region_expression=f"mdb.models['{model_name}'].rootAssembly.sets['{bc.region}']",
+                        step=bc_step,
+                    ))
             elif bc.bc_type == "TEMPERATURE":
                 mag = bc.values.get("magnitude", bc.values.get("temp", 0.0))
-                bc_code = (
-                    f"a = mdb.models['{model_name}'].rootAssembly\n"
-                    f"f = a.instances['{inst_name}'].faces\n"
-                    f"target_faces = f.findAt({find_at_str})\n"
-                    f"region = a.Set(faces=target_faces, name='{bc.region}')\n"
-                    f"mdb.models['{model_name}'].TemperatureBC(name='{bc.name}', createStepName='{bc_step}', "
-                    f"region=region, distributionType=UNIFORM, magnitude={mag})\n"
-                )
-                actions.append(builders.python_action(model_name, bc_code))
+                if named_set:
+                    bc_code = (
+                        f"a = mdb.models['{model_name}'].rootAssembly\n"
+                        f"region = a.sets['{named_set}']\n"
+                        f"mdb.models['{model_name}'].TemperatureBC(name='{bc.name}', createStepName='{bc_step}', "
+                        f"region=region, distributionType=UNIFORM, magnitude={mag})\n"
+                    )
+                    actions.append(builders.python_action(model_name, bc_code))
+                elif named_surf:
+                    bc_code = (
+                        f"a = mdb.models['{model_name}'].rootAssembly\n"
+                        f"region = a.surfaces['{named_surf}']\n"
+                        f"mdb.models['{model_name}'].TemperatureBC(name='{bc.name}', createStepName='{bc_step}', "
+                        f"region=region, distributionType=UNIFORM, magnitude={mag})\n"
+                    )
+                    actions.append(builders.python_action(model_name, bc_code))
+                else:
+                    bc_code = (
+                        f"a = mdb.models['{model_name}'].rootAssembly\n"
+                        f"f = a.instances['{inst_name}'].faces\n"
+                        f"target_faces = f.findAt({find_at_str})\n"
+                        f"region = a.Set(faces=target_faces, name='{bc.region}')\n"
+                        f"mdb.models['{model_name}'].TemperatureBC(name='{bc.name}', createStepName='{bc_step}', "
+                        f"region=region, distributionType=UNIFORM, magnitude={mag})\n"
+                    )
+                    actions.append(builders.python_action(model_name, bc_code))
             elif bc.bc_type == "DISPLACEMENT":
                 # Check if region is an RP set or matches a moment RP coupling
                 rp_coupled_moment = None
@@ -849,6 +909,21 @@ def compile_intent_to_actions(
                         model=model_name,
                         name=bc.name,
                         region_expression=f"mdb.models['{model_name}'].rootAssembly.sets['{rp_coupled_moment.name}_RP_Set']",
+                        step=bc_step,
+                        u1=bc.values.get("u1", 0.0), u2=bc.values.get("u2", 0.0), u3=bc.values.get("u3", 0.0),
+                    ))
+                elif named_set:
+                    bc_code = (
+                        f"a = mdb.models['{model_name}'].rootAssembly\n"
+                        f"region = a.sets['{named_set}']\n"
+                        f"mdb.models['{model_name}'].DisplacementBC(name='{bc.name}', createStepName='{bc_step}', "
+                        f"region=region, {dof_str})\n"
+                    )
+                    actions.append(builders.python_action(model_name, bc_code))
+                    actions.append(builders.displacement_bc(
+                        model=model_name,
+                        name=bc.name,
+                        region_expression=f"mdb.models['{model_name}'].rootAssembly.sets['{named_set}']",
                         step=bc_step,
                         u1=bc.values.get("u1", 0.0), u2=bc.values.get("u2", 0.0), u3=bc.values.get("u3", 0.0),
                     ))
@@ -1002,74 +1077,65 @@ def compile_intent_to_actions(
         field_arg = f", distributionType=FIELD, field='{ld.field}'" if ld.field else ""
 
         if gr is not None:
+            named_set, named_surf = _extract_gr_named_selector(gr)
             pts, anch = _extract_gr_pts_and_anchor(gr)
-            find_at_str = ", ".join(f"(({p[0]}, {p[1]}, {p[2]}),)" for p in pts)
+            find_at_str = ", ".join(f"(({p[0]}, {p[1]}, {p[2]}),)" for p in pts) if pts else ""
             if ld.load_type == "pressure":
-                load_code = (
-                    f"a = mdb.models['{model_name}'].rootAssembly\n"
-                    f"f = a.instances['{inst_name}'].faces\n"
-                    f"target_faces = f.findAt({find_at_str})\n"
-                    f"surf = a.Surface(side1Faces=target_faces, name='{ld.region}_Surf')\n"
-                    f"mdb.models['{model_name}'].Pressure(name='{ld.name}', createStepName='{target_step}', "
-                    f"region=surf, magnitude={ld.magnitude}{field_arg})\n"
-                )
-                actions.append(builders.python_action(model_name, load_code))
-                actions.append(builders.pressure_load(
-                    model=model_name,
-                    name=ld.name,
-                    region_expression=f"mdb.models['{model_name}'].rootAssembly.surfaces['{ld.region}_Surf']",
-                    magnitude=ld.magnitude,
-                    step=target_step,
-                    field=ld.field,
-                ))
-            elif ld.load_type == "concentrated_force":
-                entity_type = _extract_gr_entity_type(gr)
-                if entity_type.lower() == "face":
-                    if geometry.shape == "l_bracket":
-                        thick = geometry.thickness if geometry.thickness and geometry.thickness > 0 else 10.0
-                        wid = geometry.width if geometry.width and geometry.width > 0 else 20.0
-                        anch_pt = anch if anch else (0.0, 0.0, 0.0)
-                        if abs(anch_pt[1] - (geometry.height or 100.0)) < 1.0 or abs(anch_pt[0] - (geometry.length or 100.0)) < 1.0:
-                            face_area = thick * wid
-                        else:
-                            face_area = (geometry.length or 100.0) * wid
-                    elif geometry.shape == "plate_with_hole":
-                        p_width = geometry.width if geometry.width > 0 else 100.0
-                        p_height = geometry.height if geometry.height > 20.0 else (geometry.length if geometry.length > 20.0 else 100.0)
-                        p_depth = geometry.thickness if geometry.thickness is not None else 20.0
-                        p_radius = geometry.radius if geometry.radius is not None else 10.0
-                        face_area = (p_width * p_height) - (math.pi * p_radius**2)
-                    elif geometry.shape == "cantilever_box":
-                        face_area = (geometry.width if geometry.width > 0 else 10.0) * (geometry.height if geometry.height > 0 else 10.0)
-                    else:
-                        face_area = (geometry.width if geometry.width > 0 else 10.0) * (geometry.height if geometry.height > 0 else 10.0)
-                    if face_area <= 0:
-                        face_area = 1.0
-                    eq_pressure = abs(ld.magnitude) / face_area
+                if named_surf:
                     load_code = (
-                        f"# Total force {ld.magnitude} N on face converted to equivalent surface pressure: {eq_pressure:.6f} MPa\n"
                         f"a = mdb.models['{model_name}'].rootAssembly\n"
-                        f"f = a.instances['{inst_name}'].faces\n"
-                        f"target_faces = f.findAt({find_at_str})\n"
-                        f"surf = a.Surface(side1Faces=target_faces, name='{ld.region}_Surf')\n"
+                        f"surf = a.surfaces['{named_surf}']\n"
                         f"mdb.models['{model_name}'].Pressure(name='{ld.name}', createStepName='{target_step}', "
-                        f"region=surf, magnitude={eq_pressure}{field_arg})\n"
+                        f"region=surf, magnitude={ld.magnitude}{field_arg})\n"
+                    )
+                    actions.append(builders.python_action(model_name, load_code))
+                    actions.append(builders.pressure_load(
+                        model=model_name,
+                        name=ld.name,
+                        region_expression=f"mdb.models['{model_name}'].rootAssembly.surfaces['{named_surf}']",
+                        magnitude=ld.magnitude,
+                        step=target_step,
+                        field=ld.field,
+                    ))
+                elif named_set:
+                    load_code = (
+                        f"a = mdb.models['{model_name}'].rootAssembly\n"
+                        f"surf = a.Surface(side1Faces=a.sets['{named_set}'].faces, name='{ld.region}_Surf')\n"
+                        f"mdb.models['{model_name}'].Pressure(name='{ld.name}', createStepName='{target_step}', "
+                        f"region=surf, magnitude={ld.magnitude}{field_arg})\n"
                     )
                     actions.append(builders.python_action(model_name, load_code))
                     actions.append(builders.pressure_load(
                         model=model_name,
                         name=ld.name,
                         region_expression=f"mdb.models['{model_name}'].rootAssembly.surfaces['{ld.region}_Surf']",
-                        magnitude=eq_pressure,
+                        magnitude=ld.magnitude,
                         step=target_step,
                         field=ld.field,
                     ))
                 else:
                     load_code = (
                         f"a = mdb.models['{model_name}'].rootAssembly\n"
-                        f"v = a.instances['{inst_name}'].vertices\n"
-                        f"target_verts = v.findAt({find_at_str})\n"
-                        f"region = a.Set(vertices=target_verts, name='{ld.region}')\n"
+                        f"f = a.instances['{inst_name}'].faces\n"
+                        f"target_faces = f.findAt({find_at_str})\n"
+                        f"surf = a.Surface(side1Faces=target_faces, name='{ld.region}_Surf')\n"
+                        f"mdb.models['{model_name}'].Pressure(name='{ld.name}', createStepName='{target_step}', "
+                        f"region=surf, magnitude={ld.magnitude}{field_arg})\n"
+                    )
+                    actions.append(builders.python_action(model_name, load_code))
+                    actions.append(builders.pressure_load(
+                        model=model_name,
+                        name=ld.name,
+                        region_expression=f"mdb.models['{model_name}'].rootAssembly.surfaces['{ld.region}_Surf']",
+                        magnitude=ld.magnitude,
+                        step=target_step,
+                        field=ld.field,
+                    ))
+            elif ld.load_type == "concentrated_force":
+                if named_set:
+                    load_code = (
+                        f"a = mdb.models['{model_name}'].rootAssembly\n"
+                        f"region = a.sets['{named_set}']\n"
                         f"mdb.models['{model_name}'].ConcentratedForce(name='{ld.name}', createStepName='{target_step}', "
                         f"region=region, cf3={ld.magnitude}{field_arg})\n"
                     )
@@ -1077,10 +1143,69 @@ def compile_intent_to_actions(
                     actions.append(builders.concentrated_force(
                         model=model_name,
                         name=ld.name,
-                        region_expression=f"mdb.models['{model_name}'].rootAssembly.sets['{ld.region}']",
+                        region_expression=f"mdb.models['{model_name}'].rootAssembly.sets['{named_set}']",
                         cf3=ld.magnitude,
                         step=target_step,
                     ))
+                else:
+                    entity_type = _extract_gr_entity_type(gr)
+                    if entity_type.lower() == "face":
+                        if geometry.shape == "l_bracket":
+                            thick = geometry.thickness if geometry.thickness and geometry.thickness > 0 else 10.0
+                            wid = geometry.width if geometry.width and geometry.width > 0 else 20.0
+                            anch_pt = anch if anch else (0.0, 0.0, 0.0)
+                            if abs(anch_pt[1] - (geometry.height or 100.0)) < 1.0 or abs(anch_pt[0] - (geometry.length or 100.0)) < 1.0:
+                                face_area = thick * wid
+                            else:
+                                face_area = (geometry.length or 100.0) * wid
+                        elif geometry.shape == "plate_with_hole":
+                            p_width = geometry.width if geometry.width > 0 else 100.0
+                            p_height = geometry.height if geometry.height > 20.0 else (geometry.length if geometry.length > 20.0 else 100.0)
+                            p_depth = geometry.thickness if geometry.thickness is not None else 20.0
+                            p_radius = geometry.radius if geometry.radius is not None else 10.0
+                            face_area = (p_width * p_height) - (math.pi * p_radius**2)
+                        elif geometry.shape == "cantilever_box":
+                            face_area = (geometry.width if geometry.width > 0 else 10.0) * (geometry.height if geometry.height > 0 else 10.0)
+                        else:
+                            face_area = (geometry.width if geometry.width > 0 else 10.0) * (geometry.height if geometry.height > 0 else 10.0)
+                        if face_area <= 0:
+                            face_area = 1.0
+                        eq_pressure = abs(ld.magnitude) / face_area
+                        load_code = (
+                            f"# Total force {ld.magnitude} N on face converted to equivalent surface pressure: {eq_pressure:.6f} MPa\n"
+                            f"a = mdb.models['{model_name}'].rootAssembly\n"
+                            f"f = a.instances['{inst_name}'].faces\n"
+                            f"target_faces = f.findAt({find_at_str})\n"
+                            f"surf = a.Surface(side1Faces=target_faces, name='{ld.region}_Surf')\n"
+                            f"mdb.models['{model_name}'].Pressure(name='{ld.name}', createStepName='{target_step}', "
+                            f"region=surf, magnitude={eq_pressure}{field_arg})\n"
+                        )
+                        actions.append(builders.python_action(model_name, load_code))
+                        actions.append(builders.pressure_load(
+                            model=model_name,
+                            name=ld.name,
+                            region_expression=f"mdb.models['{model_name}'].rootAssembly.surfaces['{ld.region}_Surf']",
+                            magnitude=eq_pressure,
+                            step=target_step,
+                            field=ld.field,
+                        ))
+                    else:
+                        load_code = (
+                            f"a = mdb.models['{model_name}'].rootAssembly\n"
+                            f"v = a.instances['{inst_name}'].vertices\n"
+                            f"target_verts = v.findAt({find_at_str})\n"
+                            f"region = a.Set(vertices=target_verts, name='{ld.region}')\n"
+                            f"mdb.models['{model_name}'].ConcentratedForce(name='{ld.name}', createStepName='{target_step}', "
+                            f"region=region, cf3={ld.magnitude}{field_arg})\n"
+                        )
+                        actions.append(builders.python_action(model_name, load_code))
+                        actions.append(builders.concentrated_force(
+                            model=model_name,
+                            name=ld.name,
+                            region_expression=f"mdb.models['{model_name}'].rootAssembly.sets['{ld.region}']",
+                            cf3=ld.magnitude,
+                            step=target_step,
+                        ))
         elif geometry.shape == "two_blocks_contact" and ld.region in ("SliderTop_Surf", "BaseSurf", "SliderSurf"):
             load_code = (
                 f"a = mdb.models['{model_name}'].rootAssembly\n"
@@ -1362,9 +1487,13 @@ def _extract_gr_pts_and_anchor(gr: Any) -> Tuple[Tuple[Tuple[float, float, float
     if isinstance(gr, dict):
         raw_pts = gr.get("anchor_points")
         if raw_pts and isinstance(raw_pts, (list, tuple)):
-            pts = tuple(tuple(float(c) for c in p) for p in raw_pts)
+            converted_pts = []
+            for p in raw_pts:
+                if _is_valid_3d_point(p):
+                    converted_pts.append((float(p[0]), float(p[1]), float(p[2])))
+            pts = tuple(converted_pts)
         raw_anch = gr.get("anchor_point")
-        if raw_anch and isinstance(raw_anch, (list, tuple)) and len(raw_anch) >= 3:
+        if raw_anch and _is_valid_3d_point(raw_anch):
             anch = (float(raw_anch[0]), float(raw_anch[1]), float(raw_anch[2]))
         if not pts and anch:
             pts = (anch,)
@@ -1373,9 +1502,13 @@ def _extract_gr_pts_and_anchor(gr: Any) -> Tuple[Tuple[Tuple[float, float, float
     else:
         raw_pts = getattr(gr, "anchor_points", None)
         if raw_pts and isinstance(raw_pts, (list, tuple)):
-            pts = tuple(tuple(float(c) for c in p) for p in raw_pts)
+            converted_pts = []
+            for p in raw_pts:
+                if _is_valid_3d_point(p):
+                    converted_pts.append((float(p[0]), float(p[1]), float(p[2])))
+            pts = tuple(converted_pts)
         raw_anch = getattr(gr, "anchor_point", None)
-        if raw_anch and isinstance(raw_anch, (list, tuple)) and len(raw_anch) >= 3:
+        if raw_anch and _is_valid_3d_point(raw_anch):
             anch = (float(raw_anch[0]), float(raw_anch[1]), float(raw_anch[2]))
         if not pts and anch:
             pts = (anch,)
@@ -1402,27 +1535,92 @@ def _extract_gr_entity_type(gr: Any) -> str:
     return str(getattr(gr, "entity_type", "face"))
 
 
+def _is_valid_3d_point(pt: Any) -> bool:
+    """Validate that a point is a 3-element coordinate of finite non-boolean floats."""
+    if not isinstance(pt, (list, tuple)) or len(pt) < 3:
+        return False
+    for c in pt[:3]:
+        if isinstance(c, bool) or not isinstance(c, (int, float)):
+            return False
+        try:
+            fc = float(c)
+            if not math.isfinite(fc):
+                return False
+        except (ValueError, TypeError):
+            return False
+    return True
+
+
+def _extract_gr_named_selector(gr: Any) -> Tuple[Optional[str], Optional[str]]:
+    """Extract (named_set, named_surface) from GroundedRegion or dict if present."""
+    if gr is None:
+        return None, None
+    named_set: Optional[str] = None
+    named_surf: Optional[str] = None
+    if isinstance(gr, dict):
+        s = gr.get("set")
+        if isinstance(s, str) and s.strip():
+            named_set = s.strip()
+        sf = gr.get("surface")
+        if isinstance(sf, str) and sf.strip():
+            named_surf = sf.strip()
+    else:
+        s = getattr(gr, "set", None)
+        if isinstance(s, str) and s.strip():
+            named_set = s.strip()
+        sf = getattr(gr, "surface", None)
+        if isinstance(sf, str) and sf.strip():
+            named_surf = sf.strip()
+    return named_set, named_surf
+
+
 def _is_valid_grounded_region(gr: Any) -> bool:
-    """Validate whether a grounded region representation has genuine geometry mapping anchors."""
+    """Validate whether a grounded region representation has genuine geometry mapping anchors or consumable named selectors."""
     if gr is None:
         return False
-    if hasattr(gr, "anchor_points") and getattr(gr, "anchor_points"):
-        pts = getattr(gr, "anchor_points")
-        return isinstance(pts, (list, tuple)) and len(pts) > 0 and all(isinstance(p, (list, tuple)) and len(p) >= 3 for p in pts)
-    if hasattr(gr, "anchor_point") and getattr(gr, "anchor_point"):
-        pt = getattr(gr, "anchor_point")
-        return isinstance(pt, (list, tuple)) and len(pt) >= 3
-    if isinstance(gr, dict):
-        if gr.get("resolved") is False:
+
+    # 1. Unresolved flag check (both object and dict)
+    if getattr(gr, "resolved", None) is False:
+        return False
+    if isinstance(gr, dict) and gr.get("resolved") is False:
+        return False
+
+    # 2. Status check (both object and dict)
+    status = getattr(gr, "status", None) if not isinstance(gr, dict) else gr.get("status")
+    if status is not None:
+        st_str = str(status).strip().upper()
+        if st_str in ("NOT_FOUND", "AMBIGUOUS", "UNSUPPORTED", "UNRESOLVED") or not st_str:
             return False
-        pts = gr.get("anchor_points")
-        if isinstance(pts, (list, tuple)) and len(pts) > 0 and all(isinstance(p, (list, tuple)) and len(p) >= 3 for p in pts):
+        if any(unres in st_str for unres in ("NOT_", "UNRESOLVED", "FAIL", "INVALID")):
+            return False
+
+    # 3. Confidence check (both object and dict)
+    conf = getattr(gr, "confidence", None) if not isinstance(gr, dict) else gr.get("confidence")
+    if conf is not None:
+        try:
+            if isinstance(conf, bool) or float(conf) <= 0.0 or not math.isfinite(float(conf)):
+                return False
+        except (ValueError, TypeError):
+            return False
+
+    # 4. Anchor points validation
+    pts = getattr(gr, "anchor_points", None) if not isinstance(gr, dict) else gr.get("anchor_points")
+    if pts and isinstance(pts, (list, tuple)) and len(pts) > 0:
+        if all(_is_valid_3d_point(p) for p in pts):
             return True
-        pt = gr.get("anchor_point")
-        if isinstance(pt, (list, tuple)) and len(pt) >= 3:
+        return False
+
+    pt = getattr(gr, "anchor_point", None) if not isinstance(gr, dict) else gr.get("anchor_point")
+    if pt is not None:
+        if _is_valid_3d_point(pt):
             return True
-        if any(k in gr for k in ("surface", "set", "faces", "side1Faces")):
-            return True
+        return False
+
+    # 5. Consumable named topological selectors (named set or surface with non-empty string name)
+    named_set, named_surf = _extract_gr_named_selector(gr)
+    if named_set is not None or named_surf is not None:
+        return True
+
     return False
 
 

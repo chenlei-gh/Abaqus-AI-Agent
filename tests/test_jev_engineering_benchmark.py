@@ -1157,3 +1157,205 @@ def test_benchmark_cases_sha256_hash_integrity():
     mutated_hash = compute_benchmark_cases_hash(mutated_cases)
     assert mutated_hash != expected_hash
     assert mutated_hash.startswith("sha256_")
+
+    # Verify sensitivity: mutating even one description alters the hash
+    mutated_cases_desc = list(BENCHMARK_CASES)
+    mutated_cases_desc[0] = replace(mutated_cases_desc[0], description=mutated_cases_desc[0].description + " altered desc")
+    mutated_hash_desc = compute_benchmark_cases_hash(mutated_cases_desc)
+    assert mutated_hash_desc != expected_hash
+    assert mutated_hash_desc != mutated_hash
+
+
+def test_shadow_mode_status_conservation_law():
+    """Verify shadow evaluation satisfies status conservation: N_total = N_eval + N_fail + N_not_conf."""
+    from tools.jev_engineering_benchmark import run_engineering_benchmark
+
+    # 1. Unconfigured scenario: all cases are NOT_CONFIGURED
+    report_unconf = run_engineering_benchmark(mode="shadow")
+    sm_u = report_unconf["shadow_metrics"]
+    assert sm_u["status_conservation_verified"] is True
+    assert sm_u["total_cases"] == sm_u["evaluated_cases"] + sm_u["failed_cases"] + sm_u["not_configured_cases"]
+    assert sm_u["not_configured_cases"] == sm_u["total_cases"]
+    assert sm_u["evaluated_cases"] == 0
+    assert sm_u["failed_cases"] == 0
+
+    # 2. Configured evaluator scenario: all cases are EVALUATED
+    class MockPerfectEvaluator:
+        def is_configured(self) -> bool:
+            return True
+
+        def judge(self, prompt: str, timeout: float = 5.0) -> Dict[str, Any]:
+            return {
+                "answers": {
+                    "physics": {"choice": "linear_static", "confidence": 0.99},
+                    "units": {"choice": "MM_N_MPA", "confidence": 0.95},
+                    "solver": {"choice": "abaqus_standard", "confidence": 0.98},
+                    "well_constrained": {"probability": 0.95},
+                    "has_acceptance_criteria": {"probability": 0.90},
+                    "completeness": {"score": 4.5},
+                }
+            }
+
+    shadow_router = JevIntentRouter(mode="shadow", external_provider=MockPerfectEvaluator())
+    report_eval = run_engineering_benchmark(router=shadow_router)
+    sm_e = report_eval["shadow_metrics"]
+    assert sm_e["status_conservation_verified"] is True
+    assert sm_e["total_cases"] == sm_e["evaluated_cases"] + sm_e["failed_cases"] + sm_e["not_configured_cases"]
+    assert sm_e["evaluated_cases"] == sm_e["total_cases"]
+    assert sm_e["failed_cases"] == 0
+    assert sm_e["not_configured_cases"] == 0
+
+
+def test_compiler_step_file_grounding_gate_rejects_unresolved_or_invalid_objects():
+    """Verify GroundedRegion dataclass objects with resolved=False, invalid status, or confidence<=0 are rejected."""
+    from abaqus_ai_agent.contracts.intent import EngineeringIntent
+    from abaqus_ai_agent.grounding.feature_grounding import GroundedRegion
+    from abaqus_ai_agent.planning.compiler import IntentGeometrySpec, compile_engineering_intent
+
+    intent = EngineeringIntent(
+        id="STEP_OBJ_GATE_01",
+        kind="linear_static",
+        description="Bracket with GroundedRegion objects",
+        analysis_type="linear_static",
+        unit_system="MM_N_MPA",
+        material={"name": "Steel", "elastic_modulus": 210000.0, "poisson_ratio": 0.3},
+        boundary_conditions=({"type": "encastre", "region": "MountingHole"},),
+        loads=({"type": "concentrated_force", "region": "LoadBearingEye", "magnitude": 1000.0},),
+    )
+    step_geom = IntentGeometrySpec(shape="step_file", step_file_path="/path/to/part.step")
+
+    # 1. Object with status="NOT_FOUND"
+    gr_not_found = GroundedRegion(
+        target_semantic="MountingHole",
+        entity_type="Face",
+        entity_ids=("F_1",),
+        anchor_point=(0.0, 0.0, 0.0),
+        status="NOT_FOUND",
+    )
+    gr_valid = GroundedRegion(
+        target_semantic="LoadBearingEye",
+        entity_type="Face",
+        entity_ids=("F_2",),
+        anchor_point=(10.0, 0.0, 0.0),
+        status="RESOLVED",
+    )
+    with pytest.raises(ValueError, match="lack valid GroundedRegion mappings") as exc1:
+        compile_engineering_intent(intent, geometry=step_geom, grounded_regions={"MountingHole": gr_not_found, "LoadBearingEye": gr_valid})
+    assert "MountingHole" in str(exc1.value)
+
+    # 2. Object with confidence <= 0.0
+    gr_zero_conf = GroundedRegion(
+        target_semantic="MountingHole",
+        entity_type="Face",
+        entity_ids=("F_1",),
+        anchor_point=(0.0, 0.0, 0.0),
+        confidence=0.0,
+        status="RESOLVED",
+    )
+    with pytest.raises(ValueError, match="lack valid GroundedRegion mappings") as exc2:
+        compile_engineering_intent(intent, geometry=step_geom, grounded_regions={"MountingHole": gr_zero_conf, "LoadBearingEye": gr_valid})
+    assert "MountingHole" in str(exc2.value)
+
+
+def test_compiler_step_file_grounding_gate_rejects_nan_inf_bool_string_coordinates():
+    """Verify coordinate components containing NaN, Inf, bool, or strings are strictly rejected."""
+    import math
+    from abaqus_ai_agent.contracts.intent import EngineeringIntent
+    from abaqus_ai_agent.planning.compiler import IntentGeometrySpec, compile_engineering_intent
+
+    intent = EngineeringIntent(
+        id="STEP_COORDS_STRICT_01",
+        kind="linear_static",
+        description="Bracket with non-finite coordinates",
+        analysis_type="linear_static",
+        unit_system="MM_N_MPA",
+        material={"name": "Steel", "elastic_modulus": 210000.0, "poisson_ratio": 0.3},
+        boundary_conditions=({"type": "encastre", "region": "MountingHole"},),
+        loads=({"type": "concentrated_force", "region": "LoadBearingEye", "magnitude": 1000.0},),
+    )
+    step_geom = IntentGeometrySpec(shape="step_file", step_file_path="/path/to/part.step")
+
+    # NaN in anchor_point
+    with pytest.raises(ValueError, match="lack valid GroundedRegion mappings"):
+        compile_engineering_intent(
+            intent, geometry=step_geom,
+            grounded_regions={
+                "MountingHole": {"anchor_point": (0.0, float("nan"), 0.0)},
+                "LoadBearingEye": {"anchor_point": (10.0, 0.0, 0.0)},
+            }
+        )
+
+    # Inf in anchor_points
+    with pytest.raises(ValueError, match="lack valid GroundedRegion mappings"):
+        compile_engineering_intent(
+            intent, geometry=step_geom,
+            grounded_regions={
+                "MountingHole": {"anchor_points": [(0.0, 0.0, float("inf"))]},
+                "LoadBearingEye": {"anchor_point": (10.0, 0.0, 0.0)},
+            }
+        )
+
+    # Boolean in coordinates (bool is a subclass of int, must be rejected)
+    with pytest.raises(ValueError, match="lack valid GroundedRegion mappings"):
+        compile_engineering_intent(
+            intent, geometry=step_geom,
+            grounded_regions={
+                "MountingHole": {"anchor_point": (True, 0.0, 0.0)},
+                "LoadBearingEye": {"anchor_point": (10.0, 0.0, 0.0)},
+            }
+        )
+
+    # String in coordinates
+    with pytest.raises(ValueError, match="lack valid GroundedRegion mappings"):
+        compile_engineering_intent(
+            intent, geometry=step_geom,
+            grounded_regions={
+                "MountingHole": {"anchor_point": ("0.0", 0.0, 0.0)},
+                "LoadBearingEye": {"anchor_point": (10.0, 0.0, 0.0)},
+            }
+        )
+
+
+def test_compiler_step_file_grounding_gate_consumes_named_selectors_without_empty_findat():
+    """Verify named sets/surfaces are directly consumed without generating empty findAt() calls."""
+    from abaqus_ai_agent.contracts.intent import EngineeringIntent
+    from abaqus_ai_agent.planning.compiler import IntentGeometrySpec, compile_engineering_intent
+
+    intent = EngineeringIntent(
+        id="STEP_NAMED_SELECTORS_01",
+        kind="linear_static",
+        description="Bracket with named set and named surface mappings",
+        analysis_type="linear_static",
+        unit_system="MM_N_MPA",
+        material={"name": "Steel", "elastic_modulus": 210000.0, "poisson_ratio": 0.3},
+        boundary_conditions=({"type": "encastre", "region": "FixedFace"},),
+        loads=({"type": "pressure", "region": "PressureFace", "magnitude": 5.0},),
+    )
+    step_geom = IntentGeometrySpec(shape="step_file", step_file_path="/path/to/part.step")
+
+    # 1. Providing consumable named set for BC and named surface for Load
+    plan = compile_engineering_intent(
+        intent,
+        geometry=step_geom,
+        grounded_regions={
+            "FixedFace": {"set": "Hole_Fix_Set"},
+            "PressureFace": {"surface": "Top_Pres_Surf"},
+        },
+    )
+    assert plan is not None
+    # Verify generated script consumes named set and surface directly without findAt()
+    cae_script = plan.cae_script
+    assert "a.sets['Hole_Fix_Set']" in cae_script
+    assert "a.surfaces['Top_Pres_Surf']" in cae_script
+    assert "findAt()" not in cae_script  # Never emit empty findAt()!
+
+    # 2. Reject raw non-consumable selectors like raw faces without names or anchors
+    with pytest.raises(ValueError, match="lack valid GroundedRegion mappings"):
+        compile_engineering_intent(
+            intent,
+            geometry=step_geom,
+            grounded_regions={
+                "FixedFace": {"faces": [1, 2]},  # raw unconsumable selector
+                "PressureFace": {"surface": "Top_Pres_Surf"},
+            },
+        )

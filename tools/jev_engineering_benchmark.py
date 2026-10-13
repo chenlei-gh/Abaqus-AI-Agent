@@ -58,6 +58,7 @@ def compute_benchmark_cases_hash(cases: List[BenchmarkCase]) -> str:
             "case_id": c.case_id,
             "dimension": c.dimension,
             "prompt": c.prompt,
+            "description": c.description,
             "expected_status": c.expected_status,
             "expected_physics": c.expected_physics,
             "expected_missing": sorted(c.expected_missing) if c.expected_missing else [],
@@ -500,8 +501,17 @@ def run_engineering_benchmark(
 
     shadow_metrics = None
     if router_mode == "shadow":
-        evaluated_cases = [r for r in case_results if r.get("shadow_diff", {}).get("status") == "EVALUATED"]
+        evaluated_cases = [
+            r for r in case_results
+            if r.get("shadow_diff", {}).get("status") == "EVALUATED"
+            and r.get("shadow_diff", {}).get("live_physics") is not None
+        ]
         evaluated_count = len(evaluated_cases)
+        failed_count = sum(1 for r in case_results if r.get("shadow_diff", {}).get("status") == "LIVE_FAILED")
+        not_configured_count = sum(1 for r in case_results if r.get("shadow_diff", {}).get("status") == "NOT_CONFIGURED")
+        other_status_count = total_cases - (evaluated_count + failed_count + not_configured_count)
+        status_conserved = (total_cases == (evaluated_count + failed_count + not_configured_count))
+
         physics_matches_count = sum(1 for r in evaluated_cases if r.get("shadow_diff", {}).get("physics_match") is True)
 
         # External provider independent ground truth evaluation
@@ -562,6 +572,10 @@ def run_engineering_benchmark(
 
         shadow_metrics = {
             "evaluated_cases": evaluated_count,
+            "failed_cases": failed_count,
+            "not_configured_cases": not_configured_count,
+            "other_status_cases": other_status_count,
+            "status_conservation_verified": status_conserved,
             "total_cases": total_cases,
             "coverage_pct": coverage_pct,
             "physics_matches": physics_matches_count,
@@ -684,11 +698,13 @@ def format_markdown_report(report: Dict[str, Any]) -> str:
 
     sm = report.get("shadow_metrics")
     if sm:
+        conservation_str = "Verified (N_total = N_eval + N_fail + N_not_conf)" if sm.get("status_conservation_verified") else "FAILED"
         lines.extend([
             "",
             "## Shadow Dual-Run Comparative Audit",
             "",
             f"- **External Evaluation Coverage**: `{sm.get('coverage_pct', 0.0)}%` ({sm['evaluated_cases']}/{report['total_cases']})",
+            f"- **Status Conservation Law**: `{conservation_str}` (Eval: {sm.get('evaluated_cases', 0)}, Failed: {sm.get('failed_cases', 0)}, Not Configured: {sm.get('not_configured_cases', 0)})",
             f"- **Agreement with Baseline Rule Engine**: `{sm['physics_agreement_pct']}%` ({sm['physics_matches']}/{sm['evaluated_cases']})",
             f"- **External Provider Success-Subset Accuracy**: `{sm.get('success_accuracy_pct', sm.get('live_physics_accuracy_pct', 0.0))}%` ({sm.get('live_ground_truth_matches', 0)}/{sm.get('live_ground_truth_evaluated_cases', 0)})",
             f"- **External Provider End-to-End Effective Accuracy**: `{sm.get('effective_accuracy_pct', 0.0)}%` ({sm.get('live_ground_truth_matches', 0)}/{sm.get('total_ground_truth_target_cases', 0)})",
