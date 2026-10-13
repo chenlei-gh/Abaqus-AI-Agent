@@ -144,6 +144,7 @@ class AbaqusAIAgent:
         run_id: Optional[str] = None,
         overwrite: bool = False,
         odb_validator: Optional[Callable[[Path], bool]] = None,
+        rollback_on_solver_failure: bool = False,
     ) -> Dict[str, Any]:
         """Surgically modify a user-provided .inp in an isolated working copy and solve it."""
         from .execution.input_modes import edit_and_solve_user_inp
@@ -158,6 +159,7 @@ class AbaqusAIAgent:
             run_id=run_id,
             overwrite=overwrite,
             odb_validator=odb_validator,
+            rollback_on_solver_failure=rollback_on_solver_failure,
         )
 
     def postprocess_user_odb(

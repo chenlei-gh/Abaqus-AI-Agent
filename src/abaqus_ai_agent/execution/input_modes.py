@@ -56,6 +56,10 @@ class IncludeDependencyPlan:
     source_sha256: str
 
 
+class RollbackError(RuntimeError):
+    """Raised when one or more file restoration or cleanup steps fail during rollback."""
+
+
 class WorkspaceTransaction:
     """Transactional staging, backup, and rollback manager for workspace files.
 
@@ -63,10 +67,12 @@ class WorkspaceTransaction:
     1. Newly created files are tracked and unlinked on rollback.
     2. Overwritten existing files are backed up and 100% restored to exact bytes on rollback.
     3. Untouched files remain untouched.
+    4. Rollback errors are recorded and raised rather than silently suppressed.
     """
     def __init__(self):
         self.newly_created: List[Path] = []
         self.backups: Dict[Path, bytes] = {}
+        self.errors: List[Exception] = []
 
     def prepare_write(self, target_path: Union[str, Path]) -> None:
         p = Path(target_path).resolve()
@@ -78,22 +84,29 @@ class WorkspaceTransaction:
                 self.newly_created.append(p)
 
     def rollback(self) -> None:
+        self.errors.clear()
         for p in self.newly_created:
             try:
                 if p.is_file():
                     p.unlink(missing_ok=True)
-            except OSError:
-                pass
+            except Exception as exc:
+                self.errors.append(exc)
         for p, orig_bytes in self.backups.items():
             try:
                 p.parent.mkdir(parents=True, exist_ok=True)
                 p.write_bytes(orig_bytes)
-            except OSError:
-                pass
+            except Exception as exc:
+                self.errors.append(exc)
+        if self.errors:
+            err_msg = "; ".join(f"{type(e).__name__}: {e}" for e in self.errors)
+            raise RollbackError(
+                f"WorkspaceTransaction rollback encountered {len(self.errors)} error(s): {err_msg}"
+            )
 
     def commit(self) -> None:
         self.backups.clear()
         self.newly_created.clear()
+        self.errors.clear()
 
 
 def _compute_file_sha256(path: Union[str, Path]) -> str:
@@ -108,18 +121,27 @@ def _compute_file_sha256(path: Union[str, Path]) -> str:
 def _plan_include_dependencies(
     includes: Sequence[Dict[str, Any]],
     target_dir: Path,
+    source_root_inp: Optional[Path] = None,
 ) -> Tuple[List[IncludeDependencyPlan], List[Dict[str, Any]]]:
     """Pure planning phase for *INCLUDE dependencies without filesystem mutation.
 
     Rules:
     1. Rejects path escape (relative targets must strictly reside within target_dir).
     2. Rejects collisions (different source files mapping to identical target path).
-    3. Returns planned dependency records and list of missing includes.
+    3. Nested include mapping: maps each dependency relative to its referring deck's target directory.
+    4. Returns planned dependency records and list of missing includes.
     """
     plans: List[IncludeDependencyPlan] = []
     missing: List[Dict[str, Any]] = []
     seen_targets: Dict[Path, str] = {}
     resolved_target_dir = target_dir.resolve()
+
+    deck_target_map: Dict[str, Path] = {}
+    root_parent: Optional[Path] = None
+    if source_root_inp is not None:
+        resolved_root_src = str(Path(source_root_inp).resolve())
+        root_parent = Path(source_root_inp).parent.resolve()
+        deck_target_map[resolved_root_src] = (target_dir / Path(source_root_inp).name).resolve()
 
     for inc in includes:
         raw_input = inc.get("input", "")
@@ -130,7 +152,18 @@ def _plan_include_dependencies(
             # Absolute paths reside outside project workspace, not copied
             continue
 
-        dest_inc = (target_dir / raw_input).resolve()
+        source_deck = inc.get("source_deck")
+        parent_target_dir = resolved_target_dir
+        if source_deck and source_deck in deck_target_map:
+            parent_target_dir = deck_target_map[source_deck].parent
+        elif source_deck and root_parent is not None:
+            src_deck_path = Path(source_deck).resolve()
+            if src_deck_path.is_relative_to(root_parent):
+                rel_deck_parent = src_deck_path.relative_to(root_parent).parent
+                parent_target_dir = (resolved_target_dir / rel_deck_parent).resolve()
+                deck_target_map[source_deck] = (resolved_target_dir / src_deck_path.relative_to(root_parent)).resolve()
+
+        dest_inc = (parent_target_dir / raw_input).resolve()
         if not dest_inc.is_relative_to(resolved_target_dir):
             raise ValueError(
                 f"Path escape violation in *INCLUDE: '{raw_input}' escapes target directory '{resolved_target_dir}'."
@@ -146,6 +179,10 @@ def _plan_include_dependencies(
             continue
 
         src_sha256 = inc.get("sha256") or _compute_file_sha256(src_inc)
+        resolved_src_str = str(src_inc)
+        deck_target_map[resolved_src_str] = dest_inc
+
+        rel_logical = str(dest_inc.relative_to(resolved_target_dir)).replace("\\", "/")
 
         if dest_inc in seen_targets:
             existing_sha = seen_targets[dest_inc]
@@ -164,7 +201,7 @@ def _plan_include_dependencies(
                     )
             seen_targets[dest_inc] = src_sha256
             plans.append(IncludeDependencyPlan(
-                logical_path=raw_input,
+                logical_path=rel_logical,
                 source_path=str(src_inc),
                 target_path=str(dest_inc),
                 source_sha256=src_sha256,
@@ -210,12 +247,13 @@ def _execute_include_sync(
 def _sync_include_dependencies(
     includes: Sequence[Dict[str, Any]],
     target_dir: Path,
+    source_root_inp: Optional[Path] = None,
 ) -> List[Dict[str, Any]]:
     """Synchronize and cryptographically verify *INCLUDE dependencies into target workspace.
 
     Backwards-compatible convenience wrapper combining planning and execution.
     """
-    plans, missing = _plan_include_dependencies(includes, target_dir)
+    plans, missing = _plan_include_dependencies(includes, target_dir, source_root_inp=source_root_inp)
     return _execute_include_sync(plans)
 
 
@@ -278,7 +316,11 @@ def solve_user_inp(
             search_dirs=[inp_file.parent],
             recursive=True,
         )
-        plans, missing = _plan_include_dependencies(includes, target_dir=effective_workdir)
+        plans, missing = _plan_include_dependencies(
+            includes,
+            target_dir=effective_workdir,
+            source_root_inp=inp_file,
+        )
         if missing:
             err_detail = "; ".join(
                 f"Line {inc['line_number']}: '{inc['input']}'" for inc in missing
@@ -293,6 +335,11 @@ def solve_user_inp(
     candidate_odb = (effective_workdir if effective_workdir else inp_file.parent) / f"{eff_job_name}.odb"
     pre_existing_odb = candidate_odb.is_file()
     pre_mtime = candidate_odb.stat().st_mtime if pre_existing_odb else None
+    if pre_existing_odb:
+        try:
+            candidate_odb.unlink(missing_ok=True)
+        except OSError:
+            pass
 
     # Invoke solver directly via executor
     orig_workdir = getattr(executor, "workdir", None)
@@ -366,22 +413,39 @@ def solve_user_inp(
                 if returncode != 0:
                     status = "FAILED"
                     error_msg = f"Solver exited with non-zero exit code {returncode}. Stderr: {stderr}"
-                elif expected_odb is None or not expected_odb.is_file():
+                    expected_odb = None
+                elif not candidate_odb.is_file():
                     status = "FAILED"
                     error_msg = f"Solver completed with code 0 but expected ODB output was not found: {eff_job_name}.odb"
-                elif expected_odb.stat().st_size == 0:
+                    expected_odb = None
+                elif candidate_odb.stat().st_size == 0:
                     status = "FAILED"
                     error_msg = f"Solver completed with code 0 but generated empty/corrupt ODB: {eff_job_name}.odb (0 bytes)"
-                elif odb_validator is not None:
-                    try:
-                        is_valid = bool(odb_validator(expected_odb))
-                    except Exception as val_exc:
-                        status = "FAILED"
-                        error_msg = f"Solver output ODB validity verification raised exception: {val_exc}"
-                    else:
-                        if not is_valid:
+                    expected_odb = None
+                elif pre_existing_odb and pre_mtime is not None and candidate_odb.stat().st_mtime <= pre_mtime:
+                    status = "FAILED"
+                    error_msg = (
+                        f"Solver completed but candidate ODB is stale (pre-existed prior to run and was not updated by solver): "
+                        f"{eff_job_name}.odb"
+                    )
+                    expected_odb = None
+                else:
+                    expected_odb = candidate_odb
+                    active_validator = odb_validator
+                    if active_validator is None and hasattr(executor, "validate_odb"):
+                        active_validator = getattr(executor, "validate_odb")
+                    if active_validator is not None:
+                        try:
+                            is_valid = bool(active_validator(expected_odb))
+                        except Exception as val_exc:
                             status = "FAILED"
-                            error_msg = f"Solver output ODB failed validity verification: {eff_job_name}.odb"
+                            error_msg = f"Solver output ODB validity verification raised exception: {val_exc}"
+                            expected_odb = None
+                        else:
+                            if not is_valid:
+                                status = "FAILED"
+                                error_msg = f"Solver output ODB failed validity verification: {eff_job_name}.odb"
+                                expected_odb = None
 
     odb_valid = (
         status == "COMPLETED"
@@ -404,6 +468,7 @@ def solve_user_inp(
         "odb_path": str(expected_odb) if expected_odb else None,
         "execution_result": res,
         "include_dependencies": synced_dependencies,
+        "execution_dependencies": synced_dependencies,
     }
 
 
@@ -564,6 +629,7 @@ def edit_and_solve_user_inp(
     run_id: Optional[str] = None,
     overwrite: bool = False,
     odb_validator: Optional[Callable[[Path], bool]] = None,
+    rollback_on_solver_failure: bool = False,
 ) -> Dict[str, Any]:
     """Surgically edit a user-provided .inp file in an isolated working copy and execute it.
 
@@ -647,7 +713,11 @@ def edit_and_solve_user_inp(
             recursive=True,
         )
 
-        plans, missing_includes = _plan_include_dependencies(all_includes, target_dir=dest_inp.parent)
+        plans, missing_includes = _plan_include_dependencies(
+            all_includes,
+            target_dir=dest_inp.parent,
+            source_root_inp=dest_inp,
+        )
         if missing_includes:
             err_detail = "; ".join(
                 f"Line {inc['line_number']}: '{inc['input']}'"
@@ -660,6 +730,20 @@ def edit_and_solve_user_inp(
         synced_dependencies = _execute_include_sync(plans, tx=tx)
         _verify_solver_dependencies(synced_dependencies)
 
+        # Execute solver under transaction scope
+        solve_res = solve_user_inp(
+            executor=executor,
+            inp_path=dest_inp,
+            job_name=job_name or dest_inp.stem,
+            project_context=project_context,
+            timeout=timeout,
+            run_id=run_id,
+            odb_validator=odb_validator,
+        )
+
+        # Reconcile actual solver workspace dependencies vs editing copy
+        execution_deps = solve_res.get("execution_dependencies") or synced_dependencies
+
         audit_record = InpEditAuditRecord(
             source_path=audit_record.source_path,
             target_path=audit_record.target_path,
@@ -668,24 +752,21 @@ def edit_and_solve_user_inp(
             operations_applied=audit_record.operations_applied,
             diff_summary=audit_record.diff_summary,
             lines_changed=audit_record.lines_changed,
-            include_dependencies=tuple(synced_dependencies),
+            include_dependencies=tuple(execution_deps),
         )
 
-        tx.commit()
+        if solve_res["status"] != "COMPLETED" and rollback_on_solver_failure:
+            tx.rollback()
+            solve_res["rolled_back"] = True
+            solve_res["retained_for_diagnosis"] = False
+        else:
+            tx.commit()
+            solve_res["rolled_back"] = False
+            solve_res["retained_for_diagnosis"] = (solve_res["status"] != "COMPLETED")
 
     except Exception:
         tx.rollback()
         raise
-
-    solve_res = solve_user_inp(
-        executor=executor,
-        inp_path=dest_inp,
-        job_name=job_name or dest_inp.stem,
-        project_context=project_context,
-        timeout=timeout,
-        run_id=run_id,
-        odb_validator=odb_validator,
-    )
 
     solve_res["audit_record"] = audit_record
     solve_res["source_inp_path"] = str(src_file)
@@ -694,6 +775,8 @@ def edit_and_solve_user_inp(
     solve_res["edited_inp_sha256"] = audit_record.target_sha256
     solve_res["diff_summary"] = audit_record.diff_summary
     solve_res["lines_changed"] = audit_record.lines_changed
-    solve_res["include_dependencies"] = list(synced_dependencies)
+    solve_res["include_dependencies"] = list(execution_deps)
+    solve_res["execution_dependencies"] = list(execution_deps)
+    solve_res["edited_include_dependencies"] = list(synced_dependencies)
     solve_res["is_edited"] = True
     return solve_res

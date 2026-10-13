@@ -7,6 +7,7 @@ import pytest
 
 from abaqus_ai_agent.agent import AbaqusAIAgent
 from abaqus_ai_agent.execution.input_modes import (
+    RollbackError,
     UserInputKind,
     WorkspaceTransaction,
     _compute_file_sha256,
@@ -516,3 +517,179 @@ def test_edit_and_solve_user_inp_transactional_rollback_preserves_overwritten_fi
     assert target_working.is_file()
     assert target_working.read_bytes() == b"PRE_EXISTING_IMPORTANT_DATA_V1"
     assert _compute_file_sha256(target_working) == target_sha
+
+
+def test_edit_and_solve_rollback_on_solver_failure_contract(tmp_path):
+    """P0-1 Contract: Verify rollback_on_solver_failure controls rollback vs retention on solver failure."""
+    ctx = _make_dummy_project(tmp_path)
+    main_inp = ctx.input_dir / "deck_solver_fail.inp"
+    main_inp.write_text("*HEADING\nFail Model\n*STEP, NAME=Step-1\n*STATIC\n*END STEP\n")
+
+    class FailSolverExecutor:
+        def run_input(self, input_path, job_name=None, timeout=None, workdir=None):
+            return {"returncode": 1, "stdout": "", "stderr": "Solver crashed"}
+
+    # Case A: rollback_on_solver_failure=True -> rolls back newly created working INP
+    target_a = ctx.working_dir / "deck_fail_rolled_back.inp"
+    res_a = edit_and_solve_user_inp(
+        executor=FailSolverExecutor(),
+        inp_path=main_inp,
+        operations=[{"category": "step", "target": "Step-1", "keyword": "*STATIC", "values": {"total_time": 2.0}}],
+        project_context=ctx,
+        target_filename=target_a.name,
+        rollback_on_solver_failure=True,
+    )
+    assert res_a["status"] == "FAILED"
+    assert res_a["rolled_back"] is True
+    assert res_a["retained_for_diagnosis"] is False
+    assert not target_a.exists()
+
+    # Case B: rollback_on_solver_failure=False (default) -> retains file for diagnostic post-mortem
+    target_b = ctx.working_dir / "deck_fail_retained.inp"
+    res_b = edit_and_solve_user_inp(
+        executor=FailSolverExecutor(),
+        inp_path=main_inp,
+        operations=[{"category": "step", "target": "Step-1", "keyword": "*STATIC", "values": {"total_time": 2.0}}],
+        project_context=ctx,
+        target_filename=target_b.name,
+        rollback_on_solver_failure=False,
+    )
+    assert res_b["status"] == "FAILED"
+    assert res_b["rolled_back"] is False
+    assert res_b["retained_for_diagnosis"] is True
+    assert target_b.is_file()
+
+
+def test_workspace_transaction_rollback_error_raised(tmp_path, monkeypatch):
+    """P0-1 Contract: Verify WorkspaceTransaction.rollback collects and raises RollbackError when recovery fails."""
+    tx = WorkspaceTransaction()
+    target_file = tmp_path / "protected_target.txt"
+    target_file.write_bytes(b"INITIAL_BYTES")
+    tx.prepare_write(target_file)
+    target_file.write_bytes(b"ALTERED_BYTES")
+
+    def mock_write_bytes(self, data):
+        raise PermissionError("Access denied during file restoration")
+
+    monkeypatch.setattr(Path, "write_bytes", mock_write_bytes)
+
+    with pytest.raises(RollbackError) as exc_info:
+        tx.rollback()
+
+    assert "PermissionError" in str(exc_info.value)
+    assert len(tx.errors) == 1
+
+
+def test_multilevel_nested_include_target_directory_hierarchy(tmp_path):
+    """P0-2 Contract: Verify multi-level nested *INCLUDE dependencies preserve relative subdirectories."""
+    ctx = _make_dummy_project(tmp_path)
+    src_dir = ctx.input_dir
+
+    # Multi-level structure:
+    # main.inp -> sub/part.inc -> deep/section.inc (relative to sub/)
+    sub_dir = src_dir / "sub"
+    sub_dir.mkdir(parents=True, exist_ok=True)
+    deep_dir = sub_dir / "deep"
+    deep_dir.mkdir(parents=True, exist_ok=True)
+
+    deep_inc = deep_dir / "section.inc"
+    deep_inc.write_text("*MATERIAL, NAME=STEEL\n*ELASTIC\n210000., 0.3\n")
+
+    part_inc = sub_dir / "part.inc"
+    part_inc.write_text("*INCLUDE, INPUT=deep/section.inc\n*SOLID SECTION, MATERIAL=STEEL\n")
+
+    main_inp = src_dir / "assembly.inp"
+    main_inp.write_text("*HEADING\nAssembly\n*INCLUDE, INPUT=sub/part.inc\n*STEP, NAME=Step-1\n*STATIC\n*END STEP\n")
+
+    executor = DummyInpExecutor()
+    res = edit_and_solve_user_inp(
+        executor=executor,
+        inp_path=main_inp,
+        operations=[{"category": "step", "target": "Step-1", "keyword": "*STATIC", "values": {"total_time": 3.0}}],
+        project_context=ctx,
+        target_filename="assembly_edited.inp",
+    )
+
+    assert res["status"] == "COMPLETED"
+    exec_deps = res["execution_dependencies"]
+    logical_paths = [dep["logical_path"] for dep in exec_deps]
+    assert "sub/part.inc" in logical_paths
+    assert "sub/deep/section.inc" in logical_paths
+
+    # Verify both files exist under solver workspace at correct hierarchical paths
+    for dep in exec_deps:
+        p = Path(dep["target_path"])
+        assert p.is_file()
+        assert _compute_file_sha256(p) == dep["target_sha256"]
+
+
+def test_solve_user_inp_stale_preexisting_odb_rejected(tmp_path):
+    """P0-3 Contract: Pre-existing stale ODB with untouched timestamp MUST NOT be accepted as valid output."""
+    ctx = _make_dummy_project(tmp_path)
+    main_inp = ctx.input_dir / "stale_test.inp"
+    main_inp.write_text("*HEADING\nStale Test\n")
+
+    class StaleLeavingExecutor:
+        """Simulates solver completing with returncode=0 but failing to produce a new ODB."""
+        def run_input(self, input_path, job_name=None, timeout=None, workdir=None):
+            # Does not touch or overwrite candidate ODB
+            return {"returncode": 0, "stdout": "Job finished", "stderr": ""}
+
+    run_id = "test_run_stale_001"
+    solver_dir = ctx.solver_dir / run_id
+    solver_dir.mkdir(parents=True, exist_ok=True)
+    stale_odb = solver_dir / "stale_test.odb"
+    stale_odb.write_bytes(b"ANCIENT_PRE_EXISTING_ODB_FROM_PAST")
+
+    res = solve_user_inp(
+        executor=StaleLeavingExecutor(),
+        inp_path=main_inp,
+        project_context=ctx,
+        run_id=run_id,
+    )
+
+    assert res["status"] == "FAILED"
+    assert res["odb_path"] is None
+    assert res["odb_valid"] is False
+    assert "stale" in res["error"]
+
+
+def test_audit_record_points_to_solver_execution_dependencies(tmp_path):
+    """P0-4 Contract: audit_record.include_dependencies MUST point to solver/<run_id>/ workspace files."""
+    ctx = _make_dummy_project(tmp_path)
+    src_dir = ctx.input_dir
+
+    inc_file = src_dir / "props.inc"
+    inc_file.write_text("*MATERIAL, NAME=ALU\n*ELASTIC\n70000., 0.33\n")
+
+    main_inp = src_dir / "audit_test.inp"
+    main_inp.write_text("*HEADING\nAudit Test\n*INCLUDE, INPUT=props.inc\n*STEP, NAME=Step-1\n*STATIC\n*END STEP\n")
+
+    executor = DummyInpExecutor()
+    res = edit_and_solve_user_inp(
+        executor=executor,
+        inp_path=main_inp,
+        operations=[{"category": "step", "target": "Step-1", "keyword": "*STATIC", "values": {"total_time": 1.5}}],
+        project_context=ctx,
+        target_filename="audit_test_edited.inp",
+    )
+
+    assert res["status"] == "COMPLETED"
+    audit_record = res["audit_record"]
+
+    # Verify audit_record.include_dependencies points to solver workspace
+    solver_deps = audit_record.include_dependencies
+    assert len(solver_deps) == 1
+    dep = solver_deps[0]
+
+    target_p = Path(dep["target_path"])
+    assert target_p.is_file()
+    assert "solver" in target_p.parts
+    assert _compute_file_sha256(target_p) == dep["target_sha256"]
+
+    # Verify edited_include_dependencies points to working workspace
+    edited_deps = res["edited_include_dependencies"]
+    assert len(edited_deps) == 1
+    working_p = Path(edited_deps[0]["target_path"])
+    assert working_p.is_file()
+    assert "working" in working_p.parts
