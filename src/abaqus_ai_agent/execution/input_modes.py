@@ -309,7 +309,7 @@ def edit_and_solve_user_inp(
     project_context: Optional[ExternalProjectContext] = None,
     timeout: Optional[int] = None,
     run_id: Optional[str] = None,
-    overwrite: bool = True,
+    overwrite: bool = False,
 ) -> Dict[str, Any]:
     """Surgically edit a user-provided .inp file in an isolated working copy and execute it.
 
@@ -318,21 +318,39 @@ def edit_and_solve_user_inp(
     2. Working Copy Isolation: Surgical edits are applied solely to a new working file.
     3. Verifiable Audit: Preserves pre/post SHA-256 and reproducible unified diff.
     4. Isolated Execution: Direct solver run in isolated solver/<run_id>/ workspace.
+    5. Containment Defense: Target path must not escape the designated working directory.
+    6. Include Validation: Pre-verifies external *INCLUDE references before launching the solver.
     """
-    from ..editing.inp_editor import InpEditOperation, edit_inp_file
+    from ..editing.inp_editor import ControlledInpEditor, InpEditOperation, edit_inp_file
 
     src_file = Path(inp_path).resolve()
     if not src_file.is_file():
         raise FileNotFoundError(f"User INP file does not exist: {src_file}")
 
+    allowed_dir: Path
     if project_context is not None:
         target_name = target_filename or f"{src_file.stem}_edited.inp"
-        dest_inp = project_context.working_dir / target_name
+        dest_inp = (project_context.working_dir / target_name).resolve()
+        allowed_dir = project_context.working_dir.resolve()
+        if not dest_inp.is_relative_to(allowed_dir):
+            raise ValueError(
+                f"Path escape violation: target path '{dest_inp}' escapes working_dir '{allowed_dir}'."
+            )
     else:
         target_name = target_filename or f"{src_file.stem}_edited_{uuid.uuid4().hex[:6]}.inp"
-        dest_inp = src_file.parent / target_name
+        dest_inp = (src_file.parent / target_name).resolve()
+        allowed_dir = src_file.parent.resolve()
+        if not dest_inp.is_relative_to(allowed_dir):
+            raise ValueError(
+                f"Path escape violation: target path '{dest_inp}' escapes parent directory '{allowed_dir}'."
+            )
         if dest_inp == src_file:
             raise PermissionError("Zero In-Place Mutation violation: target_path cannot be identical to source_path.")
+
+    if dest_inp.exists() and not overwrite:
+        raise FileExistsError(
+            f"Target INP '{dest_inp}' already exists. Pass overwrite=True to permit overwrite."
+        )
 
     inp_ops = []
     for op in operations:
@@ -356,7 +374,23 @@ def edit_and_solve_user_inp(
         target_path=dest_inp,
         operations=inp_ops,
         overwrite=overwrite,
+        allowed_directory=allowed_dir,
     )
+
+    # Preflight dependency inspection: verify all *INCLUDE references exist
+    editor_checker = ControlledInpEditor(dest_inp)
+    missing_includes = [
+        inc for inc in editor_checker.inspect_includes(base_dir=dest_inp.parent)
+        if not inc["exists"]
+    ]
+    if missing_includes:
+        err_detail = "; ".join(
+            f"Line {inc['line_number']}: '{inc['input']}'"
+            for inc in missing_includes
+        )
+        raise FileNotFoundError(
+            f"Missing required *INCLUDE dependency file(s) for '{dest_inp.name}': {err_detail}"
+        )
 
     solve_res = solve_user_inp(
         executor=executor,

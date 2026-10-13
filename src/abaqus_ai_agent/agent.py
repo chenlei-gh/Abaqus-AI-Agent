@@ -140,7 +140,7 @@ class AbaqusAIAgent:
         project_context: Optional[Any] = None,
         timeout: Optional[int] = None,
         run_id: Optional[str] = None,
-        overwrite: bool = True,
+        overwrite: bool = False,
     ) -> Dict[str, Any]:
         """Surgically modify a user-provided .inp in an isolated working copy and solve it."""
         from .execution.input_modes import edit_and_solve_user_inp

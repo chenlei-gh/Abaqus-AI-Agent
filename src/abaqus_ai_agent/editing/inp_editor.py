@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import difflib
 import hashlib
+import math
 import os
 import re
 import shutil
@@ -48,10 +49,34 @@ class ControlledInpEditor:
         self.source_path = Path(source_path).resolve()
         if not self.source_path.is_file():
             raise FileNotFoundError(f"Source INP file not found: {self.source_path}")
-        raw_bytes = self.source_path.read_bytes()
-        self.source_sha256 = hashlib.sha256(raw_bytes).hexdigest()
-        self._raw_content = raw_bytes.decode("utf-8", errors="replace")
+        self._raw_bytes = self.source_path.read_bytes()
+        self.source_sha256 = hashlib.sha256(self._raw_bytes).hexdigest()
+        self._newline = "\r\n" if b"\r\n" in self._raw_bytes else "\n"
+        self._raw_content = self._raw_bytes.decode("utf-8", errors="replace")
         self._lines = self._raw_content.splitlines()
+
+    @staticmethod
+    def _validate_token_string(token: str, field_name: str = "identifier") -> str:
+        """Validate token to forbid newline injections or leading keyword prefixes."""
+        if not isinstance(token, str) or not token.strip():
+            raise ValueError(f"{field_name} must be a non-empty string.")
+        stripped = token.strip()
+        if "\n" in stripped or "\r" in stripped:
+            raise ValueError(f"{field_name} cannot contain newline characters: {token!r}")
+        if stripped.startswith("*"):
+            raise ValueError(f"{field_name} cannot start with '*' (keyword injection attempt): {token!r}")
+        return stripped
+
+    @staticmethod
+    def _validate_numeric_value(val: Any, field_name: str = "value") -> float:
+        """Ensure numeric value is a valid finite float (no NaN, Inf, -Inf)."""
+        try:
+            num = float(val)
+        except (ValueError, TypeError) as exc:
+            raise ValueError(f"{field_name} must be a valid number, got {val!r}") from exc
+        if not math.isfinite(num):
+            raise ValueError(f"{field_name} must be finite (got {val!r})")
+        return num
 
     @staticmethod
     def _parse_keyword_line(line: str) -> Optional[Tuple[str, Dict[str, str]]]:
@@ -70,6 +95,35 @@ class ControlledInpEditor:
                 params[p.strip().upper()] = "TRUE"
         return kw_name, params
 
+    def inspect_includes(self, base_dir: Optional[Union[str, Path]] = None) -> List[Dict[str, Any]]:
+        """Scan all *INCLUDE keywords and verify external file dependencies."""
+        search_root = Path(base_dir).resolve() if base_dir else self.source_path.parent
+        results = []
+        for i, line in enumerate(self._lines):
+            parsed = self._parse_keyword_line(line)
+            if parsed and parsed[0] == "INCLUDE":
+                input_spec = parsed[1].get("INPUT", "")
+                if not input_spec:
+                    results.append({
+                        "line_number": i + 1,
+                        "input": "",
+                        "resolved_path": None,
+                        "exists": False,
+                        "error": "Missing INPUT parameter in *INCLUDE keyword",
+                    })
+                    continue
+                cand_path = Path(input_spec)
+                if not cand_path.is_absolute():
+                    cand_path = (search_root / cand_path).resolve()
+                results.append({
+                    "line_number": i + 1,
+                    "input": input_spec,
+                    "resolved_path": str(cand_path),
+                    "exists": cand_path.is_file(),
+                    "error": None if cand_path.is_file() else f"Referenced file not found: {cand_path}",
+                })
+        return results
+
     def edit_material(
         self,
         material_name: str,
@@ -77,11 +131,22 @@ class ControlledInpEditor:
         new_data_lines: Sequence[Sequence[Union[float, int, str]]],
     ) -> ControlledInpEditor:
         """Surgically modify material property data lines under *MATERIAL, NAME=<material_name>."""
-        if not material_name or not isinstance(material_name, str):
-            raise ValueError("material_name must be a non-empty string.")
+        valid_mat_name = self._validate_token_string(material_name, "material_name")
         prop_kw = property_keyword.strip().upper()
         if not prop_kw.startswith("*"):
             prop_kw = "*" + prop_kw
+
+        # Validate new_data_lines elements
+        validated_rows = []
+        for r_idx, row in enumerate(new_data_lines):
+            row_vals = []
+            for c_idx, val in enumerate(row):
+                if isinstance(val, (int, float)):
+                    row_vals.append(self._validate_numeric_value(val, f"row[{r_idx}][{c_idx}]"))
+                else:
+                    token_str = self._validate_token_string(str(val), f"row[{r_idx}][{c_idx}]")
+                    row_vals.append(token_str)
+            validated_rows.append(row_vals)
 
         # Scan for target *MATERIAL block
         target_mat_indices = []
@@ -89,52 +154,60 @@ class ControlledInpEditor:
             parsed = self._parse_keyword_line(line)
             if parsed and parsed[0] == "MATERIAL":
                 name = parsed[1].get("NAME", "")
-                if name.upper() == material_name.upper():
+                if name.upper() == valid_mat_name.upper():
                     target_mat_indices.append(i)
 
         if not target_mat_indices:
-            raise KeyError(f"Material '{material_name}' not found in source INP.")
+            raise KeyError(f"Material '{valid_mat_name}' not found in source INP.")
         if len(target_mat_indices) > 1:
-            raise ValueError(f"Ambiguous target: multiple *MATERIAL blocks named '{material_name}' found.")
+            raise ValueError(f"Ambiguous target: multiple *MATERIAL blocks named '{valid_mat_name}' found.")
 
         mat_start = target_mat_indices[0]
-        # Find bounds of this *MATERIAL block (until next major keyword, step, or end)
         mat_end = len(self._lines)
         for i in range(mat_start + 1, len(self._lines)):
             parsed = self._parse_keyword_line(self._lines[i])
             if parsed:
-                # Top level keywords that end material definition
                 if parsed[0] in ("MATERIAL", "STEP", "PART", "ASSEMBLY", "END PART", "END ASSEMBLY"):
                     mat_end = i
                     break
 
-        # Locate property keyword inside material block
-        prop_idx = -1
+        # Locate property keyword inside material block and check for ambiguity
+        matched_props = []
         for i in range(mat_start + 1, mat_end):
             parsed = self._parse_keyword_line(self._lines[i])
             if parsed and "*" + parsed[0] == prop_kw:
-                prop_idx = i
-                break
+                matched_props.append(i)
 
-        if prop_idx == -1:
-            raise KeyError(f"Property '{prop_kw}' not found under material '{material_name}'.")
+        if not matched_props:
+            raise KeyError(f"Property '{prop_kw}' not found under material '{valid_mat_name}'.")
+        if len(matched_props) > 1:
+            raise ValueError(
+                f"Ambiguous target: multiple '{prop_kw}' property blocks found under material '{valid_mat_name}'."
+            )
 
-        # Find data lines belonging to this property (non-keyword lines following prop_idx)
+        prop_idx = matched_props[0]
+
+        # Find data lines belonging to this property (preserving comments)
         data_start = prop_idx + 1
         data_end = data_start
+        comments_in_block = []
         while data_end < mat_end:
             stripped = self._lines[data_end].strip()
             if stripped.startswith("*") and not stripped.startswith("**"):
                 break
+            if stripped.startswith("**"):
+                comments_in_block.append(self._lines[data_end])
             data_end += 1
 
         formatted_lines = []
-        for row in new_data_lines:
+        for row in validated_rows:
             row_str = ", ".join(str(val) for val in row)
             formatted_lines.append(f" {row_str}")
 
+        # Preserve any internal comments after data lines
+        replacement = formatted_lines + comments_in_block
         new_lines = list(self._lines)
-        new_lines[data_start:data_end] = formatted_lines
+        new_lines[data_start:data_end] = replacement
         self._lines = new_lines
         return self
 
@@ -149,54 +222,71 @@ class ControlledInpEditor:
         if not proc_kw.startswith("*"):
             proc_kw = "*" + proc_kw
 
-        # Scan for matching step and procedure
+        # Count total steps to guard against ambiguous multi-step modifications without step_name
+        step_indices = []
+        for i, line in enumerate(self._lines):
+            parsed = self._parse_keyword_line(line)
+            if parsed and parsed[0] == "STEP":
+                step_indices.append((i, parsed[1].get("NAME", "")))
+
         target_step_start = 0
         target_step_end = len(self._lines)
         if step_name:
-            step_found = False
-            for i, line in enumerate(self._lines):
-                parsed = self._parse_keyword_line(line)
-                if parsed and parsed[0] == "STEP":
-                    s_name = parsed[1].get("NAME", "")
-                    if s_name.upper() == step_name.upper():
-                        target_step_start = i
-                        step_found = True
-                    elif step_found:
-                        target_step_end = i
-                        break
-            if not step_found:
-                raise KeyError(f"Step '{step_name}' not found in source INP.")
+            valid_step = self._validate_token_string(step_name, "step_name")
+            matched_steps = [idx for idx, name in step_indices if name.upper() == valid_step.upper()]
+            if not matched_steps:
+                raise KeyError(f"Step '{valid_step}' not found in source INP.")
+            if len(matched_steps) > 1:
+                raise ValueError(f"Ambiguous target: multiple steps named '{valid_step}' found.")
+            target_step_start = matched_steps[0]
+            # Find end of step
+            for idx, _ in step_indices:
+                if idx > target_step_start:
+                    target_step_end = idx
+                    break
+        else:
+            if len(step_indices) > 1:
+                raise ValueError(
+                    f"Ambiguous target: INP contains {len(step_indices)} steps. "
+                    "Explicit 'step_name' is required to prevent cross-step corruption."
+                )
 
-        proc_idx = -1
+        matched_procs = []
         for i in range(target_step_start, target_step_end):
             parsed = self._parse_keyword_line(self._lines[i])
             if parsed and "*" + parsed[0] == proc_kw:
-                proc_idx = i
-                break
+                matched_procs.append(i)
 
-        if proc_idx == -1:
+        if not matched_procs:
             raise KeyError(f"Procedure '{proc_kw}' not found in target step.")
+        if len(matched_procs) > 1:
+            raise ValueError(f"Ambiguous target: multiple '{proc_kw}' procedures found in target scope.")
 
-        # Procedure data line is immediately following proc_idx
+        proc_idx = matched_procs[0]
+
         data_start = proc_idx + 1
         data_end = data_start
+        comments_in_block = []
         while data_end < target_step_end:
             stripped = self._lines[data_end].strip()
             if stripped.startswith("*") and not stripped.startswith("**"):
                 break
+            if stripped.startswith("**"):
+                comments_in_block.append(self._lines[data_end])
             data_end += 1
 
-        init_inc = float(time_incrementation.get("initial_inc", 0.1))
-        tot_time = float(time_incrementation.get("total_time", 1.0))
-        min_inc = float(time_incrementation.get("min_inc", 1e-5))
-        max_inc = float(time_incrementation.get("max_inc", tot_time))
+        init_inc = self._validate_numeric_value(time_incrementation.get("initial_inc", 0.1), "initial_inc")
+        tot_time = self._validate_numeric_value(time_incrementation.get("total_time", 1.0), "total_time")
+        min_inc = self._validate_numeric_value(time_incrementation.get("min_inc", 1e-5), "min_inc")
+        max_inc = self._validate_numeric_value(time_incrementation.get("max_inc", tot_time), "max_inc")
 
         if init_inc <= 0 or tot_time <= 0 or min_inc <= 0 or max_inc < min_inc:
             raise ValueError(f"Invalid incrementation parameters: {time_incrementation}")
 
         new_data_str = f" {init_inc}, {tot_time}, {min_inc}, {max_inc}"
+        replacement = [new_data_str] + comments_in_block
         new_lines = list(self._lines)
-        new_lines[data_start:data_end] = [new_data_str]
+        new_lines[data_start:data_end] = replacement
         self._lines = new_lines
         return self
 
@@ -209,6 +299,8 @@ class ControlledInpEditor:
         step_name: Optional[str] = None,
     ) -> ControlledInpEditor:
         """Modify concentrated or distributed load magnitudes on a designated node/surface set."""
+        valid_set = self._validate_token_string(set_name, "set_name")
+        valid_mag = self._validate_numeric_value(new_magnitude, "new_magnitude")
         load_kw = load_keyword.strip().upper()
         if not load_kw.startswith("*"):
             load_kw = "*" + load_kw
@@ -216,21 +308,22 @@ class ControlledInpEditor:
         step_start = 0
         step_end = len(self._lines)
         if step_name:
+            valid_step = self._validate_token_string(step_name, "step_name")
             step_found = False
             for i, line in enumerate(self._lines):
                 parsed = self._parse_keyword_line(line)
                 if parsed and parsed[0] == "STEP":
-                    if parsed[1].get("NAME", "").upper() == step_name.upper():
+                    if parsed[1].get("NAME", "").upper() == valid_step.upper():
                         step_start = i
                         step_found = True
                     elif step_found:
                         step_end = i
                         break
             if not step_found:
-                raise KeyError(f"Step '{step_name}' not found.")
+                raise KeyError(f"Step '{valid_step}' not found.")
 
-        # Find matching load entry
-        load_line_idx = -1
+        # Find matching load entry and check for duplicate ambiguity
+        matched_lines = []
         in_load_block = False
         for i in range(step_start, step_end):
             line = self._lines[i]
@@ -240,20 +333,23 @@ class ControlledInpEditor:
                 continue
             if in_load_block:
                 parts = [p.strip() for p in line.split(",")]
-                if parts and parts[0].upper() == set_name.upper():
+                if parts and parts[0].upper() == valid_set.upper():
                     if dof is None or (len(parts) > 1 and parts[1] == str(dof)):
-                        load_line_idx = i
-                        break
+                        matched_lines.append(i)
 
-        if load_line_idx == -1:
-            raise KeyError(f"Load entry for set '{set_name}' under '{load_kw}' not found.")
+        if not matched_lines:
+            raise KeyError(f"Load entry for set '{valid_set}' under '{load_kw}' not found.")
+        if len(matched_lines) > 1:
+            raise ValueError(
+                f"Ambiguous target: multiple load entries matched set '{valid_set}' under '{load_kw}'."
+            )
 
+        load_line_idx = matched_lines[0]
         old_parts = [p.strip() for p in self._lines[load_line_idx].split(",")]
-        # Replace magnitude (typically last component or position 2)
         if len(old_parts) >= 3:
-            old_parts[2] = str(float(new_magnitude))
+            old_parts[2] = str(valid_mag)
         elif len(old_parts) == 2:
-            old_parts[1] = str(float(new_magnitude))
+            old_parts[1] = str(valid_mag)
         else:
             raise ValueError(f"Malformed load line: '{self._lines[load_line_idx]}'")
 
@@ -273,43 +369,54 @@ class ControlledInpEditor:
         if not kw.startswith("*"):
             kw = "*" + kw
 
+        if not requested_variables:
+            raise ValueError("requested_variables cannot be empty.")
+        validated_vars = [self._validate_token_string(v, "output_variable").upper() for v in requested_variables]
+
         step_start = 0
         step_end = len(self._lines)
         if step_name:
+            valid_step = self._validate_token_string(step_name, "step_name")
             step_found = False
             for i, line in enumerate(self._lines):
                 parsed = self._parse_keyword_line(line)
                 if parsed and parsed[0] == "STEP":
-                    if parsed[1].get("NAME", "").upper() == step_name.upper():
+                    if parsed[1].get("NAME", "").upper() == valid_step.upper():
                         step_start = i
                         step_found = True
                     elif step_found:
                         step_end = i
                         break
             if not step_found:
-                raise KeyError(f"Step '{step_name}' not found.")
+                raise KeyError(f"Step '{valid_step}' not found.")
 
-        kw_idx = -1
+        matched_kws = []
         for i in range(step_start, step_end):
             parsed = self._parse_keyword_line(self._lines[i])
             if parsed and "*" + parsed[0] == kw:
-                kw_idx = i
-                break
+                matched_kws.append(i)
 
-        if kw_idx == -1:
+        if not matched_kws:
             raise KeyError(f"Output keyword '{kw}' not found in step.")
+        if len(matched_kws) > 1:
+            raise ValueError(f"Ambiguous target: multiple '{kw}' keywords found in target scope.")
 
+        kw_idx = matched_kws[0]
         data_start = kw_idx + 1
         data_end = data_start
+        comments_in_block = []
         while data_end < step_end:
             stripped = self._lines[data_end].strip()
             if stripped.startswith("*") and not stripped.startswith("**"):
                 break
+            if stripped.startswith("**"):
+                comments_in_block.append(self._lines[data_end])
             data_end += 1
 
-        formatted_vars = " " + ", ".join(v.strip().upper() for v in requested_variables)
+        formatted_vars = " " + ", ".join(validated_vars)
+        replacement = [formatted_vars] + comments_in_block
         new_lines = list(self._lines)
-        new_lines[data_start:data_end] = [formatted_vars]
+        new_lines[data_start:data_end] = replacement
         self._lines = new_lines
         return self
 
@@ -317,11 +424,19 @@ class ControlledInpEditor:
         self,
         target_path: Union[str, Path],
         overwrite: bool = False,
+        allowed_directory: Optional[Union[str, Path]] = None,
     ) -> InpEditAuditRecord:
         """Save the modified INP content to an isolated target path and return verifiable audit record."""
         dest = Path(target_path).resolve()
         if dest == self.source_path:
             raise PermissionError("Zero In-Place Mutation violation: target_path cannot be identical to source_path.")
+
+        if allowed_directory is not None:
+            allowed_root = Path(allowed_directory).resolve()
+            if not dest.is_relative_to(allowed_root):
+                raise ValueError(
+                    f"Path escape violation: target_path '{dest}' is outside allowed directory '{allowed_root}'."
+                )
 
         # Verify source file integrity remained 100% untampered
         curr_source_sha = hashlib.sha256(self.source_path.read_bytes()).hexdigest()
@@ -332,15 +447,19 @@ class ControlledInpEditor:
             raise FileExistsError(f"Target file '{dest}' already exists. Pass overwrite=True to permit overwrite.")
 
         dest.parent.mkdir(parents=True, exist_ok=True)
-        new_content = "\n".join(self._lines) + "\n"
-        dest.write_text(new_content, encoding="utf-8")
+        # Write bytes deterministically with original newline convention to eliminate Windows CRLF divergence
+        new_content_bytes = (self._newline.join(self._lines) + self._newline).encode("utf-8")
+        dest.write_bytes(new_content_bytes)
 
-        target_sha256 = hashlib.sha256(new_content.encode("utf-8")).hexdigest()
+        # Read actual bytes directly from disk to ensure cryptographic byte-level accuracy
+        actual_disk_bytes = dest.read_bytes()
+        target_sha256 = hashlib.sha256(actual_disk_bytes).hexdigest()
 
         # Compute unified diff
+        new_content_str = self._raw_content.__class__(self._newline.join(self._lines) + self._newline)
         diff_lines = list(difflib.unified_diff(
             self._raw_content.splitlines(keepends=True),
-            new_content.splitlines(keepends=True),
+            new_content_str.splitlines(keepends=True),
             fromfile=str(self.source_path.name),
             tofile=str(dest.name),
             n=3,
@@ -364,6 +483,7 @@ def edit_inp_file(
     target_path: Union[str, Path],
     operations: Sequence[InpEditOperation],
     overwrite: bool = False,
+    allowed_directory: Optional[Union[str, Path]] = None,
 ) -> InpEditAuditRecord:
     """Convenience helper to apply a batch of InpEditOperation specifications to an INP file."""
     editor = ControlledInpEditor(source_path)
@@ -403,7 +523,7 @@ def edit_inp_file(
             "keyword": op.property_keyword,
         })
 
-    record = editor.save(target_path, overwrite=overwrite)
+    record = editor.save(target_path, overwrite=overwrite, allowed_directory=allowed_directory)
     return InpEditAuditRecord(
         source_path=record.source_path,
         target_path=record.target_path,
