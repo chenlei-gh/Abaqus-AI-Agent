@@ -241,3 +241,75 @@ def test_html_report_rich_text_markdown_rendering():
 
     # 4. Paragraph with bold rendered
     assert '<strong>总体裁决结论 / Overall Verdict</strong>: <strong>合格 (VERIFIED PASS)</strong>' in html_out
+
+
+def test_resolve_image_path_strictly_rejects_cross_directory_collision(tmp_path):
+    """P1 契约: 彻底消除模糊跨目录与测试资产同名文件回退。
+
+    即使仓库中或测试资产中存在同名文件 (如 l_bracket_screenshot.png)，
+    若本次指定的路径不存在，_resolve_image_path 必须拒绝跨目录捞取，返回 None。
+    """
+    # 1. Non-existent path with a known colliding filename in test_assets
+    colliding_query = "isolated_run_123/sub/l_bracket_screenshot.png"
+    assert _resolve_image_path(colliding_query) is None
+
+    # 2. Arbitrary non-existent file
+    assert _resolve_image_path("non_existent_dir/never_existed_plot.png") is None
+
+    # 3. Arbitrary file located in another temporary directory with same filename
+    other_dir = tmp_path / "other_run"
+    other_dir.mkdir()
+    target_file = other_dir / "stress_mises.png"
+    target_file.write_bytes(b"dummy_png_bytes")
+
+    # Asking for a path in a different directory must NOT resolve to target_file in other_run
+    wrong_query = str(tmp_path / "current_run" / "stress_mises.png")
+    assert _resolve_image_path(wrong_query) is None
+
+
+def test_resolve_image_path_valid_absolute_and_relative_with_base_dir(tmp_path):
+    """验证绝对路径与合法相对路径（在明确基准目录下）的正常解析。"""
+    # 1. Valid absolute path
+    test_img = tmp_path / "valid_plot.png"
+    test_img.write_bytes(b"\x89PNG\r\n\x1a\n")
+
+    resolved = _resolve_image_path(str(test_img))
+    assert resolved is not None
+    assert resolved.resolve() == test_img.resolve()
+
+    # 2. Valid relative path with explicit base_dir
+    sub_dir = tmp_path / "delivery"
+    sub_dir.mkdir()
+    sub_img = sub_dir / "contour.png"
+    sub_img.write_bytes(b"\x89PNG\r\n\x1a\n")
+
+    resolved_rel = _resolve_image_path("contour.png", base_dir=sub_dir)
+    assert resolved_rel is not None
+    assert resolved_rel.resolve() == sub_img.resolve()
+
+    # 3. Relative path that doesn't exist in base_dir must return None
+    assert _resolve_image_path("missing_in_base.png", base_dir=sub_dir) is None
+
+
+def test_html_report_renders_placeholder_on_cross_directory_collision_attempt():
+    """当引用的图片路径不存在时，即使仓库中存在同名文件，HTML 报告也必须展示缺失占位，严禁冒充。"""
+    report = EngineeringReportData(
+        title="Cross-Directory Collision Prevention Test",
+        figures=[
+            ReportFigure(
+                path="some_other_run/l_bracket_screenshot.png",
+                caption="本应缺失但存在同名测试资产的应力图",
+                kind="contour",
+            )
+        ],
+        acceptance=True,
+    )
+
+    html_out = render_html(report, language="zh")
+
+    # 必须展示缺失占位结构
+    assert "figure-missing" in html_out
+    assert "placeholder-box" in html_out
+    assert "some_other_run/l_bracket_screenshot.png" in html_out
+    # 绝对不能把 test_assets 的图片以 Base64 数据形式误内嵌
+    assert "data:image/png;base64," not in html_out

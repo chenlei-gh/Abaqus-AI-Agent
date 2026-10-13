@@ -35,51 +35,46 @@ def _is_chinese_report(report, language=None):
     return False
 
 
-def _resolve_image_path(path_str):
+def _resolve_image_path(path_str, base_dir=None):
+    """Deterministically and safely resolve visual asset paths for engineering reports.
+
+    P1 Security & Integrity Contract:
+    - Only accepts explicitly specified absolute paths or valid relative paths.
+    - If base_dir is supplied, relative paths resolve strictly against base_dir.
+    - Strictly forbids fuzzy cross-directory fallback searches into test_assets,
+      machine_validation, or global repo_root.glob(**/*) scans, preventing wrong-figure
+      substitution when a run artifact is missing.
+    - Returns None if the target file does not exist, allowing _render_html_figure
+      to cleanly trigger the 'figure-missing' engineering placeholder.
+    """
     if not path_str or path_str.startswith("data:") or path_str.startswith("http://") or path_str.startswith("https://"):
         return None
-    p = Path(path_str)
-    if p.is_file():
-        return p
     try:
-        repo_root = Path(__file__).resolve().parents[3]
+        p = Path(path_str)
     except Exception:
-        repo_root = Path.cwd()
+        return None
 
-    candidate_paths = [
-        p,
-        Path.cwd() / p,
-        Path.cwd() / p.name,
-        repo_root / p,
-        repo_root / p.name,
-        repo_root / "machine_validation" / "p2_cases" / p.name,
-        repo_root / "machine_validation" / p.name,
-        repo_root / "test_assets" / p.name,
-        repo_root / "test_assets" / "drawings" / p.name,
-        repo_root / "test_assets" / "drawings" / "tier3_screenshot" / p.name,
-        Path("machine_validation/p2_cases") / p.name,
-        Path("machine_validation") / p.name,
-        Path("test_assets") / p.name,
-        Path("test_assets/drawings") / p.name,
-        Path("test_assets/drawings/tier3_screenshot") / p.name,
-    ]
-    for cand in candidate_paths:
+    # 1. Directly existing file (absolute or valid relative to current working directory)
+    try:
+        if p.is_file():
+            return p.resolve()
+    except Exception:
+        pass
+
+    # 2. Relative to explicit base_dir if provided
+    if base_dir:
         try:
+            cand = (Path(base_dir) / p).resolve()
             if cand.is_file():
                 return cand
         except Exception:
             pass
 
-    try:
-        for matched in repo_root.glob(f"**/{p.name}"):
-            if matched.is_file():
-                return matched
-    except Exception:
-        pass
+    # 3. Fail-Closed: Never perform fuzzy global searches or test asset fallbacks
     return None
 
 
-def _render_html_figure(caption, path_str, is_zh=False):
+def _render_html_figure(caption, path_str, is_zh=False, base_dir=None):
     """Render publication-grade HTML figure with automatic SVG inlining, Base64 bitmap data URI, or visual placeholder."""
     fig_label = "图 / Figure:" if is_zh else "Figure:"
     is_anim = path_str and (path_str.lower().endswith(".gif") or "anim" in path_str.lower() or "动画" in caption or "Animation" in caption)
@@ -106,8 +101,8 @@ def _render_html_figure(caption, path_str, is_zh=False):
             f'</figure>'
         )
 
-    # 3. Local file resolution
-    resolved_file = _resolve_image_path(path_str)
+    # 3. Resolve path on disk strictly
+    resolved_file = _resolve_image_path(path_str, base_dir=base_dir)
     if resolved_file and resolved_file.is_file():
         suffix = resolved_file.suffix.lower()
         if suffix == ".svg":
@@ -1258,9 +1253,10 @@ def _render_section_lines_to_html(lines, is_zh=False):
     return _render_rich_text_to_html(lines, is_zh=is_zh)
 
 
-def render_html(report, language=None):
+def render_html(report, language=None, base_dir=None):
     """Render publication-grade industrial CAE engineering report directly from EngineeringReportData in semantic HTML."""
     is_zh = _is_chinese_report(report, language=language)
+    eff_base_dir = base_dir or getattr(report, "base_dir", None) or getattr(report, "output_dir", None)
 
     # Extract KPI summaries for executive banner directly from report data
     kpi_cards = []
@@ -1353,7 +1349,7 @@ def render_html(report, language=None):
 
         if heading == "9. Figures":
             for figure in value:
-                body_parts.append(_render_html_figure(figure.caption or figure.kind, figure.path, is_zh=is_zh))
+                body_parts.append(_render_html_figure(figure.caption or figure.kind, figure.path, is_zh=is_zh, base_dir=eff_base_dir))
                 meta = getattr(figure, "metadata", None) or {}
                 interp = meta.get("description") or meta.get("interpretation") or meta.get("engineering_notes")
                 if interp:
@@ -1371,7 +1367,7 @@ def render_html(report, language=None):
                         if "mesh" in f_kind.lower() or f_field in ("MESH", "GRID"):
                             sub_t = "有限元网格空间离散几何拓扑图 (Mesh Discretization Topology)" if is_zh else "Finite Element Mesh Discretization Topology"
                             body_parts.append(f'<h3 class="subsection-heading">{html.escape(sub_t)}</h3>')
-                            body_parts.append(_render_html_figure(figure.caption or "有限元网格划分拓扑图", figure.path, is_zh=is_zh))
+                            body_parts.append(_render_html_figure(figure.caption or "有限元网格划分拓扑图", figure.path, is_zh=is_zh, base_dir=eff_base_dir))
                             interp = f_meta.get("description") or f_meta.get("interpretation") or f_meta.get("engineering_notes")
                             if interp:
                                 lead = "图面工程技术解读 (Technical Figure Analysis):" if is_zh else "Technical Figure Analysis:"
