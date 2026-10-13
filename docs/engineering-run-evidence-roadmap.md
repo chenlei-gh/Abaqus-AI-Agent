@@ -794,9 +794,11 @@ Software Contract Gate ─┤
 3. **I.3: Engineering Reproducibility & Tolerance Invariance**
    - Cryptographic hash invariance across input, model structure, action sequence, and input deck.
    - Solver output floating-point tolerance boundaries (relative tolerance $\le 10^{-4}$).
-4. **I.4: JEV-Powered Product UX & TypeSafe Intent Routing**
+4. **I.4: JEV-Powered Engineering Decision Layer & TypeSafe Intent Routing**
    - TypeSafe System One JEV paradigm (Choice, Score, Noul primitives) mapping natural language prompts to typed `EngineeringIntent` and declarative `ResultRequirement`.
-   - Guaranteed deterministic fallback and complete headless/live Abaqus integration.
+   - Explicit execution modes: `offline` (deterministic rule baseline), `live` (fail-closed authentic API with no silent degradation), and `shadow` (side-by-side discrepancy auditing).
+   - Complete payload question alignment, strict response validation, and zero silent fallback.
+   - Independent offline engineering evaluation benchmark suite with prompt matrices across validity, missing prerequisites, multiphysics, conflicts, boundaries, and adversarial inputs.
 5. **I.5: Packaging, CLI Entrypoints & Runtime Capability Fallback**
    - CLI executable `abaqus-agent` with automatic environment detection, headless execution modes, and graceful degradation when solver license is unavailable.
 	6. **I.6: Public Release Audit, Documentation & Security Sanitization**

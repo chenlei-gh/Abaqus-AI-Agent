@@ -52,6 +52,9 @@ class DeterministicReportPipeline:
         launcher: Optional[str] = None,
         result_intelligence: Optional[Any] = None,
         self_healing: Optional[Any] = None,
+        include_animation: bool = False,
+        include_mesh: bool = False,
+        include_keypoint_detail: bool = False,
     ) -> Tuple[ReportDeliveryCard, ArtifactPointer, EngineeringReportData]:
         """Compile report, render HTML & Markdown, register artifacts, and produce LLM card."""
         # 0. Early Delivery Gate: Verify authorization BEFORE any file creation or disk I/O.
@@ -121,6 +124,9 @@ class DeterministicReportPipeline:
                 run_id=run_id,
                 input_hash=input_hash,
                 odb_hash=eff_odb_hash,
+                include_animation=include_animation,
+                include_mesh=include_mesh,
+                include_keypoint_detail=include_keypoint_detail,
             )
             effective_specs = list(selection_res.specs)
 

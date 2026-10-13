@@ -1,6 +1,6 @@
 {
   "schema_version": "jev_intent_routing_v1",
-  "verified_at": "2026-10-12T07:22:48.905944+00:00",
+  "verified_at": "2026-10-13T05:54:00.780740+00:00",
   "total_prompts": 3,
   "passed_prompts": 3,
   "all_passed": true,
@@ -26,6 +26,8 @@
       "acceptance_criteria_count": 2,
       "bundle": {
         "source_model": "jev-offline-engine-v1",
+        "execution_mode": "offline",
+        "latency_ms": 0.0,
         "physics_choice": {
           "value": "linear_static",
           "confidence": 0.792,
@@ -68,13 +70,23 @@
           "levels": {}
         },
         "extracted_parameters": {
-          "dimensions": [
+          "acceptance_criteria": [
             {
-              "value": 100.0,
+              "metric": "tip_displacement",
+              "operator": "<=",
+              "limit": 2.5,
               "unit": "mm"
             },
             {
-              "value": 2.5,
+              "metric": "max_mises",
+              "operator": "<=",
+              "limit": 600.0,
+              "unit": "MPa"
+            }
+          ],
+          "dimensions": [
+            {
+              "value": 100.0,
               "unit": "mm"
             }
           ],
@@ -93,22 +105,18 @@
             "elastic_modulus": 210000.0,
             "poisson_ratio": 0.3,
             "unit": "MPa"
-          },
-          "acceptance_criteria": [
-            {
-              "metric": "tip_displacement",
-              "operator": "<=",
-              "limit": 2.5,
-              "unit": "mm"
-            },
-            {
-              "metric": "max_mises",
-              "operator": "<=",
-              "limit": 600.0,
-              "unit": "MPa"
-            }
-          ]
-        }
+          }
+        },
+        "inferred_fields": [
+          "acceptance_criteria",
+          "dimensions",
+          "loads",
+          "material",
+          "physics",
+          "units",
+          "solver"
+        ],
+        "shadow_diff": null
       }
     },
     {
@@ -127,6 +135,8 @@
       "acceptance_criteria_count": 1,
       "bundle": {
         "source_model": "jev-offline-engine-v1",
+        "execution_mode": "offline",
+        "latency_ms": 0.0,
         "physics_choice": {
           "value": "steady_thermal",
           "confidence": 0.783,
@@ -177,7 +187,14 @@
               "unit": "C"
             }
           ]
-        }
+        },
+        "inferred_fields": [
+          "acceptance_criteria",
+          "physics",
+          "units",
+          "solver"
+        ],
+        "shadow_diff": null
       }
     },
     {
@@ -201,6 +218,8 @@
       "acceptance_criteria_count": 0,
       "bundle": {
         "source_model": "jev-offline-engine-v1",
+        "execution_mode": "offline",
+        "latency_ms": 0.0,
         "physics_choice": {
           "value": "contact_frictional",
           "confidence": 0.783,
@@ -255,7 +274,15 @@
             "poisson_ratio": 0.3,
             "unit": "MPa"
           }
-        }
+        },
+        "inferred_fields": [
+          "loads",
+          "material",
+          "physics",
+          "units",
+          "solver"
+        ],
+        "shadow_diff": null
       }
     }
   ]

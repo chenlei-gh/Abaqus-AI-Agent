@@ -38,8 +38,26 @@ class BatchResult:
     workdir: Optional[str] = None
 
     @property
-    def succeeded(self):
+    def succeeded(self) -> bool:
         return self.return_code == 0
+
+    @property
+    def returncode(self) -> int:
+        return self.return_code
+
+    def __getitem__(self, key: str) -> Any:
+        if key in ("returncode", "return_code"):
+            return self.return_code
+        if hasattr(self, key):
+            return getattr(self, key)
+        raise KeyError(key)
+
+    def get(self, key: str, default: Any = None) -> Any:
+        if key in ("returncode", "return_code"):
+            return self.return_code
+        if hasattr(self, key):
+            return getattr(self, key)
+        return default
 
 
 class BatchExecutor:

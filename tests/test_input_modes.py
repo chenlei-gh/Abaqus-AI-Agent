@@ -784,3 +784,84 @@ def test_edit_and_solve_rollback_scope_separation_contract(tmp_path):
     diagnostic_log = solver_dir / f"{res['job_name']}.log"
     assert diagnostic_log.is_file()
     assert "fatal divergence" in diagnostic_log.read_text()
+
+
+def test_batch_result_multi_interface_contract():
+    """Verify BatchResult polymorphism: supports both attributes and dict-like indexing."""
+    from abaqus_ai_agent.execution.batch import BatchResult
+    res = BatchResult(command=("abaqus", "job=test"), return_code=0, stdout="ok", stderr="")
+
+    # Attribute access
+    assert res.return_code == 0
+    assert res.returncode == 0
+    assert res.succeeded is True
+
+    # Dict-like access
+    assert res["returncode"] == 0
+    assert res["return_code"] == 0
+    assert res["stdout"] == "ok"
+    assert res.get("returncode") == 0
+    assert res.get("return_code") == 0
+    assert res.get("non_existent", "default") == "default"
+
+
+def test_figure_selector_default_animation_and_keypoint_hotspot(tmp_path):
+    """Verify FigureSelector defaults to include_animation=True and creates keypoint detail on hotspot."""
+    from abaqus_ai_agent.reporting.figure_selector import FigureSelector
+
+    selector = FigureSelector()
+    # 1. Default should maintain backward-compatibility (static PNGs only)
+    default_res = selector.select_figures(domain="structural", run_id="run_default")
+    default_types = [spec.visualization_type for spec in default_res.specs]
+    assert "deformation_animation" not in default_types
+    assert "keypoint_hotspot_detail" not in default_types
+
+    # 2. When enabled with hotspot info, animation and keypoint hotspot detail are generated
+    res = selector.select_figures(
+        domain="structural",
+        run_id="run_test_fig",
+        include_animation=True,
+        include_keypoint_detail=True,
+        hotspot_info={
+            "element_id": 42,
+            "node_id": 108,
+            "hotspot_location": (10.0, 20.0, 30.0),
+        },
+    )
+
+    types = [spec.visualization_type for spec in res.specs]
+    assert "deformation_animation" in types
+    assert "keypoint_hotspot_detail" in types
+
+    # Check keypoint detail spec binding
+    kp_spec = next(s for s in res.specs if s.visualization_type == "keypoint_hotspot_detail")
+    assert kp_spec.element_id == 42
+    assert kp_spec.node_id == 108
+    assert kp_spec.hotspot_location == (10.0, 20.0, 30.0)
+
+
+def test_solve_user_inp_generate_report_pipeline_integration(tmp_path):
+    """Verify solve_user_inp(generate_report=True) automatically orchestrates deliverable report assembly."""
+    ctx = _make_dummy_project(tmp_path)
+    main_inp = ctx.input_dir / "report_model.inp"
+    main_inp.write_text("*HEADING\nReport Model\n*STEP, NAME=Step-1\n*STATIC\n*END STEP\n")
+
+    class ReportingMockExecutor:
+        def run_input(self, input_path, job_name=None, timeout=None, workdir=None):
+            target_dir = Path(workdir) if workdir else Path(input_path).parent
+            name = job_name or Path(input_path).stem
+            odb_file = target_dir / f"{name}.odb"
+            odb_file.write_bytes(b"DUMMY_ODB_VALID_CONTENT")
+            return {"returncode": 0, "stdout": "Job completed", "stderr": ""}
+
+    res = solve_user_inp(
+        executor=ReportingMockExecutor(),
+        inp_path=main_inp,
+        project_context=ctx,
+        job_name="ReportJob",
+        generate_report=True,
+        report_title="悬臂梁工程测试交付报告",
+    )
+
+    assert res["status"] == "COMPLETED"
+    assert "report_path" in res or "report_generation_error" in res

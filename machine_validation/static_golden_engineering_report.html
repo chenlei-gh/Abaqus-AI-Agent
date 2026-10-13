@@ -181,13 +181,15 @@
       color: #64748b;
     }
     .report-figure {
-      margin: 28px 0;
+      margin: 28px auto;
+      max-width: 100%;
       background: #ffffff;
       border: 1px solid var(--border);
       border-radius: 8px;
       padding: 16px;
       text-align: center;
       box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+      overflow: hidden;
     }
     .figure-missing {
       background: #f8fafc;
@@ -234,9 +236,12 @@
       display: block;
     }
     .figure-img {
+      display: block;
+      margin: 0 auto;
       max-width: 100%;
       height: auto;
       border-radius: 4px;
+      object-fit: contain;
     }
     .figure-caption {
       margin-top: 10px;

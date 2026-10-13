@@ -121,9 +121,16 @@ class AbaqusAIAgent:
         run_id: Optional[str] = None,
         odb_validator: Optional[Callable[[Path], bool]] = None,
         require_verified_odb: bool = False,
+        generate_report: bool = False,
+        report_title: Optional[str] = None,
+        deliverables_dir: Optional[Union[str, Path]] = None,
+        requirements: Sequence[Any] = (),
+        include_animation: bool = True,
+        launcher: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Directly solve a user-provided .inp file without redundant Python modeling."""
         from .execution.input_modes import solve_user_inp
+        eff_launcher = launcher or getattr(self.executor, "launcher", None)
         return solve_user_inp(
             executor=self.executor,
             inp_path=inp_path,
@@ -133,6 +140,12 @@ class AbaqusAIAgent:
             run_id=run_id,
             odb_validator=odb_validator,
             require_verified_odb=require_verified_odb,
+            generate_report=generate_report,
+            report_title=report_title,
+            deliverables_dir=deliverables_dir,
+            requirements=requirements,
+            include_animation=include_animation,
+            launcher=eff_launcher,
         )
 
     def edit_and_solve_user_inp(
@@ -148,9 +161,16 @@ class AbaqusAIAgent:
         odb_validator: Optional[Callable[[Path], bool]] = None,
         rollback_on_solver_failure: bool = False,
         require_verified_odb: bool = False,
+        generate_report: bool = False,
+        report_title: Optional[str] = None,
+        deliverables_dir: Optional[Union[str, Path]] = None,
+        requirements: Sequence[Any] = (),
+        include_animation: bool = True,
+        launcher: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Surgically modify a user-provided .inp in an isolated working copy and solve it."""
         from .execution.input_modes import edit_and_solve_user_inp
+        eff_launcher = launcher or getattr(self.executor, "launcher", None)
         return edit_and_solve_user_inp(
             executor=self.executor,
             inp_path=inp_path,
@@ -164,6 +184,12 @@ class AbaqusAIAgent:
             odb_validator=odb_validator,
             rollback_on_solver_failure=rollback_on_solver_failure,
             require_verified_odb=require_verified_odb,
+            generate_report=generate_report,
+            report_title=report_title,
+            deliverables_dir=deliverables_dir,
+            requirements=requirements,
+            include_animation=include_animation,
+            launcher=eff_launcher,
         )
 
     def postprocess_user_odb(
@@ -523,7 +549,8 @@ class AbaqusAIAgent:
         # 1. Natural Language or Structured Intent Routing
         intent = None
         if isinstance(requirement, str):
-            router = JevIntentRouter()
+            jev_mode = kwargs.pop("jev_mode", None)
+            router = JevIntentRouter(mode=jev_mode)
             routing_res = router.route(requirement)
             if routing_res.status == "NEEDS_CLARIFICATION":
                 return EngineeringTaskResult(

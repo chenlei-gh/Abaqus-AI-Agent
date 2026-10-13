@@ -100,6 +100,7 @@ def _build_parser() -> argparse.ArgumentParser:
     # 8. ask (JEV-powered natural language engineering intent)
     p_ask = subparsers.add_parser("ask", help="Process natural language engineering requirements via TypeSafe JEV System One.")
     p_ask.add_argument("prompt", help="Natural language engineering specification or simulation requirement.")
+    p_ask.add_argument("--mode", choices=["offline", "live", "shadow"], default="offline", help="JEV execution mode: offline (default deterministic), live (fail-closed API), or shadow (discrepancy diff).")
     p_ask.add_argument("--json", action="store_true", help="Output typed intent and JEV decisions as JSON.")
     p_ask.add_argument("--dry-run", action="store_true", help="Synthesize plan and intent contracts without executing solver.")
 
@@ -230,7 +231,7 @@ def handle_inspect(args: argparse.Namespace) -> int:
 def handle_ask(args: argparse.Namespace) -> int:
     from .typesafe_intent import JevIntentRouter
 
-    router = JevIntentRouter()
+    router = JevIntentRouter(mode=getattr(args, "mode", "offline"))
     try:
         routing_res = router.route(args.prompt)
     except Exception as exc:

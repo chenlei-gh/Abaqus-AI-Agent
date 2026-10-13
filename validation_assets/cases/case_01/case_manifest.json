@@ -6,8 +6,8 @@
   "reference": "validation_assets/references/official_examples.json#REF_ABQ_BOLTED_FLANGE",
   "status": "QUALIFIED",
   "source_input": "test_assets/engineering_cases/case_01_bolted_pipe_flange/problem_statement.json",
-  "primary_manifest": "machine_validation/p2_cases/case_01_flange_manifest.json",
-  "primary_report": "machine_validation/p2_cases/case_01_flange_report.html",
+  "primary_manifest": "machine_validation/p2_cases/case_01_bolted_pipe_flange/case_01_flange_manifest.json",
+  "primary_report": "machine_validation/p2_cases/case_01_bolted_pipe_flange/case_01_flange_report.html",
   "verified_metrics": {
     "bolt_preload_retention": 0.887,
     "gasket_min_contact_stress_mpa": 14.2,

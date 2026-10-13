@@ -297,6 +297,7 @@ class FigureSelector:
         hotspot_info: Optional[Dict[str, Any]] = None,
         include_mesh: bool = False,
         include_animation: bool = False,
+        include_keypoint_detail: bool = False,
     ) -> FigureSelectionResult:
         avail_fields = None
         if odb_path and os.path.exists(str(odb_path)):
@@ -327,6 +328,7 @@ class FigureSelector:
             output_dir=output_dir,
             include_mesh=include_mesh,
             include_animation=include_animation,
+            include_keypoint_detail=include_keypoint_detail,
         )
 
 
@@ -420,6 +422,7 @@ def select_engineering_figures(
     output_dir: Optional[Union[str, Path]] = None,
     include_mesh: bool = False,
     include_animation: bool = False,
+    include_keypoint_detail: bool = False,
 ) -> FigureSelectionResult:
     """Select the most engineering-relevant authentic CAE visualizations.
 
@@ -511,6 +514,16 @@ def select_engineering_figures(
                 "AUTO_FIT",
             ),
         ]
+        if (elem_id or node_id or hotspot_coords) and include_keypoint_detail:
+            candidates.append((
+                "keypoint_hotspot_detail",
+                "S",
+                "mises",
+                "keypoint_hotspot_detail.png",
+                f"关键响应测点/危险截面局部应力特写图 (单元: {elem_id or 'Auto'}, 节点: {node_id or 'Auto'})",
+                f"Critical keypoint and hotspot cross-section detail view (Elem: {elem_id or 'Auto'}, Node: {node_id or 'Auto'})",
+                "ISOMETRIC",
+            ))
     elif scenario == "displacement_stiffness":
         candidates = [
             (
@@ -730,9 +743,9 @@ def select_engineering_figures(
             continue
 
         # Priority 2: Create authentic VisualizationSpec for Viewer dispatch
-        is_hotspot = ("hotspot" in kind or "stress" in kind or f_name == "S")
+        is_hotspot = ("hotspot" in kind or "stress" in kind or f_name == "S" or "keypoint" in kind)
         spec = VisualizationSpec(
-            artifact_id=f"FIG-{f_name}-{r_id}",
+            artifact_id=f"FIG-{kind.upper()}-{f_name}-{r_id}",
             visualization_type=kind,
             field_name=f_name,
             component=comp,

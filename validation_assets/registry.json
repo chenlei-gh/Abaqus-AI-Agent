@@ -13,10 +13,10 @@
       "input_assets": [
         "test_assets/engineering_cases/case_01_bolted_pipe_flange/problem_statement.json"
       ],
-      "evidence_manifest": "machine_validation/p2_cases/case_01_flange_manifest.json",
+      "evidence_manifest": "machine_validation/p2_cases/case_01_bolted_pipe_flange/case_01_flange_manifest.json",
       "report_assets": [
-        "machine_validation/p2_cases/case_01_flange_report.html",
-        "machine_validation/p2_cases/Case_01_Bolted_Flange_Report.html"
+        "machine_validation/p2_cases/case_01_bolted_pipe_flange/case_01_flange_report.html",
+        "machine_validation/p2_cases/case_01_bolted_pipe_flange/Case_01_Bolted_Flange_Report.html"
       ],
       "case_dir": "validation_assets/cases/case_01",
       "acceptance_criteria": {
@@ -35,10 +35,10 @@
       "input_assets": [
         "test_assets/engineering_cases/case_02_reactor_pressure_vessel_closure/problem_statement.json"
       ],
-      "evidence_manifest": "machine_validation/p2_cases/case_02_rpv_manifest.json",
+      "evidence_manifest": "machine_validation/p2_cases/case_02_reactor_pressure_vessel_closure/case_02_rpv_manifest.json",
       "report_assets": [
-        "machine_validation/p2_cases/case_02_rpv_report.html",
-        "machine_validation/p2_cases/Case_02_RPV_Closure_Report.html"
+        "machine_validation/p2_cases/case_02_reactor_pressure_vessel_closure/case_02_rpv_report.html",
+        "machine_validation/p2_cases/case_02_reactor_pressure_vessel_closure/Case_02_RPV_Closure_Report.html"
       ],
       "case_dir": "validation_assets/cases/case_02",
       "acceptance_criteria": {
@@ -57,10 +57,10 @@
       "input_assets": [
         "test_assets/engineering_cases/case_03_exhaust_manifold_thermo_mechanical/problem_statement.json"
       ],
-      "evidence_manifest": "machine_validation/p2_cases/case_03_manifold_manifest.json",
+      "evidence_manifest": "machine_validation/p2_cases/case_03_exhaust_manifold/case_03_manifold_manifest.json",
       "report_assets": [
-        "machine_validation/p2_cases/case_03_manifold_report.html",
-        "machine_validation/p2_cases/Case_03_Exhaust_Manifold_Report.html",
+        "machine_validation/p2_cases/case_03_exhaust_manifold/case_03_manifold_report.html",
+        "machine_validation/p2_cases/case_03_exhaust_manifold/Case_03_Exhaust_Manifold_Report.html",
         "machine_validation/p2_cases/case_03_exhaust_manifold/assets"
       ],
       "case_dir": "validation_assets/cases/case_03",
@@ -83,7 +83,7 @@
       "evidence_manifest": "machine_validation/p2_cases/case_04_subframe_durability/case_04_subframe_manifest.json",
       "report_assets": [
         "machine_validation/p2_cases/case_04_subframe_durability/case_04_subframe_report.html",
-        "machine_validation/p2_cases/Case_04_Subframe_Durability_Report.html",
+        "machine_validation/p2_cases/case_04_subframe_durability/Case_04_Subframe_Durability_Report.html",
         "machine_validation/p2_cases/case_04_subframe_durability/assets"
       ],
       "case_dir": "validation_assets/cases/case_04",
@@ -106,7 +106,7 @@
       "evidence_manifest": "machine_validation/p2_cases/case_05_composite_buckling/case_05_composite_buckling_manifest.json",
       "report_assets": [
         "machine_validation/p2_cases/case_05_composite_buckling/case_05_composite_buckling_report.html",
-        "machine_validation/p2_cases/Case_05_Composite_Buckling_Report.html",
+        "machine_validation/p2_cases/case_05_composite_buckling/Case_05_Composite_Buckling_Report.html",
         "machine_validation/p2_cases/case_05_composite_buckling/assets"
       ],
       "case_dir": "validation_assets/cases/case_05",
@@ -129,7 +129,7 @@
       "evidence_manifest": "machine_validation/p2_cases/case_06_sheet_metal_submodeling/case_06_sheet_metal_manifest.json",
       "report_assets": [
         "machine_validation/p2_cases/case_06_sheet_metal_submodeling/case_06_sheet_metal_submodeling_report.html",
-        "machine_validation/p2_cases/Case_06_Sheet_Metal_Submodeling_Report.html",
+        "machine_validation/p2_cases/case_06_sheet_metal_submodeling/Case_06_Sheet_Metal_Submodeling_Report.html",
         "machine_validation/p2_cases/case_06_sheet_metal_submodeling/assets"
       ],
       "case_dir": "validation_assets/cases/case_06",

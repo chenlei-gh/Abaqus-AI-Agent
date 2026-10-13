@@ -957,10 +957,8 @@ def test_package_b_cases_folder_organization_and_standalone_html():
     1. Each engineering case is organized inside its own isolated dedicated subfolder.
     2. Deliverable reports are strictly pure standalone HTML with embedded Base64/SVG assets.
     3. No legacy Markdown (.md) reports reside on disk.
-    4. Backwards compatibility top-level manifests match isolated folder manifests bit-for-bit.
+    4. Dedicated subfolder manifests and standalone reports exist and are validated.
     """
-    p2_root = ROOT / "machine_validation" / "p2_cases"
-
     cases_spec = [
         (
             CASE_01_SUB_DIR,
@@ -998,12 +996,7 @@ def test_package_b_cases_folder_organization_and_standalone_html():
         assert sub_dir.is_dir(), f"Case subfolder missing at {sub_dir}"
 
         sub_manifest = sub_dir / manifest_name
-        top_manifest = p2_root / manifest_name
         assert sub_manifest.is_file(), f"Manifest missing in subfolder: {sub_manifest}"
-        assert top_manifest.is_file(), f"Top-level compatibility manifest missing: {top_manifest}"
-
-        # Bit-for-bit identical cryptographic manifest
-        assert sub_manifest.read_bytes() == top_manifest.read_bytes(), f"Manifest mismatch between subfolder and mirror for {manifest_name}"
 
         # Standalone HTML report check (must be large enough to verify inlined Base64 GIF & SVG)
         html_file = sub_dir / html_report_name
