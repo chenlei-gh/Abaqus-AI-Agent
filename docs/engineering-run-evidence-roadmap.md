@@ -2889,3 +2889,68 @@ Abaqus-AI-Agent/
 - [x] **自动化测试回归**：
   - 新增专项测试 `test_contour_plot_request_safe_margin_and_motion_detection_defaults`、`test_generate_headless_viewer_script_safe_margin_zoom`、`test_prune_static_animation_frames_and_difference` 全部通过；
   - 全仓自动化回归测试达 **1150 passed**（0 failed, 0 skipped）。
+
+---
+
+## 35. Phase P1.4: 报告图片受控解析、生产隔离硬约束与动图时间序列保真治理 (Report Asset Integrity, Mandatory Production Isolation & Temporal Fidelity Governance)
+
+**需求对应：** 综合用户最新全量代码审查意见与工程风险审计（基于远程 `main` 分支最新实际代码与架构契约）：
+1. **P1: 报告图片同名全局误匹配收敛 (`renderer.py` - `_resolve_image_path`)**：彻底消除向测试夹具和历史资产库递归搜索同名图片的非受控回退，杜绝错图风险；
+2. **P1: 生产运行环境外部项目上下文强制校验 (`paths.py` / `analysis_run.py`)**：使 `ExternalProjectContext` 成为生产任务的硬性门禁，彻底杜绝生产产物静默写回仓库内 `runs/`；
+3. **P1: 动图时间序列保真度治理与终帧完整性保障 (`odb_rendering.py`)**：明确区分物理忠实时程与活跃演示动画，修复抽样末帧被切除的逻辑缺陷，保障动力学时程保真；
+4. **P2: 视口防裁剪真实视觉验收与降级处理**：针对极限细长比、大变形位移与多部件装配建立视觉边界测试矩阵，规范异常降级日志；
+5. **P2: 用户已有数据输入模式与轻量后处理链路闭环**：对用户提供 `.inp`（直接求解）、`.odb`（只读后处理）、`.cae`（`openMdb` 副本导入与模型检查）建立清晰的行为边界与输入保护。
+
+**实施原则：** 现有机制优先收敛、不新建平行框架、安全失败闭合（Fail-Closed）、严禁破坏已通过的 1150 项全量回归基线。
+**当前状态：** 🟡 **PLANNED & TRACKED** (需求已正式收录冻结，纳入敏捷迭代实施清单)
+
+### 35.1 核心缺陷分析与整改契约
+
+| 风险/缺陷项 | 架构根因与代码证据 | 治理方案与架构契约 | 验收标准 |
+|---|---|---|---|
+| **P1 报告图片同名全局回退** | `renderer.py` 中 `_resolve_image_path` 依次遍历 `machine_validation`、`test_assets`，最后执行 `repo_root.glob(f"**/{p.name}")`。若目标图片丢失，可能错误复用仓库中同名历史或测试图。 | 1. 废除任何通向测试夹具和历史验证目录的同名全局搜索回退；<br>2. 正式报告图片仅允许：真实存在的绝对路径，或相对于本次交付目录解析的受控相对路径；<br>3. 找不到目标图像时，报告内渲染明确的“证据缺失/缺失占位”警告块，决不拿其他资产冒充。 | 负向测试覆盖：同名文件冲突测试、缺失图片测试均正确触发警告占位，无任何跨目录同名图越权加载。 |
+| **P1 生产模式隔离非强制** | `AnalysisRunner.run` 在未提供 `project_context` 时，调用 `resolve_runs_root()` 默认回退到核心仓库内的 `runs/`（`deliverables` 类似）。生产模式未能强制依赖外部项目空间。 | 1. 明确区分研发测试模式（`require_production=False`）与用户生产模式（`require_production=True`）；<br>2. 当 `require_production=True` 时，必须强制提供合法的 `ExternalProjectContext`，缺失时直接抛出 `RuntimeError` 阻断执行；<br>3. 彻底阻断生产任务向仓库内 `runs/` 与 `deliverables/` 的静默回退。 | 负向测试验证：生产模式未传 `project_context` 时 100% 阻断；传合法上下文时所有输出均严格限定在外部各专用子目录。 |
+| **P1 动图时程保真与切片缺陷** | 1. `prune_static_animation_frames` 强制裁剪尾帧，改变了平衡态/静止保持阶段的真实物理时间语义；<br>2. 抽样逻辑中 `chosen_indices.append(n_total_frames - 1)` 追加末帧后，下一行执行 `chosen_indices[:target_samples]` 导致刚刚追加的关键最终帧被截断抛弃。 | 1. 契约扩展：支持 `animation_mode="full_timeline"`（忠实时程，保留完整物理时间历程）与 `"active_presentation"`（活跃演示，修剪静止尾段）；<br>2. 忠实模式默认完整保留物理采样时程，演示模式修剪时需在输出元数据中记录修剪统计；<br>3. 修复采样切片：采样索引池严格包含首帧与最终关键帧，保证最后一帧 100% 纳入输出序列。 | 单元与回归测试验证：最终帧索引必选；忠实模式不丢弃物理尾段；演示模式修剪符合阈值记录。 |
+| **P2 视口自适应缩放防裁切加固** | `vp.view.fitView()` 加 `vp.view.zoom(factor=...)` 若在极限模型或无头异常时失效，缺少真实视觉防裁剪的完整边界覆盖矩阵与降级规范。 | 1. 针对极限长宽比细长梁、大变形网格畸变、多体大位移机构，建立包含图例与坐标系留白的真实模型测试集；<br>2. 缩放异常时保留结构化警告并在报告中注明视口自适应状态。 | 视觉边界测试用例覆盖，在多种视角与细长几何下均不发生模型边缘截断。 |
+| **P2 用户已有数据输入通道规范** | 用户提供 `.inp`、`.odb`、`.cae` 时缺少明确的“仅求解 / 仅后处理 / 导入工作副本检查”行为边界，存在重复建模或破坏原模型的隐患。 | 1. `.inp` 输入：直接调用 `run_input()` 执行作业与 ODB 提取，不触发多余 Python 建模；<br>2. `.odb` 输入：开启只读后处理模式，直接提取指标与渲染云图，禁止重新提交计算；<br>3. `.cae` 输入：明确调用 `openMdb` 打开已有模型，建立 `working/` 工作副本，操作副本并校验，原始文件完全只读。 | 用户数据输入模式专项测试：原始模型不可篡改；只读后处理不重新求解；直接 INP 作业高效闭环。 |
+
+### 35.2 实施任务分解与执行清单
+
+- [ ] **任务 35.1: 报告图片解析严格化 (`src/abaqus_ai_agent/reporting/renderer.py`)**：
+  - 重构 `_resolve_image_path(path_str, run_delivery_dir=None, is_test_mode=False)`；
+  - 移除 `test_assets/`、`machine_validation/` 及 `repo_root.glob(f"**/{p.name}")` 等越界模糊回退；
+  - 增加图片缺失时的友好占位与审计告警展示；
+  - 编写专门测试用例 `tests/test_renderer_image_security.py`（覆盖同名图冲突与缺失图阻断）。
+- [ ] **任务 35.2: 生产执行硬隔离门禁加固 (`src/abaqus_ai_agent/execution/analysis_run.py`)**：
+  - 在 `AnalysisRunner.run` 中，当 `require_production=True` 时增加显式断言：
+    ```python
+    if require_production and project_context is None:
+        raise RuntimeError(
+            "[Production Guard] Execution in production mode requires a valid ExternalProjectContext. "
+            "Silent fallback to repository-internal runs/ is strictly prohibited."
+        )
+    ```
+  - 同步检查 `agent.py` 与各 CLI 生产执行链路，确保上下文显式透传；
+  - 编写生产模式隔离阻断负向测试。
+- [ ] **任务 35.3: 动图时间序列保真与末帧保留修复 (`src/abaqus_ai_agent/execution/odb_rendering.py`)**：
+  - 修复多帧采样逻辑：
+    ```python
+    chosen_indices = list(range(0, n_total_frames, stride))
+    if (n_total_frames - 1) not in chosen_indices:
+        chosen_indices.append(n_total_frames - 1)
+    if len(chosen_indices) > target_samples:
+        # 智能重采样保证首帧 (0) 与末帧 (n_total_frames - 1) 绝对保留
+        step_factor = (len(chosen_indices) - 1) / (target_samples - 1)
+        resampled = [chosen_indices[int(round(i * step_factor))] for i in range(target_samples)]
+        chosen_indices = sorted(list(set(resampled)))
+        if (n_total_frames - 1) not in chosen_indices:
+            chosen_indices[-1] = n_total_frames - 1
+    ```
+  - 增加 `animation_mode: str = "full_timeline"` 支持；
+  - 编写采样末帧保全与双模态测试。
+- [ ] **任务 35.4: 用户已有模型输入通道与后处理模式收口**：
+  - 明确梳理用户 `.inp`、`.odb`、`.cae` 三类输入契约；
+  - 形成标准操作接口文档与测试用例验证。
+- [ ] **任务 35.5: 全量回归与 GitHub 同步**：
+  - 运行全量 `pytest` 回归（维持 1150+ 项 100% PASS）；
+  - 提交并推送至 GitHub 远程 `main` 分支。
