@@ -31,7 +31,20 @@ jobs:
           python -m abaqus_ai_agent fmbd --case fmbd7 --compile
           python -m abaqus_ai_agent inspect --json
           python -m abaqus_ai_agent ask "Apply 1000N vertical load to the free end of a 100mm cantilever beam, material steel, fixed root, check deflection <= 2.5mm." --dry-run
-          ! python -m abaqus_ai_agent ask "Apply 1000N vertical load to 100mm cantilever beam, material steel, fixed root, check deflection <= 2.5mm." --dry-run
+          set +e
+          neg_out=$(python -m abaqus_ai_agent ask "Apply 1000N vertical load to 100mm cantilever beam, material steel, fixed root, check deflection <= 2.5mm." --dry-run 2>&1)
+          neg_rc=$?
+          set -e
+          if [ "$neg_rc" -ne 2 ]; then
+            echo "Expected exit code 2 for unplaced load, got $neg_rc"
+            echo "$neg_out"
+            exit 1
+          fi
+          if ! echo "$neg_out" | grep -q "missing_load_application_region"; then
+            echo "Expected 'missing_load_application_region' in output, got:"
+            echo "$neg_out"
+            exit 1
+          fi
       - name: Run Golden Evidence & Release Quality Audits
         shell: bash
         run: |
