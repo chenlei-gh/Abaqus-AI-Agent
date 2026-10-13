@@ -290,6 +290,19 @@ def test_resolve_image_path_valid_absolute_and_relative_with_base_dir(tmp_path):
     # 3. Relative path that doesn't exist in base_dir must return None
     assert _resolve_image_path("missing_in_base.png", base_dir=sub_dir) is None
 
+    # 4. Strict Base-Dir Priority over CWD Collision:
+    # If base_dir is supplied, missing file in base_dir must NOT resolve to a colliding file in CWD!
+    cwd_colliding = Path("cwd_collision_probe_test.png")
+    try:
+        cwd_colliding.write_bytes(b"\x89PNG\r\n\x1a\n")
+        assert cwd_colliding.is_file()
+        # When querying for the relative name with base_dir (which doesn't contain it),
+        # it must return None and NEVER falsely latch onto the file in CWD!
+        assert _resolve_image_path("cwd_collision_probe_test.png", base_dir=sub_dir) is None
+    finally:
+        if cwd_colliding.exists():
+            cwd_colliding.unlink()
+
 
 def test_html_report_renders_placeholder_on_cross_directory_collision_attempt():
     """当引用的图片路径不存在时，即使仓库中存在同名文件，HTML 报告也必须展示缺失占位，严禁冒充。"""

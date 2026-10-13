@@ -21,12 +21,14 @@ class DummyInpExecutor:
 
     def __init__(self):
         self.invocations = []
+        self.workdir = None
 
-    def run_input(self, input_path, job_name=None, timeout=None):
+    def run_input(self, input_path, job_name=None, timeout=None, workdir=None):
         self.invocations.append({
             "input_path": input_path,
             "job_name": job_name,
             "timeout": timeout,
+            "workdir": workdir,
         })
         return {"returncode": 0, "stdout": "Job completed successfully", "stderr": ""}
 
@@ -90,6 +92,9 @@ def test_solve_user_inp_with_external_project_context(tmp_path):
     assert res["run_id"] == "run_inp_001"
     assert res["workdir"] == str((ctx.solver_dir / "run_inp_001").resolve())
     assert (ctx.solver_dir / "run_inp_001").is_dir()
+    # Contract verification: workdir was propagated into executor
+    assert len(executor.invocations) == 1
+    assert executor.invocations[0]["workdir"] == str((ctx.solver_dir / "run_inp_001").resolve())
 
 
 def test_postprocess_user_odb_readonly_mode(tmp_path, monkeypatch):
@@ -168,3 +173,33 @@ def test_agent_user_input_wrappers_integration(tmp_path):
     test_cae.write_text("CAE_CONTENT")
     cae_res = agent.prepare_user_cae(test_cae, project_context=ctx)
     assert cae_res["status"] == "PREPARED"
+
+
+def test_open_user_cae_from_arbitrary_external_path(tmp_path):
+    """Verify open_user_cae_working_copy accepts source CAE located outside project input_dir."""
+    ctx = _make_dummy_project(tmp_path)
+    # External CAD directory completely outside project
+    external_dir = tmp_path / "OtherVendorCAD"
+    external_dir.mkdir()
+    source_cae = external_dir / "chassis.cae"
+    source_cae.write_bytes(b"AUTHENTIC_EXTERNAL_CHASSIS_CAE_DATA")
+    orig_sha = hashlib.sha256(b"AUTHENTIC_EXTERNAL_CHASSIS_CAE_DATA").hexdigest()
+
+    executor = DummyCaeExecutor()
+    res = open_user_cae_working_copy(
+        cae_path=source_cae,
+        project_context=ctx,
+        executor=executor,
+        target_filename="chassis_work.cae",
+    )
+
+    assert res["status"] == "PREPARED"
+    assert res["original_cae_sha256"] == orig_sha
+    assert Path(res["working_cae_path"]).is_file()
+    assert Path(res["working_cae_path"]).name == "chassis_work.cae"
+    # Ensure source file remained intact in external dir
+    assert source_cae.read_bytes() == b"AUTHENTIC_EXTERNAL_CHASSIS_CAE_DATA"
+    # Ensure reference copy was archived in input_dir
+    archived_in_input = ctx.input_dir / "chassis.cae"
+    assert archived_in_input.is_file()
+    assert archived_in_input.read_bytes() == b"AUTHENTIC_EXTERNAL_CHASSIS_CAE_DATA"

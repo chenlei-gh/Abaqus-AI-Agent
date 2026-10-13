@@ -264,6 +264,11 @@ class AnalysisRunner:
                 "[Production Guard] Execution in production mode requires a valid ExternalProjectContext. "
                 "Silent fallback to repository-internal runs/ is strictly prohibited."
             )
+        if require_production and project_context is not None:
+            from ..paths import assert_path_outside_repo
+            if not hasattr(project_context, "project_root") or not hasattr(project_context, "solver_dir"):
+                raise TypeError("[Production Guard] project_context must be a valid ExternalProjectContext.")
+            assert_path_outside_repo(project_context.project_root)
 
         run_id = str(uuid.uuid4())
         orig_executor_workdir = getattr(self.executor, "workdir", None)

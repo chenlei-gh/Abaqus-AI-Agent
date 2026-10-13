@@ -63,18 +63,32 @@ def solve_user_inp(
         effective_workdir = project_context.create_run_solver_dir(eff_run_id)
 
     # Invoke solver directly via executor
-    if hasattr(executor, "run_input"):
-        res = executor.run_input(
-            input_path=str(inp_file),
-            job_name=eff_job_name,
-            timeout=timeout,
-        )
-    elif hasattr(executor, "execute"):
-        # Generic executor fallback
-        cmd = f"abaqus job={eff_job_name} input={inp_file}"
-        res = executor.execute(cmd)
-    else:
-        raise TypeError(f"Executor {type(executor)} does not support run_input or execute interface.")
+    orig_workdir = getattr(executor, "workdir", None)
+    try:
+        if effective_workdir and hasattr(executor, "workdir"):
+            executor.workdir = str(effective_workdir)
+
+        if hasattr(executor, "run_input"):
+            import inspect
+            sig = inspect.signature(executor.run_input)
+            kwargs = {}
+            if "workdir" in sig.parameters and effective_workdir:
+                kwargs["workdir"] = str(effective_workdir)
+            res = executor.run_input(
+                input_path=str(inp_file),
+                job_name=eff_job_name,
+                timeout=timeout,
+                **kwargs,
+            )
+        elif hasattr(executor, "execute"):
+            # Generic executor fallback
+            cmd = f"abaqus job={eff_job_name} input={inp_file}"
+            res = executor.execute(cmd)
+        else:
+            raise TypeError(f"Executor {type(executor)} does not support run_input or execute interface.")
+    finally:
+        if hasattr(executor, "workdir"):
+            executor.workdir = orig_workdir
 
     # Integrity verification: original .inp MUST NOT be mutated
     after_sha256 = _compute_file_sha256(inp_file)
@@ -183,8 +197,22 @@ def open_user_cae_working_copy(
 
     working_cae: Path
     if project_context is not None:
+        try:
+            src_file.relative_to(project_context.input_dir.resolve())
+            is_inside_input = True
+        except ValueError:
+            is_inside_input = False
+
+        if not is_inside_input:
+            safe_input_copy = project_context.input_dir / src_file.name
+            if not safe_input_copy.exists() or _compute_file_sha256(safe_input_copy) != orig_sha256:
+                shutil.copy2(src_file, safe_input_copy)
+            source_fname = safe_input_copy.name
+        else:
+            source_fname = src_file.name
+
         working_cae = project_context.prepare_working_copy(
-            source_filename=src_file.name,
+            source_filename=source_fname,
             target_filename=target_filename,
             overwrite=overwrite,
         )

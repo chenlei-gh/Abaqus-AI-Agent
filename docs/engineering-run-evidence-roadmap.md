@@ -2902,7 +2902,7 @@ Abaqus-AI-Agent/
 5. **P2: 用户已有数据输入模式与轻量后处理链路闭环**：对用户提供 `.inp`（直接求解）、`.odb`（只读后处理）、`.cae`（`openMdb` 副本导入与模型检查）建立清晰的行为边界与输入保护。
 
 **实施原则：** 现有机制优先收敛、不新建平行框架、安全失败闭合（Fail-Closed）、严禁破坏已通过的 1150 项全量回归基线。
-**当前状态：** 🟡 **PLANNED & TRACKED** (需求已正式收录冻结，纳入敏捷迭代实施清单)
+**当前状态：** 🟡 **READY FOR CI VERIFICATION** (代码实现与跨平台 CI 缺陷修复已完成，待 GitHub Actions 6 矩阵验证通过后闭环)
 
 ### 35.1 核心缺陷分析与整改契约
 
@@ -2935,6 +2935,10 @@ Abaqus-AI-Agent/
   - 编写标准化操作与安全契约文档 `docs/user-model-input-guide.md`；
   - 编写针对性单元与集成测试用例 `tests/test_input_modes.py` 并 100% 通过。
 - [x] **任务 35.5: 全量回归与 GitHub 同步**：
-  - 运行全量 `pytest` 回归（**1161 passed**，0 failed, 0 skipped，持续维持零缺陷）；
+  - 修复 `agent.py` 缺失 `Sequence` 导入与 `from __future__ import annotations`，根治 Python 3.10/3.11/3.12 CI NameError；
+  - 强化任务 35.1（`base_dir` 强优先，杜绝 CWD 碰撞）；
+  - 强化任务 35.2（生产模式不仅校验非空，还强制校验 `project_root` 不在仓库内）；
+  - 强化任务 35.4（透传 `workdir` 到执行器，任意外部路径 CAE 导入时先收录至 `input_dir` 再派生 `working/` 副本）；
+  - 增加对应专项负向测试用例并通过；
   - 受控资产 `machine_validation/` 零污染回滚保护；
-  - 提交并推送至 GitHub 远程 `main` 分支。
+  - 提交并推送至 GitHub 远程 `main` 分支等待 CI 验证。

@@ -90,11 +90,17 @@ class BatchExecutor:
         return BatchResult(command, proc.returncode, proc.stdout, proc.stderr,
                            effective_workdir)
 
-    def run_input(self, input_path, job_name=None, timeout=None):
+    def run_input(self, input_path, job_name=None, timeout=None, workdir=None):
         path = os.path.abspath(input_path)
         name = job_name or os.path.splitext(os.path.basename(path))[0]
-        return self._run((self.launcher, "job=%s" % name, "input=%s" % path),
-                         timeout=timeout)
+        orig_workdir = self.workdir
+        try:
+            if workdir:
+                self.workdir = str(workdir)
+            return self._run((self.launcher, "job=%s" % name, "input=%s" % path),
+                             timeout=timeout)
+        finally:
+            self.workdir = orig_workdir
 
     def run_nogui(self, script_path, timeout=None):
         path = os.path.abspath(script_path)

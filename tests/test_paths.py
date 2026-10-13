@@ -430,6 +430,72 @@ def test_prepare_working_copy_overwrite_protection_and_containment(tmp_path):
     assert dest_overwritten.read_bytes() == b"UPDATED_INPUT_BYTES_002"
 
 
+def test_analysis_runner_production_mode_strict_guards(tmp_path):
+    """P1.4 Task 35.2 Contract: Production mode (require_production=True) enforces strict validation:
+    1. project_context is None -> RuntimeError
+    2. project_context inside repo -> PermissionError (assert_path_outside_repo)
+    3. Invalid mock object lacking required project structure -> TypeError
+    """
+    from abaqus_ai_agent.execution.client import AbaqusExecutor
+    from abaqus_ai_agent.execution.analysis_run import AnalysisRunner
+
+    class DummyExecutor(AbaqusExecutor):
+        def execute(self, code, timeout=120):
+            return {}
+
+    runner = AnalysisRunner(DummyExecutor())
+
+    # 1. Missing project_context in production mode
+    with pytest.raises(RuntimeError) as exc_none:
+        runner.run(
+            model_name="M",
+            job_name="J",
+            project_context=None,
+            require_production=True,
+        )
+    assert "[Production Guard]" in str(exc_none.value)
+
+    # 2. Fake project context lacking required attributes
+    class FakeContext:
+        pass
+
+    with pytest.raises(TypeError) as exc_type:
+        runner.run(
+            model_name="M",
+            job_name="J",
+            project_context=FakeContext(),
+            require_production=True,
+        )
+    assert "must be a valid ExternalProjectContext" in str(exc_type.value)
+
+    # 3. Project context pointing inside repository root
+    repo_root = get_repo_root()
+    repo_internal_project = repo_root / "tests" / "dummy_internal_project"
+    try:
+        repo_internal_project.mkdir(parents=True, exist_ok=True)
+        # Manually assemble a context-like object inside repo
+        class RepoInternalContext:
+            project_root = repo_internal_project
+            solver_dir = repo_internal_project / "solver"
+            def create_run_solver_dir(self, run_id):
+                return self.solver_dir / run_id
+            def create_run_evidence_dir(self, run_id):
+                return repo_internal_project / "evidence" / run_id
+
+        with pytest.raises(PermissionError) as exc_perm:
+            runner.run(
+                model_name="M",
+                job_name="J",
+                project_context=RepoInternalContext(),
+                require_production=True,
+            )
+        assert "Security violation (REQ-ISO-003)" in str(exc_perm.value)
+    finally:
+        if repo_internal_project.exists():
+            import shutil
+            shutil.rmtree(repo_internal_project, ignore_errors=True)
+
+
 def test_agent_production_mode_blocks_execution_in_repo_runs(tmp_path):
     """P0-3 Contract: When executing with a non-test-double executor in production mode,
     falling back to internal repository runs/ or executing in the repo is strictly blocked.

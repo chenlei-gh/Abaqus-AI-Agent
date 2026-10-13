@@ -54,23 +54,31 @@ def _resolve_image_path(path_str, base_dir=None):
     except Exception:
         return None
 
-    # 1. Directly existing file (absolute or valid relative to current working directory)
+    # 1. Absolute paths are evaluated strictly directly
+    if p.is_absolute():
+        try:
+            return p.resolve() if p.is_file() else None
+        except Exception:
+            return None
+
+    # 2. When base_dir is supplied, relative paths resolve STRICTLY against base_dir.
+    #    Never fall back to current working directory (cwd) to avoid collision with
+    #    accidental identical file names in cwd.
+    if base_dir:
+        try:
+            cand = (Path(base_dir) / p).resolve()
+            return cand if cand.is_file() else None
+        except Exception:
+            return None
+
+    # 3. When base_dir is not provided, evaluate relative to cwd only
     try:
         if p.is_file():
             return p.resolve()
     except Exception:
         pass
 
-    # 2. Relative to explicit base_dir if provided
-    if base_dir:
-        try:
-            cand = (Path(base_dir) / p).resolve()
-            if cand.is_file():
-                return cand
-        except Exception:
-            pass
-
-    # 3. Fail-Closed: Never perform fuzzy global searches or test asset fallbacks
+    # 4. Fail-Closed: Never perform fuzzy global searches or test asset fallbacks
     return None
 
 
