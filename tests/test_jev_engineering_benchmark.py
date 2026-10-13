@@ -470,6 +470,109 @@ def test_zero_raw_context_fallback_for_unverified_entities():
     assert "missing_boundary_constraints" in res.missing_requirements
 
 
+def test_thermal_zero_degree_magnitude_and_convection_radiation_contracts():
+    """Verify 0.0 magnitude (e.g. 0°C) is valid, and convection/radiation require specific parameters."""
+    from abaqus_ai_agent.typesafe_intent import _validate_thermal_bcs_entity
+
+    # 1. 0.0 magnitude (0°C) must be accepted, not treated as falsy
+    ok, norm, err = _validate_thermal_bcs_entity({"type": "temperature", "region": "ColdEnd", "temperature": 0.0})
+    assert ok is True
+    assert norm[0]["magnitude"] == 0.0
+
+    # 2. Convection missing sink temperature or film coefficient
+    ok, _, err = _validate_thermal_bcs_entity({"type": "convection", "region": "OuterSurface", "magnitude": 100.0})
+    assert ok is False
+    assert err == "convection_missing_ambient_temp_or_film_coefficient"
+
+    # Valid convection
+    ok, norm, _ = _validate_thermal_bcs_entity({
+        "type": "convection",
+        "region": "OuterSurface",
+        "magnitude": 25.0,
+        "sink_temperature": 25.0,
+        "film_coefficient": 15.0,
+    })
+    assert ok is True
+
+    # 3. Radiation missing emissivity or ambient temperature
+    ok, _, err = _validate_thermal_bcs_entity({"type": "radiation", "region": "OuterSurface", "magnitude": 300.0})
+    assert ok is False
+    assert err == "radiation_missing_ambient_temp_or_emissivity"
+
+    # Valid radiation
+    ok, norm, _ = _validate_thermal_bcs_entity({
+        "type": "radiation",
+        "region": "OuterSurface",
+        "magnitude": 300.0,
+        "ambient_temperature": 293.15,
+        "emissivity": 0.85,
+    })
+    assert ok is True
+
+
+def test_load_magnitude_must_be_strictly_non_zero():
+    """Verify that zero magnitude loads are rejected with load_magnitude_must_be_non_zero."""
+    from abaqus_ai_agent.typesafe_intent import _validate_loads_entity
+
+    ok, _, err = _validate_loads_entity({"type": "concentrated_force", "magnitude": 0.0, "region": "TipFace"})
+    assert ok is False
+    assert err == "load_magnitude_must_be_non_zero"
+
+
+def test_displacement_bc_dof_range_and_non_empty():
+    """Verify that displacement BC dofs must be non-empty and bounded in 1..6."""
+    from abaqus_ai_agent.typesafe_intent import _validate_boundary_conditions_entity
+
+    ok, _, err = _validate_boundary_conditions_entity({"type": "displacement", "region": "RootFace", "dofs": []})
+    assert ok is False
+    assert err == "displacement_bc_missing_or_invalid_dofs"
+
+    ok, _, err = _validate_boundary_conditions_entity({"type": "displacement", "region": "RootFace", "dofs": [7]})
+    assert ok is False
+    assert err == "displacement_bc_missing_or_invalid_dofs"
+
+
+def test_acceptance_criteria_metrics_whitelist_enforcement():
+    """Verify that non-whitelisted metrics are rejected."""
+    from abaqus_ai_agent.typesafe_intent import _validate_acceptance_criteria_entity
+
+    ok, _, err = _validate_acceptance_criteria_entity({"metric": "arbitrary_unknown_foo", "limit": 100.0})
+    assert ok is False
+    assert "unsupported_criteria_metric_arbitrary_unknown_foo" in str(err)
+
+    ok, norm, _ = _validate_acceptance_criteria_entity({"metric": "max_mises", "limit": 355.0})
+    assert ok is True
+    assert norm[0]["metric"] == "max_mises"
+
+
+def test_no_speculative_region_when_prompt_only_says_fixed():
+    """Verify that prompt with bare '固定' without location does not forge RootFace and fails closed."""
+    from abaqus_ai_agent.typesafe_intent import _extract_prompt_boundary_conditions, JevIntentRouter
+
+    # Bare fixed prompt
+    bcs = _extract_prompt_boundary_conditions("100mm悬臂梁，材料结构钢，端部受1000N载荷，固定，校核挠度。")
+    assert bcs == []  # No region forged
+
+    router = JevIntentRouter(mode="offline")
+    res = router.route("100mm悬臂梁，材料结构钢，端部受1000N载荷，固定，校核端部挠度不超过2mm。")
+    assert res.status == "NEEDS_CLARIFICATION"
+    assert "missing_boundary_constraints" in res.missing_requirements
+
+
+def test_unverified_material_properties_clarification_in_elastic_domains():
+    """Verify that a material entity with name only but no properties triggers clarification in elastic domains."""
+    from abaqus_ai_agent.typesafe_intent import JevIntentRouter
+
+    router = JevIntentRouter(mode="offline")
+    prompt = "100mm悬臂梁，端部受1000N载荷，固定根部，校核端部挠度不超过2mm。"
+    context = {
+        "material": {"name": "Uncharacterized_Composite_X"},
+    }
+    res = router.route(prompt, context=context)
+    assert res.status == "NEEDS_CLARIFICATION"
+    assert "unverified_material_properties" in res.missing_requirements
+
+
 def test_contradictory_load_and_bc_types_trigger_clarification():
     """Verify that contradictions in load types and boundary condition types trigger clarification."""
     router = JevIntentRouter(mode="offline")
