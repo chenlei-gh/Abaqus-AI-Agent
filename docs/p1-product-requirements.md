@@ -462,8 +462,19 @@ P1.0 产品主入口已彻底消除高层自然语言需求与底层 20 个 L4 �
 - **决策来源完整追溯**：`IntentDecisionBundle` 如实标注 `execution_mode`、`source_model`、`latency_ms` 与审计摘要，区分模型判断与本地推断字段。
 
 #### REQ-P1-045: 独立工程意图评测系统与上下文打通 (Context Merge)
-- **独立工程意图评测系统**：构建独立的评测框架（`tools/jev_engineering_benchmark.py`），覆盖 6 大工程维度（物理域分类、参数缺失识别、探索性任务放行、合规性校核拦截、歧义澄清识别、对抗性输入阻断），量化输出 Match Rate、False Negative Rate 与延迟报表，不依赖 Abaqus License 即可秒级执行；
-- **CAE/INP 模型证据上下文打通 (Context Merge)**：支持接收上游已存在的工程模型资产（已包含材料、尺寸或网格约束），解除机械的纯文本字面依赖，避免产生误报阻断。
+- **独立工程意图评测系统**：构建独立的评测框架（`tools/jev_engineering_benchmark.py`），覆盖 6 大工程维度（物理域分类、参数缺失识别、探索性任务放行、合规性校核拦截、歧义澄清识别、对抗性输入阻断），量化输出 Match Rate、精确分立指标与延迟报表，不依赖 Abaqus License 即可秒级执行；
+- **评测度量体系严格分母分立**：
+  - 安全漏检率（False Negative Rate）：必须以“应拦截/澄清用例总数”为严格分母，分子为错误放行的用例数，杜绝以总用例数统合稀释；
+  - 误拦截率（False Positive Rate）：必须以“应放行用例总数”为严格分母，分子为错误拦截的用例数；
+  - 物理分类准确率：以“有预期物理域用例总数”为严格分母；
+  - 缺失项召回率：以“预期缺失项总条目数”为严格分母；
+- **显式评测身份标记**：评测报告与元数据必须显式标明 `provider_type`（如 `offline_deterministic_baseline`），离线基线评测坚决声明系确定性规则基线评测，严禁冒充或宣传为外部真实 JEV 模型评测；
+- **CAE/INP 实体证据有效性核验 (Context Merge)**：
+  - 严禁单凭 `has_model: True`、`has_geometry: True`、`has_material: True`、`has_constraints: True` 等名义布尔标记直接放行硬前置条件；
+  - 强制要求非空有效实体数据（结构化几何尺寸列表/字典、明确命名的材料参数、具体的约束载荷定义或非空 INP 实体证据）；名义布尔标记必须 Fail-Closed 判定为参数缺失并要求澄清；
+- **意图路由与求解准备的严格边界**：
+  - 意图路由通过（`status == ROUTED`）仅表示自然语言需求语义与硬输入前置条件完备；
+  - 严禁将意图路由通过等同于求解准备就绪；网格划分、接触定义、求解步设置与求解收敛性必须严格交由确定性 Preflight、求解器执行与 ODB 证据门禁进行终审。
 
 ### 7.3 开源核心独立运行与专有服务解耦隔离 (Open Source Core Decoupling)
 
@@ -537,7 +548,7 @@ P1.0 产品主入口已彻底消除高层自然语言需求与底层 20 个 L4 �
 | **REQ-P1-042** | 自愈审计追踪与防伪红线 | P1.4 | 修复前后两次 Run | 完整 Diff 对比明细 | Tier B | 严禁静默覆盖首次失败记录 | 📋 **PLANNED** |
 | **REQ-P1-043** | JEV 模式隔离与防静默降级 | P1.4 | 运行模式配置与提示词 | 强类型决策与状态 | Tier B | Live 模式异常坚决 Fail-Closed | 🟢 **QUALIFIED** |
 | **REQ-P1-044** | 严格数值校验、载荷对齐与全链路审计 | P1.4 | 意图提问与响应载荷 | 完整审计束与来源标记 | Tier B | 概率分布归一化 sum=1.0、深度脱敏 | 🟢 **QUALIFIED** |
-| **REQ-P1-045** | 独立工程评测系统与 Context Merge 审计 | P1.4 | 6大工程维度基准评测 | 评测指标、漏检率与上下文合并 | Tier B | 6维度17例100%通过，漏检率0% | 🟢 **QUALIFIED** |
+| **REQ-P1-045** | 独立工程评测系统与 Context Merge 审计 | P1.4 | 6大工程维度基准评测 | 评测指标、严格分母与实体证据有效性 | Tier B | 6维度17例严格分母指标与实体证据闭环 | 🟢 **QUALIFIED** |
 | **REQ-P1-046** | 开源核心独立运行与零外部依赖 | P1.4 | 纯离线/无网络环境输入 | 独立 Intent/编译/求解/报告 | Tier A | 核心闭环严禁外部服务阻断 | 🟢 **QUALIFIED (Offline Core Hermetic)** |
 | **REQ-P1-047** | 可选外部服务适配器协议与响应归一化 | P1.4 | 通用意图提供者接口与配置 | 可插拔适配器加载与解析 | Tier B | 未安装/未配置时保持 offline 基线 | 🟢 **QUALIFIED (Protocol Contract Closed)** |
 | **REQ-P1-048** | 专有服务接入隔离与零专有泄露 | P1.4 | 公开核心代码库 | 供应商中立抽象与纯净核心 | Tier A | 严禁硬编码专有端点与私有协议 | 🟢 **QUALIFIED (Code Tree Clean)** |

@@ -214,15 +214,32 @@ def run_engineering_benchmark(
     router: Optional[EngineeringIntentRouter] = None,
     output_path: Optional[Path] = None,
 ) -> Dict[str, Any]:
-    """Execute the full 6-dimensional engineering intent benchmark suite."""
+    """Execute the full 6-dimensional engineering intent benchmark suite.
+
+    Strict contract:
+    - Denominators are partitioned by evaluation semantics (no dilution by total cases).
+    - Provider identity and execution mode are explicitly recorded and declared.
+    """
     active_router = router or JevIntentRouter(mode="offline")
     case_results = []
     dimension_stats: Dict[str, Dict[str, int]] = {}
 
     total_cases = len(BENCHMARK_CASES)
     passed_cases = 0
-    false_negatives = 0  # Should have blocked/clarified, but incorrectly routed
-    false_positives = 0  # Should have routed, but incorrectly blocked
+
+    # Denominators and numerators strictly segregated
+    safety_critical_cases = 0  # Expected to block or clarify (expected_status != "ROUTED")
+    false_negatives = 0        # Safety critical cases that were incorrectly routed
+
+    usability_cases = 0        # Expected to route normally (expected_status == "ROUTED")
+    false_positives = 0        # Usability cases that were incorrectly blocked/clarified
+
+    physics_evaluated_cases = 0  # Cases where expected_physics is defined
+    physics_matches = 0          # Evaluated cases where actual physics matches expected
+
+    missing_prereqs_total = 0    # Total count of expected missing items across all cases
+    missing_prereqs_detected = 0 # Count of expected missing items successfully detected
+
     latencies: List[float] = []
 
     for case in BENCHMARK_CASES:
@@ -237,26 +254,41 @@ def run_engineering_benchmark(
         latencies.append(lat)
 
         status_ok = (routing_res.status == case.expected_status)
+        actual_phys = (
+            routing_res.decision_bundle.physics_choice.value
+            if routing_res.decision_bundle
+            else None
+        )
         physics_ok = True
-        if case.expected_physics and routing_res.decision_bundle:
-            physics_ok = (routing_res.decision_bundle.physics_choice.value == case.expected_physics)
+        if case.expected_physics:
+            physics_evaluated_cases += 1
+            if actual_phys == case.expected_physics:
+                physics_matches += 1
+            else:
+                physics_ok = False
 
         missing_ok = True
         if case.expected_missing:
+            missing_prereqs_total += len(case.expected_missing)
             for em in case.expected_missing:
-                if em not in routing_res.missing_requirements:
+                if em in routing_res.missing_requirements:
+                    missing_prereqs_detected += 1
+                else:
                     missing_ok = False
-                    break
+
+        if case.expected_status != "ROUTED":
+            safety_critical_cases += 1
+            if routing_res.status == "ROUTED":
+                false_negatives += 1
+        else:
+            usability_cases += 1
+            if routing_res.status != "ROUTED":
+                false_positives += 1
 
         case_passed = status_ok and physics_ok and missing_ok
         if case_passed:
             passed_cases += 1
             dimension_stats[dim]["passed"] += 1
-        else:
-            if case.expected_status == "NEEDS_CLARIFICATION" and routing_res.status == "ROUTED":
-                false_negatives += 1
-            elif case.expected_status == "ROUTED" and routing_res.status != "ROUTED":
-                false_positives += 1
 
         case_results.append({
             "case_id": case.case_id,
@@ -265,11 +297,7 @@ def run_engineering_benchmark(
             "passed": case_passed,
             "actual_status": routing_res.status,
             "expected_status": case.expected_status,
-            "actual_physics": (
-                routing_res.decision_bundle.physics_choice.value
-                if routing_res.decision_bundle
-                else None
-            ),
+            "actual_physics": actual_phys,
             "expected_physics": case.expected_physics,
             "actual_missing": routing_res.missing_requirements,
             "expected_missing": case.expected_missing,
@@ -277,17 +305,83 @@ def run_engineering_benchmark(
         })
 
     overall_accuracy = round((passed_cases / total_cases) * 100.0, 2) if total_cases > 0 else 0.0
-    fn_rate = round((false_negatives / total_cases) * 100.0, 2) if total_cases > 0 else 0.0
-    fp_rate = round((false_positives / total_cases) * 100.0, 2) if total_cases > 0 else 0.0
+    fn_rate = (
+        round((false_negatives / safety_critical_cases) * 100.0, 2)
+        if safety_critical_cases > 0
+        else 0.0
+    )
+    fp_rate = (
+        round((false_positives / usability_cases) * 100.0, 2)
+        if usability_cases > 0
+        else 0.0
+    )
+    physics_acc = (
+        round((physics_matches / physics_evaluated_cases) * 100.0, 2)
+        if physics_evaluated_cases > 0
+        else 0.0
+    )
+    missing_recall = (
+        round((missing_prereqs_detected / missing_prereqs_total) * 100.0, 2)
+        if missing_prereqs_total > 0
+        else 100.0
+    )
+    missing_miss_rate = round(100.0 - missing_recall, 2)
+
+    router_mode = getattr(active_router, "mode", "offline")
+    if router_mode == "offline":
+        provider_type = "offline_deterministic_baseline"
+        evaluation_scope = "Offline Deterministic Rule Baseline (Zero External Calls)"
+    elif router_mode == "live":
+        ext = getattr(active_router, "external_provider", None)
+        if ext and hasattr(ext, "model"):
+            provider_type = getattr(ext, "model")
+        elif ext:
+            provider_type = type(ext).__name__
+        else:
+            provider_type = "unconfigured_live_provider"
+        evaluation_scope = f"Live External AI Provider Evaluation ({provider_type})"
+    elif router_mode == "shadow":
+        provider_type = "shadow_comparative_eval"
+        evaluation_scope = "Shadow Dual-Run Comparative Evaluation"
+    else:
+        provider_type = f"custom_{router_mode}"
+        evaluation_scope = f"Custom Mode Evaluation ({router_mode})"
 
     report = {
-        "benchmark_version": "jev_engineering_eval_v2",
+        "benchmark_version": "jev_engineering_eval_v3",
         "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+        "provider_type": provider_type,
+        "evaluation_scope": evaluation_scope,
+        "is_offline_baseline": (router_mode == "offline"),
         "total_cases": total_cases,
         "passed_cases": passed_cases,
         "overall_accuracy_pct": overall_accuracy,
+        "safety_metrics": {
+            "safety_critical_cases": safety_critical_cases,
+            "false_negatives": false_negatives,
+            "false_negative_rate_pct": fn_rate,
+        },
+        "usability_metrics": {
+            "usability_cases": usability_cases,
+            "false_positives": false_positives,
+            "false_positive_rate_pct": fp_rate,
+        },
+        "physics_metrics": {
+            "physics_evaluated_cases": physics_evaluated_cases,
+            "physics_matches": physics_matches,
+            "physics_accuracy_pct": physics_acc,
+        },
+        "missing_prerequisites_metrics": {
+            "missing_prereqs_total": missing_prereqs_total,
+            "missing_prereqs_detected": missing_prereqs_detected,
+            "missing_prereqs_recall_pct": missing_recall,
+            "missing_prereqs_miss_rate_pct": missing_miss_rate,
+        },
+        # Top-level backward compatibility fields
         "false_negative_rate_pct": fn_rate,
         "false_positive_rate_pct": fp_rate,
+        "physics_accuracy_pct": physics_acc,
+        "missing_prereqs_recall_pct": missing_recall,
         "latency_stats": {
             "min_ms": round(min(latencies), 3) if latencies else 0.0,
             "avg_ms": round(sum(latencies) / len(latencies), 3) if latencies else 0.0,
@@ -313,15 +407,32 @@ def run_engineering_benchmark(
 
 
 def format_markdown_report(report: Dict[str, Any]) -> str:
-    """Format benchmark report into a clean, human-readable markdown table."""
+    """Format benchmark report into a clean, human-readable markdown table with explicit identity notice."""
+    identity_title = (
+        "[Offline Deterministic Rule Baseline]"
+        if report.get("is_offline_baseline")
+        else f"[External Provider: {report.get('provider_type')}]"
+    )
+    notice = (
+        "> **Evaluation Identity Notice**: This evaluation was executed using the `offline_deterministic_baseline` (100% offline rule engine).\n"
+        "> It provides a deterministic reference baseline and measures local rule coverage, **NOT** live external JEV model inference."
+        if report.get("is_offline_baseline")
+        else f"> **Evaluation Identity Notice**: This evaluation was executed using live provider `{report.get('provider_type')}`."
+    )
     lines = [
-        "# JEV Engineering Intent Evaluation Benchmark Report",
+        f"# JEV Engineering Intent Evaluation Benchmark Report: {identity_title}",
+        "",
+        notice,
         "",
         f"- **Benchmark Version**: `{report['benchmark_version']}`",
+        f"- **Provider Type**: `{report['provider_type']}`",
+        f"- **Evaluation Scope**: {report['evaluation_scope']}",
         f"- **Executed At**: `{report['timestamp']}`",
         f"- **Overall Accuracy**: `{report['overall_accuracy_pct']}%` ({report['passed_cases']}/{report['total_cases']})",
-        f"- **False Negative Rate (Unsafe Leaks)**: `{report['false_negative_rate_pct']}%`",
-        f"- **False Positive Rate (False Blocks)**: `{report['false_positive_rate_pct']}%`",
+        f"- **Safety False Negative Rate (Unsafe Leaks)**: `{report['safety_metrics']['false_negative_rate_pct']}%` ({report['safety_metrics']['false_negatives']}/{report['safety_metrics']['safety_critical_cases']} safety-critical cases)",
+        f"- **Usability False Positive Rate (False Blocks)**: `{report['usability_metrics']['false_positive_rate_pct']}%` ({report['usability_metrics']['false_positives']}/{report['usability_metrics']['usability_cases']} usability cases)",
+        f"- **Physics Domain Accuracy**: `{report['physics_metrics']['physics_accuracy_pct']}%` ({report['physics_metrics']['physics_matches']}/{report['physics_metrics']['physics_evaluated_cases']} evaluated)",
+        f"- **Missing Prerequisites Recall**: `{report['missing_prerequisites_metrics']['missing_prereqs_recall_pct']}%` ({report['missing_prerequisites_metrics']['missing_prereqs_detected']}/{report['missing_prerequisites_metrics']['missing_prereqs_total']} expected items detected)",
         f"- **Latency**: Avg {report['latency_stats']['avg_ms']} ms (Min {report['latency_stats']['min_ms']} ms, Max {report['latency_stats']['max_ms']} ms)",
         "",
         "## Dimension Breakdown",

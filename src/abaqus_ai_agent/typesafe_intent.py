@@ -67,6 +67,35 @@ def _get_external_config(*var_names: str) -> Optional[str]:
     return None
 
 
+def _has_valid_entity_data(val: Any) -> bool:
+    """Validate that an input represents real engineering entity data rather than nominal boolean flags or empty stubs.
+
+    Strict contract:
+    - Boolean values (True/False) are explicitly rejected.
+    - Empty strings or whitespace-only strings are rejected.
+    - Empty lists, tuples, sets, or collections containing only empty/None items are rejected.
+    - Empty dicts or dicts containing only boolean flags or empty values are rejected.
+    """
+    if isinstance(val, bool):
+        return False
+    if isinstance(val, (int, float)):
+        return True
+    if isinstance(val, str):
+        return bool(val.strip())
+    if isinstance(val, (list, tuple, set)):
+        return len(val) > 0 and any(_has_valid_entity_data(item) for item in val)
+    if isinstance(val, dict):
+        if not val:
+            return False
+        # Discard nominal boolean-only or stub dicts (e.g. {"has_model": True})
+        valid_items = [
+            v for k, v in val.items()
+            if not isinstance(v, bool) and _has_valid_entity_data(v)
+        ]
+        return len(valid_items) > 0
+    return False
+
+
 def _validate_numeric(
     value: Any,
     min_val: float,
@@ -638,54 +667,57 @@ class EngineeringIntentRouter:
             },
         )
 
-        # 1. Geometry Dimensions
-        has_dims = bool(
-            params.get("dimensions")
-            or ctx.get("dimensions")
-            or ctx.get("geometry")
-            or ctx.get("has_geometry")
-            or ctx.get("has_model")
-            or ctx.get("inp_evidence")
+        # 1. Geometry Dimensions: Requires explicit entity data (dimensions, geometry, inp_evidence)
+        # Rejects nominal boolean flags like has_model: True or has_geometry: True!
+        has_dims = (
+            _has_valid_entity_data(params.get("dimensions"))
+            or _has_valid_entity_data(ctx.get("dimensions"))
+            or _has_valid_entity_data(ctx.get("geometry"))
+            or _has_valid_entity_data(ctx.get("inp_evidence"))
         )
         if rules["require_dimensions"] and not has_dims:
             missing.append("missing_geometry_dimensions")
 
-        # 2. Material
-        has_mat = bool(
-            params.get("material")
-            or ctx.get("material")
-            or ctx.get("has_material")
-            or (isinstance(ctx.get("inp_evidence"), dict) and ctx["inp_evidence"].get("material"))
+        # 2. Material: Requires structured or named material entity data
+        # Rejects nominal boolean flags like has_material: True!
+        inp_mat = (
+            ctx.get("inp_evidence", {}).get("material")
+            if isinstance(ctx.get("inp_evidence"), dict)
+            else None
+        )
+        has_mat = (
+            _has_valid_entity_data(params.get("material"))
+            or _has_valid_entity_data(ctx.get("material"))
+            or _has_valid_entity_data(inp_mat)
         )
         if rules["require_material"] and not has_mat:
             missing.append("missing_material_specification")
 
-        # 3. Boundary Constraints
-        has_bc = bool(
+        # 3. Boundary Constraints: Requires NLP well-constrained judgment or structured BC entities
+        # Rejects nominal boolean flags like is_well_constrained: True or has_constraints: True!
+        has_bc = (
             bundle.is_well_constrained_noul.is_yes
-            or ctx.get("boundary_conditions")
-            or ctx.get("constraints")
-            or ctx.get("is_well_constrained")
-            or ctx.get("has_constraints")
+            or _has_valid_entity_data(ctx.get("boundary_conditions"))
+            or _has_valid_entity_data(ctx.get("constraints"))
         )
         if rules["require_constraints"] and not has_bc:
             missing.append("missing_boundary_constraints")
 
-        # 4. Applied Loads / Excitation
-        has_load = bool(
-            params.get("loads")
-            or ctx.get("loads")
-            or ctx.get("has_loads")
+        # 4. Applied Loads / Excitation: Requires extracted loads or structured load entities
+        # Rejects nominal boolean flags like has_loads: True!
+        has_load = (
+            _has_valid_entity_data(params.get("loads"))
+            or _has_valid_entity_data(ctx.get("loads"))
         )
         if rules["require_loads"] and not has_load:
             missing.append("missing_applied_loads")
 
-        # 5. Thermal Boundary Conditions
-        has_thermal = bool(
+        # 5. Thermal Boundary Conditions: Requires explicit thermal conditions in prompt or structured thermal entities
+        # Rejects nominal boolean flags like has_thermal_bcs: True!
+        has_thermal = (
             self._has_thermal_boundary_conditions(prompt)
-            or ctx.get("thermal_bcs")
-            or ctx.get("thermal_boundary_conditions")
-            or ctx.get("has_thermal_bcs")
+            or _has_valid_entity_data(ctx.get("thermal_bcs"))
+            or _has_valid_entity_data(ctx.get("thermal_boundary_conditions"))
         )
         if rules["require_thermal_bcs"] and not has_thermal:
             missing.append("missing_thermal_boundary_conditions")
@@ -1234,6 +1266,13 @@ class EngineeringIntentRouter:
             "completeness_score": bundle.completeness_score.score,
             "well_constrained": bundle.is_well_constrained_noul.is_yes or bool(bcs),
             "context_merged": bool(ctx),
+            "routing_gate_passed": True,
+            "preflight_required": True,
+            "solver_ready": False,
+            "execution_gate_note": (
+                "Intent routing passed does NOT imply mesh/solver readiness. "
+                "Execution remains strictly subject to deterministic Preflight and ODB evidence gates."
+            ),
         }
 
         return EngineeringIntent(
