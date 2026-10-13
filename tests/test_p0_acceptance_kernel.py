@@ -1020,6 +1020,107 @@ def test_p0_c_production_acceptance_run_hash_tampered_even_if_caller_provides_ma
     assert any("caller_input_hash_conflict" in e or "input_hash_mismatch" in e for e in res.findings.evidence_errors)
 
 
+def test_result_validity_equality_symmetry_and_hash_consistency():
+    """P0 Contract: ResultValidity equality must be symmetric, and hash must be consistent with equality."""
+    from abaqus_ai_agent.acceptance import ResultValidity
+
+    tampered = ResultValidity("EVIDENCE_TAMPERED")
+    corrupt = ResultValidity("EVIDENCE_CORRUPT")
+    stale = ResultValidity("EVIDENCE_STALE")
+    incomplete = ResultValidity("INCOMPLETE")
+    invalid = ResultValidity("RESULT_INVALID")
+    valid = ResultValidity("VALID")
+
+    # 1. Symmetric equality with "RESULT_INVALID"
+    for item in (tampered, corrupt, stale, incomplete, invalid):
+        assert item == "RESULT_INVALID", f"{item} == RESULT_INVALID must be True"
+        assert "RESULT_INVALID" == item, f"RESULT_INVALID == {item} must be True (symmetric)"
+        assert item == ResultValidity("RESULT_INVALID"), f"{item} == ResultValidity(RESULT_INVALID) must be True"
+        assert ResultValidity("RESULT_INVALID") == item, f"ResultValidity(RESULT_INVALID) == {item} must be True"
+
+    # 2. Strict inequality between distinct non-base invalid states
+    assert tampered != "EVIDENCE_CORRUPT"
+    assert corrupt != "EVIDENCE_TAMPERED"
+    assert tampered != corrupt
+    assert corrupt != tampered
+
+    # 3. Valid state must never compare equal to RESULT_INVALID
+    assert valid != "RESULT_INVALID"
+    assert "RESULT_INVALID" != valid
+    assert valid != tampered
+
+    # 4. Hash consistency: if a == b, then hash(a) == hash(b)
+    base_invalid_hash = hash("RESULT_INVALID")
+    for item in (tampered, corrupt, stale, incomplete, invalid):
+        assert hash(item) == base_invalid_hash, f"hash({item}) must equal hash('RESULT_INVALID')"
+
+    # 5. Set and Dict membership consistency
+    s = {tampered}
+    assert "RESULT_INVALID" in s
+    assert ResultValidity("RESULT_INVALID") in s
+
+    # 6. Explicit helper properties
+    assert tampered.is_tampered is True
+    assert tampered.is_valid is False
+    assert tampered.exact_name == "EVIDENCE_TAMPERED"
+
+    assert corrupt.is_corrupt is True
+    assert corrupt.exact_name == "EVIDENCE_CORRUPT"
+
+    assert stale.is_stale is True
+    assert stale.exact_name == "EVIDENCE_STALE"
+
+    assert incomplete.is_incomplete is True
+    assert incomplete.exact_name == "INCOMPLETE"
+
+    assert valid.is_valid is True
+    assert valid.is_tampered is False
+    assert valid.exact_name == "VALID"
+
+
+def test_p0_production_acceptance_tamper_precedence_over_physical_failure(tmp_path: Path):
+    """P0 Safety Redline: Compromised evidence MUST NOT be masked by downstream physical criteria failure."""
+    files = _create_standard_mock_artifacts(tmp_path, "p0_tamper_phys_fail")
+    manifest = build_evidence_manifest_v2(
+        run_id="p0_tamper_phys_fail",
+        case_id="case_tamper_phys",
+        artifacts_dir=str(tmp_path),
+        artifact_filenames=files,
+    )
+
+    # Actual value 350 MPa exceeds limit 200 MPa -> physical criteria would evaluate to FAIL
+    run = AnalysisRun(
+        id="p0_tamper_phys_fail",
+        model_name="Model_TamperPhys",
+        job_name="Job_p0_tamper_phys_fail",
+        state=AnalysisRunState.COMPLETED,
+        job_status=JobStatus(name="Job_p0_tamper_phys_fail", state=JobState.COMPLETED),
+        odb_path=str(tmp_path / "Job_p0_tamper_phys_fail.odb"),
+        provenance=AnalysisProvenance(
+            run_id="p0_tamper_phys_fail",
+            model_name="Model_TamperPhys",
+            job_name="Job_p0_tamper_phys_fail",
+            input_hash="tampered_hash_value" + "0" * 45,
+        ),
+        metrics=(EngineeringMetric(name="max_mises", value=350.0, unit="MPa"),),
+    )
+
+    res = evaluate_production_acceptance(
+        run,
+        criteria=[{"name": "mises_limit", "value_key": "max_mises", "operator": "<=", "limit": 200.0}],
+        evidence_manifest=manifest,
+        base_dir=str(tmp_path),
+    )
+
+    # TAMPER MUST TAKE PRECEDENCE: Cannot be reported as normal physical FAIL
+    assert res.acceptance_status == "RESULT_INVALID", (
+        f"Expected RESULT_INVALID due to tampering, but got {res.acceptance_status} (masked by physical FAIL!)"
+    )
+    assert res.result_validity == "EVIDENCE_TAMPERED"
+    assert res.deliverable is False
+    assert any("input_hash_mismatch" in e for e in res.findings.evidence_errors)
+
+
 def test_p0_d_legacy_dict_with_passed_true_blocked_without_explicit_deliverable(tmp_path: Path):
     """P0-D-1: Legacy acceptance dict with passed=True but lacking explicit deliverable=True is strictly blocked."""
     pipeline = DeterministicReportPipeline()

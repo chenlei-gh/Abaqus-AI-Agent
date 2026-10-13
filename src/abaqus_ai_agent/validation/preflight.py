@@ -28,9 +28,12 @@ class PlanPreflightResult:
 
 
 def _is_finite_number(val):
-    if val is None or not isinstance(val, (int, float)):
+    if val is None or isinstance(val, bool) or not isinstance(val, (int, float)):
         return False
-    return not (math.isnan(val) or math.isinf(val))
+    try:
+        return math.isfinite(float(val))
+    except (ValueError, TypeError, OverflowError):
+        return False
 
 
 def preflight_action(action, snapshot=None):

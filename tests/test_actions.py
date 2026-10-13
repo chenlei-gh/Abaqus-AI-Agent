@@ -86,3 +86,43 @@ def test_tie_and_contact_scripts():
     assert "SurfaceToSurfaceContactStd(" in contact_code
     assert "Cont-1" in contact_code
     assert "FrictionProp" in contact_code
+
+
+def test_validate_action_rejects_bool_nan_inf():
+    """Verify that validate_action strictly rejects bool-as-number, NaN, and Inf in quantity fields."""
+    import math
+    from abaqus_ai_agent.contracts.action import AbaqusAction
+    from abaqus_ai_agent.validation.actions import validate_action
+
+    # 1. local_seed_size with bool or NaN or Inf
+    for invalid_size in (True, False, float("nan"), float("inf"), -1.0, 0.0):
+        action = AbaqusAction(
+            action_type="local_seed_size",
+            model_name="Model-1",
+            target="Part-1",
+            parameters={"part": "Part-1", "region_expression": "e[0]", "size": invalid_size},
+        )
+        with pytest.raises(ValueError, match="size must be positive"):
+            validate_action(action)
+
+    # 2. temperature_bc magnitude with bool or NaN
+    for invalid_mag in (True, False, float("nan"), float("inf")):
+        action = AbaqusAction(
+            action_type="temperature_bc",
+            model_name="Model-1",
+            target="Model-1",
+            parameters={"name": "T1", "region_expression": "n[0]", "magnitude": invalid_mag},
+        )
+        with pytest.raises(ValueError, match="magnitude"):
+            validate_action(action)
+
+    # 3. inspect_geometry with bool or NaN
+    for invalid_val in (True, float("nan"), float("-inf")):
+        action = AbaqusAction(
+            action_type="inspect_geometry",
+            model_name="Model-1",
+            target="Part-1",
+            parameters={"part": "Part-1", "min_edge_length": invalid_val},
+        )
+        with pytest.raises(ValueError, match="min_edge_length must be positive"):
+            validate_action(action)

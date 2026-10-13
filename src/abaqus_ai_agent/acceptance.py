@@ -23,22 +23,58 @@ CANONICAL_GATE_ORDER = (
 )
 
 
+_INVALID_RESULT_STATES = frozenset({
+    "RESULT_INVALID",
+    "EVIDENCE_TAMPERED",
+    "EVIDENCE_CORRUPT",
+    "EVIDENCE_STALE",
+    "INCOMPLETE",
+})
+
+
 class ResultValidity(str):
     """String subclass representing result validity while maintaining backward compatibility with RESULT_INVALID."""
+
+    @property
+    def exact_name(self) -> str:
+        return str(self)
+
+    @property
+    def is_valid(self) -> bool:
+        return str(self) == "VALID"
+
+    @property
+    def is_tampered(self) -> bool:
+        return str(self) == "EVIDENCE_TAMPERED"
+
+    @property
+    def is_corrupt(self) -> bool:
+        return str(self) == "EVIDENCE_CORRUPT"
+
+    @property
+    def is_stale(self) -> bool:
+        return str(self) == "EVIDENCE_STALE"
+
+    @property
+    def is_incomplete(self) -> bool:
+        return str(self) == "INCOMPLETE"
+
     def __eq__(self, other):
-        if str.__eq__(self, str(other)):
+        if not isinstance(other, (str, ResultValidity)):
+            return False
+        s_self = str(self)
+        s_other = str(other)
+        if s_self == s_other:
             return True
-        if other == "RESULT_INVALID" and str(self) in (
-            "RESULT_INVALID",
-            "EVIDENCE_TAMPERED",
-            "EVIDENCE_CORRUPT",
-            "EVIDENCE_STALE",
-            "INCOMPLETE",
+        if (s_self == "RESULT_INVALID" and s_other in _INVALID_RESULT_STATES) or (
+            s_other == "RESULT_INVALID" and s_self in _INVALID_RESULT_STATES
         ):
             return True
         return False
 
     def __hash__(self):
+        if str(self) in _INVALID_RESULT_STATES:
+            return hash("RESULT_INVALID")
         return str.__hash__(self)
 
 
@@ -1042,10 +1078,13 @@ def evaluate_production_acceptance(
         else:
             new_validity = res.result_validity
 
-        new_status = "RESULT_INVALID" if str(new_validity) in ("EVIDENCE_TAMPERED", "EVIDENCE_CORRUPT", "EVIDENCE_STALE", "SOLVER_FAILED") else "BLOCKED"
-        if res.acceptance_status == "FAIL":
-            # Physical failure takes absolute precedence
+        if str(new_validity) in ("EVIDENCE_TAMPERED", "EVIDENCE_CORRUPT", "EVIDENCE_STALE", "SOLVER_FAILED", "RESULT_INVALID"):
+            new_status = "RESULT_INVALID"
+        elif res.acceptance_status == "FAIL":
+            # Physical failure takes precedence only when evidence is authentic and uncompromised
             new_status = "FAIL"
+        else:
+            new_status = "BLOCKED"
 
         new_findings = AcceptanceFindings(
             failures=new_failures,

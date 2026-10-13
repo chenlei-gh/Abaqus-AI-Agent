@@ -37,9 +37,9 @@
 
 | 需求代号 | 需求名称 | 现有生产代码资产 | 现有测试与真机证据 | 真实缺口 (Gap) | 最小新增代码动作 | 严格禁止重复建设的模块 (Redline) |
 |:---|:---|:---|:---|:---|:---|:---|
-| **REQ-P1-010** | 多格式工程图纸/图像摄入 | 无专门摄入管道；仅有基础文件路径操作 | 无 | 缺乏对 PDF（矢量/光栅）、高清 PNG/TIFF 图像的预处理与多图层/瓦片切分 | 新增 `perception/ingestion.py`：实现图像标准化预处理与瓦片切片 | 🛑 严禁重造底层图像格式解析库，直接基于标准库/Pillow/pypdf 处理 |
+| **REQ-P1-010** | 多格式工程图纸/图像摄入 | `src/abaqus_ai_agent/perception/ingestion.py`（支持矢量 PDF 与高清光栅图纸预处理、可逆坐标映射） | 包含在感知测试套件中（单测已覆盖） | 已完成核心摄入与归一化管线；待真实 CAE 求解端到端管线验证 | 直接复用现有 `perception/ingestion.py`，严禁重复编写底层图像摄入模块 | 🛑 严禁重造底层图像格式解析库，直接基于现有标准实现 |
 | **REQ-P1-011** | 工程专业 OCR 与技术规范提取 | `grounding/multimodal.py` 中有基于正则的关键词提取 | `test_ga2b_multimodal_golden.py` 中有文本匹配测试 | 现有逻辑仅能处理上游传来的文本，**缺乏从真实图像像素中进行 OCR 识别的能力** | 新增 `perception/ocr_adapter.py`：调用 Vision/OCR 引擎将图片文字转换为文本行 | 🛑 严禁重写文字语义解析规则，直接对接现有 `parse_drawing_callout` |
-| **REQ-P1-012** | 尺寸标注线与公差解析 | 仅在 `VisualCallout` 中有 `magnitude` 与 `unit` 字段 | 无 | 缺乏对工程图纸中尺寸线、箭头、尺寸公差框格的检测与关联 | 新增 `perception/dimension_extractor.py`：提取尺寸数值与公差 | 🛑 严禁新造尺寸数据结构，必须统一封装为 `VisualCallout(type=DIMENSION)` |
+| **REQ-P1-012** | 尺寸标注线与公差解析 | `src/abaqus_ai_agent/perception/dimension_extractor.py`（提取线性、径向尺寸与公差并输出标准 VisualCallout） | 单测已覆盖（提取尺寸、公差与基准） | 基础提取器已就绪；待与真实 CAD 特征关联做更深工程闭环 | 直接复用现有 `perception/dimension_extractor.py`，严禁新建重复提取器 | 🛑 严禁新造尺寸数据结构，必须统一封装为 `VisualCallout(type=DIMENSION)` |
 | **REQ-P1-013** | 载荷箭头与约束符号解析 | `VisualCallout` 已有 `direction_vector`, `magnitude`, `semantic_intent` | `contracts/multimodal.py` 已有完整数据契约 | 缺乏对图像中受力箭头与约束简图（固定端、铰支座）的视觉识别模型对接 | 新增 `perception/symbol_extractor.py`：识别箭头方向与类型 | 🛑 严禁重造载荷与边界契约，必须直接输出标准的 `VisualCallout` |
 | **REQ-P1-014** | 结构化 `VisualCallout` 输出 | `contracts/multimodal.py`<br>`grounding/multimodal.py` 已完全实现 | `test_ga2b_multimodal_golden.py` (661 PASS) | 无架构缺口；仅需将前序提取器输出组装为元组 | 无需新建架构；直接调用已有的 `VisualCallout` 构造器 | 🛑 **绝对禁止重造 VisualCallout 数据类** |
 | **REQ-P1-015** | 强制人机协同确认门禁 (HITL) | `MultimodalHITLWorkflow`<br>`HITLStatus`<br>`synthesize_specs` 已完全实现 | `ga2b_multimodal_manifest.json` 真实 Abaqus 闭环认证 | 缺乏轻量交互触发层（当前只能通过代码传决策，缺自动化交互接口） | 仅在工作流层暴露简易交互方法，供 CLI/测试使用 | 🛑 **绝对禁止重写 HITL 状态机与 Fail-Closed 门禁逻辑** |

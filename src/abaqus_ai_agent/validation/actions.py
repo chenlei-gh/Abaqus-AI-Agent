@@ -1,4 +1,29 @@
+import math
 from ..contracts.action import AbaqusAction
+
+
+def _is_finite_num(v) -> bool:
+    if v is None or isinstance(v, bool) or not isinstance(v, (int, float)):
+        return False
+    try:
+        return math.isfinite(float(v))
+    except (ValueError, TypeError, OverflowError):
+        return False
+
+
+def _require_positive(v, name: str) -> None:
+    if not _is_finite_num(v) or float(v) <= 0:
+        raise ValueError("%s must be positive" % name)
+
+
+def _require_non_negative(v, name: str) -> None:
+    if not _is_finite_num(v) or float(v) < 0:
+        raise ValueError("%s cannot be negative" % name)
+
+
+def _require_finite(v, name: str) -> None:
+    if not _is_finite_num(v):
+        raise ValueError("%s must be a finite number" % name)
 
 
 VALID_CONNECTOR_ASSEMBLED_TYPES = (
@@ -55,19 +80,19 @@ def validate_action(action):
             raise ValueError("region_expression is required for %s" % action.action_type)
         if action.action_type == "inspect_geometry":
             for key in ("min_edge_length", "min_face_size"):
-                if action.parameters.get(key) is not None and action.parameters[key] <= 0:
-                    raise ValueError("%s must be positive" % key)
+                if action.parameters.get(key) is not None:
+                    _require_positive(action.parameters[key], key)
     mesh = action.action_type in ("seed_part", "local_seed_size", "local_seed_number", "mesh_controls", "element_type", "generate_mesh", "inspect_mesh")
     if mesh:
         part = action.parameters.get("part")
         if not part:
             raise ValueError("part is required for %s" % action.action_type)
-    if action.action_type == "local_seed_size" and action.parameters.get("size", 0) <= 0:
-        raise ValueError("size must be positive")
-    if action.action_type == "local_seed_number" and int(action.parameters.get("number", 0)) < 1:
-        raise ValueError("number must be positive")
-    if action.action_type in ("local_seed_size", "local_seed_number", "mesh_controls", "element_type") and not action.parameters.get("region_expression"):
-        raise ValueError("region_expression is required for %s" % action.action_type)
+    if action.action_type == "local_seed_size":
+        _require_positive(action.parameters.get("size", 0), "size")
+    if action.action_type == "local_seed_number":
+        num = action.parameters.get("number", 0)
+        if not _is_finite_num(num) or int(num) < 1 or int(num) != num:
+            raise ValueError("number must be positive")
     if action.action_type == "mesh_controls" and not action.parameters.get("technique"):
         raise ValueError("technique is required for mesh_controls")
     if action.action_type == "mesh_quality":
@@ -75,10 +100,10 @@ def validate_action(action):
             raise ValueError("part is required for mesh_quality")
         for key in ("max_aspect_ratio", "max_skew", "min_jacobian", "min_angle", "max_angle", "max_angular_deviation", "max_geometric_deviation_factor"):
             value = action.parameters.get(key)
-            if value is not None and value < 0:
-                raise ValueError("%s cannot be negative" % key)
-        if action.parameters.get("max_aspect_ratio") == 0:
-            raise ValueError("max_aspect_ratio must be positive")
+            if value is not None:
+                _require_non_negative(value, key)
+        if action.parameters.get("max_aspect_ratio") is not None:
+            _require_positive(action.parameters.get("max_aspect_ratio"), "max_aspect_ratio")
     if action.action_type in ("field_output", "history_output"):
         variables = action.parameters.get("variables", ())
         if not variables:
@@ -88,7 +113,7 @@ def validate_action(action):
     if action.action_type in ("body_heat_flux", "surface_heat_flux", "temperature_bc", "initial_temperature"):
         if not action.parameters.get("name"):
             raise ValueError("name is required for %s" % action.action_type)
-        if action.parameters.get("magnitude") is None:
+        if action.parameters.get("magnitude") is None or not _is_finite_num(action.parameters.get("magnitude")):
             raise ValueError("magnitude is required for %s" % action.action_type)
     if action.action_type == "initial_stress" and not action.parameters.get("name"):
         raise ValueError("name is required for initial_stress")
@@ -99,25 +124,23 @@ def validate_action(action):
                 raise ValueError("step amplitude must be RAMP or STEP")
         if action.action_type == "dynamic_explicit_step":
             value = action.parameters.get("max_increment")
-            if value is not None and value <= 0:
-                raise ValueError("max_increment must be positive")
+            if value is not None:
+                _require_positive(value, "max_increment")
         if not action.parameters.get("name"):
             raise ValueError("name is required for %s" % action.action_type)
-        if action.parameters.get("time_period", 1.0) <= 0:
-            raise ValueError("time_period must be positive")
-        if action.parameters.get("max_num_inc", 1) < 1:
-            raise ValueError("max_num_inc must be positive")
+        if action.parameters.get("time_period") is not None:
+            _require_positive(action.parameters.get("time_period"), "time_period")
+        if action.parameters.get("max_num_inc") is not None:
+            mni = action.parameters.get("max_num_inc")
+            if not _is_finite_num(mni) or int(mni) < 1 or int(mni) != mni:
+                raise ValueError("max_num_inc must be positive")
         for key in ("initial_inc", "min_inc", "max_inc"):
             value = action.parameters.get(key)
-            if value is not None and value <= 0:
-                raise ValueError("%s must be positive" % key)
+            if value is not None:
+                _require_positive(value, key)
     if action.action_type in ("material_conductivity", "material_specific_heat", "material_expansion"):
         if not action.parameters.get("name") or not action.parameters.get("table"):
             raise ValueError("%s requires name and table" % action.action_type)
-    if action.action_type == "contact" and not action.parameters.get("property"):
-        raise ValueError("property is required for contact")
-    if action.action_type == "contact" and (not action.parameters.get("master_expression") or not action.parameters.get("slave_expression")):
-        raise ValueError("master_expression and slave_expression are required for contact")
     if action.action_type == "contact":
         sliding = str(action.parameters.get("sliding", "FINITE")).upper()
         if sliding not in ("FINITE", "SMALL", "SMALL_SLIDING"):
@@ -128,8 +151,7 @@ def validate_action(action):
             raise ValueError("unsupported contact tangential formulation")
         if formulation in ("PENALTY", "LAGRANGE"):
             friction = action.parameters.get("tangential_behavior", {}).get("friction", 0.0)
-            if friction < 0:
-                raise ValueError("friction cannot be negative")
+            _require_non_negative(friction, "friction")
     if action.action_type in ("tabular_amplitude", "smooth_step_amplitude", "periodic_amplitude"):
         data = action.parameters.get("data", ())
         if not data:
@@ -140,17 +162,18 @@ def validate_action(action):
             if any(len(x) != 2 for x in data):
                 raise ValueError("amplitude data must contain time/value pairs")
         if action.action_type == "periodic_amplitude":
-            if action.parameters.get("frequency", 0) <= 0:
-                raise ValueError("frequency must be positive")
+            _require_positive(action.parameters.get("frequency", 0), "frequency")
             if any(len(x) != 2 for x in data):
                 raise ValueError("periodic data must contain A_i/B_i pairs")
     if action.action_type == "equally_spaced_amplitude":
-        if action.parameters.get("fixed_interval", 0) <= 0:
-            raise ValueError("fixed_interval must be positive")
+        _require_positive(action.parameters.get("fixed_interval", 0), "fixed_interval")
         if not action.parameters.get("data"):
             raise ValueError("data is required for equally_spaced_amplitude")
     if action.action_type == "gravity":
-        if not any(action.parameters.get(k, 0.0) != 0.0 for k in ("comp1", "comp2", "comp3")):
+        comps = [action.parameters.get(k, 0.0) for k in ("comp1", "comp2", "comp3")]
+        if not all(_is_finite_num(c) for c in comps):
+            raise ValueError("gravity components must be finite numbers")
+        if not any(float(c) != 0.0 for c in comps):
             raise ValueError("gravity requires a non-zero acceleration vector")
     if action.action_type in ("assembly_inspect",):
         pass
@@ -215,15 +238,19 @@ def validate_action(action):
         ctype = str(action.parameters.get("coupling_type", "KINEMATIC")).upper()
         if ctype not in ("KINEMATIC", "DISTRIBUTING", "CONTINUUM", "STRUCTURAL"):
             raise ValueError("unsupported coupling_type for coupling_constraint: %s" % ctype)
-        if action.parameters.get("influence_radius") is not None and action.parameters["influence_radius"] <= 0:
-            raise ValueError("influence_radius must be positive")
+        if action.parameters.get("influence_radius") is not None:
+            _require_positive(action.parameters["influence_radius"], "influence_radius")
     if action.action_type == "instance_linear_pattern":
         if not action.parameters.get("instances"):
             raise ValueError("instances are required")
-        if int(action.parameters.get("number1", 0)) < 1 or int(action.parameters.get("number2", 1)) < 1:
+        n1 = action.parameters.get("number1", 0)
+        n2 = action.parameters.get("number2", 1)
+        if not _is_finite_num(n1) or int(n1) < 1 or int(n1) != n1 or not _is_finite_num(n2) or int(n2) < 1 or int(n2) != n2:
             raise ValueError("pattern counts must be positive")
-        if action.parameters.get("spacing1", 0) < 0 or action.parameters.get("spacing2", 0) < 0:
-            raise ValueError("pattern spacing cannot be negative")
+        s1 = action.parameters.get("spacing1", 0)
+        s2 = action.parameters.get("spacing2", 0)
+        _require_non_negative(s1, "pattern spacing")
+        _require_non_negative(s2, "pattern spacing")
     if action.action_type == "export_inp":
         if not action.parameters.get("job_name"):
             raise ValueError("job_name is required for export_inp")
