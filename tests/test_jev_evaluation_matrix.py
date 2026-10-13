@@ -409,3 +409,65 @@ def test_cli_ask_subcommand_respects_mode():
         "--mode", "offline",
     ])
     assert code_ambiguous == 2
+
+
+# ==============================================================================
+# 4. Open-Source Decoupling & Pluggable Provider Tests (REQ-P1-046 ~ REQ-P1-049)
+# ==============================================================================
+
+def test_opensource_core_runs_independently_without_external_provider():
+    """Verify core is 100% self-sufficient with zero keys and zero network (REQ-P1-046)."""
+    with patch.dict("os.environ", {}, clear=True):
+        router = JevIntentRouter()
+        assert router.mode == "offline"
+        assert router.external_provider is None
+
+        prompt = "100mm悬臂梁端部施加1000N垂直载荷，材料为结构钢，固定根部，校核端部挠度不超过2.5mm。"
+        res = router.route(prompt)
+
+        assert res.status == "ROUTED"
+        assert res.intent is not None
+        assert res.intent.analysis_type == "linear_static"
+        assert res.decision_bundle.source_model == "offline-rule-engine-v1"
+        assert res.decision_bundle.execution_mode == "offline"
+
+
+def test_custom_pluggable_external_provider_protocol():
+    """Verify custom adapter implementing ExternalIntentProviderProtocol plugs in seamlessly (REQ-P1-047)."""
+    class MockCustomProvider:
+        model = "custom-enterprise-llm-v2"
+
+        def is_configured(self) -> bool:
+            return True
+
+        def judge(self, prompt: str, timeout: float = 5.0) -> Dict[str, Any]:
+            return {
+                "answers": {
+                    "physics": {"choice": "steady_thermal", "confidence": 0.95},
+                    "units": {"choice": "MM_N_MPA", "confidence": 0.95},
+                    "solver": {"choice": "abaqus_standard", "confidence": 0.98},
+                    "well_constrained": {"probability": 0.95},
+                    "has_acceptance_criteria": {"probability": 0.90},
+                    "completeness": {"score": 4.5},
+                }
+            }
+
+    custom_provider = MockCustomProvider()
+    router = JevIntentRouter(mode="live", external_provider=custom_provider)
+
+    res = router.route("100mm x 20mm 结构钢导热杆，热端100C，冷端0C，固定冷端面，校核中点温度50C。")
+    assert res.status == "ROUTED"
+    assert res.decision_bundle.source_model == "custom-enterprise-llm-v2"
+    assert res.decision_bundle.physics_choice.value == "steady_thermal"
+    assert res.decision_bundle.execution_mode == "live"
+
+
+def test_generic_http_provider_missing_endpoint_fails_closed():
+    """GenericHttpIntentProvider must fail-closed if endpoint is missing (REQ-P1-048)."""
+    from abaqus_ai_agent.typesafe_intent import GenericHttpIntentProvider
+
+    with patch.dict("os.environ", {}, clear=True):
+        provider = GenericHttpIntentProvider(endpoint=None, api_key=None)
+        assert provider.is_configured() is False
+        with pytest.raises(JevApiError, match="External intent provider endpoint is not configured"):
+            provider.judge("test prompt")

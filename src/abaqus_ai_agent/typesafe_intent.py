@@ -1,15 +1,20 @@
-"""TypeSafe AI System One (JEV) Intent Routing for Abaqus Engineering.
+"""Generic & Decoupled Intent Routing for Abaqus Engineering.
 
 Translates unconstrained natural language engineering requirements into typed,
-deterministic EngineeringIntent and ResultRequirement models using TypeSafe System One
-primitives:
+deterministic EngineeringIntent and ResultRequirement models using declarative primitives:
 - Choice: Discretely classifies physics category, unit system, and target solver.
 - Noul: Assesses constraints sufficiency probability and acceptance criteria explicitness.
 - Score: Quantifies engineering intent completeness (1 to 5 scale).
 
-Supports both live TypeSafe API calls when configured (via TYPESAFE_API_KEY)
-and a robust, deterministic offline System One engine ensuring 100% reproducible execution
-under any network/CI environment.
+Architectural Decoupling Contract (REQ-P1-046 ~ REQ-P1-049, REQ-P1-053):
+- Core Open-Source Engine: Deterministic offline rule engine runs 100% self-sufficiently
+  without any external API keys, commercial services, or internet access.
+- Optional External Provider: Cleanly isolated via ExternalIntentProviderProtocol.
+  Proprietary endpoints and credentials are strictly kept outside the core open-source codebase.
+- Three-State Execution Modes:
+  * 'offline' (default): Pure deterministic rule engine (hermetic, reproducible, zero-cost).
+  * 'live': Invokes configured external provider. Fails closed (JevApiError) on any error.
+  * 'shadow': Baseline offline engine executes, while recording side-by-side discrepancy auditing.
 """
 
 from __future__ import annotations
@@ -21,7 +26,7 @@ import time
 import urllib.error
 import urllib.request
 from dataclasses import asdict, dataclass, field
-from typing import Any, Dict, List, Literal, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Protocol, Tuple, runtime_checkable
 
 from abaqus_ai_agent.contracts.intent import EngineeringIntent
 from abaqus_ai_agent.contracts.results import ResultRequirement
@@ -29,7 +34,7 @@ from abaqus_ai_agent.contracts.units import UnitSystem
 
 
 class JevApiError(RuntimeError):
-    """Raised when TypeSafe System One (JEV) API fails or returns invalid payloads in live mode."""
+    """Raised when external AI intent provider fails or returns invalid payloads in live mode."""
 
 
 class IntentAmbiguityError(ValueError):
@@ -62,7 +67,7 @@ class IntentRoutingResult:
 
 @dataclass(frozen=True)
 class ChoiceJudgment:
-    """TypeSafe System One Choice primitive result."""
+    """Discrete choice primitive result."""
     value: str
     confidence: float
     distribution: Dict[str, float] = field(default_factory=dict)
@@ -70,7 +75,7 @@ class ChoiceJudgment:
 
 @dataclass(frozen=True)
 class NoulJudgment:
-    """TypeSafe System One Noul primitive result (probability of Yes)."""
+    """Binary probability primitive result (probability of Yes)."""
     probability: float
     is_yes: bool = field(init=False)
 
@@ -80,14 +85,14 @@ class NoulJudgment:
 
 @dataclass(frozen=True)
 class ScoreJudgment:
-    """TypeSafe System One Score primitive result (1 to 5 scale)."""
+    """Continuous or graded score primitive result (1 to 5 scale)."""
     score: float
     levels: Dict[int, float] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
 class JevDecisionBundle:
-    """Consolidated judgments from TypeSafe System One (JEV)."""
+    """Consolidated judgments from intent reasoning."""
     physics_choice: ChoiceJudgment
     unit_system_choice: ChoiceJudgment
     solver_choice: ChoiceJudgment
@@ -95,7 +100,7 @@ class JevDecisionBundle:
     has_acceptance_criteria_noul: NoulJudgment
     completeness_score: ScoreJudgment
     extracted_parameters: Dict[str, Any] = field(default_factory=dict)
-    source_model: str = "jev-system-one-v1"
+    source_model: str = "offline-rule-engine-v1"
     execution_mode: str = "offline"
     latency_ms: float = 0.0
     inferred_fields: List[str] = field(default_factory=list)
@@ -118,8 +123,125 @@ class JevDecisionBundle:
         }
 
 
+@runtime_checkable
+class ExternalIntentProviderProtocol(Protocol):
+    """Protocol for optional external AI decision providers."""
+
+    def judge(self, prompt: str, timeout: float = 5.0) -> Dict[str, Any]:
+        """Execute judgment against external provider and return raw answers dictionary."""
+        ...
+
+
+class GenericHttpIntentProvider:
+    """Vendor-neutral HTTP adapter for optional external AI intent providers.
+    
+    No proprietary endpoints or models are hardcoded. All service coordinates are
+    injected via constructor parameters or environment variables.
+    """
+
+    def __init__(
+        self,
+        endpoint: Optional[str] = None,
+        api_key: Optional[str] = None,
+        model: Optional[str] = None,
+    ):
+        self.endpoint = (
+            endpoint
+            or os.environ.get("EXTERNAL_INTENT_API_URL")
+            or os.environ.get("TYPESAFE_API_URL")
+        )
+        self.api_key = (
+            api_key
+            or os.environ.get("EXTERNAL_INTENT_API_KEY")
+            or os.environ.get("TYPESAFE_API_KEY")
+        )
+        self.model = (
+            model
+            or os.environ.get("EXTERNAL_INTENT_MODEL")
+            or ("jev-live-api" if (api_key and "typesafe" in str(self.endpoint).lower()) else "external-intent-v1")
+        )
+
+    def is_configured(self) -> bool:
+        """Return True if both endpoint and authentication credentials are provided."""
+        return bool(self.endpoint and self.api_key)
+
+    def judge(self, prompt: str, timeout: float = 5.0) -> Dict[str, Any]:
+        """Send prompt to the configured HTTP endpoint."""
+        if not self.endpoint:
+            raise JevApiError(
+                "External intent provider endpoint is not configured. "
+                "Set EXTERNAL_INTENT_API_URL or TYPESAFE_API_URL."
+            )
+        if not self.api_key:
+            raise JevApiError(
+                "API credentials are required for external intent provider. "
+                "Set EXTERNAL_INTENT_API_KEY or TYPESAFE_API_KEY."
+            )
+
+        headers = {
+            "Authorization": f"Bearer {self.api_key}",
+            "Content-Type": "application/json",
+        }
+        payload = {
+            "model": self.model,
+            "state": {"prompt": prompt},
+            "questions": [
+                {
+                    "id": "physics",
+                    "primitive": "choice",
+                    "options": list(JevIntentRouter.PHYSICS_OPTIONS),
+                },
+                {
+                    "id": "units",
+                    "primitive": "choice",
+                    "options": list(JevIntentRouter.UNIT_OPTIONS),
+                },
+                {
+                    "id": "solver",
+                    "primitive": "choice",
+                    "options": list(JevIntentRouter.SOLVER_OPTIONS),
+                },
+                {
+                    "id": "well_constrained",
+                    "primitive": "noul",
+                },
+                {
+                    "id": "has_acceptance_criteria",
+                    "primitive": "noul",
+                },
+                {
+                    "id": "completeness",
+                    "primitive": "score",
+                },
+            ],
+        }
+
+        req = urllib.request.Request(
+            self.endpoint,
+            data=json.dumps(payload).encode("utf-8"),
+            headers=headers,
+            method="POST",
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=timeout) as resp:
+                raw_bytes = resp.read()
+                return json.loads(raw_bytes.decode("utf-8"))
+        except urllib.error.HTTPError as http_err:
+            try:
+                err_body = http_err.read().decode("utf-8", errors="replace")
+            except Exception:
+                err_body = ""
+            raise JevApiError(
+                f"External intent API HTTP {http_err.code} error: {http_err.reason}. Response: {err_body[:200]}"
+            ) from http_err
+        except urllib.error.URLError as url_err:
+            raise JevApiError(f"External intent API network unreachable: {url_err.reason}") from url_err
+        except Exception as exc:
+            raise JevApiError(f"External intent API invocation failed: {exc}") from exc
+
+
 class JevIntentRouter:
-    """System One Intent Router powered by TypeSafe JEV architecture."""
+    """System One Intent Router supporting deterministic offline rules and optional external AI."""
 
     PHYSICS_OPTIONS = (
         "linear_static",
@@ -149,8 +271,11 @@ class JevIntentRouter:
         use_live_api: bool = False,
         mode: Optional[str] = None,
         timeout: float = 5.0,
+        api_url: Optional[str] = None,
+        external_provider: Optional[Any] = None,
     ):
-        self.api_key = api_key or os.environ.get("TYPESAFE_API_KEY")
+        self.api_key = api_key or os.environ.get("TYPESAFE_API_KEY") or os.environ.get("EXTERNAL_INTENT_API_KEY")
+        self.api_url = api_url or os.environ.get("TYPESAFE_API_URL") or os.environ.get("EXTERNAL_INTENT_API_URL")
         self.timeout = timeout
 
         if mode:
@@ -161,10 +286,22 @@ class JevIntentRouter:
         elif use_live_api:
             self.mode = "live"
         else:
-            env_mode = os.environ.get("TYPESAFE_RUN_MODE", "offline").lower()
-            self.mode = env_mode if env_mode in self.VALID_MODES else "offline"
+            env_mode = os.environ.get("TYPESAFE_RUN_MODE") or os.environ.get("INTENT_RUN_MODE", "offline")
+            norm_env = env_mode.lower()
+            self.mode = norm_env if norm_env in self.VALID_MODES else "offline"
 
         self.use_live_api = (self.mode == "live")
+
+        # Configure optional external provider
+        if external_provider is not None:
+            self.external_provider = external_provider
+        elif self.api_url or self.api_key:
+            self.external_provider = GenericHttpIntentProvider(
+                endpoint=self.api_url or "https://api.typesafe.ai/v1/system-one/judge",
+                api_key=self.api_key,
+            )
+        else:
+            self.external_provider = None
 
     def route(self, prompt: str) -> IntentRoutingResult:
         """Route prompt with explicit fail-closed clarification gate for ambiguous requirements."""
@@ -201,7 +338,7 @@ class JevIntentRouter:
     def route_prompt_to_intent(
         self, prompt: str, strict: bool = False
     ) -> Tuple[EngineeringIntent, JevDecisionBundle]:
-        """Convert natural language requirement into typed EngineeringIntent via JEV judgments.
+        """Convert natural language requirement into typed EngineeringIntent via judgments.
 
         If strict=True, raises IntentAmbiguityError when requirements are incomplete.
         """
@@ -213,7 +350,6 @@ class JevIntentRouter:
                     res.missing_requirements,
                     res.decision_bundle,
                 )
-            # In non-strict mode for backward-compatibility, synthesize draft intent
             intent = self._build_intent_from_decisions(prompt.strip(), res.decision_bundle)
             return intent, res.decision_bundle
 
@@ -223,7 +359,7 @@ class JevIntentRouter:
     def _detect_missing_engineering_prerequisites(
         self, prompt: str, bundle: JevDecisionBundle
     ) -> List[str]:
-        """Verify whether prompt contains all necessary engineering prerequisites to be well-posed."""
+        """Verify whether prompt contains all necessary engineering prerequisites."""
         missing = []
         params = bundle.extracted_parameters
         phys = bundle.physics_choice.value
@@ -254,29 +390,55 @@ class JevIntentRouter:
         return missing
 
     def _evaluate_system_one_judgments(self, prompt: str) -> JevDecisionBundle:
-        """Evaluate JEV judgments over input prompt in accordance with the configured execution mode."""
+        """Evaluate judgments over input prompt in accordance with the configured execution mode."""
         if self.mode == "live":
-            if not self.api_key:
+            if not self.external_provider:
                 raise JevApiError(
                     "TYPESAFE_API_KEY is required for live execution mode. "
                     "Fail-closed: refused to silently degrade to offline engine in strict live mode."
                 )
+            if hasattr(self.external_provider, "is_configured") and not self.external_provider.is_configured():
+                raise JevApiError(
+                    "TYPESAFE_API_KEY is required for live execution mode. "
+                    "Fail-closed: refused to silently degrade to offline engine in strict live mode."
+                )
+
+            t0 = time.perf_counter()
             try:
-                return self._call_typesafe_live_api(prompt)
+                if hasattr(self.external_provider, "judge"):
+                    raw_data = self.external_provider.judge(prompt, timeout=self.timeout)
+                elif callable(self.external_provider):
+                    raw_data = self.external_provider(prompt)
+                else:
+                    raise JevApiError(f"Unsupported external provider type: {type(self.external_provider).__name__}")
             except JevApiError:
                 raise
             except Exception as exc:
                 raise JevApiError(
-                    f"TypeSafe live API request failed in live mode: {exc}. "
+                    f"External intent provider request failed in live mode: {exc}. "
                     "Fail-closed: refusing silent fallback to offline engine."
                 ) from exc
 
+            latency_ms = round((time.perf_counter() - t0) * 1000.0, 2)
+            return self._parse_provider_response(raw_data, prompt, latency_ms=latency_ms)
+
         if self.mode == "shadow":
             baseline = self._evaluate_offline_engine(prompt)
-            shadow_diff: Dict[str, Any] = {"status": "SKIPPED", "reason": "No TYPESAFE_API_KEY configured"}
-            if self.api_key:
+            shadow_diff: Dict[str, Any] = {
+                "status": "SKIPPED",
+                "reason": "No TYPESAFE_API_KEY configured",
+            }
+            if self.external_provider and (
+                not hasattr(self.external_provider, "is_configured") or self.external_provider.is_configured()
+            ):
                 try:
-                    live_res = self._call_typesafe_live_api(prompt)
+                    if hasattr(self.external_provider, "judge"):
+                        raw_data = self.external_provider.judge(prompt, timeout=self.timeout)
+                    elif callable(self.external_provider):
+                        raw_data = self.external_provider(prompt)
+                    else:
+                        raw_data = {}
+                    live_res = self._parse_provider_response(raw_data, prompt, latency_ms=0.0)
                     shadow_diff = self._compute_shadow_diff(baseline, live_res)
                 except Exception as shadow_err:
                     shadow_diff = {
@@ -300,13 +462,13 @@ class JevIntentRouter:
                 shadow_diff=shadow_diff,
             )
 
-        # Default offline deterministic execution mode
+        # Default offline deterministic execution mode (100% self-contained)
         return self._evaluate_offline_engine(prompt)
 
     def _compute_shadow_diff(
         self, baseline: JevDecisionBundle, live: JevDecisionBundle
     ) -> Dict[str, Any]:
-        """Compute discrepancy metrics between baseline offline rule and live TypeSafe JEV."""
+        """Compute discrepancy metrics between baseline offline rule and live external provider."""
         return {
             "status": "EVALUATED",
             "physics_match": baseline.physics_choice.value == live.physics_choice.value,
@@ -321,94 +483,21 @@ class JevIntentRouter:
             "live_latency_ms": live.latency_ms,
         }
 
-    def _call_typesafe_live_api(self, prompt: str) -> JevDecisionBundle:
-        """Call live TypeSafe System One (JEV) HTTP API."""
-        url = "https://api.typesafe.ai/v1/system-one/judge"
-        headers = {
-            "Authorization": f"Bearer {self.api_key}",
-            "Content-Type": "application/json",
-        }
-        payload = {
-            "model": "jev",
-            "state": {"prompt": prompt},
-            "questions": [
-                {
-                    "id": "physics",
-                    "primitive": "choice",
-                    "options": list(self.PHYSICS_OPTIONS),
-                    "instructions": "Select the primary FEA physics discipline required by the engineering specification.",
-                },
-                {
-                    "id": "units",
-                    "primitive": "choice",
-                    "options": list(self.UNIT_OPTIONS),
-                    "instructions": "Infer the consistent engineering unit system.",
-                },
-                {
-                    "id": "solver",
-                    "primitive": "choice",
-                    "options": list(self.SOLVER_OPTIONS),
-                    "instructions": "Determine the optimal Abaqus solver engine (standard or explicit).",
-                },
-                {
-                    "id": "well_constrained",
-                    "primitive": "noul",
-                    "instructions": "Is the boundary condition sufficiently defined to eliminate rigid body motion?",
-                },
-                {
-                    "id": "has_acceptance_criteria",
-                    "primitive": "noul",
-                    "instructions": "Does the engineering requirement specify explicit numerical verification limits or thresholds?",
-                },
-                {
-                    "id": "completeness",
-                    "primitive": "score",
-                    "instructions": "Score the engineering intent completeness from 1 (ambiguous) to 5 (fully specified).",
-                },
-            ],
-        }
-        req = urllib.request.Request(
-            url,
-            data=json.dumps(payload).encode("utf-8"),
-            headers=headers,
-            method="POST",
-        )
-        t0 = time.perf_counter()
-        try:
-            with urllib.request.urlopen(req, timeout=self.timeout) as resp:
-                raw_bytes = resp.read()
-                data = json.loads(raw_bytes.decode("utf-8"))
-        except urllib.error.HTTPError as http_err:
-            try:
-                err_body = http_err.read().decode("utf-8", errors="replace")
-            except Exception:
-                err_body = ""
-            raise JevApiError(
-                f"TypeSafe API HTTP {http_err.code} error: {http_err.reason}. Response: {err_body[:200]}"
-            ) from http_err
-        except urllib.error.URLError as url_err:
-            raise JevApiError(f"TypeSafe API network unreachable: {url_err.reason}") from url_err
-        except Exception as exc:
-            raise JevApiError(f"TypeSafe API invocation failed: {exc}") from exc
-
-        latency_ms = round((time.perf_counter() - t0) * 1000.0, 2)
-        return self._parse_api_response(data, prompt, latency_ms=latency_ms)
-
-    def _parse_api_response(
+    def _parse_provider_response(
         self, data: Dict[str, Any], prompt: str, latency_ms: float = 0.0
     ) -> JevDecisionBundle:
-        """Parse and strictly validate raw TypeSafe response into typed bundle."""
+        """Parse and strictly validate raw provider response into typed bundle."""
         if not isinstance(data, dict):
-            raise JevApiError(f"Expected dict response from TypeSafe API, got {type(data).__name__}")
+            raise JevApiError(f"Expected dict response from external provider, got {type(data).__name__}")
 
         answers = data.get("answers")
         if not isinstance(answers, dict):
-            raise JevApiError("Missing or invalid 'answers' dictionary in TypeSafe API response.")
+            raise JevApiError("Missing or invalid 'answers' dictionary in external provider response.")
 
         # 1. Physics Validation
         phys_info = answers.get("physics")
         if not isinstance(phys_info, dict):
-            raise JevApiError("Missing required 'physics' answer in TypeSafe response.")
+            raise JevApiError("Missing required 'physics' answer in external provider response.")
         phys_val = phys_info.get("choice")
         if phys_val not in self.PHYSICS_OPTIONS:
             raise JevApiError(f"Invalid physics choice {phys_val!r}. Allowed: {self.PHYSICS_OPTIONS}")
@@ -422,7 +511,7 @@ class JevIntentRouter:
         # 2. Units Validation
         unit_info = answers.get("units")
         if not isinstance(unit_info, dict):
-            raise JevApiError("Missing required 'units' answer in TypeSafe response.")
+            raise JevApiError("Missing required 'units' answer in external provider response.")
         unit_val = unit_info.get("choice")
         if unit_val not in self.UNIT_OPTIONS:
             raise JevApiError(f"Invalid units choice {unit_val!r}. Allowed: {self.UNIT_OPTIONS}")
@@ -436,7 +525,7 @@ class JevIntentRouter:
         # 3. Solver Validation
         solver_info = answers.get("solver")
         if not isinstance(solver_info, dict):
-            raise JevApiError("Missing required 'solver' answer in TypeSafe response.")
+            raise JevApiError("Missing required 'solver' answer in external provider response.")
         solver_val = solver_info.get("choice")
         if solver_val not in self.SOLVER_OPTIONS:
             raise JevApiError(f"Invalid solver choice {solver_val!r}. Allowed: {self.SOLVER_OPTIONS}")
@@ -450,7 +539,7 @@ class JevIntentRouter:
         # 4. Well-constrained Validation
         wc_info = answers.get("well_constrained")
         if not isinstance(wc_info, dict):
-            raise JevApiError("Missing required 'well_constrained' answer in TypeSafe response.")
+            raise JevApiError("Missing required 'well_constrained' answer in external provider response.")
         try:
             noul_prob = float(wc_info.get("probability", 0.0))
         except (ValueError, TypeError):
@@ -461,7 +550,7 @@ class JevIntentRouter:
         # 5. Acceptance criteria presence Validation
         crit_info = answers.get("has_acceptance_criteria")
         if not isinstance(crit_info, dict):
-            raise JevApiError("Missing required 'has_acceptance_criteria' answer in TypeSafe response.")
+            raise JevApiError("Missing required 'has_acceptance_criteria' answer in external provider response.")
         try:
             crit_prob = float(crit_info.get("probability", 0.0))
         except (ValueError, TypeError):
@@ -472,7 +561,7 @@ class JevIntentRouter:
         # 6. Completeness score Validation
         comp_info = answers.get("completeness")
         if not isinstance(comp_info, dict):
-            raise JevApiError("Missing required 'completeness' answer in TypeSafe response.")
+            raise JevApiError("Missing required 'completeness' answer in external provider response.")
         try:
             score_val = float(comp_info.get("score", 0.0))
         except (ValueError, TypeError):
@@ -482,6 +571,12 @@ class JevIntentRouter:
 
         extracted = self._extract_domain_quantities(prompt)
         inferred = [k for k in ("dimensions", "loads", "material", "acceptance_criteria") if k in extracted]
+
+        model_tag = "external-provider-live"
+        if hasattr(self.external_provider, "model"):
+            model_tag = getattr(self.external_provider, "model")
+        elif hasattr(self.external_provider, "__class__"):
+            model_tag = self.external_provider.__class__.__name__
 
         return JevDecisionBundle(
             physics_choice=ChoiceJudgment(
@@ -503,14 +598,14 @@ class JevIntentRouter:
             has_acceptance_criteria_noul=NoulJudgment(round(crit_prob, 3)),
             completeness_score=ScoreJudgment(round(score_val, 2), comp_info.get("levels") or {int(score_val): 1.0}),
             extracted_parameters=extracted,
-            source_model="jev-live-api",
+            source_model=model_tag,
             execution_mode="live",
             latency_ms=latency_ms,
             inferred_fields=inferred,
         )
 
     def _evaluate_offline_engine(self, prompt: str) -> JevDecisionBundle:
-        """High-precision deterministic System One inference engine."""
+        """High-precision deterministic System One inference engine (100% offline & reproducible)."""
         prompt_lower = prompt.lower()
         extracted = self._extract_domain_quantities(prompt)
 
@@ -527,10 +622,8 @@ class JevIntentRouter:
         elif any(w in prompt_lower for w in ("动态", "dynamic", "transient", "冲击", "impact")):
             physics_scores["transient_dynamic"] += 0.85
         else:
-            # Default mechanical static
             physics_scores["linear_static"] += 0.90
 
-        # Normalize physics distribution
         total_p = sum(physics_scores.values())
         norm_physics = {k: v / total_p for k, v in physics_scores.items()}
         best_phys = max(norm_physics.items(), key=lambda kv: kv[1])
@@ -597,7 +690,7 @@ class JevIntentRouter:
             has_acceptance_criteria_noul=noul_crit,
             completeness_score=completeness_judgment,
             extracted_parameters=extracted,
-            source_model="jev-offline-engine-v1",
+            source_model="offline-rule-engine-v1",
             execution_mode="offline",
             latency_ms=0.0,
             inferred_fields=list(extracted.keys()) + ["physics", "units", "solver"],
@@ -608,7 +701,7 @@ class JevIntentRouter:
         params: Dict[str, Any] = {}
         prompt_lower = prompt.lower()
 
-        # Criteria (extract first so displacement/deflection limits are not confused with geometry dimensions)
+        # Criteria
         criteria = []
         if any(w in prompt_lower for w in ("挠度", "位移", "deflection", "displacement")):
             crit_match = re.search(r"(?:挠度|位移|deflection|displacement)[^\d]*(\d+(?:\.\d+)?)\s*(mm|inch|毫米|m(?![a-zA-Z]))?", prompt, re.IGNORECASE)
@@ -622,7 +715,7 @@ class JevIntentRouter:
         if criteria:
             params["acceptance_criteria"] = criteria
 
-        # Dimensions: e.g. 100mm, 500 mm, 2 m (strictly avoid matching MPa, m/s, mN, or displacement criteria limits)
+        # Dimensions: e.g. 100mm, 500 mm, 2 m
         dim_matches = re.finditer(
             r"(\d+(?:\.\d+)?)\s*(mm|inch|毫米|米|m(?![a-zA-Z]))",
             prompt,
@@ -639,7 +732,7 @@ class JevIntentRouter:
         if dims:
             params["dimensions"] = dims
 
-        # Loads: e.g. 1000N, 50kN, 2.5 MPa (strictly avoid matching nm, ns, etc.)
+        # Loads: e.g. 1000N, 50kN, 2.5 MPa
         load_matches = re.findall(
             r"(\d+(?:\.\d+)?)\s*(kn|mpa|kpa|千牛|牛|n(?![a-zA-Z]))",
             prompt,
@@ -681,7 +774,7 @@ class JevIntentRouter:
         return params
 
     def _build_intent_from_decisions(self, prompt: str, bundle: JevDecisionBundle) -> EngineeringIntent:
-        """Synthesize EngineeringIntent from JEV decisions."""
+        """Synthesize EngineeringIntent from judgments."""
         phys = bundle.physics_choice.value
         unit_sys = bundle.unit_system_choice.value
         params = bundle.extracted_parameters

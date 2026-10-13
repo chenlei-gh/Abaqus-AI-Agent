@@ -799,6 +799,7 @@ Software Contract Gate ─┤
    - Explicit execution modes: `offline` (deterministic rule baseline), `live` (fail-closed authentic API with no silent degradation), and `shadow` (side-by-side discrepancy auditing).
    - Complete payload question alignment, strict response validation, and zero silent fallback.
    - Independent offline engineering evaluation benchmark suite with prompt matrices across validity, missing prerequisites, multiphysics, conflicts, boundaries, and adversarial inputs.
+   - **Open Source Core Decoupling (REQ-P1-046 ~ REQ-P1-049, REQ-P1-053)**: Core is 100% self-sufficient and independent of external commercial AI APIs. Generic `ExternalIntentProviderProtocol` cleanly isolates proprietary endpoints and secret credentials outside the open-source repository. Qualifications for offline core, external adapters, and live Abaqus 2025 solver are tracked separately.
 5. **I.5: Packaging, CLI Entrypoints & Runtime Capability Fallback**
    - CLI executable `abaqus-agent` with automatic environment detection, headless execution modes, and graceful degradation when solver license is unavailable.
 	6. **I.6: Public Release Audit, Documentation & Security Sanitization**
