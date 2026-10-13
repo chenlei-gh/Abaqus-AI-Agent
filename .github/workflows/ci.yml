@@ -30,7 +30,8 @@ jobs:
           python -m abaqus_ai_agent fmbd --case fmbd7 --verify-topology
           python -m abaqus_ai_agent fmbd --case fmbd7 --compile
           python -m abaqus_ai_agent inspect --json
-          python -m abaqus_ai_agent ask "Apply 1000N vertical load to 100mm cantilever beam, material steel, fixed root, check deflection <= 2.5mm." --dry-run
+          python -m abaqus_ai_agent ask "Apply 1000N vertical load to the free end of a 100mm cantilever beam, material steel, fixed root, check deflection <= 2.5mm." --dry-run
+          ! python -m abaqus_ai_agent ask "Apply 1000N vertical load to 100mm cantilever beam, material steel, fixed root, check deflection <= 2.5mm." --dry-run
       - name: Run Golden Evidence & Release Quality Audits
         shell: bash
         run: |
