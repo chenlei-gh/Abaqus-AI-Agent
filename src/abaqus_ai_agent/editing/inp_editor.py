@@ -95,10 +95,94 @@ class ControlledInpEditor:
                 params[p.strip().upper()] = "TRUE"
         return kw_name, params
 
-    def inspect_includes(self, base_dir: Optional[Union[str, Path]] = None) -> List[Dict[str, Any]]:
-        """Scan all *INCLUDE keywords and verify external file dependencies."""
-        search_root = Path(base_dir).resolve() if base_dir else self.source_path.parent
-        results = []
+    @staticmethod
+    def _splice_data_lines_preserving_comments(
+        block_lines: Sequence[str],
+        new_data_lines: Sequence[str],
+    ) -> List[str]:
+        """Replace data lines in a block while strictly preserving comment positions and order.
+
+        Rules:
+        1. If original block has identical number of data lines as new_data_lines, each data line
+           is replaced in-place in its original slot, leaving all comments exactly at their relative line positions.
+        2. If original block data line count differs from new_data_lines:
+           - If there are NO comments interleaved between data lines (i.e. comments are either only leading,
+             only trailing, or no comments), leading comments remain before new data lines, followed by
+             new data lines, followed by trailing comments.
+           - If comments are interleaved between multiple data lines AND the row count changes,
+             raise ValueError to fail closed rather than guessing comment-to-row associations.
+        """
+        comment_indices: List[int] = []
+        data_indices: List[int] = []
+        for i, line in enumerate(block_lines):
+            stripped = line.strip()
+            if stripped.startswith("**"):
+                comment_indices.append(i)
+            elif stripped:  # non-empty data line
+                data_indices.append(i)
+
+        # Case 1: Identical data line counts -> slot-by-slot in-place replacement
+        if len(data_indices) == len(new_data_lines):
+            result = list(block_lines)
+            for orig_idx, new_line in zip(data_indices, new_data_lines):
+                result[orig_idx] = new_line
+            return result
+
+        # Case 2: Data line count changed. Check for interleaved comments.
+        if data_indices and comment_indices:
+            first_data = data_indices[0]
+            last_data = data_indices[-1]
+            has_interleaved = any(first_data < c_idx < last_data for c_idx in comment_indices)
+            if has_interleaved:
+                raise ValueError(
+                    f"Ambiguous comment placement: comments are interleaved between data lines "
+                    f"and data row count changed from {len(data_indices)} to {len(new_data_lines)}. "
+                    "Cannot unambiguously preserve comment associations."
+                )
+
+        # Separate leading comments and trailing comments
+        leading_comments: List[str] = []
+        trailing_comments: List[str] = []
+        if data_indices:
+            first_data = data_indices[0]
+            last_data = data_indices[-1]
+            for i, line in enumerate(block_lines):
+                if line.strip().startswith("**"):
+                    if i < first_data:
+                        leading_comments.append(line)
+                    elif i > last_data:
+                        trailing_comments.append(line)
+        else:
+            # All lines were comments
+            leading_comments = list(block_lines)
+
+        return leading_comments + list(new_data_lines) + trailing_comments
+
+    def inspect_includes(
+        self,
+        base_dir: Optional[Union[str, Path]] = None,
+        search_dirs: Optional[Sequence[Union[str, Path]]] = None,
+        recursive: bool = True,
+        visited: Optional[Set[str]] = None,
+        active_chain: Optional[List[str]] = None,
+    ) -> List[Dict[str, Any]]:
+        """Scan all *INCLUDE keywords, verify dependencies recursively, and detect cycles."""
+        curr_source_resolved = str(self.source_path.resolve())
+        chain = list(active_chain or [curr_source_resolved])
+        visited_set = set(visited or set())
+
+        search_roots: List[Path] = []
+        if base_dir:
+            search_roots.append(Path(base_dir).resolve())
+        if search_dirs:
+            for sd in search_dirs:
+                p = Path(sd).resolve()
+                if p not in search_roots:
+                    search_roots.append(p)
+        if self.source_path.parent.resolve() not in search_roots:
+            search_roots.append(self.source_path.parent.resolve())
+
+        results: List[Dict[str, Any]] = []
         for i, line in enumerate(self._lines):
             parsed = self._parse_keyword_line(line)
             if parsed and parsed[0] == "INCLUDE":
@@ -110,18 +194,53 @@ class ControlledInpEditor:
                         "resolved_path": None,
                         "exists": False,
                         "error": "Missing INPUT parameter in *INCLUDE keyword",
+                        "source_deck": curr_source_resolved,
                     })
                     continue
-                cand_path = Path(input_spec)
-                if not cand_path.is_absolute():
-                    cand_path = (search_root / cand_path).resolve()
-                results.append({
+
+                raw_p = Path(input_spec)
+                cand_path: Optional[Path] = None
+                if raw_p.is_absolute():
+                    cand_path = raw_p.resolve()
+                else:
+                    for root in search_roots:
+                        probe = (root / input_spec).resolve()
+                        if probe.is_file():
+                            cand_path = probe
+                            break
+                    if cand_path is None:
+                        cand_path = (search_roots[0] / input_spec).resolve()
+
+                cand_path_str = str(cand_path)
+
+                # Cycle detection
+                if cand_path_str in chain:
+                    cycle_str = " -> ".join(chain + [cand_path_str])
+                    raise ValueError(f"Circular *INCLUDE dependency detected: {cycle_str}")
+
+                is_file = cand_path.is_file()
+                entry = {
                     "line_number": i + 1,
                     "input": input_spec,
-                    "resolved_path": str(cand_path),
-                    "exists": cand_path.is_file(),
-                    "error": None if cand_path.is_file() else f"Referenced file not found: {cand_path}",
-                })
+                    "resolved_path": cand_path_str,
+                    "exists": is_file,
+                    "error": None if is_file else f"Referenced file not found in search paths: {cand_path_str}",
+                    "source_deck": curr_source_resolved,
+                }
+                results.append(entry)
+
+                # Recursive descent
+                if recursive and is_file and cand_path_str not in visited_set:
+                    visited_set.add(cand_path_str)
+                    child_editor = ControlledInpEditor(cand_path)
+                    child_results = child_editor.inspect_includes(
+                        search_dirs=search_roots,
+                        recursive=True,
+                        visited=visited_set,
+                        active_chain=chain + [cand_path_str],
+                    )
+                    results.extend(child_results)
+
         return results
 
     def edit_material(
@@ -187,16 +306,13 @@ class ControlledInpEditor:
 
         prop_idx = matched_props[0]
 
-        # Find data lines belonging to this property (preserving comments)
+        # Find data lines belonging to this property
         data_start = prop_idx + 1
         data_end = data_start
-        comments_in_block = []
         while data_end < mat_end:
             stripped = self._lines[data_end].strip()
             if stripped.startswith("*") and not stripped.startswith("**"):
                 break
-            if stripped.startswith("**"):
-                comments_in_block.append(self._lines[data_end])
             data_end += 1
 
         formatted_lines = []
@@ -204,8 +320,9 @@ class ControlledInpEditor:
             row_str = ", ".join(str(val) for val in row)
             formatted_lines.append(f" {row_str}")
 
-        # Preserve any internal comments after data lines
-        replacement = formatted_lines + comments_in_block
+        # Preserve exact relative positioning of comments
+        block_lines = self._lines[data_start:data_end]
+        replacement = self._splice_data_lines_preserving_comments(block_lines, formatted_lines)
         new_lines = list(self._lines)
         new_lines[data_start:data_end] = replacement
         self._lines = new_lines
@@ -266,13 +383,10 @@ class ControlledInpEditor:
 
         data_start = proc_idx + 1
         data_end = data_start
-        comments_in_block = []
         while data_end < target_step_end:
             stripped = self._lines[data_end].strip()
             if stripped.startswith("*") and not stripped.startswith("**"):
                 break
-            if stripped.startswith("**"):
-                comments_in_block.append(self._lines[data_end])
             data_end += 1
 
         init_inc = self._validate_numeric_value(time_incrementation.get("initial_inc", 0.1), "initial_inc")
@@ -284,7 +398,8 @@ class ControlledInpEditor:
             raise ValueError(f"Invalid incrementation parameters: {time_incrementation}")
 
         new_data_str = f" {init_inc}, {tot_time}, {min_inc}, {max_inc}"
-        replacement = [new_data_str] + comments_in_block
+        block_lines = self._lines[data_start:data_end]
+        replacement = self._splice_data_lines_preserving_comments(block_lines, [new_data_str])
         new_lines = list(self._lines)
         new_lines[data_start:data_end] = replacement
         self._lines = new_lines
@@ -404,17 +519,15 @@ class ControlledInpEditor:
         kw_idx = matched_kws[0]
         data_start = kw_idx + 1
         data_end = data_start
-        comments_in_block = []
         while data_end < step_end:
             stripped = self._lines[data_end].strip()
             if stripped.startswith("*") and not stripped.startswith("**"):
                 break
-            if stripped.startswith("**"):
-                comments_in_block.append(self._lines[data_end])
             data_end += 1
 
         formatted_vars = " " + ", ".join(validated_vars)
-        replacement = [formatted_vars] + comments_in_block
+        block_lines = self._lines[data_start:data_end]
+        replacement = self._splice_data_lines_preserving_comments(block_lines, [formatted_vars])
         new_lines = list(self._lines)
         new_lines[data_start:data_end] = replacement
         self._lines = new_lines

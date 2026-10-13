@@ -561,11 +561,12 @@ def test_inp_editor_include_dependency_detection(tmp_path):
 def test_inp_editor_windows_disk_bytes_sha256_strong_consistency(tmp_path):
     """Cryptographic Byte-Level Verification: Target SHA-256 strictly matches disk bytes across newline conventions."""
     for newline_style in ["\r\n", "\n"]:
+        tag = "crlf" if "\r" in newline_style else "lf"
         content = f"*HEADING{newline_style}*MATERIAL, NAME=STEEL{newline_style}*ELASTIC{newline_style} 210000.0, 0.3{newline_style}"
-        src = tmp_path / f"deck_{'crlf' if newline_style == '\r\n' else 'lf'}.inp"
+        src = tmp_path / f"deck_{tag}.inp"
         src.write_bytes(content.encode("utf-8"))
 
-        dest = tmp_path / f"deck_out_{'crlf' if newline_style == '\r\n' else 'lf'}.inp"
+        dest = tmp_path / f"deck_out_{tag}.inp"
         editor = ControlledInpEditor(src)
         editor.edit_material("STEEL", "*ELASTIC", [[195000.0, 0.28]])
         audit = editor.save(dest)
@@ -579,3 +580,125 @@ def test_inp_editor_windows_disk_bytes_sha256_strong_consistency(tmp_path):
         # Verify newline style preservation
         if newline_style == "\r\n":
             assert b"\r\n" in disk_bytes
+
+
+def test_inp_editor_exact_comment_relative_positions(tmp_path):
+    """Strict Fidelity: Ensure comments maintain their exact line positions relative to data rows."""
+    deck = (
+        "*HEADING\n"
+        "*MATERIAL, NAME=STEEL\n"
+        "*ELASTIC\n"
+        "** Pre-data comment 1\n"
+        "** Pre-data comment 2\n"
+        " 210000.0, 0.3\n"
+        "** Post-data comment\n"
+        "*DENSITY\n"
+        " 7.85e-9\n"
+    )
+    src = tmp_path / "exact_comments.inp"
+    src.write_text(deck, encoding="utf-8")
+    dest = tmp_path / "exact_comments_out.inp"
+
+    editor = ControlledInpEditor(src)
+    editor.edit_material("STEEL", "*ELASTIC", [[200000.0, 0.28]])
+    editor.save(dest)
+
+    lines = dest.read_text(encoding="utf-8").splitlines()
+    elastic_idx = lines.index("*ELASTIC")
+    assert lines[elastic_idx + 1] == "** Pre-data comment 1"
+    assert lines[elastic_idx + 2] == "** Pre-data comment 2"
+    assert lines[elastic_idx + 3].strip() == "200000.0, 0.28"
+    assert lines[elastic_idx + 4] == "** Post-data comment"
+    assert lines[elastic_idx + 5] == "*DENSITY"
+
+
+def test_inp_editor_interleaved_comments_row_change_fails_closed(tmp_path):
+    """Fail-Closed: If comments are interleaved between multiple data rows and row count changes, reject."""
+    deck = (
+        "*HEADING\n"
+        "*MATERIAL, NAME=STEEL\n"
+        "*ELASTIC\n"
+        " 210000.0, 0.3\n"
+        "** Interleaved comment between rows\n"
+        " 200000.0, 0.29\n"
+        "*DENSITY\n"
+        " 7.85e-9\n"
+    )
+    src = tmp_path / "interleaved.inp"
+    src.write_text(deck, encoding="utf-8")
+
+    editor = ControlledInpEditor(src)
+    # Changing row count from 2 to 1 with interleaved comment must fail closed
+    with pytest.raises(ValueError, match="Ambiguous comment placement"):
+        editor.edit_material("STEEL", "*ELASTIC", [[205000.0, 0.28]])
+
+
+def test_inp_editor_cross_directory_and_nested_includes(tmp_path):
+    """Dependency Analysis: Verify cross-directory resolution, nested inclusion, and synchronization."""
+    ctx = create_external_project_context(tmp_path / "NestedIncludeProject")
+
+    # input/ contains main deck and materials.inc
+    sub_inc = ctx.input_dir / "elastic_props.inc"
+    sub_inc.write_text("*ELASTIC\n 72000.0, 0.33\n", encoding="utf-8")
+
+    mat_inc = ctx.input_dir / "materials.inc"
+    mat_inc.write_text(
+        "*MATERIAL, NAME=ALU\n"
+        "*INCLUDE, INPUT=elastic_props.inc\n",
+        encoding="utf-8"
+    )
+
+    main_deck = (
+        "*HEADING\n"
+        "*INCLUDE, INPUT=materials.inc\n"
+        "*STEP, NAME=Step-1\n"
+        "*STATIC\n"
+        " 0.1, 1.0\n"
+        "*END STEP\n"
+    )
+    src_inp = ctx.input_dir / "main.inp"
+    src_inp.write_text(main_deck, encoding="utf-8")
+
+    executor = DummyInpExecutor()
+    agent = AbaqusAIAgent(executor=executor)
+
+    # Edit main deck in working_dir. Relative includes must resolve from input/ and synchronize to working/ & solver/
+    res = agent.edit_and_solve_user_inp(
+        inp_path=src_inp,
+        operations=[{
+            "category": "step",
+            "target": "Step-1",
+            "keyword": "*STATIC",
+            "values": {"initial_inc": 0.05, "total_time": 2.0},
+        }],
+        project_context=ctx,
+        run_id="run_inc_nested",
+    )
+
+    assert res["status"] == "COMPLETED"
+
+    # Working dir must have synchronized copies of the relative includes
+    working_mat_inc = ctx.working_dir / "materials.inc"
+    working_elastic_inc = ctx.working_dir / "elastic_props.inc"
+    assert working_mat_inc.is_file()
+    assert working_elastic_inc.is_file()
+
+    # Solver workspace must also have copies for authentic Abaqus execution
+    solver_dir = ctx.solver_dir / "run_inc_nested"
+    assert (solver_dir / "materials.inc").is_file()
+    assert (solver_dir / "elastic_props.inc").is_file()
+
+
+def test_inp_editor_circular_include_detected(tmp_path):
+    """Fail-Closed: Circular *INCLUDE dependencies must be detected and rejected."""
+    deck_a = "*HEADING\n*INCLUDE, INPUT=deck_b.inc\n"
+    deck_b = "*INCLUDE, INPUT=deck_a.inc\n"
+
+    file_a = tmp_path / "deck_a.inc"
+    file_b = tmp_path / "deck_b.inc"
+    file_a.write_text(deck_a, encoding="utf-8")
+    file_b.write_text(deck_b, encoding="utf-8")
+
+    editor = ControlledInpEditor(file_a)
+    with pytest.raises(ValueError, match="Circular \\*INCLUDE dependency detected"):
+        editor.inspect_includes(base_dir=tmp_path, recursive=True)

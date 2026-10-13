@@ -62,6 +62,36 @@ def solve_user_inp(
     if project_context is not None:
         effective_workdir = project_context.create_run_solver_dir(eff_run_id)
 
+    # Preflight inspection of *INCLUDE dependencies and workspace synchronization
+    if effective_workdir:
+        from ..editing.inp_editor import ControlledInpEditor
+        try:
+            inp_editor = ControlledInpEditor(inp_file)
+            includes = inp_editor.inspect_includes(
+                base_dir=inp_file.parent,
+                search_dirs=[inp_file.parent],
+                recursive=True,
+            )
+            missing = [inc for inc in includes if not inc["exists"]]
+            if missing:
+                err_detail = "; ".join(
+                    f"Line {inc['line_number']}: '{inc['input']}'" for inc in missing
+                )
+                raise FileNotFoundError(
+                    f"Missing required *INCLUDE dependency file(s) for '{inp_file.name}': {err_detail}"
+                )
+            for inc in includes:
+                if inc.get("exists") and inc.get("resolved_path"):
+                    raw_input = inc.get("input", "")
+                    if not Path(raw_input).is_absolute():
+                        solver_inc = (effective_workdir / raw_input).resolve()
+                        if not solver_inc.exists() and Path(inc["resolved_path"]).is_file():
+                            solver_inc.parent.mkdir(parents=True, exist_ok=True)
+                            shutil.copy2(Path(inc["resolved_path"]), solver_inc)
+        except Exception as exc:
+            if isinstance(exc, (FileNotFoundError, ValueError)):
+                raise
+
     # Invoke solver directly via executor
     orig_workdir = getattr(executor, "workdir", None)
     res = None
@@ -377,10 +407,19 @@ def edit_and_solve_user_inp(
         allowed_directory=allowed_dir,
     )
 
-    # Preflight dependency inspection: verify all *INCLUDE references exist
+    # Preflight dependency inspection: verify all *INCLUDE references exist recursively
+    search_dirs = [dest_inp.parent]
+    if src_file.parent.resolve() != dest_inp.parent.resolve():
+        search_dirs.append(src_file.parent.resolve())
+
     editor_checker = ControlledInpEditor(dest_inp)
+    all_includes = editor_checker.inspect_includes(
+        base_dir=dest_inp.parent,
+        search_dirs=search_dirs,
+        recursive=True,
+    )
     missing_includes = [
-        inc for inc in editor_checker.inspect_includes(base_dir=dest_inp.parent)
+        inc for inc in all_includes
         if not inc["exists"]
     ]
     if missing_includes:
@@ -391,6 +430,17 @@ def edit_and_solve_user_inp(
         raise FileNotFoundError(
             f"Missing required *INCLUDE dependency file(s) for '{dest_inp.name}': {err_detail}"
         )
+
+    # Synchronize relative include dependencies into dest_inp's directory
+    for inc in all_includes:
+        if inc.get("exists") and inc.get("resolved_path"):
+            src_inc = Path(inc["resolved_path"])
+            raw_input = inc.get("input", "")
+            if not Path(raw_input).is_absolute():
+                dest_inc = (dest_inp.parent / raw_input).resolve()
+                if not dest_inc.exists() and src_inc.is_file():
+                    dest_inc.parent.mkdir(parents=True, exist_ok=True)
+                    shutil.copy2(src_inc, dest_inc)
 
     solve_res = solve_user_inp(
         executor=executor,
