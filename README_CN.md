@@ -7,14 +7,14 @@
 [![CI](https://github.com/chenlei-gh/Abaqus-AI-Agent/actions/workflows/ci.yml/badge.svg)](https://github.com/chenlei-gh/Abaqus-AI-Agent/actions/workflows/ci.yml)
 [![Python](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12-blue.svg)](https://www.python.org/)
 [![Abaqus](https://img.shields.io/badge/SIMULIA%20Abaqus-2025%20%E8%AE%A4%E8%AF%81-brightgreen.svg)](https://www.3ds.com/products-services/simulia/products/abaqus/)
-[![Tests](https://img.shields.io/badge/%E8%87%AA%E5%8A%A8%E5%8C%96%E5%9B%9E%E5%BD%92%E6%B5%8B%E8%AF%95-1129%20%E9%80%9A%E8%BF%87%20%280%20%E8%AD%A6%E5%91%8A%29-success.svg)](tests/)
+[![Tests](https://img.shields.io/badge/%E8%87%AA%E5%8A%A8%E5%8C%96%E5%9B%9E%E5%BD%92%E6%B5%8B%E8%AF%95-1328%20%E9%80%9A%E8%BF%87%20%280%20%E8%AD%A6%E5%91%8A%29-success.svg)](tests/)
 [![Golden Matrix](https://img.shields.io/badge/golden%20matrix-20%2F20%20L4%20passed-success.svg)](machine_validation/)
 [![Official Benchmarks](https://img.shields.io/badge/tier%20a%20benchmarks-22%2F22%20passed-success.svg)](tools/j_comprehensive_physics_matrix.py)
 [![Tier B Benchmarks](https://img.shields.io/badge/tier%20b%20benchmarks-7%2F7%20passed-success.svg)](tools/j3_tier_b_extended_physics.py)
 [![Live Abaqus Gate](https://img.shields.io/badge/live%20abaqus%20gate-22%2F22%20passed-brightgreen.svg)](tools/j_live_abaqus_matrix.py)
 [![Task Matrix](https://img.shields.io/badge/task%20matrix-T1--T6%20passed-brightgreen.svg)](tools/m_engineering_task_matrix.py)
-[![确定性报告](https://img.shields.io/badge/%E6%8A%A5%E5%91%8A%E7%AE%A1%E7%BA%BF-%E5%8D%95%E4%B8%80%E6%AD%A3%E5%BC%8F%E7%A1%AE%E5%AE%9A%E6%80%A7-brightgreen.svg)](src/abaqus_ai_agent/reporting/pipeline.py)
-[![密码学防伪](https://img.shields.io/badge/%E5%9B%BE%E4%BB%B6%E9%AA%8C%E7%AD%BE-Viewer%20Session%20Token-blue.svg)](src/abaqus_ai_agent/execution/odb_rendering.py)
+[![验收模型](https://img.shields.io/badge/%E9%AA%8C%E6%94%B6%E6%A8%A1%E5%9E%8B-4D%20%E6%AD%A3%E4%BA%A4%E9%97%AD%E7%8E%AF-brightgreen.svg)](src/abaqus_ai_agent/acceptance.py)
+[![密码学防伪](https://img.shields.io/badge/%E5%9B%BE%E4%BB%B6%E9%AA%8C%E7%AD%BE-Manifest%20V2%20%2B%20Session%20Token-blue.svg)](src/abaqus_ai_agent/execution/odb_rendering.py)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 
 ---
@@ -51,6 +51,7 @@ graph LR
 | **Token 成本与治理** | ❌ 上下文直接塞满 ODB 数组，Token 迅速耗尽 | ❌ 无治理机制，长流程必雪崩 | ⚡ **三平面解耦与 Token 隔离**：P0-1~P0-5 协议隔离，仅交换轻量工件指针与标量查询边界 |
 | **可视化与图件存证** | ❌ 文本 ASCII 示意图或无图件 | ❌ 零散本地图片，缺乏血统与来源绑定 | 🔐 **无头 Viewer 密码学防伪**：Abaqus 官方无头离屏渲染，绑定 `viewer_session_token` 与验签凭据 |
 | **工程交付成果** | ❌ 破碎的代码片段 | ❌ 简陋的 Markdown 散落文档 | 📊 **单一权威交付体系**：中英双语、零依赖单文件纯 HTML（内嵌矢量图与动图）+ 密码学交付卡 |
+| **工程验收状态模型** | ❌ 误将进程退出码 0 当成力学计算合格 | ❌ 粗糙字符串判定，遗漏证据损坏与求解失败 | ⚖️ **4D 正交工程验收模型**：数学解耦求解状态、证据真实性、工程门禁与交付授权，消除等价传递悖论 |
 | **企业生产调度** | ❌ 仅限单机单用户 Demo | ❌ 本地进程极易死锁导致环境污染 | 🏢 **企业级工业基座**：独立 UUID 隔离沙箱、原子持久化任务队列、FlexNet/DSLS 浮动许可治理 |
 
 ### 商业投资回报率（ROI）
@@ -64,105 +65,113 @@ graph LR
 
 ```mermaid
 flowchart TD
-    subgraph Cognitive_Plane["1. LLM 认知推理平面 (严格最小上下文边界)"]
-        A[工程师自然语言 Prompt] --> B[意图编译器与物理域分类器]
-        B --> C[参数提取与模糊歧义澄清]
-        C --> D[结构化定性工程解释卡片]
+    subgraph Cognitive_Plane["1. LLM 认知平面（极小上下文边界）"]
+        A[工程师自然语言 Prompt / 规格书] --> B[意图编译器与物理分类器]
+        B --> C[参数实体校验与歧义澄清]
+        C --> D[结构化定性分析卡片]
     end
 
-    subgraph Engineering_Plane["2. 确定性工程执行平面 (硬核 CAE 契约体系)"]
-        E[视口空间三维射线投影] --> F[几何拓扑确定性 findAt 接地]
-        F --> G[材料门禁与温标绝对归一化]
-        G --> H[渐近多级网格细化收敛门禁]
+    subgraph Engineering_Plane["2. 确定性工程平面（严格 CAE 契约体系）"]
+        E[视口空间射线拾取] --> F[拓扑接地 findAt 解析]
+        F --> G[材料门禁与温标归一化]
+        G --> H[渐近网格加密收敛门禁]
         H --> I[Abaqus CAE 脚本确定性编译]
-        I --> J[Solver Doctor 迭代切步监控]
-        J --> K[结果智能: 静力平衡与安全裕度]
+        I --> J[Solver Doctor 收敛实时监控]
+        J --> K[结果智能：平衡误差与安全系数]
         K --> L[单一权威确定性报告管线]
     end
 
-    subgraph Data_Plane["3. 物理数据与产物平面 (零上下文泄漏)"]
+    subgraph Data_Plane["3. 物理数据平面（零上下文泄漏）"]
         M[SIMULIA Abaqus 2025 求解器] --> N[二进制 ODB / .sta / .msg / .dat]
-        N --> O[Abaqus Viewer 无头离屏渲染]
-        O --> P[防伪签署工程云图资产]
-        P --> Q[密码学工程报告交付卡]
+        N --> O[无头 Abaqus Viewer 离屏会话]
+        O --> P[密码学会话签名云图资产]
+        P --> Q[权威报告交付卡 Delivery Card]
     end
 
-    B -.->|仅暴露阶段限定动态工具| E
-    D -.->|仅注入定性工程洞察| L
-    N -.->|按需提取有界标量/热点极值| K
-    P -.->|内嵌已认证离屏云图| L
+    B -.->|仅暴露阶段专属轻量工具| E
+    D -.->|注入结构化定性洞察| L
+    N -.->|仅查询受限标量/危险点| K
+    P -.->|嵌入已验签离屏渲染云图| L
 ```
 
 ### 1. 严格反伪造公理（The Anti-Fabrication Axiom）
-> **一项工程仿真结果，绝不能仅因“Python 脚本返回了 0”就被判定为成功！**  
-> 必须经过有限元网格质量核验、物理 ODB 二进制验证、正体积单元审计、全局静态反力平衡（$\Delta RF < 0.1\%$）、数值能量守恒（$\Delta E_{\text{total}}$ 漂移率检查）及多维度准则校核，才被赋予不可篡改的合格存证。
+> **工程有限元仿真结果，绝不可仅仅因为脚本退出码为 0 就被判定为合格。**<br>
+> 验收必须通过严苛数学验证：真实二进制 ODB 文件存在性、单元正体积审计、静态支座反力自平衡（$\Delta RF < 0.1\%$）、数值能量守恒（$\Delta E_{\text{total}}$ 漂移率受控），以及满足用户显式声明的各项工程验收准则。
 
-### 2. 三平面解耦与上下文治理（Tri-Plane Decoupled Architecture）
-为根除大模型在复杂工业分析中的 Token 持续性黑洞，系统确立了严格的三平面分层架构：
-- **LLM 认知平面（Cognitive Plane）**：仅负责工程意图理解、高阶任务编排与定性工程机理解释。绝对禁止直接读取原始 ODB 庞大数组或生成完整 HTML 文本。
-- **确定性工程平面（Engineering Plane）**：负责强类型编译、拓扑坐标投影映射、材料温标归一化、自适应多级网格收敛门禁、Solver Doctor 发散自愈及单一出口验收评定。
-- **物理数据平面（Data Plane）**：负责真实 Abaqus 进程调度、二进制 ODB 存储、无头离屏 Viewer 渲染及图件存储。数据交换严格通过轻量级强类型工件指针（Artifact Pointer）进行。
+### 2. 4D 正交工程验收模型（4D Orthogonal Acceptance Model）
+平台确立了四个相互正交、职责严格解耦的评估维度：
+- **求解器执行状态** (`completed`, `failed`, `running`, `unsubmitted`)：Abaqus 进程级生命周期。
+- **证据真实性状态** (`VALID`, `EVIDENCE_TAMPERED`, `EVIDENCE_CORRUPT`, `EVIDENCE_STALE`, `INCOMPLETE`, `SOLVER_FAILED`)：基于 SHA-256 跨文件散列清单校验。
+- **严格数学等价性契约**：`ResultValidity` 严格满足等价关系公理（自反性、对称性、传递性），杜绝在 `__eq__` 中进行松弛的跨状态伪合并；通过 `.is_invalid`、`.is_valid` 分类谓词提供完备判定。
+- **物理工程门禁评定** (`PASS`, `FAIL`, `BLOCKED`, `WARNING`)：校核应力限值、反力、变形、网格质量、接触稳定性与热平衡。
+- **交付许可硬门禁** (`deliverable: bool`)：原子级布尔门禁，任何未通过求解、证据存疑或物理失效的结果均绝对禁止发放交付资质。
 
-### 3. 单一正式报告管线（Phase P2 统一收敛架构）
-- **根除双轨报告架构**：彻底废弃“先生成普通草稿、再用确定性报告覆盖”的历史设计。所有生产交付严格流经 `DeterministicReportPipeline.build_and_render()`，由同一份数据源同步渲染 Markdown 与零依赖单文件纯 HTML。
-- **诊断草稿边界隔离**：非正式或调试任务严格输出带有 `[DIAGNOSTIC / NON-DELIVERABLE DRAFT]` 强制警告前缀的诊断结构体，且 `report_html` 强制为 `None`，杜绝任何将未认证草稿误作为工程正式交付物的可能。
-- **交付阻断旧报告原子清空**：当工程验收未达标或发生交付阻断（`DELIVERY_BLOCKED`）时，系统原子清空报告文本与交付卡，防止旧产物在内存中残留导致误判。
+### 3. Fail-Closed 意图编译与零虚构区域接地
+- **子句隔离语义绑定**：通过标点与语法子句物理隔离，防止载荷或约束跨子句借用验收条件中提及的区域名称。
+- **1-to-1 模型真实拓扑解析**：消除裸“固定”默认回退到 `RootFace` 等启发式猜测，强制要求每个区域必须在当前 CAE/INP 模型中完成确定性 1-to-1 映射。
+- **物理参数全链路保留**：热对流（环境温度、对流换热系数）、热辐射（环境温度、发射率）及复杂接触参数在路由、归一化、编译与下发中完整保真传递。
+- **材料证据等级分级治理**：严密区分参考假设（`REFERENCE_LIBRARY`）与真实材质卡验证数据（`VERIFIED_PROPERTIES`），阻止硬编码默认值冒充核验数据。
 
-### 4. 无头 Viewer 离屏渲染与密码学防伪验签
-- **真实 Abaqus Viewer 无头离屏渲染**：调用系统原生 Abaqus Viewer（`abaqus viewer -noGUI`），直接从物理 ODB 离屏导出真实变形与 von Mises 危险区云图，严禁占位图或环境旧图冒充。
-- **会话防伪验签凭据（Viewer Session Token）**：每张图件自动关联随机会话 Nonce，将 `run_id`、`input_hash`、`odb_sha256`、目标场变量/分量及图像 SHA-256 哈希熔接计算 `viewer_session_token`。
-- **签名渲染凭据包（Render Execution Evidence）**：图件元数据中内嵌经私钥数字签署的渲染执行凭据包，实现从 ODB 物理张量到最终像素级图件的端到端因果溯源。
+### 4. Action 全 Schema 空间与幅值数值严格加固
+- **几何向量与参考点加固**：`instance_translate`、`instance_rotate`、`reference_point` 强制进行三维坐标分量有限数校验，严格拒绝 `bool`、`NaN`、`Inf`，并绝对拒绝旋转轴为零向量（`axis_direction cannot be a zero vector`）。
+- **幅值曲线全分量校验**：`tabular_amplitude`、`smooth_step_amplitude`、`periodic_amplitude` 及 `equally_spaced_amplitude` 强制校验所有时步、幅值、傅里叶级数分量为有限数值。
+- **物理量量纲守恒门禁**：在 `contracts/units.py` 中强制禁止弹性模量、密度、分析步时间周期传入布尔值、非正数或非有限数。
 
-### 5. 渐近网格收敛门禁（Multi-Level Mesh Convergence Gate）
-- **严格渐近层级契约**：要求至少 3 层（Levels $\ge$ 3）有效加密网格阶梯，拒绝仅凭 2 级网格造成的误判。
-- **同质指标强制对比**：同一序列内必须对比同名、同义、同量纲的指标（统一使用单元数或种子尺寸），严禁单元数与节点数交叉混拼。
-- **应力符号严格校验**：区分非负不变量（von Mises、Tresca）与有符号分量（法向应力、剪应力、压力），防止变号被误判为单调收敛；严格绑定长度单位契约（mm）。
+### 5. 单一正式报告管线（Phase P2 统一收敛架构）
+- **杜绝双轨漂移**：彻底废弃旧式草稿生成器。所有生产作业统一流经 `DeterministicReportPipeline.build_and_render()`，确保 Markdown 与离线单文件纯 HTML 在数据层面绝对对称。
+- **诊断草稿严格隔离**：未交付或排错运行严格输出带有 `[DIAGNOSTIC / NON-DELIVERABLE DRAFT]` 标识的调试记录，且强制 `report_html = None`。
+- **防止残留泄漏**：当下游验收被阻断（`DELIVERY_BLOCKED`）时，系统原子清空旧有报告并注销 `ReportDeliveryCard`，防止中间过程误作正式结论交付。
 
-### 6. 材料本构与热物性严苛闭环门禁
-- **全链路温度归一化**：严格统一摄氏度、开尔文与华氏度换算，拒绝低于绝对零度的物理无效值；反序列化路径严格拦截布尔值防绕过。
-- **显式曲线分类识别**：真实应力-应变与工程应力-应变曲线必须双轴明确标识，拒绝无明确类型推断；强制执行应变严格单调性与硬化表有效性校验。
-- **严禁无授权热物性假设**：导热系数、线膨胀系数及复合材料泊松比缺少有效数据时直接触发 `BLOCKED` 阻断，杜绝无授权默认值。
+### 6. 无头 Viewer 离屏渲染与密码学防伪验签
+- **官方无头原生离屏渲染**：应力、变形等云图直接由 Dassault Abaqus Viewer 原生执行渲染（`abaqus viewer -noGUI`），彻底淘汰外部模拟图件。
+- **密码学验签 Token**：每个图件资产均盖有随机凭据，将 `run_id`、`input_hash`、`odb_sha256`、物理场分量与 `image_sha256` 绑定为可校验的 `viewer_session_token`。
+- **防篡改执行存证**：图件内嵌 `render_execution_evidence` 数字存证，实现独立于平台的第三方核验。
 
-### 7. 自主发散自愈（Autonomous Solver Doctor）
-面对大变形（`NLGEOM`）、接触状态突变、塑性软化或沙漏失稳：
-- 实时追踪 `.msg` 严重力残余量与 `.sta` 切步频率；
-- 诊断深层物理诱因（`CONTACT_CHATTER`、`LOCAL_SINGULARITY`、`INCREMENTATION_EXHAUSTED`）；
-- 自动施加微量接触稳定化阻尼（Stabilization），自动收紧初始切步与最小步长，闭环重算收敛。
+### 7. 渐近网格收敛门禁（Multi-Level Mesh Convergence Gate）
+- **严苛三级渐近收敛**：强制要求至少三个独立的网格加密层级（$\text{Levels} \ge 3$），坚决拦截两级偶然巧合带来的虚假收敛。
+- **同质指标追踪**：各层级间仅允许对比完全同质的网格度量（纯单元数或纯布种尺寸，禁止节点与单元混杂）。
+- **应力符号严格验证**：对带符号物理量（静水压力、正应力）执行严格变号校核；对真非负标量（von Mises、Tresca）豁免符号检查，防止数值振荡误判为单调收敛。
+
+### 8. 自主发散自愈（Autonomous Solver Doctor）
+面对接触颤振、几何非线性（`NLGEOM`）、局部失稳与网格畸变：
+- 实时监听解析 `.msg` 严重力残余与 `.sta` 切步频率。
+- 准确定位失效物理机理（`CONTACT_CHATTER`、`LOCAL_SINGULARITY`、`TIME_INCREMENT_EXHAUSTED`）。
+- 自动施加自适应阻尼因子、调整时间切步准则并在可控重试上限内闭环自愈。
 
 ---
 
-## 工业级标杆案例实测验证 (Phase 2 Package B)
+## 工业级标杆案例实测验证
 
-本仓库提供经 Dassault Abaqus 2025 官方算例及 ASME 核电标准审计校核的端到端工业级标杆，归档于 `machine_validation/p2_cases/` 目录：
+包含完整 ASME 规范核算及 Abaqus 官方验证资产，归档于 `machine_validation/p2_cases/`：
 
 ```text
 machine_validation/p2_cases/
-├── case_01_bolted_pipe_flange/                  # 案例 1: 管道螺栓法兰垫片连接非线性预紧与密封
-│   ├── case_01_flange_manifest.json            # 密码学凭据清单 (SHA-256)
-│   └── Case_01_Bolted_Flange_Report.html       # 单文件独立 HTML 报告 (内嵌动图与矢量图)
-├── case_02_reactor_pressure_vessel_closure/     # 案例 2: 核反应堆压力容器顶盖 (RPV) ASME 规范核算
-│   ├── case_02_rpv_manifest.json               # 密码学凭据清单 (SHA-256)
-│   └── Case_02_RPV_Closure_Report.html         # 单文件独立 HTML 报告 (内嵌动图与矢量图)
-└── case_03_exhaust_manifold/                    # 案例 3: 四合一发动机排气歧管 650°C 热机接触滑移
-    ├── case_03_manifold_manifest.json          # 密码学凭据清单 (SHA-256)
-    ├── Case_03_Exhaust_Manifold_Report.html    # 单文件独立 HTML 报告 (内嵌动图与矢量图)
-    └── case_03_render_contours_headless.py     # 无头离屏 Abaqus Viewer 脚本
+├── case_01_bolted_pipe_flange/                  # 案例 1: 管道螺栓法兰连接与垫片非线性密封
+│   ├── case_01_flange_manifest.json            # 密码学防伪清单 (SHA-256)
+│   └── Case_01_Bolted_Flange_Report.html       # 独立纯 HTML 交付报告 (内嵌动图与矢量图)
+├── case_02_reactor_pressure_vessel_closure/     # 案例 2: 核电 RPV 顶盖 ASME Section III 规范核算
+│   ├── case_02_rpv_manifest.json               # 密码学防伪清单 (SHA-256)
+│   └── Case_02_RPV_Closure_Report.html         # 独立纯 HTML 交付报告 (内嵌动图与矢量图)
+└── case_03_exhaust_manifold/                    # 案例 3: 4合1 排气歧管热机耦合接触滑移
+    ├── case_03_manifold_manifest.json          # 密码学防伪清单 (SHA-256)
+    ├── Case_03_Exhaust_Manifold_Report.html    # 独立纯 HTML 交付报告 (内嵌动图与矢量图)
+    └── case_03_render_contours_headless.py     # 无头离屏云图渲染脚本
 ```
 
 ### 案例 01: 管道螺栓法兰垫片连接非线性预紧与密封
-- **工程场景**：符合 ASME PCC-1 标准的 8 螺栓 M16 管道法兰接头，包含非线性压缩纤维复合垫片。
-- **物理验证**：Step 1 螺栓预紧（50 kN/螺栓，400 kN 总夹紧力，初始压紧接触压力 31.52 MPa）；Step 2 锁定长度并施加 3.0 MPa 流体压力及 94.25 kN 轴向拉力，维持 24.85 MPa 接触压力（超出 12.0 MPa 密封门槛 $+107.1\%$ 安全裕度），法兰颈部最大 Mises 应力 195.42 MPa（$\text{FoS} = 1.82 \ge 1.25$）。
-- **交付成果**：**内嵌 12 帧完整加压密封演变动图（GIF）**、密封压力分布 SVG 矢量图与单文件独立纯 HTML 工程报告。
+- **工程场景**：符合 ASME PCC-1 标准的 8 螺栓 M16 管道高压连接工况。
+- **物理验证指标**：Step 1 螺栓力预紧（每根 $50\text{ kN}$，总预紧力 $400\text{ kN}$，垫片初压 $31.52\text{ MPa}$）；Step 2 锁定螺栓长度并施加 $3.0\text{ MPa}$ 流体压力，保持 $24.85\text{ MPa}$ 接触压应力（相对 $12.0\text{ MPa}$ 临界密封阈值裕量 $+107.1\%$）。法兰颈部峰值 Mises 应力 $195.42\text{ MPa}$（安全系数 $\text{FoS} = 1.82 \ge 1.25$）。
+- **交付成果**：单文件自包含 HTML 报告、12 帧完整预紧升压瞬态 GIF 动图、螺栓法兰径向接触压应力分布曲线及数字交付卡。
 
 ### 案例 02: 核反应堆压力容器顶盖 (RPV) ASME 规范核算
-- **工程场景**：压水堆（PWR）容器顶盖组合体，由 54 根重型 M180 双头螺栓受拉紧固，采用 Inconel 718 双锥面自紧金属垫片，材料为 SA-508 锻钢，符合 ASME 第 III 卷第 1 册 NB 分卷核安全标准。
-- **物理验证**：Step 1 液压拉伸预紧（6.5 MN/螺栓，351 MN 总夹紧力）；Step 2 承受 17.5 MPa 运行工况与 219.91 MN 穹顶推力，保持 98.60 MPa 自紧接触压力（超出 75.0 MPa ASME 门槛 $+31.5\%$）。法兰颈部应力线性化 $P_L+P_b = 238.50\text{ MPa} \le 1.5 S_m = 276.0\text{ MPa}$。
-- **交付成果**：**内嵌 12 帧液压拉伸与升压演变动图（GIF）**、ASME 评定合规看板与单文件独立纯 HTML 工程报告。
+- **工程场景**：压水堆（PWR）封头整体组件，采用 54 根 M180 巨型双头螺栓与 Inconel 718 自紧式金属密封环，依 ASME Section III Div 1 Subsection NB 严格核算。
+- **物理验证指标**：Step 1 螺栓液压拉伸预紧（每根 $6.5\text{ MN}$，总预紧力 $351\text{ MN}$）；Step 2 承受 $17.5\text{ MPa}$ 运行内压及 $219.91\text{ MN}$ 封头推力，密封面保持 $98.60\text{ MPa}$ 闭合应力（ASME 安全裕量 $+31.5\%$）。一次局部薄膜加弯曲应力强度 $P_L + P_b = 238.50\text{ MPa} \le 1.5 S_m = 276.0\text{ MPa}$。
+- **交付成果**：ASME 合规性评估交互式仪表盘、预紧应力演化动图与全张量防篡改清单。
 
 ### 案例 03: 四合一发动机排气歧管 650°C 热机接触滑移
-- **工程场景**：SiMo 球铁排气歧管、HT250 气缸盖及多层不锈钢压花垫片（MLS），承受 650°C 燃气瞬态对流与热膨胀。
-- **物理验证**：稳态热传导温差（管腔 615.4°C 至法兰 132.8°C，热平衡误差 $0.024\%$）；Step 1 冷态预紧（8 颗 M10 螺栓各 25 kN）；Step 2 差动热膨胀外滑移 0.420 mm（在 0.75 mm 螺栓孔间隙公差内保留 $+44.0\%$ 余量），MLS 垫片接触压力维持在 38.60 MPa（$> 25.0$ MPa 门槛）。
-- **交付成果**：**内嵌 12 帧升温膨胀接触滑移动画（GIF）**、全场热-力耦合云图与单文件独立纯 HTML 工程报告。
+- **工程场景**：4 合 1 SiMo 球铁排气歧管与 HT250 缸盖配合，经受 $650^\circ\text{C}$ 瞬态废气冲刷与双层金属（MLS）凸筋垫片非线性接触滑移。
+- **物理验证指标**：稳态热温度梯度场（歧管口 $615.4^\circ\text{C}$ 至法兰盘 $132.8^\circ\text{C}$，热平衡误差 $0.024\%$）；Step 1 冷态螺栓锁紧（$8\times\text{M10}$ 预紧力 $25\text{ kN}$）；Step 2 差动热膨胀滑移量 $0.420\text{ mm}$（低于 $0.75\text{ mm}$ 螺孔游隙极限，安全裕度 $+44.0\%$）。MLS 垫片接触压应力 $38.60\text{ MPa} > 25.0\text{ MPa}$。
+- **交付成果**：热力耦合多模态 HTML 报告、升温滑移瞬态 GIF 动图与全场应力-温度耦合云图。
 
 ---
 
@@ -171,101 +180,104 @@ machine_validation/p2_cases/
 ```text
                ┌─────────────────────────────────────────────────────────┐
                │ Level 1: 真实 Abaqus 2025 求解器门禁                    │
-               │ (真实进程、二进制 ODB 张量、SHA-256 签名存证)           │
+               │ (真实进程执行、二进制 ODB 提取、SHA-256 签名)           │
                ├─────────────────────────────────────────────────────────┤
-               │ Level 2: 连续介质力学理论解析解基准                     │
-               │ (经典连续介质力学校核，相对误差 ≤0.01%)                 │
+               │ Level 2: 理论力学解析解基准门禁                         │
+               │ (经典连续介质力学闭式解比对，相对误差 ≤0.01%)           │
                ├─────────────────────────────────────────────────────────┤
-               │ Level 3: 非线性物理准则与边界门禁                       │
-               │ (自适应网格渐近收敛、材料本构温度与硬化分类门禁)        │
+               │ Level 3: 非线性物理收敛与材料门禁                       │
+               │ (三级渐近网格收敛、显式真实/工程应变分类)               │
                ├─────────────────────────────────────────────────────────┤
-               │ Level 4: 软件层确定性自动化回归测试套件                 │
-               │ (1098 项 CI 测试全绿通过，Python 3.10-3.12 跨平台 0 警告)│
+               │ Level 4: 自动化确定性回归测试集                         │
+               │ (1328 项 CI 测试全通过，Python 3.10-3.12 零警告)        │
                ├─────────────────────────────────────────────────────────┤
-               │ Level 5: 求解器非线性发散自愈闭环                       │
-               │ (基于 .msg/.sta 的自适应阻尼与切步控制)                 │
+               │ Level 5: 自主非线性发散自愈门禁                         │
+               │ (.msg/.sta 闭环诊断自愈与自适应阻尼参数注入)            │
                └─────────────────────────────────────────────────────────┘
 ```
 
-| 验证门禁 | 运行环境 | 工具链与依赖 | 覆盖范围与目标 |
+| 验证轨道 | 运行环境与执行器 | 工具链依赖 | 覆盖范围与考核指标 |
 | :--- | :--- | :--- | :--- |
-| **CI 软件契约门禁** | GitHub Actions (Ubuntu / macOS / Windows) | 纯 Python 环境，无需商业许可证 (3.10–3.12) | • **1098 项自动化单元与契约测试通过 (0 警告, 0 报错)**<br>• 22 项 Dassault Tier A 物理标准算例基准<br>• 7 项 Tier B 高阶力学基准 (粘弹性/蠕变/断裂)<br>• 全仓零敏感泄漏安全审计 |
-| **真机物理执行门禁** | 配备商业 Abaqus 2025 的 Windows 11 / Server | 官方 SIMULIA Abaqus 浮动/节点许可证 | • 真实 CAE 驱动与二进制 ODB 张量提取<br>• Headless Abaqus Viewer 离屏渲染与验签<br>• 密码学交付卡 (Report Delivery Card) 签发<br>• 真实非线性发散诊断与自愈重算 |
+| **CI 软件契约轨道** | GitHub Actions (Ubuntu / macOS / Windows) | 纯 Python 环境（Python 3.10–3.12） | • **1328 项自动化测试通过（0 警告、0 错误）**<br>• 22 项 Dassault Tier A 物理标杆案例<br>• 7 项 Tier B 扩展力学校准基准<br>• 严格负向错误码 CLI 冒烟门禁<br>• 全仓库零泄露静态安全审计 |
+| **真机物理求解轨道** | 部署 Abaqus 2025 的 Windows 11 / Server | SIMULIA Abaqus 商业浮动/节点许可 | • 真实 CAE 建模脚本生成与二进制 ODB 提取<br>• 原生无头 Abaqus Viewer 离屏云图生成<br>• 密码学交付卡签名与防伪核验<br>• 真实非线性接触求解与收敛自愈 |
 
 ---
 
 ## 快速开始
 
 ### 1. 环境准备
-- **操作系统**：Windows 10/11 (64-bit)、Windows Server、Linux (Ubuntu 20.04/22.04/24.04)
-- **Python 环境**：Python 3.10、3.11 或 3.12 (64-bit)
-- **可选商业求解器**：Dassault Systèmes SIMULIA Abaqus 2025（用于真机求解与 Viewer 抓图；无许可证环境下系统自动运行于离线契约与测试模式）
+- **操作系统**：Windows 10/11 (64-bit)、Windows Server 或 Linux (Ubuntu 20.04/22.04/24.04)。
+- **Python 版本**：Python 3.10、3.11 或 3.12 (64-bit)。
+- **商业求解器（可选）**：Dassault Systèmes SIMULIA Abaqus 2025 用于真实求解。开发阶段完全支持在离线测试模式下进行无 License 开发。
 
 ### 2. 安装与环境检验
 
 ```bash
-# 克隆代码仓库
+# 克隆仓库
 git clone https://github.com/chenlei-gh/Abaqus-AI-Agent.git
 cd Abaqus-AI-Agent
 
 # 安装核心生产包
 python -m pip install -e .
 
-# 安装完整开发与测试套件
+# 安装完整测试与开发套件
 python -m pip install -e ".[test]"
 ```
 
-运行确定性全量软件测试套件：
+运行确定性全量回归测试：
 
 ```bash
 python -m pytest tests -W error -q
-# 预期输出: 1098 passed in ~70s (0 warnings, 0 errors)
+# 预期输出：1328 passed, 0 warnings
 ```
 
 ### 3. Python 极简调用示例
 
-通过自然语言发起结构工程分析并获得权威交付卡与独立报告：
+提交自然语言工程需求并自动执行全流程求解与验收：
 
 ```python
 from abaqus_ai_agent import AbaqusAIAgent
 
-# 初始化智能体（若本地存在 Abaqus 启动器则自动完成硬件与求解器绑定）
+# 初始化 Agent（自动探测本机 Abaqus 求解器环境）
 agent = AbaqusAIAgent()
 
-# 输入自然语言工程规格书
+# 输入自然语言工程需求规格
 result = agent.solve_requirement(
-    "对长100mm、截面10x10mm的Q235钢悬臂梁执行线性静力分析。"
-    "根部完全固定约束，端部施加1000N向下剪切载荷。"
-    "验收准则：端部挠度 <= 2.5mm，最大von Mises等效应力 <= 600MPa。",
+    "对长度 100mm、截面 10x10mm 的钢制悬臂梁进行线性静力学分析。"
+    "根部固定约束，自由端端面施加 1000N 垂直向下剪力载荷。材料选用 Q235 结构钢。"
+    "验收指标：自由端挠度 <= 2.5mm，最大 von Mises 应力 <= 600MPa。",
     require_production=True
 )
 
 if result.status == "NEEDS_CLARIFICATION":
-    print("工程参数不完备，已被安全阻断并请求澄清:", result.clarification_needed)
+    print("输入存在物理不变量缺失，阻断执行并要求澄清：", result.clarification_needed)
 elif result.status == "COMPLETED":
-    print("工程验收判定:", result.acceptance.conclusion)  # PASS
-    print("静力反力平衡误差:", result.result_intelligence.derived_metrics.equilibrium_error)
-    print("最大 von Mises 应力:", result.metrics.get("max_mises"), "MPa")
-    print("正式 HTML 报告路径:", result.report_html_path)
-    print("密码学交付卡 ID:", result.delivery_card.card_id)
+    print("工程验收结论：", result.acceptance.conclusion)  # PASS
+    print("支座反力自平衡误差：", result.result_intelligence.derived_metrics.equilibrium_error)
+    print("最大 von Mises 应力：", result.metrics.get("max_mises"), "MPa")
+    print("权威 HTML 交付报告：", result.report_html_path)
+    print("密码学防伪交付卡：", result.delivery_card.card_id)
 ```
 
 ### 4. 命令行交互（CLI）
 
 ```bash
-# 1. 探查本地环境、求解器路径与多级运行时能力
+# 1. 审计本机环境、求解器可用性与各级工具能力
 abaqus-ai-agent inspect
 
-# 2. 测试自然语言工程意图分类与参数解析
-abaqus-ai-agent intent "Cantilever beam with 1000N load, check maximum displacement"
+# 2. 测试自然语言工程意图编译与实体解析
+abaqus-ai-agent intent "对 100mm 悬臂梁自由端施加 1000N 载荷，校核端部挠度 <= 2.5mm"
 
-# 3. 执行 Dassault Tier A 物理标准算例矩阵 (22 基础案例)
+# 3. 运行 Fail-Closed 冒烟校验（缺失区域直接给出结构化阻断并返回退出码 2）
+abaqus-ai-agent ask "对 100mm 悬臂梁施加 1000N 载荷，根部固定" --dry-run
+
+# 4. 执行 Dassault Tier A 物理标杆基准矩阵（22 基础案例）
 python tools/j_comprehensive_physics_matrix.py
 
-# 4. 从经审计的物理凭据生成单文件独立权威 HTML 报告
+# 5. 从经审计的证据包生成独立权威 HTML 交付报告
 abaqus-ai-agent report machine_validation/static_golden_e2e.json --format html --output report.html
 
-# 5. 清理运行临时过程文件并保护经审计的 Golden 资产
+# 6. 安全清理仿真临时中间文件并完整保护黄金证据资产
 python scripts/clean_workspace.py
 ```
 
@@ -275,44 +287,45 @@ python scripts/clean_workspace.py
 
 ```text
 Abaqus-AI-Agent/
-├── docs/                     # 架构规范、闭环路线图与技术审计报告
-│   ├── engineering-run-evidence-roadmap.md # 核心执行与 Phase P2 收敛路线图
-│   ├── rc1-release-audit.md                # 官方发布审计报告
-│   └── ai-agent-capability-boundary.md     # LLM 与确定性工程边界规范
-├── machine_validation/       # 经审计的真机物理验证黄金资产与 P2 标杆案例
-│   └── p2_cases/             # ASME 级工业标杆案例 (法兰、RPV 封头、排气歧管)
-├── scripts/                  # 工作区治理与自动化清理脚本
-├── src/abaqus_ai_agent/      # 智能体核心源码包
-│   ├── actions/              # Abaqus 原生动作构建器与前置检查
-│   ├── contracts/            # 强类型契约模型 (意图、材料、网格、报告、证据凭据)
-│   ├── diagnostics/          # 迭代收敛解析器 (.msg/.sta) 与自主发散修复器 (Solver Doctor)
-│   ├── execution/            # 批处理器、UUID 隔离沙箱与无头 Viewer 离屏渲染器
-│   ├── grounding/            # 视口三维空间射线投影与拓扑确定性接地 (findAt)
-│   ├── planning/             # 动作规划器与力学机构依赖图编译器
-│   ├── reporting/            # 单一权威 DeterministicReportPipeline、HTML/MD 渲染器
-│   └── validation/           # 量纲一致性、网格自适应收敛门禁与单一出口验收判定
-├── tests/                    # 1098 项确定性自动化测试套件 (0 警告)
-└── tools/                    # 真机物理测试驱动、探针与工业资质标定工具
+├── docs/                     # 工程路线图、审计报告与能力边界契约
+│   ├── engineering-run-evidence-roadmap.md # 核心执行与验收闭环路线图
+│   ├── rc1-release-audit.md                # 官方 RC 1.0 审计报告
+│   ├── p1-product-requirements.md          # 正式产品需求规格书与需求追溯矩阵
+│   └── ai-agent-capability-boundary.md     # LLM 与确定性 CAE 边界定义
+├── machine_validation/       # 经真机审计的黄金证据包与标杆案例库
+│   └── p2_cases/             # 工业标杆案例（法兰密封、核电封头、排气歧管）
+├── scripts/                  # 工作区治理、审计与文件清理工具
+├── src/abaqus_ai_agent/      # 核心生产源码包
+│   ├── actions/              # Abaqus 原生 Action 生成器与前置校验
+│   ├── contracts/            # 强类型数据契约（意图、材料、网格、报告、证据、单位量纲）
+│   ├── diagnostics/          # 收敛诊断器 (.msg/.sta) 与自主 Solver Doctor
+│   ├── execution/            # 批量执行器、UUID 沙箱隔离管理器与无头 Viewer
+│   ├── grounding/            # 视口空间射线投影与 3D 拓扑接地 (findAt)
+│   ├── planning/             # 动作规划编排与机构图编译器
+│   ├── reporting/            # 单一正式确定性报告管线 (DeterministicReportPipeline)
+│   └── validation/           # 量纲相容性、网格渐近收敛与 4D 正交验收门禁
+├── tests/                    # 1328 项确定性回归测试用例（0 警告）
+└── tools/                    # 黄金驱动脚本、负向探针与真机认证套件
 ```
 
 ---
 
 ## 企业级支持与商业合作
 
-我们面向先进制造龙头企业与设计院所提供端到端技术集成与商业工程解决方案：
+我们面向工业制造企业提供端到端技术集成、私有化部署与定制仿真智能体开发服务：
 
-- **🏢 私有化隔离部署与超算集成**：支持企业内网气隙隔离（Air-Gapped）私有云部署，适配企业级高性能计算集群（HPC PBS、Slurm、LSF 作业调度器对接）。
-- **📦 企业私有材料数据库与本构卡片定制**：打通企业内部实验数据库（高温合金、特种高分子、复合材料损伤退化），自动生成抗幻觉材料卡片与失效判据。
-- **🎯 复杂工业仿真流线定制开发**：针对整车碰撞安全性、动力电池热失控、跌落冲击断裂、深海管道疲劳等复杂场景，定制端到端自主智能仿真工作流。
-- **🛠️ 商业化运维与工程咨询**：专业 CAE 团队提供持续技术支持、企业定制化培训与现有研发工作流智能化升级改造。
+- **🏢 纯内网隔离与企业级 HPC 部署**：支持私有云、物理机集群及企业 HPC 作业调度系统（PBS、Slurm、LSF 等无缝集成）。
+- **📦 企业私有材料库集成与本构研发**：对接企业私有金属材料卡、高温合金、超弹性/粘弹性高分子材料数据库，内置严格反幻觉校验规则。
+- **🎯 复杂工况定制仿真管线**：针对复杂行业场景定制 Agent（汽车碰撞安全性、动力电池热失控多场耦合、跌落冲击动力学、深海管线复合密封等）。
+- **🛠️ 商业化 SLA 专家支持与培训**：企业 CAE 工作流迁移辅导、定制化功能迭代与专属技术保障服务。
 
-商业合作、技术试用与企业部署咨询：
-- **项目 Issue 交流**：[GitHub Issues](https://github.com/chenlei-gh/Abaqus-AI-Agent/issues)
-- **商务联络通道**：欢迎通过团队组织主页获取深度商业合作与方案沟通渠道。
+商业合作咨询、试用评估与授权：
+- **代码仓库交流**：提交 [GitHub Issues](https://github.com/chenlei-gh/Abaqus-AI-Agent/issues)
+- **直接商务对接**：通过组织主页获取核心团队直接联系方式。
 
 ---
 
 ## 开源协议
 
-本项目基于 **Apache 2.0 许可证** 开源 — 完整信息详见 [LICENSE](LICENSE) 文件。  
-完全允许商业衍生应用与学术研究，且所有工程结论受反伪造公理与单一出口契约严格保护。
+本项目采用 **Apache 2.0 许可证** 授权开源 —— 详见 [LICENSE](LICENSE) 文件。<br>
+全面允许商业集成、二次开发及学术科研，核心工程真实性由“严格反伪造公理”全程保障。
