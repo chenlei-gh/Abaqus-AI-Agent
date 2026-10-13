@@ -120,7 +120,7 @@ def _is_finite_number(v: Any) -> bool:
 
 
 def _is_unverified_or_expired_evidence(val: Any) -> bool:
-    """Check if dictionary or object carries explicit UNVERIFIED, invalid, or expired evidence markers."""
+    """Check if dictionary or object carries explicit UNVERIFIED, invalid, expired, or conflict evidence markers."""
     if isinstance(val, dict):
         status = str(val.get("status", "")).strip().upper()
         if status in ("UNVERIFIED", "EXPIRED", "CONFLICT", "INVALID"):
@@ -129,12 +129,21 @@ def _is_unverified_or_expired_evidence(val: Any) -> bool:
             return True
         if val.get("expired") is True:
             return True
+        if val.get("conflict") is True or str(val.get("conflict", "")).strip().lower() == "true":
+            return True
     return False
 
 
 VALID_LENGTH_UNITS = {
     "mm", "m", "cm", "in", "inch", "ft", "um", "nm",
     "毫米", "米", "厘米", "微米", "英寸",
+}
+
+VALID_DIMENSION_KEYS = {
+    "length", "width", "height", "thickness", "radius", "diameter", "depth",
+    "span", "chord", "section", "area", "dimension", "dimensions", "size",
+    "box", "value", "l", "w", "h", "t", "r", "d", "dx", "dy", "dz",
+    "parts", "nodes", "elements", "mesh",
 }
 
 VALID_BC_TYPES = {
@@ -152,6 +161,10 @@ VALID_LOAD_TYPES = {
 
 VALID_THERMAL_BC_TYPES = {
     "temperature", "heat_flux", "convection", "radiation", "film_condition", "flux",
+}
+
+VALID_CRITERIA_OPERATORS = {
+    "<=", "<", ">=", ">", "==", "=",
 }
 
 
@@ -228,11 +241,28 @@ def _validate_dimensions_entity(val: Any) -> Tuple[bool, Optional[Any], Optional
             if u not in VALID_LENGTH_UNITS:
                 return False, None, f"invalid_dimension_unit_{u}"
 
+        # Structured mesh/parts/nodes INP discrete geometry evidence
+        has_mesh_evidence = any(k in val for k in ("parts", "nodes", "elements", "mesh"))
+        if has_mesh_evidence:
+            valid_inp_items = {}
+            for k in ("parts", "nodes", "elements", "mesh"):
+                if k in val and val[k] and not isinstance(val[k], bool):
+                    valid_inp_items[k] = val[k]
+            if valid_inp_items:
+                return True, valid_inp_items, None
+
+        has_dimension_keys = any(str(k).strip().lower() in VALID_DIMENSION_KEYS for k in val.keys())
+        if not has_dimension_keys:
+            return False, None, "no_valid_dimension_keys_found"
+
         numeric_items = {}
         for k, v in val.items():
-            if k in ("status", "verified", "source", "evidence_type", "unit"):
+            if k in ("status", "verified", "source", "evidence_type", "unit", "conflict", "expired"):
                 continue
             if isinstance(v, bool):
+                continue
+            k_lower = str(k).strip().lower()
+            if k_lower not in VALID_DIMENSION_KEYS:
                 continue
             if _is_finite_positive_number(v):
                 numeric_items[k] = float(v)
@@ -302,6 +332,7 @@ def _validate_material_entity(val: Any) -> Tuple[bool, Optional[Any], Optional[s
         norm_mat = dict(val)
         if "name" in norm_mat:
             norm_mat["name"] = str(norm_mat["name"]).strip()
+        norm_mat["has_verified_properties"] = bool("elastic_modulus" in val and "poisson_ratio" in val)
         return True, norm_mat, None
 
     return False, None, "unsupported_material_type"
@@ -335,8 +366,15 @@ def _validate_boundary_conditions_entity(val: Any) -> Tuple[bool, Optional[Any],
         if raw_type is None or isinstance(raw_type, bool) or not str(raw_type).strip():
             return False, None, "missing_boundary_condition_type"
         bc_type = str(raw_type).strip().lower()
-        if not any(valid_t in bc_type for valid_t in VALID_BC_TYPES):
+        if bc_type not in VALID_BC_TYPES:
             return False, None, f"unsupported_boundary_condition_type_{bc_type}"
+
+        if bc_type == "displacement":
+            has_dofs = ("dofs" in item and item["dofs"] is not None) or any(
+                item.get(k) is not None for k in ("u1", "u2", "u3", "ur1", "ur2", "ur3")
+            )
+            if not has_dofs:
+                return False, None, "displacement_bc_missing_constrained_dofs"
 
         raw_region = item.get("region") or item.get("surface") or item.get("set") or item.get("face") or item.get("nodeset")
         if raw_region is None or isinstance(raw_region, bool) or not str(raw_region).strip():
@@ -417,7 +455,7 @@ def _validate_loads_entity(val: Any, require_region: bool = False) -> Tuple[bool
             else:
                 return False, None, "missing_load_type"
         load_type = str(raw_type).strip().lower()
-        if not any(valid_t in load_type for valid_t in VALID_LOAD_TYPES):
+        if load_type not in VALID_LOAD_TYPES:
             return False, None, f"unsupported_load_type_{load_type}"
 
         raw_region = item.get("region") or item.get("surface") or item.get("set") or item.get("face")
@@ -483,12 +521,12 @@ def _validate_thermal_bcs_entity(val: Any) -> Tuple[bool, Optional[Any], Optiona
             else:
                 return False, None, "missing_thermal_bc_type"
         th_type = str(raw_type).strip().lower()
-        if not any(valid_t in th_type for valid_t in VALID_THERMAL_BC_TYPES):
+        if th_type not in VALID_THERMAL_BC_TYPES:
             return False, None, f"unsupported_thermal_bc_type_{th_type}"
 
         val_mag = item.get("magnitude") or item.get("temperature") or item.get("heat_flux") or item.get("value")
-        if val_mag is not None and (isinstance(val_mag, bool) or not _is_finite_number(val_mag)):
-            return False, None, "invalid_thermal_magnitude"
+        if val_mag is None or isinstance(val_mag, bool) or not _is_finite_number(val_mag):
+            return False, None, "missing_or_invalid_thermal_magnitude"
 
         raw_region = item.get("region") or item.get("surface") or item.get("set") or item.get("face")
         if raw_region is None or isinstance(raw_region, bool) or not str(raw_region).strip():
@@ -497,9 +535,8 @@ def _validate_thermal_bcs_entity(val: Any) -> Tuple[bool, Optional[Any], Optiona
         norm: Dict[str, Any] = {
             "type": th_type,
             "region": str(raw_region).strip(),
+            "magnitude": float(val_mag),
         }
-        if val_mag is not None:
-            norm["magnitude"] = float(val_mag)
         return True, norm, None
 
     if isinstance(val, (list, tuple)):
@@ -548,6 +585,8 @@ def _validate_acceptance_criteria_entity(val: Any) -> Tuple[bool, Optional[Any],
             return False, None, "missing_metric_name"
 
         op = str(item.get("operator", "<=")).strip()
+        if op not in VALID_CRITERIA_OPERATORS:
+            return False, None, f"invalid_criteria_operator_{op}"
         norm: Dict[str, Any] = {
             "name": str(name).strip(),
             "metric": str(name).strip(),
@@ -654,6 +693,31 @@ def _detect_entity_conflicts(
                     f"while context defines {list(c_types)}. Please clarify load application type."
                 )
 
+            # Check for magnitude contradictions among matching load types (deviation > 5%)
+            for p_ld in p_loads:
+                pt = str(p_ld.get("type", "concentrated_force")).lower()
+                pm = p_ld.get("magnitude")
+                pu = str(p_ld.get("unit", "")).strip().upper()
+                if pm is not None and _is_finite_number(pm):
+                    pm_val = float(pm)
+                    if pu in ("KN", "千牛"):
+                        pm_val *= 1000.0
+                    for c_ld in c_load_norm:
+                        ct = str(c_ld.get("type", "")).lower()
+                        cm = c_ld.get("magnitude")
+                        cu = str(c_ld.get("unit", "")).strip().upper()
+                        if ct == pt and cm is not None and _is_finite_number(cm):
+                            cm_val = float(cm)
+                            if cu in ("KN", "千牛"):
+                                cm_val *= 1000.0
+                            diff = abs(pm_val - cm_val)
+                            max_val = max(abs(pm_val), abs(cm_val), 1e-6)
+                            if (diff / max_val) > 0.05:
+                                conflicts.append(
+                                    f"conflict_load_magnitude: Prompt specifies load magnitude {pm_val} "
+                                    f"while context defines {cm_val}. Please clarify applied load magnitude."
+                                )
+
     # 4. Boundary Condition Conflicts (e.g. Free-Free / Simple vs Encastre / Fixed)
     prompt_lower = prompt.lower()
     c_bcs = context.get("boundary_conditions") or context.get("constraints")
@@ -685,6 +749,67 @@ def _detect_entity_conflicts(
                 )
 
     return conflicts
+
+
+def _extract_prompt_boundary_conditions(prompt: str) -> List[Dict[str, Any]]:
+    """Extract explicit boundary condition entities and geometric regions from prompt text.
+    Avoids arbitrary FixedFace forgery by extracting explicitly stated geometric regions.
+    """
+    p_lower = prompt.lower()
+    bcs = []
+
+    # Check for adversarial negation or exclusion
+    negation_patterns = (
+        "忽略所有边界", "无需边界", "不要固定", "无需固定", "忽略固定",
+        "无约束", "忽略所有约束", "忽略边界", "无需约束", "无需任何约束",
+        "no boundary", "ignore boundary", "without boundary", "ignore constraints"
+    )
+    if any(neg in p_lower for neg in negation_patterns):
+        return []
+
+    # Check for encastre / fixed
+    has_fixed = any(w in p_lower for w in (
+        "固定", "固支", "encastre", "clamped", "fixed", "固支端", "固定端", "固定根部", "固定底"
+    ))
+    if has_fixed:
+        region = None
+        if any(w in p_lower for w in ("根部", "root")):
+            region = "RootFace"
+        elif any(w in p_lower for w in ("底端", "底面", "base", "bottom", "固定底", "fixed bottom", "fixed base")):
+            region = "BottomFace"
+        elif any(w in p_lower for w in ("左端", "left end", "left face")):
+            region = "LeftFace"
+        elif any(w in p_lower for w in ("右端", "right end", "right face")):
+            region = "RightFace"
+        elif any(w in p_lower for w in ("固定端", "固支端", "fixed end", "clamped end", "fixed-free", "fixed free")):
+            region = "RootFace"
+        elif "固定" in p_lower or "fixed" in p_lower or "encastre" in p_lower or "clamped" in p_lower:
+            region = "RootFace"
+
+        if region:
+            bcs.append({"type": "encastre", "region": region, "dofs": (1, 2, 3, 4, 5, 6)})
+
+    # Check for pinned / simply supported
+    has_pinned = any(w in p_lower for w in ("简支", "pinned", "simply supported", "simply-supported"))
+    if has_pinned:
+        region = "SupportEdges" if any(w in p_lower for w in ("两端", "both ends")) else "PinnedEdge"
+        bcs.append({"type": "pinned", "region": region, "dofs": (1, 2, 3)})
+
+    return bcs
+
+
+def _extract_prompt_load_region(prompt: str, load_type: str = "concentrated_force") -> Optional[str]:
+    """Extract explicitly stated geometric load region from prompt text."""
+    p_lower = prompt.lower()
+    if any(w in p_lower for w in ("端部", "自由端", "tip", "free end", "悬臂端")):
+        return "TipFace"
+    if any(w in p_lower for w in ("顶面", "上表面", "top surface", "top face", "top")):
+        return "TopFace"
+    if any(w in p_lower for w in ("中点", "中间", "midpoint", "center")):
+        return "Midpoint"
+    if any(w in p_lower for w in ("底面", "下表面", "bottom surface", "bottom")):
+        return "BottomFace"
+    return None
 
 
 def _validate_numeric(
@@ -1342,21 +1467,33 @@ class EngineeringIntentRouter:
         if rules["require_material"] and not mat_ok:
             missing.append("missing_material_specification")
 
-        # 3. Boundary Constraints: Requires NLP well-constrained judgment or structured BC entities
+        # 3. Boundary Constraints: Requires verified context BC or prompt boundary conditions with explicit regions
         # Rejects nominal boolean flags like is_well_constrained: True or has_constraints: True!
         bc_ok = False
-        if bundle.is_well_constrained_noul.is_yes:
+        c_bc = ctx.get("boundary_conditions") or ctx.get("constraints")
+        c_bc_ok, c_bc_norm, _ = _validate_boundary_conditions_entity(c_bc)
+        if c_bc_ok:
             bc_ok = True
-            verified_entities["evidence_sources"]["boundary_conditions"] = "prompt"
+            verified_entities["evidence_sources"]["boundary_conditions"] = "context"
             verified_entities["evidence_status"]["boundary_conditions"] = "VERIFIED"
+            verified_entities["normalized"]["boundary_conditions"] = c_bc_norm
         else:
-            c_bc = ctx.get("boundary_conditions") or ctx.get("constraints")
-            c_bc_ok, c_bc_norm, _ = _validate_boundary_conditions_entity(c_bc)
-            if c_bc_ok:
-                bc_ok = True
-                verified_entities["evidence_sources"]["boundary_conditions"] = "context"
-                verified_entities["evidence_status"]["boundary_conditions"] = "VERIFIED"
-                verified_entities["normalized"]["boundary_conditions"] = c_bc_norm
+            has_bc_negation = any(neg in prompt.lower() for neg in (
+                "忽略所有边界", "无需边界", "不要固定", "无需固定", "忽略固定",
+                "无约束", "忽略所有约束", "忽略边界", "无需约束", "无需任何约束",
+                "no boundary", "ignore boundary", "without boundary", "ignore constraints"
+            ))
+            if not has_bc_negation:
+                prompt_bcs = _extract_prompt_boundary_conditions(prompt)
+                if prompt_bcs:
+                    bc_ok = True
+                    verified_entities["evidence_sources"]["boundary_conditions"] = "prompt"
+                    verified_entities["evidence_status"]["boundary_conditions"] = "VERIFIED"
+                    verified_entities["normalized"]["boundary_conditions"] = prompt_bcs
+                elif bundle.is_well_constrained_noul.is_yes:
+                    bc_ok = True
+                    verified_entities["evidence_sources"]["boundary_conditions"] = "prompt"
+                    verified_entities["evidence_status"]["boundary_conditions"] = "VERIFIED"
 
         if rules["require_constraints"] and not bc_ok:
             missing.append("missing_boundary_constraints")
@@ -1923,28 +2060,45 @@ class EngineeringIntentRouter:
         # Resolve Material: Strictly consume verified normalized entity or extracted prompt parameters (Zero Raw Context Fallback!)
         material = norm.get("material") or params.get("material")
 
-        # Construct boundary conditions tuple: Strictly consume verified normalized entity or prompt judgment
+        # Construct boundary conditions tuple:
+        # Prioritize verified normalized context entities or explicit prompt boundary regions (Zero Forgery!)
         bcs = []
-        if bundle.is_well_constrained_noul.is_yes:
-            bcs.append({"type": "encastre", "region": "FixedFace", "dofs": (1, 2, 3, 4, 5, 6)})
-        elif norm.get("boundary_conditions"):
+        if norm.get("boundary_conditions"):
             bcs.extend(norm["boundary_conditions"])
+        else:
+            prompt_bcs = _extract_prompt_boundary_conditions(prompt)
+            if prompt_bcs:
+                bcs.extend(prompt_bcs)
 
-        # Construct loads tuple: Strictly consume extracted prompt loads or verified normalized loads
+        # Construct loads tuple:
+        # Prioritize verified normalized context loads or prompt loads with explicitly extracted regions
         loads = []
-        for ld in params.get("loads", []):
-            mag = ld["magnitude"]
-            u = ld["unit"]
-            if u in ("KN", "千牛"):
-                mag *= 1000.0
-                loads.append({"type": "concentrated_force", "region": "TipFace", "magnitude": mag, "direction": "-Y"})
-            elif u in ("N", "牛"):
-                loads.append({"type": "concentrated_force", "region": "TipFace", "magnitude": mag, "direction": "-Y"})
-            elif u in ("MPA", "KPA"):
-                if any(w in prompt.lower() for w in ("压力", "压强", "pressure")):
-                    loads.append({"type": "pressure", "region": "TopFace", "magnitude": mag})
-        if not loads and norm.get("loads"):
+        if norm.get("loads"):
             loads.extend(norm["loads"])
+        else:
+            for ld in params.get("loads", []):
+                mag = ld["magnitude"]
+                u = ld["unit"]
+                if u in ("KN", "千牛"):
+                    mag *= 1000.0
+                    reg = _extract_prompt_load_region(prompt, "concentrated_force")
+                    ld_dict = {"type": "concentrated_force", "magnitude": mag, "direction": "-Y"}
+                    if reg:
+                        ld_dict["region"] = reg
+                    loads.append(ld_dict)
+                elif u in ("N", "牛"):
+                    reg = _extract_prompt_load_region(prompt, "concentrated_force")
+                    ld_dict = {"type": "concentrated_force", "magnitude": mag, "direction": "-Y"}
+                    if reg:
+                        ld_dict["region"] = reg
+                    loads.append(ld_dict)
+                elif u in ("MPA", "KPA"):
+                    if any(w in prompt.lower() for w in ("压力", "压强", "pressure")):
+                        reg = _extract_prompt_load_region(prompt, "pressure")
+                        ld_dict = {"type": "pressure", "magnitude": mag}
+                        if reg:
+                            ld_dict["region"] = reg
+                        loads.append(ld_dict)
 
         # Construct acceptance criteria tuple: Strictly consume verified normalized criteria or prompt criteria
         crit_list = []
@@ -2012,25 +2166,40 @@ class EngineeringIntentRouter:
         material = norm.get("material") or params.get("material")
 
         bcs = []
-        if bundle.is_well_constrained_noul.is_yes:
-            bcs.append({"type": "encastre", "region": "FixedFace", "dofs": (1, 2, 3, 4, 5, 6)})
-        elif norm.get("boundary_conditions"):
+        if norm.get("boundary_conditions"):
             bcs.extend(norm["boundary_conditions"])
+        else:
+            prompt_bcs = _extract_prompt_boundary_conditions(prompt)
+            if prompt_bcs:
+                bcs.extend(prompt_bcs)
 
         loads = []
-        for ld in params.get("loads", []):
-            mag = ld["magnitude"]
-            u = ld["unit"]
-            if u in ("KN", "千牛"):
-                mag *= 1000.0
-                loads.append({"type": "concentrated_force", "region": "TipFace", "magnitude": mag, "direction": "-Y"})
-            elif u in ("N", "牛"):
-                loads.append({"type": "concentrated_force", "region": "TipFace", "magnitude": mag, "direction": "-Y"})
-            elif u in ("MPA", "KPA"):
-                if any(w in prompt.lower() for w in ("压力", "压强", "pressure")):
-                    loads.append({"type": "pressure", "region": "TopFace", "magnitude": mag})
-        if not loads and norm.get("loads"):
+        if norm.get("loads"):
             loads.extend(norm["loads"])
+        else:
+            for ld in params.get("loads", []):
+                mag = ld["magnitude"]
+                u = ld["unit"]
+                if u in ("KN", "千牛"):
+                    mag *= 1000.0
+                    reg = _extract_prompt_load_region(prompt, "concentrated_force")
+                    ld_dict = {"type": "concentrated_force", "magnitude": mag, "direction": "-Y"}
+                    if reg:
+                        ld_dict["region"] = reg
+                    loads.append(ld_dict)
+                elif u in ("N", "牛"):
+                    reg = _extract_prompt_load_region(prompt, "concentrated_force")
+                    ld_dict = {"type": "concentrated_force", "magnitude": mag, "direction": "-Y"}
+                    if reg:
+                        ld_dict["region"] = reg
+                    loads.append(ld_dict)
+                elif u in ("MPA", "KPA"):
+                    if any(w in prompt.lower() for w in ("压力", "压强", "pressure")):
+                        reg = _extract_prompt_load_region(prompt, "pressure")
+                        ld_dict = {"type": "pressure", "magnitude": mag}
+                        if reg:
+                            ld_dict["region"] = reg
+                        loads.append(ld_dict)
 
         crit_list = []
         for c in params.get("acceptance_criteria", []):

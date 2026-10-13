@@ -473,18 +473,18 @@ P1.0 产品主入口已彻底消除高层自然语言需求与底层 20 个 L4 �
 - **CAE/INP 实体证据有效性核验与物理语义防呆 (Context Merge)**：
   - 严禁单凭 `has_model: True`、`has_geometry: True`、`has_material: True`、`has_constraints: True` 等名义布尔标记直接放行硬前置条件；
   - **全实体严格类型化结构防呆校验**：
-    - 几何尺寸：数值必须为有限正数（拒绝 $<=0$、NaN、Inf），且必须具备合法的长度单位（如 `mm`, `m`, `cm`, `in`），非法单位坚决拒绝；
-    - 材料属性：弹性模量必须正有限，泊松比必须严格满足 $0.0 \le \nu < 0.5$（拒绝 $\nu \ge 0.5$ 体积刚度奇异及负值）；
-    - 边界条件：必须具备明确且受支持的约束类型（如 `encastre`, `fixed`, `pinned`, `roller`, `symmetry`, `antisymmetry`, `displacement` 等）与有效几何区域（`region`/`surface`/`set`/`face`），位移约束必须包含受控自由度；严禁将任意非空字符串伪造成 `FixedFace`，严禁无关键属性字典通过校验；
-    - 载荷实体：必须包含明确的有限非零数值幅值（`magnitude`，严禁布尔值、NaN、Inf）、受支持载荷类型（如 `concentrated_force`, `pressure`, `moment`, `surface_traction`, `body_force`, `gravity` 等）及目标区域（`region`/`surface`/`set`）；缺少幅值或区域的实体坚决拒绝；
-    - 热边界与验收准则：严格校验数值有限性与物理指标合法性；
-    - 证据有效性标记：标有 `status: "UNVERIFIED"`、`verified: False`、`expired: True`、`conflict: True` 的证据严禁放行；
-- **零原始上下文回退（Zero Raw Context Fallback）**：
+    - 几何尺寸：数值必须为有限正数（拒绝 $<=0$、NaN、Inf），字段键必须严格匹配合法尺寸键集合（`VALID_DIMENSION_KEYS`，如 length/width/height/box 等，拒绝 `stress: 300` 等非尺寸字典），且必须具备合法的长度单位（如 `mm`, `m`, `cm`, `in`），非法单位坚决拒绝；
+    - 材料属性：弹性模量必须正有限，泊松比必须严格满足 $0.0 \le \nu < 0.5$（拒绝 $\nu \ge 0.5$ 体积刚度奇异及负值）；严格区分“材料名称识别”（named string）与“物理属性验证”（verified properties），物理求解域必须依赖已验证的弹性属性；
+    - 边界条件：必须具备明确且受支持的约束类型（精确匹配 `VALID_BC_TYPES`，拒绝 `not_fixed` 等子串伪造）与有效几何区域（`region`/`surface`/`set`/`face`），位移约束（`displacement`）必须强制包含受控自由度（`dofs` 或 `u1`..`u3`）；严禁将任意非空字符串或无区域约束伪造成 `FixedFace`，严禁无关键属性字典通过校验；
+    - 载荷实体：必须包含明确的有限非零数值幅值（`magnitude`，严禁布尔值、NaN、Inf）、受支持载荷类型（精确匹配 `VALID_LOAD_TYPES`，拒绝 `not_pressure` 等子串伪造）及目标区域；缺少幅值或区域的实体坚决拒绝；
+    - 热边界与验收准则：热边界必须强制包含有限数值幅值（温度/热流）；验收准则操作符必须严格限定在合法比较运算符集合（`VALID_CRITERIA_OPERATORS` = `<=`, `<`, `>=`, `>`, `==`, `=`）；
+    - 证据有效性标记：标有 `status: "UNVERIFIED"`、`verified: False`、`expired: True`、`conflict: True`（含布尔值与字符串）的证据严禁放行；
+- **零原始上下文回退与零虚构几何区域（Zero Raw Context Fallback & Geometric Region De-forgery）**：
   - 路由与 Intent 构造阶段彻底断绝从未经验证的 `context` 字典直接回退提取数据（Zero Raw Context Fallback）；
-  - `_build_intent_from_decisions` 与 `_build_draft_intent_from_decisions` 只能消费经由前置条件验证通过并完成规范化的统一实体结果（`verified_entities["normalized"]`）以及当前 prompt/decisions 提取的合法参数；
-  - 任何校验失败或缺失的实体不得在下游私自回退补齐；
+  - `_build_intent_from_decisions` 与 `_build_draft_intent_from_decisions` 只能消费经由前置条件验证通过并完成规范化的统一实体结果（`verified_entities["normalized"]`）以及当前 prompt 提取的合法参数与显式几何区域；
+  - **彻底杜绝虚构几何区域**：严禁在无真实证据或无显式 Prompt 区域声明时，向 Intent 中注入默认虚构的 `FixedFace`、`TipFace` 或 `TopFace`；无法确定具体几何区域时，坚决 fail-closed 进入澄清门禁（`NEEDS_CLARIFICATION`）；
 - **多维冲突检测（Prompt vs Context Conflict Detection）**：
-  - 覆盖材料类别冲突、物理域冲突、载荷类型/幅值冲突、约束自由度冲突与单位系统冲突；发生工程冲突时严禁静默覆盖，必须触发 `NEEDS_CLARIFICATION` 要求工程师确认；
+  - 覆盖材料类别冲突、物理域冲突、载荷类型冲突、**同类型载荷幅值冲突（相对偏差 $> 5\%$ 触发 `conflict_load_magnitude`）**、约束自由度冲突与单位系统冲突；发生工程冲突时严禁静默覆盖，必须触发 `NEEDS_CLARIFICATION` 要求工程师确认；
 - **意图路由与求解准备的严格边界及全入口 DraftIntent 阻断**：
   - 意图路由通过（`status == ROUTED`）仅表示自然语言需求语义与硬输入前置条件完备；
   - 任何带 `is_executable=False` 的 `DraftEngineeringIntent` 在所有求解与编译入口（`solve_requirement`、`compile_engineering_intent`、执行后端等）必须被严格阻断；
@@ -562,7 +562,7 @@ P1.0 产品主入口已彻底消除高层自然语言需求与底层 20 个 L4 �
 | **REQ-P1-042** | 自愈审计追踪与防伪红线 | P1.4 | 修复前后两次 Run | 完整 Diff 对比明细 | Tier B | 严禁静默覆盖首次失败记录 | 📋 **PLANNED** |
 | **REQ-P1-043** | JEV 模式隔离与防静默降级 | P1.4 | 运行模式配置与提示词 | 强类型决策与状态 | Tier B | Live 模式异常坚决 Fail-Closed | 🟢 **QUALIFIED** |
 | **REQ-P1-044** | 严格数值校验、载荷对齐与全链路审计 | P1.4 | 意图提问与响应载荷 | 完整审计束与来源标记 | Tier B | 概率分布归一化 sum=1.0、深度脱敏 | 🟢 **QUALIFIED** |
-| **REQ-P1-045** | 独立工程评测系统与 Context Merge 审计 | P1.4 | 8大工程维度基准评测 | 评测指标、严格分母、精确率与实体防呆 | Tier B | 8维度22例严格分母、双向召回精确率与冲突证据拦截闭环 | 🟢 **QUALIFIED** |
+| **REQ-P1-045** | 独立工程评测系统与 Context Merge 审计 | P1.4 | 8大工程维度基准评测 | 评测指标、严格分母、精确率与实体防呆 | Tier B | 8维度全指标分母分立、零虚构几何区域、精确白名单与双向实体防呆闭环 | 🟢 **QUALIFIED** |
 | **REQ-P1-046** | 开源核心独立运行与零外部依赖 | P1.4 | 纯离线/无网络环境输入 | 独立 Intent/编译/求解/报告 | Tier A | 核心闭环严禁外部服务阻断 | 🟢 **QUALIFIED (Offline Core Hermetic)** |
 | **REQ-P1-047** | 可选外部服务适配器协议与响应归一化 | P1.4 | 通用意图提供者接口与配置 | 可插拔适配器加载与解析 | Tier B | 未安装/未配置时保持 offline 基线 | 🟢 **QUALIFIED (Protocol Contract Closed)** |
 | **REQ-P1-048** | 专有服务接入隔离与零专有泄露 | P1.4 | 公开核心代码库 | 供应商中立抽象与纯净核心 | Tier A | 严禁硬编码专有端点与私有协议 | 🟢 **QUALIFIED (Code Tree Clean)** |

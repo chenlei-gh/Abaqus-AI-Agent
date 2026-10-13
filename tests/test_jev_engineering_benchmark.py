@@ -259,6 +259,116 @@ def test_draft_intent_solver_execution_blocked_in_agent():
     assert res.summary_card.get("status") == "DRAFT_INTENT_BLOCKED"
 
 
+def test_evidence_conflict_flag_rejection():
+    """Verify that evidence with explicit conflict: True marker is rejected."""
+    from abaqus_ai_agent.typesafe_intent import _is_unverified_or_expired_evidence, _validate_dimensions_entity
+
+    assert _is_unverified_or_expired_evidence({"conflict": True}) is True
+    assert _is_unverified_or_expired_evidence({"conflict": "true"}) is True
+    assert _is_unverified_or_expired_evidence({"conflict": False}) is False
+
+    ok, _, err = _validate_dimensions_entity({"length": 100.0, "conflict": True})
+    assert ok is False
+    assert err == "unverified_or_expired_evidence"
+
+
+def test_boundary_condition_strict_type_and_displacement_dofs():
+    """Verify that substring BC types (e.g. not_fixed) and displacement BCs missing DOFs are rejected."""
+    from abaqus_ai_agent.typesafe_intent import _validate_boundary_conditions_entity
+
+    # Substring illegal type
+    ok, _, err = _validate_boundary_conditions_entity({"type": "not_fixed", "region": "RootFace"})
+    assert ok is False
+    assert "unsupported_boundary_condition_type_not_fixed" in str(err)
+
+    # Displacement BC missing DOFs
+    ok, _, err = _validate_boundary_conditions_entity({"type": "displacement", "region": "RootFace"})
+    assert ok is False
+    assert err == "displacement_bc_missing_constrained_dofs"
+
+    # Displacement BC with valid DOFs
+    ok, norm, _ = _validate_boundary_conditions_entity({"type": "displacement", "region": "RootFace", "dofs": (1, 2, 3)})
+    assert ok is True
+    assert norm[0]["type"] == "displacement"
+    assert norm[0]["dofs"] == (1, 2, 3)
+
+
+def test_load_type_strict_matching_and_thermal_bc_magnitude():
+    """Verify exact load type whitelist and mandatory thermal magnitude requirement."""
+    from abaqus_ai_agent.typesafe_intent import _validate_loads_entity, _validate_thermal_bcs_entity
+
+    # Substring illegal load type
+    ok, _, err = _validate_loads_entity({"type": "not_pressure", "magnitude": 100.0, "region": "TopFace"}, require_region=True)
+    assert ok is False
+    assert "unsupported_load_type_not_pressure" in str(err)
+
+    # Thermal BC missing magnitude must be rejected
+    ok, _, err = _validate_thermal_bcs_entity({"type": "temperature", "region": "HotEnd"})
+    assert ok is False
+    assert err == "missing_or_invalid_thermal_magnitude"
+
+    # Valid thermal BC with magnitude
+    ok, norm, _ = _validate_thermal_bcs_entity({"type": "temperature", "region": "HotEnd", "magnitude": 100.0})
+    assert ok is True
+    assert norm[0]["magnitude"] == 100.0
+
+
+def test_acceptance_criteria_operator_whitelist():
+    """Verify that criteria with non-whitelisted operators are strictly rejected."""
+    from abaqus_ai_agent.typesafe_intent import _validate_acceptance_criteria_entity
+
+    ok, _, err = _validate_acceptance_criteria_entity({"metric": "stress", "limit": 300.0, "operator": "~="})
+    assert ok is False
+    assert "invalid_criteria_operator_~=" in str(err)
+
+    ok, norm, _ = _validate_acceptance_criteria_entity({"metric": "stress", "limit": 300.0, "operator": "<="})
+    assert ok is True
+    assert norm[0]["operator"] == "<="
+
+
+def test_dimension_keys_whitelist_rejection():
+    """Verify that dicts without recognizable dimension keys (e.g. stress: 300) are rejected."""
+    from abaqus_ai_agent.typesafe_intent import _validate_dimensions_entity
+
+    ok, _, err = _validate_dimensions_entity({"stress": 300.0})
+    assert ok is False
+    assert err == "no_valid_dimension_keys_found"
+
+    ok, norm, _ = _validate_dimensions_entity({"length": 100.0, "width": 20.0})
+    assert ok is True
+    assert norm["length"] == 100.0
+
+
+def test_load_magnitude_conflict_detection():
+    """Verify that same load type with conflicting magnitude (>5% deviation) triggers clarification."""
+    router = JevIntentRouter(mode="offline")
+    prompt = "100mm悬臂梁端部受1000N垂直载荷，材料为结构钢，固定根部，校核端部挠度不超过2.5mm。"
+    context = {
+        "loads": [{"type": "concentrated_force", "region": "TipFace", "magnitude": 5000.0}],
+    }
+    res = router.route(prompt, context=context)
+    assert res.status == "NEEDS_CLARIFICATION"
+    assert any("conflict_load_magnitude" in req for req in res.missing_requirements)
+
+
+def test_geometric_region_de_forgery_contract():
+    """Verify that intent construction never forges FixedFace when explicit region is not provided,
+    and preserves verified context boundary regions without overwriting them."""
+    router = JevIntentRouter(mode="offline")
+
+    # 1. When context provides verified boundary conditions on custom region (e.g. Surface-Root)
+    custom_ctx = {
+        "boundary_conditions": [{"type": "encastre", "region": "Surface-Root", "dofs": (1, 2, 3, 4, 5, 6)}],
+    }
+    prompt = "100mm悬臂梁端部受1000N垂直载荷，材料为结构钢，校核端部挠度不超过2.5mm。"
+    res = router.route(prompt, context=custom_ctx)
+    assert res.status == "ROUTED"
+    assert res.intent is not None
+    # Must preserve the verified context region "Surface-Root", never overwrite with "FixedFace"
+    assert any(bc.get("region") == "Surface-Root" for bc in res.intent.boundary_conditions)
+    assert not any(bc.get("region") == "FixedFace" for bc in res.intent.boundary_conditions)
+
+
 def test_draft_intent_compiler_rejected():
     """Verify that compiler compile_engineering_intent strictly rejects non-executable intent."""
     from abaqus_ai_agent.contracts.intent import EngineeringIntent
