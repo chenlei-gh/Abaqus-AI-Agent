@@ -2916,41 +2916,25 @@ Abaqus-AI-Agent/
 
 ### 35.2 实施任务分解与执行清单
 
-- [ ] **任务 35.1: 报告图片解析严格化 (`src/abaqus_ai_agent/reporting/renderer.py`)**：
+- [x] **任务 35.1: 报告图片解析严格化 (`src/abaqus_ai_agent/reporting/renderer.py`)**：
   - 重构 `_resolve_image_path(path_str, run_delivery_dir=None, is_test_mode=False)`；
-  - 移除 `test_assets/`、`machine_validation/` 及 `repo_root.glob(f"**/{p.name}")` 等越界模糊回退；
-  - 增加图片缺失时的友好占位与审计告警展示；
-  - 编写专门测试用例 `tests/test_renderer_image_security.py`（覆盖同名图冲突与缺失图阻断）。
-- [ ] **任务 35.2: 生产执行硬隔离门禁加固 (`src/abaqus_ai_agent/execution/analysis_run.py`)**：
-  - 在 `AnalysisRunner.run` 中，当 `require_production=True` 时增加显式断言：
-    ```python
-    if require_production and project_context is None:
-        raise RuntimeError(
-            "[Production Guard] Execution in production mode requires a valid ExternalProjectContext. "
-            "Silent fallback to repository-internal runs/ is strictly prohibited."
-        )
-    ```
-  - 同步检查 `agent.py` 与各 CLI 生产执行链路，确保上下文显式透传；
-  - 编写生产模式隔离阻断负向测试。
-- [ ] **任务 35.3: 动图时间序列保真与末帧保留修复 (`src/abaqus_ai_agent/execution/odb_rendering.py`)**：
-  - 修复多帧采样逻辑：
-    ```python
-    chosen_indices = list(range(0, n_total_frames, stride))
-    if (n_total_frames - 1) not in chosen_indices:
-        chosen_indices.append(n_total_frames - 1)
-    if len(chosen_indices) > target_samples:
-        # 智能重采样保证首帧 (0) 与末帧 (n_total_frames - 1) 绝对保留
-        step_factor = (len(chosen_indices) - 1) / (target_samples - 1)
-        resampled = [chosen_indices[int(round(i * step_factor))] for i in range(target_samples)]
-        chosen_indices = sorted(list(set(resampled)))
-        if (n_total_frames - 1) not in chosen_indices:
-            chosen_indices[-1] = n_total_frames - 1
-    ```
-  - 增加 `animation_mode: str = "full_timeline"` 支持；
-  - 编写采样末帧保全与双模态测试。
-- [ ] **任务 35.4: 用户已有模型输入通道与后处理模式收口**：
-  - 明确梳理用户 `.inp`、`.odb`、`.cae` 三类输入契约；
-  - 形成标准操作接口文档与测试用例验证。
-- [ ] **任务 35.5: 全量回归与 GitHub 同步**：
-  - 运行全量 `pytest` 回归（维持 1150+ 项 100% PASS）；
+  - 彻底移除对 `machine_validation/`、`test_assets/` 及 `repo_root.glob(f"**/{p.name}")` 的全局同名模糊搜索；
+  - 仅接受真实有效绝对路径或相对于本次交付目录的相对路径，图片丢失时安全降级渲染受控占位符；
+  - 编写防同名错图与缺失降级专项负向测试并通过。
+- [x] **任务 35.2: 生产执行硬隔离门禁加固 (`src/abaqus_ai_agent/execution/analysis_run.py` / `agent.py`)**：
+  - 在 `AnalysisRunner.run` 增加硬性门禁：`require_production=True` 且 `project_context is None` 时抛出 `RuntimeError("[Production Guard]...")`；
+  - 生产模式下严禁静默回退向仓库内 `runs/` 与 `deliverables/`；
+  - 在 `agent.py` 与管道中强制外部工程上下文显式透传与合法性校验；
+  - 编写生产模式隔离阻断负向测试并通过。
+- [x] **任务 35.3: 动图时间序列保真与末帧保留修复 (`src/abaqus_ai_agent/execution/odb_rendering.py`)**：
+  - 修复多帧采样切片截断缺陷：引入智能重采样与末帧强保全算法，100% 确保首帧与末帧包含在输出帧中；
+  - 扩展 `ContourPlotRequest` 支持 `animation_mode: str = "full_timeline"`（忠实时程保留全物理时间历程）与 `"active_presentation"`（活跃演示智能修剪静态尾段）；
+  - 在 `odb_rendering.py` 与 `agent.py` 贯穿双模态参数支持并增加自动化回归测试。
+- [x] **任务 35.4: 用户已有模型输入通道与后处理模式收口 (`src/abaqus_ai_agent/execution/input_modes.py`)**：
+  - 明确梳理并实现用户 `.inp`（直接求解无多余建模）、`.odb`（纯只读后处理严禁求解）、`.cae`（`openMdb` 打开工作副本，原件只读保护）三大通道；
+  - 编写标准化操作与安全契约文档 `docs/user-model-input-guide.md`；
+  - 编写针对性单元与集成测试用例 `tests/test_input_modes.py` 并 100% 通过。
+- [x] **任务 35.5: 全量回归与 GitHub 同步**：
+  - 运行全量 `pytest` 回归（**1161 passed**，0 failed, 0 skipped，持续维持零缺陷）；
+  - 受控资产 `machine_validation/` 零污染回滚保护；
   - 提交并推送至 GitHub 远程 `main` 分支。

@@ -46,6 +46,22 @@ class ExternalProjectContext:
     evidence_dir: Path
     delivery_dir: Path
 
+    @classmethod
+    def create(
+        cls,
+        project_root: Union[str, Path],
+        project_name: Optional[str] = None,
+        enforce_outside_repo: bool = True,
+        ensure_dirs: bool = True,
+    ) -> "ExternalProjectContext":
+        """Factory method to construct, validate, and initialize an ExternalProjectContext."""
+        return create_external_project_context(
+            project_root=project_root,
+            project_name=project_name,
+            enforce_outside_repo=enforce_outside_repo,
+            ensure_dirs=ensure_dirs,
+        )
+
     def assert_within_project(self, target_path: Path) -> Path:
         """Enforce strict path containment to prevent path traversal outside project_root."""
         resolved = target_path.resolve()

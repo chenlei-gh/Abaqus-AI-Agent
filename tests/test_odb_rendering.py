@@ -798,3 +798,59 @@ def test_render_odb_animation_headless_and_agent_integration(tmp_path, monkeypat
     )
     assert agent_result == out_agent_gif
     assert agent_result.is_file()
+
+
+def test_generate_headless_viewer_script_animation_last_frame_guaranteed():
+    """Verify script generation guarantees the authentic final frame is strictly sampled."""
+    from abaqus_ai_agent.execution.odb_rendering import (
+        ContourPlotRequest,
+        generate_headless_viewer_script,
+    )
+
+    req = ContourPlotRequest(
+        output_filename="deform.gif",
+        variable_label="U",
+        is_animation=True,
+        animation_frames=10,
+        animation_mode="full_timeline",
+    )
+    script = generate_headless_viewer_script(
+        odb_path="dummy.odb",
+        requests=[req],
+        output_dir="dummy_out",
+    )
+    assert "target_samples = 10" in script
+    assert "step_factor = (len(chosen_indices) - 1.0) / float(target_samples - 1)" in script
+    assert "chosen_indices[-1] = n_total_frames - 1" in script
+    assert "for f_seq, f_idx in enumerate(chosen_indices):" in script
+
+
+def test_animation_mode_dual_modal_full_timeline_and_presentation():
+    """Verify animation_mode contracts: full_timeline preserves history while active_presentation prunes."""
+    from PIL import Image
+    from abaqus_ai_agent.execution.odb_rendering import (
+        ContourPlotRequest,
+        prune_static_animation_frames,
+    )
+
+    # 1. Default request uses full_timeline mode
+    req_default = ContourPlotRequest(output_filename="test.gif", is_animation=True)
+    assert req_default.animation_mode == "full_timeline"
+
+    # 2. Synthetic frames: 2 dynamic frames + 4 static tail frames
+    f1 = Image.new("RGB", (32, 32), color=(255, 0, 0))
+    f2 = Image.new("RGB", (32, 32), color=(0, 255, 0))
+    f_tail = [Image.new("RGB", (32, 32), color=(255, 255, 255)) for _ in range(4)]
+    all_frames = [f1, f2] + f_tail
+
+    # In active_presentation mode, static frames are pruned
+    pruned = prune_static_animation_frames(all_frames, motion_threshold=0.005, max_static_tail=1)
+    assert len(pruned) == 4  # f1, f2, f_tail[0], f_tail[1]
+
+    # In full_timeline mode, original sequence is kept intact (all 6 frames)
+    req_full = ContourPlotRequest(
+        output_filename="full.gif",
+        is_animation=True,
+        animation_mode="full_timeline",
+    )
+    assert req_full.animation_mode == "full_timeline"

@@ -78,6 +78,7 @@ class AbaqusAIAgent:
         frames: int = 24,
         duration_ms: int = 100,
         viewport_zoom_factor: Optional[float] = None,
+        animation_mode: str = "full_timeline",
         active_motion_only: bool = True,
         motion_threshold: float = 0.005,
         launcher: Optional[str] = None,
@@ -102,10 +103,65 @@ class AbaqusAIAgent:
             frames=frames,
             duration_ms=duration_ms,
             viewport_zoom_factor=viewport_zoom_factor,
+            animation_mode=animation_mode,
             active_motion_only=active_motion_only,
             motion_threshold=motion_threshold,
             launcher=eff_launcher,
             timeout=timeout,
+        )
+
+    def solve_user_inp(
+        self,
+        inp_path: Any,
+        job_name: Optional[str] = None,
+        project_context: Optional[Any] = None,
+        timeout: Optional[int] = None,
+        run_id: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Directly solve a user-provided .inp file without redundant Python modeling."""
+        from .execution.input_modes import solve_user_inp
+        return solve_user_inp(
+            executor=self.executor,
+            inp_path=inp_path,
+            job_name=job_name,
+            project_context=project_context,
+            timeout=timeout,
+            run_id=run_id,
+        )
+
+    def postprocess_user_odb(
+        self,
+        odb_path: Any,
+        requirements: Sequence[Any] = (),
+        project_context: Optional[Any] = None,
+        run_id: Optional[str] = None,
+        timeout_seconds: int = 120,
+    ) -> Dict[str, Any]:
+        """Perform strictly read-only postprocessing and metric extraction on a user-provided .odb."""
+        from .execution.input_modes import postprocess_user_odb
+        return postprocess_user_odb(
+            odb_path=odb_path,
+            project_context=project_context,
+            requirements=requirements,
+            run_id=run_id,
+            timeout_seconds=timeout_seconds,
+        )
+
+    def prepare_user_cae(
+        self,
+        cae_path: Any,
+        project_context: Optional[Any] = None,
+        target_filename: Optional[str] = None,
+        overwrite: bool = False,
+    ) -> Dict[str, Any]:
+        """Open and prepare an authentic working copy of a user-provided .cae database."""
+        from .execution.input_modes import open_user_cae_working_copy
+        return open_user_cae_working_copy(
+            cae_path=cae_path,
+            project_context=project_context,
+            executor=self.executor,
+            target_filename=target_filename,
+            overwrite=overwrite,
         )
 
     def extract_result_intelligence(

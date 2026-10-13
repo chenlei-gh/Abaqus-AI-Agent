@@ -517,6 +517,7 @@ class ContourPlotRequest:
     animation_duration_ms: int = 120
     is_ping_pong: Optional[bool] = None
     viewport_zoom_factor: Optional[float] = None
+    animation_mode: str = "full_timeline"  # "full_timeline" (忠实时程完整保留) or "active_presentation" (活跃演示修剪尾帧)
     active_motion_only: bool = True
     motion_threshold: float = 0.005
 
@@ -784,7 +785,13 @@ def generate_headless_viewer_script(
                 "        chosen_indices = list(range(0, n_total_frames, stride))",
                 "        if (n_total_frames - 1) not in chosen_indices:",
                 "            chosen_indices.append(n_total_frames - 1)",
-                f"        for f_seq, f_idx in enumerate(chosen_indices[:target_samples]):",
+                "        if len(chosen_indices) > target_samples:",
+                "            step_factor = (len(chosen_indices) - 1.0) / float(target_samples - 1)",
+                "            resampled = [chosen_indices[int(round(i * step_factor))] for i in range(target_samples)]",
+                "            chosen_indices = sorted(list(set(resampled)))",
+                "            if (n_total_frames - 1) not in chosen_indices:",
+                "                chosen_indices[-1] = n_total_frames - 1",
+                "        for f_seq, f_idx in enumerate(chosen_indices):",
                 "            vp.odbDisplay.setFrame(step=target_step.name, frame=f_idx)",
                 "            frame_target = os.path.join(anim_frames_dir, 'frame_%03d' % f_seq)",
                 "            session.printToFile(fileName=frame_target, format=PNG, canvasObjects=(vp,))",
@@ -906,7 +913,13 @@ def render_odb_contours_headless(
                             except Exception:
                                 pass
                         if frames:
-                            if getattr(req, "active_motion_only", True):
+                            anim_mode = getattr(req, "animation_mode", "full_timeline")
+                            if anim_mode == "active_presentation":
+                                m_thresh = float(getattr(req, "motion_threshold", 0.005) or 0.005)
+                                frames = prune_static_animation_frames(frames, motion_threshold=m_thresh)
+                            elif anim_mode == "full_timeline":
+                                pass  # Full timeline mode preserves authentic simulation time history
+                            elif getattr(req, "active_motion_only", False):
                                 m_thresh = float(getattr(req, "motion_threshold", 0.005) or 0.005)
                                 frames = prune_static_animation_frames(frames, motion_threshold=m_thresh)
 
@@ -1144,6 +1157,7 @@ def render_odb_animation_headless(
     plot_state: str = "CONTOURS_ON_DEF",
     is_ping_pong: Optional[bool] = None,
     viewport_zoom_factor: Optional[float] = None,
+    animation_mode: str = "full_timeline",
     active_motion_only: bool = True,
     motion_threshold: float = 0.005,
     launcher: Optional[str] = None,
@@ -1175,6 +1189,7 @@ def render_odb_animation_headless(
         animation_duration_ms=duration_ms,
         is_ping_pong=is_ping_pong,
         viewport_zoom_factor=viewport_zoom_factor,
+        animation_mode=animation_mode,
         active_motion_only=active_motion_only,
         motion_threshold=motion_threshold,
         caption=f"{variable_label} animation",
