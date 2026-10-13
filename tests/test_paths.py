@@ -460,12 +460,12 @@ def test_agent_production_mode_blocks_execution_in_repo_runs(tmp_path):
     )
 
     # 1. No project_context and no workdir -> would fallback to repo runs/ -> must fail
-    with pytest.raises(PermissionError) as exc_info:
+    with pytest.raises((RuntimeError, PermissionError)) as exc_info:
         agent.solve_requirement(
             intent,
             require_production=True,
         )
-    assert "Production execution blocked" in str(exc_info.value)
+    assert "Production execution blocked" in str(exc_info.value) or "Production Guard" in str(exc_info.value)
 
     # 2. workdir explicitly passed pointing inside the repo -> must fail
     repo_workdir = get_repo_root() / "runs" / "illegal_run"
@@ -476,3 +476,27 @@ def test_agent_production_mode_blocks_execution_in_repo_runs(tmp_path):
             require_production=True,
         )
     assert "Production execution blocked" in str(exc_info2.value)
+
+
+def test_production_guard_analysis_runner_requires_external_project_context():
+    """Task 35.2 Contract: AnalysisRunner.run in production mode (require_production=True)
+    strictly requires a valid ExternalProjectContext. Silent fallback to internal runs/
+    is strictly forbidden and must raise RuntimeError with '[Production Guard]'.
+    """
+    from abaqus_ai_agent.execution.client import AbaqusExecutor
+    from abaqus_ai_agent.execution.analysis_run import AnalysisRunner
+
+    class RealExecutor(AbaqusExecutor):
+        def execute(self, code, timeout=120):
+            return {}
+
+    runner = AnalysisRunner(RealExecutor())
+    with pytest.raises(RuntimeError) as exc_info:
+        runner.run(
+            model_name="Model_Prod",
+            job_name="Job_Prod",
+            require_production=True,
+            project_context=None,
+        )
+    assert "[Production Guard]" in str(exc_info.value)
+    assert "requires a valid ExternalProjectContext" in str(exc_info.value)

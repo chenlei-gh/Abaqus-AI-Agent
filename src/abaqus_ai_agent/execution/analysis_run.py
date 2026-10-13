@@ -259,6 +259,12 @@ class AnalysisRunner:
                              getattr(self.executor, "_is_mock", False)
             require_production = not is_test_double
 
+        if require_production and project_context is None:
+            raise RuntimeError(
+                "[Production Guard] Execution in production mode requires a valid ExternalProjectContext. "
+                "Silent fallback to repository-internal runs/ is strictly prohibited."
+            )
+
         run_id = str(uuid.uuid4())
         orig_executor_workdir = getattr(self.executor, "workdir", None)
         run_evidence_dir = None

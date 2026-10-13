@@ -27,8 +27,13 @@ from abaqus_ai_agent.execution.odb_rendering import (
     ContourPlotRequest,
     generate_headless_viewer_script,
 )
+from abaqus_ai_agent.paths import create_external_project_context
 from abaqus_ai_agent.reporting.pipeline import DeterministicReportPipeline
 from abaqus_ai_agent.reporting.visualization_spec import VisualizationSpec
+
+
+def _make_test_ctx(tmp_path: Path, name: str):
+    return create_external_project_context(tmp_path / name, enforce_outside_repo=False)
 
 
 class MockCaeExecutor(AbaqusExecutor):
@@ -75,8 +80,8 @@ class MockCaeExecutor(AbaqusExecutor):
 
 def test_analysis_runner_require_production_denies_external_injected_values(tmp_path: Path):
     """External injected result_values MUST NEVER pass production deliverable gate."""
-    workdir = tmp_path / "run_workdir"
-    workdir.mkdir()
+    ctx = _make_test_ctx(tmp_path, "proj_injected")
+    workdir = ctx.create_run_solver_dir("run_workdir")
     executor = MockCaeExecutor(workdir, job_name="Job_Injected")
     runner = AnalysisRunner(executor)
 
@@ -92,6 +97,7 @@ def test_analysis_runner_require_production_denies_external_injected_values(tmp_
         criteria=criteria,
         result_values={"max_stress": 120.0},
         require_production=True,
+        project_context=ctx,
     )
 
     # Verification:
@@ -124,8 +130,8 @@ def test_analysis_runner_require_production_denies_external_injected_values(tmp_
 
 def test_analysis_runner_require_production_unsubmitted_job_denied(tmp_path: Path):
     """If solver job fails or is unsubmitted, AnalysisRunner halts before acceptance."""
-    workdir = tmp_path / "run_fail"
-    workdir.mkdir()
+    ctx = _make_test_ctx(tmp_path, "proj_fail")
+    workdir = ctx.create_run_solver_dir("run_fail")
     executor = MockCaeExecutor(workdir, job_name="Job_Fail", job_status_response="ABORTED")
     # Overwrite .sta without completion message
     (workdir / "Job_Fail.sta").write_text("ERROR: Solver diverged\n", encoding="utf-8")
@@ -137,6 +143,7 @@ def test_analysis_runner_require_production_unsubmitted_job_denied(tmp_path: Pat
         job_name="Job_Fail",
         workdir=str(workdir),
         require_production=True,
+        project_context=ctx,
     )
 
     assert run_res.state == AnalysisRunState.FAILED
@@ -146,8 +153,8 @@ def test_analysis_runner_require_production_unsubmitted_job_denied(tmp_path: Pat
 
 def test_analysis_runner_require_production_full_causal_binding_and_delivery(tmp_path: Path, monkeypatch):
     """When ODB extraction and live manifest are authentic and consistent, deliverable is granted."""
-    workdir = tmp_path / "run_authentic"
-    workdir.mkdir()
+    ctx = _make_test_ctx(tmp_path, "proj_auth")
+    workdir = ctx.create_run_solver_dir("run_authentic")
     executor = MockCaeExecutor(workdir, job_name="Job_Auth")
     executor.launcher = "abaqus"
     monkeypatch.setattr(
@@ -193,6 +200,7 @@ def test_analysis_runner_require_production_full_causal_binding_and_delivery(tmp
         workdir=str(workdir),
         criteria=criteria,
         require_production=True,
+        project_context=ctx,
     )
 
     # Verify AnalysisRun state and production deliverable
@@ -329,8 +337,8 @@ def test_agent_solve_requirement_require_production_full_closure_and_delivery(tm
     from abaqus_ai_agent.contracts.task import TaskStatus
     from abaqus_ai_agent.planning.compiler import IntentGeometrySpec
 
-    workdir = tmp_path / "prod_agent_run"
-    workdir.mkdir()
+    ctx = _make_test_ctx(tmp_path, "prod_agent_proj")
+    workdir = ctx.create_run_solver_dir("Job_PROD")
     executor = MockCaeExecutor(workdir, job_name="Job_PROD")
     executor.launcher = "abaqus"
     monkeypatch.setattr(
@@ -458,6 +466,7 @@ def test_agent_solve_requirement_require_production_full_closure_and_delivery(tm
         geometry=geom,
         material=mat,
         workdir=str(workdir),
+        project_context=ctx,
         require_production=True,
     )
 
@@ -465,7 +474,7 @@ def test_agent_solve_requirement_require_production_full_closure_and_delivery(tm
     assert result.summary_card["deliverable"] is True
     assert result.summary_card["figure_selection"]["scenario"] == "static_structural"
     assert result.summary_card["delivery_card"] is not None
-    assert (workdir / "report.html").exists()
+    assert (ctx.delivery_dir / "report.html").exists() or (workdir / "report.html").exists()
 
 
 def test_agent_solve_requirement_require_production_blocks_fake_odb(tmp_path: Path):
@@ -476,8 +485,8 @@ def test_agent_solve_requirement_require_production_blocks_fake_odb(tmp_path: Pa
     from abaqus_ai_agent.contracts.task import TaskStatus
     from abaqus_ai_agent.planning.compiler import IntentGeometrySpec
 
-    workdir = tmp_path / "fake_agent_run"
-    workdir.mkdir()
+    ctx = _make_test_ctx(tmp_path, "fake_agent_proj")
+    workdir = ctx.create_run_solver_dir("Job_FAKE")
     executor = MockCaeExecutor(workdir, job_name="Job_FAKE")
     # Overwrite ODB with plaintext fake
     (workdir / "Job_FAKE.odb").write_text('{"steps": []}', encoding="utf-8")
@@ -506,6 +515,7 @@ def test_agent_solve_requirement_require_production_blocks_fake_odb(tmp_path: Pa
         geometry=geom,
         material=mat,
         workdir=str(workdir),
+        project_context=ctx,
         require_production=True,
     )
 
@@ -596,8 +606,8 @@ def test_p0_6_headless_viewer_failure_raises_runtime_error(tmp_path: Path, monke
 
 def test_negative_p0_a_corrupt_or_empty_odb_rejected_by_analysis_runner_require_production(tmp_path: Path, monkeypatch):
     """Negative Test P0-A: Corrupt ODB or structural failure in openOdb verification must fail AnalysisRunner."""
-    workdir = tmp_path / "neg_p0_a"
-    workdir.mkdir()
+    ctx = _make_test_ctx(tmp_path, "proj_neg_p0_a")
+    workdir = ctx.create_run_solver_dir("Job_NegP0A")
     executor = MockCaeExecutor(workdir, job_name="Job_NegP0A")
     executor.launcher = "python"
 
@@ -616,6 +626,7 @@ def test_negative_p0_a_corrupt_or_empty_odb_rejected_by_analysis_runner_require_
         workdir=str(workdir),
         criteria=criteria,
         require_production=True,
+        project_context=ctx,
     )
 
     assert run_res.state == AnalysisRunState.FAILED
@@ -625,8 +636,8 @@ def test_negative_p0_a_corrupt_or_empty_odb_rejected_by_analysis_runner_require_
 
 def test_negative_p0_a_production_mode_denies_missing_launcher_or_offline_verification(tmp_path: Path, monkeypatch):
     """Negative Test P0-A: Production executor without launcher or with offline verification MUST fail regardless of class name."""
-    workdir = tmp_path / "neg_p0_a_real"
-    workdir.mkdir()
+    ctx = _make_test_ctx(tmp_path, "proj_neg_real")
+    workdir = ctx.create_run_solver_dir("RealJob")
 
     # Create real binary ODB
     odb_p = workdir / "RealJob.odb"
@@ -658,6 +669,7 @@ def test_negative_p0_a_production_mode_denies_missing_launcher_or_offline_verifi
         workdir=str(workdir),
         criteria=({"name": "stress", "value_key": "max_mises"},),
         require_production=True,
+        project_context=ctx,
     )
     assert res_no_launcher.state == AnalysisRunState.FAILED
     assert res_no_launcher.engineering_status == "RESULT_INVALID"
@@ -675,6 +687,7 @@ def test_negative_p0_a_production_mode_denies_missing_launcher_or_offline_verifi
         workdir=str(workdir),
         criteria=({"name": "stress", "value_key": "max_mises"},),
         require_production=True,
+        project_context=ctx,
     )
     assert res_offline.state == AnalysisRunState.FAILED
     assert res_offline.engineering_status == "RESULT_INVALID"
@@ -686,8 +699,8 @@ def test_p0_a_production_mode_in_process_native_odb_verification_succeeds_withou
     import sys
     import types
 
-    workdir = tmp_path / "inprocess_native_run"
-    workdir.mkdir()
+    ctx = _make_test_ctx(tmp_path, "proj_inproc")
+    workdir = ctx.create_run_solver_dir("InProcessJob")
 
     executor = MockCaeExecutor(workdir, job_name="InProcessJob")
     executor.launcher = None  # In-process executor has NO launcher command
@@ -749,6 +762,7 @@ def test_p0_a_production_mode_in_process_native_odb_verification_succeeds_withou
         workdir=str(workdir),
         criteria=criteria,
         require_production=True,
+        project_context=ctx,
     )
 
     assert not run_res.diagnostics, f"Diagnostics: {run_res.diagnostics}"
@@ -760,8 +774,8 @@ def test_p0_a_production_mode_in_process_native_odb_verification_succeeds_withou
 
 def test_non_standard_launcher_propagation_to_verification_and_extraction(tmp_path: Path, monkeypatch):
     """Verify that a non-standard launcher path is consistently passed to both verification and extraction."""
-    workdir = tmp_path / "custom_launcher_run"
-    workdir.mkdir()
+    ctx = _make_test_ctx(tmp_path, "proj_custom_launcher")
+    workdir = ctx.create_run_solver_dir("CustomLauncherJob")
 
     custom_launcher = "C:/SIMULIA/Commands/abaqus.bat"
     executor = MockCaeExecutor(workdir, job_name="CustomLauncherJob")
@@ -797,6 +811,7 @@ def test_non_standard_launcher_propagation_to_verification_and_extraction(tmp_pa
         workdir=str(workdir),
         criteria=criteria,
         require_production=True,
+        project_context=ctx,
     )
 
     assert run_res.state == AnalysisRunState.ACCEPTED
@@ -806,8 +821,8 @@ def test_non_standard_launcher_propagation_to_verification_and_extraction(tmp_pa
 
 def test_production_mode_fails_closed_when_no_launcher_and_not_native(tmp_path: Path, monkeypatch):
     """Verify strict fail-closed when running in external Python without launcher."""
-    workdir = tmp_path / "offline_run"
-    workdir.mkdir()
+    ctx = _make_test_ctx(tmp_path, "proj_offline")
+    workdir = ctx.create_run_solver_dir("OfflineJob")
 
     executor = MockCaeExecutor(workdir, job_name="OfflineJob")
     executor.launcher = None
@@ -824,6 +839,7 @@ def test_production_mode_fails_closed_when_no_launcher_and_not_native(tmp_path: 
         workdir=str(workdir),
         criteria=criteria,
         require_production=True,
+        project_context=ctx,
     )
 
     assert run_res.state == AnalysisRunState.FAILED
@@ -836,8 +852,8 @@ def test_in_process_native_extraction_fail_closed_on_missing_field(tmp_path: Pat
     import sys
     import types
 
-    workdir = tmp_path / "inprocess_fail_run"
-    workdir.mkdir()
+    ctx = _make_test_ctx(tmp_path, "proj_inproc_fail")
+    workdir = ctx.create_run_solver_dir("InProcessFailJob")
 
     executor = MockCaeExecutor(workdir, job_name="InProcessFailJob")
     executor.launcher = None
@@ -869,6 +885,7 @@ def test_in_process_native_extraction_fail_closed_on_missing_field(tmp_path: Pat
         workdir=str(workdir),
         criteria=criteria,
         require_production=True,
+        project_context=ctx,
     )
 
     assert run_res.state == AnalysisRunState.FAILED

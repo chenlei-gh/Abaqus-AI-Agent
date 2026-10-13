@@ -586,7 +586,7 @@ class AbaqusAIAgent:
 
         # Strict Production Mode Isolation (REQ-ISO-003):
         # In real production mode, solver execution inside the core repository is strictly forbidden.
-        if prod_req and not is_test_double:
+        if prod_req:
             if project_context is None:
                 from .paths import get_repo_root, resolve_runs_root, resolve_project_root, create_external_project_context
                 ext_root = resolve_project_root(fail_closed=False)
@@ -600,14 +600,23 @@ class AbaqusAIAgent:
                             f"Production execution blocked (REQ-ISO-003): Target workdir '{cand_target}' "
                             f"resides inside the core repository '{repo_r}'. Production runs must use an external project context."
                         )
+                    # Automatically establish project context rooted at external workdir
+                    proj_root = cand_target.parent if cand_target.name in ("solver", "working", "input", "delivery", "evidence") else cand_target
+                    project_context = create_external_project_context(
+                        proj_root,
+                        project_name=plan.job_name or "Project",
+                        enforce_outside_repo=False if is_test_double else True,
+                    )
+                    # Ensure target_workdir satisfies solver_dir boundary
+                    if not cand_target.is_relative_to(project_context.solver_dir.resolve()):
+                        target_workdir = str(project_context.create_run_solver_dir(plan.job_name or "run"))
                 else:
                     runs_root = resolve_runs_root().resolve()
                     repo_r = get_repo_root().resolve()
                     if runs_root == repo_r or runs_root.is_relative_to(repo_r):
-                        raise PermissionError(
-                            "Production execution blocked (REQ-ISO-003): Production mode requires an explicit "
-                            "ExternalProjectContext or external ABAQUS_AGENT_RUNS_DIR / ABAQUS_AGENT_PROJECT_ROOT. "
-                            "Defaulting to internal repository runs/ is strictly prohibited."
+                        raise RuntimeError(
+                            "[Production Guard] Execution in production mode requires a valid ExternalProjectContext. "
+                            "Silent fallback to repository-internal runs/ is strictly prohibited."
                         )
 
         # 5. Apply Plan Actions to CAE Environment
