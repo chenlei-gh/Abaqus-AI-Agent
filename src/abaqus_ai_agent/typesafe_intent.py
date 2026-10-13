@@ -15,6 +15,7 @@ Architectural Decoupling Contract (REQ-P1-046 ~ REQ-P1-049, REQ-P1-053):
   * 'offline' (default): Pure deterministic rule engine (hermetic, reproducible, zero-cost).
   * 'live': Invokes configured external provider. Fails closed (JevApiError) on any error.
   * 'shadow': Baseline offline engine executes, while recording side-by-side discrepancy auditing.
+    If external provider is not configured, records status='NOT_CONFIGURED'.
 """
 
 from __future__ import annotations
@@ -134,9 +135,9 @@ class ExternalIntentProviderProtocol(Protocol):
 
 class GenericHttpIntentProvider:
     """Vendor-neutral HTTP adapter for optional external AI intent providers.
-    
-    No proprietary endpoints or models are hardcoded. All service coordinates are
-    injected via constructor parameters or environment variables.
+
+    Zero proprietary endpoints or models are hardcoded. All service coordinates are
+    explicitly injected via constructor parameters or environment variables.
     """
 
     def __init__(
@@ -144,6 +145,7 @@ class GenericHttpIntentProvider:
         endpoint: Optional[str] = None,
         api_key: Optional[str] = None,
         model: Optional[str] = None,
+        payload_builder: Optional[Callable[[str, "GenericHttpIntentProvider"], Dict[str, Any]]] = None,
     ):
         self.endpoint = (
             endpoint
@@ -158,11 +160,12 @@ class GenericHttpIntentProvider:
         self.model = (
             model
             or os.environ.get("EXTERNAL_INTENT_MODEL")
-            or ("jev-live-api" if (api_key and "typesafe" in str(self.endpoint).lower()) else "external-intent-v1")
+            or "external-intent-v1"
         )
+        self._payload_builder = payload_builder
 
     def is_configured(self) -> bool:
-        """Return True if both endpoint and authentication credentials are provided."""
+        """Return True only if both endpoint and credentials are provided."""
         return bool(self.endpoint and self.api_key)
 
     def judge(self, prompt: str, timeout: float = 5.0) -> Dict[str, Any]:
@@ -170,51 +173,25 @@ class GenericHttpIntentProvider:
         if not self.endpoint:
             raise JevApiError(
                 "External intent provider endpoint is not configured. "
-                "Set EXTERNAL_INTENT_API_URL or TYPESAFE_API_URL."
+                "Explicit endpoint configuration is required."
             )
         if not self.api_key:
             raise JevApiError(
-                "API credentials are required for external intent provider. "
-                "Set EXTERNAL_INTENT_API_KEY or TYPESAFE_API_KEY."
+                "API credentials are required for external intent provider."
             )
 
         headers = {
             "Authorization": f"Bearer {self.api_key}",
             "Content-Type": "application/json",
         }
-        payload = {
-            "model": self.model,
-            "state": {"prompt": prompt},
-            "questions": [
-                {
-                    "id": "physics",
-                    "primitive": "choice",
-                    "options": list(JevIntentRouter.PHYSICS_OPTIONS),
-                },
-                {
-                    "id": "units",
-                    "primitive": "choice",
-                    "options": list(JevIntentRouter.UNIT_OPTIONS),
-                },
-                {
-                    "id": "solver",
-                    "primitive": "choice",
-                    "options": list(JevIntentRouter.SOLVER_OPTIONS),
-                },
-                {
-                    "id": "well_constrained",
-                    "primitive": "noul",
-                },
-                {
-                    "id": "has_acceptance_criteria",
-                    "primitive": "noul",
-                },
-                {
-                    "id": "completeness",
-                    "primitive": "score",
-                },
-            ],
-        }
+
+        if self._payload_builder:
+            payload = self._payload_builder(prompt, self)
+        else:
+            payload = {
+                "model": self.model,
+                "prompt": prompt,
+            }
 
         req = urllib.request.Request(
             self.endpoint,
@@ -274,30 +251,37 @@ class JevIntentRouter:
         api_url: Optional[str] = None,
         external_provider: Optional[Any] = None,
     ):
-        self.api_key = api_key or os.environ.get("TYPESAFE_API_KEY") or os.environ.get("EXTERNAL_INTENT_API_KEY")
-        self.api_url = api_url or os.environ.get("TYPESAFE_API_URL") or os.environ.get("EXTERNAL_INTENT_API_URL")
+        self.api_key = api_key or os.environ.get("EXTERNAL_INTENT_API_KEY") or os.environ.get("TYPESAFE_API_KEY")
+        self.api_url = api_url or os.environ.get("EXTERNAL_INTENT_API_URL") or os.environ.get("TYPESAFE_API_URL")
         self.timeout = timeout
 
-        if mode:
-            norm_mode = mode.lower()
+        if mode is not None:
+            norm_mode = mode.strip().lower()
             if norm_mode not in self.VALID_MODES:
                 raise ValueError(f"Invalid JEV mode: {mode!r}. Must be one of {self.VALID_MODES}.")
             self.mode = norm_mode
         elif use_live_api:
             self.mode = "live"
         else:
-            env_mode = os.environ.get("TYPESAFE_RUN_MODE") or os.environ.get("INTENT_RUN_MODE", "offline")
-            norm_env = env_mode.lower()
-            self.mode = norm_env if norm_env in self.VALID_MODES else "offline"
+            env_mode = os.environ.get("INTENT_RUN_MODE") or os.environ.get("TYPESAFE_RUN_MODE")
+            if env_mode:
+                norm_env = env_mode.strip().lower()
+                if norm_env not in self.VALID_MODES:
+                    raise ValueError(
+                        f"Invalid intent run mode in environment: {env_mode!r}. Must be one of {self.VALID_MODES}."
+                    )
+                self.mode = norm_env
+            else:
+                self.mode = "offline"
 
         self.use_live_api = (self.mode == "live")
 
-        # Configure optional external provider
+        # Configure optional external provider (zero default proprietary endpoints)
         if external_provider is not None:
             self.external_provider = external_provider
-        elif self.api_url or self.api_key:
+        elif self.api_url and self.api_key:
             self.external_provider = GenericHttpIntentProvider(
-                endpoint=self.api_url or "https://api.typesafe.ai/v1/system-one/judge",
+                endpoint=self.api_url,
                 api_key=self.api_key,
             )
         else:
@@ -394,12 +378,12 @@ class JevIntentRouter:
         if self.mode == "live":
             if not self.external_provider:
                 raise JevApiError(
-                    "TYPESAFE_API_KEY is required for live execution mode. "
+                    "External intent provider is not configured. "
                     "Fail-closed: refused to silently degrade to offline engine in strict live mode."
                 )
             if hasattr(self.external_provider, "is_configured") and not self.external_provider.is_configured():
                 raise JevApiError(
-                    "TYPESAFE_API_KEY is required for live execution mode. "
+                    "External intent provider is not fully configured (missing endpoint or credentials). "
                     "Fail-closed: refused to silently degrade to offline engine in strict live mode."
                 )
 
@@ -425,8 +409,8 @@ class JevIntentRouter:
         if self.mode == "shadow":
             baseline = self._evaluate_offline_engine(prompt)
             shadow_diff: Dict[str, Any] = {
-                "status": "SKIPPED",
-                "reason": "No TYPESAFE_API_KEY configured",
+                "status": "NOT_CONFIGURED",
+                "reason": "No external intent provider configured",
             }
             if self.external_provider and (
                 not hasattr(self.external_provider, "is_configured") or self.external_provider.is_configured()
@@ -455,7 +439,7 @@ class JevIntentRouter:
                 has_acceptance_criteria_noul=baseline.has_acceptance_criteria_noul,
                 completeness_score=baseline.completeness_score,
                 extracted_parameters=baseline.extracted_parameters,
-                source_model="jev-shadow-audited",
+                source_model="offline-shadow-audited",
                 execution_mode="shadow",
                 latency_ms=baseline.latency_ms,
                 inferred_fields=baseline.inferred_fields,

@@ -49,11 +49,19 @@ def test_jev_mode_resolution_and_validation():
     r_off = JevIntentRouter(mode="offline")
     assert r_off.mode == "offline"
 
-    r_live = JevIntentRouter(api_key="sk-test", mode="live")
+    r_live = JevIntentRouter(
+        api_key="sk-test",
+        api_url="https://example.com/intent/judge",
+        mode="live",
+    )
     assert r_live.mode == "live"
     assert r_live.use_live_api is True
 
-    r_shadow = JevIntentRouter(api_key="sk-test", mode="shadow")
+    r_shadow = JevIntentRouter(
+        api_key="sk-test",
+        api_url="https://example.com/intent/judge",
+        mode="shadow",
+    )
     assert r_shadow.mode == "shadow"
 
     # 3. Invalid mode rejects fail-closed
@@ -61,21 +69,40 @@ def test_jev_mode_resolution_and_validation():
         JevIntentRouter(mode="unsupported_quantum_mode")
 
 
+def test_env_invalid_intent_mode_fails_closed():
+    """Invalid INTENT_RUN_MODE environment variable must fail-closed with ValueError."""
+    with patch.dict("os.environ", {"INTENT_RUN_MODE": "invalid_experimental_mode"}):
+        with pytest.raises(ValueError, match="Invalid intent run mode in environment"):
+            JevIntentRouter()
+
+
 def test_jev_live_mode_missing_api_key_fails_closed():
-    """Live mode must fail-closed if TYPESAFE_API_KEY is not provided (NO silent fallback)."""
+    """Live mode must fail-closed if external provider or credentials are not configured."""
     with patch.dict("os.environ", {}, clear=True):
         router = JevIntentRouter(api_key=None, mode="live")
-        with pytest.raises(JevApiError, match="TYPESAFE_API_KEY is required"):
+        with pytest.raises(JevApiError, match="External intent provider is not configured"):
+            router.route("100mm cantilever beam with 1000N load")
+
+
+def test_jev_live_mode_missing_endpoint_fails_closed():
+    """Live mode must fail-closed if api_key is given but endpoint is absent."""
+    with patch.dict("os.environ", {}, clear=True):
+        router = JevIntentRouter(api_key="sk-test", api_url=None, mode="live")
+        with pytest.raises(JevApiError, match="External intent provider is not configured"):
             router.route("100mm cantilever beam with 1000N load")
 
 
 def test_jev_live_mode_http_errors_fail_closed_without_silent_degradation():
     """Live mode HTTP 401, 403, 500, 504 errors must raise JevApiError without silent degradation."""
-    router = JevIntentRouter(api_key="sk-invalid-or-expired", mode="live")
+    router = JevIntentRouter(
+        api_key="sk-invalid-or-expired",
+        api_url="https://example.com/intent/judge",
+        mode="live",
+    )
 
     # Mock HTTP 401 Unauthorized
     http_error_401 = urllib.error.HTTPError(
-        url="https://api.typesafe.ai/v1/system-one/judge",
+        url="https://example.com/intent/judge",
         code=401,
         msg="Unauthorized",
         hdrs={},
@@ -88,7 +115,7 @@ def test_jev_live_mode_http_errors_fail_closed_without_silent_degradation():
 
     # Mock HTTP 504 Gateway Timeout
     http_error_504 = urllib.error.HTTPError(
-        url="https://api.typesafe.ai/v1/system-one/judge",
+        url="https://example.com/intent/judge",
         code=504,
         msg="Gateway Timeout",
         hdrs={},
@@ -102,8 +129,12 @@ def test_jev_live_mode_http_errors_fail_closed_without_silent_degradation():
 
 def test_jev_live_mode_network_unreachable_fails_closed():
     """Network connection failure in live mode must raise JevApiError."""
-    router = JevIntentRouter(api_key="sk-test", mode="live")
-    url_err = urllib.error.URLError("DNS resolution failed for api.typesafe.ai")
+    router = JevIntentRouter(
+        api_key="sk-test",
+        api_url="https://example.com/intent/judge",
+        mode="live",
+    )
+    url_err = urllib.error.URLError("DNS resolution failed for example.com")
 
     with patch("urllib.request.urlopen", side_effect=url_err):
         with pytest.raises(JevApiError, match="network unreachable"):
@@ -122,7 +153,11 @@ def _make_mock_response(payload_dict_or_bytes):
 
 def test_jev_live_mode_malformed_response_fails_closed():
     """Malformed or invalid JSON responses from live API must be strictly rejected."""
-    router = JevIntentRouter(api_key="sk-test", mode="live")
+    router = JevIntentRouter(
+        api_key="sk-test",
+        api_url="https://example.com/intent/judge",
+        mode="live",
+    )
 
     # 1. Non-JSON string response
     with patch("urllib.request.urlopen", return_value=_make_mock_response(b"<html>502 Bad Gateway</html>")):
@@ -151,7 +186,11 @@ def test_jev_live_mode_malformed_response_fails_closed():
 )
 def test_jev_live_mode_out_of_bound_payload_validation(invalid_answers, expected_err):
     """Every primitive judgment must be strictly bounds-checked against schemas and domains."""
-    router = JevIntentRouter(api_key="sk-test", mode="live")
+    router = JevIntentRouter(
+        api_key="sk-test",
+        api_url="https://example.com/intent/judge",
+        mode="live",
+    )
 
     # Full template with 1 invalid field
     answers: Dict[str, Any] = {
@@ -171,7 +210,11 @@ def test_jev_live_mode_out_of_bound_payload_validation(invalid_answers, expected
 
 def test_jev_live_mode_authentic_payload_success():
     """Verify live mode authentic payload parses all 6 questions and tags metadata cleanly."""
-    router = JevIntentRouter(api_key="sk-test-live-key", mode="live")
+    router = JevIntentRouter(
+        api_key="sk-test-live-key",
+        api_url="https://example.com/intent/judge",
+        mode="live",
+    )
 
     valid_payload = {
         "answers": {
@@ -190,7 +233,7 @@ def test_jev_live_mode_authentic_payload_success():
 
     assert res.status == "ROUTED"
     b = res.decision_bundle
-    assert b.source_model == "jev-live-api"
+    assert b.source_model == "external-intent-v1"
     assert b.execution_mode == "live"
     assert b.physics_choice.value == "linear_static"
     assert b.solver_choice.value == "abaqus_standard"
@@ -204,8 +247,12 @@ def test_jev_live_mode_authentic_payload_success():
 
 
 def test_jev_shadow_mode_auditing_and_diff():
-    """Verify shadow mode executes baseline offline and audits discrepancies against live TypeSafe."""
-    router = JevIntentRouter(api_key="sk-test-shadow", mode="shadow")
+    """Verify shadow mode executes baseline offline and audits discrepancies against live provider."""
+    router = JevIntentRouter(
+        api_key="sk-test-shadow",
+        api_url="https://example.com/intent/judge",
+        mode="shadow",
+    )
 
     # Mock live returning differing solver preference
     mock_live = {
@@ -226,7 +273,7 @@ def test_jev_shadow_mode_auditing_and_diff():
     assert res.status == "ROUTED"
     b = res.decision_bundle
     assert b.execution_mode == "shadow"
-    assert b.source_model == "jev-shadow-audited"
+    assert b.source_model == "offline-shadow-audited"
     diff = b.shadow_diff
     assert diff is not None
     assert diff["status"] == "EVALUATED"
@@ -235,9 +282,31 @@ def test_jev_shadow_mode_auditing_and_diff():
     assert diff["solver_match"] is True
 
 
+def test_jev_shadow_mode_unconfigured_records_not_configured():
+    """When shadow mode has no external provider configured, diff must be NOT_CONFIGURED."""
+    with patch.dict("os.environ", {}, clear=True):
+        router = JevIntentRouter(mode="shadow")
+        assert router.external_provider is None
+
+        res = router.route(
+            "100mm悬臂梁端部施加1000N垂直载荷，材料为结构钢，固定根部，校核端部挠度不超过2.5mm。"
+        )
+
+        assert res.status == "ROUTED"
+        b = res.decision_bundle
+        assert b.execution_mode == "shadow"
+        assert b.shadow_diff is not None
+        assert b.shadow_diff["status"] == "NOT_CONFIGURED"
+        assert "No external intent provider configured" in b.shadow_diff["reason"]
+
+
 def test_jev_shadow_mode_handles_live_error_gracefully():
     """In shadow mode, if live API fails, baseline execution must proceed while logging diff error."""
-    router = JevIntentRouter(api_key="sk-test", mode="shadow")
+    router = JevIntentRouter(
+        api_key="sk-test",
+        api_url="https://example.com/intent/judge",
+        mode="shadow",
+    )
 
     with patch("urllib.request.urlopen", side_effect=urllib.error.URLError("Network timed out")):
         res = router.route(
