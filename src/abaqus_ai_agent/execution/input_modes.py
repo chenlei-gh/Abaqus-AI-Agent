@@ -282,6 +282,7 @@ def solve_user_inp(
     timeout: Optional[int] = None,
     run_id: Optional[str] = None,
     odb_validator: Optional[Callable[[Path], bool]] = None,
+    require_verified_odb: bool = False,
 ) -> Dict[str, Any]:
     """Execute direct solver computation on a user-provided .inp input deck.
 
@@ -293,6 +294,11 @@ def solve_user_inp(
        solver/<run_id>/ workspace, avoiding core repository contamination.
     4. Strict Returncode and Output Validation: Rejects invalid or missing returncodes, corrupt ODBs,
        or unverified outputs.
+    5. ODB Readability Verification Modes:
+       - When require_verified_odb=True, the ODB MUST be verified by a concrete readability validator
+         (active_validator); otherwise execution fails closed.
+       - When require_verified_odb=False, an unverified non-empty file is flagged honestly as
+         odb_verification_mode="unverified_file_only" and odb_verified=False.
     """
     inp_file = Path(inp_path).resolve()
     if not inp_file.is_file():
@@ -383,6 +389,8 @@ def solve_user_inp(
     status = "COMPLETED"
     error_msg: Optional[str] = None
     returncode = 0
+    odb_verified: bool = False
+    odb_verification_mode: str = "none"
 
     if exec_exc is not None:
         status = "FAILED"
@@ -446,18 +454,40 @@ def solve_user_inp(
                                 status = "FAILED"
                                 error_msg = f"Solver output ODB failed validity verification: {eff_job_name}.odb"
                                 expected_odb = None
+                            else:
+                                odb_verified = True
+                                odb_verification_mode = "readability_verified"
+                    else:
+                        if require_verified_odb:
+                            status = "FAILED"
+                            error_msg = (
+                                f"Strict ODB verification required, but no readability validator "
+                                f"was configured for {eff_job_name}.odb"
+                            )
+                            expected_odb = None
+                        else:
+                            odb_verified = False
+                            odb_verification_mode = "unverified_file_only"
 
-    odb_valid = (
-        status == "COMPLETED"
-        and expected_odb is not None
+    odb_present = bool(
+        expected_odb is not None
         and expected_odb.is_file()
         and expected_odb.stat().st_size > 0
+    )
+    odb_valid = (
+        status == "COMPLETED"
+        and odb_present
+        and (odb_verified or not require_verified_odb)
     )
 
     return {
         "status": status,
         "error": error_msg,
         "returncode": returncode,
+        "odb_present": odb_present,
+        "odb_verified": odb_verified,
+        "odb_verification_mode": odb_verification_mode,
+        "require_verified_odb": require_verified_odb,
         "odb_valid": odb_valid,
         "input_kind": UserInputKind.INP_SOLVER_DIRECT.value,
         "run_id": eff_run_id,
@@ -630,6 +660,7 @@ def edit_and_solve_user_inp(
     overwrite: bool = False,
     odb_validator: Optional[Callable[[Path], bool]] = None,
     rollback_on_solver_failure: bool = False,
+    require_verified_odb: bool = False,
 ) -> Dict[str, Any]:
     """Surgically edit a user-provided .inp file in an isolated working copy and execute it.
 
@@ -639,6 +670,11 @@ def edit_and_solve_user_inp(
        Any failure before successful execution rolls back all state, restoring original files.
     3. Cryptographic Provenance: Records pre/post SHA-256 for main INP and all dependencies.
     4. Isolated Execution: Runs directly in solver/<run_id>/ workspace.
+    5. Rollback Scope vs Diagnostic Sandbox:
+       - Working Copy Rollback: When rollback_on_solver_failure=True, only staged working-copy mutations
+         (working/ modified INP and staged dependencies) are rolled back to keep the user's working copy clean.
+       - Solver Workspace Diagnostics: The solver execution sandbox (solver/<run_id>/) containing raw solver logs
+         (.sta, .msg, .log, core dumps) is intentionally retained for post-mortem diagnostics.
     """
     from ..editing.inp_editor import ControlledInpEditor, InpEditOperation, edit_inp_file, InpEditAuditRecord
 
@@ -739,6 +775,7 @@ def edit_and_solve_user_inp(
             timeout=timeout,
             run_id=run_id,
             odb_validator=odb_validator,
+            require_verified_odb=require_verified_odb,
         )
 
         # Reconcile actual solver workspace dependencies vs editing copy
@@ -768,6 +805,8 @@ def edit_and_solve_user_inp(
         tx.rollback()
         raise
 
+    solve_res["working_copy_rolled_back"] = solve_res["rolled_back"]
+    solve_res["solver_workspace_retained"] = bool(solve_res.get("workdir") is not None)
     solve_res["audit_record"] = audit_record
     solve_res["source_inp_path"] = str(src_file)
     solve_res["source_inp_sha256"] = audit_record.source_sha256

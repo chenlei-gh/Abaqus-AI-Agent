@@ -693,3 +693,92 @@ def test_audit_record_points_to_solver_execution_dependencies(tmp_path):
     working_p = Path(edited_deps[0]["target_path"])
     assert working_p.is_file()
     assert "working" in working_p.parts
+
+
+def test_solve_user_inp_require_verified_odb_contract(tmp_path):
+    """P0 Contract: Verify require_verified_odb fails closed when readability validator is absent or failing."""
+    ctx = _make_dummy_project(tmp_path)
+    main_inp = ctx.input_dir / "odb_verify_model.inp"
+    main_inp.write_text("*HEADING\nODB Verify\n")
+
+    executor = DummyInpExecutor()
+
+    # Case A: require_verified_odb=True without validator -> Fails closed
+    res_a = solve_user_inp(
+        executor=executor,
+        inp_path=main_inp,
+        project_context=ctx,
+        require_verified_odb=True,
+    )
+    assert res_a["status"] == "FAILED"
+    assert res_a["odb_verified"] is False
+    assert res_a["odb_valid"] is False
+    assert "no readability validator" in res_a["error"]
+
+    # Case B: require_verified_odb=True with passing validator -> Passes
+    def mock_odb_reader(p: Path) -> bool:
+        return p.name.endswith(".odb") and p.stat().st_size > 0
+
+    res_b = solve_user_inp(
+        executor=executor,
+        inp_path=main_inp,
+        project_context=ctx,
+        odb_validator=mock_odb_reader,
+        require_verified_odb=True,
+    )
+    assert res_b["status"] == "COMPLETED"
+    assert res_b["odb_present"] is True
+    assert res_b["odb_verified"] is True
+    assert res_b["odb_verification_mode"] == "readability_verified"
+    assert res_b["odb_valid"] is True
+
+    # Case C: require_verified_odb=False (default) without validator -> Honest unverified_file_only flag
+    res_c = solve_user_inp(
+        executor=executor,
+        inp_path=main_inp,
+        project_context=ctx,
+        require_verified_odb=False,
+    )
+    assert res_c["status"] == "COMPLETED"
+    assert res_c["odb_present"] is True
+    assert res_c["odb_verified"] is False
+    assert res_c["odb_verification_mode"] == "unverified_file_only"
+    assert res_c["odb_valid"] is True
+
+
+def test_edit_and_solve_rollback_scope_separation_contract(tmp_path):
+    """P0 Contract: Verify rollback_on_solver_failure rolls back working copy while retaining solver sandbox."""
+    ctx = _make_dummy_project(tmp_path)
+    main_inp = ctx.input_dir / "scope_model.inp"
+    main_inp.write_text("*HEADING\nScope Model\n*STEP, NAME=Step-1\n*STATIC\n*END STEP\n")
+
+    class FailWithLogsExecutor:
+        """Simulates solver failing after emitting diagnostic log in solver sandbox."""
+        def run_input(self, input_path, job_name=None, timeout=None, workdir=None):
+            if workdir:
+                log_file = Path(workdir) / f"{job_name or 'job'}.log"
+                log_file.write_text("Solver encountered fatal divergence in increment 4")
+            return {"returncode": -1, "stdout": "", "stderr": "Divergence abort"}
+
+    target_working = ctx.working_dir / "scope_model_edited.inp"
+    res = edit_and_solve_user_inp(
+        executor=FailWithLogsExecutor(),
+        inp_path=main_inp,
+        operations=[{"category": "step", "target": "Step-1", "keyword": "*STATIC", "values": {"total_time": 1.0}}],
+        project_context=ctx,
+        target_filename=target_working.name,
+        rollback_on_solver_failure=True,
+    )
+
+    assert res["status"] == "FAILED"
+    # Working copy mutation is cleaned up and rolled back
+    assert res["working_copy_rolled_back"] is True
+    assert not target_working.exists()
+
+    # Solver workspace containing diagnostic log is retained for analysis
+    assert res["solver_workspace_retained"] is True
+    solver_dir = Path(res["workdir"])
+    assert solver_dir.is_dir()
+    diagnostic_log = solver_dir / f"{res['job_name']}.log"
+    assert diagnostic_log.is_file()
+    assert "fatal divergence" in diagnostic_log.read_text()

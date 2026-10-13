@@ -120,6 +120,7 @@ class AbaqusAIAgent:
         timeout: Optional[int] = None,
         run_id: Optional[str] = None,
         odb_validator: Optional[Callable[[Path], bool]] = None,
+        require_verified_odb: bool = False,
     ) -> Dict[str, Any]:
         """Directly solve a user-provided .inp file without redundant Python modeling."""
         from .execution.input_modes import solve_user_inp
@@ -131,6 +132,7 @@ class AbaqusAIAgent:
             timeout=timeout,
             run_id=run_id,
             odb_validator=odb_validator,
+            require_verified_odb=require_verified_odb,
         )
 
     def edit_and_solve_user_inp(
@@ -145,6 +147,7 @@ class AbaqusAIAgent:
         overwrite: bool = False,
         odb_validator: Optional[Callable[[Path], bool]] = None,
         rollback_on_solver_failure: bool = False,
+        require_verified_odb: bool = False,
     ) -> Dict[str, Any]:
         """Surgically modify a user-provided .inp in an isolated working copy and solve it."""
         from .execution.input_modes import edit_and_solve_user_inp
@@ -160,6 +163,7 @@ class AbaqusAIAgent:
             overwrite=overwrite,
             odb_validator=odb_validator,
             rollback_on_solver_failure=rollback_on_solver_failure,
+            require_verified_odb=require_verified_odb,
         )
 
     def postprocess_user_odb(
