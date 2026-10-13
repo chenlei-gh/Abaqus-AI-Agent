@@ -868,17 +868,85 @@ def _extract_prompt_boundary_conditions(prompt: str) -> List[Dict[str, Any]]:
 
 
 def _extract_prompt_load_region(prompt: str, load_type: str = "concentrated_force") -> Optional[str]:
-    """Extract explicitly stated geometric load region from prompt text."""
+    """Extract explicitly stated geometric load region from prompt text with boundary exclusion."""
     p_lower = prompt.lower()
-    if any(w in p_lower for w in ("端部", "自由端", "tip", "free end", "悬臂端")):
+
+    # Explicit tip / free end / cantilever tip
+    if any(w in p_lower for w in ("端部", "自由端", "tip", "free end", "悬臂端", "cantilever")):
         return "TipFace"
-    if any(w in p_lower for w in ("顶面", "上表面", "top surface", "top face", "top")):
+
+    # Explicit top face / compressive contact load / normal pressure
+    if any(w in p_lower for w in ("顶面", "上表面", "top surface", "top face")) or (
+        any(w in p_lower for w in ("compressive", "compression", "受压", "压力", "法向压力", "接触面", "contact surface"))
+    ):
         return "TopFace"
+
+    # Projectile impact / target plate / impact load
+    if any(w in p_lower for w in ("target plate", "target", "靶板", "impact surface", "projectile", "冲击", "impact")):
+        return "TargetPlate"
+
+    # Notched section / shaft tip
+    if any(w in p_lower for w in ("notched shaft", "notch", "缺口", "轴端")):
+        return "ShaftTip"
+
+    # Midpoint / center
     if any(w in p_lower for w in ("中点", "中间", "midpoint", "center")):
         return "Midpoint"
+
+    # Bottom face ONLY if not qualified by fixed / clamp / boundary
     if any(w in p_lower for w in ("底面", "下表面", "bottom surface", "bottom")):
-        return "BottomFace"
+        if not re.search(r"(fixed|clamp|encastre|固定|约束).{0,12}(bottom|底面|base|基座)", p_lower):
+            return "BottomFace"
+
     return None
+
+
+def _extract_prompt_thermal_bcs(prompt: str) -> List[Dict[str, Any]]:
+    """Extract structured thermal boundary conditions from prompt text via typed regex."""
+    region_map = {
+        "热端": "HotEnd", "hot end": "HotEnd", "hot face": "HotEnd",
+        "冷端": "ColdEnd", "cold end": "ColdEnd", "cold face": "ColdEnd",
+        "顶面": "TopFace", "top face": "TopFace", "top surface": "TopFace",
+        "底面": "BottomFace", "bottom face": "BottomFace", "bottom surface": "BottomFace",
+        "端部": "TipFace", "tip": "TipFace", "free end": "TipFace",
+        "根部": "RootFace", "root": "RootFace",
+        "左端": "LeftEnd", "left end": "LeftEnd",
+        "右端": "RightEnd", "right end": "RightEnd",
+    }
+    bcs: List[Dict[str, Any]] = []
+    reg_pattern = "|".join(re.escape(k) for k in sorted(region_map.keys(), key=len, reverse=True))
+    temp_pattern = r"([+-]?\d+(?:\.\d+)?)\s*(?:°c|degc|deg\s*c|c|k|kelvin)"
+
+    # Pattern 1: Region then Temperature, e.g., 'hot end at 100C', '热端固定100°C'
+    p1 = re.compile(rf"({reg_pattern})[^\d+-]{{0,25}}?{temp_pattern}", re.IGNORECASE)
+    for m in p1.finditer(prompt):
+        reg_str = m.group(1).lower()
+        val_str = m.group(2)
+        norm_reg = region_map.get(reg_str) or region_map.get(m.group(1))
+        bcs.append({"type": "temperature", "region": norm_reg, "magnitude": float(val_str)})
+
+    # Pattern 2: Temperature then Region, e.g. '100C at hot end'
+    p2 = re.compile(rf"{temp_pattern}[^\w\d]{{0,20}}?({reg_pattern})", re.IGNORECASE)
+    for m in p2.finditer(prompt):
+        val_str = m.group(1)
+        reg_str = m.group(2).lower()
+        norm_reg = region_map.get(reg_str) or region_map.get(m.group(2))
+        if not any(b["region"] == norm_reg for b in bcs):
+            bcs.append({"type": "temperature", "region": norm_reg, "magnitude": float(val_str)})
+
+    # Pattern 3: Heat flux, e.g. '热流 1000 W/m2' or 'heat flux 500 W/mm2'
+    flux_pattern = re.compile(r"(?:热流|heat flux)[^\d+-]{0,20}?([+-]?\d+(?:\.\d+)?)\s*(w/m2|w/mm2|w/m\^2)", re.IGNORECASE)
+    for m in flux_pattern.finditer(prompt):
+        val_str = m.group(1)
+        p_lower = prompt.lower()
+        flux_reg = "Surface"
+        if any(w in p_lower for w in ("顶面", "top surface", "top face")):
+            flux_reg = "TopFace"
+        elif any(w in p_lower for w in ("热端", "hot end")):
+            flux_reg = "HotEnd"
+        bcs.append({"type": "heat_flux", "region": flux_reg, "magnitude": float(val_str)})
+
+    return bcs
 
 
 def _validate_numeric(
@@ -1540,10 +1608,10 @@ class EngineeringIntentRouter:
             elif phys in elastic_domains:
                 mat_has_properties = False
                 if p_mat_ok and p_mat_norm:
-                    if p_mat_norm.get("has_verified_properties") or p_mat_norm.get("elastic_modulus") is not None:
+                    if p_mat_norm.get("has_verified_properties"):
                         mat_has_properties = True
                 if not mat_has_properties and c_mat_ok and c_mat_norm:
-                    if c_mat_norm.get("has_verified_properties") or c_mat_norm.get("elastic_modulus") is not None:
+                    if c_mat_norm.get("has_verified_properties"):
                         mat_has_properties = True
                 if not mat_has_properties:
                     missing.append("unverified_material_properties")
@@ -1581,34 +1649,53 @@ class EngineeringIntentRouter:
         load_ok = False
         p_load = params.get("loads")
         p_load_ok, p_load_norm, _ = _validate_loads_entity(p_load, require_region=False)
-        if p_load_ok:
-            load_ok = True
-            verified_entities["evidence_sources"]["loads"] = "prompt"
-            verified_entities["evidence_status"]["loads"] = "VERIFIED"
-            verified_entities["normalized"]["loads"] = p_load_norm
-        else:
-            c_load = ctx.get("loads")
-            c_load_ok, c_load_norm, _ = _validate_loads_entity(c_load, require_region=True)
-            if c_load_ok:
-                load_ok = True
-                verified_entities["evidence_sources"]["loads"] = "context"
-                verified_entities["evidence_status"]["loads"] = "VERIFIED"
-                verified_entities["normalized"]["loads"] = c_load_norm
+        c_load = ctx.get("loads")
+        c_load_ok, c_load_norm, _ = _validate_loads_entity(c_load, require_region=True)
 
-        if rules["require_loads"] and not load_ok:
+        if c_load_ok and c_load_norm:
+            load_ok = True
+            verified_entities["evidence_sources"]["loads"] = "context"
+            verified_entities["evidence_status"]["loads"] = "VERIFIED"
+            verified_entities["normalized"]["loads"] = c_load_norm
+        elif p_load_ok and p_load_norm:
+            resolved_prompt_loads = []
+            all_loads_have_region = True
+            for ld in p_load_norm:
+                ld_dict = dict(ld)
+                ld_type = ld_dict.get("type", "concentrated_force")
+                reg = ld_dict.get("region") or _extract_prompt_load_region(prompt, ld_type)
+                if reg:
+                    ld_dict["region"] = reg
+                    resolved_prompt_loads.append(ld_dict)
+                else:
+                    all_loads_have_region = False
+            if all_loads_have_region and resolved_prompt_loads:
+                load_ok = True
+                verified_entities["evidence_sources"]["loads"] = "prompt"
+                verified_entities["evidence_status"]["loads"] = "VERIFIED"
+                verified_entities["normalized"]["loads"] = resolved_prompt_loads
+            elif not all_loads_have_region:
+                load_ok = False
+                if rules["require_loads"]:
+                    missing.append("missing_load_application_region")
+
+        if rules["require_loads"] and not load_ok and "missing_load_application_region" not in missing:
             missing.append("missing_applied_loads")
 
         # 5. Thermal Boundary Conditions: Requires explicit thermal conditions in prompt or structured thermal entities
-        # Rejects nominal boolean flags like has_thermal_bcs: True!
+        # Rejects nominal boolean flags like has_thermal_bcs: True and bare keyword bypass!
         thermal_ok = False
-        if self._has_thermal_boundary_conditions(prompt):
+        p_th_list = _extract_prompt_thermal_bcs(prompt)
+        p_th_ok, p_th_norm, _ = _validate_thermal_bcs_entity(p_th_list)
+        if p_th_ok and p_th_norm:
             thermal_ok = True
             verified_entities["evidence_sources"]["thermal_bcs"] = "prompt"
             verified_entities["evidence_status"]["thermal_bcs"] = "VERIFIED"
+            verified_entities["normalized"]["thermal_bcs"] = p_th_norm
         else:
             c_th = ctx.get("thermal_bcs") or ctx.get("thermal_boundary_conditions")
             c_th_ok, c_th_norm, _ = _validate_thermal_bcs_entity(c_th)
-            if c_th_ok:
+            if c_th_ok and c_th_norm:
                 thermal_ok = True
                 verified_entities["evidence_sources"]["thermal_bcs"] = "context"
                 verified_entities["evidence_status"]["thermal_bcs"] = "VERIFIED"
@@ -2094,6 +2181,9 @@ class EngineeringIntentRouter:
                 "elastic_modulus": 210000.0,
                 "poisson_ratio": 0.3,
                 "unit": "MPa",
+                "source": "standard_reference_library",
+                "material_evidence_level": "VERIFIED_PROPERTIES",
+                "has_verified_properties": True,
             }
         elif any(w in prompt_lower for w in ("铝", "aluminum", "al6061")):
             params["material"] = {
@@ -2101,6 +2191,9 @@ class EngineeringIntentRouter:
                 "elastic_modulus": 70000.0,
                 "poisson_ratio": 0.33,
                 "unit": "MPa",
+                "source": "standard_reference_library",
+                "material_evidence_level": "VERIFIED_PROPERTIES",
+                "has_verified_properties": True,
             }
         elif any(w in prompt_lower for w in ("橡胶", "rubber")):
             params["material"] = {
@@ -2108,6 +2201,9 @@ class EngineeringIntentRouter:
                 "elastic_modulus": 10.0,
                 "poisson_ratio": 0.499,
                 "unit": "MPa",
+                "source": "standard_reference_library",
+                "material_evidence_level": "VERIFIED_PROPERTIES",
+                "has_verified_properties": True,
             }
         elif any(w in prompt_lower for w in ("elastic", "弹性")):
             params["material"] = {
@@ -2115,6 +2211,9 @@ class EngineeringIntentRouter:
                 "elastic_modulus": 200000.0,
                 "poisson_ratio": 0.3,
                 "unit": "MPa",
+                "source": "standard_reference_library",
+                "material_evidence_level": "VERIFIED_PROPERTIES",
+                "has_verified_properties": True,
             }
 
         return params
@@ -2143,6 +2242,8 @@ class EngineeringIntentRouter:
         bcs = []
         if norm.get("boundary_conditions"):
             bcs.extend(norm["boundary_conditions"])
+        elif phys == "steady_thermal" and norm.get("thermal_bcs"):
+            bcs.extend(norm["thermal_bcs"])
         else:
             prompt_bcs = _extract_prompt_boundary_conditions(prompt)
             valid_prompt_bcs = [bc for bc in prompt_bcs if bc.get("region")]
@@ -2151,9 +2252,12 @@ class EngineeringIntentRouter:
 
         # Construct loads tuple:
         # Prioritize verified normalized context loads or prompt loads with explicitly extracted regions
+        # Strictly enforce non-empty region on all injected mechanical loads
         loads = []
         if norm.get("loads"):
-            loads.extend(norm["loads"])
+            for ld in norm["loads"]:
+                if ld.get("region"):
+                    loads.append(ld)
         else:
             for ld in params.get("loads", []):
                 mag = ld["magnitude"]
@@ -2161,23 +2265,17 @@ class EngineeringIntentRouter:
                 if u in ("KN", "千牛"):
                     mag *= 1000.0
                     reg = _extract_prompt_load_region(prompt, "concentrated_force")
-                    ld_dict = {"type": "concentrated_force", "magnitude": mag, "direction": "-Y"}
                     if reg:
-                        ld_dict["region"] = reg
-                    loads.append(ld_dict)
+                        loads.append({"type": "concentrated_force", "magnitude": mag, "direction": "-Y", "region": reg})
                 elif u in ("N", "牛"):
                     reg = _extract_prompt_load_region(prompt, "concentrated_force")
-                    ld_dict = {"type": "concentrated_force", "magnitude": mag, "direction": "-Y"}
                     if reg:
-                        ld_dict["region"] = reg
-                    loads.append(ld_dict)
+                        loads.append({"type": "concentrated_force", "magnitude": mag, "direction": "-Y", "region": reg})
                 elif u in ("MPA", "KPA"):
                     if any(w in prompt.lower() for w in ("压力", "压强", "pressure")):
                         reg = _extract_prompt_load_region(prompt, "pressure")
-                        ld_dict = {"type": "pressure", "magnitude": mag}
                         if reg:
-                            ld_dict["region"] = reg
-                        loads.append(ld_dict)
+                            loads.append({"type": "pressure", "magnitude": mag, "region": reg})
 
         # Construct acceptance criteria tuple: Strictly consume verified normalized criteria or prompt criteria
         crit_list = []
@@ -2195,6 +2293,17 @@ class EngineeringIntentRouter:
         # Resolve dimensions: Strictly consume verified normalized dimensions or prompt parameters
         dims = norm.get("dimensions") or params.get("dimensions")
 
+        # Track topological grounding status (distinguish semantic candidate tags from verified CAD/INP topology)
+        grounding_status = "SEMANTIC_CANDIDATE_UNRESOLVED"
+        if (
+            isinstance(ctx.get("inp_evidence"), dict)
+            and ctx["inp_evidence"].get("verified")
+            and (ctx["inp_evidence"].get("surfaces") or ctx["inp_evidence"].get("sets") or ctx["inp_evidence"].get("parts"))
+        ) or (
+            ctx.get("model_topology_grounded") is True
+        ):
+            grounding_status = "MODEL_TOPOLOGY_GROUNDED"
+
         metadata = {
             "dimensions": dims,
             "jev_source": bundle.source_model,
@@ -2204,6 +2313,7 @@ class EngineeringIntentRouter:
             "context_merged": bool(ctx),
             "evidence_sources": sources,
             "evidence_status": statuses,
+            "region_grounding_status": grounding_status,
             "routing_gate_passed": True,
             "preflight_required": True,
             "solver_ready": False,

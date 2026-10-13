@@ -545,6 +545,101 @@ def test_acceptance_criteria_metrics_whitelist_enforcement():
     assert norm[0]["metric"] == "max_mises"
 
 
+def test_material_property_strictness_rejects_missing_poisson():
+    """Verify material having only elastic_modulus without poisson_ratio is blocked as unverified_material_properties."""
+    from abaqus_ai_agent.typesafe_intent import JevIntentRouter
+
+    router = JevIntentRouter(mode="offline")
+    prompt = "100mm悬臂梁端部受1000N垂直载荷，固定根部，校核端部挠度不超过2.5mm。"
+
+    # Context provides material with E but NO nu
+    incomplete_mat_ctx = {
+        "material": {"name": "Custom_Steel", "elastic_modulus": 210000.0},
+    }
+    res = router.route(prompt, context=incomplete_mat_ctx)
+    assert res.status == "NEEDS_CLARIFICATION"
+    assert "unverified_material_properties" in res.missing_requirements
+
+    # Complete material with both E and nu
+    complete_mat_ctx = {
+        "material": {"name": "Custom_Steel", "elastic_modulus": 210000.0, "poisson_ratio": 0.3},
+    }
+    res_ok = router.route(prompt, context=complete_mat_ctx)
+    assert res_ok.status == "ROUTED"
+    assert res_ok.intent is not None
+    assert res_ok.intent.material.get("has_verified_properties") is True
+
+
+def test_mechanical_load_requires_explicit_application_region():
+    """Verify mechanical load lacking an application region fails closed with missing_load_application_region."""
+    from abaqus_ai_agent.typesafe_intent import JevIntentRouter
+
+    router = JevIntentRouter(mode="offline")
+    # Prompt specifies 1000N load, but omits application region (no 端部 / 顶面 / tip / top)
+    unplaced_load_prompt = "100mm悬臂梁施加1000N垂直载荷，材料为结构钢，固定根部，校核挠度不超过2.5mm。"
+    res = router.route(unplaced_load_prompt)
+    assert res.status == "NEEDS_CLARIFICATION"
+    assert "missing_load_application_region" in res.missing_requirements
+
+    # When application region is explicitly provided (端部 -> TipFace)
+    placed_load_prompt = "100mm悬臂梁端部施加1000N垂直载荷，材料为结构钢，固定根部，校核端部挠度不超过2.5mm。"
+    res_ok = router.route(placed_load_prompt)
+    assert res_ok.status == "ROUTED"
+    assert res_ok.intent is not None
+    assert len(res_ok.intent.loads) > 0
+    for ld in res_ok.intent.loads:
+        assert bool(ld.get("region")) is True
+        assert ld["region"] == "TipFace"
+
+
+def test_thermal_bc_bare_keywords_rejected_without_entity_data():
+    """Verify bare thermal keywords (e.g. 对流, 辐射) without parameters/regions are strictly rejected."""
+    from abaqus_ai_agent.typesafe_intent import JevIntentRouter
+
+    router = JevIntentRouter(mode="offline")
+    # Bare keyword without temperatures, film coefficients, or regions
+    bare_kw_prompt = "500mm导热棒，材料为结构钢，对流换热分析，计算温度分布。"
+    res = router.route(bare_kw_prompt)
+    assert res.status == "NEEDS_CLARIFICATION"
+    assert "missing_thermal_boundary_conditions" in res.missing_requirements
+
+    # Real thermal BCs with temperatures and regions
+    real_th_prompt = "500mm导热棒，材料为结构钢，热端固定100°C，冷端固定20°C，计算稳态温度梯度分布。"
+    res_ok = router.route(real_th_prompt)
+    assert res_ok.status == "ROUTED"
+    assert res_ok.intent is not None
+    assert len(res_ok.intent.boundary_conditions) > 0
+    th_regions = {bc.get("region") for bc in res_ok.intent.boundary_conditions}
+    assert "HotEnd" in th_regions
+    assert "ColdEnd" in th_regions
+
+
+def test_region_grounding_status_in_intent_metadata():
+    """Verify semantic candidate regions are tagged SEMANTIC_CANDIDATE_UNRESOLVED,
+    while verified topology models are tagged MODEL_TOPOLOGY_GROUNDED."""
+    from abaqus_ai_agent.typesafe_intent import JevIntentRouter
+
+    router = JevIntentRouter(mode="offline")
+    prompt = "100mm悬臂梁端部施加1000N垂直载荷，材料为结构钢，固定根部，校核端部挠度不超过2.5mm。"
+
+    # Prompt only: semantic candidate
+    res_semantic = router.route(prompt)
+    assert res_semantic.status == "ROUTED"
+    assert res_semantic.intent.metadata["region_grounding_status"] == "SEMANTIC_CANDIDATE_UNRESOLVED"
+
+    # Context with verified topology evidence
+    topology_ctx = {
+        "inp_evidence": {
+            "verified": True,
+            "parts": ["BeamPart"],
+            "surfaces": ["FixedFace", "TipFace"],
+        }
+    }
+    res_grounded = router.route(prompt, context=topology_ctx)
+    assert res_grounded.status == "ROUTED"
+    assert res_grounded.intent.metadata["region_grounding_status"] == "MODEL_TOPOLOGY_GROUNDED"
+
+
 def test_no_speculative_region_when_prompt_only_says_fixed():
     """Verify that prompt with bare '固定' without location does not forge RootFace and fails closed."""
     from abaqus_ai_agent.typesafe_intent import _extract_prompt_boundary_conditions, JevIntentRouter

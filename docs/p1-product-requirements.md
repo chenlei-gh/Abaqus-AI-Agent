@@ -474,11 +474,13 @@ P1.0 产品主入口已彻底消除高层自然语言需求与底层 20 个 L4 �
   - 严禁单凭 `has_model: True`、`has_geometry: True`、`has_material: True`、`has_constraints: True` 等名义布尔标记直接放行硬前置条件；
   - **全实体严格类型化结构防呆校验**：
     - 几何尺寸：数值必须为有限正数（拒绝 $<=0$、NaN、Inf），字段键必须严格匹配合法尺寸键集合（`VALID_DIMENSION_KEYS`，如 length/width/height/box 等，拒绝 `stress: 300` 等非尺寸字典），且必须具备合法的长度单位（如 `mm`, `m`, `cm`, `in`），非法单位坚决拒绝；
-    - 材料属性：弹性模量必须正有限，泊松比必须严格满足 $0.0 \le \nu < 0.5$（拒绝 $\nu \ge 0.5$ 体积刚度奇异及负值）；严格解耦“材料名称识别”（`NAMED_ONLY`）与“物理属性验证”（`VERIFIED_PROPERTIES`），在弹性物理域（静力、模态、动力学等）缺少有效力学物性参数时坚决阻断澄清（`unverified_material_properties`）；
+    - 材料属性：弹性模量必须正有限，泊松比必须严格满足 $0.0 \le \nu < 0.5$（拒绝 $\nu \ge 0.5$ 体积刚度奇异及负值）；严格解耦“材料名称识别”（`NAMED_ONLY`）与“物理属性验证”（`VERIFIED_PROPERTIES`），彻底消除 `or elastic_modulus is not None` 旁路漏洞，在弹性物理域（静力、模态、动力学等）缺少有效力学物性参数时坚决阻断澄清（`unverified_material_properties`），并显式标记来源（`explicit_user_input`, `model_extracted`, `standard_reference_library`）；
     - 边界条件：必须具备明确且受支持的约束类型（精确匹配 `VALID_BC_TYPES`，拒绝 `not_fixed` 等子串伪造）与有效几何区域（`region`/`surface`/`set`/`face`），位移约束（`displacement`）必须强制包含非空且严格位于 $1..6$ 范围内的自由度集合（`dofs`）；严禁将任意非空字符串或无区域约束伪造成 `FixedFace`，Prompt 仅包含裸“固定”而未指定具体位置时坚决拒绝生成推测性区域；
     - 边界提取子句作用域隔离：提取 Prompt 边界区域时实施子句级别隔离（Clause Scoping），彻底杜绝载荷端部描述（如“端部受1000N力”）被跨子句错误窃取为约束区域；
-    - 载荷实体：必须包含明确的有限且严格非零数值幅值（`magnitude != 0.0`，拒绝零幅值并报错 `load_magnitude_must_be_non_zero`，严禁布尔值、NaN、Inf）、受支持载荷类型（精确匹配 `VALID_LOAD_TYPES`，拒绝 `not_pressure` 等子串伪造）及目标区域；缺少幅值或区域的实体坚决拒绝；
-    - 热边界与验收准则：热边界必须包含有限数值幅值（温度/热流，完整支持合法的 $0^\circ\text{C}$ / `0.0` 数值，杜绝 falsy 丢失缺陷），对流换热强制环境温度与换热系数，热辐射强制环境温度与有效发射率（$0 < \epsilon \le 1.0$）；验收准则操作符必须严格限定在合法比较运算符集合（`VALID_CRITERIA_OPERATORS`），指标名称必须严格匹配工程指标白名单（`VALID_CRITERIA_METRICS`）；
+    - 载荷实体与作用区域严格闭环：必须包含明确的有限且严格非零数值幅值（`magnitude != 0.0`，拒绝零幅值并报错 `load_magnitude_must_be_non_zero`，严禁布尔值、NaN、Inf）、受支持载荷类型（精确匹配 `VALID_LOAD_TYPES`，拒绝 `not_pressure` 等子串伪造）及目标作用区域；进入可执行 `EngineeringIntent` 的机械载荷必须 100% 具备显式区域，若 Prompt 仅有幅值而缺少作用区域且 Context 未提供，坚决 fail-closed 拦截并报错 `missing_load_application_region`，杜绝载荷前置条件放行但 Intent 缺少区域的不对称缺陷；
+    - 热边界实体结构校验：彻底消除裸关键词判定绕过，必须通过 `_extract_prompt_thermal_bcs` 提取结构化实体，热边界必须包含有限数值幅值（温度/热流，完整支持合法的 $0^\circ\text{C}$ / `0.0` 数值，杜绝 falsy 丢失缺陷）与目标区域，对流换热强制环境温度与换热系数，热辐射强制环境温度与有效发射率（$0 < \epsilon \le 1.0$）；未提供有效实体时坚决输出 `missing_thermal_boundary_conditions` 阻断澄清；
+    - 语义候选区域与拓扑模型 Grounding 解耦：意图元数据中显式追踪 `region_grounding_status`（Prompt 语义标签标记为 `SEMANTIC_CANDIDATE_UNRESOLVED`，经 INP/CAD 真实模型拓扑验证的标记为 `MODEL_TOPOLOGY_GROUNDED`），杜绝下游将语义推断误当成拓扑接地；
+    - 验收准则：验收准则操作符必须严格限定在合法比较运算符集合（`VALID_CRITERIA_OPERATORS`），指标名称必须严格匹配工程指标白名单（`VALID_CRITERIA_METRICS`）；
     - 证据有效性标记：标有 `status: "UNVERIFIED"`、`verified: False`、`expired: True`、`conflict: True`（含布尔值与字符串）的证据严禁放行；
   - **前置条件与意图构造对称闭环**：前置条件判定通过的所有物理实体，必须 100% 完整映射并注入最终 `EngineeringIntent`，彻底消除前置条件判定通过却产出空约束 Intent 的断层缺陷；
   - **零原始上下文回退与零虚构几何区域（Zero Raw Context Fallback & Geometric Region De-forgery）**：
@@ -564,7 +566,7 @@ P1.0 产品主入口已彻底消除高层自然语言需求与底层 20 个 L4 �
 | **REQ-P1-042** | 自愈审计追踪与防伪红线 | P1.4 | 修复前后两次 Run | 完整 Diff 对比明细 | Tier B | 严禁静默覆盖首次失败记录 | 📋 **PLANNED** |
 | **REQ-P1-043** | JEV 模式隔离与防静默降级 | P1.4 | 运行模式配置与提示词 | 强类型决策与状态 | Tier B | Live 模式异常坚决 Fail-Closed | 🟢 **QUALIFIED** |
 | **REQ-P1-044** | 严格数值校验、载荷对齐与全链路审计 | P1.4 | 意图提问与响应载荷 | 完整审计束与来源标记 | Tier B | 概率分布归一化 sum=1.0、深度脱敏 | 🟢 **QUALIFIED** |
-| **REQ-P1-045** | 独立工程评测系统与 Context Merge 审计 | P1.4 | 8大工程维度基准评测 | 评测指标、严格分母、精确率与实体防呆 | Tier B | 8维度全指标分母分立、零虚构几何区域、精确白名单与双向实体防呆闭环 | 🟢 **QUALIFIED (Offline Intent Contract Closed)** |
+| **REQ-P1-045** | 独立工程评测系统与 Context Merge 审计 | P1.4 | 8大工程维度基准评测 | 评测指标、严格分母、精确率与实体防呆 | Tier B | 8维度全指标分母分立、零虚构几何区域、严格物性与载荷区域闭环 | 🟡 **IN_REVIEW (Contract Hardening in Progress)** |
 | **REQ-P1-046** | 开源核心独立运行与零外部依赖 | P1.4 | 纯离线/无网络环境输入 | 独立 Intent/编译/求解/报告 | Tier A | 核心闭环严禁外部服务阻断 | 🟢 **QUALIFIED (Offline Core Hermetic)** |
 | **REQ-P1-047** | 可选外部服务适配器协议与响应归一化 | P1.4 | 通用意图提供者接口与配置 | 可插拔适配器加载与解析 | Tier B | 未安装/未配置时保持 offline 基线 | 🟢 **QUALIFIED (Protocol Contract Closed)** |
 | **REQ-P1-048** | 专有服务接入隔离与零专有泄露 | P1.4 | 公开核心代码库 | 供应商中立抽象与纯净核心 | Tier A | 严禁硬编码专有端点与私有协议 | 🟢 **QUALIFIED (Code Tree Clean)** |
