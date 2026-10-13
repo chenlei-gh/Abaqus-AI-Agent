@@ -219,7 +219,7 @@ Run the deterministic regression suite:
 
 ```bash
 python -m pytest tests -W error -q
-# Expected result: 1098 passed in ~70s (0 warnings, 0 errors)
+# Expected result: all test suites passing (0 warnings, 0 errors)
 ```
 
 ### 3. Minimal Python Usage

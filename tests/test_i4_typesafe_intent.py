@@ -7,6 +7,7 @@ import pytest
 
 from abaqus_ai_agent.typesafe_intent import (
     ChoiceJudgment,
+    IntentAmbiguityError,
     JevDecisionBundle,
     JevIntentRouter,
     NoulJudgment,
@@ -50,7 +51,13 @@ def test_jev_intent_router_static_prompt():
 def test_jev_intent_router_thermal_prompt():
     router = JevIntentRouter()
     prompt = "1D heat conduction bar with hot end at 100C and cold end at 0C. Check midpoint temperature."
-    intent, bundle = router.route_prompt_to_intent(prompt)
+
+    # Default strict=True must fail-closed on incomplete specification
+    with pytest.raises(IntentAmbiguityError):
+        router.route_prompt_to_intent(prompt)
+
+    # Explicit strict=False allows backwards-compatible draft intent generation
+    intent, bundle = router.route_prompt_to_intent(prompt, strict=False)
 
     assert bundle.physics_choice.value == "steady_thermal"
     assert bundle.unit_system_choice.value == "MM_N_MPA"

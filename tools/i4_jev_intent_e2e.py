@@ -67,7 +67,7 @@ def run_jev_intent_e2e(output_path: Path) -> Dict[str, Any]:
         pid = sample["id"]
         prompt = sample["prompt"]
 
-        intent, bundle = router.route_prompt_to_intent(prompt)
+        intent, bundle = router.route_prompt_to_intent(prompt, strict=False)
 
         # Assertions
         phys_match = (bundle.physics_choice.value == sample["expected_physics"])

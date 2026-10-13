@@ -158,7 +158,7 @@ Phase 4 才开始正式产品化：MCP / Agent Tool、UI / HITL 工作台、部�
 ### 1.4 现有能力复用与防重复建设审计原则 (Capability Reuse Matrix)
 在启动 P1.1 及后续研发前，全量审计了当前代码库在 Phase A~M 及 Post-RC1 沉淀的大量高成熟度资产（详细审计详见专报 [`docs/p1-capability-reuse-audit.md`](p1-capability-reuse-audit.md)）：
 * **P1.1 多模态层（Phase 1）**：严禁重写 `VisualCallout`、`GroundingObservation` 及 `MultimodalHITLWorkflow` 状态机；严禁重写 3D 射线拾取与几何候选算法（复用 GA-2A 与 H.6 真实机已验证资产）；**P1.1 唯一任务是补齐最前端的图像/图纸 OCR 与符号提取适配器**。
-* **P1.2 推理补全层（Phase 1）**：严禁重写 `MaterialResolver` 的单位转换与温度外推阻断逻辑；严禁重构 `JevIntentRouter`；严禁重写网格指标与 GCI 算法；**P1.2 唯一任务是建立常用材料别名字典与网格透明推荐依据记录器**。
+* **P1.2 推理补全层（Phase 1）**：严禁重写 `MaterialResolver` 的单位转换与温度外推阻断逻辑；严禁无依据重写既有能力，允许为满足供应商中立与工程解耦契约进行受控演进；严禁重写网格指标与 GCI 算法；**P1.2 唯一任务是建立常用材料别名字典与网格透明推荐依据记录器**。
 * **P1.3 可视化与报告层（Phase 1）**：严禁重构 `EngineeringReportData` 与 HTML 报告渲染器；**仅补齐无头 ODB 云图导出脚本与 Matplotlib 动力学能量曲线生成器**。
 * **P1.4 求解医生层（Phase 3：诊断 / 迭代）**：严禁重写发散模式正则库与两次 Run 的物理对比算法（复用 `PATTERNS` 与 `AnalysisRunDiff`）；**仅补齐自愈调度闭环编排器**。
 

@@ -24,6 +24,8 @@ import pytest
 from abaqus_ai_agent.agent import AbaqusAIAgent
 from abaqus_ai_agent.typesafe_intent import (
     ChoiceJudgment,
+    EngineeringIntentRouter,
+    ExternalIntentApiError,
     IntentAmbiguityError,
     IntentRoutingResult,
     JevApiError,
@@ -456,6 +458,199 @@ def test_agent_solve_requirement_orchestrates_jev_mode():
     res = agent.solve_requirement("帮我算算这个结构强度", jev_mode="offline")
     assert res.status.value == "NEEDS_CLARIFICATION"
     assert "missing_requirements" in res.metadata
+
+
+# ==============================================================================
+# 4. Strict Contract Gating, Prerequisite Matrix, & Shadow Isolation Tests
+# ==============================================================================
+
+def test_route_prompt_to_intent_defaults_to_strict_fail_closed():
+    """route_prompt_to_intent must default to strict=True and raise IntentAmbiguityError on incomplete prompts."""
+    router = EngineeringIntentRouter(mode="offline")
+
+    # Default strict=True
+    with pytest.raises(IntentAmbiguityError) as exc_info:
+        router.route_prompt_to_intent("100mm 悬臂梁，固定根部，校核应力")  # missing load, material
+    err = exc_info.value
+    assert "missing_material_specification" in err.missing_requirements
+    assert "missing_applied_loads" in err.missing_requirements
+    assert err.bundle is not None
+
+    # Explicit strict=False allows draft intent generation
+    intent, bundle = router.route_prompt_to_intent(
+        "100mm 悬臂梁，固定根部，校核应力", strict=False
+    )
+    assert intent is not None
+    assert bundle is not None
+
+
+def test_thermal_prerequisite_word_boundary_and_no_single_char_k_leak():
+    """Verify English prompt with letter 'k' in common words (like 'check') does NOT fool thermal BC detector."""
+    router = EngineeringIntentRouter(mode="offline")
+
+    # Prompt with 'check' has 'k', but no temperature units or thermal BC keywords
+    res_ambiguous = router.route(
+        "100mm structural steel rod under thermal conduction, check midpoint temperature."
+    )
+    assert res_ambiguous.status == "NEEDS_CLARIFICATION"
+    assert "missing_thermal_boundary_conditions" in res_ambiguous.missing_requirements
+
+    # Prompt with legitimate thermal boundary condition (300 K, 400 K)
+    res_valid = router.route(
+        "100mm x 20mm 结构钢导热杆，热端 400 K，冷端 300 K，固定冷端面，校核中点温度。"
+    )
+    assert res_valid.status == "ROUTED"
+    assert "missing_thermal_boundary_conditions" not in res_valid.missing_requirements
+
+
+def test_modal_frequency_does_not_require_loads():
+    """Modal frequency eigenvalue extraction requires geometry, material, constraints, but NO external loads."""
+    router = EngineeringIntentRouter(mode="offline")
+    prompt = (
+        "100mm x 20mm x 20mm 结构钢悬臂梁，固定根部，进行模态分析提取固有频率与振型，校核一阶固有频率大于50Hz。"
+    )
+    res = router.route(prompt)
+    assert res.status == "ROUTED"
+    assert res.decision_bundle.physics_choice.value == "modal_frequency"
+    assert "missing_applied_loads" not in res.missing_requirements
+
+
+@pytest.mark.parametrize(
+    "missing_field_patch, expected_error_msg",
+    [
+        ({"physics": {"choice": "linear_static"}}, "Missing required 'confidence' in physics"),
+        ({"units": {"choice": "MM_N_MPA"}}, "Missing required 'confidence' in units"),
+        ({"solver": {"choice": "abaqus_standard"}}, "Missing required 'confidence' in solver"),
+        ({"well_constrained": {}}, "Missing required 'probability' in well_constrained"),
+        ({"has_acceptance_criteria": {}}, "Missing required 'probability' in has_acceptance_criteria"),
+        ({"completeness": {}}, "Missing required 'score' in completeness"),
+    ],
+)
+def test_external_provider_missing_fields_strictly_fail_closed(missing_field_patch, expected_error_msg):
+    """External provider responses missing required confidence/probability/score must fail-closed."""
+    router = EngineeringIntentRouter(
+        api_key="sk-test",
+        api_url="https://example.com/intent/judge",
+        mode="live",
+    )
+
+    valid_base: Dict[str, Any] = {
+        "physics": {"choice": "linear_static", "confidence": 0.95},
+        "units": {"choice": "MM_N_MPA", "confidence": 0.95},
+        "solver": {"choice": "abaqus_standard", "confidence": 0.98},
+        "well_constrained": {"probability": 0.95},
+        "has_acceptance_criteria": {"probability": 0.90},
+        "completeness": {"score": 4.5},
+    }
+    valid_base.update(missing_field_patch)
+
+    with patch("urllib.request.urlopen", return_value=_make_mock_response({"answers": valid_base})):
+        with pytest.raises(ExternalIntentApiError, match=expected_error_msg):
+            router.route("100mm cantilever steel beam with 1000N load, fixed root, check max stress <= 600MPa")
+
+
+def test_nested_distribution_and_levels_validation():
+    """Nested distribution and levels structures must be strictly type- and range-checked."""
+    router = EngineeringIntentRouter(
+        api_key="sk-test",
+        api_url="https://example.com/intent/judge",
+        mode="live",
+    )
+
+    # 1. Invalid physics in distribution
+    invalid_dist_payload = {
+        "answers": {
+            "physics": {"choice": "linear_static", "confidence": 0.9, "distribution": {"invalid_phys": 0.9}},
+            "units": {"choice": "MM_N_MPA", "confidence": 0.9},
+            "solver": {"choice": "abaqus_standard", "confidence": 0.9},
+            "well_constrained": {"probability": 0.9},
+            "has_acceptance_criteria": {"probability": 0.9},
+            "completeness": {"score": 4.0},
+        }
+    }
+    with patch("urllib.request.urlopen", return_value=_make_mock_response(invalid_dist_payload)):
+        with pytest.raises(ExternalIntentApiError, match="Invalid physics choice in distribution"):
+            router.route("100mm steel bar with 1000N load")
+
+    # 2. Invalid level key in completeness levels
+    invalid_levels_payload = {
+        "answers": {
+            "physics": {"choice": "linear_static", "confidence": 0.9},
+            "units": {"choice": "MM_N_MPA", "confidence": 0.9},
+            "solver": {"choice": "abaqus_standard", "confidence": 0.9},
+            "well_constrained": {"probability": 0.9},
+            "has_acceptance_criteria": {"probability": 0.9},
+            "completeness": {"score": 4.0, "levels": {6: 0.9}},
+        }
+    }
+    with patch("urllib.request.urlopen", return_value=_make_mock_response(invalid_levels_payload)):
+        with pytest.raises(ExternalIntentApiError, match="Completeness level key out of range"):
+            router.route("100mm steel bar with 1000N load")
+
+
+def test_shadow_mode_handles_custom_provider_is_configured_crashing():
+    """If a custom provider's is_configured() or judge() raises an unexpected exception, shadow mode must not fail."""
+    class CrashingProvider:
+        def is_configured(self):
+            raise RuntimeError("Unexpected internal crash inside provider check!")
+
+    router = EngineeringIntentRouter(
+        mode="shadow",
+        external_provider=CrashingProvider(),
+    )
+
+    res = router.route(
+        "100mm悬臂梁端部施加1000N垂直载荷，材料为结构钢，固定根部，校核端部挠度不超过2.5mm。"
+    )
+    assert res.status == "ROUTED"
+    assert res.intent is not None
+    diff = res.decision_bundle.shadow_diff
+    assert diff["status"] == "LIVE_FAILED"
+    assert "Unexpected internal crash" in diff["error"]
+
+
+def test_http_error_does_not_leak_response_body():
+    """HTTP errors must not include raw server response bodies that might echo sensitive credentials."""
+    router = EngineeringIntentRouter(
+        api_key="sk-test-secret-12345",
+        api_url="https://example.com/intent/judge",
+        mode="live",
+    )
+
+    http_error_with_secret = urllib.error.HTTPError(
+        url="https://example.com/intent/judge",
+        code=400,
+        msg="Bad Request",
+        hdrs={},
+        fp=io.BytesIO(b'{"debug": "Prompt leaked with auth Bearer sk-test-secret-12345"}'),
+    )
+
+    with patch("urllib.request.urlopen", side_effect=http_error_with_secret):
+        with pytest.raises(ExternalIntentApiError) as exc_info:
+            router.route("100mm steel bar with 1000N load")
+        err_msg = str(exc_info.value)
+        assert "sk-test-secret-12345" not in err_msg
+        assert "HTTP 400 error: Bad Request" in err_msg
+
+
+def test_config_priority_and_whitespace_normalization():
+    """Environment configuration values must respect vendor-neutral priority and whitespace trimming."""
+    # 1. Whitespace only string should be ignored as None
+    with patch.dict("os.environ", {"EXTERNAL_INTENT_RUN_MODE": "   ", "INTENT_RUN_MODE": "shadow"}, clear=True):
+        r1 = EngineeringIntentRouter()
+        assert r1.mode == "shadow"
+
+    # 2. Neutral variable has priority over legacy variable
+    with patch.dict(
+        "os.environ",
+        {
+            "EXTERNAL_INTENT_RUN_MODE": "offline",
+            "TYPESAFE_RUN_MODE": "live",
+        },
+        clear=True,
+    ):
+        r2 = EngineeringIntentRouter()
+        assert r2.mode == "offline"
 
 
 def test_cli_ask_subcommand_respects_mode():

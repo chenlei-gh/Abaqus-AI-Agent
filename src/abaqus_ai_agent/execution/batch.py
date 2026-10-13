@@ -4,7 +4,7 @@ import shutil
 import subprocess
 import uuid
 from dataclasses import dataclass
-from typing import Optional, Tuple
+from typing import Any, Optional, Tuple
 
 
 def resolve_default_launcher(launcher: str = "abaqus") -> str:
