@@ -132,6 +132,29 @@ def _is_unverified_or_expired_evidence(val: Any) -> bool:
     return False
 
 
+VALID_LENGTH_UNITS = {
+    "mm", "m", "cm", "in", "inch", "ft", "um", "nm",
+    "毫米", "米", "厘米", "微米", "英寸",
+}
+
+VALID_BC_TYPES = {
+    "encastre", "fixed", "pinned", "roller",
+    "symmetry", "antisymmetry", "displacement",
+    "xsy_symmetry", "ysy_symmetry", "zsy_symmetry",
+    "submodel", "spring",
+}
+
+VALID_LOAD_TYPES = {
+    "concentrated_force", "pressure", "moment",
+    "surface_traction", "body_force", "gravity",
+    "line_load", "thermal_load", "force", "cload",
+}
+
+VALID_THERMAL_BC_TYPES = {
+    "temperature", "heat_flux", "convection", "radiation", "film_condition", "flux",
+}
+
+
 def _validate_dimensions_entity(val: Any) -> Tuple[bool, Optional[Any], Optional[str]]:
     """Validate geometry dimensions entity.
 
@@ -140,6 +163,7 @@ def _validate_dimensions_entity(val: Any) -> Tuple[bool, Optional[Any], Optional
     - Unverified or expired context markers
     - Non-positive numbers (<= 0), NaN, Inf
     - Nominal boolean-only dicts
+    - Unsupported or invalid length units
     Returns: (is_valid, normalized_entity, error_reason)
     """
     if val is None or isinstance(val, bool):
@@ -166,7 +190,9 @@ def _validate_dimensions_entity(val: Any) -> Tuple[bool, Optional[Any], Optional
                 if v is not None:
                     if not _is_finite_positive_number(v):
                         return False, None, "non_positive_or_infinite_dimension"
-                    u = str(item.get("unit", "mm")).strip()
+                    u = str(item.get("unit", "mm")).strip().lower()
+                    if u not in VALID_LENGTH_UNITS:
+                        return False, None, f"invalid_dimension_unit_{u}"
                     normalized.append({"value": float(v), "unit": u})
                 else:
                     dim_keys = [k for k in ("length", "width", "height", "thickness", "radius", "diameter", "depth") if k in item]
@@ -176,6 +202,10 @@ def _validate_dimensions_entity(val: Any) -> Tuple[bool, Optional[Any], Optional
                         kv = item[k]
                         if not _is_finite_positive_number(kv):
                             return False, None, "non_positive_or_infinite_dimension"
+                    if "unit" in item:
+                        u = str(item["unit"]).strip().lower()
+                        if u not in VALID_LENGTH_UNITS:
+                            return False, None, f"invalid_dimension_unit_{u}"
                     normalized.append(dict(item))
             else:
                 return False, None, f"unsupported_dimension_item_type_{type(item).__name__}"
@@ -187,12 +217,20 @@ def _validate_dimensions_entity(val: Any) -> Tuple[bool, Optional[Any], Optional
         if "box" in val and isinstance(val["box"], (list, tuple)):
             box = val["box"]
             if all(_is_finite_positive_number(x) for x in box):
-                return True, [{"value": float(x), "unit": "mm"} for x in box], None
+                u = str(val.get("unit", "mm")).strip().lower()
+                if u not in VALID_LENGTH_UNITS:
+                    return False, None, f"invalid_dimension_unit_{u}"
+                return True, [{"value": float(x), "unit": u} for x in box], None
             return False, None, "non_positive_or_infinite_box_dimension"
+
+        if "unit" in val:
+            u = str(val["unit"]).strip().lower()
+            if u not in VALID_LENGTH_UNITS:
+                return False, None, f"invalid_dimension_unit_{u}"
 
         numeric_items = {}
         for k, v in val.items():
-            if k in ("status", "verified", "source", "evidence_type"):
+            if k in ("status", "verified", "source", "evidence_type", "unit"):
                 continue
             if isinstance(v, bool):
                 continue
@@ -270,129 +308,272 @@ def _validate_material_entity(val: Any) -> Tuple[bool, Optional[Any], Optional[s
 
 
 def _validate_boundary_conditions_entity(val: Any) -> Tuple[bool, Optional[Any], Optional[str]]:
-    """Validate boundary conditions entity."""
+    """Validate boundary conditions entity strictly.
+
+    Rejects:
+    - Booleans and None
+    - Unverified or expired context markers
+    - Bare string without geometric region (no arbitrary FixedFace forgery)
+    - Entities missing explicit constraint type or missing geometric region
+    - Nominal boolean-only dicts
+    Returns: (is_valid, normalized_entity, error_reason)
+    """
     if val is None or isinstance(val, bool):
         return False, None, "nominal_boolean_or_none"
     if _is_unverified_or_expired_evidence(val):
         return False, None, "unverified_or_expired_evidence"
+
+    def _validate_single_bc(item: Any) -> Tuple[bool, Optional[Dict[str, Any]], Optional[str]]:
+        if item is None or isinstance(item, bool):
+            return False, None, "boolean_or_none_in_bc"
+        if _is_unverified_or_expired_evidence(item):
+            return False, None, "unverified_or_expired_evidence"
+        if not isinstance(item, dict):
+            return False, None, f"boundary_condition_must_be_dict_got_{type(item).__name__}"
+
+        raw_type = item.get("type") or item.get("bc_type")
+        if raw_type is None or isinstance(raw_type, bool) or not str(raw_type).strip():
+            return False, None, "missing_boundary_condition_type"
+        bc_type = str(raw_type).strip().lower()
+        if not any(valid_t in bc_type for valid_t in VALID_BC_TYPES):
+            return False, None, f"unsupported_boundary_condition_type_{bc_type}"
+
+        raw_region = item.get("region") or item.get("surface") or item.get("set") or item.get("face") or item.get("nodeset")
+        if raw_region is None or isinstance(raw_region, bool) or not str(raw_region).strip():
+            return False, None, "missing_boundary_condition_region"
+        region = str(raw_region).strip()
+
+        norm: Dict[str, Any] = {
+            "type": bc_type,
+            "region": region,
+        }
+        if "dofs" in item and item["dofs"] is not None:
+            norm["dofs"] = item["dofs"]
+        for dof_k in ("u1", "u2", "u3", "ur1", "ur2", "ur3"):
+            if dof_k in item and item[dof_k] is not None:
+                norm[dof_k] = item[dof_k]
+        return True, norm, None
 
     if isinstance(val, (list, tuple)):
         if not val:
             return False, None, "empty_boundary_conditions_list"
         valid_bcs = []
         for item in val:
-            if isinstance(item, bool) or _is_unverified_or_expired_evidence(item):
-                continue
-            if isinstance(item, dict) and item:
-                valid_bcs.append(item)
-            elif isinstance(item, str) and item.strip():
-                valid_bcs.append({"type": item.strip(), "region": "FixedFace"})
-        if valid_bcs:
-            return True, valid_bcs, None
-        return False, None, "no_valid_boundary_condition_items"
+            ok, norm_bc, err = _validate_single_bc(item)
+            if not ok:
+                return False, None, err
+            valid_bcs.append(norm_bc)
+        return (True, valid_bcs, None) if valid_bcs else (False, None, "no_valid_boundary_condition_items")
 
     if isinstance(val, dict):
         if not val:
             return False, None, "empty_boundary_conditions_dict"
-        real_keys = [k for k, v in val.items() if not isinstance(v, bool) and k not in ("status", "verified")]
-        if real_keys:
-            return True, [val], None
-        return False, None, "nominal_boolean_dict_only"
+        ok, norm_bc, err = _validate_single_bc(val)
+        if ok:
+            return True, [norm_bc], None
+        return False, None, err
 
     return False, None, "unsupported_boundary_conditions_type"
 
 
-def _validate_loads_entity(val: Any) -> Tuple[bool, Optional[Any], Optional[str]]:
-    """Validate loads entity."""
+def _validate_loads_entity(val: Any, require_region: bool = False) -> Tuple[bool, Optional[Any], Optional[str]]:
+    """Validate loads entity strictly.
+
+    Rejects:
+    - Booleans and None
+    - Unverified or expired context markers
+    - Entities missing finite numerical magnitude (no empty/missing magnitude dicts)
+    - Entities missing load type or missing geometric region (when require_region=True)
+    - Nominal boolean-only dicts
+    Returns: (is_valid, normalized_entity, error_reason)
+    """
     if val is None or isinstance(val, bool):
         return False, None, "nominal_boolean_or_none"
     if _is_unverified_or_expired_evidence(val):
         return False, None, "unverified_or_expired_evidence"
+
+    def _validate_single_load(item: Any) -> Tuple[bool, Optional[Dict[str, Any]], Optional[str]]:
+        if item is None or isinstance(item, bool):
+            return False, None, "boolean_or_none_in_load"
+        if _is_unverified_or_expired_evidence(item):
+            return False, None, "unverified_or_expired_evidence"
+        if not isinstance(item, dict):
+            return False, None, f"load_must_be_dict_got_{type(item).__name__}"
+
+        # Finite magnitude is strictly required
+        mag = item.get("magnitude")
+        if mag is None:
+            mag = item.get("force") if "force" in item else (item.get("pressure") if "pressure" in item else item.get("value"))
+        if mag is None or isinstance(mag, bool) or not _is_finite_number(mag):
+            return False, None, "missing_or_non_finite_load_magnitude"
+        fmag = float(mag)
+
+        raw_type = item.get("type") or item.get("load_type")
+        if raw_type is None or isinstance(raw_type, bool) or not str(raw_type).strip():
+            if "pressure" in item:
+                raw_type = "pressure"
+            elif "force" in item or "magnitude" in item:
+                raw_type = "concentrated_force"
+            else:
+                return False, None, "missing_load_type"
+        load_type = str(raw_type).strip().lower()
+        if not any(valid_t in load_type for valid_t in VALID_LOAD_TYPES):
+            return False, None, f"unsupported_load_type_{load_type}"
+
+        raw_region = item.get("region") or item.get("surface") or item.get("set") or item.get("face")
+        if require_region:
+            if raw_region is None or isinstance(raw_region, bool) or not str(raw_region).strip():
+                return False, None, "missing_load_region"
+
+        norm: Dict[str, Any] = {
+            "type": load_type,
+            "magnitude": fmag,
+        }
+        if raw_region and str(raw_region).strip():
+            norm["region"] = str(raw_region).strip()
+        if "direction" in item and item["direction"]:
+            norm["direction"] = str(item["direction"]).strip()
+        if "unit" in item and item["unit"]:
+            norm["unit"] = str(item["unit"]).strip()
+        return True, norm, None
 
     if isinstance(val, (list, tuple)):
         if not val:
             return False, None, "empty_loads_list"
         valid_loads = []
         for item in val:
-            if isinstance(item, bool) or _is_unverified_or_expired_evidence(item):
-                continue
-            if isinstance(item, dict):
-                mag = item.get("magnitude")
-                if mag is not None and not _is_finite_number(mag):
-                    continue
-                valid_loads.append(item)
-        if valid_loads:
-            return True, valid_loads, None
-        return False, None, "no_valid_load_items"
+            ok, norm_ld, err = _validate_single_load(item)
+            if not ok:
+                return False, None, err
+            valid_loads.append(norm_ld)
+        return (True, valid_loads, None) if valid_loads else (False, None, "no_valid_load_items")
 
     if isinstance(val, dict):
         if not val:
             return False, None, "empty_loads_dict"
-        mag = val.get("magnitude")
-        if mag is not None and not _is_finite_number(mag):
-            return False, None, "invalid_magnitude"
-        real_keys = [k for k, v in val.items() if not isinstance(v, bool) and k not in ("status", "verified")]
-        if real_keys:
-            return True, [val], None
-        return False, None, "nominal_boolean_dict_only"
+        ok, norm_ld, err = _validate_single_load(val)
+        if ok:
+            return True, [norm_ld], None
+        return False, None, err
 
     return False, None, "unsupported_loads_type"
 
 
 def _validate_thermal_bcs_entity(val: Any) -> Tuple[bool, Optional[Any], Optional[str]]:
-    """Validate thermal boundary conditions entity."""
+    """Validate thermal boundary conditions entity strictly."""
     if val is None or isinstance(val, bool):
         return False, None, "nominal_boolean_or_none"
     if _is_unverified_or_expired_evidence(val):
         return False, None, "unverified_or_expired_evidence"
 
+    def _validate_single_th(item: Any) -> Tuple[bool, Optional[Dict[str, Any]], Optional[str]]:
+        if item is None or isinstance(item, bool):
+            return False, None, "boolean_or_none_in_thermal_bc"
+        if _is_unverified_or_expired_evidence(item):
+            return False, None, "unverified_or_expired_evidence"
+        if not isinstance(item, dict):
+            return False, None, f"thermal_bc_must_be_dict_got_{type(item).__name__}"
+
+        raw_type = item.get("type") or item.get("bc_type")
+        if raw_type is None or isinstance(raw_type, bool) or not str(raw_type).strip():
+            if "temperature" in item:
+                raw_type = "temperature"
+            elif "heat_flux" in item or "flux" in item:
+                raw_type = "heat_flux"
+            else:
+                return False, None, "missing_thermal_bc_type"
+        th_type = str(raw_type).strip().lower()
+        if not any(valid_t in th_type for valid_t in VALID_THERMAL_BC_TYPES):
+            return False, None, f"unsupported_thermal_bc_type_{th_type}"
+
+        val_mag = item.get("magnitude") or item.get("temperature") or item.get("heat_flux") or item.get("value")
+        if val_mag is not None and (isinstance(val_mag, bool) or not _is_finite_number(val_mag)):
+            return False, None, "invalid_thermal_magnitude"
+
+        raw_region = item.get("region") or item.get("surface") or item.get("set") or item.get("face")
+        if raw_region is None or isinstance(raw_region, bool) or not str(raw_region).strip():
+            return False, None, "missing_thermal_bc_region"
+
+        norm: Dict[str, Any] = {
+            "type": th_type,
+            "region": str(raw_region).strip(),
+        }
+        if val_mag is not None:
+            norm["magnitude"] = float(val_mag)
+        return True, norm, None
+
     if isinstance(val, (list, tuple)):
         if not val:
             return False, None, "empty_thermal_bcs_list"
-        valid_items = [x for x in val if not isinstance(x, bool) and not _is_unverified_or_expired_evidence(x)]
-        if valid_items:
-            return True, valid_items, None
-        return False, None, "no_valid_thermal_bc_items"
+        valid_items = []
+        for item in val:
+            ok, norm_th, err = _validate_single_th(item)
+            if not ok:
+                return False, None, err
+            valid_items.append(norm_th)
+        return (True, valid_items, None) if valid_items else (False, None, "no_valid_thermal_bc_items")
 
     if isinstance(val, dict):
         if not val:
             return False, None, "empty_thermal_bcs_dict"
-        real_keys = [k for k, v in val.items() if not isinstance(v, bool) and k not in ("status", "verified")]
-        if real_keys:
-            return True, [val], None
-        return False, None, "nominal_boolean_dict_only"
+        ok, norm_th, err = _validate_single_th(val)
+        if ok:
+            return True, [norm_th], None
+        return False, None, err
 
     return False, None, "unsupported_thermal_bcs_type"
 
 
 def _validate_acceptance_criteria_entity(val: Any) -> Tuple[bool, Optional[Any], Optional[str]]:
-    """Validate acceptance criteria entity."""
+    """Validate acceptance criteria entity strictly."""
     if val is None or isinstance(val, bool):
         return False, None, "nominal_boolean_or_none"
     if _is_unverified_or_expired_evidence(val):
         return False, None, "unverified_or_expired_evidence"
+
+    def _validate_single_crit(item: Any) -> Tuple[bool, Optional[Dict[str, Any]], Optional[str]]:
+        if item is None or isinstance(item, bool):
+            return False, None, "boolean_or_none_in_criteria"
+        if _is_unverified_or_expired_evidence(item):
+            return False, None, "unverified_or_expired_evidence"
+        if not isinstance(item, dict):
+            return False, None, f"criteria_must_be_dict_got_{type(item).__name__}"
+
+        lim = item.get("limit")
+        if lim is None or isinstance(lim, bool) or not _is_finite_number(lim):
+            return False, None, "missing_or_invalid_limit"
+
+        name = item.get("metric") or item.get("name") or item.get("value_key")
+        if name is None or isinstance(name, bool) or not str(name).strip():
+            return False, None, "missing_metric_name"
+
+        op = str(item.get("operator", "<=")).strip()
+        norm: Dict[str, Any] = {
+            "name": str(name).strip(),
+            "metric": str(name).strip(),
+            "operator": op,
+            "limit": float(lim),
+        }
+        if "unit" in item and item["unit"]:
+            norm["unit"] = str(item["unit"]).strip()
+        return True, norm, None
 
     if isinstance(val, (list, tuple)):
         if not val:
             return False, None, "empty_criteria_list"
         valid_crits = []
         for item in val:
-            if isinstance(item, bool) or _is_unverified_or_expired_evidence(item):
-                continue
-            if isinstance(item, dict):
-                lim = item.get("limit")
-                if lim is not None and not _is_finite_number(lim):
-                    continue
-                valid_crits.append(item)
-        if valid_crits:
-            return True, valid_crits, None
-        return False, None, "no_valid_criteria_items"
+            ok, norm_cr, err = _validate_single_crit(item)
+            if not ok:
+                return False, None, err
+            valid_crits.append(norm_cr)
+        return (True, valid_crits, None) if valid_crits else (False, None, "no_valid_criteria_items")
 
     if isinstance(val, dict):
-        lim = val.get("limit")
-        if lim is not None and not _is_finite_number(lim):
-            return False, None, "invalid_limit"
-        return True, [val], None
+        ok, norm_cr, err = _validate_single_crit(val)
+        if ok:
+            return True, [norm_cr], None
+        return False, None, err
 
     return False, None, "unsupported_criteria_type"
 
@@ -458,6 +639,50 @@ def _detect_entity_conflicts(
                 f"while context enforces '{c_phys_norm}'. "
                 "Analysis domains are incompatible; please clarify simulation objective."
             )
+
+    # 3. Loads Conflicts (Type and Magnitude contradictions)
+    p_loads = extracted_params.get("loads", [])
+    c_loads = context.get("loads")
+    if p_loads and c_loads:
+        c_load_ok, c_load_norm, _ = _validate_loads_entity(c_loads, require_region=False)
+        if c_load_ok and c_load_norm:
+            p_types = {str(ld.get("type", "concentrated_force")).lower() for ld in p_loads}
+            c_types = {str(c_ld.get("type", "")).lower() for c_ld in c_load_norm}
+            if ("concentrated_force" in p_types and "pressure" in c_types) or ("pressure" in p_types and "concentrated_force" in c_types):
+                conflicts.append(
+                    f"conflict_load_type: Prompt specifies load type {list(p_types)} "
+                    f"while context defines {list(c_types)}. Please clarify load application type."
+                )
+
+    # 4. Boundary Condition Conflicts (e.g. Free-Free / Simple vs Encastre / Fixed)
+    prompt_lower = prompt.lower()
+    c_bcs = context.get("boundary_conditions") or context.get("constraints")
+    if c_bcs:
+        c_bc_ok, c_bc_norm, _ = _validate_boundary_conditions_entity(c_bcs)
+        if c_bc_ok and c_bc_norm:
+            has_encastre_ctx = any("encastre" in bc.get("type", "") or "fixed" in bc.get("type", "") for bc in c_bc_norm)
+            if has_encastre_ctx and any(w in prompt_lower for w in ("自由模态", "自由自由", "free-free", "无约束", "两端简支", "简支", "simply supported", "simply-supported", "pinned")):
+                conflicts.append(
+                    "conflict_boundary_constraints: Prompt requests unconstrained/simply-supported conditions "
+                    "while context enforces fixed/encastre boundary conditions."
+                )
+
+    # 5. Unit System Conflicts
+    c_unit_sys = context.get("unit_system")
+    if c_unit_sys and isinstance(c_unit_sys, str):
+        cus = c_unit_sys.strip().upper()
+        if cus in ("SI_M", "M", "SI-M"):
+            if any(w in prompt_lower for w in ("mm", "毫米", "mpa", "兆帕")):
+                conflicts.append(
+                    f"conflict_unit_system: Context specifies '{cus}' (meter-based) "
+                    "while prompt specifies millimeter/MPa units (SI_MM)."
+                )
+        elif cus in ("SI_MM", "MM", "SI-MM"):
+            if re.search(r'\b\d+\s*m\b', prompt_lower) or any(w in prompt_lower for w in ("米制", "国际单位制(m)")):
+                conflicts.append(
+                    f"conflict_unit_system: Context specifies '{cus}' (millimeter-based) "
+                    "while prompt specifies meter-based units."
+                )
 
     return conflicts
 
@@ -1140,7 +1365,7 @@ class EngineeringIntentRouter:
         # Rejects nominal boolean flags like has_loads: True!
         load_ok = False
         p_load = params.get("loads")
-        p_load_ok, p_load_norm, _ = _validate_loads_entity(p_load)
+        p_load_ok, p_load_norm, _ = _validate_loads_entity(p_load, require_region=False)
         if p_load_ok:
             load_ok = True
             verified_entities["evidence_sources"]["loads"] = "prompt"
@@ -1148,7 +1373,7 @@ class EngineeringIntentRouter:
             verified_entities["normalized"]["loads"] = p_load_norm
         else:
             c_load = ctx.get("loads")
-            c_load_ok, c_load_norm, _ = _validate_loads_entity(c_load)
+            c_load_ok, c_load_norm, _ = _validate_loads_entity(c_load, require_region=True)
             if c_load_ok:
                 load_ok = True
                 verified_entities["evidence_sources"]["loads"] = "context"
@@ -1629,14 +1854,23 @@ class EngineeringIntentRouter:
         if dims:
             params["dimensions"] = dims
 
-        # Loads: e.g. 1000N, 50kN, 2.5 MPa
-        load_matches = re.findall(
+        # Loads: e.g. 1000N, 50kN, 2.5 MPa (exclude acceptance criteria / allowable stress / modulus prefixes)
+        load_matches = re.finditer(
             r"(\d+(?:\.\d+)?)\s*(kn|mpa|kpa|千牛|牛|n(?![a-zA-Z]))",
             prompt,
             re.IGNORECASE,
         )
-        if load_matches:
-            params["loads"] = [{"magnitude": float(m[0]), "unit": m[1].upper()} for m in load_matches]
+        loads = []
+        for m in load_matches:
+            val = float(m.group(1))
+            unit_str = m.group(2).upper()
+            start_pos = max(0, m.start() - 25)
+            prefix = prompt[start_pos:m.start()].lower()
+            if any(w in prefix for w in ("应力", "stress", "mises", "校核", "不超过", "小于", "<", "容许", "allowable", "模量", "modulus")):
+                continue
+            loads.append({"magnitude": val, "unit": unit_str})
+        if loads:
+            params["loads"] = loads
 
         # Material detection
         if any(w in prompt_lower for w in ("结构钢", "steel", "钢", "q235")):
@@ -1686,29 +1920,17 @@ class EngineeringIntentRouter:
         sources = verified_entities.get("evidence_sources", {}) if verified_entities else {}
         statuses = verified_entities.get("evidence_status", {}) if verified_entities else {}
 
-        # Resolve Material: Verified normalized takes precedence
+        # Resolve Material: Strictly consume verified normalized entity or extracted prompt parameters (Zero Raw Context Fallback!)
         material = norm.get("material") or params.get("material")
-        if not material and ctx.get("material"):
-            ctx_mat = ctx["material"]
-            if isinstance(ctx_mat, dict):
-                material = ctx_mat
-            elif isinstance(ctx_mat, str):
-                material = {"name": ctx_mat, "source": "model_context"}
-        elif not material and isinstance(ctx.get("inp_evidence"), dict) and ctx["inp_evidence"].get("material"):
-            material = ctx["inp_evidence"]["material"]
 
-        # Construct boundary conditions tuple
+        # Construct boundary conditions tuple: Strictly consume verified normalized entity or prompt judgment
         bcs = []
         if bundle.is_well_constrained_noul.is_yes:
             bcs.append({"type": "encastre", "region": "FixedFace", "dofs": (1, 2, 3, 4, 5, 6)})
         elif norm.get("boundary_conditions"):
             bcs.extend(norm["boundary_conditions"])
-        elif ctx.get("boundary_conditions"):
-            bcs.extend(ctx["boundary_conditions"])
-        elif ctx.get("constraints") and isinstance(ctx["constraints"], (list, tuple)):
-            bcs.extend(ctx["constraints"])
 
-        # Construct loads tuple
+        # Construct loads tuple: Strictly consume extracted prompt loads or verified normalized loads
         loads = []
         for ld in params.get("loads", []):
             mag = ld["magnitude"]
@@ -1723,10 +1945,8 @@ class EngineeringIntentRouter:
                     loads.append({"type": "pressure", "region": "TopFace", "magnitude": mag})
         if not loads and norm.get("loads"):
             loads.extend(norm["loads"])
-        elif not loads and ctx.get("loads") and isinstance(ctx["loads"], (list, tuple)):
-            loads.extend(ctx["loads"])
 
-        # Construct acceptance criteria tuple
+        # Construct acceptance criteria tuple: Strictly consume verified normalized criteria or prompt criteria
         crit_list = []
         for c in params.get("acceptance_criteria", []):
             crit_list.append({
@@ -1738,14 +1958,9 @@ class EngineeringIntentRouter:
             })
         if not crit_list and norm.get("acceptance_criteria"):
             crit_list.extend(norm["acceptance_criteria"])
-        elif not crit_list and ctx.get("acceptance_criteria"):
-            if isinstance(ctx["acceptance_criteria"], (list, tuple)):
-                crit_list.extend(ctx["acceptance_criteria"])
-            elif isinstance(ctx["acceptance_criteria"], dict):
-                crit_list.append(ctx["acceptance_criteria"])
 
-        # Resolve dimensions
-        dims = norm.get("dimensions") or params.get("dimensions") or ctx.get("dimensions") or ctx.get("geometry")
+        # Resolve dimensions: Strictly consume verified normalized dimensions or prompt parameters
+        dims = norm.get("dimensions") or params.get("dimensions")
 
         metadata = {
             "dimensions": dims,
@@ -1795,24 +2010,12 @@ class EngineeringIntentRouter:
         statuses = verified_entities.get("evidence_status", {}) if verified_entities else {}
 
         material = norm.get("material") or params.get("material")
-        if not material and ctx.get("material"):
-            ctx_mat = ctx["material"]
-            if isinstance(ctx_mat, dict):
-                material = ctx_mat
-            elif isinstance(ctx_mat, str):
-                material = {"name": ctx_mat, "source": "model_context"}
-        elif not material and isinstance(ctx.get("inp_evidence"), dict) and ctx["inp_evidence"].get("material"):
-            material = ctx["inp_evidence"]["material"]
 
         bcs = []
         if bundle.is_well_constrained_noul.is_yes:
             bcs.append({"type": "encastre", "region": "FixedFace", "dofs": (1, 2, 3, 4, 5, 6)})
         elif norm.get("boundary_conditions"):
             bcs.extend(norm["boundary_conditions"])
-        elif ctx.get("boundary_conditions"):
-            bcs.extend(ctx["boundary_conditions"])
-        elif ctx.get("constraints") and isinstance(ctx["constraints"], (list, tuple)):
-            bcs.extend(ctx["constraints"])
 
         loads = []
         for ld in params.get("loads", []):
@@ -1828,8 +2031,6 @@ class EngineeringIntentRouter:
                     loads.append({"type": "pressure", "region": "TopFace", "magnitude": mag})
         if not loads and norm.get("loads"):
             loads.extend(norm["loads"])
-        elif not loads and ctx.get("loads") and isinstance(ctx["loads"], (list, tuple)):
-            loads.extend(ctx["loads"])
 
         crit_list = []
         for c in params.get("acceptance_criteria", []):
@@ -1842,13 +2043,8 @@ class EngineeringIntentRouter:
             })
         if not crit_list and norm.get("acceptance_criteria"):
             crit_list.extend(norm["acceptance_criteria"])
-        elif not crit_list and ctx.get("acceptance_criteria"):
-            if isinstance(ctx["acceptance_criteria"], (list, tuple)):
-                crit_list.extend(ctx["acceptance_criteria"])
-            elif isinstance(ctx["acceptance_criteria"], dict):
-                crit_list.append(ctx["acceptance_criteria"])
 
-        dims = norm.get("dimensions") or params.get("dimensions") or ctx.get("dimensions") or ctx.get("geometry")
+        dims = norm.get("dimensions") or params.get("dimensions")
 
         return DraftEngineeringIntent(
             id=f"DRAFT-INTENT-{bundle.physics_choice.value.upper()}",

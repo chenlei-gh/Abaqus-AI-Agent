@@ -261,6 +261,42 @@ BENCHMARK_CASES: List[BenchmarkCase] = [
         },
         description="Context contains negative dimension and singular Poisson ratio (nu=0.5) which must be rejected",
     ),
+    BenchmarkCase(
+        case_id="EVID-03-INVALID-LOAD-MISSING-MAGNITUDE",
+        dimension="evidence_validation",
+        prompt="悬臂梁固定根部，材料为结构钢，几何尺寸为100mm，校核应力不超过300MPa。",
+        expected_status="NEEDS_CLARIFICATION",
+        expected_missing=["missing_applied_loads"],
+        context={"loads": {"type": "concentrated_force", "region": "TipFace"}},
+        description="Context contains load dictionary missing numerical magnitude which must be rejected",
+    ),
+    BenchmarkCase(
+        case_id="EVID-04-INVALID-BC-MISSING-REGION",
+        dimension="evidence_validation",
+        prompt="100mm悬臂梁端部受1000N载荷，材料为结构钢，校核应力不超过300MPa。",
+        expected_status="NEEDS_CLARIFICATION",
+        expected_missing=["missing_boundary_constraints"],
+        context={"boundary_conditions": [{"type": "encastre"}]},
+        description="Context contains boundary condition missing geometric target region which must be rejected",
+    ),
+    BenchmarkCase(
+        case_id="EVID-05-INVALID-DIMENSION-UNIT",
+        dimension="evidence_validation",
+        prompt="悬臂梁端部受1000N载荷，固定端，材料为结构钢，校核应力不超过300MPa。",
+        expected_status="NEEDS_CLARIFICATION",
+        expected_missing=["missing_geometry_dimensions"],
+        context={"dimensions": {"box": [100, 20, 20], "unit": "kg"}},
+        description="Context contains dimension entity with illegal length unit ('kg') which must be rejected",
+    ),
+    BenchmarkCase(
+        case_id="CONF-03-LOAD-TYPE-CONTRADICTION",
+        dimension="conflict_detection",
+        prompt="100mm悬臂梁端部受1000N垂直载荷，材料为结构钢，固定根部，校核挠度不超过2.0mm。",
+        expected_status="NEEDS_CLARIFICATION",
+        expected_missing=["conflict_load_type"],
+        context={"loads": [{"type": "pressure", "region": "TopFace", "magnitude": 2.5}]},
+        description="Prompt specifies concentrated force while context enforces pressure (incompatible load types)",
+    ),
 ]
 
 

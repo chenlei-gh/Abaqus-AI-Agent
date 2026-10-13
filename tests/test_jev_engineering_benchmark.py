@@ -310,3 +310,70 @@ def test_context_unverified_and_invalid_physics_rejected():
     res_sing = router.route(prompt, context=ctx_singular)
     assert res_sing.status == "NEEDS_CLARIFICATION"
     assert "missing_material_specification" in res_sing.missing_requirements
+
+
+def test_strict_entity_validation_bc_loads_dimensions():
+    """Verify that malformed entities in context (missing region, magnitude, invalid units) are rejected."""
+    from abaqus_ai_agent.typesafe_intent import (
+        _validate_boundary_conditions_entity,
+        _validate_dimensions_entity,
+        _validate_loads_entity,
+    )
+
+    # 1. Boundary conditions missing region or bare strings
+    ok, _, err = _validate_boundary_conditions_entity("fixed")
+    assert ok is False
+    assert err in ("bare_string_without_region", "unsupported_boundary_conditions_type")
+
+    ok, _, err = _validate_boundary_conditions_entity({"type": "encastre"})
+    assert ok is False
+    assert err == "missing_boundary_condition_region"
+
+    # 2. Loads in context missing magnitude or missing region
+    ok, _, err = _validate_loads_entity({"type": "pressure", "region": "TopFace"}, require_region=True)
+    assert ok is False
+    assert err == "missing_or_non_finite_load_magnitude"
+
+    ok, _, err = _validate_loads_entity({"type": "pressure", "magnitude": 1.0}, require_region=True)
+    assert ok is False
+    assert err == "missing_load_region"
+
+    # 3. Dimensions with unsupported units
+    ok, _, err = _validate_dimensions_entity({"value": 100.0, "unit": "kg"})
+    assert ok is False
+    assert err == "invalid_dimension_unit_kg"
+
+
+def test_zero_raw_context_fallback_for_unverified_entities():
+    """Verify that unverified or invalid context evidence is never leaked into the final EngineeringIntent."""
+    router = JevIntentRouter(mode="offline")
+    # Prompt contains valid dimensions, material, and loads, but no boundary conditions
+    prompt = "100mm悬臂梁，材料为结构钢，受1000N载荷，校核应力300MPa。"
+
+    # Context contains unverified boundary conditions
+    context = {
+        "boundary_conditions": {"status": "UNVERIFIED", "type": "encastre", "region": "RootFace"}
+    }
+    res = router.route(prompt, context=context)
+    # Must ask for clarification rather than silently falling back to raw context
+    assert res.status == "NEEDS_CLARIFICATION"
+    assert "missing_boundary_constraints" in res.missing_requirements
+
+
+def test_contradictory_load_and_bc_types_trigger_clarification():
+    """Verify that contradictions in load types and boundary condition types trigger clarification."""
+    router = JevIntentRouter(mode="offline")
+
+    # Contradiction in load type: prompt asks for 1000N concentrated force, context provides pressure
+    prompt_load = "100mm悬臂梁，材料结构钢，固定端部，施加1000N集中力，校核应力300MPa。"
+    ctx_load = {"loads": {"type": "pressure", "magnitude": 2.5, "region": "TopFace"}}
+    res_load = router.route(prompt_load, context=ctx_load)
+    assert res_load.status == "NEEDS_CLARIFICATION"
+    assert any("conflict_load_type" in item for item in res_load.missing_requirements)
+
+    # Contradiction in BC type: prompt says simply supported, context provides encastre/fixed
+    prompt_bc = "100mm梁受1000N载荷，简支约束，材料为结构钢，校核应力300MPa。"
+    ctx_bc = {"boundary_conditions": {"type": "encastre", "region": "RootFace"}}
+    res_bc = router.route(prompt_bc, context=ctx_bc)
+    assert res_bc.status == "NEEDS_CLARIFICATION"
+    assert any("conflict_boundary_constraints" in item for item in res_bc.missing_requirements)
