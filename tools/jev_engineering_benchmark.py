@@ -301,8 +301,9 @@ BENCHMARK_CASES: List[BenchmarkCase] = [
 
 
 def run_engineering_benchmark(
-    router: Optional[EngineeringIntentRouter] = None,
+    router: Optional[JevIntentRouter] = None,
     output_path: Optional[Path] = None,
+    mode: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Execute the full 6-dimensional engineering intent benchmark suite.
 
@@ -310,7 +311,7 @@ def run_engineering_benchmark(
     - Denominators are partitioned by evaluation semantics (no dilution by total cases).
     - Provider identity and execution mode are explicitly recorded and declared.
     """
-    active_router = router or JevIntentRouter(mode="offline")
+    active_router = router or JevIntentRouter(mode=mode or "offline")
     case_results = []
     dimension_stats: Dict[str, Dict[str, int]] = {}
 
@@ -405,7 +406,7 @@ def run_engineering_benchmark(
             passed_cases += 1
             dimension_stats[dim]["passed"] += 1
 
-        case_results.append({
+        c_res = {
             "case_id": case.case_id,
             "dimension": case.dimension,
             "description": case.description,
@@ -417,7 +418,11 @@ def run_engineering_benchmark(
             "actual_missing": routing_res.missing_requirements,
             "expected_missing": case.expected_missing,
             "latency_ms": lat,
-        })
+        }
+        shadow_diff = getattr(routing_res.decision_bundle, "shadow_diff", None) if routing_res.decision_bundle else None
+        if shadow_diff:
+            c_res["shadow_diff"] = shadow_diff
+        case_results.append(c_res)
 
     overall_accuracy = round((passed_cases / total_cases) * 100.0, 2) if total_cases > 0 else 0.0
     fn_rate = (
@@ -472,6 +477,31 @@ def run_engineering_benchmark(
         provider_type = f"custom_{router_mode}"
         evaluation_scope = f"Custom Mode Evaluation ({router_mode})"
 
+    shadow_metrics = None
+    if router_mode == "shadow":
+        evaluated_count = sum(1 for r in case_results if r.get("shadow_diff", {}).get("status") == "EVALUATED")
+        physics_matches_count = sum(1 for r in case_results if r.get("shadow_diff", {}).get("physics_match") is True)
+        divergent_cases = [
+            r["case_id"] for r in case_results
+            if r.get("shadow_diff", {}).get("status") == "EVALUATED" and not r.get("shadow_diff", {}).get("physics_match")
+        ]
+        error_categories: Dict[str, int] = {}
+        for r in case_results:
+            sd = r.get("shadow_diff", {})
+            if sd.get("status") == "LIVE_FAILED":
+                cat = str(sd.get("error_category", "UNKNOWN"))
+                error_categories[cat] = error_categories.get(cat, 0) + 1
+            elif sd.get("status") == "NOT_CONFIGURED":
+                error_categories["NOT_CONFIGURED"] = error_categories.get("NOT_CONFIGURED", 0) + 1
+
+        shadow_metrics = {
+            "evaluated_cases": evaluated_count,
+            "physics_matches": physics_matches_count,
+            "physics_agreement_pct": round((physics_matches_count / evaluated_count) * 100.0, 2) if evaluated_count > 0 else 0.0,
+            "divergent_cases": divergent_cases,
+            "error_categories": error_categories,
+        }
+
     report = {
         "benchmark_version": "jev_engineering_eval_v4",
         "benchmark_cases_count": total_cases,
@@ -480,6 +510,7 @@ def run_engineering_benchmark(
         "provider_type": provider_type,
         "evaluation_scope": evaluation_scope,
         "is_offline_baseline": (router_mode == "offline"),
+        "shadow_metrics": shadow_metrics,
         "total_cases": total_cases,
         "passed_cases": passed_cases,
         "overall_accuracy_pct": overall_accuracy,
@@ -601,6 +632,12 @@ def format_markdown_report(report: Dict[str, Any]) -> str:
 def main() -> int:
     parser = argparse.ArgumentParser(description="Run JEV Engineering Evaluation Benchmark")
     parser.add_argument(
+        "--mode",
+        choices=["offline", "shadow", "live"],
+        default="offline",
+        help="Router execution mode: offline (default), shadow (dual-run audit), or live",
+    )
+    parser.add_argument(
         "--out",
         type=Path,
         default=None,
@@ -613,7 +650,7 @@ def main() -> int:
     )
     args = parser.parse_args()
 
-    report = run_engineering_benchmark(output_path=args.out)
+    report = run_engineering_benchmark(output_path=args.out, mode=args.mode)
 
     if args.md:
         print(format_markdown_report(report))

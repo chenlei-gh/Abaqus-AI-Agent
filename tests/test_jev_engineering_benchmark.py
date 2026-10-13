@@ -932,3 +932,45 @@ def test_thermal_flux_without_region_fails_closed_end_to_end():
     res = router.route(prompt)
     assert res.status == "NEEDS_CLARIFICATION"
     assert "missing_thermal_boundary_conditions" in res.missing_requirements
+
+
+def test_jev_engineering_benchmark_shadow_mode_reporting():
+    """Verify benchmark harness aggregates shadow mode differences and unconfigured status."""
+    # 1. Unconfigured external provider in shadow mode
+    report_unconf = run_engineering_benchmark(mode="shadow")
+    assert report_unconf["provider_type"] == "shadow_comparative_eval"
+    assert report_unconf["is_offline_baseline"] is False
+    assert report_unconf["shadow_metrics"] is not None
+    assert report_unconf["shadow_metrics"]["evaluated_cases"] == 0
+    assert report_unconf["shadow_metrics"]["error_categories"]["NOT_CONFIGURED"] == report_unconf["total_cases"]
+
+    # 2. Injected external provider in shadow mode
+    class MockEvaluator:
+        model = "evaluator-v1"
+
+        def is_configured(self) -> bool:
+            return True
+
+        def judge(self, prompt: str, timeout: float = 5.0) -> Dict[str, Any]:
+            # Returns linear_static for all cases to observe divergence on thermal/contact cases
+            return {
+                "answers": {
+                    "physics": {"choice": "linear_static", "confidence": 0.95},
+                    "units": {"choice": "MM_N_MPA", "confidence": 0.95},
+                    "solver": {"choice": "abaqus_standard", "confidence": 0.98},
+                    "well_constrained": {"probability": 0.95},
+                    "has_acceptance_criteria": {"probability": 0.90},
+                    "completeness": {"score": 4.5},
+                }
+            }
+
+    shadow_router = JevIntentRouter(mode="shadow", external_provider=MockEvaluator())
+    report_eval = run_engineering_benchmark(router=shadow_router)
+    sm = report_eval["shadow_metrics"]
+    assert sm is not None
+    assert sm["evaluated_cases"] == report_eval["total_cases"]
+    assert sm["physics_matches"] > 0
+    # Because MockEvaluator returns linear_static for thermal/contact, divergence must be captured
+    assert len(sm["divergent_cases"]) > 0
+    assert "PHYS-02-THERMAL" in sm["divergent_cases"]
+    assert sm["physics_agreement_pct"] < 100.0
