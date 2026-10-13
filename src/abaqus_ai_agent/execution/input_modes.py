@@ -292,13 +292,14 @@ def solve_user_inp(
     2. Input Deck Preservation: Verifies the original .inp exists and remains strictly intact.
     3. Isolated Workdir: If project_context is provided, the solver runs in an isolated
        solver/<run_id>/ workspace, avoiding core repository contamination.
-    4. Strict Returncode and Output Validation: Rejects invalid or missing returncodes, corrupt ODBs,
-       or unverified outputs.
-    5. ODB Readability Verification Modes:
-       - When require_verified_odb=True, the ODB MUST be verified by a concrete readability validator
-         (active_validator); otherwise execution fails closed.
-       - When require_verified_odb=False, an unverified non-empty file is flagged honestly as
-         odb_verification_mode="unverified_file_only" and odb_verified=False.
+    4. Strict Returncode and Integrity Gate: Rejects invalid or missing returncodes, corrupt (0-byte) ODBs,
+       or stale un-updated ODB outputs.
+    5. Graduated ODB Verification Contract:
+       - Default mode (require_verified_odb=False): allows execution to complete upon passing solver exitcode
+         and non-empty file presence, honestly flagging the result as odb_verification_mode="unverified_file_only"
+         and odb_verified=False (distinguishing file presence from deep readability verification).
+       - Strict mode (require_verified_odb=True): enforces deep readability validation via an active ODB validator;
+         if no validator is configured or validation fails, execution fails closed (status="FAILED", odb_valid=False).
     """
     inp_file = Path(inp_path).resolve()
     if not inp_file.is_file():
@@ -470,13 +471,15 @@ def solve_user_inp(
                             odb_verification_mode = "unverified_file_only"
 
     odb_present = bool(
-        expected_odb is not None
-        and expected_odb.is_file()
-        and expected_odb.stat().st_size > 0
+        candidate_odb is not None
+        and candidate_odb.is_file()
+        and candidate_odb.stat().st_size > 0
     )
     odb_valid = (
         status == "COMPLETED"
-        and odb_present
+        and expected_odb is not None
+        and expected_odb.is_file()
+        and expected_odb.stat().st_size > 0
         and (odb_verified or not require_verified_odb)
     )
 

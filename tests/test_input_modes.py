@@ -711,6 +711,8 @@ def test_solve_user_inp_require_verified_odb_contract(tmp_path):
         require_verified_odb=True,
     )
     assert res_a["status"] == "FAILED"
+    assert res_a["odb_present"] is True  # File exists on disk, but is rejected by strict validation
+    assert res_a["odb_path"] is None     # Not accepted as canonical deliverable output
     assert res_a["odb_verified"] is False
     assert res_a["odb_valid"] is False
     assert "no readability validator" in res_a["error"]
