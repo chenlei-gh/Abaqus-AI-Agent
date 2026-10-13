@@ -125,7 +125,7 @@ def test_jev_engineering_benchmark_with_mock_live_provider():
         external_provider=CompliantMockProvider(),
     )
     # Single case verification under live provider
-    res = router.route("100mm cantilever steel beam with 1000N load, fixed root, check stress <= 600MPa")
+    res = router.route("100mm cantilever steel beam with 1000N load at tip, fixed root, check stress <= 600MPa")
     assert res.status == "ROUTED"
     assert res.intent is not None
     assert res.decision_bundle.execution_mode == "live"
@@ -722,21 +722,35 @@ def test_material_reference_library_distinguished_from_verified():
     assert res.intent.metadata["material_evidence_level"] == "REFERENCE_LIBRARY"
     assert res.intent.metadata["material_assumption"] is True
 
-    # Context with verified material properties card: tagged VERIFIED_PROPERTIES and assumption=False
-    verified_ctx = {
+    # 2. Context with user-provided numerical properties: tagged USER_EXPLICIT_VALUES and assumption=False
+    user_explicit_ctx = {
         "material": {
-            "name": "Structural_Steel_Certified",
+            "name": "Structural_Steel_Custom",
             "elastic_modulus": 206000.0,
             "poisson_ratio": 0.29,
             "unit": "MPa",
-            "has_verified_properties": True,
-            "source": "verified_material_card",
         }
     }
-    res_verified = router.route(prompt, context=verified_ctx)
-    assert res_verified.status == "ROUTED"
-    assert res_verified.intent.metadata["material_evidence_level"] == "VERIFIED_PROPERTIES"
-    assert res_verified.intent.metadata["material_assumption"] is False
+    res_user = router.route(prompt, context=user_explicit_ctx)
+    assert res_user.status == "ROUTED"
+    assert res_user.intent.metadata["material_evidence_level"] == "USER_EXPLICIT_VALUES"
+    assert res_user.intent.metadata["material_assumption"] is False
+
+    # 3. Context with verified INP model card: tagged MODEL_CARD_VERIFIED and assumption=False
+    model_card_ctx = {
+        "inp_evidence": {
+            "verified": True,
+            "material": {
+                "name": "Structural_Steel_Certified",
+                "elastic_modulus": 210000.0,
+                "poisson_ratio": 0.30,
+            },
+        }
+    }
+    res_card = router.route(prompt, context=model_card_ctx)
+    assert res_card.status == "ROUTED"
+    assert res_card.intent.metadata["material_evidence_level"] == "MODEL_CARD_VERIFIED"
+    assert res_card.intent.metadata["material_assumption"] is False
 
 
 def test_no_speculative_region_when_prompt_only_says_fixed():
@@ -784,3 +798,137 @@ def test_contradictory_load_and_bc_types_trigger_clarification():
     res_bc = router.route(prompt_bc, context=ctx_bc)
     assert res_bc.status == "NEEDS_CLARIFICATION"
     assert any("conflict_boundary_constraints" in item for item in res_bc.missing_requirements)
+
+
+def test_grounding_rejects_part_names_and_populates_region_resolutions():
+    """Verify that part names cannot serve as surface/set targets, resolving to 'unresolved' and SEMANTIC_CANDIDATE_UNRESOLVED."""
+    from abaqus_ai_agent.typesafe_intent import JevIntentRouter
+
+    router = JevIntentRouter(mode="offline")
+    prompt = "100mm悬臂梁端部施加1000N垂直载荷，材料为结构钢，固定根部，校核端部挠度不超过2.5mm。"
+
+    # Context provides 'parts' containing 'RootFace' and 'TipFace', but NO surfaces or sets!
+    # A part is NOT a valid topological boundary/load target.
+    part_only_ctx = {
+        "inp_evidence": {
+            "verified": True,
+            "parts": ["RootFace", "TipFace"],
+        }
+    }
+    res = router.route(prompt, context=part_only_ctx)
+    assert res.status == "ROUTED"
+    # Must remain unresolved because parts are not surfaces or sets
+    assert res.intent.metadata["region_grounding_status"] == "SEMANTIC_CANDIDATE_UNRESOLVED"
+    resolutions = res.intent.metadata["region_resolutions"]
+    assert "RootFace" in resolutions
+    assert resolutions["RootFace"]["resolved"] is False
+    assert resolutions["RootFace"]["target_type"] == "unresolved"
+    assert "TipFace" in resolutions
+    assert resolutions["TipFace"]["resolved"] is False
+
+
+def test_grounding_rejects_string_false_in_inp_evidence():
+    """Verify that inp_evidence with verified: 'false' or non-boolean is strictly rejected."""
+    from abaqus_ai_agent.typesafe_intent import JevIntentRouter
+
+    router = JevIntentRouter(mode="offline")
+    prompt = "100mm悬臂梁端部施加1000N垂直载荷，材料为结构钢，固定根部，校核端部挠度不超过2.5mm。"
+
+    # String "false" is truthy in Python, but must be rejected by strict boolean check!
+    fake_ctx = {
+        "inp_evidence": {
+            "verified": "false",
+            "surfaces": ["RootFace", "TipFace"],
+        }
+    }
+    res = router.route(prompt, context=fake_ctx)
+    assert res.status == "ROUTED"
+    assert res.intent.metadata["region_grounding_status"] == "SEMANTIC_CANDIDATE_UNRESOLVED"
+    assert res.intent.metadata["region_resolutions"]["RootFace"]["resolved"] is False
+
+
+def test_cantilever_beam_without_explicit_tip_requires_clarification():
+    """Verify that 'cantilever beam with 1000N load' without explicit tip location fails closed with missing_load_application_region."""
+    from abaqus_ai_agent.typesafe_intent import JevIntentRouter
+
+    router = JevIntentRouter(mode="offline")
+    # 'cantilever' defines structural form, NOT load application location
+    prompt = "100mm cantilever steel beam with 1000N load, fixed root, check deflection <= 2mm"
+    res = router.route(prompt)
+    assert res.status == "NEEDS_CLARIFICATION"
+    assert "missing_load_application_region" in res.missing_requirements
+
+    # With explicit tip location
+    prompt_with_tip = "100mm cantilever steel beam with 1000N load at tip, fixed root, check deflection <= 2mm"
+    res_ok = router.route(prompt_with_tip)
+    assert res_ok.status == "ROUTED"
+    assert any(ld.get("region") == "TipFace" for ld in res_ok.intent.loads)
+
+
+def test_thermal_bc_convection_radiation_end_to_end_preservation():
+    """Verify convection and radiation parameters flow end-to-end into EngineeringIntent.boundary_conditions."""
+    from abaqus_ai_agent.typesafe_intent import JevIntentRouter
+
+    router = JevIntentRouter(mode="offline")
+    prompt = "500mm导热棒，材料为结构钢，计算稳态热传导温度场。"
+    th_ctx = {
+        "thermal_bcs": [
+            {
+                "type": "convection",
+                "region": "OuterSurface",
+                "magnitude": 25.0,
+                "ambient_temperature": 25.0,
+                "film_coefficient": 150.0,
+                "unit": "W/m2-K",
+            },
+            {
+                "type": "radiation",
+                "region": "HotEnd",
+                "magnitude": 500.0,
+                "ambient_temperature": 20.0,
+                "emissivity": 0.85,
+            },
+        ]
+    }
+    res = router.route(prompt, context=th_ctx)
+    assert res.status == "ROUTED"
+    assert res.intent is not None
+    assert len(res.intent.boundary_conditions) == 2
+
+    conv_bc = next(b for b in res.intent.boundary_conditions if b["type"] == "convection")
+    assert conv_bc["ambient_temperature"] == 25.0
+    assert conv_bc["film_coefficient"] == 150.0
+    assert conv_bc["canonical_ambient_temperature_c"] == 25.0
+    assert conv_bc["canonical_ambient_temperature_k"] == 298.15
+
+    rad_bc = next(b for b in res.intent.boundary_conditions if b["type"] == "radiation")
+    assert rad_bc["ambient_temperature"] == 20.0
+    assert rad_bc["emissivity"] == 0.85
+    assert rad_bc["canonical_ambient_temperature_c"] == 20.0
+    assert rad_bc["canonical_ambient_temperature_k"] == 293.15
+
+
+def test_thermal_bc_regex_rejects_bare_numbers_without_unit_or_anchor():
+    """Verify that numbers lacking temperature units or keywords are not misparsed as temperatures."""
+    from abaqus_ai_agent.typesafe_intent import _extract_prompt_thermal_bcs
+
+    # '顶面 1000 N' or '端部 500' without temperature unit/keyword must NOT be parsed as temperature
+    bcs = _extract_prompt_thermal_bcs("100mm悬臂梁，顶面 1000 N 压力，端部 500，固定根部。")
+    assert len(bcs) == 0
+
+    # With explicit unit
+    bcs_valid = _extract_prompt_thermal_bcs("导热棒热端固定100°C，冷端20C。")
+    assert len(bcs_valid) == 2
+    assert any(b["region"] == "HotEnd" and b["magnitude"] == 100.0 for b in bcs_valid)
+    assert any(b["region"] == "ColdEnd" and b["magnitude"] == 20.0 for b in bcs_valid)
+
+
+def test_thermal_flux_without_region_fails_closed_end_to_end():
+    """Verify that a heat flux without explicit application region fails closed in routing."""
+    from abaqus_ai_agent.typesafe_intent import JevIntentRouter
+
+    router = JevIntentRouter(mode="offline")
+    prompt = "500mm导热棒，材料为结构钢，热流 1000 W/m2，冷端固定20°C，计算稳态温度梯度。"
+    res = router.route(prompt)
+    assert res.status == "NEEDS_CLARIFICATION"
+    assert "missing_thermal_boundary_conditions" in res.missing_requirements

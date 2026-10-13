@@ -290,7 +290,28 @@ def _validate_dimensions_entity(val: Any) -> Tuple[bool, Optional[Any], Optional
     return False, None, "unsupported_dimensions_type"
 
 
-def _validate_material_entity(val: Any) -> Tuple[bool, Optional[Any], Optional[str]]:
+def _canonicalize_temperature(mag: float, unit_str: Optional[str] = None) -> Tuple[float, float, str]:
+    """Canonicalize temperature value to both Celsius and Kelvin.
+
+    Returns: (canonical_c, canonical_k, raw_unit)
+    """
+    u = (unit_str or "C").strip()
+    u_lower = u.lower()
+    fmag = float(mag)
+    if u_lower in ("k", "kelvin", "°k"):
+        temp_k = fmag
+        temp_c = temp_k - 273.15
+        return temp_c, temp_k, "K"
+    else:
+        temp_c = fmag
+        temp_k = temp_c + 273.15
+        return temp_c, temp_k, "C"
+
+
+def _validate_material_entity(
+    val: Any,
+    is_from_verified_inp_card: bool = False,
+) -> Tuple[bool, Optional[Any], Optional[str]]:
     """Validate material entity.
 
     Rejects:
@@ -358,10 +379,18 @@ def _validate_material_entity(val: Any) -> Tuple[bool, Optional[Any], Optional[s
             norm_mat["has_verified_properties"] = False
             norm_mat["material_evidence_level"] = "REFERENCE_LIBRARY"
             norm_mat["is_reference_assumption"] = True
-        else:
-            norm_mat["has_verified_properties"] = has_props
-            norm_mat["material_evidence_level"] = "VERIFIED_PROPERTIES" if has_props else "NAMED_ONLY"
+        elif not has_props:
+            norm_mat["has_verified_properties"] = False
+            norm_mat["material_evidence_level"] = "NAMED_ONLY"
             norm_mat["is_reference_assumption"] = False
+        else:
+            # Genuine provenance check: do not trust self-reported string flags
+            norm_mat["has_verified_properties"] = True
+            norm_mat["is_reference_assumption"] = False
+            if is_from_verified_inp_card:
+                norm_mat["material_evidence_level"] = "MODEL_CARD_VERIFIED"
+            else:
+                norm_mat["material_evidence_level"] = "USER_EXPLICIT_VALUES"
         return True, norm_mat, None
 
     return False, None, "unsupported_material_type"
@@ -577,6 +606,13 @@ def _validate_thermal_bcs_entity(val: Any) -> Tuple[bool, Optional[Any], Optiona
         if item.get("unit"):
             norm["unit"] = str(item["unit"]).strip()
 
+        if th_type == "temperature":
+            unit_val = str(item.get("unit", "C")).strip()
+            temp_c, temp_k, _ = _canonicalize_temperature(float(val_mag), unit_val)
+            norm["canonical_temperature_c"] = round(temp_c, 4)
+            norm["canonical_temperature_k"] = round(temp_k, 4)
+            norm["canonical_unit"] = "C"
+
         if th_type in ("convection", "film_condition"):
             ambient_val = None
             for k in ("sink_temperature", "ambient_temperature", "temp_ambient"):
@@ -594,6 +630,9 @@ def _validate_thermal_bcs_entity(val: Any) -> Tuple[bool, Optional[Any], Optiona
             norm["film_coefficient"] = h_val
             norm["sink_temperature"] = ambient_val
             norm["h"] = h_val
+            amb_c, amb_k, _ = _canonicalize_temperature(ambient_val, item.get("ambient_unit") or item.get("unit"))
+            norm["canonical_ambient_temperature_c"] = round(amb_c, 4)
+            norm["canonical_ambient_temperature_k"] = round(amb_k, 4)
 
         elif th_type == "radiation":
             ambient_val = None
@@ -613,6 +652,9 @@ def _validate_thermal_bcs_entity(val: Any) -> Tuple[bool, Optional[Any], Optiona
             norm["ambient_temperature"] = ambient_val
             norm["emissivity"] = emissivity_val
             norm["sink_temperature"] = ambient_val
+            amb_c, amb_k, _ = _canonicalize_temperature(ambient_val, item.get("ambient_unit") or item.get("unit"))
+            norm["canonical_ambient_temperature_c"] = round(amb_c, 4)
+            norm["canonical_ambient_temperature_k"] = round(amb_k, 4)
 
         return True, norm, None
 
@@ -957,9 +999,6 @@ def _extract_prompt_load_region(prompt: str, load_type: str = "concentrated_forc
         # Explicit tip / free end / cantilever tip
         if any(w in c_lower for w in ("端部", "自由端", "tip", "free end", "悬臂端", "cantilever tip")):
             return "TipFace"
-        # English benchmark case like 'cantilever steel beam with 1000N load'
-        if "cantilever" in c_lower and "beam" in c_lower and not any(w in c_lower for w in ("根部", "root", "fixed end")):
-            return "TipFace"
 
         # Explicit top face / compressive contact load / normal pressure
         if any(w in c_lower for w in ("顶面", "上表面", "top surface", "top face")):
@@ -1009,26 +1048,82 @@ def _extract_prompt_thermal_bcs(prompt: str) -> List[Dict[str, Any]]:
     }
     bcs: List[Dict[str, Any]] = []
     reg_pattern = "|".join(re.escape(k) for k in sorted(region_map.keys(), key=len, reverse=True))
-    temp_pattern = r"([+-]?\d+(?:\.\d+)?)\s*(°c|degc|deg\s*c|c|k|kelvin)?"
 
-    # Pattern 1: Region then Temperature, e.g., 'hot end at 100C', '热端固定100°C'
-    p1 = re.compile(rf"({reg_pattern})[^\d+-]{{0,25}}?{temp_pattern}", re.IGNORECASE)
-    for m in p1.finditer(prompt):
+    # Mandatory temperature unit sub-pattern
+    unit_sub = r"(°c|degc|deg\s*c|°k|kelvin|[ck])\b"
+    # Temperature keyword prefix sub-pattern (unit optional, defaults to C)
+    kw_sub = r"(?:温度|temperature|temp|恒温)\s*(?:为|为：|:|=)?\s*([+-]?\d+(?:\.\d+)?)\s*(°c|degc|deg\s*c|°k|kelvin|[ck])?"
+
+    # Pattern 1A: Region then value with explicit unit: 'hot end at 100C', '热端固定100°C'
+    p1a = re.compile(rf"({reg_pattern})[^\d+-]{{0,25}}?([+-]?\d+(?:\.\d+)?)\s*{unit_sub}", re.IGNORECASE)
+    for m in p1a.finditer(prompt):
         reg_str = m.group(1).lower()
         val_str = m.group(2)
-        unit_str = m.group(3) if m.lastindex and m.lastindex >= 3 and m.group(3) else "C"
+        unit_str = m.group(3)
         norm_reg = region_map.get(reg_str) or region_map.get(m.group(1))
-        bcs.append({"type": "temperature", "region": norm_reg, "magnitude": float(val_str), "unit": unit_str})
+        temp_c, temp_k, _ = _canonicalize_temperature(float(val_str), unit_str)
+        bcs.append({
+            "type": "temperature",
+            "region": norm_reg,
+            "magnitude": float(val_str),
+            "unit": unit_str,
+            "canonical_temperature_c": round(temp_c, 4),
+            "canonical_temperature_k": round(temp_k, 4),
+        })
 
-    # Pattern 2: Temperature then Region, e.g. '100C at hot end'
-    p2 = re.compile(rf"{temp_pattern}[^\w\d]{{0,20}}?({reg_pattern})", re.IGNORECASE)
-    for m in p2.finditer(prompt):
+    # Pattern 1B: Region then temperature keyword: '热端温度100', 'hot end temperature 25'
+    p1b = re.compile(rf"({reg_pattern})[^\w\d]{{0,15}}?{kw_sub}", re.IGNORECASE)
+    for m in p1b.finditer(prompt):
+        reg_str = m.group(1).lower()
+        val_str = m.group(2)
+        unit_str = m.group(3) if (m.lastindex and m.lastindex >= 3 and m.group(3)) else "C"
+        norm_reg = region_map.get(reg_str) or region_map.get(m.group(1))
+        if norm_reg and not any(b.get("region") == norm_reg for b in bcs):
+            temp_c, temp_k, _ = _canonicalize_temperature(float(val_str), unit_str)
+            bcs.append({
+                "type": "temperature",
+                "region": norm_reg,
+                "magnitude": float(val_str),
+                "unit": unit_str,
+                "canonical_temperature_c": round(temp_c, 4),
+                "canonical_temperature_k": round(temp_k, 4),
+            })
+
+    # Pattern 2A: Value with explicit unit then Region: '100C at hot end', '100°C 施加于热端'
+    p2a = re.compile(rf"([+-]?\d+(?:\.\d+)?)\s*{unit_sub}[^\w\d]{{0,20}}?({reg_pattern})", re.IGNORECASE)
+    for m in p2a.finditer(prompt):
         val_str = m.group(1)
-        unit_str = m.group(2) if m.group(2) else "C"
+        unit_str = m.group(2)
         reg_str = m.group(3).lower() if m.lastindex and m.lastindex >= 3 and m.group(3) else ""
         norm_reg = region_map.get(reg_str) or (region_map.get(m.group(3)) if m.lastindex and m.lastindex >= 3 else None)
         if norm_reg and not any(b.get("region") == norm_reg for b in bcs):
-            bcs.append({"type": "temperature", "region": norm_reg, "magnitude": float(val_str), "unit": unit_str})
+            temp_c, temp_k, _ = _canonicalize_temperature(float(val_str), unit_str)
+            bcs.append({
+                "type": "temperature",
+                "region": norm_reg,
+                "magnitude": float(val_str),
+                "unit": unit_str,
+                "canonical_temperature_c": round(temp_c, 4),
+                "canonical_temperature_k": round(temp_k, 4),
+            })
+
+    # Pattern 2B: Temperature keyword then Region: '温度100在热端', 'temperature 100 on hot end'
+    p2b = re.compile(rf"{kw_sub}[^\w\d]{{0,20}}?({reg_pattern})", re.IGNORECASE)
+    for m in p2b.finditer(prompt):
+        val_str = m.group(1)
+        unit_str = m.group(2) if (m.lastindex and m.lastindex >= 2 and m.group(2)) else "C"
+        reg_str = m.group(3).lower() if m.lastindex and m.lastindex >= 3 and m.group(3) else ""
+        norm_reg = region_map.get(reg_str) or (region_map.get(m.group(3)) if m.lastindex and m.lastindex >= 3 else None)
+        if norm_reg and not any(b.get("region") == norm_reg for b in bcs):
+            temp_c, temp_k, _ = _canonicalize_temperature(float(val_str), unit_str)
+            bcs.append({
+                "type": "temperature",
+                "region": norm_reg,
+                "magnitude": float(val_str),
+                "unit": unit_str,
+                "canonical_temperature_c": round(temp_c, 4),
+                "canonical_temperature_k": round(temp_k, 4),
+            })
 
     # Pattern 3: Heat flux, e.g. '热流 1000 W/m2' or 'heat flux 500 W/mm2'
     flux_pattern = re.compile(r"(?:热流|heat flux)[^\d+-]{0,20}?([+-]?\d+(?:\.\d+)?)\s*(w/m2|w/mm2|w/m\^2)", re.IGNORECASE)
@@ -1703,29 +1798,54 @@ class EngineeringIntentRouter:
         # Rejects nominal boolean flags like has_material: True and unverified/expired/invalid evidence!
         mat_ok = False
         p_mat = params.get("material")
-        p_mat_ok, p_mat_norm, _ = _validate_material_entity(p_mat)
-        c_mat = ctx.get("material") or (ctx.get("inp_evidence", {}).get("material") if isinstance(ctx.get("inp_evidence"), dict) else None)
-        c_mat_ok, c_mat_norm, _ = _validate_material_entity(c_mat)
+        p_mat_ok, p_mat_norm, _ = _validate_material_entity(p_mat, is_from_verified_inp_card=False)
 
-        if c_mat_ok and c_mat_norm and c_mat_norm.get("has_verified_properties"):
-            # Context provides verified material card! Prioritize over prompt reference assumptions
+        c_inp = ctx.get("inp_evidence") if isinstance(ctx.get("inp_evidence"), dict) else {}
+        inp_is_verified = bool(c_inp.get("verified") is True and not c_inp.get("conflict"))
+        inp_mat = c_inp.get("material")
+
+        c_mat_raw = ctx.get("material")
+
+        inp_mat_ok, inp_mat_norm, _ = (False, None, None)
+        if inp_mat is not None:
+            inp_mat_ok, inp_mat_norm, _ = _validate_material_entity(
+                inp_mat,
+                is_from_verified_inp_card=inp_is_verified,
+            )
+
+        c_mat_ok, c_mat_norm, _ = (False, None, None)
+        if c_mat_raw is not None:
+            c_mat_ok, c_mat_norm, _ = _validate_material_entity(c_mat_raw, is_from_verified_inp_card=False)
+
+        if inp_mat_ok and inp_mat_norm and inp_mat_norm.get("has_verified_properties"):
+            # Context provides verified INP material card! Prioritize over prompt reference assumptions
             mat_ok = True
-            src = "inp_evidence" if (isinstance(ctx.get("inp_evidence"), dict) and ctx["inp_evidence"].get("material")) else "context"
-            lvl = c_mat_norm.get("material_evidence_level", "VERIFIED_PROPERTIES")
-            verified_entities["evidence_sources"]["material"] = src
+            lvl = inp_mat_norm.get("material_evidence_level", "MODEL_CARD_VERIFIED")
+            verified_entities["evidence_sources"]["material"] = "inp_evidence"
+            verified_entities["evidence_status"]["material"] = lvl
+            verified_entities["normalized"]["material"] = inp_mat_norm
+        elif c_mat_ok and c_mat_norm and c_mat_norm.get("has_verified_properties"):
+            mat_ok = True
+            lvl = c_mat_norm.get("material_evidence_level", "USER_EXPLICIT_VALUES")
+            verified_entities["evidence_sources"]["material"] = "context"
             verified_entities["evidence_status"]["material"] = lvl
             verified_entities["normalized"]["material"] = c_mat_norm
         elif p_mat_ok and p_mat_norm:
             mat_ok = True
-            lvl = p_mat_norm.get("material_evidence_level", "VERIFIED_PROPERTIES")
+            lvl = p_mat_norm.get("material_evidence_level", "REFERENCE_LIBRARY")
             verified_entities["evidence_sources"]["material"] = "prompt"
             verified_entities["evidence_status"]["material"] = lvl
             verified_entities["normalized"]["material"] = p_mat_norm
+        elif inp_mat_ok and inp_mat_norm:
+            mat_ok = True
+            lvl = inp_mat_norm.get("material_evidence_level", "NAMED_ONLY")
+            verified_entities["evidence_sources"]["material"] = "inp_evidence"
+            verified_entities["evidence_status"]["material"] = lvl
+            verified_entities["normalized"]["material"] = inp_mat_norm
         elif c_mat_ok and c_mat_norm:
             mat_ok = True
-            src = "inp_evidence" if (isinstance(ctx.get("inp_evidence"), dict) and ctx["inp_evidence"].get("material")) else "context"
-            lvl = c_mat_norm.get("material_evidence_level", "VERIFIED_PROPERTIES")
-            verified_entities["evidence_sources"]["material"] = src
+            lvl = c_mat_norm.get("material_evidence_level", "NAMED_ONLY")
+            verified_entities["evidence_sources"]["material"] = "context"
             verified_entities["evidence_status"]["material"] = lvl
             verified_entities["normalized"]["material"] = c_mat_norm
 
@@ -1734,14 +1854,11 @@ class EngineeringIntentRouter:
             if not mat_ok:
                 missing.append("missing_material_specification")
             elif phys in elastic_domains:
-                mat_has_properties = False
-                if p_mat_ok and p_mat_norm:
-                    if p_mat_norm.get("has_verified_properties") or p_mat_norm.get("is_reference_assumption"):
-                        mat_has_properties = True
-                if not mat_has_properties and c_mat_ok and c_mat_norm:
-                    if c_mat_norm.get("has_verified_properties") or c_mat_norm.get("is_reference_assumption"):
-                        mat_has_properties = True
-                if not mat_has_properties:
+                active_norm_mat = verified_entities["normalized"].get("material")
+                if not active_norm_mat or not (
+                    active_norm_mat.get("has_verified_properties")
+                    or active_norm_mat.get("is_reference_assumption")
+                ):
                     missing.append("unverified_material_properties")
 
         # 3. Boundary Constraints: Requires verified context BC or prompt boundary conditions with explicit regions
@@ -2436,36 +2553,85 @@ class EngineeringIntentRouter:
                 referenced_regions.add(str(ld["region"]).strip())
 
         # Collect verified topological regions from model context (INP surfaces, sets, faces, etc.)
-        model_topology_regions = set()
+        # Strict boolean validation: inp_evidence.verified must be strictly True!
+        valid_surfaces: Dict[str, str] = {}  # name -> source
+        valid_sets: Dict[str, str] = {}      # name -> source
+
+        inp_ev = ctx.get("inp_evidence")
         if (
-            isinstance(ctx.get("inp_evidence"), dict)
-            and ctx["inp_evidence"].get("verified")
-            and not ctx["inp_evidence"].get("conflict")
+            isinstance(inp_ev, dict)
+            and inp_ev.get("verified") is True
+            and not inp_ev.get("conflict")
         ):
-            inp = ctx["inp_evidence"]
-            for k in ("surfaces", "sets", "faces", "elementsets", "nodesets", "parts", "regions"):
-                v = inp.get(k)
+            # Surfaces & faces
+            for k in ("surfaces", "faces"):
+                v = inp_ev.get(k)
                 if isinstance(v, (list, tuple, set)):
                     for item in v:
                         if isinstance(item, str) and item.strip():
-                            model_topology_regions.add(item.strip())
+                            valid_surfaces[item.strip()] = f"inp_evidence.{k}"
                         elif isinstance(item, dict) and item.get("name"):
-                            model_topology_regions.add(str(item["name"]).strip())
+                            valid_surfaces[str(item["name"]).strip()] = f"inp_evidence.{k}"
                 elif isinstance(v, dict):
                     for rk in v.keys():
                         if isinstance(rk, str) and rk.strip():
-                            model_topology_regions.add(rk.strip())
-        for key in ("model_surfaces", "model_sets", "model_regions"):
+                            valid_surfaces[rk.strip()] = f"inp_evidence.{k}"
+
+            # Sets & elementsets & nodesets
+            for k in ("sets", "elementsets", "nodesets", "regions"):
+                v = inp_ev.get(k)
+                if isinstance(v, (list, tuple, set)):
+                    for item in v:
+                        if isinstance(item, str) and item.strip():
+                            valid_sets[item.strip()] = f"inp_evidence.{k}"
+                        elif isinstance(item, dict) and item.get("name"):
+                            valid_sets[str(item["name"]).strip()] = f"inp_evidence.{k}"
+                elif isinstance(v, dict):
+                    for rk in v.keys():
+                        if isinstance(rk, str) and rk.strip():
+                            valid_sets[rk.strip()] = f"inp_evidence.{k}"
+
+        # Context model surfaces and sets (explicitly excluding parts!)
+        for key in ("model_surfaces", "model_faces"):
             mv = ctx.get(key)
             if isinstance(mv, (list, tuple, set)):
                 for item in mv:
                     if isinstance(item, str) and item.strip():
-                        model_topology_regions.add(item.strip())
+                        valid_surfaces[item.strip()] = f"context.{key}"
+        for key in ("model_sets", "model_regions"):
+            mv = ctx.get(key)
+            if isinstance(mv, (list, tuple, set)):
+                for item in mv:
+                    if isinstance(item, str) and item.strip():
+                        valid_sets[item.strip()] = f"context.{key}"
+
+        region_resolutions: Dict[str, Dict[str, Any]] = {}
+        all_resolved = True
+        for reg in sorted(referenced_regions):
+            if reg in valid_surfaces:
+                region_resolutions[reg] = {
+                    "target_type": "surface",
+                    "resolved": True,
+                    "source": valid_surfaces[reg],
+                }
+            elif reg in valid_sets:
+                region_resolutions[reg] = {
+                    "target_type": "set",
+                    "resolved": True,
+                    "source": valid_sets[reg],
+                }
+            else:
+                region_resolutions[reg] = {
+                    "target_type": "unresolved",
+                    "resolved": False,
+                    "source": "unresolved",
+                }
+                all_resolved = False
 
         # Track topological grounding status (Deterministic 1-to-1 subset resolution)
         if not referenced_regions:
             grounding_status = "NO_REGIONS_SPECIFIED"
-        elif model_topology_regions and referenced_regions.issubset(model_topology_regions):
+        elif all_resolved:
             grounding_status = "MODEL_TOPOLOGY_GROUNDED"
         else:
             grounding_status = "SEMANTIC_CANDIDATE_UNRESOLVED"
@@ -2473,7 +2639,10 @@ class EngineeringIntentRouter:
         mat_evidence_level = "UNKNOWN"
         mat_is_assumption = False
         if isinstance(material, dict):
-            mat_evidence_level = material.get("material_evidence_level", "VERIFIED_PROPERTIES" if material.get("has_verified_properties") else "NAMED_ONLY")
+            mat_evidence_level = material.get(
+                "material_evidence_level",
+                "USER_EXPLICIT_VALUES" if material.get("has_verified_properties") else "NAMED_ONLY",
+            )
             mat_is_assumption = bool(material.get("is_reference_assumption"))
 
         metadata = {
@@ -2486,6 +2655,7 @@ class EngineeringIntentRouter:
             "evidence_sources": sources,
             "evidence_status": statuses,
             "region_grounding_status": grounding_status,
+            "region_resolutions": region_resolutions,
             "material_evidence_level": mat_evidence_level,
             "material_assumption": mat_is_assumption,
             "routing_gate_passed": True,

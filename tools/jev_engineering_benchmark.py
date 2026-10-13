@@ -164,7 +164,7 @@ BENCHMARK_CASES: List[BenchmarkCase] = [
     BenchmarkCase(
         case_id="COMP-02-UNSPECIFIED-LIMIT",
         dimension="compliance_enforcement",
-        prompt="100mm cantilever steel beam with 1000N load, fixed end, verify is compliant.",
+        prompt="100mm cantilever steel beam with 1000N load at tip, fixed end, verify is compliant.",
         expected_status="NEEDS_CLARIFICATION",
         expected_missing=["missing_acceptance_criteria_or_limits"],
         description="English compliance query with unspecified engineering threshold",
