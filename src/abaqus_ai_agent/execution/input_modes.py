@@ -101,13 +101,16 @@ def solve_user_inp(
 
     expected_odb: Optional[Path] = None
     if effective_workdir:
+        # P0 Contract: When running in an isolated workdir, the output ODB MUST be
+        # produced directly within effective_workdir. Never latch onto stale sibling ODBs!
         candidate_odb = effective_workdir / f"{eff_job_name}.odb"
-        if candidate_odb.is_file():
+        if candidate_odb.is_file() and candidate_odb.stat().st_size > 0:
             expected_odb = candidate_odb
-    if expected_odb is None:
-        sibling_odb = inp_file.parent / f"{eff_job_name}.odb"
-        if sibling_odb.is_file():
-            expected_odb = sibling_odb
+    else:
+        # Fallback only when executing without an external project context
+        candidate_odb = inp_file.parent / f"{eff_job_name}.odb"
+        if candidate_odb.is_file() and candidate_odb.stat().st_size > 0:
+            expected_odb = candidate_odb
 
     # Evaluate true execution status (P0 contract: never report COMPLETED unconditionally)
     status = "COMPLETED"
@@ -294,3 +297,82 @@ def open_user_cae_working_copy(
         "open_script": open_script,
         "model_info": model_info,
     }
+
+
+def edit_and_solve_user_inp(
+    executor: Any,
+    inp_path: Union[str, Path],
+    operations: Sequence[Any],
+    *,
+    target_filename: Optional[str] = None,
+    job_name: Optional[str] = None,
+    project_context: Optional[ExternalProjectContext] = None,
+    timeout: Optional[int] = None,
+    run_id: Optional[str] = None,
+    overwrite: bool = True,
+) -> Dict[str, Any]:
+    """Surgically edit a user-provided .inp file in an isolated working copy and execute it.
+
+    Contract Rules (Phase P1.4 / P1.5):
+    1. Zero In-Place Mutation: The original input deck is strictly read-only and never modified.
+    2. Working Copy Isolation: Surgical edits are applied solely to a new working file.
+    3. Verifiable Audit: Preserves pre/post SHA-256 and reproducible unified diff.
+    4. Isolated Execution: Direct solver run in isolated solver/<run_id>/ workspace.
+    """
+    from ..editing.inp_editor import InpEditOperation, edit_inp_file
+
+    src_file = Path(inp_path).resolve()
+    if not src_file.is_file():
+        raise FileNotFoundError(f"User INP file does not exist: {src_file}")
+
+    if project_context is not None:
+        target_name = target_filename or f"{src_file.stem}_edited.inp"
+        dest_inp = project_context.working_dir / target_name
+    else:
+        target_name = target_filename or f"{src_file.stem}_edited_{uuid.uuid4().hex[:6]}.inp"
+        dest_inp = src_file.parent / target_name
+        if dest_inp == src_file:
+            raise PermissionError("Zero In-Place Mutation violation: target_path cannot be identical to source_path.")
+
+    inp_ops = []
+    for op in operations:
+        if isinstance(op, InpEditOperation):
+            inp_ops.append(op)
+        elif isinstance(op, dict):
+            inp_ops.append(
+                InpEditOperation(
+                    category=op.get("category", ""),
+                    target_identifier=op.get("target_identifier", op.get("target", "")),
+                    property_keyword=op.get("property_keyword", op.get("keyword", "")),
+                    new_values=op.get("new_values", op.get("values")),
+                    metadata=op.get("metadata", {}),
+                )
+            )
+        else:
+            raise TypeError(f"Unsupported edit operation type: {type(op)}")
+
+    audit_record = edit_inp_file(
+        source_path=src_file,
+        target_path=dest_inp,
+        operations=inp_ops,
+        overwrite=overwrite,
+    )
+
+    solve_res = solve_user_inp(
+        executor=executor,
+        inp_path=dest_inp,
+        job_name=job_name or dest_inp.stem,
+        project_context=project_context,
+        timeout=timeout,
+        run_id=run_id,
+    )
+
+    solve_res["audit_record"] = audit_record
+    solve_res["source_inp_path"] = str(src_file)
+    solve_res["source_inp_sha256"] = audit_record.source_sha256
+    solve_res["edited_inp_path"] = str(dest_inp)
+    solve_res["edited_inp_sha256"] = audit_record.target_sha256
+    solve_res["diff_summary"] = audit_record.diff_summary
+    solve_res["lines_changed"] = audit_record.lines_changed
+    solve_res["is_edited"] = True
+    return solve_res

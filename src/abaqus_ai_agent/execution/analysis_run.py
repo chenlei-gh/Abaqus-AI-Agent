@@ -260,9 +260,9 @@ class AnalysisRunner:
                 or getattr(self.executor, "is_test_mode", False)
                 or getattr(self.executor, "_is_mock", False)
             )
-            cname = getattr(self.executor, "__class__", None).__name__ or ""
-            is_known_test_double = any(token in cname for token in ("Mock", "Fake", "Stub", "Dummy", "OdbBackedExecutor"))
-            require_production = not (is_explicit_test or is_known_test_double)
+            # Safe Default: Production mode is ALWAYS enforced unless explicitly in test mode.
+            # Never rely on Mock/Dummy class name heuristics in safety-critical production pipelines.
+            require_production = not is_explicit_test
 
         if require_production and project_context is None:
             raise RuntimeError(

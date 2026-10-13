@@ -1,8 +1,12 @@
 """Global pytest session lifecycle and workspace hygiene."""
 
+import os
 import shutil
 from pathlib import Path
 import pytest
+
+# Explicit Test Mode Marker (Contract: Never rely on Mock/Dummy class names in production)
+os.environ.setdefault("ABAQUS_AGENT_TEST_MODE", "1")
 
 
 @pytest.fixture(scope="session", autouse=True)

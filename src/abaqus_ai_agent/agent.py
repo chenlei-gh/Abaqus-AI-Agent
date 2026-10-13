@@ -131,6 +131,31 @@ class AbaqusAIAgent:
             run_id=run_id,
         )
 
+    def edit_and_solve_user_inp(
+        self,
+        inp_path: Any,
+        operations: Sequence[Any],
+        target_filename: Optional[str] = None,
+        job_name: Optional[str] = None,
+        project_context: Optional[Any] = None,
+        timeout: Optional[int] = None,
+        run_id: Optional[str] = None,
+        overwrite: bool = True,
+    ) -> Dict[str, Any]:
+        """Surgically modify a user-provided .inp in an isolated working copy and solve it."""
+        from .execution.input_modes import edit_and_solve_user_inp
+        return edit_and_solve_user_inp(
+            executor=self.executor,
+            inp_path=inp_path,
+            operations=operations,
+            target_filename=target_filename,
+            job_name=job_name,
+            project_context=project_context,
+            timeout=timeout,
+            run_id=run_id,
+            overwrite=overwrite,
+        )
+
     def postprocess_user_odb(
         self,
         odb_path: Any,

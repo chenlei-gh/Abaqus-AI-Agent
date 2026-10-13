@@ -2942,3 +2942,37 @@ Abaqus-AI-Agent/
   - 补齐对应专项负向测试用例（覆盖率扩展，全部通过）；
   - 受控资产 `machine_validation/` 零污染回滚保护；
   - 提交并推送至 GitHub 远程 `main` 分支进行六矩阵 CI 闭环验证。
+
+## 36. Phase P1.5: 受控 INP 结构化参数编辑能力与执行闭环 (Controlled INP Structural Editing & Closed-Loop Execution)
+
+### 36.1 核心设计契约
+1. **零原地修改（Zero In-Place Mutation）**：原始 INP 默认为只读基准，执行前、中、后核查 SHA-256 严格不变；任何尝试原地覆盖原文件的行为均由系统抛出 `PermissionError` 阻断。
+2. **手术式参数修改（Surgical Parameter Modification）**：以关键字数据行为最小编辑单位，完整保留注释（`**`）、其他关键字块与原始数据格式排版。
+3. **首批支持四大工程参数场景**：
+   - 材料参数修改（`*MATERIAL`, `*ELASTIC`, `*PLASTIC`, `*DENSITY` 等）；
+   - 分析步时间增量与求解控制修改（`*STEP`, `*STATIC`, `*DYNAMIC` 等）；
+   - 载荷/边界条件幅值修改（`*CLOAD`, `*DLOAD` 等）；
+   - 场/历史输出变量修改（`*ELEMENT OUTPUT`, `*NODE OUTPUT` 等）。
+4. **可审计版本追踪与 Diff 生成**：记录修改前与修改后 SHA-256 指纹、操作清单及统一差异对比（Unified Diff），产出结构化审计凭证 `InpEditAuditRecord`。
+5. **Fail-Closed 目标校验**：目标名称不存在时抛出 `KeyError`，存在重复同名块引起歧义时抛出 `ValueError` 阻断，禁止盲目猜测。
+6. **外部工程隔离与执行闭环**：修改生成的新 INP 保存于 `ExternalProjectContext.working_dir`，并在隔离工作目录 `solver/<run_id>` 中执行，输出 ODB 真实性与非零退出码严格拦截。
+
+### 36.2 实施任务分解与执行清单
+- [x] **任务 36.1: 受控 INP 编辑器核心模块 (`src/abaqus_ai_agent/editing/inp_editor.py`)**：
+  - 实现 `ControlledInpEditor`、`InpEditOperation`、`InpEditAuditRecord`；
+  - 实现跨平台二进制哈希校验，杜绝换行符转换引发的伪造篡改误判；
+  - 实现四大类关键字解析与定向数据行置换。
+- [x] **任务 36.2: 隔离执行管道与 Agent 接口扩展 (`src/abaqus_ai_agent/execution/input_modes.py` / `agent.py`)**：
+  - 在 `input_modes.py` 实现 `edit_and_solve_user_inp`；
+  - 在 `AbaqusAIAgent` 暴露 `edit_and_solve_user_inp`，整合编辑审计凭证与执行结果；
+  - 严格确保执行在独立工作副本与外部求解工作区中完成。
+- [x] **任务 36.3: 专项契约测试与负向拦截验证 (`tests/test_inp_editor.py`)**：
+  - 材料、分析步增量、载荷、输出请求单项与批量修改测试；
+  - 原地修改禁止、目标缺失、同名歧义、负增量步长等 Fail-Closed 机制验证；
+  - 结合 `ExternalProjectContext` 的端到端集成测试；
+  - 求解器非零退出码与缺失 ODB 的失败拦截测试。
+- [x] **任务 36.4: 全量回归测试与发布门禁审计**：
+  - 运行全量回归套件（1174 个测试全部通过）；
+  - 运行发布审计与代码健康检查；
+  - 受控资产 `machine_validation/` 零污染回滚保护；
+  - 提交并推送至 GitHub 远程 `main` 分支。
