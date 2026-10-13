@@ -702,3 +702,238 @@ def test_inp_editor_circular_include_detected(tmp_path):
     editor = ControlledInpEditor(file_a)
     with pytest.raises(ValueError, match="Circular \\*INCLUDE dependency detected"):
         editor.inspect_includes(base_dir=tmp_path, recursive=True)
+
+
+def test_solve_user_inp_missing_or_invalid_returncode_fails_closed(tmp_path):
+    """P0 Safety: Missing, None, non-integer, or non-zero returncodes must NEVER report COMPLETED."""
+    inp_file = tmp_path / "model.inp"
+    inp_file.write_text("*HEADING\nModel\n*NODE\n1, 0., 0., 0.\n", encoding="utf-8")
+
+    class IncompleteExecutor:
+        def __init__(self, ret_val):
+            self.ret_val = ret_val
+        def run_input(self, input_path, job_name=None, timeout=None, workdir=None):
+            target_dir = Path(workdir) if workdir else Path(input_path).parent
+            name = job_name or Path(input_path).stem
+            (target_dir / f"{name}.odb").write_bytes(b"AUTHENTIC_ODB_BYTES")
+            return self.ret_val
+
+    from abaqus_ai_agent.execution.input_modes import solve_user_inp
+
+    # 1. Missing returncode field
+    res1 = solve_user_inp(IncompleteExecutor({"stdout": "Done"}), inp_file)
+    assert res1["status"] == "FAILED"
+    assert res1["returncode"] == -1
+    assert "missing required 'returncode' field" in res1["error"]
+    assert res1["odb_valid"] is False
+
+    # 2. None returncode field
+    res2 = solve_user_inp(IncompleteExecutor({"returncode": None}), inp_file)
+    assert res2["status"] == "FAILED"
+    assert res2["returncode"] == -1
+    assert "missing required 'returncode' field" in res2["error"]
+
+    # 3. Non-integer returncode field
+    res3 = solve_user_inp(IncompleteExecutor({"returncode": "UNKNOWN_ERROR"}), inp_file)
+    assert res3["status"] == "FAILED"
+    assert res3["returncode"] == -1
+    assert "invalid non-integer returncode" in res3["error"]
+
+    # 4. Non-zero exit code
+    res4 = solve_user_inp(IncompleteExecutor({"returncode": 127, "stderr": "Abnormal termination"}), inp_file)
+    assert res4["status"] == "FAILED"
+    assert res4["returncode"] == 127
+    assert "non-zero exit code 127" in res4["error"]
+
+
+def test_solve_user_inp_corrupt_or_empty_odb_fails_closed(tmp_path):
+    """P0 Safety: Zero-byte or non-existent ODB output must fail-closed."""
+    inp_file = tmp_path / "model.inp"
+    inp_file.write_text("*HEADING\nModel\n*NODE\n1, 0., 0., 0.\n", encoding="utf-8")
+
+    class EmptyOdbExecutor:
+        def run_input(self, input_path, job_name=None, timeout=None, workdir=None):
+            target_dir = Path(workdir) if workdir else Path(input_path).parent
+            name = job_name or Path(input_path).stem
+            (target_dir / f"{name}.odb").write_bytes(b"")  # 0 bytes corrupt file
+            return {"returncode": 0, "stdout": "Finished"}
+
+    from abaqus_ai_agent.execution.input_modes import solve_user_inp
+    res = solve_user_inp(EmptyOdbExecutor(), inp_file)
+    assert res["status"] == "FAILED"
+    assert "generated empty/corrupt ODB" in res["error"]
+    assert res["odb_valid"] is False
+
+
+def test_nested_include_relative_to_child_directory_priority(tmp_path):
+    """P0 Precision: Child *INCLUDE must prioritize its own containing directory over parent search roots."""
+    # Top-level directory has a conflicting props.inc with content A
+    top_props = tmp_path / "props.inc"
+    top_props.write_text("*ELASTIC\n 100000.0, 0.3\n", encoding="utf-8")
+
+    # Sub-directory has child.inp and its local props.inc with content B
+    sub_dir = tmp_path / "sub"
+    sub_dir.mkdir()
+    child_props = sub_dir / "props.inc"
+    child_props.write_text("*ELASTIC\n 200000.0, 0.3\n", encoding="utf-8")
+
+    child_inp = sub_dir / "child.inp"
+    child_inp.write_text("*MATERIAL, NAME=M1\n*INCLUDE, INPUT=props.inc\n", encoding="utf-8")
+
+    main_inp = tmp_path / "main.inp"
+    main_inp.write_text("*HEADING\n*INCLUDE, INPUT=sub/child.inp\n", encoding="utf-8")
+
+    editor = ControlledInpEditor(main_inp)
+    includes = editor.inspect_includes(base_dir=tmp_path, recursive=True)
+
+    # Find the include corresponding to props.inc
+    props_entry = next(inc for inc in includes if inc["input"] == "props.inc")
+    # Must resolve strictly to sub/props.inc (child's own directory), NOT top_props!
+    assert Path(props_entry["resolved_path"]).resolve() == child_props.resolve()
+    assert props_entry["sha256"] == hashlib.sha256(child_props.read_bytes()).hexdigest()
+
+
+def test_include_path_escape_fails_closed(tmp_path):
+    """P0 Containment: *INCLUDE with directory traversal '../' escaping workspace must fail closed."""
+    ctx = create_external_project_context(tmp_path / "EscapeProject")
+
+    evil_inp = ctx.input_dir / "evil.inp"
+    evil_inp.write_text("*HEADING\n*INCLUDE, INPUT=../../escaped_secret.inc\n", encoding="utf-8")
+
+    executor = DummyInpExecutor()
+    agent = AbaqusAIAgent(executor=executor)
+
+    with pytest.raises(ValueError, match="Path escape violation in \\*INCLUDE"):
+        agent.solve_user_inp(inp_path=evil_inp, project_context=ctx)
+
+
+def test_include_hash_collision_fails_closed(tmp_path):
+    """P0 Collision Defense: Divergent dependency files mapping to identical target name must reject collision."""
+    from abaqus_ai_agent.execution.input_modes import _sync_include_dependencies
+
+    target_dir = tmp_path / "sync_target"
+    target_dir.mkdir()
+
+    # Pre-create a file with hash X
+    conflict_file = target_dir / "data.inc"
+    conflict_file.write_bytes(b"CONTENT_X")
+
+    # Attempt to sync another dependency with hash Y into data.inc
+    src_file = tmp_path / "src_data.inc"
+    src_file.write_bytes(b"CONTENT_Y_DIFFERENT")
+
+    includes = [{
+        "input": "data.inc",
+        "resolved_path": str(src_file),
+        "exists": True,
+        "sha256": hashlib.sha256(b"CONTENT_Y_DIFFERENT").hexdigest(),
+    }]
+
+    with pytest.raises(ValueError, match="Include collision conflict"):
+        _sync_include_dependencies(includes, target_dir=target_dir)
+
+
+def test_inp_editor_strict_utf8_encoding_fails_closed(tmp_path):
+    """P1 Fidelity: Source files with invalid non-UTF-8 bytes must be rejected on initialization."""
+    bad_file = tmp_path / "corrupt_encoding.inp"
+    bad_file.write_bytes(b"*HEADING\n\xff\xfe\x00\x12Invalid Binary Stream\n")
+
+    with pytest.raises(ValueError, match="Unsupported character encoding"):
+        ControlledInpEditor(bad_file)
+
+
+def test_inp_editor_trailing_newline_fidelity(tmp_path):
+    """P1 Fidelity: Files without trailing newline must preserve absence of trailing newline upon save."""
+    # 1. No trailing newline
+    content_no_trailing = "*HEADING\n*MATERIAL, NAME=STEEL\n*ELASTIC\n 210000.0, 0.3"
+    src1 = tmp_path / "no_trailing.inp"
+    src1.write_bytes(content_no_trailing.encode("utf-8"))
+
+    dest1 = tmp_path / "out_no_trailing.inp"
+    editor1 = ControlledInpEditor(src1)
+    editor1.edit_material("STEEL", "*ELASTIC", [[200000.0, 0.3]])
+    editor1.save(dest1)
+    assert not dest1.read_bytes().endswith(b"\n")
+    assert not dest1.read_bytes().endswith(b"\r\n")
+
+    # 2. With trailing newline
+    content_with_trailing = "*HEADING\n*MATERIAL, NAME=STEEL\n*ELASTIC\n 210000.0, 0.3\n"
+    src2 = tmp_path / "with_trailing.inp"
+    src2.write_bytes(content_with_trailing.encode("utf-8"))
+
+    dest2 = tmp_path / "out_with_trailing.inp"
+    editor2 = ControlledInpEditor(src2)
+    editor2.edit_material("STEEL", "*ELASTIC", [[200000.0, 0.3]])
+    editor2.save(dest2)
+    assert dest2.read_bytes().endswith(b"\n")
+
+
+def test_inp_editor_interleaved_blank_lines_row_change_fails_closed(tmp_path):
+    """P1 Fidelity: Blank lines interleaved between data rows must fail-closed when data row count changes."""
+    deck = (
+        "*HEADING\n"
+        "*MATERIAL, NAME=STEEL\n"
+        "*ELASTIC\n"
+        " 210000.0, 0.3\n"
+        "\n"  # Interleaved blank line
+        " 200000.0, 0.29\n"
+        "*DENSITY\n"
+        " 7.85e-9\n"
+    )
+    src = tmp_path / "interleaved_blank.inp"
+    src.write_text(deck, encoding="utf-8")
+
+    editor = ControlledInpEditor(src)
+    with pytest.raises(ValueError, match="Ambiguous comment placement"):
+        editor.edit_material("STEEL", "*ELASTIC", [[205000.0, 0.28]])
+
+
+def test_edit_and_solve_transaction_rollback_on_preflight_failure(tmp_path):
+    """P1 Artifact Isolation: Failures during edit/preflight must rollback and not leave staged files in working directory."""
+    ctx = create_external_project_context(tmp_path / "RollbackProject")
+
+    # Create INP that references a missing include file
+    src = ctx.input_dir / "deck_missing_inc.inp"
+    src.write_text("*HEADING\n*INCLUDE, INPUT=ghost_dependency.inc\n*MATERIAL, NAME=M1\n*ELASTIC\n 100.0, 0.3\n", encoding="utf-8")
+
+    executor = DummyInpExecutor()
+    agent = AbaqusAIAgent(executor=executor)
+
+    with pytest.raises(FileNotFoundError, match="Missing required \\*INCLUDE dependency"):
+        agent.edit_and_solve_user_inp(
+            inp_path=src,
+            operations=[{"category": "material", "target": "M1", "keyword": "*ELASTIC", "values": [[120.0, 0.3]]}],
+            project_context=ctx,
+        )
+
+    # Verify no partial/staged artifacts remain in working_dir
+    staged_files = list(ctx.working_dir.glob("*"))
+    assert len(staged_files) == 0, f"Expected clean working directory, but found: {staged_files}"
+
+
+def test_include_dependencies_audit_record(tmp_path):
+    """P1 Provenance: Verified *INCLUDE dependencies must be recorded with SHA-256 in InpEditAuditRecord."""
+    ctx = create_external_project_context(tmp_path / "AuditDepsProject")
+
+    inc = ctx.input_dir / "mat_props.inc"
+    inc.write_text("*ELASTIC\n 210000.0, 0.3\n", encoding="utf-8")
+    inc_sha = hashlib.sha256(inc.read_bytes()).hexdigest()
+
+    main = ctx.input_dir / "assembly.inp"
+    main.write_text("*HEADING\n*INCLUDE, INPUT=mat_props.inc\n*STEP, NAME=Step-1\n*STATIC\n 0.1, 1.0\n*END STEP\n", encoding="utf-8")
+
+    executor = DummyInpExecutor()
+    agent = AbaqusAIAgent(executor=executor)
+
+    res = agent.edit_and_solve_user_inp(
+        inp_path=main,
+        operations=[{"category": "step", "target": "Step-1", "keyword": "*STATIC", "values": {"initial_inc": 0.05, "total_time": 1.5}}],
+        project_context=ctx,
+    )
+
+    audit = res["audit_record"]
+    assert len(audit.include_dependencies) >= 1
+    dep_entry = audit.include_dependencies[0]
+    assert dep_entry["logical_path"] == "mat_props.inc"
+    assert dep_entry["sha256"] == inc_sha
+    assert Path(dep_entry["target_path"]).is_file()

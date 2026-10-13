@@ -8,7 +8,7 @@ import re
 import shutil
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
+from typing import Any, Dict, List, Optional, Sequence, Set, Tuple, Union
 
 
 @dataclass(frozen=True)
@@ -31,6 +31,7 @@ class InpEditAuditRecord:
     operations_applied: Tuple[Dict[str, Any], ...]
     diff_summary: str
     lines_changed: int
+    include_dependencies: Tuple[Dict[str, Any], ...] = ()
 
 
 class ControlledInpEditor:
@@ -52,7 +53,16 @@ class ControlledInpEditor:
         self._raw_bytes = self.source_path.read_bytes()
         self.source_sha256 = hashlib.sha256(self._raw_bytes).hexdigest()
         self._newline = "\r\n" if b"\r\n" in self._raw_bytes else "\n"
-        self._raw_content = self._raw_bytes.decode("utf-8", errors="replace")
+        self._has_trailing_newline = (
+            self._raw_bytes.endswith(b"\n") or self._raw_bytes.endswith(b"\r\n")
+        )
+        try:
+            self._raw_content = self._raw_bytes.decode("utf-8", errors="strict")
+        except UnicodeDecodeError as exc:
+            raise ValueError(
+                f"Unsupported character encoding in '{self.source_path}': "
+                f"source INP must be valid UTF-8. Error at byte {exc.start}: {exc.reason}"
+            ) from exc
         self._lines = self._raw_content.splitlines()
 
     @staticmethod
@@ -100,26 +110,32 @@ class ControlledInpEditor:
         block_lines: Sequence[str],
         new_data_lines: Sequence[str],
     ) -> List[str]:
-        """Replace data lines in a block while strictly preserving comment positions and order.
+        """Replace data lines in a block while strictly preserving comment and blank line positions.
 
         Rules:
         1. If original block has identical number of data lines as new_data_lines, each data line
-           is replaced in-place in its original slot, leaving all comments exactly at their relative line positions.
+           is replaced in-place in its original slot, leaving all comments and blank lines exactly
+           at their relative line positions.
         2. If original block data line count differs from new_data_lines:
-           - If there are NO comments interleaved between data lines (i.e. comments are either only leading,
-             only trailing, or no comments), leading comments remain before new data lines, followed by
-             new data lines, followed by trailing comments.
-           - If comments are interleaved between multiple data lines AND the row count changes,
-             raise ValueError to fail closed rather than guessing comment-to-row associations.
+           - Comments and blank lines are treated equally as preserved non-data lines.
+           - If there are non-data lines interleaved between data lines (i.e. between first and last
+             data lines), raise ValueError to fail closed rather than guessing associations.
+           - If non-data lines are only leading or trailing, leading lines remain before new data lines,
+             followed by new data lines, followed by trailing lines.
         """
         comment_indices: List[int] = []
+        blank_indices: List[int] = []
         data_indices: List[int] = []
         for i, line in enumerate(block_lines):
             stripped = line.strip()
             if stripped.startswith("**"):
                 comment_indices.append(i)
-            elif stripped:  # non-empty data line
+            elif not stripped:
+                blank_indices.append(i)
+            else:
                 data_indices.append(i)
+
+        non_data_indices = sorted(comment_indices + blank_indices)
 
         # Case 1: Identical data line counts -> slot-by-slot in-place replacement
         if len(data_indices) == len(new_data_lines):
@@ -128,35 +144,34 @@ class ControlledInpEditor:
                 result[orig_idx] = new_line
             return result
 
-        # Case 2: Data line count changed. Check for interleaved comments.
-        if data_indices and comment_indices:
+        # Case 2: Data line count changed. Check for interleaved comments or blank lines.
+        if data_indices and non_data_indices:
             first_data = data_indices[0]
             last_data = data_indices[-1]
-            has_interleaved = any(first_data < c_idx < last_data for c_idx in comment_indices)
+            has_interleaved = any(first_data < nd_idx < last_data for nd_idx in non_data_indices)
             if has_interleaved:
                 raise ValueError(
-                    f"Ambiguous comment placement: comments are interleaved between data lines "
+                    f"Ambiguous comment placement: comments or blank lines are interleaved between data lines "
                     f"and data row count changed from {len(data_indices)} to {len(new_data_lines)}. "
-                    "Cannot unambiguously preserve comment associations."
+                    "Cannot unambiguously preserve line associations when row count varies."
                 )
 
-        # Separate leading comments and trailing comments
-        leading_comments: List[str] = []
-        trailing_comments: List[str] = []
+        # Separate leading non-data lines and trailing non-data lines
+        leading_non_data: List[str] = []
+        trailing_non_data: List[str] = []
         if data_indices:
             first_data = data_indices[0]
             last_data = data_indices[-1]
             for i, line in enumerate(block_lines):
-                if line.strip().startswith("**"):
-                    if i < first_data:
-                        leading_comments.append(line)
-                    elif i > last_data:
-                        trailing_comments.append(line)
+                if i < first_data:
+                    leading_non_data.append(line)
+                elif i > last_data:
+                    trailing_non_data.append(line)
         else:
-            # All lines were comments
-            leading_comments = list(block_lines)
+            # All lines were non-data
+            leading_non_data = list(block_lines)
 
-        return leading_comments + list(new_data_lines) + trailing_comments
+        return leading_non_data + list(new_data_lines) + trailing_non_data
 
     def inspect_includes(
         self,
@@ -166,21 +181,29 @@ class ControlledInpEditor:
         visited: Optional[Set[str]] = None,
         active_chain: Optional[List[str]] = None,
     ) -> List[Dict[str, Any]]:
-        """Scan all *INCLUDE keywords, verify dependencies recursively, and detect cycles."""
+        """Scan all *INCLUDE keywords, verify dependencies recursively, and detect cycles.
+
+        Search Order Guarantee:
+        The containing directory of the current file being inspected is ALWAYS the first-priority
+        search root. External directories are only probed if the dependency does not reside adjacent
+        to the referring file.
+        """
         curr_source_resolved = str(self.source_path.resolve())
         chain = list(active_chain or [curr_source_resolved])
         visited_set = set(visited or set())
 
-        search_roots: List[Path] = []
+        # The current file's parent directory is ALWAYS root 0
+        current_dir = self.source_path.parent.resolve()
+        search_roots: List[Path] = [current_dir]
         if base_dir:
-            search_roots.append(Path(base_dir).resolve())
+            bp = Path(base_dir).resolve()
+            if bp not in search_roots:
+                search_roots.append(bp)
         if search_dirs:
             for sd in search_dirs:
                 p = Path(sd).resolve()
                 if p not in search_roots:
                     search_roots.append(p)
-        if self.source_path.parent.resolve() not in search_roots:
-            search_roots.append(self.source_path.parent.resolve())
 
         results: List[Dict[str, Any]] = []
         for i, line in enumerate(self._lines):
@@ -193,6 +216,7 @@ class ControlledInpEditor:
                         "input": "",
                         "resolved_path": None,
                         "exists": False,
+                        "sha256": None,
                         "error": "Missing INPUT parameter in *INCLUDE keyword",
                         "source_deck": curr_source_resolved,
                     })
@@ -219,21 +243,27 @@ class ControlledInpEditor:
                     raise ValueError(f"Circular *INCLUDE dependency detected: {cycle_str}")
 
                 is_file = cand_path.is_file()
+                file_sha256 = None
+                if is_file:
+                    file_sha256 = hashlib.sha256(cand_path.read_bytes()).hexdigest()
+
                 entry = {
                     "line_number": i + 1,
                     "input": input_spec,
                     "resolved_path": cand_path_str,
                     "exists": is_file,
+                    "sha256": file_sha256,
                     "error": None if is_file else f"Referenced file not found in search paths: {cand_path_str}",
                     "source_deck": curr_source_resolved,
                 }
                 results.append(entry)
 
-                # Recursive descent
+                # Recursive descent: child's containing directory becomes the child's primary search root
                 if recursive and is_file and cand_path_str not in visited_set:
                     visited_set.add(cand_path_str)
                     child_editor = ControlledInpEditor(cand_path)
                     child_results = child_editor.inspect_includes(
+                        base_dir=cand_path.parent.resolve(),
                         search_dirs=search_roots,
                         recursive=True,
                         visited=visited_set,
@@ -538,6 +568,7 @@ class ControlledInpEditor:
         target_path: Union[str, Path],
         overwrite: bool = False,
         allowed_directory: Optional[Union[str, Path]] = None,
+        include_dependencies: Sequence[Dict[str, Any]] = (),
     ) -> InpEditAuditRecord:
         """Save the modified INP content to an isolated target path and return verifiable audit record."""
         dest = Path(target_path).resolve()
@@ -560,8 +591,11 @@ class ControlledInpEditor:
             raise FileExistsError(f"Target file '{dest}' already exists. Pass overwrite=True to permit overwrite.")
 
         dest.parent.mkdir(parents=True, exist_ok=True)
-        # Write bytes deterministically with original newline convention to eliminate Windows CRLF divergence
-        new_content_bytes = (self._newline.join(self._lines) + self._newline).encode("utf-8")
+        # Write bytes deterministically with original newline convention and trailing newline fidelity
+        joined_content = self._newline.join(self._lines)
+        if self._has_trailing_newline:
+            joined_content += self._newline
+        new_content_bytes = joined_content.encode("utf-8")
         dest.write_bytes(new_content_bytes)
 
         # Read actual bytes directly from disk to ensure cryptographic byte-level accuracy
@@ -569,10 +603,9 @@ class ControlledInpEditor:
         target_sha256 = hashlib.sha256(actual_disk_bytes).hexdigest()
 
         # Compute unified diff
-        new_content_str = self._raw_content.__class__(self._newline.join(self._lines) + self._newline)
         diff_lines = list(difflib.unified_diff(
             self._raw_content.splitlines(keepends=True),
-            new_content_str.splitlines(keepends=True),
+            joined_content.splitlines(keepends=True),
             fromfile=str(self.source_path.name),
             tofile=str(dest.name),
             n=3,
@@ -588,6 +621,7 @@ class ControlledInpEditor:
             operations_applied=(),
             diff_summary=diff_summary,
             lines_changed=lines_changed,
+            include_dependencies=tuple(include_dependencies),
         )
 
 
@@ -597,6 +631,7 @@ def edit_inp_file(
     operations: Sequence[InpEditOperation],
     overwrite: bool = False,
     allowed_directory: Optional[Union[str, Path]] = None,
+    include_dependencies: Sequence[Dict[str, Any]] = (),
 ) -> InpEditAuditRecord:
     """Convenience helper to apply a batch of InpEditOperation specifications to an INP file."""
     editor = ControlledInpEditor(source_path)
@@ -636,7 +671,12 @@ def edit_inp_file(
             "keyword": op.property_keyword,
         })
 
-    record = editor.save(target_path, overwrite=overwrite, allowed_directory=allowed_directory)
+    record = editor.save(
+        target_path,
+        overwrite=overwrite,
+        allowed_directory=allowed_directory,
+        include_dependencies=include_dependencies,
+    )
     return InpEditAuditRecord(
         source_path=record.source_path,
         target_path=record.target_path,
@@ -645,4 +685,5 @@ def edit_inp_file(
         operations_applied=tuple(applied),
         diff_summary=record.diff_summary,
         lines_changed=record.lines_changed,
+        include_dependencies=record.include_dependencies,
     )

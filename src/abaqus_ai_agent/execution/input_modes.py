@@ -32,6 +32,79 @@ def _compute_file_sha256(path: Union[str, Path]) -> str:
     return h.hexdigest()
 
 
+def _sync_include_dependencies(
+    includes: Sequence[Dict[str, Any]],
+    target_dir: Path,
+) -> List[Dict[str, Any]]:
+    """Synchronize and cryptographically verify *INCLUDE dependencies into target workspace.
+
+    Rules:
+    1. Containment defense: target destination must be strictly relative to target_dir (no '../' escape).
+    2. Collision defense: if different files map to the same target name with diverging hashes, raise ValueError.
+    3. Disk-level consistency: verify byte-level SHA-256 after copying.
+    """
+    synced_records: List[Dict[str, Any]] = []
+    seen_targets: Dict[Path, str] = {}
+    resolved_target_dir = target_dir.resolve()
+
+    for inc in includes:
+        if not inc.get("exists") or not inc.get("resolved_path"):
+            continue
+        raw_input = inc.get("input", "")
+        if not raw_input:
+            continue
+        raw_p = Path(raw_input)
+        if raw_p.is_absolute():
+            # Absolute path does not need copying into workspace
+            continue
+
+        dest_inc = (target_dir / raw_input).resolve()
+        if not dest_inc.is_relative_to(resolved_target_dir):
+            raise ValueError(
+                f"Path escape violation in *INCLUDE: '{raw_input}' escapes target directory '{resolved_target_dir}'."
+            )
+
+        src_inc = Path(inc["resolved_path"]).resolve()
+        if not src_inc.is_file():
+            continue
+
+        src_sha256 = inc.get("sha256") or _compute_file_sha256(src_inc)
+
+        if dest_inc in seen_targets:
+            existing_sha = seen_targets[dest_inc]
+            if existing_sha != src_sha256:
+                raise ValueError(
+                    f"Include collision conflict: multiple dependencies map to '{dest_inc}' "
+                    f"with divergent SHA-256 digests."
+                )
+        else:
+            if dest_inc.exists():
+                existing_disk_sha = _compute_file_sha256(dest_inc)
+                if existing_disk_sha != src_sha256:
+                    raise ValueError(
+                        f"Include collision conflict: file at '{dest_inc}' already exists "
+                        f"with divergent SHA-256 digest."
+                    )
+            else:
+                dest_inc.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(src_inc, dest_inc)
+                disk_sha = _compute_file_sha256(dest_inc)
+                if disk_sha != src_sha256:
+                    raise RuntimeError(
+                        f"Integrity violation copying *INCLUDE '{raw_input}' to '{dest_inc}': SHA-256 mismatch."
+                    )
+            seen_targets[dest_inc] = src_sha256
+
+        synced_records.append({
+            "logical_path": raw_input,
+            "source_path": str(src_inc),
+            "target_path": str(dest_inc),
+            "sha256": src_sha256,
+        })
+
+    return synced_records
+
+
 def solve_user_inp(
     executor: Any,
     inp_path: Union[str, Path],
@@ -65,32 +138,31 @@ def solve_user_inp(
     # Preflight inspection of *INCLUDE dependencies and workspace synchronization
     if effective_workdir:
         from ..editing.inp_editor import ControlledInpEditor
-        try:
-            inp_editor = ControlledInpEditor(inp_file)
-            includes = inp_editor.inspect_includes(
-                base_dir=inp_file.parent,
-                search_dirs=[inp_file.parent],
-                recursive=True,
+        inp_editor = ControlledInpEditor(inp_file)
+        includes = inp_editor.inspect_includes(
+            base_dir=inp_file.parent,
+            search_dirs=[inp_file.parent],
+            recursive=True,
+        )
+        # Defense-in-depth: check path escape on all relative includes before existence checks
+        for inc in includes:
+            raw_input = inc.get("input", "")
+            if raw_input and not Path(raw_input).is_absolute():
+                dest_probe = (effective_workdir / raw_input).resolve()
+                if not dest_probe.is_relative_to(effective_workdir.resolve()):
+                    raise ValueError(
+                        f"Path escape violation in *INCLUDE: '{raw_input}' escapes target directory '{effective_workdir}'."
+                    )
+
+        missing = [inc for inc in includes if not inc["exists"]]
+        if missing:
+            err_detail = "; ".join(
+                f"Line {inc['line_number']}: '{inc['input']}'" for inc in missing
             )
-            missing = [inc for inc in includes if not inc["exists"]]
-            if missing:
-                err_detail = "; ".join(
-                    f"Line {inc['line_number']}: '{inc['input']}'" for inc in missing
-                )
-                raise FileNotFoundError(
-                    f"Missing required *INCLUDE dependency file(s) for '{inp_file.name}': {err_detail}"
-                )
-            for inc in includes:
-                if inc.get("exists") and inc.get("resolved_path"):
-                    raw_input = inc.get("input", "")
-                    if not Path(raw_input).is_absolute():
-                        solver_inc = (effective_workdir / raw_input).resolve()
-                        if not solver_inc.exists() and Path(inc["resolved_path"]).is_file():
-                            solver_inc.parent.mkdir(parents=True, exist_ok=True)
-                            shutil.copy2(Path(inc["resolved_path"]), solver_inc)
-        except Exception as exc:
-            if isinstance(exc, (FileNotFoundError, ValueError)):
-                raise
+            raise FileNotFoundError(
+                f"Missing required *INCLUDE dependency file(s) for '{inp_file.name}': {err_detail}"
+            )
+        _sync_include_dependencies(includes, target_dir=effective_workdir)
 
     # Invoke solver directly via executor
     orig_workdir = getattr(executor, "workdir", None)
@@ -129,18 +201,8 @@ def solve_user_inp(
     if initial_sha256 != after_sha256:
         raise RuntimeError(f"Integrity violation: source INP '{inp_file}' was modified during execution.")
 
-    expected_odb: Optional[Path] = None
-    if effective_workdir:
-        # P0 Contract: When running in an isolated workdir, the output ODB MUST be
-        # produced directly within effective_workdir. Never latch onto stale sibling ODBs!
-        candidate_odb = effective_workdir / f"{eff_job_name}.odb"
-        if candidate_odb.is_file() and candidate_odb.stat().st_size > 0:
-            expected_odb = candidate_odb
-    else:
-        # Fallback only when executing without an external project context
-        candidate_odb = inp_file.parent / f"{eff_job_name}.odb"
-        if candidate_odb.is_file() and candidate_odb.stat().st_size > 0:
-            expected_odb = candidate_odb
+    candidate_odb = (effective_workdir if effective_workdir else inp_file.parent) / f"{eff_job_name}.odb"
+    expected_odb: Optional[Path] = candidate_odb if candidate_odb.is_file() else None
 
     # Evaluate true execution status (P0 contract: never report COMPLETED unconditionally)
     status = "COMPLETED"
@@ -152,27 +214,49 @@ def solve_user_inp(
         error_msg = f"Solver invocation raised exception: {exec_exc}"
         returncode = -1
     else:
+        rc = None
+        stderr = ""
         if isinstance(res, dict):
-            returncode = int(res.get("returncode", 0))
+            rc = res.get("returncode")
             stderr = str(res.get("stderr", ""))
         elif hasattr(res, "returncode"):
-            returncode = int(getattr(res, "returncode", 0))
+            rc = getattr(res, "returncode")
             stderr = str(getattr(res, "stderr", ""))
-        else:
-            returncode = 0
-            stderr = ""
 
-        if returncode != 0:
+        if rc is None:
             status = "FAILED"
-            error_msg = f"Solver exited with non-zero exit code {returncode}. Stderr: {stderr}"
-        elif expected_odb is None or not expected_odb.is_file():
-            status = "FAILED"
-            error_msg = f"Solver completed with code 0 but expected ODB output was not found: {eff_job_name}.odb"
+            error_msg = "Execution result is incomplete: missing required 'returncode' field."
+            returncode = -1
+        else:
+            try:
+                returncode = int(rc)
+            except (ValueError, TypeError):
+                status = "FAILED"
+                error_msg = f"Execution result contains invalid non-integer returncode: {rc!r}"
+                returncode = -1
+            else:
+                if returncode != 0:
+                    status = "FAILED"
+                    error_msg = f"Solver exited with non-zero exit code {returncode}. Stderr: {stderr}"
+                elif expected_odb is None or not expected_odb.is_file():
+                    status = "FAILED"
+                    error_msg = f"Solver completed with code 0 but expected ODB output was not found: {eff_job_name}.odb"
+                elif expected_odb.stat().st_size == 0:
+                    status = "FAILED"
+                    error_msg = f"Solver completed with code 0 but generated empty/corrupt ODB: {eff_job_name}.odb (0 bytes)"
+
+    odb_valid = (
+        status == "COMPLETED"
+        and expected_odb is not None
+        and expected_odb.is_file()
+        and expected_odb.stat().st_size > 0
+    )
 
     return {
         "status": status,
         "error": error_msg,
         "returncode": returncode,
+        "odb_valid": odb_valid,
         "input_kind": UserInputKind.INP_SOLVER_DIRECT.value,
         "run_id": eff_run_id,
         "job_name": eff_job_name,
@@ -358,89 +442,117 @@ def edit_and_solve_user_inp(
         raise FileNotFoundError(f"User INP file does not exist: {src_file}")
 
     allowed_dir: Path
-    if project_context is not None:
-        target_name = target_filename or f"{src_file.stem}_edited.inp"
-        dest_inp = (project_context.working_dir / target_name).resolve()
-        allowed_dir = project_context.working_dir.resolve()
-        if not dest_inp.is_relative_to(allowed_dir):
-            raise ValueError(
-                f"Path escape violation: target path '{dest_inp}' escapes working_dir '{allowed_dir}'."
-            )
-    else:
-        target_name = target_filename or f"{src_file.stem}_edited_{uuid.uuid4().hex[:6]}.inp"
-        dest_inp = (src_file.parent / target_name).resolve()
-        allowed_dir = src_file.parent.resolve()
-        if not dest_inp.is_relative_to(allowed_dir):
-            raise ValueError(
-                f"Path escape violation: target path '{dest_inp}' escapes parent directory '{allowed_dir}'."
-            )
-        if dest_inp == src_file:
-            raise PermissionError("Zero In-Place Mutation violation: target_path cannot be identical to source_path.")
-
-    if dest_inp.exists() and not overwrite:
-        raise FileExistsError(
-            f"Target INP '{dest_inp}' already exists. Pass overwrite=True to permit overwrite."
-        )
-
-    inp_ops = []
-    for op in operations:
-        if isinstance(op, InpEditOperation):
-            inp_ops.append(op)
-        elif isinstance(op, dict):
-            inp_ops.append(
-                InpEditOperation(
-                    category=op.get("category", ""),
-                    target_identifier=op.get("target_identifier", op.get("target", "")),
-                    property_keyword=op.get("property_keyword", op.get("keyword", "")),
-                    new_values=op.get("new_values", op.get("values")),
-                    metadata=op.get("metadata", {}),
+    created_files: List[Path] = []
+    try:
+        if project_context is not None:
+            target_name = target_filename or f"{src_file.stem}_edited.inp"
+            dest_inp = (project_context.working_dir / target_name).resolve()
+            allowed_dir = project_context.working_dir.resolve()
+            if not dest_inp.is_relative_to(allowed_dir):
+                raise ValueError(
+                    f"Path escape violation: target path '{dest_inp}' escapes working_dir '{allowed_dir}'."
                 )
-            )
         else:
-            raise TypeError(f"Unsupported edit operation type: {type(op)}")
+            target_name = target_filename or f"{src_file.stem}_edited_{uuid.uuid4().hex[:6]}.inp"
+            dest_inp = (src_file.parent / target_name).resolve()
+            allowed_dir = src_file.parent.resolve()
+            if not dest_inp.is_relative_to(allowed_dir):
+                raise ValueError(
+                    f"Path escape violation: target path '{dest_inp}' escapes parent directory '{allowed_dir}'."
+                )
+            if dest_inp == src_file:
+                raise PermissionError("Zero In-Place Mutation violation: target_path cannot be identical to source_path.")
 
-    audit_record = edit_inp_file(
-        source_path=src_file,
-        target_path=dest_inp,
-        operations=inp_ops,
-        overwrite=overwrite,
-        allowed_directory=allowed_dir,
-    )
+        if dest_inp.exists() and not overwrite:
+            raise FileExistsError(
+                f"Target INP '{dest_inp}' already exists. Pass overwrite=True to permit overwrite."
+            )
 
-    # Preflight dependency inspection: verify all *INCLUDE references exist recursively
-    search_dirs = [dest_inp.parent]
-    if src_file.parent.resolve() != dest_inp.parent.resolve():
-        search_dirs.append(src_file.parent.resolve())
+        inp_ops = []
+        for op in operations:
+            if isinstance(op, InpEditOperation):
+                inp_ops.append(op)
+            elif isinstance(op, dict):
+                inp_ops.append(
+                    InpEditOperation(
+                        category=op.get("category", ""),
+                        target_identifier=op.get("target_identifier", op.get("target", "")),
+                        property_keyword=op.get("property_keyword", op.get("keyword", "")),
+                        new_values=op.get("new_values", op.get("values")),
+                        metadata=op.get("metadata", {}),
+                    )
+                )
+            else:
+                raise TypeError(f"Unsupported edit operation type: {type(op)}")
 
-    editor_checker = ControlledInpEditor(dest_inp)
-    all_includes = editor_checker.inspect_includes(
-        base_dir=dest_inp.parent,
-        search_dirs=search_dirs,
-        recursive=True,
-    )
-    missing_includes = [
-        inc for inc in all_includes
-        if not inc["exists"]
-    ]
-    if missing_includes:
-        err_detail = "; ".join(
-            f"Line {inc['line_number']}: '{inc['input']}'"
-            for inc in missing_includes
+        audit_record = edit_inp_file(
+            source_path=src_file,
+            target_path=dest_inp,
+            operations=inp_ops,
+            overwrite=overwrite,
+            allowed_directory=allowed_dir,
         )
-        raise FileNotFoundError(
-            f"Missing required *INCLUDE dependency file(s) for '{dest_inp.name}': {err_detail}"
-        )
+        created_files.append(dest_inp)
 
-    # Synchronize relative include dependencies into dest_inp's directory
-    for inc in all_includes:
-        if inc.get("exists") and inc.get("resolved_path"):
-            src_inc = Path(inc["resolved_path"])
+        # Preflight dependency inspection: verify all *INCLUDE references exist recursively
+        search_dirs = [dest_inp.parent]
+        if src_file.parent.resolve() != dest_inp.parent.resolve():
+            search_dirs.append(src_file.parent.resolve())
+
+        editor_checker = ControlledInpEditor(dest_inp)
+        all_includes = editor_checker.inspect_includes(
+            base_dir=dest_inp.parent,
+            search_dirs=search_dirs,
+            recursive=True,
+        )
+        for inc in all_includes:
             raw_input = inc.get("input", "")
-            if not Path(raw_input).is_absolute():
-                dest_inc = (dest_inp.parent / raw_input).resolve()
-                if not dest_inc.exists() and src_inc.is_file():
-                    dest_inc.parent.mkdir(parents=True, exist_ok=True)
-                    shutil.copy2(src_inc, dest_inc)
+            if raw_input and not Path(raw_input).is_absolute():
+                dest_probe = (dest_inp.parent / raw_input).resolve()
+                if not dest_probe.is_relative_to(dest_inp.parent.resolve()):
+                    raise ValueError(
+                        f"Path escape violation in *INCLUDE: '{raw_input}' escapes target directory '{dest_inp.parent}'."
+                    )
+        missing_includes = [
+            inc for inc in all_includes
+            if not inc["exists"]
+        ]
+        if missing_includes:
+            err_detail = "; ".join(
+                f"Line {inc['line_number']}: '{inc['input']}'"
+                for inc in missing_includes
+            )
+            raise FileNotFoundError(
+                f"Missing required *INCLUDE dependency file(s) for '{dest_inp.name}': {err_detail}"
+            )
+
+        # Synchronize and verify dependencies with strict containment and collision defense
+        synced_dependencies = _sync_include_dependencies(all_includes, target_dir=dest_inp.parent)
+        for dep in synced_dependencies:
+            created_files.append(Path(dep["target_path"]))
+
+        # Augment audit_record with verified include dependencies
+        from ..editing.inp_editor import InpEditAuditRecord
+        audit_record = InpEditAuditRecord(
+            source_path=audit_record.source_path,
+            target_path=audit_record.target_path,
+            source_sha256=audit_record.source_sha256,
+            target_sha256=audit_record.target_sha256,
+            operations_applied=audit_record.operations_applied,
+            diff_summary=audit_record.diff_summary,
+            lines_changed=audit_record.lines_changed,
+            include_dependencies=tuple(synced_dependencies),
+        )
+
+    except Exception:
+        # Transaction rollback on preflight failure: clean up partially staged working artifacts
+        for f in created_files:
+            try:
+                if f.is_file():
+                    f.unlink(missing_ok=True)
+            except OSError:
+                pass
+        raise
 
     solve_res = solve_user_inp(
         executor=executor,
@@ -458,5 +570,6 @@ def edit_and_solve_user_inp(
     solve_res["edited_inp_sha256"] = audit_record.target_sha256
     solve_res["diff_summary"] = audit_record.diff_summary
     solve_res["lines_changed"] = audit_record.lines_changed
+    solve_res["include_dependencies"] = list(synced_dependencies)
     solve_res["is_edited"] = True
     return solve_res
