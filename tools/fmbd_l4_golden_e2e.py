@@ -688,7 +688,7 @@ with open(r'{extract_out}', 'w') as jf:
     )
     assert acc_probe7.passed is False
     assert acc_probe7.gates["evidence_sufficiency"] == "FAIL"
-    assert acc_probe7.result_validity == "RESULT_INVALID"
+    assert acc_probe7.result_validity in ("EVIDENCE_TAMPERED", "INCOMPLETE") and acc_probe7.result_validity.is_invalid is True
     neg_results["probe_7_evidence_tampering"] = "PASS"
     print("  Negative Probe 7 (Evidence Tampering -> Fail-Closed): PASS")
 

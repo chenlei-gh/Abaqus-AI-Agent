@@ -458,7 +458,7 @@ odb.close()
         evidence_manifest=tampered_manifest,
     )
     assert acc_tamper.passed is False
-    assert acc_tamper.result_validity == "RESULT_INVALID"
+    assert acc_tamper.result_validity == "EVIDENCE_TAMPERED" and acc_tamper.result_validity.is_invalid is True
     print(f"  [PROBE 4 PASS] Tampered evidence correctly blocked as {acc_tamper.result_validity}")
 
     # Persist certified machine validation evidence

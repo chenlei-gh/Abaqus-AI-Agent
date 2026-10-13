@@ -165,10 +165,16 @@ def validate_action(action):
             _require_positive(action.parameters.get("frequency", 0), "frequency")
             if any(len(x) != 2 for x in data):
                 raise ValueError("periodic data must contain A_i/B_i pairs")
+        for pair in data:
+            for val in pair:
+                _require_finite(val, "amplitude data component")
     if action.action_type == "equally_spaced_amplitude":
         _require_positive(action.parameters.get("fixed_interval", 0), "fixed_interval")
-        if not action.parameters.get("data"):
+        data = action.parameters.get("data")
+        if not data:
             raise ValueError("data is required for equally_spaced_amplitude")
+        for val in data:
+            _require_finite(val, "amplitude data component")
     if action.action_type == "gravity":
         comps = [action.parameters.get(k, 0.0) for k in ("comp1", "comp2", "comp3")]
         if not all(_is_finite_num(c) for c in comps):
@@ -181,6 +187,8 @@ def validate_action(action):
         vector = action.parameters.get("vector")
         if not vector or len(vector) != 3:
             raise ValueError("vector must contain three components")
+        for c in vector:
+            _require_finite(c, "vector component")
         if not action.parameters.get("instance"):
             raise ValueError("instance is required")
     if action.action_type == "instance_rotate":
@@ -188,6 +196,11 @@ def validate_action(action):
             value = action.parameters.get(key)
             if not value or len(value) != 3:
                 raise ValueError("%s must contain three components" % key)
+            for c in value:
+                _require_finite(c, "%s component" % key)
+        axis_dir = action.parameters.get("axis_direction", ())
+        if all(float(c) == 0.0 for c in axis_dir):
+            raise ValueError("axis_direction cannot be a zero vector")
         if not action.parameters.get("instance"):
             raise ValueError("instance is required")
     if action.action_type == "reference_point":
@@ -196,6 +209,8 @@ def validate_action(action):
         coords = action.parameters.get("coordinates")
         if not coords or len(coords) != 3:
             raise ValueError("coordinates must contain three components")
+        for c in coords:
+            _require_finite(c, "coordinates component")
     if action.action_type == "rigid_body":
         if not action.parameters.get("name"):
             raise ValueError("name is required for rigid_body")

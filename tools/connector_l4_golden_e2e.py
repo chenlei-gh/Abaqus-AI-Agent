@@ -649,8 +649,8 @@ with open(r'{extract_out}', 'w') as f:
     )
     assert p7_acc.passed is False
     assert p7_acc.gates["evidence_sufficiency"] == "FAIL"
-    assert p7_acc.result_validity == "RESULT_INVALID"
-    print("    -> PASS (Blocked / RESULT_INVALID)")
+    assert p7_acc.result_validity == "EVIDENCE_TAMPERED" and p7_acc.result_validity.is_invalid is True
+    print("    -> PASS (Blocked / EVIDENCE_TAMPERED)")
 
     # Probe 8: Semantic type tampering
     print("  [Probe 8] Testing semantic type tampering (HINGE -> TRANSLATOR mismatch)...")

@@ -29,11 +29,31 @@ _INVALID_RESULT_STATES = frozenset({
     "EVIDENCE_CORRUPT",
     "EVIDENCE_STALE",
     "INCOMPLETE",
+    "SOLVER_FAILED",
 })
 
 
+def is_invalid_result_validity(val) -> bool:
+    """Return True if val represents an invalid, compromised, or failed result validity state."""
+    if val is None:
+        return False
+    if hasattr(val, "is_invalid"):
+        return bool(val.is_invalid)
+    return str(val) in _INVALID_RESULT_STATES
+
+
 class ResultValidity(str):
-    """String subclass representing result validity while maintaining backward compatibility with RESULT_INVALID."""
+    """String subclass representing result validity with strict identity equality.
+
+    Strictly satisfies mathematical equivalence relation axioms:
+    - Reflexive: a == a
+    - Symmetric: a == b <=> b == a
+    - Transitive: a == b and b == c => a == c
+
+    Never performs loose cross-state equality matching in __eq__. Inherits
+    native str equality and hashing. Use explicit properties (.is_invalid, .is_valid)
+    or is_invalid_result_validity() to query categorical validity.
+    """
 
     @property
     def exact_name(self) -> str:
@@ -42,6 +62,10 @@ class ResultValidity(str):
     @property
     def is_valid(self) -> bool:
         return str(self) == "VALID"
+
+    @property
+    def is_invalid(self) -> bool:
+        return str(self) in _INVALID_RESULT_STATES
 
     @property
     def is_tampered(self) -> bool:
@@ -59,23 +83,9 @@ class ResultValidity(str):
     def is_incomplete(self) -> bool:
         return str(self) == "INCOMPLETE"
 
-    def __eq__(self, other):
-        if not isinstance(other, (str, ResultValidity)):
-            return False
-        s_self = str(self)
-        s_other = str(other)
-        if s_self == s_other:
-            return True
-        if (s_self == "RESULT_INVALID" and s_other in _INVALID_RESULT_STATES) or (
-            s_other == "RESULT_INVALID" and s_self in _INVALID_RESULT_STATES
-        ):
-            return True
-        return False
-
-    def __hash__(self):
-        if str(self) in _INVALID_RESULT_STATES:
-            return hash("RESULT_INVALID")
-        return str.__hash__(self)
+    @property
+    def is_solver_failed(self) -> bool:
+        return str(self) == "SOLVER_FAILED"
 
 
 @dataclass(frozen=True)

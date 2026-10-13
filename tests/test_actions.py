@@ -126,3 +126,109 @@ def test_validate_action_rejects_bool_nan_inf():
         )
         with pytest.raises(ValueError, match="min_edge_length must be positive"):
             validate_action(action)
+
+
+def test_validate_action_spatial_and_amplitude_numeric_hardening():
+    """Verify that validate_action strictly rejects bool, NaN, Inf, and zero rotation vectors."""
+    from abaqus_ai_agent.contracts.action import AbaqusAction
+    from abaqus_ai_agent.validation.actions import validate_action
+
+    # 1. instance_translate rejects non-finite / bool in vector
+    for bad_vec in ([1.0, 2.0, float("nan")], [float("inf"), 0.0, 0.0], [True, 0.0, 0.0], [1.0, "str", 3.0]):
+        action = AbaqusAction(
+            action_type="instance_translate",
+            model_name="Model-1",
+            target="Assembly",
+            parameters={"instance": "Part-1-1", "vector": bad_vec},
+        )
+        with pytest.raises(ValueError, match="vector component must be a finite number"):
+            validate_action(action)
+
+    # 2. instance_rotate rejects non-finite / bool in axis_point and axis_direction
+    for bad_pt in ([1.0, float("nan"), 0.0], [True, 0.0, 0.0]):
+        action = AbaqusAction(
+            action_type="instance_rotate",
+            model_name="Model-1",
+            target="Assembly",
+            parameters={"instance": "Part-1-1", "axis_point": bad_pt, "axis_direction": [0.0, 0.0, 1.0]},
+        )
+        with pytest.raises(ValueError, match="axis_point component must be a finite number"):
+            validate_action(action)
+
+    for bad_dir in ([0.0, 0.0, float("inf")], [0.0, False, 1.0]):
+        action = AbaqusAction(
+            action_type="instance_rotate",
+            model_name="Model-1",
+            target="Assembly",
+            parameters={"instance": "Part-1-1", "axis_point": [0.0, 0.0, 0.0], "axis_direction": bad_dir},
+        )
+        with pytest.raises(ValueError, match="axis_direction component must be a finite number"):
+            validate_action(action)
+
+    # 3. instance_rotate rejects zero-vector for axis_direction
+    action = AbaqusAction(
+        action_type="instance_rotate",
+        model_name="Model-1",
+        target="Assembly",
+        parameters={"instance": "Part-1-1", "axis_point": [0.0, 0.0, 0.0], "axis_direction": [0.0, 0.0, 0.0]},
+    )
+    with pytest.raises(ValueError, match="axis_direction cannot be a zero vector"):
+        validate_action(action)
+
+    # 4. reference_point rejects non-finite / bool in coordinates
+    for bad_coord in ([float("nan"), 0.0, 0.0], [0.0, True, 0.0], [0.0, 0.0, float("-inf")]):
+        action = AbaqusAction(
+            action_type="reference_point",
+            model_name="Model-1",
+            target="Assembly",
+            parameters={"name": "RP-1", "coordinates": bad_coord},
+        )
+        with pytest.raises(ValueError, match="coordinates component must be a finite number"):
+            validate_action(action)
+
+    # 5. amplitudes reject non-finite / bool in data pairs
+    for bad_pair in (((0.0, 0.0), (1.0, float("nan"))), ((0.0, True), (1.0, 1.0))):
+        action = AbaqusAction(
+            action_type="tabular_amplitude",
+            model_name="Model-1",
+            target="Model-1",
+            parameters={"name": "Amp1", "data": bad_pair},
+        )
+        with pytest.raises(ValueError, match="amplitude data component must be a finite number"):
+            validate_action(action)
+
+    action_eq = AbaqusAction(
+        action_type="equally_spaced_amplitude",
+        model_name="Model-1",
+        target="Model-1",
+        parameters={"name": "AmpEq", "fixed_interval": 0.1, "data": [0.0, float("inf")]},
+    )
+    with pytest.raises(ValueError, match="amplitude data component must be a finite number"):
+        validate_action(action_eq)
+
+
+def test_validate_action_quantities_rejects_bool_nan_inf():
+    """Verify that validate_action_quantities in units.py rejects bool, NaN, Inf, and non-positive values."""
+    from abaqus_ai_agent.contracts.units import validate_action_quantities
+
+    # 1. material_elastic: youngs_modulus
+    for bad_ym in (True, False, float("nan"), float("inf"), float("-inf"), 0.0, -100.0):
+        with pytest.raises(ValueError, match="Young's modulus must be positive"):
+            validate_action_quantities("material_elastic", {"youngs_modulus": bad_ym})
+
+    # Valid youngs_modulus passes
+    assert validate_action_quantities("material_elastic", {"youngs_modulus": 210000.0}) is True
+
+    # 2. material_density: density
+    for bad_rho in (True, False, float("nan"), float("inf"), 0.0, -7.85e-9):
+        with pytest.raises(ValueError, match="density must be positive"):
+            validate_action_quantities("material_density", {"density": bad_rho})
+
+    assert validate_action_quantities("material_density", {"density": 7.85e-9}) is True
+
+    # 3. static_step: time_period
+    for bad_tp in (True, False, float("nan"), float("inf"), 0.0, -1.0):
+        with pytest.raises(ValueError, match="time_period must be positive"):
+            validate_action_quantities("static_step", {"time_period": bad_tp})
+
+    assert validate_action_quantities("static_step", {"time_period": 1.0}) is True

@@ -1020,58 +1020,121 @@ def test_p0_c_production_acceptance_run_hash_tampered_even_if_caller_provides_ma
     assert any("caller_input_hash_conflict" in e or "input_hash_mismatch" in e for e in res.findings.evidence_errors)
 
 
-def test_result_validity_equality_symmetry_and_hash_consistency():
-    """P0 Contract: ResultValidity equality must be symmetric, and hash must be consistent with equality."""
-    from abaqus_ai_agent.acceptance import ResultValidity
+def test_result_validity_strict_equivalence_and_transitivity():
+    """P0 Contract: ResultValidity must strictly satisfy mathematical equivalence axioms:
+    - Reflexive: a == a
+    - Symmetric: a == b <=> b == a
+    - Transitive: (a == b and b == c) => a == c
+
+    Never allows loose cross-state collapsing in __eq__. Distinct states remain
+    strictly unequal, eliminating transitivity paradoxes and hash-table instability.
+    Categorical validity is queried via .is_invalid, .is_valid, or is_invalid_result_validity().
+    """
+    from abaqus_ai_agent.acceptance import ResultValidity, is_invalid_result_validity
 
     tampered = ResultValidity("EVIDENCE_TAMPERED")
     corrupt = ResultValidity("EVIDENCE_CORRUPT")
     stale = ResultValidity("EVIDENCE_STALE")
     incomplete = ResultValidity("INCOMPLETE")
     invalid = ResultValidity("RESULT_INVALID")
+    solver_failed = ResultValidity("SOLVER_FAILED")
     valid = ResultValidity("VALID")
 
-    # 1. Symmetric equality with "RESULT_INVALID"
-    for item in (tampered, corrupt, stale, incomplete, invalid):
-        assert item == "RESULT_INVALID", f"{item} == RESULT_INVALID must be True"
-        assert "RESULT_INVALID" == item, f"RESULT_INVALID == {item} must be True (symmetric)"
-        assert item == ResultValidity("RESULT_INVALID"), f"{item} == ResultValidity(RESULT_INVALID) must be True"
-        assert ResultValidity("RESULT_INVALID") == item, f"ResultValidity(RESULT_INVALID) == {item} must be True"
+    all_states = [tampered, corrupt, stale, incomplete, invalid, solver_failed, valid]
 
-    # 2. Strict inequality between distinct non-base invalid states
-    assert tampered != "EVIDENCE_CORRUPT"
-    assert corrupt != "EVIDENCE_TAMPERED"
-    assert tampered != corrupt
-    assert corrupt != tampered
+    # 1. Reflexivity: for all a, a == a
+    for item in all_states:
+        assert item == item
+        assert item == str(item)
+        assert str(item) == item
 
-    # 3. Valid state must never compare equal to RESULT_INVALID
-    assert valid != "RESULT_INVALID"
-    assert "RESULT_INVALID" != valid
-    assert valid != tampered
+    # 2. Symmetry: a == b <=> b == a
+    for a in all_states:
+        for b in all_states:
+            assert (a == b) == (b == a), f"Symmetry broken between {a} and {b}"
 
-    # 4. Hash consistency: if a == b, then hash(a) == hash(b)
-    base_invalid_hash = hash("RESULT_INVALID")
-    for item in (tampered, corrupt, stale, incomplete, invalid):
-        assert hash(item) == base_invalid_hash, f"hash({item}) must equal hash('RESULT_INVALID')"
+    # 3. Transitivity: if a == b and b == c, then a == c
+    for a in all_states:
+        for b in all_states:
+            for c in all_states:
+                if (a == b) and (b == c):
+                    assert a == c, f"Transitivity violated for ({a}, {b}, {c})"
 
-    # 5. Set and Dict membership consistency
-    s = {tampered}
+    # 4. Strict identity: distinct states must NEVER compare equal
+    distinct_pairs = [
+        (tampered, invalid),
+        (corrupt, invalid),
+        (stale, invalid),
+        (incomplete, invalid),
+        (solver_failed, invalid),
+        (tampered, corrupt),
+        (tampered, stale),
+        (tampered, incomplete),
+        (corrupt, stale),
+        (stale, incomplete),
+        (valid, invalid),
+        (valid, tampered),
+    ]
+    for a, b in distinct_pairs:
+        assert a != b, f"{a} must NOT equal {b}"
+        assert b != a, f"{b} must NOT equal {a}"
+
+    # 5. Native hash consistency: equal objects have equal hash, distinct objects keep native str hash
+    for item in all_states:
+        assert hash(item) == hash(str(item)), f"hash({item}) must equal native string hash"
+    assert hash(tampered) != hash(invalid), "Distinct states should not have artificially forced hash collision"
+
+    # 6. Set and Dict membership behaves deterministically as native strings
+    s = {tampered, corrupt, invalid}
+    assert len(s) == 3
+    assert tampered in s
+    assert corrupt in s
+    assert invalid in s
+    assert "EVIDENCE_TAMPERED" in s
     assert "RESULT_INVALID" in s
-    assert ResultValidity("RESULT_INVALID") in s
+    assert stale not in s
 
-    # 6. Explicit helper properties
+    # 7. Explicit helper properties for categorical validity query
     assert tampered.is_tampered is True
+    assert tampered.is_invalid is True
     assert tampered.is_valid is False
     assert tampered.exact_name == "EVIDENCE_TAMPERED"
 
     assert corrupt.is_corrupt is True
+    assert corrupt.is_invalid is True
+    assert corrupt.is_valid is False
     assert corrupt.exact_name == "EVIDENCE_CORRUPT"
 
     assert stale.is_stale is True
+    assert stale.is_invalid is True
+    assert stale.is_valid is False
     assert stale.exact_name == "EVIDENCE_STALE"
 
     assert incomplete.is_incomplete is True
+    assert incomplete.is_invalid is True
+    assert incomplete.is_valid is False
     assert incomplete.exact_name == "INCOMPLETE"
+
+    assert solver_failed.is_solver_failed is True
+    assert solver_failed.is_invalid is True
+    assert solver_failed.is_valid is False
+    assert solver_failed.exact_name == "SOLVER_FAILED"
+
+    assert invalid.is_invalid is True
+    assert invalid.is_valid is False
+    assert invalid.exact_name == "RESULT_INVALID"
+
+    assert valid.is_valid is True
+    assert valid.is_invalid is False
+    assert valid.exact_name == "VALID"
+
+    # 8. Categorical classification helper: is_invalid_result_validity()
+    for item in (tampered, corrupt, stale, incomplete, invalid, solver_failed):
+        assert is_invalid_result_validity(item) is True
+        assert is_invalid_result_validity(str(item)) is True
+    assert is_invalid_result_validity(valid) is False
+    assert is_invalid_result_validity("VALID") is False
+    assert is_invalid_result_validity(None) is False
 
     assert valid.is_valid is True
     assert valid.is_tampered is False

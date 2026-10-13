@@ -266,7 +266,8 @@ def test_fmbd_negative_probe_7_evidence_tampering():
     )
     assert acc.passed is False
     assert acc.gates["evidence_sufficiency"] == "FAIL"
-    assert acc.result_validity == "RESULT_INVALID"
+    assert acc.result_validity.is_invalid is True
+    assert acc.result_validity in ("INCOMPLETE", "EVIDENCE_TAMPERED", "RESULT_INVALID")
 
 
 def test_fmbd_negative_probe_8_rigid_body_self_tie():

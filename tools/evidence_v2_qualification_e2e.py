@@ -208,7 +208,7 @@ def run_evidence_v2_qualification() -> Dict[str, Any]:
                 and verif_v2.validity == "TAMPERED"
                 and not acc_v2.passed
                 and acc_v2.status == "BLOCKED"
-                and acc_v2.result_validity == "RESULT_INVALID"
+                and acc_v2.result_validity.is_invalid
                 and acc_v2.gates.get("evidence_sufficiency") == "FAIL"
             ),
         }
@@ -254,7 +254,7 @@ def run_evidence_v2_qualification() -> Dict[str, Any]:
                 and verif_v3.validity == "INCOMPLETE"
                 and not acc_v3.passed
                 and acc_v3.status == "BLOCKED"
-                and acc_v3.result_validity == "RESULT_INVALID"
+                and acc_v3.result_validity.is_invalid
                 and acc_v3.gates.get("evidence_sufficiency") == "FAIL"
             ),
         }
@@ -295,7 +295,7 @@ def run_evidence_v2_qualification() -> Dict[str, Any]:
             and verif_v4.validity == "STALE"
             and not acc_v4.passed
             and acc_v4.status == "BLOCKED"
-            and acc_v4.result_validity == "RESULT_INVALID"
+            and acc_v4.result_validity.is_invalid
             and acc_v4.gates.get("evidence_sufficiency") == "FAIL"
         ),
     }
@@ -338,7 +338,7 @@ def run_evidence_v2_qualification() -> Dict[str, Any]:
             and verif_v5.validity == "STALE"
             and not acc_v5.passed
             and acc_v5.status == "BLOCKED"
-            and acc_v5.result_validity == "RESULT_INVALID"
+            and acc_v5.result_validity.is_invalid
         ),
     }
 
@@ -374,7 +374,7 @@ def run_evidence_v2_qualification() -> Dict[str, Any]:
             and verif_v6.validity == "TAMPERED"
             and not acc_v6.passed
             and acc_v6.status == "BLOCKED"
-            and acc_v6.result_validity == "RESULT_INVALID"
+            and acc_v6.result_validity.is_invalid
         ),
     }
 

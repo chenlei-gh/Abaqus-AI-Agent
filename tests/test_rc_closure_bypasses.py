@@ -41,7 +41,8 @@ def test_scenario_1_no_evidence_manifest_with_valid_numbers_is_blocked():
     )
     assert res.passed is False
     assert res.status == "BLOCKED"
-    assert res.result_validity == "RESULT_INVALID"
+    assert res.result_validity.is_invalid is True
+    assert res.result_validity in ("INCOMPLETE", "RESULT_INVALID")
     assert "missing_required_evidence" in res.blocked
     assert res.gates["evidence_sufficiency"] == "BLOCKED"
     assert res.audit_summary == "Solver: PASS | ODB: PASS | Required Result: FAIL | Engineering Acceptance: FAIL"
@@ -70,7 +71,8 @@ def test_scenario_2_evidence_manifest_missing_artifact_is_blocked(tmp_path: Path
     )
     assert res.passed is False
     assert res.status == "BLOCKED"
-    assert res.result_validity == "RESULT_INVALID"
+    assert res.result_validity.is_invalid is True
+    assert res.result_validity in ("INCOMPLETE", "RESULT_INVALID")
     assert res.gates["evidence_sufficiency"] == "FAIL"
     assert any("missing_mandatory_role" in f for f in res.failures)
 
@@ -101,7 +103,8 @@ def test_scenario_3_evidence_manifest_hash_mismatch_is_blocked(tmp_path: Path):
     )
     assert res.passed is False
     assert res.status == "BLOCKED"
-    assert res.result_validity == "RESULT_INVALID"
+    assert res.result_validity == "EVIDENCE_TAMPERED"
+    assert res.result_validity.is_invalid is True
     assert res.gates["evidence_sufficiency"] == "FAIL"
     assert any("hash_mismatch" in f or "tampered" in f for f in res.failures)
 
@@ -227,7 +230,8 @@ def test_scenario_7_legacy_v1_manifest_rejected_as_rc_evidence():
     )
     assert res.passed is False
     assert res.status == "BLOCKED"
-    assert res.result_validity == "RESULT_INVALID"
+    assert res.result_validity.is_invalid is True
+    assert res.result_validity in ("INCOMPLETE", "RESULT_INVALID")
     assert res.gates["evidence_sufficiency"] == "FAIL"
     assert "unsupported_legacy_manifest:schema_v1_deprecated_for_rc" in res.failures
 

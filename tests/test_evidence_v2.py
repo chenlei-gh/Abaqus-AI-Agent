@@ -242,7 +242,9 @@ def test_acceptance_gate_binding_fail_closed(tmp_path: Path):
     )
     assert acc_tampered.passed is False
     assert acc_tampered.status == "BLOCKED"
-    assert acc_tampered.result_validity == "RESULT_INVALID"
+    assert acc_tampered.result_validity == "EVIDENCE_TAMPERED"
+    assert acc_tampered.result_validity.is_invalid is True
+    assert acc_tampered.acceptance_status == "RESULT_INVALID"
     assert acc_tampered.gates["evidence_sufficiency"] == "FAIL"
     assert acc_tampered.evidence_status == "TAMPERED"
     assert any("evidence_tampered:hash_mismatch:Job.odb" in b for b in acc_tampered.blocked)
@@ -261,7 +263,9 @@ def test_acceptance_gate_binding_fail_closed(tmp_path: Path):
     )
     assert acc_stale.passed is False
     assert acc_stale.status == "BLOCKED"
-    assert acc_stale.result_validity == "RESULT_INVALID"
+    assert acc_stale.result_validity == "EVIDENCE_STALE"
+    assert acc_stale.result_validity.is_invalid is True
+    assert acc_stale.acceptance_status == "RESULT_INVALID"
     assert acc_stale.gates["evidence_sufficiency"] == "FAIL"
     assert acc_stale.evidence_status == "STALE"
 

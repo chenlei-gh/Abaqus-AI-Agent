@@ -206,7 +206,8 @@ def test_connector_negative_probe_6_missing_required_odb_fields(tmp_path):
         evidence_manifest=manifest,
     )
     assert acc.passed is False
-    assert acc.result_validity == "RESULT_INVALID"
+    assert acc.result_validity.is_invalid is True
+    assert acc.result_validity in ("INCOMPLETE", "RESULT_INVALID")
     assert "missing_required_field:CU" in acc.failures or "missing_required_field:CTF" in acc.failures
 
 
@@ -243,7 +244,8 @@ def test_connector_negative_probe_7_evidence_tampering(tmp_path):
     )
     assert acc.passed is False
     assert acc.gates["evidence_sufficiency"] == "FAIL"
-    assert acc.result_validity == "RESULT_INVALID"
+    assert acc.result_validity == "EVIDENCE_TAMPERED"
+    assert acc.result_validity.is_invalid is True
 
 
 def test_connector_negative_probe_8_semantic_type_tampering():

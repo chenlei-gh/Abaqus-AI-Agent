@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+import math
 from typing import Any, Dict, Optional, Tuple
 
 UNIT_SYSTEMS = {
@@ -124,24 +125,34 @@ def validate_same_dimension(units):
     return dimensions[0]
 
 
+def _is_finite_positive(v) -> bool:
+    if v is None or isinstance(v, bool) or not isinstance(v, (int, float)):
+        return False
+    try:
+        f = float(v)
+        return math.isfinite(f) and f > 0
+    except (ValueError, TypeError, OverflowError):
+        return False
+
+
 def validate_action_quantities(action_type: str, parameters: dict, unit_system: Optional[str] = None) -> bool:
     """Validate dimensional consistency and non-negativity of quantities within an action."""
     params = parameters or {}
     if action_type == "material_elastic":
         ym = params.get("youngs_modulus")
-        if ym is not None and float(ym) <= 0:
+        if ym is not None and not _is_finite_positive(ym):
             raise ValueError("Young's modulus must be positive in %s" % action_type)
         if "unit" in params:
             validate_quantity_unit("stress", params["unit"], unit_system)
     elif action_type == "material_density":
         rho = params.get("density")
-        if rho is not None and float(rho) <= 0:
+        if rho is not None and not _is_finite_positive(rho):
             raise ValueError("density must be positive in %s" % action_type)
         if "unit" in params:
             validate_quantity_unit("mass", params["unit"], unit_system)
     elif action_type in ("static_step", "implicit_dynamic_step", "explicit_dynamic_step"):
         tp = params.get("time_period")
-        if tp is not None and float(tp) <= 0:
+        if tp is not None and not _is_finite_positive(tp):
             raise ValueError("time_period must be positive in %s" % action_type)
         if "unit" in params:
             validate_quantity_unit("time", params["unit"], unit_system)
