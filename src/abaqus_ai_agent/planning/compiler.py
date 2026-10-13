@@ -281,7 +281,11 @@ def compile_intent_to_actions(
             b_name = getattr(b_spec, "name", None) or (b_spec.get("name") if isinstance(b_spec, dict) else None) or (b_spec.get("bolt_name") if isinstance(b_spec, dict) else "B1")
             reg_expr = getattr(b_spec, "region_expression", None) or (b_spec.get("region_expression") if isinstance(b_spec, dict) else None)
             gr = grounded_regions.get(reg_expr) if (grounded_regions and reg_expr) else None
-            cut_z = gr.anchor_point[2] if (gr and gr.anchor_point) else (geometry.length / 2.0)
+            cut_z = (
+                _extract_gr_pts_and_anchor(gr)[1][2]
+                if (gr and _extract_gr_pts_and_anchor(gr)[1])
+                else (geometry.length / 2.0)
+            )
             part_partition_code += (
                 f"d_plane_{b_name} = p.DatumPlaneByPrincipalPlane(principalPlane=XYPLANE, offset={cut_z})\n"
                 f"p.PartitionCellByDatumPlane(datumPlane=p.datums[d_plane_{b_name}.id], cells=p.cells)\n"
@@ -716,9 +720,9 @@ def compile_intent_to_actions(
             if m_spec.strategy == MomentTransferStrategy.RP_COUPLING:
                 gr = grounded_regions.get(m_spec.region_expression) if grounded_regions else None
                 if gr is not None:
-                    pts = gr.anchor_points if gr.anchor_points else (gr.anchor_point,)
-                    find_at_str = ", ".join(f"(({p[0]}, {p[1]}, {p[2]}),)" for p in pts)
-                    rp_pt = m_spec.rp_coordinates if m_spec.rp_coordinates else gr.anchor_point
+                    pts, anch = _extract_gr_pts_and_anchor(gr)
+                    find_at_str = ", ".join(f"(({p[0]}, {p[1]}, {p[2]}),)" for p in pts) if pts else ""
+                    rp_pt = m_spec.rp_coordinates if m_spec.rp_coordinates else (anch if anch else (geometry.width / 2.0, geometry.height / 2.0, geometry.length))
                 else:
                     rp_pt = m_spec.rp_coordinates if m_spec.rp_coordinates else (geometry.width / 2.0, geometry.height / 2.0, geometry.length)
                     find_at_str = f"(({rp_pt[0]}, {rp_pt[1]}, {rp_pt[2]}),)"
@@ -769,10 +773,11 @@ def compile_intent_to_actions(
     for bc in bcs:
         bc_step = bc.step if bc.step else "Initial"
         gr = grounded_regions.get(bc.region) if grounded_regions else None
-        plane = bc.plane or (gr.target_semantic.split("_")[-1] if gr and "SYMMETRY_PLANE" in gr.target_semantic else "X")
+        target_semantic = _extract_gr_target_semantic(gr)
+        plane = bc.plane or (target_semantic.split("_")[-1] if "SYMMETRY_PLANE" in target_semantic else "X")
 
         if gr is not None:
-            pts = gr.anchor_points if gr.anchor_points else (gr.anchor_point,)
+            pts, _ = _extract_gr_pts_and_anchor(gr)
             find_at_str = ", ".join(f"(({p[0]}, {p[1]}, {p[2]}),)" for p in pts)
             if bc.bc_type in ("SYMMETRY", "XSYMM", "YSYMM", "ZSYMM"):
                 method_name = {"X": "XsymmBC", "Y": "YsymmBC", "Z": "ZsymmBC"}.get(plane, "XsymmBC")
@@ -997,7 +1002,7 @@ def compile_intent_to_actions(
         field_arg = f", distributionType=FIELD, field='{ld.field}'" if ld.field else ""
 
         if gr is not None:
-            pts = gr.anchor_points if gr.anchor_points else (gr.anchor_point,)
+            pts, anch = _extract_gr_pts_and_anchor(gr)
             find_at_str = ", ".join(f"(({p[0]}, {p[1]}, {p[2]}),)" for p in pts)
             if ld.load_type == "pressure":
                 load_code = (
@@ -1018,18 +1023,20 @@ def compile_intent_to_actions(
                     field=ld.field,
                 ))
             elif ld.load_type == "concentrated_force":
-                if gr.entity_type.lower() == "face":
+                entity_type = _extract_gr_entity_type(gr)
+                if entity_type.lower() == "face":
                     if geometry.shape == "l_bracket":
                         thick = geometry.thickness if geometry.thickness and geometry.thickness > 0 else 10.0
                         wid = geometry.width if geometry.width and geometry.width > 0 else 20.0
-                        anch = gr.anchor_point if gr.anchor_point else (0.0, 0.0, 0.0)
-                        if abs(anch[1] - (geometry.height or 100.0)) < 1.0 or abs(anch[0] - (geometry.length or 100.0)) < 1.0:
+                        anch_pt = anch if anch else (0.0, 0.0, 0.0)
+                        if abs(anch_pt[1] - (geometry.height or 100.0)) < 1.0 or abs(anch_pt[0] - (geometry.length or 100.0)) < 1.0:
                             face_area = thick * wid
                         else:
                             face_area = (geometry.length or 100.0) * wid
                     elif geometry.shape == "plate_with_hole":
                         p_width = geometry.width if geometry.width > 0 else 100.0
                         p_height = geometry.height if geometry.height > 20.0 else (geometry.length if geometry.length > 20.0 else 100.0)
+                        p_depth = geometry.thickness if geometry.thickness is not None else 20.0
                         p_radius = geometry.radius if geometry.radius is not None else 10.0
                         face_area = (p_width * p_height) - (math.pi * p_radius**2)
                     elif geometry.shape == "cantilever_box":
@@ -1128,8 +1135,8 @@ def compile_intent_to_actions(
         for b_spec in bolt_pretensions:
             gr = grounded_regions.get(b_spec.region_expression) if grounded_regions else None
             if gr is not None:
-                pts = gr.anchor_points if gr.anchor_points else (gr.anchor_point,)
-                find_at_str = ", ".join(f"(({p[0]}, {p[1]}, {p[2]}),)" for p in pts)
+                pts, _ = _extract_gr_pts_and_anchor(gr)
+                find_at_str = ", ".join(f"(({p[0]}, {p[1]}, {p[2]}),)" for p in pts) if pts else ""
             else:
                 find_at_str = f"(({geometry.width / 2.0}, {geometry.height / 2.0}, {geometry.length / 2.0}),)"
 
@@ -1344,6 +1351,79 @@ def compile_intent_to_actions(
         intent_summary=intent_summary,
         material=material,
     )
+
+
+def _extract_gr_pts_and_anchor(gr: Any) -> Tuple[Tuple[Tuple[float, float, float], ...], Optional[Tuple[float, float, float]]]:
+    """Helper to extract anchor points and primary anchor point from GroundedRegion or dict."""
+    if gr is None:
+        return (), None
+    pts: Tuple[Tuple[float, float, float], ...] = ()
+    anch: Optional[Tuple[float, float, float]] = None
+    if isinstance(gr, dict):
+        raw_pts = gr.get("anchor_points")
+        if raw_pts and isinstance(raw_pts, (list, tuple)):
+            pts = tuple(tuple(float(c) for c in p) for p in raw_pts)
+        raw_anch = gr.get("anchor_point")
+        if raw_anch and isinstance(raw_anch, (list, tuple)) and len(raw_anch) >= 3:
+            anch = (float(raw_anch[0]), float(raw_anch[1]), float(raw_anch[2]))
+        if not pts and anch:
+            pts = (anch,)
+        if not anch and pts:
+            anch = pts[0]
+    else:
+        raw_pts = getattr(gr, "anchor_points", None)
+        if raw_pts and isinstance(raw_pts, (list, tuple)):
+            pts = tuple(tuple(float(c) for c in p) for p in raw_pts)
+        raw_anch = getattr(gr, "anchor_point", None)
+        if raw_anch and isinstance(raw_anch, (list, tuple)) and len(raw_anch) >= 3:
+            anch = (float(raw_anch[0]), float(raw_anch[1]), float(raw_anch[2]))
+        if not pts and anch:
+            pts = (anch,)
+        if not anch and pts:
+            anch = pts[0]
+    return pts, anch
+
+
+def _extract_gr_target_semantic(gr: Any) -> str:
+    """Helper to extract target_semantic from GroundedRegion or dict."""
+    if gr is None:
+        return ""
+    if isinstance(gr, dict):
+        return str(gr.get("target_semantic", ""))
+    return str(getattr(gr, "target_semantic", ""))
+
+
+def _extract_gr_entity_type(gr: Any) -> str:
+    """Helper to extract entity_type from GroundedRegion or dict."""
+    if gr is None:
+        return "face"
+    if isinstance(gr, dict):
+        return str(gr.get("entity_type", "face"))
+    return str(getattr(gr, "entity_type", "face"))
+
+
+def _is_valid_grounded_region(gr: Any) -> bool:
+    """Validate whether a grounded region representation has genuine geometry mapping anchors."""
+    if gr is None:
+        return False
+    if hasattr(gr, "anchor_points") and getattr(gr, "anchor_points"):
+        pts = getattr(gr, "anchor_points")
+        return isinstance(pts, (list, tuple)) and len(pts) > 0 and all(isinstance(p, (list, tuple)) and len(p) >= 3 for p in pts)
+    if hasattr(gr, "anchor_point") and getattr(gr, "anchor_point"):
+        pt = getattr(gr, "anchor_point")
+        return isinstance(pt, (list, tuple)) and len(pt) >= 3
+    if isinstance(gr, dict):
+        if gr.get("resolved") is False:
+            return False
+        pts = gr.get("anchor_points")
+        if isinstance(pts, (list, tuple)) and len(pts) > 0 and all(isinstance(p, (list, tuple)) and len(p) >= 3 for p in pts):
+            return True
+        pt = gr.get("anchor_point")
+        if isinstance(pt, (list, tuple)) and len(pt) >= 3:
+            return True
+        if any(k in gr for k in ("surface", "set", "faces", "side1Faces")):
+            return True
+    return False
 
 
 def compile_engineering_intent(
@@ -1628,20 +1708,33 @@ def compile_engineering_intent(
             )
 
     # 7.5. Topological Grounding Gate for non-primitive geometry
-    grounding_status = intent.metadata.get("region_grounding_status")
-    eff_grounded = grounded_regions or intent.metadata.get("grounded_regions")
-    if grounding_status == "SEMANTIC_CANDIDATE_UNRESOLVED":
-        is_step_or_external = (
-            getattr(eff_geom, "shape", "") == "step_file"
-            or getattr(eff_geom, "step_file_path", None) is not None
-        )
-        if is_step_or_external and not eff_grounded:
-            resolutions = intent.metadata.get("region_resolutions", {})
-            unresolved = [r for r, res in resolutions.items() if not res.get("resolved")]
+    is_step_or_external = (
+        getattr(eff_geom, "shape", "") == "step_file"
+        or getattr(eff_geom, "step_file_path", None) is not None
+    )
+    eff_grounded = grounded_regions or intent.metadata.get("grounded_regions") or {}
+    if not isinstance(eff_grounded, dict):
+        eff_grounded = {}
+
+    if is_step_or_external:
+        referenced_regions = set()
+        for bc in compiled_bcs:
+            if getattr(bc, "region", None):
+                referenced_regions.add(str(bc.region))
+        for ld in compiled_loads:
+            if getattr(ld, "region", None):
+                referenced_regions.add(str(ld.region))
+
+        missing_or_invalid = [
+            reg for reg in sorted(referenced_regions)
+            if not _is_valid_grounded_region(eff_grounded.get(reg))
+        ]
+        if missing_or_invalid:
+            step_path = getattr(eff_geom, "step_file_path", None)
             raise ValueError(
-                f"Cannot compile engineering intent: geometry relies on external STEP file ({getattr(eff_geom, 'step_file_path', None)}), "
-                f"but boundary/load regions {unresolved or 'specified in intent'} remain SEMANTIC_CANDIDATE_UNRESOLVED. "
-                "Provide explicit GroundedRegion mapping before compiling execution plan."
+                f"Cannot compile engineering intent: geometry relies on external STEP file ({step_path}), "
+                f"but referenced boundary/load regions {missing_or_invalid} lack valid GroundedRegion mappings. "
+                "Provide complete and valid GroundedRegion mappings before compiling execution plan."
             )
 
     # 8. Multi-domain special contracts

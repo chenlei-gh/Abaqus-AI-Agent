@@ -24,6 +24,7 @@ def test_jev_engineering_benchmark_suite_passes():
     report = run_engineering_benchmark()
 
     assert report["benchmark_version"] == "jev_engineering_eval_v4"
+    assert report["cases_hash"].startswith("sha256_")
     assert report["provider_type"] == "offline_deterministic_baseline"
     assert report["is_offline_baseline"] is True
     assert report["total_cases"] >= 20
@@ -977,12 +978,17 @@ def test_jev_engineering_benchmark_shadow_mode_reporting():
     assert sm["live_physics_accuracy_pct"] < 100.0
     assert len(sm["divergent_details"]) == len(sm["divergent_cases"])
     assert sm["avg_live_latency_ms"] >= 0.0
+    assert sm["coverage_pct"] == 100.0
+    assert sm["success_accuracy_pct"] == sm["live_physics_accuracy_pct"]
+    assert sm["effective_accuracy_pct"] > 0.0
 
     # Test Markdown formatting of shadow mode
     md_report = format_markdown_report(report_eval)
     assert "## Shadow Dual-Run Comparative Audit" in md_report
+    assert "External Evaluation Coverage" in md_report
     assert "Agreement with Baseline Rule Engine" in md_report
-    assert "External Provider Ground Truth Accuracy" in md_report
+    assert "External Provider Success-Subset Accuracy" in md_report
+    assert "External Provider End-to-End Effective Accuracy" in md_report
     assert "Average Latency" in md_report
     assert "### Divergent Cases Between Baseline and Live Provider" in md_report
 
@@ -1055,3 +1061,99 @@ def test_compiler_fails_closed_on_unresolved_grounding_for_step_file():
 
     with pytest.raises(ValueError, match="geometry relies on external STEP file"):
         compile_engineering_intent(intent, geometry=step_geom)
+
+
+def test_compiler_step_file_grounding_gate_rejects_dummy_and_invalid_mappings():
+    """Verify compiler gate strictly validates referenced regions and rejects dummy dictionaries or invalid anchor points."""
+    from abaqus_ai_agent.contracts.intent import EngineeringIntent
+    from abaqus_ai_agent.planning.compiler import IntentGeometrySpec, compile_engineering_intent
+
+    intent = EngineeringIntent(
+        id="STEP_GATE_STRICT_01",
+        kind="linear_static",
+        description="Bracket with referenced regions",
+        analysis_type="linear_static",
+        unit_system="MM_N_MPA",
+        material={"name": "Steel", "elastic_modulus": 210000.0, "poisson_ratio": 0.3},
+        boundary_conditions=({"type": "encastre", "region": "MountingHole"},),
+        loads=({"type": "concentrated_force", "region": "LoadBearingEye", "magnitude": 1000.0},),
+        metadata={},  # Omitted region_grounding_status must NOT bypass the gate!
+    )
+    step_geom = IntentGeometrySpec(shape="step_file", step_file_path="/path/to/part.step")
+
+    # 1. Non-empty dummy dictionary that lacks the referenced regions
+    dummy_grounded = {"UnrelatedFace": {"anchor_point": (0.0, 0.0, 0.0)}}
+    with pytest.raises(ValueError, match="lack valid GroundedRegion mappings") as exc_info:
+        compile_engineering_intent(intent, geometry=step_geom, grounded_regions=dummy_grounded)
+    assert "MountingHole" in str(exc_info.value)
+    assert "LoadBearingEye" in str(exc_info.value)
+
+    # 2. Referenced regions present but have invalid coordinates (< 3 items or resolved: False)
+    invalid_coords_grounded = {
+        "MountingHole": {"anchor_point": (0.0, 0.0)},  # Invalid: only 2D
+        "LoadBearingEye": {"anchor_points": []},         # Invalid: empty
+    }
+    with pytest.raises(ValueError, match="lack valid GroundedRegion mappings"):
+        compile_engineering_intent(intent, geometry=step_geom, grounded_regions=invalid_coords_grounded)
+
+    # 3. Explicitly unresolved dict
+    unresolved_grounded = {
+        "MountingHole": {"resolved": False, "anchor_point": (0.0, 0.0, 0.0)},
+        "LoadBearingEye": {"anchor_point": (10.0, 0.0, 0.0)},
+    }
+    with pytest.raises(ValueError, match="lack valid GroundedRegion mappings") as exc_unres:
+        compile_engineering_intent(intent, geometry=step_geom, grounded_regions=unresolved_grounded)
+    assert "MountingHole" in str(exc_unres.value)
+
+
+def test_compiler_step_file_grounding_gate_accepts_valid_grounded_regions():
+    """Verify compiler gate successfully compiles when all referenced regions have genuine GroundedRegion mappings."""
+    from abaqus_ai_agent.contracts.intent import EngineeringIntent
+    from abaqus_ai_agent.planning.compiler import IntentGeometrySpec, compile_engineering_intent
+
+    intent = EngineeringIntent(
+        id="STEP_GATE_PASS_01",
+        kind="linear_static",
+        description="Bracket with valid grounding",
+        analysis_type="linear_static",
+        unit_system="MM_N_MPA",
+        material={"name": "Steel", "elastic_modulus": 210000.0, "poisson_ratio": 0.3},
+        boundary_conditions=({"type": "encastre", "region": "MountingHole"},),
+        loads=({"type": "concentrated_force", "region": "LoadBearingEye", "magnitude": 1000.0},),
+        metadata={
+            "grounded_regions": {
+                "MountingHole": {"surface": "Surf-Mount", "anchor_points": [(0.0, 0.0, 0.0)]},
+                "LoadBearingEye": {"anchor_point": (50.0, 10.0, 0.0)},
+            }
+        },
+    )
+    step_geom = IntentGeometrySpec(shape="step_file", step_file_path="/path/to/part.step")
+
+    # Should not raise ValueError for missing/invalid grounded regions
+    plan = compile_engineering_intent(intent, geometry=step_geom)
+    assert plan is not None
+    assert plan.model_name is not None
+    assert len(plan.actions) > 0
+
+
+def test_benchmark_cases_sha256_hash_integrity():
+    """Verify compute_benchmark_cases_hash produces deterministic SHA-256 and detects mutations."""
+    from dataclasses import replace
+    from tools.jev_engineering_benchmark import (
+        BENCHMARK_CASES,
+        compute_benchmark_cases_hash,
+        run_engineering_benchmark,
+    )
+
+    report = run_engineering_benchmark()
+    expected_hash = compute_benchmark_cases_hash(BENCHMARK_CASES)
+    assert report["cases_hash"] == expected_hash
+    assert expected_hash.startswith("sha256_")
+    assert len(expected_hash) == 7 + 64
+
+    # Verify sensitivity: mutating even one prompt alters the hash
+    mutated_cases = list(BENCHMARK_CASES)
+    mutated_cases[0] = replace(mutated_cases[0], prompt=mutated_cases[0].prompt + " altered")
+    mutated_hash = compute_benchmark_cases_hash(mutated_cases)
+    assert mutated_hash != expected_hash
+    assert mutated_hash.startswith("sha256_")

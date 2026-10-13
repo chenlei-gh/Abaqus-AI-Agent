@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import argparse
 import datetime
+import hashlib
 import json
 import os
 import sys
@@ -47,6 +48,24 @@ class BenchmarkCase:
     expected_physics: Optional[str] = None
     expected_missing: List[str] = field(default_factory=list)
     context: Optional[Dict[str, Any]] = None
+
+
+def compute_benchmark_cases_hash(cases: List[BenchmarkCase]) -> str:
+    """Compute deterministic SHA-256 hash over canonical representation of benchmark cases."""
+    canonical_list = []
+    for c in cases:
+        canonical_list.append({
+            "case_id": c.case_id,
+            "dimension": c.dimension,
+            "prompt": c.prompt,
+            "expected_status": c.expected_status,
+            "expected_physics": c.expected_physics,
+            "expected_missing": sorted(c.expected_missing) if c.expected_missing else [],
+            "context": c.context,
+        })
+    canonical_json = json.dumps(canonical_list, sort_keys=True, ensure_ascii=False)
+    digest = hashlib.sha256(canonical_json.encode("utf-8")).hexdigest()
+    return f"sha256_{digest}"
 
 
 BENCHMARK_CASES: List[BenchmarkCase] = [
@@ -304,6 +323,7 @@ def run_engineering_benchmark(
     router: Optional[JevIntentRouter] = None,
     output_path: Optional[Path] = None,
     mode: Optional[str] = None,
+    cases: Optional[List[BenchmarkCase]] = None,
 ) -> Dict[str, Any]:
     """Execute the full 6-dimensional engineering intent benchmark suite.
 
@@ -312,10 +332,11 @@ def run_engineering_benchmark(
     - Provider identity and execution mode are explicitly recorded and declared.
     """
     active_router = router or JevIntentRouter(mode=mode or "offline")
+    active_cases = cases or BENCHMARK_CASES
     case_results = []
     dimension_stats: Dict[str, Dict[str, int]] = {}
 
-    total_cases = len(BENCHMARK_CASES)
+    total_cases = len(active_cases)
     passed_cases = 0
 
     # Denominators and numerators strictly segregated
@@ -338,7 +359,7 @@ def run_engineering_benchmark(
 
     latencies: List[float] = []
 
-    for case in BENCHMARK_CASES:
+    for case in active_cases:
         dim = case.dimension
         if dim not in dimension_stats:
             dimension_stats[dim] = {"total": 0, "passed": 0}
@@ -484,6 +505,7 @@ def run_engineering_benchmark(
         physics_matches_count = sum(1 for r in evaluated_cases if r.get("shadow_diff", {}).get("physics_match") is True)
 
         # External provider independent ground truth evaluation
+        total_gt_target_cases = sum(1 for r in case_results if r.get("expected_physics"))
         live_gt_matches = 0
         live_gt_eval_count = 0
         for r in evaluated_cases:
@@ -491,9 +513,19 @@ def run_engineering_benchmark(
                 live_gt_eval_count += 1
                 if r.get("shadow_diff", {}).get("live_physics") == r.get("expected_physics"):
                     live_gt_matches += 1
-        live_gt_acc = (
+        live_gt_success_acc = (
             round((live_gt_matches / live_gt_eval_count) * 100.0, 2)
             if live_gt_eval_count > 0
+            else 0.0
+        )
+        live_gt_effective_acc = (
+            round((live_gt_matches / total_gt_target_cases) * 100.0, 2)
+            if total_gt_target_cases > 0
+            else 0.0
+        )
+        coverage_pct = (
+            round((evaluated_count / total_cases) * 100.0, 2)
+            if total_cases > 0
             else 0.0
         )
 
@@ -530,11 +562,16 @@ def run_engineering_benchmark(
 
         shadow_metrics = {
             "evaluated_cases": evaluated_count,
+            "total_cases": total_cases,
+            "coverage_pct": coverage_pct,
             "physics_matches": physics_matches_count,
             "physics_agreement_pct": round((physics_matches_count / evaluated_count) * 100.0, 2) if evaluated_count > 0 else 0.0,
             "live_ground_truth_matches": live_gt_matches,
             "live_ground_truth_evaluated_cases": live_gt_eval_count,
-            "live_physics_accuracy_pct": live_gt_acc,
+            "total_ground_truth_target_cases": total_gt_target_cases,
+            "success_accuracy_pct": live_gt_success_acc,
+            "effective_accuracy_pct": live_gt_effective_acc,
+            "live_physics_accuracy_pct": live_gt_success_acc,
             "avg_live_latency_ms": avg_live_lat,
             "divergent_cases": divergent_cases,
             "divergent_details": divergent_details,
@@ -544,7 +581,7 @@ def run_engineering_benchmark(
     report = {
         "benchmark_version": "jev_engineering_eval_v4",
         "benchmark_cases_count": total_cases,
-        "cases_hash": f"cases_v4_count_{total_cases}",
+        "cases_hash": compute_benchmark_cases_hash(active_cases),
         "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat(),
         "provider_type": provider_type,
         "evaluation_scope": evaluation_scope,
@@ -651,9 +688,10 @@ def format_markdown_report(report: Dict[str, Any]) -> str:
             "",
             "## Shadow Dual-Run Comparative Audit",
             "",
-            f"- **Evaluated External Cases**: `{sm['evaluated_cases']}/{report['total_cases']}`",
+            f"- **External Evaluation Coverage**: `{sm.get('coverage_pct', 0.0)}%` ({sm['evaluated_cases']}/{report['total_cases']})",
             f"- **Agreement with Baseline Rule Engine**: `{sm['physics_agreement_pct']}%` ({sm['physics_matches']}/{sm['evaluated_cases']})",
-            f"- **External Provider Ground Truth Accuracy**: `{sm.get('live_physics_accuracy_pct', 0.0)}%` ({sm.get('live_ground_truth_matches', 0)}/{sm.get('live_ground_truth_evaluated_cases', 0)})",
+            f"- **External Provider Success-Subset Accuracy**: `{sm.get('success_accuracy_pct', sm.get('live_physics_accuracy_pct', 0.0))}%` ({sm.get('live_ground_truth_matches', 0)}/{sm.get('live_ground_truth_evaluated_cases', 0)})",
+            f"- **External Provider End-to-End Effective Accuracy**: `{sm.get('effective_accuracy_pct', 0.0)}%` ({sm.get('live_ground_truth_matches', 0)}/{sm.get('total_ground_truth_target_cases', 0)})",
             f"- **Average Latency**: Baseline `{report['latency_stats']['avg_ms']} ms` vs Live `{sm.get('avg_live_latency_ms', 0.0)} ms`",
         ])
         if sm.get("error_categories"):
