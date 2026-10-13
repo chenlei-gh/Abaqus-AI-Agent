@@ -482,6 +482,10 @@ P1.0 产品主入口已彻底消除高层自然语言需求与底层 20 个 L4 �
     - 语义候选区域与拓扑模型 Grounding 解耦：意图元数据中显式追踪 `region_grounding_status`（Prompt 语义标签标记为 `SEMANTIC_CANDIDATE_UNRESOLVED`，经 INP/CAD 真实模型拓扑验证的标记为 `MODEL_TOPOLOGY_GROUNDED`），杜绝下游将语义推断误当成拓扑接地；
     - 验收准则：验收准则操作符必须严格限定在合法比较运算符集合（`VALID_CRITERIA_OPERATORS`），指标名称必须严格匹配工程指标白名单（`VALID_CRITERIA_METRICS`）；
     - 证据有效性标记：标有 `status: "UNVERIFIED"`、`verified: False`、`expired: True`、`conflict: True`（含布尔值与字符串）的证据严禁放行；
+  - **拓扑 Grounding 严格 1-to-1 集合包含解析**：彻底杜绝 `model_topology_grounded: True` 等名义标记或任意非空 `surfaces` 绕过；必须对 Intent 中所有 BC 和 Load 引用的几何区域执行严格的 1-to-1 模型拓扑子集校验，仅当所有引用区域 100% 存在于已验证模型实体时才标记 `MODEL_TOPOLOGY_GROUNDED`，存在未解析区域时坚决标记为 `SEMANTIC_CANDIDATE_UNRESOLVED`；
+  - **载荷区域子句作用域隔离（Clause Scoping）与反偷窃门禁**：对 Prompt 实施子句作用域切分，严格禁止载荷从约束分句（如“固定根部”）或验收指标分句（如“校核端部挠度不超过2.5mm”）中偷取区域；载荷专属子句未显式指定作用区域时坚决 fail-closed 阻断并报错 `missing_load_application_region`；
+  - **热边界规范化参数完整保留与零伪造**：`_validate_thermal_bcs_entity` 规范化字典中 100% 完整保留对流环境温度（`ambient_temperature`）、表面传热系数（`film_coefficient`/`h`）及热辐射发射率（`emissivity`）；热流提取在当前子句未找到区域时严禁伪造 `"Surface"` 默认区域；
+  - **材料参考库假设与实测已验证物性严格分级**：标准参考库默认材料（结构钢、铝合金等）严格打标为 `REFERENCE_LIBRARY` 与 `is_reference_assumption: True`，`has_verified_properties: False`；Intent 元数据明确追踪 `material_assumption: True`；只有用户显式提供或上游模型卡核验的材料实体才赋予 `VERIFIED_PROPERTIES`；
   - **前置条件与意图构造对称闭环**：前置条件判定通过的所有物理实体，必须 100% 完整映射并注入最终 `EngineeringIntent`，彻底消除前置条件判定通过却产出空约束 Intent 的断层缺陷；
   - **零原始上下文回退与零虚构几何区域（Zero Raw Context Fallback & Geometric Region De-forgery）**：
     - 路由与 Intent 构造阶段彻底断绝从未经验证的 `context` 字典直接回退提取数据（Zero Raw Context Fallback）；
@@ -566,7 +570,7 @@ P1.0 产品主入口已彻底消除高层自然语言需求与底层 20 个 L4 �
 | **REQ-P1-042** | 自愈审计追踪与防伪红线 | P1.4 | 修复前后两次 Run | 完整 Diff 对比明细 | Tier B | 严禁静默覆盖首次失败记录 | 📋 **PLANNED** |
 | **REQ-P1-043** | JEV 模式隔离与防静默降级 | P1.4 | 运行模式配置与提示词 | 强类型决策与状态 | Tier B | Live 模式异常坚决 Fail-Closed | 🟢 **QUALIFIED** |
 | **REQ-P1-044** | 严格数值校验、载荷对齐与全链路审计 | P1.4 | 意图提问与响应载荷 | 完整审计束与来源标记 | Tier B | 概率分布归一化 sum=1.0、深度脱敏 | 🟢 **QUALIFIED** |
-| **REQ-P1-045** | 独立工程评测系统与 Context Merge 审计 | P1.4 | 8大工程维度基准评测 | 评测指标、严格分母、精确率与实体防呆 | Tier B | 8维度全指标分母分立、零虚构几何区域、严格物性与载荷区域闭环 | 🟡 **IN_REVIEW (Contract Hardening in Progress)** |
+| **REQ-P1-045** | 独立工程评测系统与 Context Merge 审计 | P1.4 | 8大工程维度基准评测 | 评测指标、严格分母、精确率与实体防呆 | Tier B | 8维度全指标分母分立、1-to-1拓扑Grounding、子句载荷隔离、物性分级闭环 | 🟢 **QUALIFIED (Physical Intent Contract & Grounding Closed)** |
 | **REQ-P1-046** | 开源核心独立运行与零外部依赖 | P1.4 | 纯离线/无网络环境输入 | 独立 Intent/编译/求解/报告 | Tier A | 核心闭环严禁外部服务阻断 | 🟢 **QUALIFIED (Offline Core Hermetic)** |
 | **REQ-P1-047** | 可选外部服务适配器协议与响应归一化 | P1.4 | 通用意图提供者接口与配置 | 可插拔适配器加载与解析 | Tier B | 未安装/未配置时保持 offline 基线 | 🟢 **QUALIFIED (Protocol Contract Closed)** |
 | **REQ-P1-048** | 专有服务接入隔离与零专有泄露 | P1.4 | 公开核心代码库 | 供应商中立抽象与纯净核心 | Tier A | 严禁硬编码专有端点与私有协议 | 🟢 **QUALIFIED (Code Tree Clean)** |

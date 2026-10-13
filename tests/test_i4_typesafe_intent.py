@@ -103,7 +103,7 @@ def test_jev_intent_context_merge_unblocks_existing_model_evidence():
     """Verify that upstream model context (geometry, material, constraints) satisfies prerequisites without prompt duplication."""
     router = JevIntentRouter()
     # Prompt only specifies load and constraint, omitting dimensions and material
-    prompt = "固定悬臂梁端部，施加1000N向下集中载荷。"
+    prompt = "固定悬臂梁根部，端部施加1000N向下集中载荷。"
 
     # Without context -> fails closed due to missing dimensions & material
     res_no_ctx = router.route(prompt)

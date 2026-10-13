@@ -616,28 +616,127 @@ def test_thermal_bc_bare_keywords_rejected_without_entity_data():
 
 def test_region_grounding_status_in_intent_metadata():
     """Verify semantic candidate regions are tagged SEMANTIC_CANDIDATE_UNRESOLVED,
-    while verified topology models are tagged MODEL_TOPOLOGY_GROUNDED."""
+    while verified topology models are strictly verified via 1-to-1 subset matching."""
     from abaqus_ai_agent.typesafe_intent import JevIntentRouter
 
     router = JevIntentRouter(mode="offline")
     prompt = "100mm悬臂梁端部施加1000N垂直载荷，材料为结构钢，固定根部，校核端部挠度不超过2.5mm。"
 
-    # Prompt only: semantic candidate
+    # Prompt only: semantic candidates (RootFace for BC, TipFace for load)
     res_semantic = router.route(prompt)
     assert res_semantic.status == "ROUTED"
     assert res_semantic.intent.metadata["region_grounding_status"] == "SEMANTIC_CANDIDATE_UNRESOLVED"
 
-    # Context with verified topology evidence
-    topology_ctx = {
+    # Incomplete topology context: has TipFace and FixedFace, but missing RootFace!
+    # Must remain SEMANTIC_CANDIDATE_UNRESOLVED (rejecting false-positive nominal grounding)
+    incomplete_ctx = {
         "inp_evidence": {
             "verified": True,
             "parts": ["BeamPart"],
             "surfaces": ["FixedFace", "TipFace"],
         }
     }
-    res_grounded = router.route(prompt, context=topology_ctx)
+    res_incomplete = router.route(prompt, context=incomplete_ctx)
+    assert res_incomplete.status == "ROUTED"
+    assert res_incomplete.intent.metadata["region_grounding_status"] == "SEMANTIC_CANDIDATE_UNRESOLVED"
+
+    # Context with complete 1-to-1 matching verified topology evidence (RootFace and TipFace)
+    complete_ctx = {
+        "inp_evidence": {
+            "verified": True,
+            "parts": ["BeamPart"],
+            "surfaces": ["RootFace", "TipFace"],
+        }
+    }
+    res_grounded = router.route(prompt, context=complete_ctx)
     assert res_grounded.status == "ROUTED"
     assert res_grounded.intent.metadata["region_grounding_status"] == "MODEL_TOPOLOGY_GROUNDED"
+
+
+def test_load_region_clause_scoping_does_not_steal_from_criteria():
+    """Verify clause scoping prevents loads without explicit application regions from stealing '端部' from acceptance criteria."""
+    from abaqus_ai_agent.typesafe_intent import JevIntentRouter, _extract_prompt_load_region
+
+    # Bare load clause: '100mm悬臂梁施加1000N垂直载荷' lacks explicit load application face.
+    # Acceptance clause: '校核端部挠度不超过2.5mm' mentions '端部', but must NOT be stolen!
+    trap_prompt = "100mm悬臂梁施加1000N垂直载荷，固定根部，校核端部挠度不超过2.5mm。"
+
+    region = _extract_prompt_load_region(trap_prompt, "concentrated_force")
+    assert region is None  # Anti-Theft: region must NOT be TipFace!
+
+    router = JevIntentRouter(mode="offline")
+    res = router.route(trap_prompt)
+    assert res.status == "NEEDS_CLARIFICATION"
+    assert "missing_load_application_region" in res.missing_requirements
+
+
+def test_thermal_bc_normalization_preserves_convection_and_radiation_params():
+    """Verify that thermal BC validator preserves ambient temperature, film coefficient, and emissivity."""
+    from abaqus_ai_agent.typesafe_intent import _validate_thermal_bcs_entity, _extract_prompt_thermal_bcs
+
+    # Convection entity validation & preservation
+    conv_input = {
+        "type": "convection",
+        "region": "TopFace",
+        "magnitude": 25.0,
+        "ambient_temperature": 25.0,
+        "film_coefficient": 150.0,
+        "unit": "W/m2-K",
+    }
+    ok, norm_conv, err = _validate_thermal_bcs_entity(conv_input)
+    assert ok is True
+    assert norm_conv[0]["ambient_temperature"] == 25.0
+    assert norm_conv[0]["film_coefficient"] == 150.0
+    assert norm_conv[0]["unit"] == "W/m2-K"
+
+    # Radiation entity validation & preservation
+    rad_input = {
+        "type": "radiation",
+        "region": "HotEnd",
+        "magnitude": 500.0,
+        "ambient_temperature": 20.0,
+        "emissivity": 0.85,
+    }
+    ok_rad, norm_rad, err_rad = _validate_thermal_bcs_entity(rad_input)
+    assert ok_rad is True
+    assert norm_rad[0]["ambient_temperature"] == 20.0
+    assert norm_rad[0]["emissivity"] == 0.85
+
+    # Zero Forgery: Heat flux without explicit region does NOT forge 'Surface'
+    flux_without_region = _extract_prompt_thermal_bcs("计算热传导，热流 1000 W/m2，冷端固定20°C。")
+    flux_bcs = [b for b in flux_without_region if b["type"] == "heat_flux"]
+    assert len(flux_bcs) == 1
+    assert flux_bcs[0]["region"] is None  # Must NOT be 'Surface'!
+
+
+def test_material_reference_library_distinguished_from_verified():
+    """Verify standard reference library assumptions are explicitly tracked and distinguished from verified model cards."""
+    from abaqus_ai_agent.typesafe_intent import JevIntentRouter
+
+    router = JevIntentRouter(mode="offline")
+    prompt = "100mm悬臂梁端部施加1000N垂直载荷，材料为结构钢，固定根部，校核端部挠度不超过2.5mm。"
+
+    # Prompt with standard steel keyword: tagged REFERENCE_LIBRARY and assumption=True
+    res = router.route(prompt)
+    assert res.status == "ROUTED"
+    assert res.intent.metadata["material_evidence_level"] == "REFERENCE_LIBRARY"
+    assert res.intent.metadata["material_assumption"] is True
+
+    # Context with verified material properties card: tagged VERIFIED_PROPERTIES and assumption=False
+    verified_ctx = {
+        "material": {
+            "name": "Structural_Steel_Certified",
+            "elastic_modulus": 206000.0,
+            "poisson_ratio": 0.29,
+            "unit": "MPa",
+            "has_verified_properties": True,
+            "source": "verified_material_card",
+        }
+    }
+    res_verified = router.route(prompt, context=verified_ctx)
+    assert res_verified.status == "ROUTED"
+    assert res_verified.intent.metadata["material_evidence_level"] == "VERIFIED_PROPERTIES"
+    assert res_verified.intent.metadata["material_assumption"] is False
 
 
 def test_no_speculative_region_when_prompt_only_says_fixed():

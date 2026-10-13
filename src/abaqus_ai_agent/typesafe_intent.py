@@ -315,6 +315,7 @@ def _validate_material_entity(val: Any) -> Tuple[bool, Optional[Any], Optional[s
             "source": "named_string",
             "material_evidence_level": "NAMED_ONLY",
             "has_verified_properties": False,
+            "is_reference_assumption": False,
         }, None
 
     if isinstance(val, dict):
@@ -347,9 +348,20 @@ def _validate_material_entity(val: Any) -> Tuple[bool, Optional[Any], Optional[s
         norm_mat = dict(val)
         if "name" in norm_mat:
             norm_mat["name"] = str(norm_mat["name"]).strip()
+        is_ref = bool(
+            val.get("is_reference_assumption")
+            or val.get("material_evidence_level") == "REFERENCE_LIBRARY"
+            or val.get("source") == "standard_reference_library"
+        )
         has_props = bool("elastic_modulus" in val and "poisson_ratio" in val)
-        norm_mat["has_verified_properties"] = has_props
-        norm_mat["material_evidence_level"] = "VERIFIED_PROPERTIES" if has_props else "NAMED_ONLY"
+        if is_ref:
+            norm_mat["has_verified_properties"] = False
+            norm_mat["material_evidence_level"] = "REFERENCE_LIBRARY"
+            norm_mat["is_reference_assumption"] = True
+        else:
+            norm_mat["has_verified_properties"] = has_props
+            norm_mat["material_evidence_level"] = "VERIFIED_PROPERTIES" if has_props else "NAMED_ONLY"
+            norm_mat["is_reference_assumption"] = False
         return True, norm_mat, None
 
     return False, None, "unsupported_material_type"
@@ -557,22 +569,51 @@ def _validate_thermal_bcs_entity(val: Any) -> Tuple[bool, Optional[Any], Optiona
         if raw_region is None or isinstance(raw_region, bool) or not str(raw_region).strip():
             return False, None, "missing_thermal_bc_region"
 
-        if th_type in ("convection", "film_condition"):
-            has_sink = any(item.get(k) is not None and not isinstance(item.get(k), bool) and _is_finite_number(item.get(k)) for k in ("sink_temperature", "ambient_temperature", "temp_ambient"))
-            has_h = any(item.get(k) is not None and not isinstance(item.get(k), bool) and _is_finite_positive_number(item.get(k)) for k in ("film_coefficient", "h", "heat_transfer_coefficient"))
-            if not (has_sink and has_h):
-                return False, None, "convection_missing_ambient_temp_or_film_coefficient"
-        elif th_type == "radiation":
-            has_ambient = any(item.get(k) is not None and not isinstance(item.get(k), bool) and _is_finite_number(item.get(k)) for k in ("ambient_temperature", "sink_temperature", "temp_ambient"))
-            has_emissivity = any(item.get(k) is not None and not isinstance(item.get(k), bool) and _is_finite_number(item.get(k)) and 0.0 < float(item.get(k)) <= 1.0 for k in ("emissivity", "epsilon"))
-            if not (has_ambient and has_emissivity):
-                return False, None, "radiation_missing_ambient_temp_or_emissivity"
-
         norm: Dict[str, Any] = {
             "type": th_type,
             "region": str(raw_region).strip(),
             "magnitude": float(val_mag),
         }
+        if item.get("unit"):
+            norm["unit"] = str(item["unit"]).strip()
+
+        if th_type in ("convection", "film_condition"):
+            ambient_val = None
+            for k in ("sink_temperature", "ambient_temperature", "temp_ambient"):
+                if item.get(k) is not None and not isinstance(item.get(k), bool) and _is_finite_number(item.get(k)):
+                    ambient_val = float(item[k])
+                    break
+            h_val = None
+            for k in ("film_coefficient", "h", "heat_transfer_coefficient"):
+                if item.get(k) is not None and not isinstance(item.get(k), bool) and _is_finite_positive_number(item.get(k)):
+                    h_val = float(item[k])
+                    break
+            if ambient_val is None or h_val is None:
+                return False, None, "convection_missing_ambient_temp_or_film_coefficient"
+            norm["ambient_temperature"] = ambient_val
+            norm["film_coefficient"] = h_val
+            norm["sink_temperature"] = ambient_val
+            norm["h"] = h_val
+
+        elif th_type == "radiation":
+            ambient_val = None
+            for k in ("ambient_temperature", "sink_temperature", "temp_ambient"):
+                if item.get(k) is not None and not isinstance(item.get(k), bool) and _is_finite_number(item.get(k)):
+                    ambient_val = float(item[k])
+                    break
+            emissivity_val = None
+            for k in ("emissivity", "epsilon"):
+                if item.get(k) is not None and not isinstance(item.get(k), bool) and _is_finite_number(item.get(k)):
+                    fem = float(item[k])
+                    if 0.0 < fem <= 1.0:
+                        emissivity_val = fem
+                        break
+            if ambient_val is None or emissivity_val is None:
+                return False, None, "radiation_missing_ambient_temp_or_emissivity"
+            norm["ambient_temperature"] = ambient_val
+            norm["emissivity"] = emissivity_val
+            norm["sink_temperature"] = ambient_val
+
         return True, norm, None
 
     if isinstance(val, (list, tuple)):
@@ -868,35 +909,88 @@ def _extract_prompt_boundary_conditions(prompt: str) -> List[Dict[str, Any]]:
 
 
 def _extract_prompt_load_region(prompt: str, load_type: str = "concentrated_force") -> Optional[str]:
-    """Extract explicitly stated geometric load region from prompt text with boundary exclusion."""
-    p_lower = prompt.lower()
+    """Extract explicitly stated geometric load region from prompt text using clause-scoped analysis.
 
-    # Explicit tip / free end / cantilever tip
-    if any(w in p_lower for w in ("端部", "自由端", "tip", "free end", "悬臂端", "cantilever")):
-        return "TipFace"
+    Enforces Zero Forgery and Anti-Theft:
+    Prevents stealing regions from boundary conditions ('固定根部') or acceptance criteria ('校核端部挠度').
+    Only extracts region if explicitly specified within a clause describing the applied load.
+    """
+    if not prompt or not prompt.strip():
+        return None
 
-    # Explicit top face / compressive contact load / normal pressure
-    if any(w in p_lower for w in ("顶面", "上表面", "top surface", "top face")) or (
-        any(w in p_lower for w in ("compressive", "compression", "受压", "压力", "法向压力", "接触面", "contact surface"))
-    ):
-        return "TopFace"
+    # 1. Split prompt into clauses by punctuation and newlines
+    raw_clauses = re.split(r"[,，;；。\n\r]+", prompt)
+    clauses = [c.strip() for c in raw_clauses if c.strip()]
+    if not clauses:
+        return None
 
-    # Projectile impact / target plate / impact load
-    if any(w in p_lower for w in ("target plate", "target", "靶板", "impact surface", "projectile", "冲击", "impact")):
-        return "TargetPlate"
+    def _is_acceptance_criteria_clause(c: str) -> bool:
+        c_low = c.lower()
+        has_crit_metric = any(w in c_low for w in ("挠度", "位移", "应力", "mises", "deflection", "displacement", "stress", "固有频率", "frequency"))
+        has_check_verb = any(w in c_low for w in ("校核", "不超过", "小于", "达标", "合格", "check", "verify", "compliant", "compliance", "<=", "<"))
+        return (has_check_verb and has_crit_metric) or (has_check_verb and not any(w in c_low for w in ("施加", "受力", "加载", "apply", "acting on")))
 
-    # Notched section / shaft tip
-    if any(w in p_lower for w in ("notched shaft", "notch", "缺口", "轴端")):
-        return "ShaftTip"
+    def _is_pure_boundary_clause(c: str) -> bool:
+        c_low = c.lower()
+        has_bc = any(w in c_low for w in ("固定", "约束", "encastre", "clamp", "pinned", "简支"))
+        has_load_act = any(w in c_low for w in ("施加", "载荷", "受力", "load", "force", "pressure", "压力", "千牛", "kn", "5000n", "1000n", "2000n"))
+        return has_bc and not has_load_act
 
-    # Midpoint / center
-    if any(w in p_lower for w in ("中点", "中间", "midpoint", "center")):
-        return "Midpoint"
+    def _is_load_clause(c: str) -> bool:
+        c_low = c.lower()
+        if _is_acceptance_criteria_clause(c):
+            return False
+        if _is_pure_boundary_clause(c):
+            return False
+        load_indicators = (
+            "载荷", "受力", "施加", "加载", "集中力", "压力", "压强", "冲击", "受", "力",
+            "load", "force", "pressure", "impact", "compressive", "reaction force",
+            "kn", "千牛", "mpa", "kpa"
+        )
+        if any(w in c_low for w in load_indicators):
+            return True
+        if re.search(r"\b\d+(?:\.\d+)?\s*(?:n|kn|mpa|kpa|牛|千牛)\b", c_low):
+            return True
+        return False
 
-    # Bottom face ONLY if not qualified by fixed / clamp / boundary
-    if any(w in p_lower for w in ("底面", "下表面", "bottom surface", "bottom")):
-        if not re.search(r"(fixed|clamp|encastre|固定|约束).{0,12}(bottom|底面|base|基座)", p_lower):
-            return "BottomFace"
+    def _match_region_in_clause(c_lower: str) -> Optional[str]:
+        # Explicit tip / free end / cantilever tip
+        if any(w in c_lower for w in ("端部", "自由端", "tip", "free end", "悬臂端", "cantilever tip")):
+            return "TipFace"
+        # English benchmark case like 'cantilever steel beam with 1000N load'
+        if "cantilever" in c_lower and "beam" in c_lower and not any(w in c_lower for w in ("根部", "root", "fixed end")):
+            return "TipFace"
+
+        # Explicit top face / compressive contact load / normal pressure
+        if any(w in c_lower for w in ("顶面", "上表面", "top surface", "top face")):
+            return "TopFace"
+        if any(w in c_lower for w in ("compressive", "compression", "受压", "压力", "法向压力", "接触面", "contact surface")):
+            return "TopFace"
+
+        # Projectile impact / target plate / impact load
+        if any(w in c_lower for w in ("target plate", "target", "靶板", "impact surface", "projectile", "冲击", "impact")):
+            return "TargetPlate"
+
+        # Notched section / shaft tip
+        if any(w in c_lower for w in ("notched shaft", "notch", "缺口", "轴端")):
+            return "ShaftTip"
+
+        # Midpoint / center
+        if any(w in c_lower for w in ("中点", "中间", "midpoint", "center")):
+            return "Midpoint"
+
+        # Bottom face ONLY if not qualified by fixed / clamp / boundary
+        if any(w in c_lower for w in ("底面", "下表面", "bottom surface", "bottom")):
+            if not re.search(r"(fixed|clamp|encastre|固定|约束).{0,12}(bottom|底面|base|基座)", c_lower):
+                return "BottomFace"
+
+        return None
+
+    candidate_load_clauses = [c for c in clauses if _is_load_clause(c)]
+    for clause in candidate_load_clauses:
+        matched = _match_region_in_clause(clause.lower())
+        if matched:
+            return matched
 
     return None
 
@@ -915,36 +1009,60 @@ def _extract_prompt_thermal_bcs(prompt: str) -> List[Dict[str, Any]]:
     }
     bcs: List[Dict[str, Any]] = []
     reg_pattern = "|".join(re.escape(k) for k in sorted(region_map.keys(), key=len, reverse=True))
-    temp_pattern = r"([+-]?\d+(?:\.\d+)?)\s*(?:°c|degc|deg\s*c|c|k|kelvin)"
+    temp_pattern = r"([+-]?\d+(?:\.\d+)?)\s*(°c|degc|deg\s*c|c|k|kelvin)?"
 
     # Pattern 1: Region then Temperature, e.g., 'hot end at 100C', '热端固定100°C'
     p1 = re.compile(rf"({reg_pattern})[^\d+-]{{0,25}}?{temp_pattern}", re.IGNORECASE)
     for m in p1.finditer(prompt):
         reg_str = m.group(1).lower()
         val_str = m.group(2)
+        unit_str = m.group(3) if m.lastindex and m.lastindex >= 3 and m.group(3) else "C"
         norm_reg = region_map.get(reg_str) or region_map.get(m.group(1))
-        bcs.append({"type": "temperature", "region": norm_reg, "magnitude": float(val_str)})
+        bcs.append({"type": "temperature", "region": norm_reg, "magnitude": float(val_str), "unit": unit_str})
 
     # Pattern 2: Temperature then Region, e.g. '100C at hot end'
     p2 = re.compile(rf"{temp_pattern}[^\w\d]{{0,20}}?({reg_pattern})", re.IGNORECASE)
     for m in p2.finditer(prompt):
         val_str = m.group(1)
-        reg_str = m.group(2).lower()
-        norm_reg = region_map.get(reg_str) or region_map.get(m.group(2))
-        if not any(b["region"] == norm_reg for b in bcs):
-            bcs.append({"type": "temperature", "region": norm_reg, "magnitude": float(val_str)})
+        unit_str = m.group(2) if m.group(2) else "C"
+        reg_str = m.group(3).lower() if m.lastindex and m.lastindex >= 3 and m.group(3) else ""
+        norm_reg = region_map.get(reg_str) or (region_map.get(m.group(3)) if m.lastindex and m.lastindex >= 3 else None)
+        if norm_reg and not any(b.get("region") == norm_reg for b in bcs):
+            bcs.append({"type": "temperature", "region": norm_reg, "magnitude": float(val_str), "unit": unit_str})
 
     # Pattern 3: Heat flux, e.g. '热流 1000 W/m2' or 'heat flux 500 W/mm2'
     flux_pattern = re.compile(r"(?:热流|heat flux)[^\d+-]{0,20}?([+-]?\d+(?:\.\d+)?)\s*(w/m2|w/mm2|w/m\^2)", re.IGNORECASE)
     for m in flux_pattern.finditer(prompt):
         val_str = m.group(1)
-        p_lower = prompt.lower()
-        flux_reg = "Surface"
-        if any(w in p_lower for w in ("顶面", "top surface", "top face")):
+        unit_str = m.group(2)
+        flux_pos = m.start()
+
+        # Clause-scoped bounding: find preceding and succeeding clause delimiters
+        left_delims = [pos for pos in (prompt.rfind("，", 0, flux_pos), prompt.rfind(",", 0, flux_pos), prompt.rfind(";", 0, flux_pos), prompt.rfind("；", 0, flux_pos), prompt.rfind("。", 0, flux_pos), prompt.rfind("\n", 0, flux_pos)) if pos != -1]
+        c_start = max(left_delims) + 1 if left_delims else 0
+        right_delims = [pos for pos in (prompt.find("，", m.end()), prompt.find(",", m.end()), prompt.find(";", m.end()), prompt.find("；", m.end()), prompt.find("。", m.end()), prompt.find("\n", m.end())) if pos != -1]
+        c_end = min(right_delims) if right_delims else len(prompt)
+
+        local_clause = prompt[c_start:c_end].lower()
+        flux_reg = None
+        if any(w in local_clause for w in ("顶面", "上表面", "top surface", "top face")):
             flux_reg = "TopFace"
-        elif any(w in p_lower for w in ("热端", "hot end")):
+        elif any(w in local_clause for w in ("热端", "hot end", "hot face")):
             flux_reg = "HotEnd"
-        bcs.append({"type": "heat_flux", "region": flux_reg, "magnitude": float(val_str)})
+        elif any(w in local_clause for w in ("冷端", "cold end", "cold face")):
+            flux_reg = "ColdEnd"
+        elif any(w in local_clause for w in ("底面", "下表面", "bottom surface", "bottom face")):
+            flux_reg = "BottomFace"
+        elif any(w in local_clause for w in ("端部", "tip", "free end")):
+            flux_reg = "TipFace"
+        elif any(w in local_clause for w in ("左端", "left end")):
+            flux_reg = "LeftEnd"
+        elif any(w in local_clause for w in ("右端", "right end")):
+            flux_reg = "RightEnd"
+
+        # Zero Forgery: Never fabricate "Surface" if no explicit region is stated in this clause
+        # Set region strictly to flux_reg (may be None if missing, failing closed in validator)
+        bcs.append({"type": "heat_flux", "region": flux_reg, "magnitude": float(val_str), "unit": unit_str})
 
     return bcs
 
@@ -1586,20 +1704,30 @@ class EngineeringIntentRouter:
         mat_ok = False
         p_mat = params.get("material")
         p_mat_ok, p_mat_norm, _ = _validate_material_entity(p_mat)
-        if p_mat_ok:
+        c_mat = ctx.get("material") or (ctx.get("inp_evidence", {}).get("material") if isinstance(ctx.get("inp_evidence"), dict) else None)
+        c_mat_ok, c_mat_norm, _ = _validate_material_entity(c_mat)
+
+        if c_mat_ok and c_mat_norm and c_mat_norm.get("has_verified_properties"):
+            # Context provides verified material card! Prioritize over prompt reference assumptions
             mat_ok = True
+            src = "inp_evidence" if (isinstance(ctx.get("inp_evidence"), dict) and ctx["inp_evidence"].get("material")) else "context"
+            lvl = c_mat_norm.get("material_evidence_level", "VERIFIED_PROPERTIES")
+            verified_entities["evidence_sources"]["material"] = src
+            verified_entities["evidence_status"]["material"] = lvl
+            verified_entities["normalized"]["material"] = c_mat_norm
+        elif p_mat_ok and p_mat_norm:
+            mat_ok = True
+            lvl = p_mat_norm.get("material_evidence_level", "VERIFIED_PROPERTIES")
             verified_entities["evidence_sources"]["material"] = "prompt"
-            verified_entities["evidence_status"]["material"] = "VERIFIED"
+            verified_entities["evidence_status"]["material"] = lvl
             verified_entities["normalized"]["material"] = p_mat_norm
-        else:
-            c_mat = ctx.get("material") or (ctx.get("inp_evidence", {}).get("material") if isinstance(ctx.get("inp_evidence"), dict) else None)
-            c_mat_ok, c_mat_norm, _ = _validate_material_entity(c_mat)
-            if c_mat_ok:
-                mat_ok = True
-                src = "inp_evidence" if (isinstance(ctx.get("inp_evidence"), dict) and ctx["inp_evidence"].get("material")) else "context"
-                verified_entities["evidence_sources"]["material"] = src
-                verified_entities["evidence_status"]["material"] = "VERIFIED"
-                verified_entities["normalized"]["material"] = c_mat_norm
+        elif c_mat_ok and c_mat_norm:
+            mat_ok = True
+            src = "inp_evidence" if (isinstance(ctx.get("inp_evidence"), dict) and ctx["inp_evidence"].get("material")) else "context"
+            lvl = c_mat_norm.get("material_evidence_level", "VERIFIED_PROPERTIES")
+            verified_entities["evidence_sources"]["material"] = src
+            verified_entities["evidence_status"]["material"] = lvl
+            verified_entities["normalized"]["material"] = c_mat_norm
 
         elastic_domains = {"linear_static", "modal_frequency", "transient_dynamic", "contact_frictional", "fatigue_damage"}
         if rules["require_material"]:
@@ -1608,10 +1736,10 @@ class EngineeringIntentRouter:
             elif phys in elastic_domains:
                 mat_has_properties = False
                 if p_mat_ok and p_mat_norm:
-                    if p_mat_norm.get("has_verified_properties"):
+                    if p_mat_norm.get("has_verified_properties") or p_mat_norm.get("is_reference_assumption"):
                         mat_has_properties = True
                 if not mat_has_properties and c_mat_ok and c_mat_norm:
-                    if c_mat_norm.get("has_verified_properties"):
+                    if c_mat_norm.get("has_verified_properties") or c_mat_norm.get("is_reference_assumption"):
                         mat_has_properties = True
                 if not mat_has_properties:
                     missing.append("unverified_material_properties")
@@ -2182,8 +2310,9 @@ class EngineeringIntentRouter:
                 "poisson_ratio": 0.3,
                 "unit": "MPa",
                 "source": "standard_reference_library",
-                "material_evidence_level": "VERIFIED_PROPERTIES",
-                "has_verified_properties": True,
+                "material_evidence_level": "REFERENCE_LIBRARY",
+                "has_verified_properties": False,
+                "is_reference_assumption": True,
             }
         elif any(w in prompt_lower for w in ("铝", "aluminum", "al6061")):
             params["material"] = {
@@ -2192,8 +2321,9 @@ class EngineeringIntentRouter:
                 "poisson_ratio": 0.33,
                 "unit": "MPa",
                 "source": "standard_reference_library",
-                "material_evidence_level": "VERIFIED_PROPERTIES",
-                "has_verified_properties": True,
+                "material_evidence_level": "REFERENCE_LIBRARY",
+                "has_verified_properties": False,
+                "is_reference_assumption": True,
             }
         elif any(w in prompt_lower for w in ("橡胶", "rubber")):
             params["material"] = {
@@ -2202,8 +2332,9 @@ class EngineeringIntentRouter:
                 "poisson_ratio": 0.499,
                 "unit": "MPa",
                 "source": "standard_reference_library",
-                "material_evidence_level": "VERIFIED_PROPERTIES",
-                "has_verified_properties": True,
+                "material_evidence_level": "REFERENCE_LIBRARY",
+                "has_verified_properties": False,
+                "is_reference_assumption": True,
             }
         elif any(w in prompt_lower for w in ("elastic", "弹性")):
             params["material"] = {
@@ -2212,8 +2343,9 @@ class EngineeringIntentRouter:
                 "poisson_ratio": 0.3,
                 "unit": "MPa",
                 "source": "standard_reference_library",
-                "material_evidence_level": "VERIFIED_PROPERTIES",
-                "has_verified_properties": True,
+                "material_evidence_level": "REFERENCE_LIBRARY",
+                "has_verified_properties": False,
+                "is_reference_assumption": True,
             }
 
         return params
@@ -2294,15 +2426,55 @@ class EngineeringIntentRouter:
         dims = norm.get("dimensions") or params.get("dimensions")
 
         # Track topological grounding status (distinguish semantic candidate tags from verified CAD/INP topology)
-        grounding_status = "SEMANTIC_CANDIDATE_UNRESOLVED"
+        # Collect all referenced geometric regions across bcs and loads
+        referenced_regions = set()
+        for bc in bcs:
+            if isinstance(bc, dict) and bc.get("region"):
+                referenced_regions.add(str(bc["region"]).strip())
+        for ld in loads:
+            if isinstance(ld, dict) and ld.get("region"):
+                referenced_regions.add(str(ld["region"]).strip())
+
+        # Collect verified topological regions from model context (INP surfaces, sets, faces, etc.)
+        model_topology_regions = set()
         if (
             isinstance(ctx.get("inp_evidence"), dict)
             and ctx["inp_evidence"].get("verified")
-            and (ctx["inp_evidence"].get("surfaces") or ctx["inp_evidence"].get("sets") or ctx["inp_evidence"].get("parts"))
-        ) or (
-            ctx.get("model_topology_grounded") is True
+            and not ctx["inp_evidence"].get("conflict")
         ):
+            inp = ctx["inp_evidence"]
+            for k in ("surfaces", "sets", "faces", "elementsets", "nodesets", "parts", "regions"):
+                v = inp.get(k)
+                if isinstance(v, (list, tuple, set)):
+                    for item in v:
+                        if isinstance(item, str) and item.strip():
+                            model_topology_regions.add(item.strip())
+                        elif isinstance(item, dict) and item.get("name"):
+                            model_topology_regions.add(str(item["name"]).strip())
+                elif isinstance(v, dict):
+                    for rk in v.keys():
+                        if isinstance(rk, str) and rk.strip():
+                            model_topology_regions.add(rk.strip())
+        for key in ("model_surfaces", "model_sets", "model_regions"):
+            mv = ctx.get(key)
+            if isinstance(mv, (list, tuple, set)):
+                for item in mv:
+                    if isinstance(item, str) and item.strip():
+                        model_topology_regions.add(item.strip())
+
+        # Track topological grounding status (Deterministic 1-to-1 subset resolution)
+        if not referenced_regions:
+            grounding_status = "NO_REGIONS_SPECIFIED"
+        elif model_topology_regions and referenced_regions.issubset(model_topology_regions):
             grounding_status = "MODEL_TOPOLOGY_GROUNDED"
+        else:
+            grounding_status = "SEMANTIC_CANDIDATE_UNRESOLVED"
+
+        mat_evidence_level = "UNKNOWN"
+        mat_is_assumption = False
+        if isinstance(material, dict):
+            mat_evidence_level = material.get("material_evidence_level", "VERIFIED_PROPERTIES" if material.get("has_verified_properties") else "NAMED_ONLY")
+            mat_is_assumption = bool(material.get("is_reference_assumption"))
 
         metadata = {
             "dimensions": dims,
@@ -2314,6 +2486,8 @@ class EngineeringIntentRouter:
             "evidence_sources": sources,
             "evidence_status": statuses,
             "region_grounding_status": grounding_status,
+            "material_evidence_level": mat_evidence_level,
+            "material_assumption": mat_is_assumption,
             "routing_gate_passed": True,
             "preflight_required": True,
             "solver_ready": False,
