@@ -3,7 +3,7 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
+from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple, Union
 
 from .actions.runner import execute
 from .evidence.result import summarize_odb
@@ -119,6 +119,7 @@ class AbaqusAIAgent:
         project_context: Optional[Any] = None,
         timeout: Optional[int] = None,
         run_id: Optional[str] = None,
+        odb_validator: Optional[Callable[[Path], bool]] = None,
     ) -> Dict[str, Any]:
         """Directly solve a user-provided .inp file without redundant Python modeling."""
         from .execution.input_modes import solve_user_inp
@@ -129,6 +130,7 @@ class AbaqusAIAgent:
             project_context=project_context,
             timeout=timeout,
             run_id=run_id,
+            odb_validator=odb_validator,
         )
 
     def edit_and_solve_user_inp(
@@ -141,6 +143,7 @@ class AbaqusAIAgent:
         timeout: Optional[int] = None,
         run_id: Optional[str] = None,
         overwrite: bool = False,
+        odb_validator: Optional[Callable[[Path], bool]] = None,
     ) -> Dict[str, Any]:
         """Surgically modify a user-provided .inp in an isolated working copy and solve it."""
         from .execution.input_modes import edit_and_solve_user_inp
@@ -154,6 +157,7 @@ class AbaqusAIAgent:
             timeout=timeout,
             run_id=run_id,
             overwrite=overwrite,
+            odb_validator=odb_validator,
         )
 
     def postprocess_user_odb(

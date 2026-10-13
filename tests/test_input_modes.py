@@ -8,7 +8,11 @@ import pytest
 from abaqus_ai_agent.agent import AbaqusAIAgent
 from abaqus_ai_agent.execution.input_modes import (
     UserInputKind,
+    WorkspaceTransaction,
     _compute_file_sha256,
+    _parse_returncode,
+    _verify_solver_dependencies,
+    edit_and_solve_user_inp,
     open_user_cae_working_copy,
     postprocess_user_odb,
     solve_user_inp,
@@ -295,3 +299,220 @@ def test_open_user_cae_collision_preserves_existing_benchmark(tmp_path):
     working_file = Path(res["working_cae_path"])
     assert working_file.is_file()
     assert working_file.read_bytes() == b"NEW_INCOMING_DIFFERENT_V2"
+
+
+def test_parse_returncode_contract_matrix():
+    """Verify _parse_returncode enforces strict typing and value constraints."""
+    # Valid returncodes
+    assert _parse_returncode(0) == 0
+    assert _parse_returncode(-1) == -1
+    assert _parse_returncode(127) == 127
+    assert _parse_returncode("0") == 0
+    assert _parse_returncode("-1") == -1
+    assert _parse_returncode("127") == 127
+    assert _parse_returncode("  42  ") == 42
+
+    # Strictly rejected: bool (bool is subclass of int)
+    with pytest.raises(ValueError, match="returncode must not be bool"):
+        _parse_returncode(True)
+    with pytest.raises(ValueError, match="returncode must not be bool"):
+        _parse_returncode(False)
+
+    # Strictly rejected: float and float strings
+    with pytest.raises(ValueError, match="Invalid solver returncode"):
+        _parse_returncode(0.0)
+    with pytest.raises(ValueError, match="Invalid solver returncode"):
+        _parse_returncode(0.5)
+    with pytest.raises(ValueError, match="Invalid solver returncode"):
+        _parse_returncode(1.0)
+    with pytest.raises(ValueError, match="Invalid solver returncode"):
+        _parse_returncode("0.5")
+
+    # Strictly rejected: None, empty string, non-numeric strings, collections
+    with pytest.raises(ValueError, match="Invalid solver returncode"):
+        _parse_returncode(None)
+    with pytest.raises(ValueError, match="Invalid solver returncode"):
+        _parse_returncode("")
+    with pytest.raises(ValueError, match="Invalid solver returncode"):
+        _parse_returncode("   ")
+    with pytest.raises(ValueError, match="Invalid solver returncode"):
+        _parse_returncode("abc")
+    with pytest.raises(ValueError, match="Invalid solver returncode"):
+        _parse_returncode([0])
+
+
+def test_workspace_transaction_lifecycle_and_rollback(tmp_path):
+    """Verify WorkspaceTransaction tracks new files and restores overwritten files on rollback."""
+    tx = WorkspaceTransaction()
+
+    # 1. Existing file
+    orig_file = tmp_path / "baseline.txt"
+    orig_bytes = b"ORIGINAL_BYTES_12345"
+    orig_file.write_bytes(orig_bytes)
+    orig_sha = hashlib.sha256(orig_bytes).hexdigest()
+
+    # 2. New file that does not yet exist
+    new_file = tmp_path / "new_artifact.txt"
+
+    tx.prepare_write(orig_file)
+    tx.prepare_write(new_file)
+
+    # Mutate existing file and write new file
+    orig_file.write_bytes(b"MUTATED_BYTES_TEMPORARY")
+    new_file.write_bytes(b"NEW_TEMPORARY_CONTENT")
+
+    assert orig_file.read_bytes() == b"MUTATED_BYTES_TEMPORARY"
+    assert new_file.is_file()
+
+    # Trigger rollback
+    tx.rollback()
+
+    # Existing file must be 100% restored to original exact bytes and hash
+    assert orig_file.is_file()
+    assert orig_file.read_bytes() == orig_bytes
+    assert _compute_file_sha256(orig_file) == orig_sha
+
+    # New file must be unlinked
+    assert not new_file.exists()
+
+
+def test_workspace_transaction_commit_clears_state(tmp_path):
+    """Verify WorkspaceTransaction commit clears backups and new files tracker."""
+    tx = WorkspaceTransaction()
+    target_file = tmp_path / "committed.txt"
+    target_file.write_bytes(b"ORIG")
+
+    tx.prepare_write(target_file)
+    target_file.write_bytes(b"UPDATED")
+    tx.commit()
+
+    assert len(tx.backups) == 0
+    assert len(tx.newly_created) == 0
+
+    # Rollback after commit does not revert committed changes
+    tx.rollback()
+    assert target_file.read_bytes() == b"UPDATED"
+
+
+def test_pre_solve_dependency_tamper_guard_fails_closed(tmp_path):
+    """Verify _verify_solver_dependencies detects disk-level tampering or missing dependency."""
+    dep_file = tmp_path / "inc.txt"
+    dep_file.write_bytes(b"GENUINE_CONTENT")
+    genuine_sha = hashlib.sha256(b"GENUINE_CONTENT").hexdigest()
+
+    valid_record = [{
+        "logical_path": "inc.txt",
+        "source_path": str(dep_file),
+        "target_path": str(dep_file),
+        "target_sha256": genuine_sha,
+    }]
+
+    # Unaltered file passes verification
+    _verify_solver_dependencies(valid_record)
+
+    # 1. Disk-level tampering (modified bytes)
+    dep_file.write_bytes(b"TAMPERED_CONTENT_MALICIOUS")
+    with pytest.raises(RuntimeError, match="Pre-solve integrity violation: dependency file tampered"):
+        _verify_solver_dependencies(valid_record)
+
+    # 2. Missing dependency file
+    dep_file.unlink()
+    with pytest.raises(RuntimeError, match="Pre-solve integrity violation: dependency file missing"):
+        _verify_solver_dependencies(valid_record)
+
+
+def test_solve_user_inp_odb_validator_hook_positive_and_negative(tmp_path):
+    """Verify solve_user_inp integrates odb_validator hook correctly."""
+    ctx = _make_dummy_project(tmp_path)
+    inp_file = ctx.input_dir / "valid_job.inp"
+    inp_file.write_text("*HEADING\nValid Job\n")
+
+    executor = DummyInpExecutor()
+
+    # 1. Positive validation
+    res_pos = solve_user_inp(
+        executor=executor,
+        inp_path=inp_file,
+        project_context=ctx,
+        run_id="run_val_pos",
+        odb_validator=lambda odb_p: odb_p.is_file(),
+    )
+    assert res_pos["status"] == "COMPLETED"
+    assert res_pos["odb_valid"] is True
+
+    # 2. Negative validation (validator returns False)
+    res_neg = solve_user_inp(
+        executor=executor,
+        inp_path=inp_file,
+        project_context=ctx,
+        run_id="run_val_neg",
+        odb_validator=lambda odb_p: False,
+    )
+    assert res_neg["status"] == "FAILED"
+    assert res_neg["odb_valid"] is False
+    assert "failed validity verification" in res_neg["error"]
+
+    # 3. Failing validator (validator raises exception)
+    def broken_validator(odb_p):
+        raise RuntimeError("Corrupt ODB header structure detected")
+
+    res_exc = solve_user_inp(
+        executor=executor,
+        inp_path=inp_file,
+        project_context=ctx,
+        run_id="run_val_exc",
+        odb_validator=broken_validator,
+    )
+    assert res_exc["status"] == "FAILED"
+    assert res_exc["odb_valid"] is False
+    assert "validity verification raised exception" in res_exc["error"]
+
+
+def test_edit_and_solve_user_inp_transactional_rollback_on_missing_include(tmp_path):
+    """Verify edit_and_solve_user_inp rolls back newly created working INP when include preflight fails."""
+    ctx = _make_dummy_project(tmp_path)
+    main_inp = ctx.input_dir / "missing_inc_model.inp"
+    main_inp.write_text("*HEADING\n*INCLUDE, INPUT=non_existent_file.inc\n*STEP, NAME=Step-1\n*STATIC\n*END STEP\n")
+
+    target_working = ctx.working_dir / "missing_inc_model_edited.inp"
+    assert not target_working.exists()
+
+    executor = DummyInpExecutor()
+    with pytest.raises(FileNotFoundError, match="Missing required \\*INCLUDE dependency"):
+        edit_and_solve_user_inp(
+            executor=executor,
+            inp_path=main_inp,
+            operations=[{"category": "step", "target": "Step-1", "keyword": "*STATIC", "values": {"total_time": 2.0}}],
+            project_context=ctx,
+            target_filename=target_working.name,
+        )
+
+    # Target working INP must be rolled back (deleted) because dependency planning failed
+    assert not target_working.exists()
+
+
+def test_edit_and_solve_user_inp_transactional_rollback_preserves_overwritten_file(tmp_path):
+    """Verify edit_and_solve_user_inp restores existing file on transactional failure."""
+    ctx = _make_dummy_project(tmp_path)
+    main_inp = ctx.input_dir / "fail_model.inp"
+    main_inp.write_text("*HEADING\n*INCLUDE, INPUT=ghost.inc\n*STEP, NAME=Step-1\n*STATIC\n*END STEP\n")
+
+    target_working = ctx.working_dir / "fail_model_edited.inp"
+    target_working.write_bytes(b"PRE_EXISTING_IMPORTANT_DATA_V1")
+    target_sha = hashlib.sha256(b"PRE_EXISTING_IMPORTANT_DATA_V1").hexdigest()
+
+    executor = DummyInpExecutor()
+    with pytest.raises(FileNotFoundError):
+        edit_and_solve_user_inp(
+            executor=executor,
+            inp_path=main_inp,
+            operations=[{"category": "step", "target": "Step-1", "keyword": "*STATIC", "values": {"total_time": 2.0}}],
+            project_context=ctx,
+            target_filename=target_working.name,
+            overwrite=True,
+        )
+
+    # File was overwritten during edit, but rollback must have restored the exact original bytes!
+    assert target_working.is_file()
+    assert target_working.read_bytes() == b"PRE_EXISTING_IMPORTANT_DATA_V1"
+    assert _compute_file_sha256(target_working) == target_sha
