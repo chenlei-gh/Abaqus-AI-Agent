@@ -64,6 +64,8 @@ def solve_user_inp(
 
     # Invoke solver directly via executor
     orig_workdir = getattr(executor, "workdir", None)
+    res = None
+    exec_exc: Optional[Exception] = None
     try:
         if effective_workdir and hasattr(executor, "workdir"):
             executor.workdir = str(effective_workdir)
@@ -86,6 +88,8 @@ def solve_user_inp(
             res = executor.execute(cmd)
         else:
             raise TypeError(f"Executor {type(executor)} does not support run_input or execute interface.")
+    except Exception as exc:
+        exec_exc = exc
     finally:
         if hasattr(executor, "workdir"):
             executor.workdir = orig_workdir
@@ -105,8 +109,37 @@ def solve_user_inp(
         if sibling_odb.is_file():
             expected_odb = sibling_odb
 
+    # Evaluate true execution status (P0 contract: never report COMPLETED unconditionally)
+    status = "COMPLETED"
+    error_msg: Optional[str] = None
+    returncode = 0
+
+    if exec_exc is not None:
+        status = "FAILED"
+        error_msg = f"Solver invocation raised exception: {exec_exc}"
+        returncode = -1
+    else:
+        if isinstance(res, dict):
+            returncode = int(res.get("returncode", 0))
+            stderr = str(res.get("stderr", ""))
+        elif hasattr(res, "returncode"):
+            returncode = int(getattr(res, "returncode", 0))
+            stderr = str(getattr(res, "stderr", ""))
+        else:
+            returncode = 0
+            stderr = ""
+
+        if returncode != 0:
+            status = "FAILED"
+            error_msg = f"Solver exited with non-zero exit code {returncode}. Stderr: {stderr}"
+        elif expected_odb is None or not expected_odb.is_file():
+            status = "FAILED"
+            error_msg = f"Solver completed with code 0 but expected ODB output was not found: {eff_job_name}.odb"
+
     return {
-        "status": "COMPLETED",
+        "status": status,
+        "error": error_msg,
+        "returncode": returncode,
         "input_kind": UserInputKind.INP_SOLVER_DIRECT.value,
         "run_id": eff_run_id,
         "job_name": eff_job_name,
@@ -205,7 +238,15 @@ def open_user_cae_working_copy(
 
         if not is_inside_input:
             safe_input_copy = project_context.input_dir / src_file.name
-            if not safe_input_copy.exists() or _compute_file_sha256(safe_input_copy) != orig_sha256:
+            if safe_input_copy.exists():
+                existing_sha = _compute_file_sha256(safe_input_copy)
+                if existing_sha != orig_sha256:
+                    if not overwrite:
+                        # Collision protection: Never silently overwrite an existing reference benchmark
+                        safe_input_copy = project_context.input_dir / f"{src_file.stem}_{orig_sha256[:8]}{src_file.suffix}"
+                    if not safe_input_copy.exists() or _compute_file_sha256(safe_input_copy) != orig_sha256:
+                        shutil.copy2(src_file, safe_input_copy)
+            else:
                 shutil.copy2(src_file, safe_input_copy)
             source_fname = safe_input_copy.name
         else:

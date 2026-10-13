@@ -2936,9 +2936,9 @@ Abaqus-AI-Agent/
   - 编写针对性单元与集成测试用例 `tests/test_input_modes.py` 并 100% 通过。
 - [x] **任务 35.5: 全量回归与 GitHub 同步**：
   - 修复 `agent.py` 缺失 `Sequence` 导入与 `from __future__ import annotations`，根治 Python 3.10/3.11/3.12 CI NameError；
-  - 强化任务 35.1（`base_dir` 强优先，杜绝 CWD 碰撞）；
-  - 强化任务 35.2（生产模式不仅校验非空，还强制校验 `project_root` 不在仓库内）；
-  - 强化任务 35.4（透传 `workdir` 到执行器，任意外部路径 CAE 导入时先收录至 `input_dir` 再派生 `working/` 副本）；
-  - 增加对应专项负向测试用例并通过；
+  - 强化任务 35.1（`base_dir` 强优先，杜绝 CWD 碰撞，新增 `../` 相对路径越界逃逸严格拒绝）；
+  - 强化任务 35.2（生产模式对上下文 `project_root` 及 `input/working/solver/evidence/delivery` 全部子目录进行越界与外部性深度校验，生产门禁严格默认开启）；
+  - 强化任务 35.4（INP 求解状态严谨化：非零退出码、异常崩溃、缺失 ODB 坚决判定 FAILED 严禁盲目返回 COMPLETED；CAE 导入同名冲突防覆盖已有基准）；
+  - 补齐对应专项负向测试用例（覆盖率扩展，全部通过）；
   - 受控资产 `machine_validation/` 零污染回滚保护；
-  - 提交并推送至 GitHub 远程 `main` 分支等待 CI 验证。
+  - 提交并推送至 GitHub 远程 `main` 分支进行六矩阵 CI 闭环验证。

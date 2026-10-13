@@ -64,9 +64,14 @@ def _resolve_image_path(path_str, base_dir=None):
     # 2. When base_dir is supplied, relative paths resolve STRICTLY against base_dir.
     #    Never fall back to current working directory (cwd) to avoid collision with
     #    accidental identical file names in cwd.
+    #    Strictly reject path traversal escaping outside base_dir.
     if base_dir:
         try:
-            cand = (Path(base_dir) / p).resolve()
+            resolved_base = Path(base_dir).resolve()
+            cand = (resolved_base / p).resolve()
+            if not cand.is_relative_to(resolved_base):
+                # Path traversal attempt escaping base_dir
+                return None
             return cand if cand.is_file() else None
         except Exception:
             return None

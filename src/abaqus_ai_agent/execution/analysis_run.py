@@ -254,10 +254,15 @@ class AnalysisRunner:
             postprocess_profile=None, workdir=None, physics_domain=None, require_evidence=None,
             require_production=None, project_context=None):
         if require_production is None:
+            # Explicit test flag via environment or executor attribute takes precedence
+            is_explicit_test = (
+                os.environ.get("ABAQUS_AGENT_TEST_MODE", "").lower() in ("1", "true", "yes")
+                or getattr(self.executor, "is_test_mode", False)
+                or getattr(self.executor, "_is_mock", False)
+            )
             cname = getattr(self.executor, "__class__", None).__name__ or ""
-            is_test_double = any(token in cname for token in ("Mock", "Fake", "Stub", "Dummy", "OdbBackedExecutor")) or \
-                             getattr(self.executor, "_is_mock", False)
-            require_production = not is_test_double
+            is_known_test_double = any(token in cname for token in ("Mock", "Fake", "Stub", "Dummy", "OdbBackedExecutor"))
+            require_production = not (is_explicit_test or is_known_test_double)
 
         if require_production and project_context is None:
             raise RuntimeError(
@@ -266,9 +271,21 @@ class AnalysisRunner:
             )
         if require_production and project_context is not None:
             from ..paths import assert_path_outside_repo
-            if not hasattr(project_context, "project_root") or not hasattr(project_context, "solver_dir"):
-                raise TypeError("[Production Guard] project_context must be a valid ExternalProjectContext.")
-            assert_path_outside_repo(project_context.project_root)
+            required_subdirs = ("project_root", "input_dir", "working_dir", "solver_dir", "evidence_dir", "delivery_dir")
+            for attr in required_subdirs:
+                if not hasattr(project_context, attr):
+                    raise TypeError(f"[Production Guard] project_context must be a valid ExternalProjectContext: missing '{attr}'.")
+                val = getattr(project_context, attr)
+                if not isinstance(val, Path):
+                    raise TypeError(f"[Production Guard] project_context.{attr} must be a Path, got {type(val)}.")
+                assert_path_outside_repo(val)
+                if attr != "project_root":
+                    resolved_val = val.resolve()
+                    resolved_root = project_context.project_root.resolve()
+                    if not resolved_val.is_relative_to(resolved_root):
+                        raise PermissionError(
+                            f"[Production Guard] Subdirectory boundary escape (REQ-ISO-002): {attr} '{resolved_val}' escapes project_root."
+                        )
 
         run_id = str(uuid.uuid4())
         orig_executor_workdir = getattr(self.executor, "workdir", None)

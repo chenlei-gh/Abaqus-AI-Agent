@@ -303,6 +303,11 @@ def test_resolve_image_path_valid_absolute_and_relative_with_base_dir(tmp_path):
         if cwd_colliding.exists():
             cwd_colliding.unlink()
 
+    # 5. Relative path traversal escaping base_dir MUST be rejected
+    outside_probe = tmp_path / "outside_probe.png"
+    outside_probe.write_bytes(b"\x89PNG\r\n\x1a\n")
+    assert _resolve_image_path("../outside_probe.png", base_dir=sub_dir) is None
+
 
 def test_html_report_renders_placeholder_on_cross_directory_collision_attempt():
     """当引用的图片路径不存在时，即使仓库中存在同名文件，HTML 报告也必须展示缺失占位，严禁冒充。"""

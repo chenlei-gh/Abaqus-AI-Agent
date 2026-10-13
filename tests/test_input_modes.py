@@ -30,6 +30,11 @@ class DummyInpExecutor:
             "timeout": timeout,
             "workdir": workdir,
         })
+        target_dir = Path(workdir) if workdir else Path(input_path).parent
+        name = job_name or Path(input_path).stem
+        odb_file = target_dir / f"{name}.odb"
+        if not odb_file.exists():
+            odb_file.write_bytes(b"DUMMY_ODB_OUTPUT")
         return {"returncode": 0, "stdout": "Job completed successfully", "stderr": ""}
 
 
@@ -203,3 +208,90 @@ def test_open_user_cae_from_arbitrary_external_path(tmp_path):
     archived_in_input = ctx.input_dir / "chassis.cae"
     assert archived_in_input.is_file()
     assert archived_in_input.read_bytes() == b"AUTHENTIC_EXTERNAL_CHASSIS_CAE_DATA"
+
+
+def test_solve_user_inp_fails_on_nonzero_exit_code_and_missing_odb(tmp_path):
+    """P0 Contract: solve_user_inp must report FAILED when solver returns non-zero code or misses ODB."""
+    ctx = _make_dummy_project(tmp_path)
+    inp_file = ctx.input_dir / "bad_syntax.inp"
+    inp_file.write_text("*HEADING\nBad INP syntax")
+
+    # 1. Non-zero exit code
+    class FailExecutor:
+        def run_input(self, input_path, job_name=None, timeout=None, workdir=None):
+            return {"returncode": 143, "stdout": "", "stderr": "Abaqus error: syntax error on line 2"}
+
+    res_fail = solve_user_inp(
+        executor=FailExecutor(),
+        inp_path=inp_file,
+        project_context=ctx,
+        run_id="run_inp_fail_01",
+    )
+    assert res_fail["status"] == "FAILED"
+    assert res_fail["returncode"] == 143
+    assert "non-zero exit code 143" in res_fail["error"]
+
+    # 2. Returncode 0 but missing ODB
+    class ZeroExitNoOdbExecutor:
+        def run_input(self, input_path, job_name=None, timeout=None, workdir=None):
+            return {"returncode": 0, "stdout": "Check completed", "stderr": ""}
+
+    res_no_odb = solve_user_inp(
+        executor=ZeroExitNoOdbExecutor(),
+        inp_path=inp_file,
+        project_context=ctx,
+        run_id="run_inp_no_odb",
+    )
+    assert res_no_odb["status"] == "FAILED"
+    assert "expected ODB output was not found" in res_no_odb["error"]
+
+    # 3. Solver exception (e.g. process launch failed or timeout)
+    class TimeoutExecutor:
+        def run_input(self, input_path, job_name=None, timeout=None, workdir=None):
+            raise TimeoutError("Solver execution timed out after 300s")
+
+    res_exc = solve_user_inp(
+        executor=TimeoutExecutor(),
+        inp_path=inp_file,
+        project_context=ctx,
+        run_id="run_inp_timeout",
+    )
+    assert res_exc["status"] == "FAILED"
+    assert "Solver invocation raised exception" in res_exc["error"]
+
+
+def test_open_user_cae_collision_preserves_existing_benchmark(tmp_path):
+    """P0 Contract: Importing an external CAE with the same filename but different content
+    MUST NOT overwrite the existing reference baseline in input_dir.
+    """
+    ctx = _make_dummy_project(tmp_path)
+
+    # 1. Pre-existing baseline in input_dir
+    baseline_cae = ctx.input_dir / "part.cae"
+    baseline_cae.write_bytes(b"HISTORICAL_BASELINE_V1")
+    baseline_sha = hashlib.sha256(b"HISTORICAL_BASELINE_V1").hexdigest()
+
+    # 2. External new CAE with identical name but different bytes
+    ext_dir = tmp_path / "IncomingDrop"
+    ext_dir.mkdir()
+    new_cae = ext_dir / "part.cae"
+    new_cae.write_bytes(b"NEW_INCOMING_DIFFERENT_V2")
+    new_sha = hashlib.sha256(b"NEW_INCOMING_DIFFERENT_V2").hexdigest()
+
+    executor = DummyCaeExecutor()
+    res = open_user_cae_working_copy(
+        cae_path=new_cae,
+        project_context=ctx,
+        executor=executor,
+        target_filename="part_working.cae",
+    )
+
+    assert res["status"] == "PREPARED"
+    # Crucial: Existing historical baseline is 100% UNTOUCHED
+    assert baseline_cae.read_bytes() == b"HISTORICAL_BASELINE_V1"
+    assert _compute_file_sha256(baseline_cae) == baseline_sha
+
+    # Working copy derived from the new input content
+    working_file = Path(res["working_cae_path"])
+    assert working_file.is_file()
+    assert working_file.read_bytes() == b"NEW_INCOMING_DIFFERENT_V2"

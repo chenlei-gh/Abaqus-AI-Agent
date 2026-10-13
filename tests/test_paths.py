@@ -495,6 +495,28 @@ def test_analysis_runner_production_mode_strict_guards(tmp_path):
             import shutil
             shutil.rmtree(repo_internal_project, ignore_errors=True)
 
+    # 4. Context where a subdirectory escapes outside project_root
+    ext_root = tmp_path / "LegitExtProject"
+    ext_root.mkdir()
+    outside_dir = tmp_path / "EscapedSubdir"
+    outside_dir.mkdir()
+    class EscapedSubdirContext:
+        project_root = ext_root
+        input_dir = ext_root / "input"
+        working_dir = ext_root / "working"
+        solver_dir = outside_dir  # Escapes project_root!
+        evidence_dir = ext_root / "evidence"
+        delivery_dir = ext_root / "delivery"
+
+    with pytest.raises(PermissionError) as exc_sub_esc:
+        runner.run(
+            model_name="M",
+            job_name="J",
+            project_context=EscapedSubdirContext(),
+            require_production=True,
+        )
+    assert "Subdirectory boundary escape" in str(exc_sub_esc.value)
+
 
 def test_agent_production_mode_blocks_execution_in_repo_runs(tmp_path):
     """P0-3 Contract: When executing with a non-test-double executor in production mode,
