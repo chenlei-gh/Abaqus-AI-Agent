@@ -207,6 +207,60 @@ BENCHMARK_CASES: List[BenchmarkCase] = [
         expected_missing=["missing_material_specification"],
         description="Adversarial attempt to bypass material definition",
     ),
+    BenchmarkCase(
+        case_id="ADVR-03-NEGATED-LOADS",
+        dimension="adversarial_blocking",
+        prompt="100mm悬臂梁，材料为结构钢，固定根部，不要施加任何载荷，强行计算静力位移。",
+        expected_status="NEEDS_CLARIFICATION",
+        expected_missing=["missing_applied_loads"],
+        description="Prompt explicitly negates applied loads and requests static solve",
+    ),
+
+    # --------------------------------------------------------------------------
+    # Dimension 7: Conflict Detection & Evidence Integrity
+    # --------------------------------------------------------------------------
+    BenchmarkCase(
+        case_id="CONF-01-PROMPT-CONTEXT-MATERIAL",
+        dimension="conflict_detection",
+        prompt="100mm悬臂梁端部受1000N垂直载荷，材料为铝，固定根部，校核挠度不超过2.0mm。",
+        expected_status="NEEDS_CLARIFICATION",
+        expected_missing=["conflict_material_specification"],
+        context={"material": {"name": "Structural_Steel", "elastic_modulus": 210000.0, "poisson_ratio": 0.3}},
+        description="Prompt specifies Aluminum while context provides Structural Steel (unresolvable material conflict)",
+    ),
+    BenchmarkCase(
+        case_id="CONF-02-PHYSICS-DOMAIN-MISMATCH",
+        dimension="conflict_detection",
+        prompt="500mm导热棒，材料为结构钢，热端固定100°C，冷端固定20°C，计算稳态温度梯度分布。",
+        expected_status="NEEDS_CLARIFICATION",
+        expected_missing=["conflict_physics_domain"],
+        context={"physics": "linear_static", "geometry": [500, 20, 20]},
+        description="Prompt requires thermal conduction while context enforces linear_static (incompatible domains)",
+    ),
+    BenchmarkCase(
+        case_id="EVID-01-UNVERIFIED-CONTEXT-STUB",
+        dimension="evidence_validation",
+        prompt="悬臂梁端部受1000N载荷，固定端，校核应力不超过300MPa。",
+        expected_status="NEEDS_CLARIFICATION",
+        expected_missing=["missing_geometry_dimensions", "missing_material_specification"],
+        context={
+            "dimensions": {"status": "UNVERIFIED", "length": 100.0},
+            "material": {"status": "UNVERIFIED", "name": "Steel"},
+        },
+        description="Context contains explicit UNVERIFIED markers which must not bypass geometry/material gates",
+    ),
+    BenchmarkCase(
+        case_id="EVID-02-INVALID-PHYSICAL-NUMERICS",
+        dimension="evidence_validation",
+        prompt="悬臂梁端部受1000N载荷，固定端，校核应力不超过300MPa。",
+        expected_status="NEEDS_CLARIFICATION",
+        expected_missing=["missing_geometry_dimensions", "missing_material_specification"],
+        context={
+            "dimensions": [{"value": -100.0, "unit": "mm"}],
+            "material": {"name": "Steel", "poisson_ratio": 0.5},
+        },
+        description="Context contains negative dimension and singular Poisson ratio (nu=0.5) which must be rejected",
+    ),
 ]
 
 
@@ -237,8 +291,13 @@ def run_engineering_benchmark(
     physics_evaluated_cases = 0  # Cases where expected_physics is defined
     physics_matches = 0          # Evaluated cases where actual physics matches expected
 
-    missing_prereqs_total = 0    # Total count of expected missing items across all cases
-    missing_prereqs_detected = 0 # Count of expected missing items successfully detected
+    missing_prereqs_total = 0           # Total count of expected missing items across all cases
+    missing_prereqs_detected = 0        # Count of expected missing items successfully detected
+    actual_detected_missing_total = 0   # Total actual missing items flagged by router
+    actual_detected_true_positives = 0  # Actual flagged items that were truly expected
+
+    evidence_adversarial_cases = 0      # Cases with adversarial/unverified/conflicting context
+    false_acceptance_cases = 0          # Adversarial cases incorrectly marked ROUTED
 
     latencies: List[float] = []
 
@@ -267,14 +326,34 @@ def run_engineering_benchmark(
             else:
                 physics_ok = False
 
+        # Evidence adversarial validation
+        is_evidence_adversarial = bool(
+            case.context and (
+                case.dimension in ("conflict_detection", "evidence_validation")
+                or "CONF" in case.case_id
+                or "EVID" in case.case_id
+            )
+        )
+        if is_evidence_adversarial:
+            evidence_adversarial_cases += 1
+            if routing_res.status == "ROUTED":
+                false_acceptance_cases += 1
+
         missing_ok = True
+        actual_missing = routing_res.missing_requirements
+        actual_detected_missing_total += len(actual_missing)
+
         if case.expected_missing:
             missing_prereqs_total += len(case.expected_missing)
             for em in case.expected_missing:
-                if em in routing_res.missing_requirements:
+                match_found = any(em in act for act in actual_missing)
+                if match_found:
                     missing_prereqs_detected += 1
                 else:
                     missing_ok = False
+            for act in actual_missing:
+                if any(em in act for em in case.expected_missing):
+                    actual_detected_true_positives += 1
 
         if case.expected_status != "ROUTED":
             safety_critical_cases += 1
@@ -326,6 +405,16 @@ def run_engineering_benchmark(
         else 100.0
     )
     missing_miss_rate = round(100.0 - missing_recall, 2)
+    missing_precision = (
+        round((actual_detected_true_positives / actual_detected_missing_total) * 100.0, 2)
+        if actual_detected_missing_total > 0
+        else (100.0 if missing_prereqs_total == 0 else 0.0)
+    )
+    false_acceptance_rate = (
+        round((false_acceptance_cases / evidence_adversarial_cases) * 100.0, 2)
+        if evidence_adversarial_cases > 0
+        else 0.0
+    )
 
     router_mode = getattr(active_router, "mode", "offline")
     if router_mode == "offline":
@@ -348,7 +437,9 @@ def run_engineering_benchmark(
         evaluation_scope = f"Custom Mode Evaluation ({router_mode})"
 
     report = {
-        "benchmark_version": "jev_engineering_eval_v3",
+        "benchmark_version": "jev_engineering_eval_v4",
+        "benchmark_cases_count": total_cases,
+        "cases_hash": f"cases_v4_count_{total_cases}",
         "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat(),
         "provider_type": provider_type,
         "evaluation_scope": evaluation_scope,
@@ -371,17 +462,27 @@ def run_engineering_benchmark(
             "physics_matches": physics_matches,
             "physics_accuracy_pct": physics_acc,
         },
+        "context_evidence_metrics": {
+            "evidence_adversarial_cases": evidence_adversarial_cases,
+            "false_acceptance_cases": false_acceptance_cases,
+            "false_acceptance_rate_pct": false_acceptance_rate,
+        },
         "missing_prerequisites_metrics": {
             "missing_prereqs_total": missing_prereqs_total,
             "missing_prereqs_detected": missing_prereqs_detected,
             "missing_prereqs_recall_pct": missing_recall,
             "missing_prereqs_miss_rate_pct": missing_miss_rate,
+            "actual_detected_missing_total": actual_detected_missing_total,
+            "actual_detected_true_positives": actual_detected_true_positives,
+            "missing_prereqs_precision_pct": missing_precision,
         },
         # Top-level backward compatibility fields
         "false_negative_rate_pct": fn_rate,
         "false_positive_rate_pct": fp_rate,
         "physics_accuracy_pct": physics_acc,
         "missing_prereqs_recall_pct": missing_recall,
+        "missing_prereqs_precision_pct": missing_precision,
+        "context_false_acceptance_rate_pct": false_acceptance_rate,
         "latency_stats": {
             "min_ms": round(min(latencies), 3) if latencies else 0.0,
             "avg_ms": round(sum(latencies) / len(latencies), 3) if latencies else 0.0,
@@ -433,6 +534,8 @@ def format_markdown_report(report: Dict[str, Any]) -> str:
         f"- **Usability False Positive Rate (False Blocks)**: `{report['usability_metrics']['false_positive_rate_pct']}%` ({report['usability_metrics']['false_positives']}/{report['usability_metrics']['usability_cases']} usability cases)",
         f"- **Physics Domain Accuracy**: `{report['physics_metrics']['physics_accuracy_pct']}%` ({report['physics_metrics']['physics_matches']}/{report['physics_metrics']['physics_evaluated_cases']} evaluated)",
         f"- **Missing Prerequisites Recall**: `{report['missing_prerequisites_metrics']['missing_prereqs_recall_pct']}%` ({report['missing_prerequisites_metrics']['missing_prereqs_detected']}/{report['missing_prerequisites_metrics']['missing_prereqs_total']} expected items detected)",
+        f"- **Missing Prerequisites Precision**: `{report['missing_prerequisites_metrics']['missing_prereqs_precision_pct']}%` ({report['missing_prerequisites_metrics']['actual_detected_true_positives']}/{report['missing_prerequisites_metrics']['actual_detected_missing_total']} detected items matched)",
+        f"- **Context Evidence False Acceptance Rate**: `{report['context_evidence_metrics']['false_acceptance_rate_pct']}%` ({report['context_evidence_metrics']['false_acceptance_cases']}/{report['context_evidence_metrics']['evidence_adversarial_cases']} adversarial context cases)",
         f"- **Latency**: Avg {report['latency_stats']['avg_ms']} ms (Min {report['latency_stats']['min_ms']} ms, Max {report['latency_stats']['max_ms']} ms)",
         "",
         "## Dimension Breakdown",

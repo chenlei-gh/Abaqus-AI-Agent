@@ -1365,6 +1365,8 @@ def compile_engineering_intent(
     """
     if not isinstance(intent, EngineeringIntent):
         raise TypeError(f"Expected EngineeringIntent, got {type(intent).__name__}")
+    if not getattr(intent, "is_executable", True):
+        raise ValueError("Draft or non-executable EngineeringIntent cannot be compiled into an execution plan.")
 
     # 1. Resolved Names
     safe_id = "".join(c if c.isalnum() or c == "_" else "_" for c in intent.id)

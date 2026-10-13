@@ -23,10 +23,10 @@ def test_jev_engineering_benchmark_suite_passes():
     """Verify that the 6-dimensional benchmark suite achieves 100% accuracy and 0% false negatives."""
     report = run_engineering_benchmark()
 
-    assert report["benchmark_version"] == "jev_engineering_eval_v3"
+    assert report["benchmark_version"] == "jev_engineering_eval_v4"
     assert report["provider_type"] == "offline_deterministic_baseline"
     assert report["is_offline_baseline"] is True
-    assert report["total_cases"] >= 15
+    assert report["total_cases"] >= 20
     assert report["passed_cases"] == report["total_cases"]
     assert report["overall_accuracy_pct"] == 100.0
 
@@ -50,12 +50,18 @@ def test_jev_engineering_benchmark_suite_passes():
     assert missing_m["missing_prereqs_total"] > 0
     assert missing_m["missing_prereqs_recall_pct"] == 100.0
     assert missing_m["missing_prereqs_miss_rate_pct"] == 0.0
+    assert missing_m["missing_prereqs_precision_pct"] > 0.0
+
+    evidence_m = report["context_evidence_metrics"]
+    assert evidence_m["evidence_adversarial_cases"] > 0
+    assert evidence_m["false_acceptance_cases"] == 0
+    assert evidence_m["false_acceptance_rate_pct"] == 0.0
 
     assert report["false_negative_rate_pct"] == 0.0
     assert report["false_positive_rate_pct"] == 0.0
     assert report["latency_stats"]["avg_ms"] >= 0.0
 
-    # Ensure all 6 dimensions are evaluated
+    # Ensure all dimensions are evaluated
     expected_dims = {
         "physics_classification",
         "missing_prerequisites",
@@ -63,6 +69,8 @@ def test_jev_engineering_benchmark_suite_passes():
         "compliance_enforcement",
         "ambiguity_clarification",
         "adversarial_blocking",
+        "conflict_detection",
+        "evidence_validation",
     }
     breakdown = report["dimension_breakdown"]
     for dim in expected_dims:
@@ -78,7 +86,7 @@ def test_jev_engineering_benchmark_json_and_md_export(tmp_path: Path):
     assert out_file.is_file()
     with open(out_file, "r", encoding="utf-8") as f:
         loaded = json.load(f)
-    assert loaded["benchmark_version"] == "jev_engineering_eval_v3"
+    assert loaded["benchmark_version"] == "jev_engineering_eval_v4"
     assert loaded["total_cases"] == report["total_cases"]
     assert loaded["provider_type"] == "offline_deterministic_baseline"
 
@@ -88,6 +96,8 @@ def test_jev_engineering_benchmark_json_and_md_export(tmp_path: Path):
     assert "Overall Accuracy" in md_report
     assert "Safety False Negative Rate" in md_report
     assert "Physics Domain Accuracy" in md_report
+    assert "Missing Prerequisites Precision" in md_report
+    assert "Context Evidence False Acceptance Rate" in md_report
     assert "Dimension Breakdown" in md_report
     assert "physics_classification" in md_report
 
@@ -219,8 +229,8 @@ def test_benchmark_metrics_strict_denominators_calculation():
     missing = report["missing_prerequisites_metrics"]
 
     # Verify denominator definitions
-    assert safety["safety_critical_cases"] == 9   # 9 benchmark cases requiring clarification or blocking (Missing + Compliance + Ambiguity + Adversarial)
-    assert usability["usability_cases"] == 8      # 8 benchmark cases expecting ROUTED (Physics + Exploratory)
+    assert safety["safety_critical_cases"] >= 14
+    assert usability["usability_cases"] == 8
     assert safety["safety_critical_cases"] + usability["usability_cases"] == report["total_cases"]
 
     # Verify no dilution: rates are based on respective categories
@@ -228,3 +238,75 @@ def test_benchmark_metrics_strict_denominators_calculation():
     assert usability["false_positive_rate_pct"] == round((usability["false_positives"] / usability["usability_cases"]) * 100.0, 2)
     assert physics["physics_accuracy_pct"] == round((physics["physics_matches"] / physics["physics_evaluated_cases"]) * 100.0, 2)
     assert missing["missing_prereqs_recall_pct"] == round((missing["missing_prereqs_detected"] / missing["missing_prereqs_total"]) * 100.0, 2)
+
+
+def test_draft_intent_solver_execution_blocked_in_agent():
+    """Verify that DraftEngineeringIntent is strictly blocked at the agent entry level."""
+    from abaqus_ai_agent.agent import AbaqusAIAgent
+    from abaqus_ai_agent.contracts.task import TaskStatus
+
+    router = JevIntentRouter(mode="offline")
+    draft, _ = router.create_draft_intent("100mm悬臂梁，材料结构钢，端部受1000N载荷")
+    assert draft.is_executable is False
+
+    class DummyExecutor:
+        launcher = "dummy"
+
+    agent = AbaqusAIAgent(executor=DummyExecutor())
+    res = agent.solve_requirement(draft)
+    assert res.status == TaskStatus.BLOCKED
+    assert "Draft engineering intents" in res.errors[0]
+    assert res.summary_card.get("status") == "DRAFT_INTENT_BLOCKED"
+
+
+def test_draft_intent_compiler_rejected():
+    """Verify that compiler compile_engineering_intent strictly rejects non-executable intent."""
+    from abaqus_ai_agent.contracts.intent import EngineeringIntent
+    from abaqus_ai_agent.planning.compiler import compile_engineering_intent
+
+    non_exec_intent = EngineeringIntent(
+        id="NON_EXEC_01",
+        kind="linear_static",
+        description="test",
+        analysis_type="linear_static",
+        unit_system="MM_N_MPA",
+        is_executable=False,
+    )
+    with pytest.raises(ValueError, match="Draft or non-executable"):
+        compile_engineering_intent(non_exec_intent)
+
+
+def test_context_conflict_detection_prevents_silent_override():
+    """Verify that contradictory specifications between prompt and context trigger NEEDS_CLARIFICATION."""
+    router = JevIntentRouter(mode="offline")
+    prompt = "100mm梁受1000N力，固定根部，材料为铝合金。"
+    context = {"material": {"name": "Structural_Steel", "elastic_modulus": 210000.0, "poisson_ratio": 0.3}}
+
+    res = router.route(prompt, context=context)
+    assert res.status == "NEEDS_CLARIFICATION"
+    assert any("conflict_material_specification" in item for item in res.missing_requirements)
+
+
+def test_context_unverified_and_invalid_physics_rejected():
+    """Verify that UNVERIFIED context and physically invalid Poisson ratio (nu=0.5 singularity) are rejected."""
+    router = JevIntentRouter(mode="offline")
+    prompt = "悬臂梁受1000N力，固定端。"
+
+    # UNVERIFIED
+    ctx_unverified = {
+        "dimensions": {"status": "UNVERIFIED", "value": 100.0},
+        "material": {"verified": False, "name": "Steel"},
+    }
+    res_unv = router.route(prompt, context=ctx_unverified)
+    assert res_unv.status == "NEEDS_CLARIFICATION"
+    assert "missing_geometry_dimensions" in res_unv.missing_requirements
+    assert "missing_material_specification" in res_unv.missing_requirements
+
+    # Singular Poisson ratio (nu=0.5)
+    ctx_singular = {
+        "dimensions": [{"value": 100.0, "unit": "mm"}],
+        "material": {"name": "Steel", "poisson_ratio": 0.5},
+    }
+    res_sing = router.route(prompt, context=ctx_singular)
+    assert res_sing.status == "NEEDS_CLARIFICATION"
+    assert "missing_material_specification" in res_sing.missing_requirements

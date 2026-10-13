@@ -49,3 +49,4 @@ class EngineeringIntent:
     fatigue: Optional[IntentFatigueSpec] = None
     connectors: tuple = ()
     fmbd: Optional[IntentFMBDSpec] = None
+    is_executable: bool = True

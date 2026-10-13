@@ -79,7 +79,8 @@ def _has_valid_entity_data(val: Any) -> bool:
     if isinstance(val, bool):
         return False
     if isinstance(val, (int, float)):
-        return True
+        fv = float(val)
+        return not (math.isnan(fv) or math.isinf(fv))
     if isinstance(val, str):
         return bool(val.strip())
     if isinstance(val, (list, tuple, set)):
@@ -94,6 +95,371 @@ def _has_valid_entity_data(val: Any) -> bool:
         ]
         return len(valid_items) > 0
     return False
+
+
+def _is_finite_positive_number(v: Any) -> bool:
+    """Check if value is a finite, positive, non-boolean number (> 0.0)."""
+    if isinstance(v, bool) or not isinstance(v, (int, float)):
+        return False
+    try:
+        fv = float(v)
+        return not (math.isnan(fv) or math.isinf(fv)) and fv > 0.0
+    except (TypeError, ValueError):
+        return False
+
+
+def _is_finite_number(v: Any) -> bool:
+    """Check if value is a finite, non-boolean number."""
+    if isinstance(v, bool) or not isinstance(v, (int, float)):
+        return False
+    try:
+        fv = float(v)
+        return not (math.isnan(fv) or math.isinf(fv))
+    except (TypeError, ValueError):
+        return False
+
+
+def _is_unverified_or_expired_evidence(val: Any) -> bool:
+    """Check if dictionary or object carries explicit UNVERIFIED, invalid, or expired evidence markers."""
+    if isinstance(val, dict):
+        status = str(val.get("status", "")).strip().upper()
+        if status in ("UNVERIFIED", "EXPIRED", "CONFLICT", "INVALID"):
+            return True
+        if val.get("verified") is False:
+            return True
+        if val.get("expired") is True:
+            return True
+    return False
+
+
+def _validate_dimensions_entity(val: Any) -> Tuple[bool, Optional[Any], Optional[str]]:
+    """Validate geometry dimensions entity.
+
+    Rejects:
+    - Booleans
+    - Unverified or expired context markers
+    - Non-positive numbers (<= 0), NaN, Inf
+    - Nominal boolean-only dicts
+    Returns: (is_valid, normalized_entity, error_reason)
+    """
+    if val is None or isinstance(val, bool):
+        return False, None, "nominal_boolean_or_none"
+    if _is_unverified_or_expired_evidence(val):
+        return False, None, "unverified_or_expired_evidence"
+
+    if _is_finite_positive_number(val):
+        return True, [{"value": float(val), "unit": "mm"}], None
+
+    if isinstance(val, (list, tuple)):
+        if not val:
+            return False, None, "empty_dimensions_collection"
+        normalized = []
+        for item in val:
+            if isinstance(item, bool):
+                return False, None, "boolean_in_dimensions"
+            if _is_unverified_or_expired_evidence(item):
+                return False, None, "unverified_or_expired_evidence"
+            if _is_finite_positive_number(item):
+                normalized.append({"value": float(item), "unit": "mm"})
+            elif isinstance(item, dict):
+                v = item.get("value")
+                if v is not None:
+                    if not _is_finite_positive_number(v):
+                        return False, None, "non_positive_or_infinite_dimension"
+                    u = str(item.get("unit", "mm")).strip()
+                    normalized.append({"value": float(v), "unit": u})
+                else:
+                    dim_keys = [k for k in ("length", "width", "height", "thickness", "radius", "diameter", "depth") if k in item]
+                    if not dim_keys:
+                        return False, None, "missing_dimension_numeric_values"
+                    for k in dim_keys:
+                        kv = item[k]
+                        if not _is_finite_positive_number(kv):
+                            return False, None, "non_positive_or_infinite_dimension"
+                    normalized.append(dict(item))
+            else:
+                return False, None, f"unsupported_dimension_item_type_{type(item).__name__}"
+        return (True, normalized, None) if normalized else (False, None, "no_valid_dimensions")
+
+    if isinstance(val, dict):
+        if not val:
+            return False, None, "empty_dimensions_dict"
+        if "box" in val and isinstance(val["box"], (list, tuple)):
+            box = val["box"]
+            if all(_is_finite_positive_number(x) for x in box):
+                return True, [{"value": float(x), "unit": "mm"} for x in box], None
+            return False, None, "non_positive_or_infinite_box_dimension"
+
+        numeric_items = {}
+        for k, v in val.items():
+            if k in ("status", "verified", "source", "evidence_type"):
+                continue
+            if isinstance(v, bool):
+                continue
+            if _is_finite_positive_number(v):
+                numeric_items[k] = float(v)
+            elif isinstance(v, (list, tuple)) and all(_is_finite_positive_number(x) for x in v):
+                numeric_items[k] = [float(x) for x in v]
+            elif isinstance(v, dict):
+                sub_ok, sub_norm, _ = _validate_dimensions_entity(v)
+                if sub_ok:
+                    numeric_items[k] = sub_norm
+
+        if numeric_items:
+            return True, numeric_items, None
+        return False, None, "no_positive_numeric_dimensions_found"
+
+    return False, None, "unsupported_dimensions_type"
+
+
+def _validate_material_entity(val: Any) -> Tuple[bool, Optional[Any], Optional[str]]:
+    """Validate material entity.
+
+    Rejects:
+    - Booleans
+    - Unverified or expired context markers
+    - Missing or null material names
+    - Poisson's ratio outside [0.0, 0.5) (reject nu >= 0.5 singularity, nu < 0)
+    - Elastic modulus <= 0.0 or non-finite
+    Returns: (is_valid, normalized_entity, error_reason)
+    """
+    if val is None or isinstance(val, bool):
+        return False, None, "nominal_boolean_or_none"
+    if _is_unverified_or_expired_evidence(val):
+        return False, None, "unverified_or_expired_evidence"
+
+    if isinstance(val, str):
+        cleaned = val.strip()
+        if not cleaned or cleaned.lower() in ("null", "none", "unknown", "n/a", "undefined"):
+            return False, None, "invalid_material_name_string"
+        return True, {"name": cleaned, "source": "named_string"}, None
+
+    if isinstance(val, dict):
+        if not val:
+            return False, None, "empty_material_dict"
+        name = val.get("name")
+        if name is not None:
+            if isinstance(name, bool) or not str(name).strip() or str(name).strip().lower() in ("null", "none", "unknown"):
+                return False, None, "invalid_material_name"
+
+        if "elastic_modulus" in val:
+            em = val["elastic_modulus"]
+            if not _is_finite_positive_number(em):
+                return False, None, "invalid_elastic_modulus"
+
+        if "poisson_ratio" in val:
+            pr = val["poisson_ratio"]
+            if isinstance(pr, bool) or not _is_finite_number(pr):
+                return False, None, "invalid_poisson_ratio_non_numeric"
+            fpr = float(pr)
+            if not (0.0 <= fpr < 0.5):
+                return False, None, f"poisson_ratio_out_of_physical_range_{fpr}"
+
+        has_real_fields = any(
+            k in val for k in ("name", "elastic_modulus", "poisson_ratio", "density", "yield_strength", "conductivity")
+        )
+        if not has_real_fields:
+            return False, None, "nominal_flag_only_without_engineering_properties"
+
+        norm_mat = dict(val)
+        if "name" in norm_mat:
+            norm_mat["name"] = str(norm_mat["name"]).strip()
+        return True, norm_mat, None
+
+    return False, None, "unsupported_material_type"
+
+
+def _validate_boundary_conditions_entity(val: Any) -> Tuple[bool, Optional[Any], Optional[str]]:
+    """Validate boundary conditions entity."""
+    if val is None or isinstance(val, bool):
+        return False, None, "nominal_boolean_or_none"
+    if _is_unverified_or_expired_evidence(val):
+        return False, None, "unverified_or_expired_evidence"
+
+    if isinstance(val, (list, tuple)):
+        if not val:
+            return False, None, "empty_boundary_conditions_list"
+        valid_bcs = []
+        for item in val:
+            if isinstance(item, bool) or _is_unverified_or_expired_evidence(item):
+                continue
+            if isinstance(item, dict) and item:
+                valid_bcs.append(item)
+            elif isinstance(item, str) and item.strip():
+                valid_bcs.append({"type": item.strip(), "region": "FixedFace"})
+        if valid_bcs:
+            return True, valid_bcs, None
+        return False, None, "no_valid_boundary_condition_items"
+
+    if isinstance(val, dict):
+        if not val:
+            return False, None, "empty_boundary_conditions_dict"
+        real_keys = [k for k, v in val.items() if not isinstance(v, bool) and k not in ("status", "verified")]
+        if real_keys:
+            return True, [val], None
+        return False, None, "nominal_boolean_dict_only"
+
+    return False, None, "unsupported_boundary_conditions_type"
+
+
+def _validate_loads_entity(val: Any) -> Tuple[bool, Optional[Any], Optional[str]]:
+    """Validate loads entity."""
+    if val is None or isinstance(val, bool):
+        return False, None, "nominal_boolean_or_none"
+    if _is_unverified_or_expired_evidence(val):
+        return False, None, "unverified_or_expired_evidence"
+
+    if isinstance(val, (list, tuple)):
+        if not val:
+            return False, None, "empty_loads_list"
+        valid_loads = []
+        for item in val:
+            if isinstance(item, bool) or _is_unverified_or_expired_evidence(item):
+                continue
+            if isinstance(item, dict):
+                mag = item.get("magnitude")
+                if mag is not None and not _is_finite_number(mag):
+                    continue
+                valid_loads.append(item)
+        if valid_loads:
+            return True, valid_loads, None
+        return False, None, "no_valid_load_items"
+
+    if isinstance(val, dict):
+        if not val:
+            return False, None, "empty_loads_dict"
+        mag = val.get("magnitude")
+        if mag is not None and not _is_finite_number(mag):
+            return False, None, "invalid_magnitude"
+        real_keys = [k for k, v in val.items() if not isinstance(v, bool) and k not in ("status", "verified")]
+        if real_keys:
+            return True, [val], None
+        return False, None, "nominal_boolean_dict_only"
+
+    return False, None, "unsupported_loads_type"
+
+
+def _validate_thermal_bcs_entity(val: Any) -> Tuple[bool, Optional[Any], Optional[str]]:
+    """Validate thermal boundary conditions entity."""
+    if val is None or isinstance(val, bool):
+        return False, None, "nominal_boolean_or_none"
+    if _is_unverified_or_expired_evidence(val):
+        return False, None, "unverified_or_expired_evidence"
+
+    if isinstance(val, (list, tuple)):
+        if not val:
+            return False, None, "empty_thermal_bcs_list"
+        valid_items = [x for x in val if not isinstance(x, bool) and not _is_unverified_or_expired_evidence(x)]
+        if valid_items:
+            return True, valid_items, None
+        return False, None, "no_valid_thermal_bc_items"
+
+    if isinstance(val, dict):
+        if not val:
+            return False, None, "empty_thermal_bcs_dict"
+        real_keys = [k for k, v in val.items() if not isinstance(v, bool) and k not in ("status", "verified")]
+        if real_keys:
+            return True, [val], None
+        return False, None, "nominal_boolean_dict_only"
+
+    return False, None, "unsupported_thermal_bcs_type"
+
+
+def _validate_acceptance_criteria_entity(val: Any) -> Tuple[bool, Optional[Any], Optional[str]]:
+    """Validate acceptance criteria entity."""
+    if val is None or isinstance(val, bool):
+        return False, None, "nominal_boolean_or_none"
+    if _is_unverified_or_expired_evidence(val):
+        return False, None, "unverified_or_expired_evidence"
+
+    if isinstance(val, (list, tuple)):
+        if not val:
+            return False, None, "empty_criteria_list"
+        valid_crits = []
+        for item in val:
+            if isinstance(item, bool) or _is_unverified_or_expired_evidence(item):
+                continue
+            if isinstance(item, dict):
+                lim = item.get("limit")
+                if lim is not None and not _is_finite_number(lim):
+                    continue
+                valid_crits.append(item)
+        if valid_crits:
+            return True, valid_crits, None
+        return False, None, "no_valid_criteria_items"
+
+    if isinstance(val, dict):
+        lim = val.get("limit")
+        if lim is not None and not _is_finite_number(lim):
+            return False, None, "invalid_limit"
+        return True, [val], None
+
+    return False, None, "unsupported_criteria_type"
+
+
+def _normalize_material_class(name: Optional[str]) -> Optional[str]:
+    """Map natural or structured material names into canonical physics classification classes."""
+    if not name:
+        return None
+    nl = str(name).strip().lower()
+    if any(w in nl for w in ("steel", "结构钢", "q235", "45", "碳钢", "合金钢", "astm")):
+        return "steel"
+    if any(w in nl for w in ("aluminum", "al6061", "al7075", "铝", "铝合金")):
+        return "aluminum"
+    if any(w in nl for w in ("rubber", "橡胶", "hyperelastic", "silicone")):
+        return "rubber"
+    if any(w in nl for w in ("copper", "铜", "黄铜", "紫铜")):
+        return "copper"
+    if any(w in nl for w in ("titanium", "钛", "钛合金", "ti6al4v")):
+        return "titanium"
+    if any(w in nl for w in ("elastic", "linear_elastic", "线性弹性")):
+        return "linear_elastic"
+    return nl
+
+
+def _detect_entity_conflicts(
+    prompt: str,
+    extracted_params: Dict[str, Any],
+    context: Optional[Dict[str, Any]],
+    physics_choice: str,
+) -> List[str]:
+    """Detect unresolvable engineering conflicts between user prompt and upstream context.
+
+    Zero silent overriding: Any fundamental engineering contradiction between prompt specifications
+    and context entities must trigger explicit clarification rather than silent arbitrary selection.
+    """
+    conflicts: List[str] = []
+    if not context:
+        return conflicts
+
+    # 1. Material Conflicts
+    p_mat = extracted_params.get("material")
+    c_mat = context.get("material") or (context.get("inp_evidence", {}).get("material") if isinstance(context.get("inp_evidence"), dict) else None)
+
+    if p_mat and c_mat:
+        p_name = p_mat.get("name") if isinstance(p_mat, dict) else str(p_mat)
+        c_name = c_mat.get("name") if isinstance(c_mat, dict) else str(c_mat)
+        p_class = _normalize_material_class(p_name)
+        c_class = _normalize_material_class(c_name)
+        if p_class and c_class and p_class != c_class:
+            conflicts.append(
+                f"conflict_material_specification: Prompt specifies '{p_name}' ({p_class}) "
+                f"while context specifies '{c_name}' ({c_class}). "
+                "Engineering properties differ significantly; please clarify intended material."
+            )
+
+    # 2. Physics Domain Conflicts
+    c_phys = context.get("physics") or context.get("analysis_type")
+    if c_phys and isinstance(c_phys, str):
+        c_phys_norm = c_phys.strip().lower()
+        if c_phys_norm in ("linear_static", "steady_thermal", "transient_dynamic", "modal_frequency", "contact_frictional", "fatigue_damage") and c_phys_norm != physics_choice:
+            conflicts.append(
+                f"conflict_physics_domain: Prompt requires '{physics_choice}' "
+                f"while context enforces '{c_phys_norm}'. "
+                "Analysis domains are incompatible; please clarify simulation objective."
+            )
+
+    return conflicts
 
 
 def _validate_numeric(
@@ -394,15 +760,22 @@ class GenericHttpIntentProvider:
                 http_err.close()
             except Exception:
                 pass
+            sanitized_reason = _sanitize_error_message(f"HTTP {http_err.code} error: {http_err.reason}")
             raise ExternalIntentApiError(
-                f"External intent API HTTP {http_err.code} error: {http_err.reason}."
+                f"External intent API {sanitized_reason}."
             ) from http_err
         except urllib.error.URLError as url_err:
-            raise ExternalIntentApiError(f"External intent API network unreachable: {url_err.reason}") from url_err
+            sanitized_reason = _sanitize_error_message(f"network unreachable: {url_err.reason}")
+            raise ExternalIntentApiError(
+                f"External intent API {sanitized_reason}"
+            ) from url_err
         except Exception as exc:
             if isinstance(exc, ExternalIntentApiError):
                 raise
-            raise ExternalIntentApiError(f"External intent API invocation failed: {exc}") from exc
+            sanitized_exc = _sanitize_error_message(str(exc))
+            raise ExternalIntentApiError(
+                f"External intent API invocation failed: {sanitized_exc}"
+            ) from exc
 
 
 class EngineeringIntentRouter:
@@ -488,13 +861,20 @@ class EngineeringIntentRouter:
             raise ValueError("Engineering intent prompt cannot be empty.")
 
         decisions = self._evaluate_system_one_judgments(prompt_clean)
-        missing = self._detect_missing_engineering_prerequisites(prompt_clean, decisions, context=context)
+        verified_entities: Dict[str, Any] = {
+            "evidence_sources": {},
+            "evidence_status": {},
+            "normalized": {},
+        }
+        missing = self._detect_missing_engineering_prerequisites(
+            prompt_clean, decisions, context=context, verified_entities_out=verified_entities
+        )
 
         if missing:
             clarification_msg = (
-                f"Engineering specification is ambiguous or incomplete. Missing prerequisites: {', '.join(missing)}. "
+                f"Engineering specification is ambiguous, contradictory, or incomplete. Missing prerequisites: {', '.join(missing)}. "
                 "Please clarify structural dimensions, boundary conditions, applied loads, material properties, "
-                "or acceptance thresholds before submitting simulation execution."
+                "or resolve conflicting specifications before submitting simulation execution."
             )
             return IntentRoutingResult(
                 status="NEEDS_CLARIFICATION",
@@ -504,7 +884,9 @@ class EngineeringIntentRouter:
                 clarification_prompt=clarification_msg,
             )
 
-        intent = self._build_intent_from_decisions(prompt_clean, decisions, context=context)
+        intent = self._build_intent_from_decisions(
+            prompt_clean, decisions, context=context, verified_entities=verified_entities
+        )
         return IntentRoutingResult(
             status="ROUTED",
             intent=intent,
@@ -548,7 +930,17 @@ class EngineeringIntentRouter:
         if not prompt_clean:
             raise ValueError("Engineering intent prompt cannot be empty.")
         decisions = self._evaluate_system_one_judgments(prompt_clean)
-        draft = self._build_draft_intent_from_decisions(prompt_clean, decisions, context=context)
+        verified_entities: Dict[str, Any] = {
+            "evidence_sources": {},
+            "evidence_status": {},
+            "normalized": {},
+        }
+        self._detect_missing_engineering_prerequisites(
+            prompt_clean, decisions, context=context, verified_entities_out=verified_entities
+        )
+        draft = self._build_draft_intent_from_decisions(
+            prompt_clean, decisions, context=context, verified_entities=verified_entities
+        )
         return draft, decisions
 
     PHYSICS_PREREQUISITE_RULES: Dict[str, Dict[str, bool]] = {
@@ -644,16 +1036,28 @@ class EngineeringIntentRouter:
         prompt: str,
         bundle: JevDecisionBundle,
         context: Optional[Dict[str, Any]] = None,
+        verified_entities_out: Optional[Dict[str, Any]] = None,
     ) -> List[str]:
         """Verify whether prompt contains all necessary engineering prerequisites via table-driven rules.
 
         Seamlessly merges model context (existing CAE/INP geometry, materials, boundary conditions)
         to prevent false-positive blocks when evidence already exists in upstream project assets.
+        Performs typed structural validation and conflict detection against nominal boolean flags.
         """
         missing = []
+        verified_entities: Dict[str, Any] = {
+            "evidence_sources": {},
+            "evidence_status": {},
+            "normalized": {},
+        }
         params = bundle.extracted_parameters
         phys = bundle.physics_choice.value
         ctx = context or {}
+
+        # 0. Prompt vs Context Engineering Conflict Detection (Zero silent overriding!)
+        conflicts = _detect_entity_conflicts(prompt, params, ctx, phys)
+        if conflicts:
+            missing.extend(conflicts)
 
         rules = self.PHYSICS_PREREQUISITE_RULES.get(
             phys,
@@ -668,73 +1072,139 @@ class EngineeringIntentRouter:
         )
 
         # 1. Geometry Dimensions: Requires explicit entity data (dimensions, geometry, inp_evidence)
-        # Rejects nominal boolean flags like has_model: True or has_geometry: True!
-        has_dims = (
-            _has_valid_entity_data(params.get("dimensions"))
-            or _has_valid_entity_data(ctx.get("dimensions"))
-            or _has_valid_entity_data(ctx.get("geometry"))
-            or _has_valid_entity_data(ctx.get("inp_evidence"))
-        )
-        if rules["require_dimensions"] and not has_dims:
+        # Rejects nominal boolean flags like has_model: True or has_geometry: True, and unverified/expired evidence!
+        dim_ok = False
+        p_dim = params.get("dimensions")
+        p_dim_ok, p_dim_norm, _ = _validate_dimensions_entity(p_dim)
+        if p_dim_ok:
+            dim_ok = True
+            verified_entities["evidence_sources"]["dimensions"] = "prompt"
+            verified_entities["evidence_status"]["dimensions"] = "VERIFIED"
+            verified_entities["normalized"]["dimensions"] = p_dim_norm
+        else:
+            c_dim = ctx.get("dimensions") or ctx.get("geometry") or ctx.get("inp_evidence")
+            c_dim_ok, c_dim_norm, _ = _validate_dimensions_entity(c_dim)
+            if c_dim_ok:
+                dim_ok = True
+                src = "inp_evidence" if ("inp_evidence" in ctx and ctx.get("inp_evidence")) else "context"
+                verified_entities["evidence_sources"]["dimensions"] = src
+                verified_entities["evidence_status"]["dimensions"] = "VERIFIED"
+                verified_entities["normalized"]["dimensions"] = c_dim_norm
+
+        if rules["require_dimensions"] and not dim_ok:
             missing.append("missing_geometry_dimensions")
 
         # 2. Material: Requires structured or named material entity data
-        # Rejects nominal boolean flags like has_material: True!
-        inp_mat = (
-            ctx.get("inp_evidence", {}).get("material")
-            if isinstance(ctx.get("inp_evidence"), dict)
-            else None
-        )
-        has_mat = (
-            _has_valid_entity_data(params.get("material"))
-            or _has_valid_entity_data(ctx.get("material"))
-            or _has_valid_entity_data(inp_mat)
-        )
-        if rules["require_material"] and not has_mat:
+        # Rejects nominal boolean flags like has_material: True and unverified/expired/invalid evidence!
+        mat_ok = False
+        p_mat = params.get("material")
+        p_mat_ok, p_mat_norm, _ = _validate_material_entity(p_mat)
+        if p_mat_ok:
+            mat_ok = True
+            verified_entities["evidence_sources"]["material"] = "prompt"
+            verified_entities["evidence_status"]["material"] = "VERIFIED"
+            verified_entities["normalized"]["material"] = p_mat_norm
+        else:
+            c_mat = ctx.get("material") or (ctx.get("inp_evidence", {}).get("material") if isinstance(ctx.get("inp_evidence"), dict) else None)
+            c_mat_ok, c_mat_norm, _ = _validate_material_entity(c_mat)
+            if c_mat_ok:
+                mat_ok = True
+                src = "inp_evidence" if (isinstance(ctx.get("inp_evidence"), dict) and ctx["inp_evidence"].get("material")) else "context"
+                verified_entities["evidence_sources"]["material"] = src
+                verified_entities["evidence_status"]["material"] = "VERIFIED"
+                verified_entities["normalized"]["material"] = c_mat_norm
+
+        if rules["require_material"] and not mat_ok:
             missing.append("missing_material_specification")
 
         # 3. Boundary Constraints: Requires NLP well-constrained judgment or structured BC entities
         # Rejects nominal boolean flags like is_well_constrained: True or has_constraints: True!
-        has_bc = (
-            bundle.is_well_constrained_noul.is_yes
-            or _has_valid_entity_data(ctx.get("boundary_conditions"))
-            or _has_valid_entity_data(ctx.get("constraints"))
-        )
-        if rules["require_constraints"] and not has_bc:
+        bc_ok = False
+        if bundle.is_well_constrained_noul.is_yes:
+            bc_ok = True
+            verified_entities["evidence_sources"]["boundary_conditions"] = "prompt"
+            verified_entities["evidence_status"]["boundary_conditions"] = "VERIFIED"
+        else:
+            c_bc = ctx.get("boundary_conditions") or ctx.get("constraints")
+            c_bc_ok, c_bc_norm, _ = _validate_boundary_conditions_entity(c_bc)
+            if c_bc_ok:
+                bc_ok = True
+                verified_entities["evidence_sources"]["boundary_conditions"] = "context"
+                verified_entities["evidence_status"]["boundary_conditions"] = "VERIFIED"
+                verified_entities["normalized"]["boundary_conditions"] = c_bc_norm
+
+        if rules["require_constraints"] and not bc_ok:
             missing.append("missing_boundary_constraints")
 
         # 4. Applied Loads / Excitation: Requires extracted loads or structured load entities
         # Rejects nominal boolean flags like has_loads: True!
-        has_load = (
-            _has_valid_entity_data(params.get("loads"))
-            or _has_valid_entity_data(ctx.get("loads"))
-        )
-        if rules["require_loads"] and not has_load:
+        load_ok = False
+        p_load = params.get("loads")
+        p_load_ok, p_load_norm, _ = _validate_loads_entity(p_load)
+        if p_load_ok:
+            load_ok = True
+            verified_entities["evidence_sources"]["loads"] = "prompt"
+            verified_entities["evidence_status"]["loads"] = "VERIFIED"
+            verified_entities["normalized"]["loads"] = p_load_norm
+        else:
+            c_load = ctx.get("loads")
+            c_load_ok, c_load_norm, _ = _validate_loads_entity(c_load)
+            if c_load_ok:
+                load_ok = True
+                verified_entities["evidence_sources"]["loads"] = "context"
+                verified_entities["evidence_status"]["loads"] = "VERIFIED"
+                verified_entities["normalized"]["loads"] = c_load_norm
+
+        if rules["require_loads"] and not load_ok:
             missing.append("missing_applied_loads")
 
         # 5. Thermal Boundary Conditions: Requires explicit thermal conditions in prompt or structured thermal entities
         # Rejects nominal boolean flags like has_thermal_bcs: True!
-        has_thermal = (
-            self._has_thermal_boundary_conditions(prompt)
-            or _has_valid_entity_data(ctx.get("thermal_bcs"))
-            or _has_valid_entity_data(ctx.get("thermal_boundary_conditions"))
-        )
-        if rules["require_thermal_bcs"] and not has_thermal:
+        thermal_ok = False
+        if self._has_thermal_boundary_conditions(prompt):
+            thermal_ok = True
+            verified_entities["evidence_sources"]["thermal_bcs"] = "prompt"
+            verified_entities["evidence_status"]["thermal_bcs"] = "VERIFIED"
+        else:
+            c_th = ctx.get("thermal_bcs") or ctx.get("thermal_boundary_conditions")
+            c_th_ok, c_th_norm, _ = _validate_thermal_bcs_entity(c_th)
+            if c_th_ok:
+                thermal_ok = True
+                verified_entities["evidence_sources"]["thermal_bcs"] = "context"
+                verified_entities["evidence_status"]["thermal_bcs"] = "VERIFIED"
+                verified_entities["normalized"]["thermal_bcs"] = c_th_norm
+
+        if rules["require_thermal_bcs"] and not thermal_ok:
             missing.append("missing_thermal_boundary_conditions")
 
         # 6. Acceptance Criteria / Limits
-        # Decouple physical solver prerequisites from compliance acceptance targets.
-        # Exploratory analysis does NOT require numeric acceptance thresholds.
-        # Only require explicit criteria if the user specifically asked for verification/compliance check
-        # without specifying metrics or limits (e.g. "校核是否达标", "校核是否合格", "check compliance").
         prompt_lower = prompt.lower()
         unspecified_compliance_check = any(
             w in prompt_lower for w in ("是否达标", "是否合格", "是否满足要求", "compliance", "is compliant")
         )
         if unspecified_compliance_check:
-            has_extracted_limits = bool(params.get("acceptance_criteria") or ctx.get("acceptance_criteria"))
-            if not has_extracted_limits:
+            crit_ok = False
+            p_crit = params.get("acceptance_criteria")
+            p_crit_ok, p_crit_norm, _ = _validate_acceptance_criteria_entity(p_crit)
+            if p_crit_ok:
+                crit_ok = True
+                verified_entities["evidence_sources"]["acceptance_criteria"] = "prompt"
+                verified_entities["evidence_status"]["acceptance_criteria"] = "VERIFIED"
+                verified_entities["normalized"]["acceptance_criteria"] = p_crit_norm
+            else:
+                c_crit = ctx.get("acceptance_criteria")
+                c_crit_ok, c_crit_norm, _ = _validate_acceptance_criteria_entity(c_crit)
+                if c_crit_ok:
+                    crit_ok = True
+                    verified_entities["evidence_sources"]["acceptance_criteria"] = "context"
+                    verified_entities["evidence_status"]["acceptance_criteria"] = "VERIFIED"
+                    verified_entities["normalized"]["acceptance_criteria"] = c_crit_norm
+
+            if not crit_ok:
                 missing.append("missing_acceptance_criteria_or_limits")
+
+        if verified_entities_out is not None:
+            verified_entities_out.update(verified_entities)
 
         return missing
 
@@ -760,11 +1230,12 @@ class EngineeringIntentRouter:
                     raw_data = self.external_provider(prompt)
                 else:
                     raise JevApiError(f"Unsupported external provider type: {type(self.external_provider).__name__}")
-            except JevApiError:
-                raise
+            except JevApiError as jae:
+                raise JevApiError(_sanitize_error_message(str(jae))) from jae
             except Exception as exc:
+                sanitized_exc = _sanitize_error_message(str(exc))
                 raise JevApiError(
-                    f"External intent provider request failed in live mode: {exc}. "
+                    f"External intent provider request failed in live mode: {sanitized_exc}. "
                     "Fail-closed: refusing silent fallback to offline engine."
                 ) from exc
 
@@ -1039,14 +1510,21 @@ class EngineeringIntentRouter:
 
         # 4. Noul: Constraints Sufficiency
         has_negated_constraint = bool(
-            re.search(r"(忽略|无需|不用|没有|未|不加|不|bypass|ignore).{0,12}(约束|固定|边界|限制)", prompt_lower)
+            re.search(r"(忽略|无需|不用|没有|未|不加|不|不要|bypass|ignore).{0,12}(约束|固定|边界|限制)", prompt_lower)
         )
         is_constrained = False
         if not has_negated_constraint:
             is_constrained = bool(
                 any(w in prompt_lower for w in ("固定", "fixed", "encastre", "约束", "clamp", "pinned", "对称"))
             )
-        has_load = bool(extracted.get("loads") or any(w in prompt_lower for w in ("载荷", "load", "force", "压力", "pressure", "n", "kn")))
+        has_negated_load = bool(
+            re.search(r"(忽略|无需|不用|没有|未|不加|不|不要|bypass|ignore).{0,12}(载荷|受力|力|压力|load|force)", prompt_lower)
+        )
+        if has_negated_load:
+            extracted.pop("loads", None)
+            has_load = False
+        else:
+            has_load = bool(extracted.get("loads") or any(w in prompt_lower for w in ("载荷", "load", "force", "压力", "pressure", "n", "kn")))
         prob_constrained = 0.95 if is_constrained else (0.20 if has_load else 0.50)
         noul_constrained = NoulJudgment(probability=prob_constrained)
 
@@ -1197,15 +1675,19 @@ class EngineeringIntentRouter:
         prompt: str,
         bundle: IntentDecisionBundle,
         context: Optional[Dict[str, Any]] = None,
+        verified_entities: Optional[Dict[str, Any]] = None,
     ) -> EngineeringIntent:
         """Synthesize EngineeringIntent from judgments and merge upstream model context."""
         phys = bundle.physics_choice.value
         unit_sys = bundle.unit_system_choice.value
         params = bundle.extracted_parameters
         ctx = context or {}
+        norm = verified_entities.get("normalized", {}) if verified_entities else {}
+        sources = verified_entities.get("evidence_sources", {}) if verified_entities else {}
+        statuses = verified_entities.get("evidence_status", {}) if verified_entities else {}
 
-        # Resolve Material: Prompt extracted takes precedence, fallback to model/INP context
-        material = params.get("material")
+        # Resolve Material: Verified normalized takes precedence
+        material = norm.get("material") or params.get("material")
         if not material and ctx.get("material"):
             ctx_mat = ctx["material"]
             if isinstance(ctx_mat, dict):
@@ -1219,6 +1701,8 @@ class EngineeringIntentRouter:
         bcs = []
         if bundle.is_well_constrained_noul.is_yes:
             bcs.append({"type": "encastre", "region": "FixedFace", "dofs": (1, 2, 3, 4, 5, 6)})
+        elif norm.get("boundary_conditions"):
+            bcs.extend(norm["boundary_conditions"])
         elif ctx.get("boundary_conditions"):
             bcs.extend(ctx["boundary_conditions"])
         elif ctx.get("constraints") and isinstance(ctx["constraints"], (list, tuple)):
@@ -1229,7 +1713,7 @@ class EngineeringIntentRouter:
         for ld in params.get("loads", []):
             mag = ld["magnitude"]
             u = ld["unit"]
-            if u == "KN" or u == "千牛":
+            if u in ("KN", "千牛"):
                 mag *= 1000.0
                 loads.append({"type": "concentrated_force", "region": "TipFace", "magnitude": mag, "direction": "-Y"})
             elif u in ("N", "牛"):
@@ -1237,7 +1721,9 @@ class EngineeringIntentRouter:
             elif u in ("MPA", "KPA"):
                 if any(w in prompt.lower() for w in ("压力", "压强", "pressure")):
                     loads.append({"type": "pressure", "region": "TopFace", "magnitude": mag})
-        if not loads and ctx.get("loads") and isinstance(ctx["loads"], (list, tuple)):
+        if not loads and norm.get("loads"):
+            loads.extend(norm["loads"])
+        elif not loads and ctx.get("loads") and isinstance(ctx["loads"], (list, tuple)):
             loads.extend(ctx["loads"])
 
         # Construct acceptance criteria tuple
@@ -1250,14 +1736,16 @@ class EngineeringIntentRouter:
                 "limit": c["limit"],
                 "unit": c.get("unit", ""),
             })
-        if not crit_list and ctx.get("acceptance_criteria"):
+        if not crit_list and norm.get("acceptance_criteria"):
+            crit_list.extend(norm["acceptance_criteria"])
+        elif not crit_list and ctx.get("acceptance_criteria"):
             if isinstance(ctx["acceptance_criteria"], (list, tuple)):
                 crit_list.extend(ctx["acceptance_criteria"])
             elif isinstance(ctx["acceptance_criteria"], dict):
                 crit_list.append(ctx["acceptance_criteria"])
 
         # Resolve dimensions
-        dims = params.get("dimensions") or ctx.get("dimensions") or ctx.get("geometry")
+        dims = norm.get("dimensions") or params.get("dimensions") or ctx.get("dimensions") or ctx.get("geometry")
 
         metadata = {
             "dimensions": dims,
@@ -1266,6 +1754,8 @@ class EngineeringIntentRouter:
             "completeness_score": bundle.completeness_score.score,
             "well_constrained": bundle.is_well_constrained_noul.is_yes or bool(bcs),
             "context_merged": bool(ctx),
+            "evidence_sources": sources,
+            "evidence_status": statuses,
             "routing_gate_passed": True,
             "preflight_required": True,
             "solver_ready": False,
@@ -1293,14 +1783,18 @@ class EngineeringIntentRouter:
         prompt: str,
         bundle: IntentDecisionBundle,
         context: Optional[Dict[str, Any]] = None,
+        verified_entities: Optional[Dict[str, Any]] = None,
     ) -> DraftEngineeringIntent:
         """Synthesize non-executable DraftEngineeringIntent from judgments and context."""
         phys = bundle.physics_choice.value
         unit_sys = bundle.unit_system_choice.value
         params = bundle.extracted_parameters
         ctx = context or {}
+        norm = verified_entities.get("normalized", {}) if verified_entities else {}
+        sources = verified_entities.get("evidence_sources", {}) if verified_entities else {}
+        statuses = verified_entities.get("evidence_status", {}) if verified_entities else {}
 
-        material = params.get("material")
+        material = norm.get("material") or params.get("material")
         if not material and ctx.get("material"):
             ctx_mat = ctx["material"]
             if isinstance(ctx_mat, dict):
@@ -1313,6 +1807,8 @@ class EngineeringIntentRouter:
         bcs = []
         if bundle.is_well_constrained_noul.is_yes:
             bcs.append({"type": "encastre", "region": "FixedFace", "dofs": (1, 2, 3, 4, 5, 6)})
+        elif norm.get("boundary_conditions"):
+            bcs.extend(norm["boundary_conditions"])
         elif ctx.get("boundary_conditions"):
             bcs.extend(ctx["boundary_conditions"])
         elif ctx.get("constraints") and isinstance(ctx["constraints"], (list, tuple)):
@@ -1330,7 +1826,9 @@ class EngineeringIntentRouter:
             elif u in ("MPA", "KPA"):
                 if any(w in prompt.lower() for w in ("压力", "压强", "pressure")):
                     loads.append({"type": "pressure", "region": "TopFace", "magnitude": mag})
-        if not loads and ctx.get("loads") and isinstance(ctx["loads"], (list, tuple)):
+        if not loads and norm.get("loads"):
+            loads.extend(norm["loads"])
+        elif not loads and ctx.get("loads") and isinstance(ctx["loads"], (list, tuple)):
             loads.extend(ctx["loads"])
 
         crit_list = []
@@ -1342,13 +1840,15 @@ class EngineeringIntentRouter:
                 "limit": c["limit"],
                 "unit": c.get("unit", ""),
             })
-        if not crit_list and ctx.get("acceptance_criteria"):
+        if not crit_list and norm.get("acceptance_criteria"):
+            crit_list.extend(norm["acceptance_criteria"])
+        elif not crit_list and ctx.get("acceptance_criteria"):
             if isinstance(ctx["acceptance_criteria"], (list, tuple)):
                 crit_list.extend(ctx["acceptance_criteria"])
             elif isinstance(ctx["acceptance_criteria"], dict):
                 crit_list.append(ctx["acceptance_criteria"])
 
-        dims = params.get("dimensions") or ctx.get("dimensions") or ctx.get("geometry")
+        dims = norm.get("dimensions") or params.get("dimensions") or ctx.get("dimensions") or ctx.get("geometry")
 
         return DraftEngineeringIntent(
             id=f"DRAFT-INTENT-{bundle.physics_choice.value.upper()}",
@@ -1367,6 +1867,8 @@ class EngineeringIntentRouter:
                 "completeness_score": bundle.completeness_score.score,
                 "well_constrained": bundle.is_well_constrained_noul.is_yes or bool(bcs),
                 "context_merged": bool(ctx),
+                "evidence_sources": sources,
+                "evidence_status": statuses,
             },
             is_executable=False,
         )

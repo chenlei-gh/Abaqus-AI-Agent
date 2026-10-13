@@ -547,8 +547,24 @@ class AbaqusAIAgent:
             )
 
         # 1. Natural Language or Structured Intent Routing
+        from .typesafe_intent import DraftEngineeringIntent
+
         intent = None
-        if isinstance(requirement, str):
+        if isinstance(requirement, DraftEngineeringIntent) or (
+            hasattr(requirement, "is_executable") and not getattr(requirement, "is_executable", True)
+        ):
+            return EngineeringTaskResult(
+                status=TaskStatus.BLOCKED,
+                errors=(
+                    "Draft engineering intents (is_executable=False) are non-executable "
+                    "and strictly blocked from solver execution.",
+                ),
+                summary_card={
+                    "status": "DRAFT_INTENT_BLOCKED",
+                    "reason": "non_executable_draft_intent",
+                },
+            )
+        elif isinstance(requirement, str):
             jev_mode = kwargs.pop("jev_mode", None)
             context = kwargs.pop("context", None)
             router = JevIntentRouter(mode=jev_mode)
@@ -564,8 +580,33 @@ class AbaqusAIAgent:
                     },
                     metadata={"missing_requirements": routing_res.missing_requirements},
                 )
+            elif routing_res.status != "ROUTED":
+                return EngineeringTaskResult(
+                    status=TaskStatus.BLOCKED,
+                    errors=(
+                        routing_res.clarification_prompt
+                        or f"Intent routing failed with status: {routing_res.status}",
+                    ),
+                    summary_card={
+                        "status": "ROUTING_BLOCKED",
+                        "missing_requirements": routing_res.missing_requirements,
+                    },
+                    metadata={"missing_requirements": routing_res.missing_requirements},
+                )
             intent = routing_res.intent
         elif isinstance(requirement, EngineeringIntent):
+            if not getattr(requirement, "is_executable", True):
+                return EngineeringTaskResult(
+                    status=TaskStatus.BLOCKED,
+                    errors=(
+                        "EngineeringIntent has is_executable=False and is strictly blocked "
+                        "from solver execution.",
+                    ),
+                    summary_card={
+                        "status": "DRAFT_INTENT_BLOCKED",
+                        "reason": "non_executable_intent",
+                    },
+                )
             intent = requirement
         else:
             raise TypeError(
