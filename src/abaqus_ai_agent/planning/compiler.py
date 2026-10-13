@@ -1627,8 +1627,24 @@ def compile_engineering_intent(
                 "Fail-closed: cannot silently omit partition-dependent local mesh refinement."
             )
 
-    # 8. Multi-domain special contracts
+    # 7.5. Topological Grounding Gate for non-primitive geometry
+    grounding_status = intent.metadata.get("region_grounding_status")
     eff_grounded = grounded_regions or intent.metadata.get("grounded_regions")
+    if grounding_status == "SEMANTIC_CANDIDATE_UNRESOLVED":
+        is_step_or_external = (
+            getattr(eff_geom, "shape", "") == "step_file"
+            or getattr(eff_geom, "step_file_path", None) is not None
+        )
+        if is_step_or_external and not eff_grounded:
+            resolutions = intent.metadata.get("region_resolutions", {})
+            unresolved = [r for r, res in resolutions.items() if not res.get("resolved")]
+            raise ValueError(
+                f"Cannot compile engineering intent: geometry relies on external STEP file ({getattr(eff_geom, 'step_file_path', None)}), "
+                f"but boundary/load regions {unresolved or 'specified in intent'} remain SEMANTIC_CANDIDATE_UNRESOLVED. "
+                "Provide explicit GroundedRegion mapping before compiling execution plan."
+            )
+
+    # 8. Multi-domain special contracts
     eff_fields = intent.metadata.get("fields")
     eff_bolts = intent.metadata.get("bolt_pretensions")
     eff_moments = intent.metadata.get("moments")

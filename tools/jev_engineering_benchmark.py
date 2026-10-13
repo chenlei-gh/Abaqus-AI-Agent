@@ -479,12 +479,46 @@ def run_engineering_benchmark(
 
     shadow_metrics = None
     if router_mode == "shadow":
-        evaluated_count = sum(1 for r in case_results if r.get("shadow_diff", {}).get("status") == "EVALUATED")
-        physics_matches_count = sum(1 for r in case_results if r.get("shadow_diff", {}).get("physics_match") is True)
+        evaluated_cases = [r for r in case_results if r.get("shadow_diff", {}).get("status") == "EVALUATED"]
+        evaluated_count = len(evaluated_cases)
+        physics_matches_count = sum(1 for r in evaluated_cases if r.get("shadow_diff", {}).get("physics_match") is True)
+
+        # External provider independent ground truth evaluation
+        live_gt_matches = 0
+        live_gt_eval_count = 0
+        for r in evaluated_cases:
+            if r.get("expected_physics"):
+                live_gt_eval_count += 1
+                if r.get("shadow_diff", {}).get("live_physics") == r.get("expected_physics"):
+                    live_gt_matches += 1
+        live_gt_acc = (
+            round((live_gt_matches / live_gt_eval_count) * 100.0, 2)
+            if live_gt_eval_count > 0
+            else 0.0
+        )
+
         divergent_cases = [
-            r["case_id"] for r in case_results
-            if r.get("shadow_diff", {}).get("status") == "EVALUATED" and not r.get("shadow_diff", {}).get("physics_match")
+            r["case_id"] for r in evaluated_cases
+            if not r.get("shadow_diff", {}).get("physics_match")
         ]
+        divergent_details = [
+            {
+                "case_id": r["case_id"],
+                "baseline_physics": r.get("shadow_diff", {}).get("baseline_physics"),
+                "live_physics": r.get("shadow_diff", {}).get("live_physics"),
+                "expected_physics": r.get("expected_physics"),
+            }
+            for r in evaluated_cases
+            if not r.get("shadow_diff", {}).get("physics_match")
+        ]
+
+        live_latencies = [
+            float(r.get("shadow_diff", {}).get("live_latency_ms", 0.0))
+            for r in evaluated_cases
+            if "live_latency_ms" in r.get("shadow_diff", {})
+        ]
+        avg_live_lat = round(sum(live_latencies) / len(live_latencies), 2) if live_latencies else 0.0
+
         error_categories: Dict[str, int] = {}
         for r in case_results:
             sd = r.get("shadow_diff", {})
@@ -498,7 +532,12 @@ def run_engineering_benchmark(
             "evaluated_cases": evaluated_count,
             "physics_matches": physics_matches_count,
             "physics_agreement_pct": round((physics_matches_count / evaluated_count) * 100.0, 2) if evaluated_count > 0 else 0.0,
+            "live_ground_truth_matches": live_gt_matches,
+            "live_ground_truth_evaluated_cases": live_gt_eval_count,
+            "live_physics_accuracy_pct": live_gt_acc,
+            "avg_live_latency_ms": avg_live_lat,
             "divergent_cases": divergent_cases,
+            "divergent_details": divergent_details,
             "error_categories": error_categories,
         }
 
@@ -604,12 +643,42 @@ def format_markdown_report(report: Dict[str, Any]) -> str:
         f"- **Missing Prerequisites Precision**: `{report['missing_prerequisites_metrics']['missing_prereqs_precision_pct']}%` ({report['missing_prerequisites_metrics']['actual_detected_true_positives']}/{report['missing_prerequisites_metrics']['actual_detected_missing_total']} detected items matched)",
         f"- **Context Evidence False Acceptance Rate**: `{report['context_evidence_metrics']['false_acceptance_rate_pct']}%` ({report['context_evidence_metrics']['false_acceptance_cases']}/{report['context_evidence_metrics']['evidence_adversarial_cases']} adversarial context cases)",
         f"- **Latency**: Avg {report['latency_stats']['avg_ms']} ms (Min {report['latency_stats']['min_ms']} ms, Max {report['latency_stats']['max_ms']} ms)",
+    ]
+
+    sm = report.get("shadow_metrics")
+    if sm:
+        lines.extend([
+            "",
+            "## Shadow Dual-Run Comparative Audit",
+            "",
+            f"- **Evaluated External Cases**: `{sm['evaluated_cases']}/{report['total_cases']}`",
+            f"- **Agreement with Baseline Rule Engine**: `{sm['physics_agreement_pct']}%` ({sm['physics_matches']}/{sm['evaluated_cases']})",
+            f"- **External Provider Ground Truth Accuracy**: `{sm.get('live_physics_accuracy_pct', 0.0)}%` ({sm.get('live_ground_truth_matches', 0)}/{sm.get('live_ground_truth_evaluated_cases', 0)})",
+            f"- **Average Latency**: Baseline `{report['latency_stats']['avg_ms']} ms` vs Live `{sm.get('avg_live_latency_ms', 0.0)} ms`",
+        ])
+        if sm.get("error_categories"):
+            err_items = ", ".join(f"`{k}`: {v}" for k, v in sm["error_categories"].items())
+            lines.append(f"- **Provider Error Breakdown**: {err_items}")
+        if sm.get("divergent_cases"):
+            lines.extend([
+                "",
+                "### Divergent Cases Between Baseline and Live Provider",
+                "",
+                "| Case ID | Baseline Physics | Live Provider Physics | Expected Ground Truth |",
+                "| :--- | :--- | :--- | :--- |",
+            ])
+            for d in sm.get("divergent_details", []):
+                lines.append(
+                    f"| `{d['case_id']}` | `{d['baseline_physics']}` | `{d['live_physics']}` | `{d['expected_physics']}` |"
+                )
+
+    lines.extend([
         "",
         "## Dimension Breakdown",
         "",
         "| Engineering Dimension | Total Cases | Passed | Accuracy |",
         "| :--- | :---: | :---: | :---: |",
-    ]
+    ])
     for dim, stats in report["dimension_breakdown"].items():
         lines.append(f"| `{dim}` | {stats['total']} | {stats['passed']} | {stats['accuracy_pct']}% |")
 

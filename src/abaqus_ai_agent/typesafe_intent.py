@@ -2033,6 +2033,7 @@ class EngineeringIntentRouter:
                             "reason": "External intent provider is not fully configured",
                         }
                     else:
+                        t0 = time.perf_counter()
                         if hasattr(self.external_provider, "judge"):
                             raw_data = self.external_provider.judge(prompt, timeout=self.timeout)
                         elif callable(self.external_provider):
@@ -2041,7 +2042,8 @@ class EngineeringIntentRouter:
                             raise ExternalIntentApiError(
                                 f"Unsupported provider type: {type(self.external_provider).__name__}"
                             )
-                        live_res = self._parse_provider_response(raw_data, prompt, latency_ms=0.0)
+                        live_lat = round((time.perf_counter() - t0) * 1000.0, 2)
+                        live_res = self._parse_provider_response(raw_data, prompt, latency_ms=live_lat)
                         shadow_diff = self._compute_shadow_diff(baseline, live_res)
                 except Exception as shadow_err:
                     root_cause = getattr(shadow_err, "__cause__", None)
@@ -2104,6 +2106,7 @@ class EngineeringIntentRouter:
             "live_physics": live.physics_choice.value,
             "baseline_model": baseline.source_model,
             "live_model": live.source_model,
+            "baseline_latency_ms": baseline.latency_ms,
             "live_latency_ms": live.latency_ms,
         }
 
@@ -2667,6 +2670,9 @@ class EngineeringIntentRouter:
             ),
         }
 
+        if bundle.shadow_diff is not None:
+            metadata["shadow_diff"] = bundle.shadow_diff
+
         return EngineeringIntent(
             id=f"INTENT-{bundle.physics_choice.value.upper()}",
             kind=phys,
@@ -2748,6 +2754,19 @@ class EngineeringIntentRouter:
 
         dims = norm.get("dimensions") or params.get("dimensions")
 
+        metadata = {
+            "dimensions": dims,
+            "source_model": bundle.source_model,
+            "confidence": bundle.physics_choice.confidence,
+            "completeness_score": bundle.completeness_score.score,
+            "well_constrained": bundle.is_well_constrained_noul.is_yes or bool(bcs),
+            "context_merged": bool(ctx),
+            "evidence_sources": sources,
+            "evidence_status": statuses,
+        }
+        if bundle.shadow_diff is not None:
+            metadata["shadow_diff"] = bundle.shadow_diff
+
         return DraftEngineeringIntent(
             id=f"DRAFT-INTENT-{bundle.physics_choice.value.upper()}",
             kind=phys,
@@ -2758,16 +2777,7 @@ class EngineeringIntentRouter:
             boundary_conditions=tuple(bcs),
             loads=tuple(loads),
             acceptance_criteria=tuple(crit_list),
-            metadata={
-                "dimensions": dims,
-                "source_model": bundle.source_model,
-                "confidence": bundle.physics_choice.confidence,
-                "completeness_score": bundle.completeness_score.score,
-                "well_constrained": bundle.is_well_constrained_noul.is_yes or bool(bcs),
-                "context_merged": bool(ctx),
-                "evidence_sources": sources,
-                "evidence_status": statuses,
-            },
+            metadata=metadata,
             is_executable=False,
         )
 

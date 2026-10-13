@@ -974,3 +974,84 @@ def test_jev_engineering_benchmark_shadow_mode_reporting():
     assert len(sm["divergent_cases"]) > 0
     assert "PHYS-02-THERMAL" in sm["divergent_cases"]
     assert sm["physics_agreement_pct"] < 100.0
+    assert sm["live_physics_accuracy_pct"] < 100.0
+    assert len(sm["divergent_details"]) == len(sm["divergent_cases"])
+    assert sm["avg_live_latency_ms"] >= 0.0
+
+    # Test Markdown formatting of shadow mode
+    md_report = format_markdown_report(report_eval)
+    assert "## Shadow Dual-Run Comparative Audit" in md_report
+    assert "Agreement with Baseline Rule Engine" in md_report
+    assert "External Provider Ground Truth Accuracy" in md_report
+    assert "Average Latency" in md_report
+    assert "### Divergent Cases Between Baseline and Live Provider" in md_report
+
+
+def test_shadow_mode_live_latency_recorded_and_metadata_forwarded():
+    """Verify shadow mode measures live latency (>0ms) and forwards shadow_diff into intent.metadata."""
+    import time
+
+    class LatencyTestingProvider:
+        def is_configured(self) -> bool:
+            return True
+
+        def judge(self, prompt: str, timeout: float = 5.0) -> Dict[str, Any]:
+            time.sleep(0.005)  # 5ms artificial sleep
+            return {
+                "answers": {
+                    "physics": {"choice": "linear_static", "confidence": 0.99},
+                    "units": {"choice": "MM_N_MPA", "confidence": 0.95},
+                    "solver": {"choice": "abaqus_standard", "confidence": 0.98},
+                    "well_constrained": {"probability": 0.95},
+                    "has_acceptance_criteria": {"probability": 0.90},
+                    "completeness": {"score": 4.5},
+                }
+            }
+
+    router = EngineeringIntentRouter(
+        mode="shadow",
+        external_provider=LatencyTestingProvider(),
+    )
+    prompt = "100mm悬臂梁端部施加1000N垂直载荷，材料为结构钢，固定根部，校核端部挠度不超过2.5mm。"
+    res = router.route(prompt)
+
+    assert res.status == "ROUTED"
+    assert res.intent is not None
+    assert "shadow_diff" in res.intent.metadata
+    sd = res.intent.metadata["shadow_diff"]
+    assert sd["status"] == "EVALUATED"
+    assert sd["live_latency_ms"] >= 3.0  # Measured accurately, not 0.0!
+    assert sd["baseline_latency_ms"] >= 0.0
+    assert sd["physics_match"] is True
+
+
+def test_compiler_fails_closed_on_unresolved_grounding_for_step_file():
+    """Verify compiler fails closed when external STEP file is used without resolved topological grounding."""
+    from abaqus_ai_agent.contracts.intent import EngineeringIntent
+    from abaqus_ai_agent.planning.compiler import IntentGeometrySpec, compile_engineering_intent
+
+    intent = EngineeringIntent(
+        id="STEP_UNRESOLVED_01",
+        kind="linear_static",
+        description="External bracket under load",
+        analysis_type="linear_static",
+        unit_system="MM_N_MPA",
+        material={"name": "Steel", "elastic_modulus": 210000.0, "poisson_ratio": 0.3},
+        boundary_conditions=({"type": "encastre", "region": "MountingHole"},),
+        loads=({"type": "concentrated_force", "region": "LoadBearingEye", "magnitude": 1000.0},),
+        metadata={
+            "region_grounding_status": "SEMANTIC_CANDIDATE_UNRESOLVED",
+            "region_resolutions": {
+                "MountingHole": {"resolved": False, "target_type": "unresolved"},
+                "LoadBearingEye": {"resolved": False, "target_type": "unresolved"},
+            },
+        },
+    )
+
+    step_geom = IntentGeometrySpec(
+        shape="step_file",
+        step_file_path="/path/to/bracket.step",
+    )
+
+    with pytest.raises(ValueError, match="geometry relies on external STEP file"):
+        compile_engineering_intent(intent, geometry=step_geom)
