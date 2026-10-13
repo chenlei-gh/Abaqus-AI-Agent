@@ -56,12 +56,16 @@ def test_jev_intent_router_thermal_prompt():
     with pytest.raises(IntentAmbiguityError):
         router.route_prompt_to_intent(prompt)
 
-    # Explicit strict=False allows backwards-compatible draft intent generation
-    intent, bundle = router.route_prompt_to_intent(prompt, strict=False)
+    # Even explicit strict=False must fail-closed: executable intents are NEVER generated for ambiguous input
+    with pytest.raises(IntentAmbiguityError):
+        router.route_prompt_to_intent(prompt, strict=False)
 
+    # Exploratory draft intent must be explicitly requested via create_draft_intent
+    draft, bundle = router.create_draft_intent(prompt)
+    assert draft.is_executable is False
     assert bundle.physics_choice.value == "steady_thermal"
     assert bundle.unit_system_choice.value == "MM_N_MPA"
-    assert intent.analysis_type == "steady_thermal"
+    assert draft.analysis_type == "steady_thermal"
 
 
 def test_jev_intent_e2e_runner():

@@ -176,14 +176,14 @@ def test_jev_live_mode_malformed_response_fails_closed():
     "invalid_answers, expected_err",
     [
         ({"physics": {"choice": "quantum_gravity", "confidence": 0.9}}, "Invalid physics choice"),
-        ({"physics": {"choice": "linear_static", "confidence": 1.5}}, "Physics confidence out of bounds"),
-        ({"physics": {"choice": "linear_static", "confidence": -0.1}}, "Physics confidence out of bounds"),
+        ({"physics": {"choice": "linear_static", "confidence": 1.5}}, "out of bounds"),
+        ({"physics": {"choice": "linear_static", "confidence": -0.1}}, "out of bounds"),
         ({"units": {"choice": "LIGHTYEAR_GRAM", "confidence": 0.9}}, "Invalid units choice"),
         ({"solver": {"choice": "ansys_fluent", "confidence": 0.9}}, "Invalid solver choice"),
-        ({"well_constrained": {"probability": 2.0}}, "Constraint probability out of bounds"),
-        ({"has_acceptance_criteria": {"probability": -0.5}}, "Criteria probability out of bounds"),
-        ({"completeness": {"score": 6.5}}, "Completeness score out of bounds"),
-        ({"completeness": {"score": 0.5}}, "Completeness score out of bounds"),
+        ({"well_constrained": {"probability": 2.0}}, "out of bounds"),
+        ({"has_acceptance_criteria": {"probability": -0.5}}, "out of bounds"),
+        ({"completeness": {"score": 6.5}}, "out of bounds"),
+        ({"completeness": {"score": 0.5}}, "out of bounds"),
     ],
 )
 def test_jev_live_mode_out_of_bound_payload_validation(invalid_answers, expected_err):
@@ -386,9 +386,17 @@ BENCHMARK_PROMPTS = [
     },
     {
         "category": "missing_acceptance_criteria",
-        "prompt": "100mm 结构钢悬臂梁固定根部，施加 1000N 端部集中力。",
+        "prompt": "100mm 结构钢悬臂梁固定根部，施加 1000N 端部集中力，校核最大应力是否达标。",
         "expected_status": "NEEDS_CLARIFICATION",
         "expected_missing": "missing_acceptance_criteria_or_limits",
+    },
+    {
+        "category": "exploratory_analysis_without_limits",
+        "prompt": "100mm 结构钢悬臂梁固定根部，施加 1000N 端部集中力，求解受力变形与应力云图。",
+        "expected_status": "ROUTED",
+        "expected_physics": "linear_static",
+        "expected_unit": "MM_N_MPA",
+        "expected_solver": "abaqus_standard",
     },
 
     # Category C: Multiphysics / Vague Prompts
@@ -465,7 +473,7 @@ def test_agent_solve_requirement_orchestrates_jev_mode():
 # ==============================================================================
 
 def test_route_prompt_to_intent_defaults_to_strict_fail_closed():
-    """route_prompt_to_intent must default to strict=True and raise IntentAmbiguityError on incomplete prompts."""
+    """route_prompt_to_intent must fail-closed even if strict=False is passed (zero bypass)."""
     router = EngineeringIntentRouter(mode="offline")
 
     # Default strict=True
@@ -476,11 +484,16 @@ def test_route_prompt_to_intent_defaults_to_strict_fail_closed():
     assert "missing_applied_loads" in err.missing_requirements
     assert err.bundle is not None
 
-    # Explicit strict=False allows draft intent generation
-    intent, bundle = router.route_prompt_to_intent(
-        "100mm 悬臂梁，固定根部，校核应力", strict=False
-    )
-    assert intent is not None
+    # Even explicit strict=False must fail-closed and reject executable intent generation
+    with pytest.raises(IntentAmbiguityError):
+        router.route_prompt_to_intent(
+            "100mm 悬臂梁，固定根部，校核应力", strict=False
+        )
+
+    # Exploratory draft intent must be explicitly requested via create_draft_intent
+    draft, bundle = router.create_draft_intent("100mm 悬臂梁，固定根部，校核应力")
+    assert draft is not None
+    assert draft.is_executable is False
     assert bundle is not None
 
 
@@ -783,3 +796,116 @@ def test_generic_http_provider_direct_normalized_dict_and_custom_normalizer():
     with patch("urllib.request.urlopen", return_value=_make_mock_response({"result": {"domain": "linear_static"}})):
         normalized = provider_with_normalizer.judge("test prompt")
         assert normalized["physics"]["choice"] == "linear_static"
+
+
+def test_external_provider_rejects_boolean_values_as_numeric():
+    """Booleans (True/False) must be strictly rejected as numeric confidence/probability/score."""
+    router = EngineeringIntentRouter(
+        api_key="sk-test",
+        api_url="https://example.com/intent/judge",
+        mode="live",
+    )
+
+    base = {
+        "physics": {"choice": "linear_static", "confidence": 0.95},
+        "units": {"choice": "MM_N_MPA", "confidence": 0.95},
+        "solver": {"choice": "abaqus_standard", "confidence": 0.98},
+        "well_constrained": {"probability": 0.95},
+        "has_acceptance_criteria": {"probability": 0.90},
+        "completeness": {"score": 4.5},
+    }
+
+    # 1. confidence as bool True
+    bad1 = dict(base, physics={"choice": "linear_static", "confidence": True})
+    with patch("urllib.request.urlopen", return_value=_make_mock_response({"answers": bad1})):
+        with pytest.raises(ExternalIntentApiError, match="must not be a boolean value"):
+            router.route("100mm cantilever steel beam with 1000N load, fixed root, check max stress <= 600MPa")
+
+    # 2. probability as bool False
+    bad2 = dict(base, well_constrained={"probability": False})
+    with patch("urllib.request.urlopen", return_value=_make_mock_response({"answers": bad2})):
+        with pytest.raises(ExternalIntentApiError, match="must not be a boolean value"):
+            router.route("100mm cantilever steel beam with 1000N load, fixed root, check max stress <= 600MPa")
+
+    # 3. score as bool True
+    bad3 = dict(base, completeness={"score": True})
+    with patch("urllib.request.urlopen", return_value=_make_mock_response({"answers": bad3})):
+        with pytest.raises(ExternalIntentApiError, match="must not be a boolean value"):
+            router.route("100mm cantilever steel beam with 1000N load, fixed root, check max stress <= 600MPa")
+
+
+def test_external_provider_rejects_nan_and_inf_values():
+    """NaN and Infinite floats must be strictly rejected."""
+    import math
+
+    router = EngineeringIntentRouter(
+        api_key="sk-test",
+        api_url="https://example.com/intent/judge",
+        mode="live",
+    )
+
+    base = {
+        "physics": {"choice": "linear_static", "confidence": 0.95},
+        "units": {"choice": "MM_N_MPA", "confidence": 0.95},
+        "solver": {"choice": "abaqus_standard", "confidence": 0.98},
+        "well_constrained": {"probability": 0.95},
+        "has_acceptance_criteria": {"probability": 0.90},
+        "completeness": {"score": 4.5},
+    }
+
+    # 1. NaN confidence
+    bad_nan = dict(base, physics={"choice": "linear_static", "confidence": float("nan")})
+    with patch("urllib.request.urlopen", return_value=_make_mock_response({"answers": bad_nan})):
+        with pytest.raises(ExternalIntentApiError, match="must be a finite number"):
+            router.route("100mm cantilever steel beam with 1000N load, fixed root, check max stress <= 600MPa")
+
+    # 2. Inf score
+    bad_inf = dict(base, completeness={"score": float("inf")})
+    with patch("urllib.request.urlopen", return_value=_make_mock_response({"answers": bad_inf})):
+        with pytest.raises(ExternalIntentApiError, match="must be a finite number"):
+            router.route("100mm cantilever steel beam with 1000N load, fixed root, check max stress <= 600MPa")
+
+
+def test_generic_http_provider_max_response_bytes_gate():
+    """Responses exceeding MAX_RESPONSE_BYTES (1MB) must be blocked fail-closed."""
+    from abaqus_ai_agent.typesafe_intent import GenericHttpIntentProvider
+
+    provider = GenericHttpIntentProvider(
+        endpoint="https://example.com/intent/judge",
+        api_key="sk-test",
+    )
+
+    oversized_bytes = b"{" + b" " * (provider.MAX_RESPONSE_BYTES + 50) + b"}"
+    with patch("urllib.request.urlopen", return_value=_make_mock_response(oversized_bytes)):
+        with pytest.raises(ExternalIntentApiError, match="exceeded maximum allowed payload size"):
+            provider.judge("test prompt")
+
+
+def test_shadow_mode_records_structured_error_category():
+    """Shadow diffs must record structured error categories without raw credentials."""
+    router = EngineeringIntentRouter(
+        api_key="sk-test-secret-key",
+        api_url="https://example.com/intent/judge",
+        mode="shadow",
+    )
+
+    # 1. URLError -> PROVIDER_NETWORK_ERROR
+    with patch("urllib.request.urlopen", side_effect=urllib.error.URLError("Connection refused")):
+        res1 = router.route("100mm 悬臂梁，固定根部，施加 1000N 端部集中力，求解变形。")
+        diff1 = res1.decision_bundle.shadow_diff
+        assert diff1["status"] == "LIVE_FAILED"
+        assert diff1["error_category"] == "PROVIDER_NETWORK_ERROR"
+
+    # 2. HTTPError -> PROVIDER_HTTP_ERROR
+    http_err = urllib.error.HTTPError(
+        url="https://example.com/intent/judge",
+        code=502,
+        msg="Bad Gateway",
+        hdrs={},
+        fp=io.BytesIO(b"Bad Gateway"),
+    )
+    with patch("urllib.request.urlopen", side_effect=http_err):
+        res2 = router.route("100mm 悬臂梁，固定根部，施加 1000N 端部集中力，求解变形。")
+        diff2 = res2.decision_bundle.shadow_diff
+        assert diff2["status"] == "LIVE_FAILED"
+        assert diff2["error_category"] == "PROVIDER_HTTP_ERROR"

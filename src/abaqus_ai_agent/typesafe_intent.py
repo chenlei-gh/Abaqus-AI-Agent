@@ -21,6 +21,7 @@ Architectural Decoupling Contract (REQ-P1-046 ~ REQ-P1-049, REQ-P1-053):
 from __future__ import annotations
 
 import json
+import math
 import os
 import re
 import time
@@ -45,6 +46,92 @@ def _get_external_config(*var_names: str) -> Optional[str]:
             if stripped:
                 return stripped
     return None
+
+
+def _validate_numeric(
+    value: Any,
+    min_val: float,
+    max_val: float,
+    field_name: str,
+) -> float:
+    """Strictly validate numeric values: reject booleans, NaN, Inf, and out-of-range floats."""
+    if isinstance(value, bool):
+        raise ExternalIntentApiError(
+            f"Field {field_name!r} must not be a boolean value: {value!r}"
+        )
+    if not isinstance(value, (int, float)):
+        raise ExternalIntentApiError(
+            f"Field {field_name!r} must be a numeric value, got {type(value).__name__}: {value!r}"
+        )
+    fval = float(value)
+    if math.isnan(fval) or math.isinf(fval):
+        raise ExternalIntentApiError(
+            f"Field {field_name!r} must be a finite number, got {fval!r}"
+        )
+    if not (min_val <= fval <= max_val):
+        raise ExternalIntentApiError(
+            f"Field {field_name!r} value {fval} out of bounds [{min_val}, {max_val}]"
+        )
+    return fval
+
+
+def _validate_distribution(
+    dist: Any,
+    allowed_keys: Tuple[str, ...],
+    field_name: str,
+) -> Dict[str, float]:
+    """Strictly validate probability distributions: dict type, allowed keys, non-empty, and valid probabilities."""
+    if not isinstance(dist, dict) or not dist:
+        raise ExternalIntentApiError(f"Field {field_name!r} distribution must be a non-empty dictionary.")
+    validated: Dict[str, float] = {}
+    for k, v in dist.items():
+        if k not in allowed_keys:
+            raise ExternalIntentApiError(f"Invalid {field_name} choice in distribution: {k!r}")
+        prob = _validate_numeric(v, 0.0, 1.0, f"{field_name}.distribution[{k}]")
+        validated[k] = prob
+    return validated
+
+
+def _validate_score_levels(levels: Any) -> Dict[int, float]:
+    """Strictly validate completeness score levels: dict type, non-empty, int keys in 1..5, and valid probabilities."""
+    if not isinstance(levels, dict) or not levels:
+        raise ExternalIntentApiError("Completeness score 'levels' must be a non-empty dictionary.")
+    validated: Dict[int, float] = {}
+    for k, v in levels.items():
+        if isinstance(k, bool):
+            raise ExternalIntentApiError(f"Invalid level key in completeness levels: {k!r}")
+        try:
+            ik = int(k)
+        except (ValueError, TypeError):
+            raise ExternalIntentApiError(f"Invalid level key in completeness levels: {k!r}")
+        if not (1 <= ik <= 5):
+            raise ExternalIntentApiError(f"Completeness level key out of range [1, 5]: {ik}")
+        prob = _validate_numeric(v, 0.0, 1.0, f"completeness.levels[{ik}]")
+        validated[ik] = prob
+    return validated
+
+
+@dataclass(frozen=True)
+class DraftEngineeringIntent:
+    """Non-executable draft intent contract strictly isolated from FEA solver execution pipelines.
+
+    Used exclusively for exploratory, interactive UI, or diagnostic inspection.
+    Any attempt to execute this object directly will be blocked by downstream preflights.
+    """
+    id: str
+    kind: str
+    description: str
+    analysis_type: str
+    unit_system: str
+    material: Optional[Dict[str, Any]] = None
+    boundary_conditions: Tuple[Dict[str, Any], ...] = field(default_factory=tuple)
+    loads: Tuple[Dict[str, Any], ...] = field(default_factory=tuple)
+    acceptance_criteria: Tuple[Dict[str, Any], ...] = field(default_factory=tuple)
+    metadata: Dict[str, Any] = field(default_factory=dict)
+    is_executable: bool = False
+
+    def to_dict(self) -> Dict[str, Any]:
+        return asdict(self)
 
 
 class ExternalIntentApiError(RuntimeError):
@@ -161,6 +248,8 @@ class GenericHttpIntentProvider:
     explicitly injected via constructor parameters or vendor-neutral environment variables.
     """
 
+    MAX_RESPONSE_BYTES: int = 1_048_576  # 1 MB maximum response payload gate
+
     def __init__(
         self,
         endpoint: Optional[str] = None,
@@ -230,7 +319,11 @@ class GenericHttpIntentProvider:
         )
         try:
             with urllib.request.urlopen(req, timeout=timeout) as resp:
-                raw_bytes = resp.read()
+                raw_bytes = resp.read(self.MAX_RESPONSE_BYTES + 1)
+                if len(raw_bytes) > self.MAX_RESPONSE_BYTES:
+                    raise ExternalIntentApiError(
+                        f"External intent API response exceeded maximum allowed payload size of {self.MAX_RESPONSE_BYTES} bytes."
+                    )
                 raw_json = json.loads(raw_bytes.decode("utf-8"))
                 normalized = self._response_normalizer(raw_json)
                 if not isinstance(normalized, dict):
@@ -365,21 +458,35 @@ class EngineeringIntentRouter:
     ) -> Tuple[EngineeringIntent, JevDecisionBundle]:
         """Convert natural language requirement into typed EngineeringIntent via judgments.
 
-        If strict=True (default), raises IntentAmbiguityError when requirements are incomplete.
+        Fail-closed contract: If requirements are incomplete or ambiguous (non-ROUTED),
+        always raises IntentAmbiguityError. Does NOT allow bypassing execution gates
+        even if strict=False is passed.
         """
         res = self.route(prompt)
         if res.status != "ROUTED":
-            if strict:
-                raise IntentAmbiguityError(
-                    res.clarification_prompt or "Incomplete engineering intent.",
-                    res.missing_requirements,
-                    res.decision_bundle,
-                )
-            intent = self._build_intent_from_decisions(prompt.strip(), res.decision_bundle)
-            return intent, res.decision_bundle
+            raise IntentAmbiguityError(
+                res.clarification_prompt or "Incomplete engineering intent.",
+                res.missing_requirements,
+                res.decision_bundle,
+            )
 
         assert res.intent is not None
         return res.intent, res.decision_bundle
+
+    def create_draft_intent(
+        self, prompt: str
+    ) -> Tuple[DraftEngineeringIntent, JevDecisionBundle]:
+        """Create an exploratory, non-executable draft intent for inspection or interactive UX.
+
+        Returns DraftEngineeringIntent (with is_executable=False) which is explicitly
+        rejected from solver compilation and execution pipelines.
+        """
+        prompt_clean = prompt.strip()
+        if not prompt_clean:
+            raise ValueError("Engineering intent prompt cannot be empty.")
+        decisions = self._evaluate_system_one_judgments(prompt_clean)
+        draft = self._build_draft_intent_from_decisions(prompt_clean, decisions)
+        return draft, decisions
 
     PHYSICS_PREREQUISITE_RULES: Dict[str, Dict[str, bool]] = {
         "linear_static": {
@@ -388,7 +495,6 @@ class EngineeringIntentRouter:
             "require_constraints": True,
             "require_loads": True,
             "require_thermal_bcs": False,
-            "require_acceptance_criteria": True,
         },
         "steady_thermal": {
             "require_dimensions": True,
@@ -396,7 +502,6 @@ class EngineeringIntentRouter:
             "require_constraints": False,
             "require_loads": False,
             "require_thermal_bcs": True,
-            "require_acceptance_criteria": True,
         },
         "transient_dynamic": {
             "require_dimensions": True,
@@ -404,7 +509,6 @@ class EngineeringIntentRouter:
             "require_constraints": True,
             "require_loads": True,
             "require_thermal_bcs": False,
-            "require_acceptance_criteria": True,
         },
         "modal_frequency": {
             "require_dimensions": True,
@@ -412,7 +516,6 @@ class EngineeringIntentRouter:
             "require_constraints": True,
             "require_loads": False,
             "require_thermal_bcs": False,
-            "require_acceptance_criteria": True,
         },
         "contact_frictional": {
             "require_dimensions": True,
@@ -420,7 +523,6 @@ class EngineeringIntentRouter:
             "require_constraints": True,
             "require_loads": True,
             "require_thermal_bcs": False,
-            "require_acceptance_criteria": True,
         },
         "fatigue_damage": {
             "require_dimensions": True,
@@ -428,7 +530,6 @@ class EngineeringIntentRouter:
             "require_constraints": True,
             "require_loads": True,
             "require_thermal_bcs": False,
-            "require_acceptance_criteria": True,
         },
     }
 
@@ -516,8 +617,18 @@ class EngineeringIntentRouter:
             missing.append("missing_thermal_boundary_conditions")
 
         # 6. Acceptance Criteria / Limits
-        if rules["require_acceptance_criteria"] and not bundle.has_acceptance_criteria_noul.is_yes:
-            missing.append("missing_acceptance_criteria_or_limits")
+        # Decouple physical solver prerequisites from compliance acceptance targets.
+        # Exploratory analysis does NOT require numeric acceptance thresholds.
+        # Only require explicit criteria if the user specifically asked for verification/compliance check
+        # without specifying metrics or limits (e.g. "校核是否达标", "校核是否合格", "check compliance").
+        prompt_lower = prompt.lower()
+        unspecified_compliance_check = any(
+            w in prompt_lower for w in ("是否达标", "是否合格", "是否满足要求", "compliance", "is compliant")
+        )
+        if unspecified_compliance_check:
+            has_extracted_limits = bool(params.get("acceptance_criteria"))
+            if not has_extracted_limits:
+                missing.append("missing_acceptance_criteria_or_limits")
 
         return missing
 
@@ -584,10 +695,29 @@ class EngineeringIntentRouter:
                         live_res = self._parse_provider_response(raw_data, prompt, latency_ms=0.0)
                         shadow_diff = self._compute_shadow_diff(baseline, live_res)
                 except Exception as shadow_err:
+                    root_cause = getattr(shadow_err, "__cause__", None)
+                    if isinstance(shadow_err, urllib.error.HTTPError) or (
+                        isinstance(shadow_err, ExternalIntentApiError) and "HTTP" in str(shadow_err)
+                    ):
+                        err_cat = "PROVIDER_HTTP_ERROR"
+                    elif (
+                        isinstance(shadow_err, urllib.error.URLError)
+                        or isinstance(root_cause, urllib.error.URLError)
+                        or "network unreachable" in str(shadow_err).lower()
+                    ):
+                        err_cat = "PROVIDER_NETWORK_ERROR"
+                    elif isinstance(shadow_err, ExternalIntentApiError):
+                        err_cat = "PROVIDER_CONTRACT_VIOLATION"
+                    elif isinstance(shadow_err, TimeoutError) or isinstance(root_cause, TimeoutError):
+                        err_cat = "PROVIDER_TIMEOUT"
+                    else:
+                        err_cat = "PROVIDER_INTERNAL_ERROR"
+
                     err_msg = str(shadow_err)
                     sanitized_err = re.sub(r"(bearer\s+)[^\s]+", r"\1[REDACTED]", err_msg, flags=re.IGNORECASE)
                     shadow_diff = {
                         "status": "LIVE_FAILED",
+                        "error_category": err_cat,
                         "error": sanitized_err[:120],
                         "baseline_model": baseline.source_model,
                     }
@@ -652,26 +782,11 @@ class EngineeringIntentRouter:
             raise ExternalIntentApiError(f"Invalid physics choice {phys_val!r}. Allowed: {self.PHYSICS_OPTIONS}")
         if "confidence" not in phys_info or phys_info["confidence"] is None:
             raise ExternalIntentApiError("Missing required 'confidence' in physics judgment.")
-        try:
-            phys_conf = float(phys_info["confidence"])
-        except (ValueError, TypeError):
-            raise ExternalIntentApiError(f"Invalid confidence in physics answer: {phys_info.get('confidence')!r}")
-        if not (0.0 <= phys_conf <= 1.0):
-            raise ExternalIntentApiError(f"Physics confidence out of bounds [0.0, 1.0]: {phys_conf}")
+        phys_conf = _validate_numeric(phys_info["confidence"], 0.0, 1.0, "physics.confidence")
 
-        phys_dist = phys_info.get("distribution")
-        if phys_dist is not None:
-            if not isinstance(phys_dist, dict):
-                raise ExternalIntentApiError("Physics 'distribution' must be a dictionary.")
-            for k, v in phys_dist.items():
-                if k not in self.PHYSICS_OPTIONS:
-                    raise ExternalIntentApiError(f"Invalid physics choice in distribution: {k!r}")
-                try:
-                    fv = float(v)
-                except (ValueError, TypeError):
-                    raise ExternalIntentApiError(f"Invalid probability value in physics distribution: {v!r}")
-                if not (0.0 <= fv <= 1.0):
-                    raise ExternalIntentApiError(f"Physics distribution probability out of bounds [0.0, 1.0]: {fv}")
+        phys_dist = None
+        if phys_info.get("distribution") is not None:
+            phys_dist = _validate_distribution(phys_info["distribution"], self.PHYSICS_OPTIONS, "physics")
 
         # 2. Units Validation
         unit_info = answers.get("units")
@@ -682,26 +797,11 @@ class EngineeringIntentRouter:
             raise ExternalIntentApiError(f"Invalid units choice {unit_val!r}. Allowed: {self.UNIT_OPTIONS}")
         if "confidence" not in unit_info or unit_info["confidence"] is None:
             raise ExternalIntentApiError("Missing required 'confidence' in units judgment.")
-        try:
-            unit_conf = float(unit_info["confidence"])
-        except (ValueError, TypeError):
-            raise ExternalIntentApiError(f"Invalid confidence in units answer: {unit_info.get('confidence')!r}")
-        if not (0.0 <= unit_conf <= 1.0):
-            raise ExternalIntentApiError(f"Units confidence out of bounds [0.0, 1.0]: {unit_conf}")
+        unit_conf = _validate_numeric(unit_info["confidence"], 0.0, 1.0, "units.confidence")
 
-        unit_dist = unit_info.get("distribution")
-        if unit_dist is not None:
-            if not isinstance(unit_dist, dict):
-                raise ExternalIntentApiError("Units 'distribution' must be a dictionary.")
-            for k, v in unit_dist.items():
-                if k not in self.UNIT_OPTIONS:
-                    raise ExternalIntentApiError(f"Invalid units choice in distribution: {k!r}")
-                try:
-                    fv = float(v)
-                except (ValueError, TypeError):
-                    raise ExternalIntentApiError(f"Invalid probability value in units distribution: {v!r}")
-                if not (0.0 <= fv <= 1.0):
-                    raise ExternalIntentApiError(f"Units distribution probability out of bounds [0.0, 1.0]: {fv}")
+        unit_dist = None
+        if unit_info.get("distribution") is not None:
+            unit_dist = _validate_distribution(unit_info["distribution"], self.UNIT_OPTIONS, "units")
 
         # 3. Solver Validation
         solver_info = answers.get("solver")
@@ -712,26 +812,11 @@ class EngineeringIntentRouter:
             raise ExternalIntentApiError(f"Invalid solver choice {solver_val!r}. Allowed: {self.SOLVER_OPTIONS}")
         if "confidence" not in solver_info or solver_info["confidence"] is None:
             raise ExternalIntentApiError("Missing required 'confidence' in solver judgment.")
-        try:
-            solver_conf = float(solver_info["confidence"])
-        except (ValueError, TypeError):
-            raise ExternalIntentApiError(f"Invalid confidence in solver answer: {solver_info.get('confidence')!r}")
-        if not (0.0 <= solver_conf <= 1.0):
-            raise ExternalIntentApiError(f"Solver confidence out of bounds [0.0, 1.0]: {solver_conf}")
+        solver_conf = _validate_numeric(solver_info["confidence"], 0.0, 1.0, "solver.confidence")
 
-        solver_dist = solver_info.get("distribution")
-        if solver_dist is not None:
-            if not isinstance(solver_dist, dict):
-                raise ExternalIntentApiError("Solver 'distribution' must be a dictionary.")
-            for k, v in solver_dist.items():
-                if k not in self.SOLVER_OPTIONS:
-                    raise ExternalIntentApiError(f"Invalid solver choice in distribution: {k!r}")
-                try:
-                    fv = float(v)
-                except (ValueError, TypeError):
-                    raise ExternalIntentApiError(f"Invalid probability value in solver distribution: {v!r}")
-                if not (0.0 <= fv <= 1.0):
-                    raise ExternalIntentApiError(f"Solver distribution probability out of bounds [0.0, 1.0]: {fv}")
+        solver_dist = None
+        if solver_info.get("distribution") is not None:
+            solver_dist = _validate_distribution(solver_info["distribution"], self.SOLVER_OPTIONS, "solver")
 
         # 4. Well-constrained Validation
         wc_info = answers.get("well_constrained")
@@ -739,12 +824,7 @@ class EngineeringIntentRouter:
             raise ExternalIntentApiError("Missing required 'well_constrained' judgment in external provider response.")
         if "probability" not in wc_info or wc_info["probability"] is None:
             raise ExternalIntentApiError("Missing required 'probability' in well_constrained judgment.")
-        try:
-            noul_prob = float(wc_info["probability"])
-        except (ValueError, TypeError):
-            raise ExternalIntentApiError(f"Invalid probability in well_constrained: {wc_info.get('probability')!r}")
-        if not (0.0 <= noul_prob <= 1.0):
-            raise ExternalIntentApiError(f"Constraint probability out of bounds [0.0, 1.0]: {noul_prob}")
+        noul_prob = _validate_numeric(wc_info["probability"], 0.0, 1.0, "well_constrained.probability")
 
         # 5. Acceptance criteria presence Validation
         crit_info = answers.get("has_acceptance_criteria")
@@ -752,12 +832,7 @@ class EngineeringIntentRouter:
             raise ExternalIntentApiError("Missing required 'has_acceptance_criteria' judgment in external provider response.")
         if "probability" not in crit_info or crit_info["probability"] is None:
             raise ExternalIntentApiError("Missing required 'probability' in has_acceptance_criteria judgment.")
-        try:
-            crit_prob = float(crit_info["probability"])
-        except (ValueError, TypeError):
-            raise ExternalIntentApiError(f"Invalid probability in has_acceptance_criteria: {crit_info.get('probability')!r}")
-        if not (0.0 <= crit_prob <= 1.0):
-            raise ExternalIntentApiError(f"Criteria probability out of bounds [0.0, 1.0]: {crit_prob}")
+        crit_prob = _validate_numeric(crit_info["probability"], 0.0, 1.0, "has_acceptance_criteria.probability")
 
         # 6. Completeness score Validation
         comp_info = answers.get("completeness")
@@ -765,30 +840,49 @@ class EngineeringIntentRouter:
             raise ExternalIntentApiError("Missing required 'completeness' judgment in external provider response.")
         if "score" not in comp_info or comp_info["score"] is None:
             raise ExternalIntentApiError("Missing required 'score' in completeness judgment.")
-        try:
-            score_val = float(comp_info["score"])
-        except (ValueError, TypeError):
-            raise ExternalIntentApiError(f"Invalid score in completeness: {comp_info.get('score')!r}")
-        if not (1.0 <= score_val <= 5.0):
-            raise ExternalIntentApiError(f"Completeness score out of bounds [1.0, 5.0]: {score_val}")
+        score_val = _validate_numeric(comp_info["score"], 1.0, 5.0, "completeness.score")
 
-        comp_levels = comp_info.get("levels")
-        if comp_levels is not None:
-            if not isinstance(comp_levels, dict):
-                raise ExternalIntentApiError("Completeness 'levels' must be a dictionary.")
-            for k, v in comp_levels.items():
-                try:
-                    ik = int(k)
-                except (ValueError, TypeError):
-                    raise ExternalIntentApiError(f"Invalid level key in completeness levels: {k!r}")
-                if not (1 <= ik <= 5):
-                    raise ExternalIntentApiError(f"Completeness level key out of range [1, 5]: {ik}")
-                try:
-                    fv = float(v)
-                except (ValueError, TypeError):
-                    raise ExternalIntentApiError(f"Invalid probability in completeness levels: {v!r}")
-                if not (0.0 <= fv <= 1.0):
-                    raise ExternalIntentApiError(f"Completeness level probability out of bounds [0.0, 1.0]: {fv}")
+        comp_levels = None
+        if comp_info.get("levels") is not None:
+            comp_levels = _validate_score_levels(comp_info["levels"])
+
+        extracted = self._extract_domain_quantities(prompt)
+        inferred = [k for k in ("dimensions", "loads", "material", "acceptance_criteria") if k in extracted]
+
+        model_tag = "external-provider-live"
+        if hasattr(self.external_provider, "model"):
+            model_tag = getattr(self.external_provider, "model")
+        elif hasattr(self.external_provider, "__class__"):
+            model_tag = self.external_provider.__class__.__name__
+
+        return IntentDecisionBundle(
+            physics_choice=ChoiceJudgment(
+                phys_val,
+                round(phys_conf, 3),
+                phys_dist or {phys_val: phys_conf},
+            ),
+            unit_system_choice=ChoiceJudgment(
+                unit_val,
+                round(unit_conf, 3),
+                unit_dist or {unit_val: unit_conf},
+            ),
+            solver_choice=ChoiceJudgment(
+                solver_val,
+                round(solver_conf, 3),
+                solver_dist or {solver_val: solver_conf},
+            ),
+            is_well_constrained_noul=NoulJudgment(round(noul_prob, 3)),
+            has_acceptance_criteria_noul=NoulJudgment(round(crit_prob, 3)),
+            completeness_score=ScoreJudgment(
+                round(score_val, 2),
+                comp_levels or {int(round(score_val)): 1.0},
+            ),
+            extracted_parameters=extracted,
+            source_model=model_tag,
+            execution_mode="live",
+            latency_ms=latency_ms,
+            inferred_fields=inferred,
+        )
 
         extracted = self._extract_domain_quantities(prompt)
         inferred = [k for k in ("dimensions", "loads", "material", "acceptance_criteria") if k in extracted]
@@ -890,7 +984,26 @@ class EngineeringIntentRouter:
 
         # 5. Noul: Acceptance Criteria Presence
         has_crit = bool(
-            any(w in prompt_lower for w in ("校核", "check", "verify", "limit", "上限", "不超过", "应力", "挠度", "mises", "displacement"))
+            extracted.get("acceptance_criteria")
+            or any(
+                w in prompt_lower
+                for w in (
+                    "校核",
+                    "check",
+                    "verify",
+                    "limit",
+                    "上限",
+                    "不超过",
+                    "应力",
+                    "挠度",
+                    "mises",
+                    "displacement",
+                    "温度",
+                    "temperature",
+                    "频率",
+                    "frequency",
+                )
+            )
         )
         noul_crit = NoulJudgment(probability=0.95 if has_crit else 0.35)
 
@@ -925,17 +1038,31 @@ class EngineeringIntentRouter:
         params: Dict[str, Any] = {}
         prompt_lower = prompt.lower()
 
-        # Criteria
+        # Criteria: Only extract if explicit numeric threshold is provided (Zero Fabrication)
         criteria = []
         if any(w in prompt_lower for w in ("挠度", "位移", "deflection", "displacement")):
             crit_match = re.search(r"(?:挠度|位移|deflection|displacement)[^\d]*(\d+(?:\.\d+)?)\s*(mm|inch|毫米|m(?![a-zA-Z]))?", prompt, re.IGNORECASE)
-            limit_val = float(crit_match.group(1)) if crit_match else 2.5
-            unit_val = crit_match.group(2) if (crit_match and crit_match.group(2)) else "mm"
-            criteria.append({"metric": "tip_displacement", "operator": "<=", "limit": limit_val, "unit": unit_val})
+            if crit_match and crit_match.group(1):
+                limit_val = float(crit_match.group(1))
+                unit_val = crit_match.group(2) if crit_match.group(2) else "mm"
+                criteria.append({"metric": "tip_displacement", "operator": "<=", "limit": limit_val, "unit": unit_val})
         if any(w in prompt_lower for w in ("应力", "mises", "stress")):
-            criteria.append({"metric": "max_mises", "operator": "<=", "limit": 600.0, "unit": "MPa"})
+            stress_match = re.search(r"(?:应力|mises|stress)[^\d]*(\d+(?:\.\d+)?)\s*(mpa|kpa|pa|psi|n/mm2)?", prompt, re.IGNORECASE)
+            if stress_match and stress_match.group(1):
+                limit_val = float(stress_match.group(1))
+                unit_val = stress_match.group(2) if stress_match.group(2) else "MPa"
+                criteria.append({"metric": "max_mises", "operator": "<=", "limit": limit_val, "unit": unit_val})
         if any(w in prompt_lower for w in ("温度", "temperature")):
-            criteria.append({"metric": "midpoint_temperature", "operator": "==", "limit": 50.0, "unit": "C"})
+            temp_match = re.search(r"(?:温度|temperature)[^\d]*(\d+(?:\.\d+)?)\s*(°c|degc|deg\s*c|c|k|kelvin)?", prompt, re.IGNORECASE)
+            if temp_match and temp_match.group(1):
+                limit_val = float(temp_match.group(1))
+                unit_val = temp_match.group(2) if temp_match.group(2) else "C"
+                criteria.append({"metric": "midpoint_temperature", "operator": "==", "limit": limit_val, "unit": unit_val})
+        if any(w in prompt_lower for w in ("频率", "frequency", "hz")):
+            freq_match = re.search(r"(?:频率|frequency)[^\d]*(\d+(?:\.\d+)?)\s*(hz)?", prompt, re.IGNORECASE)
+            if freq_match and freq_match.group(1):
+                limit_val = float(freq_match.group(1))
+                criteria.append({"metric": "fundamental_frequency", "operator": ">=", "limit": limit_val, "unit": "Hz"})
         if criteria:
             params["acceptance_criteria"] = criteria
 
@@ -1050,6 +1177,61 @@ class EngineeringIntentRouter:
                 "completeness_score": bundle.completeness_score.score,
                 "well_constrained": bundle.is_well_constrained_noul.is_yes,
             },
+        )
+
+    def _build_draft_intent_from_decisions(
+        self, prompt: str, bundle: IntentDecisionBundle
+    ) -> DraftEngineeringIntent:
+        """Synthesize non-executable DraftEngineeringIntent from judgments."""
+        phys = bundle.physics_choice.value
+        unit_sys = bundle.unit_system_choice.value
+        params = bundle.extracted_parameters
+
+        bcs = []
+        if bundle.is_well_constrained_noul.is_yes:
+            bcs.append({"type": "encastre", "region": "FixedFace", "dofs": (1, 2, 3, 4, 5, 6)})
+
+        loads = []
+        for ld in params.get("loads", []):
+            mag = ld["magnitude"]
+            u = ld["unit"]
+            if u in ("KN", "千牛"):
+                mag *= 1000.0
+                loads.append({"type": "concentrated_force", "region": "TipFace", "magnitude": mag, "direction": "-Y"})
+            elif u in ("N", "牛"):
+                loads.append({"type": "concentrated_force", "region": "TipFace", "magnitude": mag, "direction": "-Y"})
+            elif u in ("MPA", "KPA"):
+                if any(w in prompt.lower() for w in ("压力", "压强", "pressure")):
+                    loads.append({"type": "pressure", "region": "TopFace", "magnitude": mag})
+
+        crit_list = []
+        for c in params.get("acceptance_criteria", []):
+            crit_list.append({
+                "name": c["metric"],
+                "value_key": c["metric"],
+                "operator": c["operator"],
+                "limit": c["limit"],
+                "unit": c.get("unit", ""),
+            })
+
+        return DraftEngineeringIntent(
+            id=f"DRAFT-INTENT-{bundle.physics_choice.value.upper()}",
+            kind=phys,
+            description=prompt,
+            analysis_type=phys,
+            unit_system=unit_sys,
+            material=params.get("material"),
+            boundary_conditions=tuple(bcs),
+            loads=tuple(loads),
+            acceptance_criteria=tuple(crit_list),
+            metadata={
+                "dimensions": params.get("dimensions"),
+                "source_model": bundle.source_model,
+                "confidence": bundle.physics_choice.confidence,
+                "completeness_score": bundle.completeness_score.score,
+                "well_constrained": bundle.is_well_constrained_noul.is_yes,
+            },
+            is_executable=False,
         )
 
 
