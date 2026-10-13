@@ -34,14 +34,28 @@ from abaqus_ai_agent.contracts.results import ResultRequirement
 from abaqus_ai_agent.contracts.units import UnitSystem
 
 
-class JevApiError(RuntimeError):
+def _get_external_config(primary_var: str, legacy_compat_var: Optional[str] = None) -> Optional[str]:
+    """Read external configuration preferring vendor-neutral variables, falling back to legacy compatibility vars."""
+    val = os.environ.get(primary_var)
+    if val is not None and val != "":
+        return val
+    if legacy_compat_var:
+        return os.environ.get(legacy_compat_var)
+    return None
+
+
+class ExternalIntentApiError(RuntimeError):
     """Raised when external AI intent provider fails or returns invalid payloads in live mode."""
+
+
+# Backwards compatibility alias
+JevApiError = ExternalIntentApiError
 
 
 class IntentAmbiguityError(ValueError):
     """Raised when natural language prompt is ambiguous or missing required physics definition."""
 
-    def __init__(self, message: str, missing_requirements: List[str], bundle: JevDecisionBundle):
+    def __init__(self, message: str, missing_requirements: List[str], bundle: IntentDecisionBundle):
         super().__init__(message)
         self.missing_requirements = missing_requirements
         self.bundle = bundle
@@ -52,7 +66,7 @@ class IntentRoutingResult:
     """Complete result of intent routing with fail-closed clarification gating."""
     status: str  # "ROUTED", "NEEDS_CLARIFICATION", "BLOCKED"
     intent: Optional[EngineeringIntent]
-    decision_bundle: JevDecisionBundle
+    decision_bundle: IntentDecisionBundle
     missing_requirements: List[str] = field(default_factory=list)
     clarification_prompt: Optional[str] = None
 
@@ -92,7 +106,7 @@ class ScoreJudgment:
 
 
 @dataclass(frozen=True)
-class JevDecisionBundle:
+class IntentDecisionBundle:
     """Consolidated judgments from intent reasoning."""
     physics_choice: ChoiceJudgment
     unit_system_choice: ChoiceJudgment
@@ -124,12 +138,16 @@ class JevDecisionBundle:
         }
 
 
+# Backwards compatibility alias
+JevDecisionBundle = IntentDecisionBundle
+
+
 @runtime_checkable
 class ExternalIntentProviderProtocol(Protocol):
     """Protocol for optional external AI decision providers."""
 
     def judge(self, prompt: str, timeout: float = 5.0) -> Dict[str, Any]:
-        """Execute judgment against external provider and return raw answers dictionary."""
+        """Execute judgment against external provider and return normalized judgments dictionary."""
         ...
 
 
@@ -137,7 +155,7 @@ class GenericHttpIntentProvider:
     """Vendor-neutral HTTP adapter for optional external AI intent providers.
 
     Zero proprietary endpoints or models are hardcoded. All service coordinates are
-    explicitly injected via constructor parameters or environment variables.
+    explicitly injected via constructor parameters or vendor-neutral environment variables.
     """
 
     def __init__(
@@ -146,37 +164,49 @@ class GenericHttpIntentProvider:
         api_key: Optional[str] = None,
         model: Optional[str] = None,
         payload_builder: Optional[Callable[[str, "GenericHttpIntentProvider"], Dict[str, Any]]] = None,
+        response_normalizer: Optional[Callable[[Any], Dict[str, Any]]] = None,
     ):
         self.endpoint = (
             endpoint
-            or os.environ.get("EXTERNAL_INTENT_API_URL")
-            or os.environ.get("TYPESAFE_API_URL")
+            or _get_external_config("EXTERNAL_INTENT_API_URL", "TYPESAFE_API_URL")
         )
         self.api_key = (
             api_key
-            or os.environ.get("EXTERNAL_INTENT_API_KEY")
-            or os.environ.get("TYPESAFE_API_KEY")
+            or _get_external_config("EXTERNAL_INTENT_API_KEY", "TYPESAFE_API_KEY")
         )
         self.model = (
             model
-            or os.environ.get("EXTERNAL_INTENT_MODEL")
+            or _get_external_config("EXTERNAL_INTENT_MODEL")
             or "external-intent-v1"
         )
         self._payload_builder = payload_builder
+        self._response_normalizer = response_normalizer or self._default_response_normalizer
+
+    @staticmethod
+    def _default_response_normalizer(raw_data: Any) -> Dict[str, Any]:
+        """Normalize provider response into standard engineering judgment dictionary.
+
+        Supports both direct standard judgment dicts and wrapped dicts (e.g. {'answers': ...}).
+        """
+        if not isinstance(raw_data, dict):
+            return {}
+        if "answers" in raw_data and isinstance(raw_data["answers"], dict):
+            return raw_data["answers"]
+        return raw_data
 
     def is_configured(self) -> bool:
         """Return True only if both endpoint and credentials are provided."""
         return bool(self.endpoint and self.api_key)
 
     def judge(self, prompt: str, timeout: float = 5.0) -> Dict[str, Any]:
-        """Send prompt to the configured HTTP endpoint."""
+        """Send prompt to the configured HTTP endpoint and return normalized judgments."""
         if not self.endpoint:
-            raise JevApiError(
+            raise ExternalIntentApiError(
                 "External intent provider endpoint is not configured. "
                 "Explicit endpoint configuration is required."
             )
         if not self.api_key:
-            raise JevApiError(
+            raise ExternalIntentApiError(
                 "API credentials are required for external intent provider."
             )
 
@@ -202,23 +232,26 @@ class GenericHttpIntentProvider:
         try:
             with urllib.request.urlopen(req, timeout=timeout) as resp:
                 raw_bytes = resp.read()
-                return json.loads(raw_bytes.decode("utf-8"))
+                raw_json = json.loads(raw_bytes.decode("utf-8"))
+                return self._response_normalizer(raw_json)
         except urllib.error.HTTPError as http_err:
             try:
                 err_body = http_err.read().decode("utf-8", errors="replace")
             except Exception:
                 err_body = ""
-            raise JevApiError(
+            raise ExternalIntentApiError(
                 f"External intent API HTTP {http_err.code} error: {http_err.reason}. Response: {err_body[:200]}"
             ) from http_err
         except urllib.error.URLError as url_err:
-            raise JevApiError(f"External intent API network unreachable: {url_err.reason}") from url_err
+            raise ExternalIntentApiError(f"External intent API network unreachable: {url_err.reason}") from url_err
         except Exception as exc:
-            raise JevApiError(f"External intent API invocation failed: {exc}") from exc
+            if isinstance(exc, ExternalIntentApiError):
+                raise
+            raise ExternalIntentApiError(f"External intent API invocation failed: {exc}") from exc
 
 
-class JevIntentRouter:
-    """System One Intent Router supporting deterministic offline rules and optional external AI."""
+class EngineeringIntentRouter:
+    """Vendor-neutral Engineering Intent Router supporting deterministic offline rules and optional external AI."""
 
     PHYSICS_OPTIONS = (
         "linear_static",
@@ -251,19 +284,22 @@ class JevIntentRouter:
         api_url: Optional[str] = None,
         external_provider: Optional[Any] = None,
     ):
-        self.api_key = api_key or os.environ.get("EXTERNAL_INTENT_API_KEY") or os.environ.get("TYPESAFE_API_KEY")
-        self.api_url = api_url or os.environ.get("EXTERNAL_INTENT_API_URL") or os.environ.get("TYPESAFE_API_URL")
+        self.api_key = api_key or _get_external_config("EXTERNAL_INTENT_API_KEY", "TYPESAFE_API_KEY")
+        self.api_url = api_url or _get_external_config("EXTERNAL_INTENT_API_URL", "TYPESAFE_API_URL")
         self.timeout = timeout
 
         if mode is not None:
             norm_mode = mode.strip().lower()
             if norm_mode not in self.VALID_MODES:
-                raise ValueError(f"Invalid JEV mode: {mode!r}. Must be one of {self.VALID_MODES}.")
+                raise ValueError(f"Invalid JEV mode / intent mode: {mode!r}. Must be one of {self.VALID_MODES}.")
             self.mode = norm_mode
         elif use_live_api:
             self.mode = "live"
         else:
-            env_mode = os.environ.get("INTENT_RUN_MODE") or os.environ.get("TYPESAFE_RUN_MODE")
+            env_mode = (
+                _get_external_config("EXTERNAL_INTENT_RUN_MODE", "INTENT_RUN_MODE")
+                or _get_external_config("TYPESAFE_RUN_MODE")
+            )
             if env_mode:
                 norm_env = env_mode.strip().lower()
                 if norm_env not in self.VALID_MODES:
@@ -469,89 +505,93 @@ class JevIntentRouter:
 
     def _parse_provider_response(
         self, data: Dict[str, Any], prompt: str, latency_ms: float = 0.0
-    ) -> JevDecisionBundle:
-        """Parse and strictly validate raw provider response into typed bundle."""
-        if not isinstance(data, dict):
-            raise JevApiError(f"Expected dict response from external provider, got {type(data).__name__}")
+    ) -> IntentDecisionBundle:
+        """Parse and strictly validate normalized judgments dictionary into typed bundle.
 
-        answers = data.get("answers")
-        if not isinstance(answers, dict):
-            raise JevApiError("Missing or invalid 'answers' dictionary in external provider response.")
+        Accepts either standard normalized dict directly or legacy dict wrapped in 'answers'.
+        """
+        if not isinstance(data, dict):
+            raise ExternalIntentApiError(f"Expected dict response from external provider, got {type(data).__name__}")
+
+        # Support direct normalized dictionary as well as wrapped dictionary
+        answers = data.get("answers") if ("answers" in data and isinstance(data.get("answers"), dict)) else data
+        if not isinstance(answers, dict) or not answers:
+            raise ExternalIntentApiError("Missing or invalid normalized judgments dictionary in external provider response.")
 
         # 1. Physics Validation
         phys_info = answers.get("physics")
         if not isinstance(phys_info, dict):
-            raise JevApiError("Missing required 'physics' answer in external provider response.")
+            raise ExternalIntentApiError("Missing required 'physics' judgment in external provider response.")
         phys_val = phys_info.get("choice")
         if phys_val not in self.PHYSICS_OPTIONS:
-            raise JevApiError(f"Invalid physics choice {phys_val!r}. Allowed: {self.PHYSICS_OPTIONS}")
+            raise ExternalIntentApiError(f"Invalid physics choice {phys_val!r}. Allowed: {self.PHYSICS_OPTIONS}")
         try:
             phys_conf = float(phys_info.get("confidence", 0.0))
         except (ValueError, TypeError):
-            raise JevApiError(f"Invalid confidence in physics answer: {phys_info.get('confidence')!r}")
+            raise ExternalIntentApiError(f"Invalid confidence in physics answer: {phys_info.get('confidence')!r}")
         if not (0.0 <= phys_conf <= 1.0):
-            raise JevApiError(f"Physics confidence out of bounds [0.0, 1.0]: {phys_conf}")
+            raise ExternalIntentApiError(f"Physics confidence out of bounds [0.0, 1.0]: {phys_conf}")
 
         # 2. Units Validation
         unit_info = answers.get("units")
         if not isinstance(unit_info, dict):
-            raise JevApiError("Missing required 'units' answer in external provider response.")
+            raise ExternalIntentApiError("Missing required 'units' judgment in external provider response.")
         unit_val = unit_info.get("choice")
         if unit_val not in self.UNIT_OPTIONS:
-            raise JevApiError(f"Invalid units choice {unit_val!r}. Allowed: {self.UNIT_OPTIONS}")
+            raise ExternalIntentApiError(f"Invalid units choice {unit_val!r}. Allowed: {self.UNIT_OPTIONS}")
         try:
             unit_conf = float(unit_info.get("confidence", 0.0))
         except (ValueError, TypeError):
-            raise JevApiError(f"Invalid confidence in units answer: {unit_info.get('confidence')!r}")
+            raise ExternalIntentApiError(f"Invalid confidence in units answer: {unit_info.get('confidence')!r}")
         if not (0.0 <= unit_conf <= 1.0):
-            raise JevApiError(f"Units confidence out of bounds [0.0, 1.0]: {unit_conf}")
+            raise ExternalIntentApiError(f"Units confidence out of bounds [0.0, 1.0]: {unit_conf}")
 
         # 3. Solver Validation
         solver_info = answers.get("solver")
         if not isinstance(solver_info, dict):
-            raise JevApiError("Missing required 'solver' answer in external provider response.")
+            raise ExternalIntentApiError("Missing required 'solver' judgment in external provider response.")
         solver_val = solver_info.get("choice")
         if solver_val not in self.SOLVER_OPTIONS:
-            raise JevApiError(f"Invalid solver choice {solver_val!r}. Allowed: {self.SOLVER_OPTIONS}")
+            raise ExternalIntentApiError(f"Invalid solver choice {solver_val!r}. Allowed: {self.SOLVER_OPTIONS}")
         try:
             solver_conf = float(solver_info.get("confidence", 0.0))
         except (ValueError, TypeError):
-            raise JevApiError(f"Invalid confidence in solver answer: {solver_info.get('confidence')!r}")
+            raise ExternalIntentApiError(f"Invalid confidence in solver answer: {solver_info.get('confidence')!r}")
         if not (0.0 <= solver_conf <= 1.0):
-            raise JevApiError(f"Solver confidence out of bounds [0.0, 1.0]: {solver_conf}")
+            raise ExternalIntentApiError(f"Solver confidence out of bounds [0.0, 1.0]: {solver_conf}")
 
         # 4. Well-constrained Validation
         wc_info = answers.get("well_constrained")
         if not isinstance(wc_info, dict):
-            raise JevApiError("Missing required 'well_constrained' answer in external provider response.")
+            raise ExternalIntentApiError("Missing required 'well_constrained' judgment in external provider response.")
         try:
             noul_prob = float(wc_info.get("probability", 0.0))
         except (ValueError, TypeError):
-            raise JevApiError(f"Invalid probability in well_constrained: {wc_info.get('probability')!r}")
+            raise ExternalIntentApiError(f"Invalid probability in well_constrained: {wc_info.get('probability')!r}")
         if not (0.0 <= noul_prob <= 1.0):
-            raise JevApiError(f"Constraint probability out of bounds [0.0, 1.0]: {noul_prob}")
+            raise ExternalIntentApiError(f"Constraint probability out of bounds [0.0, 1.0]: {noul_prob}")
 
         # 5. Acceptance criteria presence Validation
         crit_info = answers.get("has_acceptance_criteria")
         if not isinstance(crit_info, dict):
-            raise JevApiError("Missing required 'has_acceptance_criteria' answer in external provider response.")
+            raise ExternalIntentApiError("Missing required 'has_acceptance_criteria' judgment in external provider response.")
         try:
             crit_prob = float(crit_info.get("probability", 0.0))
         except (ValueError, TypeError):
-            raise JevApiError(f"Invalid probability in has_acceptance_criteria: {crit_info.get('probability')!r}")
+            raise ExternalIntentApiError(f"Invalid probability in has_acceptance_criteria: {crit_info.get('probability')!r}")
         if not (0.0 <= crit_prob <= 1.0):
-            raise JevApiError(f"Criteria probability out of bounds [0.0, 1.0]: {crit_prob}")
+            raise ExternalIntentApiError(f"Criteria probability out of bounds [0.0, 1.0]: {crit_prob}")
 
         # 6. Completeness score Validation
         comp_info = answers.get("completeness")
         if not isinstance(comp_info, dict):
-            raise JevApiError("Missing required 'completeness' answer in external provider response.")
+            raise ExternalIntentApiError("Missing required 'completeness' judgment in external provider response.")
         try:
             score_val = float(comp_info.get("score", 0.0))
         except (ValueError, TypeError):
-            raise JevApiError(f"Invalid score in completeness: {comp_info.get('score')!r}")
+            raise ExternalIntentApiError(f"Invalid score in completeness: {comp_info.get('score')!r}")
         if not (1.0 <= score_val <= 5.0):
-            raise JevApiError(f"Completeness score out of bounds [1.0, 5.0]: {score_val}")
+            raise ExternalIntentApiError(f"Completeness score out of bounds [1.0, 5.0]: {score_val}")
 
         extracted = self._extract_domain_quantities(prompt)
         inferred = [k for k in ("dimensions", "loads", "material", "acceptance_criteria") if k in extracted]
@@ -562,7 +602,7 @@ class JevIntentRouter:
         elif hasattr(self.external_provider, "__class__"):
             model_tag = self.external_provider.__class__.__name__
 
-        return JevDecisionBundle(
+        return IntentDecisionBundle(
             physics_choice=ChoiceJudgment(
                 phys_val,
                 round(phys_conf, 3),
@@ -580,7 +620,10 @@ class JevIntentRouter:
             ),
             is_well_constrained_noul=NoulJudgment(round(noul_prob, 3)),
             has_acceptance_criteria_noul=NoulJudgment(round(crit_prob, 3)),
-            completeness_score=ScoreJudgment(round(score_val, 2), comp_info.get("levels") or {int(score_val): 1.0}),
+            completeness_score=ScoreJudgment(
+                round(score_val, 2),
+                comp_info.get("levels") or {int(round(score_val)): 1.0},
+            ),
             extracted_parameters=extracted,
             source_model=model_tag,
             execution_mode="live",
@@ -588,7 +631,7 @@ class JevIntentRouter:
             inferred_fields=inferred,
         )
 
-    def _evaluate_offline_engine(self, prompt: str) -> JevDecisionBundle:
+    def _evaluate_offline_engine(self, prompt: str) -> IntentDecisionBundle:
         """High-precision deterministic System One inference engine (100% offline & reproducible)."""
         prompt_lower = prompt.lower()
         extracted = self._extract_domain_quantities(prompt)
@@ -757,7 +800,7 @@ class JevIntentRouter:
 
         return params
 
-    def _build_intent_from_decisions(self, prompt: str, bundle: JevDecisionBundle) -> EngineeringIntent:
+    def _build_intent_from_decisions(self, prompt: str, bundle: IntentDecisionBundle) -> EngineeringIntent:
         """Synthesize EngineeringIntent from judgments."""
         phys = bundle.physics_choice.value
         unit_sys = bundle.unit_system_choice.value
@@ -811,3 +854,7 @@ class JevIntentRouter:
                 "well_constrained": bundle.is_well_constrained_noul.is_yes,
             },
         )
+
+
+# Backwards compatibility alias
+JevIntentRouter = EngineeringIntentRouter

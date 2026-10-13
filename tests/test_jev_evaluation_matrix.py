@@ -164,9 +164,9 @@ def test_jev_live_mode_malformed_response_fails_closed():
         with pytest.raises(JevApiError):
             router.route("100mm steel bar with 1000N load")
 
-    # 2. Missing 'answers' key
+    # 2. Missing required judgments
     with patch("urllib.request.urlopen", return_value=_make_mock_response({"status": "success"})):
-        with pytest.raises(JevApiError, match="Missing or invalid 'answers'"):
+        with pytest.raises(JevApiError, match="Missing required 'physics' judgment"):
             router.route("100mm steel bar with 1000N load")
 
 
@@ -540,3 +540,51 @@ def test_generic_http_provider_missing_endpoint_fails_closed():
         assert provider.is_configured() is False
         with pytest.raises(JevApiError, match="External intent provider endpoint is not configured"):
             provider.judge("test prompt")
+
+
+def test_generic_http_provider_direct_normalized_dict_and_custom_normalizer():
+    """Verify provider accepts directly normalized dicts and custom normalizer functions."""
+    from abaqus_ai_agent.typesafe_intent import (
+        EngineeringIntentRouter,
+        ExternalIntentApiError,
+        GenericHttpIntentProvider,
+    )
+
+    # 1. Direct standard dict without legacy 'answers' wrapper
+    direct_standard = {
+        "physics": {"choice": "linear_static", "confidence": 0.99},
+        "units": {"choice": "MM_N_MPA", "confidence": 0.96},
+        "solver": {"choice": "abaqus_standard", "confidence": 0.97},
+        "well_constrained": {"probability": 0.98},
+        "has_acceptance_criteria": {"probability": 0.95},
+        "completeness": {"score": 4.8},
+    }
+    with patch("urllib.request.urlopen", return_value=_make_mock_response(direct_standard)):
+        router = EngineeringIntentRouter(
+            api_key="sk-test",
+            api_url="https://example.com/intent/judge",
+            mode="live",
+        )
+        res = router.route("100mm悬臂梁端部施加1000N垂直载荷，材料为结构钢，固定根部，校核端部挠度不超过2.5mm。")
+        assert res.status == "ROUTED"
+        assert res.decision_bundle.physics_choice.value == "linear_static"
+
+    # 2. Custom external adapter normalizer (e.g. converting third-party payload)
+    def custom_normalizer(raw_data: Any) -> Dict[str, Any]:
+        return {
+            "physics": {"choice": raw_data["result"]["domain"], "confidence": 0.95},
+            "units": {"choice": "MM_N_MPA", "confidence": 0.95},
+            "solver": {"choice": "abaqus_standard", "confidence": 0.95},
+            "well_constrained": {"probability": 0.95},
+            "has_acceptance_criteria": {"probability": 0.95},
+            "completeness": {"score": 4.5},
+        }
+
+    provider_with_normalizer = GenericHttpIntentProvider(
+        endpoint="https://example.com/intent/judge",
+        api_key="sk-test",
+        response_normalizer=custom_normalizer,
+    )
+    with patch("urllib.request.urlopen", return_value=_make_mock_response({"result": {"domain": "linear_static"}})):
+        normalized = provider_with_normalizer.judge("test prompt")
+        assert normalized["physics"]["choice"] == "linear_static"
