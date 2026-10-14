@@ -43,6 +43,43 @@ def is_invalid_result_validity(val) -> bool:
     return str(val) in _INVALID_RESULT_STATES
 
 
+def _detect_elastic_range_failure(elastic_validity) -> Optional[str]:
+    """Return a failure reason when a purely elastic model is used past yield.
+
+    elastic_validity is an optional mapping with keys:
+      - is_purely_elastic (bool): True only when the deck has no plasticity.
+      - yield_strength (float): material yield strength used for the check.
+      - max_stress (float): extracted peak von Mises (or equivalent) stress.
+
+    Returns None when the check does not apply (not provided, not purely elastic,
+    or stress within yield). Any non-finite / boolean / malformed input is treated
+    as inconclusive (returns None) rather than fabricating a failure; the caller
+    must supply verified finite numbers for the rule to engage.
+    """
+    if not isinstance(elastic_validity, dict):
+        return None
+    if elastic_validity.get("is_purely_elastic") is not True:
+        return None
+    ys = elastic_validity.get("yield_strength")
+    ms = elastic_validity.get("max_stress")
+    if isinstance(ys, bool) or isinstance(ms, bool):
+        return None
+    try:
+        ys_f = float(ys)
+        ms_f = float(ms)
+    except (TypeError, ValueError):
+        return None
+    if not (math.isfinite(ys_f) and math.isfinite(ms_f)):
+        return None
+    if ms_f > ys_f:
+        return (
+            "elastic_range_exceeded: purely elastic model extracted peak stress "
+            f"{ms_f} exceeds material yield {ys_f}; linear-elastic result is "
+            "physically invalid past yield and cannot support a plastic-deformation conclusion."
+        )
+    return None
+
+
 class ResultValidity(str):
     """String subclass representing result validity with strict identity equality.
 
@@ -308,7 +345,7 @@ def evaluate_result_acceptance(result_status, numerical=None, engineering=None,
                                odb_status=None, gate_justifications=None, procedure_verification=None,
                                thermal_balance=None, connector_kinematics=None, fmbd_dynamics=None, odb_fields=None, required_fields=None,
                                evidence_manifest=None, expected_run_id=None, base_dir=None,
-                               max_age_seconds=None, mandatory_roles=None):
+                               max_age_seconds=None, mandatory_roles=None, elastic_validity=None):
     """Combine execution/result evidence with deterministic acceptance criteria.
 
     - ResultRequirement & Physics Domain profile drive mandatory gates & required metrics.
@@ -734,6 +771,15 @@ def evaluate_result_acceptance(result_status, numerical=None, engineering=None,
 
     # Status & Result Validity & Deliverability Synthesis (S1 ~ S8)
     criteria_failed = any(not item.passed for item in criteria_result.criteria)
+
+    # Elastic-range validity (MS13L lesson): a purely elastic deck whose extracted
+    # stress exceeds material yield has violated its own linear assumption. The
+    # linear result past yield is physically invalid and must fail closed as
+    # RESULT_INVALID; it must not be narrated as "plastic deformation" or delivered.
+    elastic_range_failure = _detect_elastic_range_failure(elastic_validity)
+    if elastic_range_failure:
+        failures.append(elastic_range_failure)
+
     physical_criteria_failed = criteria_failed or any(
         ("failed" in f or "exceeded" in f or "violation" in f or "limit" in f)
         and not f.startswith("missing_")
@@ -745,6 +791,12 @@ def evaluate_result_acceptance(result_status, numerical=None, engineering=None,
     )
 
     if criteria_eval_error:
+        acceptance_status = "RESULT_INVALID"
+        result_validity = ResultValidity("RESULT_INVALID")
+        passed = False
+        deliverable = False
+        status = "BLOCKED"
+    elif elastic_range_failure:
         acceptance_status = "RESULT_INVALID"
         result_validity = ResultValidity("RESULT_INVALID")
         passed = False

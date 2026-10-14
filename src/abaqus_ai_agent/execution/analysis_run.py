@@ -242,6 +242,51 @@ class AnalysisRunner:
     def __init__(self, executor):
         self.executor = executor
 
+    def _attach_inp_contract_diagnostics(self, run, workdir, job_name):
+        """Best-effort inp model-contract diagnosis appended to run.diagnostics.
+
+        Advisory only (WARNING level). Never raises and never blocks execution:
+        a missing/unreadable inp simply yields no diagnostics. Returns the run
+        unchanged when no inp is found or no issues are detected.
+        """
+        try:
+            from ..diagnostics.solver_patterns import diagnose_inp_contract
+        except Exception:
+            return run
+        inp_path = None
+        try:
+            if workdir and job_name:
+                candidate = os.path.join(str(workdir), f"{job_name}.inp")
+                if os.path.isfile(candidate):
+                    inp_path = candidate
+        except Exception:
+            inp_path = None
+        if not inp_path:
+            return run
+        try:
+            inp_text = Path(inp_path).read_text(encoding="utf-8", errors="ignore")
+        except Exception:
+            return run
+        try:
+            issues = diagnose_inp_contract(inp_text, source=inp_path)
+        except Exception:
+            return run
+        if not issues:
+            return run
+        new_diags = tuple(
+            {
+                "kind": "model_contract",
+                "diagnosis_id": iss.diagnosis_id,
+                "severity": iss.severity,
+                "likely_cause": iss.likely_cause,
+                "suggested_remediation": iss.suggested_remediation,
+                "supporting_evidence": list(iss.supporting_evidence),
+                "file_source": iss.file_source,
+            }
+            for iss in issues
+        )
+        return run.with_state(run.state, diagnostics=tuple(run.diagnostics) + new_diags)
+
     def run(self, model_name, job_name, odb_path=None, criteria=(),
             result_values=None, numerical_verification=None, engineering_checks=None,
             mesh_quality=None, mesh_convergence=None, fatigue=None, contact_diagnostics=None,
@@ -480,6 +525,13 @@ class AnalysisRunner:
                 odb_path=path,
                 engineering_status=EngineeringStatus.RESULT_SUSPICIOUS.value,
                 evidence=EvidenceBundle((Evidence(kind="odb_summary", source="odb", locator=path, value=odb),)), artifacts=artifacts)
+
+            # Model-contract diagnosis (MS13L lesson): surface C3D4-only bending,
+            # pin tie+fix overconstraint, oversized fixed sets, and elastic-only
+            # decks that claim plasticity. This is advisory (WARNING) and never
+            # blocks a legitimate run; it makes the smells visible in run.diagnostics
+            # instead of only in the standalone CLI diagnose command.
+            run = self._attach_inp_contract_diagnostics(run, workdir, job_name)
 
             from ..contracts.fatigue import IntentFatigueSpec, FatigueResult
             fatigue_spec = getattr(engineering_intent, "fatigue", None) or (

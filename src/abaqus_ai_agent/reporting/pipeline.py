@@ -18,10 +18,58 @@ from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
 from ..contracts.artifact import ArtifactPointer
 from ..contracts.provenance import provenance_from_mapping, verify_deliverable
 from ..contracts.report import EngineeringReportData, ReportFigure
+from ..diagnostics.solver_patterns import (
+    extract_inp_element_types,
+    extract_inp_has_plasticity,
+)
 from .adaptive_template import AdaptiveReportBuilder, AnalysisObjective
 from .interpretation_card import InterpretationCard, ReportDeliveryCard
 from .renderer import render_report
 from .visualization_spec import VisualizationSpec
+
+
+def _normalize_elem_codes(text: str) -> frozenset:
+    """Extract C3D4/C3D8R-style element codes from a free-text claim."""
+    import re as _re
+    return frozenset(_re.findall(r"C[0-9A-Z]{3,}", (text or "").upper()))
+
+
+def _reconcile_model_claims(model_info: Any, inp_text: str) -> Optional[Dict[str, Any]]:
+    """Compare caller-declared model claims against the actual inp deck.
+
+    Returns a mismatch dict when a declared claim contradicts deck evidence,
+    else None. Only checks claims that are actually declared AND verifiable
+    from the deck; absent claims or absent deck evidence do not mismatch.
+    """
+    if not isinstance(model_info, dict) or not inp_text:
+        return None
+    mismatches: Dict[str, Any] = {}
+
+    actual_types = extract_inp_element_types(inp_text)
+    declared_et = model_info.get("element_type")
+    if declared_et and actual_types:
+        declared_codes = _normalize_elem_codes(str(declared_et))
+        if declared_codes and not declared_codes.issubset(actual_types):
+            mismatches["element_type"] = {
+                "declared": str(declared_et),
+                "declared_codes": sorted(declared_codes),
+                "actual_codes": sorted(actual_types),
+            }
+
+    analysis_claim = " ".join(
+        str(model_info.get(k) or "") for k in ("analysis_type", "constitutive", "material_model")
+    )
+    claims_plastic = any(
+        tok in analysis_claim.lower()
+        for tok in ("plastic", "elastoplastic", "弹塑", "塑性")
+    )
+    if claims_plastic and not extract_inp_has_plasticity(inp_text):
+        mismatches["plasticity"] = {
+            "declared": analysis_claim.strip(),
+            "actual": "purely_elastic",
+        }
+
+    return mismatches or None
 
 
 class DeterministicReportPipeline:
@@ -57,6 +105,7 @@ class DeterministicReportPipeline:
         include_animation: bool = False,
         include_mesh: bool = False,
         include_keypoint_detail: bool = False,
+        inp_text: Optional[str] = None,
     ) -> Tuple[ReportDeliveryCard, ArtifactPointer, EngineeringReportData]:
         """Compile report, render HTML & Markdown, register artifacts, and produce LLM card."""
         # 0. Early Delivery Gate: Verify authorization BEFORE any file creation or disk I/O.
@@ -76,6 +125,19 @@ class DeterministicReportPipeline:
             is_deliverable = getattr(acceptance_info, "deliverable") is True
         elif isinstance(acceptance_info, dict) and "deliverable" in acceptance_info:
             is_deliverable = acceptance_info["deliverable"] is True
+
+        # Model-claim reconciliation (MS13L lesson): when the inp deck text is
+        # available, verify the caller-declared element_type / plasticity claims
+        # against the actual deck. A contradiction (e.g. report claims C3D10M or
+        # elasto-plasticity while the deck is C3D4 / purely elastic) means the
+        # declared model was fabricated relative to what was actually solved.
+        # Fail closed: such a report must not be released as an official,
+        # Abaqus-AI-Agent-attributed deliverable.
+        model_contract_mismatch: Optional[Dict[str, Any]] = None
+        if inp_text:
+            model_contract_mismatch = _reconcile_model_claims(model_info, inp_text)
+            if model_contract_mismatch is not None:
+                is_deliverable = False
 
         if require_deliverable and not is_deliverable:
             raise PermissionError(
@@ -527,6 +589,8 @@ class DeterministicReportPipeline:
                 "sections": list(self.builder.determine_active_sections()),
                 "delivery_mode": delivery_mode,
                 "is_diagnostic_draft": not is_official_delivery,
+                **({"model_contract_mismatch": model_contract_mismatch}
+                   if model_contract_mismatch is not None else {}),
             },
         )
 

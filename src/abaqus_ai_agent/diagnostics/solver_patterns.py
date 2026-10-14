@@ -238,6 +238,24 @@ def _following_data(inp_text: str, header_line: str) -> List[str]:
     return data
 
 
+def extract_inp_element_types(inp_text: str = "") -> frozenset:
+    """Return the set of element type codes declared in an inp deck.
+
+    Public helper shared by the diagnose command and report reconciliation so
+    both parse element types identically. Returns an empty frozenset when no
+    *ELEMENT card is present. Codes are upper-cased (e.g. {"C3D4", "C3D8R"}).
+    """
+    upper = (inp_text or "").upper()
+    return frozenset(
+        re.findall(r"\*ELEMENT\s*,\s*TYPE\s*=\s*([A-Z0-9]+)", upper)
+    )
+
+
+def extract_inp_has_plasticity(inp_text: str = "") -> bool:
+    """Return True when the deck defines any *PLASTIC hardening block."""
+    return "*PLASTIC" in (inp_text or "").upper()
+
+
 def diagnose_inp_contract(inp_text: str = "", source: Optional[str] = None) -> Tuple[DiagnosticIssue, ...]:
     """Warn on model-contract smells seen in the MS13L bypass.
 
