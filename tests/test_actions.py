@@ -232,3 +232,33 @@ def test_validate_action_quantities_rejects_bool_nan_inf():
             validate_action_quantities("static_step", {"time_period": bad_tp})
 
     assert validate_action_quantities("static_step", {"time_period": 1.0}) is True
+
+
+def test_validate_action_and_preflight_reject_unknown_action_type():
+    """Verify that validate_action and preflight_action strictly fail-closed on unknown action_type."""
+    from abaqus_ai_agent.contracts.action import AbaqusAction
+    from abaqus_ai_agent.validation.actions import validate_action, SUPPORTED_ACTION_TYPES
+    from abaqus_ai_agent.validation.preflight import preflight_action
+
+    # 1. validate_action raises ValueError for unknown types
+    for unknown_type in ("totally_fake_unknown_action", "unknown_action", "unregistered_step", "arbitrary_cmd"):
+        action = AbaqusAction(
+            action_type=unknown_type,
+            model_name="Model-1",
+            target="Part-1",
+            parameters={"foo": "bar"},
+        )
+        with pytest.raises(ValueError, match="unsupported action_type"):
+            validate_action(action)
+
+        # 2. preflight_action blocks unknown types
+        res = preflight_action(action)
+        assert res.passed is False
+        assert any(b["name"] == "supported_action_type" and b["ok"] is False for b in res.blockers)
+
+    # 3. Known supported types are present in SUPPORTED_ACTION_TYPES
+    assert "material_elastic" in SUPPORTED_ACTION_TYPES
+    assert "pressure_load" in SUPPORTED_ACTION_TYPES
+    assert "static_step" in SUPPORTED_ACTION_TYPES
+    assert "fixed_bc" in SUPPORTED_ACTION_TYPES
+    assert len(SUPPORTED_ACTION_TYPES) >= 60

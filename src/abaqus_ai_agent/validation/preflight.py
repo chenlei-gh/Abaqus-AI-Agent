@@ -9,6 +9,7 @@ from .actions import (
     VALID_CONNECTOR_ASSEMBLED_TYPES,
     VALID_CONNECTOR_TRANSLATIONAL_TYPES,
     VALID_CONNECTOR_ROTATIONAL_TYPES,
+    SUPPORTED_ACTION_TYPES,
 )
 
 
@@ -46,6 +47,7 @@ def preflight_action(action, snapshot=None):
             blockers.append(item)
 
     check("model_name", bool(action.model_name))
+    check("supported_action_type", action.action_type in SUPPORTED_ACTION_TYPES, action.action_type)
     if snapshot is not None:
         if isinstance(snapshot, dict):
             models = snapshot.get("models", ())

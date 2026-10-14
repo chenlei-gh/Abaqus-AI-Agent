@@ -42,6 +42,27 @@ VALID_CONNECTOR_ROTATIONAL_TYPES = (
     "UNCOUPLED_ANGULAR_ACCELEROMETER"
 )
 
+SUPPORTED_ACTION_TYPES = frozenset({
+    "python", "material_elastic", "material_density", "material_plastic",
+    "material_conductivity", "material_specific_heat", "material_expansion",
+    "solid_section", "section_assignment", "static_step", "dynamic_explicit_step",
+    "implicit_dynamic_step", "frequency_step", "heat_transfer_step",
+    "coupled_temp_displacement_step", "tabular_amplitude", "smooth_step_amplitude",
+    "periodic_amplitude", "equally_spaced_amplitude", "fixed_bc", "displacement_bc",
+    "symmetry_bc", "temperature_bc", "initial_temperature", "initial_stress",
+    "gravity", "pressure_load", "concentrated_force", "body_force",
+    "body_heat_flux", "surface_heat_flux", "bolt_load", "bolt_load_set_values",
+    "concentrated_moment", "expression_field", "assembly_inspect",
+    "instance_translate", "instance_rotate", "instance_linear_pattern",
+    "export_inp", "export_odb_csv", "field_output", "history_output",
+    "create_job", "submit_job", "seed_part", "generate_mesh",
+    "local_seed_size", "local_seed_number", "mesh_controls", "element_type",
+    "inspect_geometry", "ignore_entity", "restore_entity", "repair_geometry",
+    "remove_redundant_entities", "inspect_mesh", "mesh_quality", "tie",
+    "contact_property", "contact", "reference_point", "rigid_body",
+    "connector_section", "wire_connector", "coupling_constraint",
+})
+
 
 def validate_action(action):
     if not isinstance(action, AbaqusAction):
@@ -50,6 +71,8 @@ def validate_action(action):
         raise ValueError("model_name is required")
     if not action.action_type:
         raise ValueError("action_type is required")
+    if action.action_type not in SUPPORTED_ACTION_TYPES:
+        raise ValueError("unsupported action_type: %s" % action.action_type)
     if action.action_type in (
         "fixed_bc", "displacement_bc", "symmetry_bc", "pressure_load",
         "concentrated_force", "body_force", "body_heat_flux", "surface_heat_flux", "temperature_bc", "initial_temperature", "initial_stress", "section_assignment",

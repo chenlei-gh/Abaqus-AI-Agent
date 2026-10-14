@@ -1382,3 +1382,117 @@ def test_p0_d_authentic_cae_visualization_asset_succeeds_in_official_delivery(tm
     assert Path(data.figures[0].path) == authentic_img
     # Ensure no synthetic transient_evolution.gif was forced
     assert not any(fig.path.endswith("transient_evolution.gif") for fig in data.figures)
+
+
+def test_neg_missing_evidence_with_physical_failure_is_blocked_incomplete(tmp_path: Path):
+    """P0 Safety Redline: Missing evidence MUST NOT report physical FAIL as valid engineering truth.
+    When evidence is missing, even if physical criteria are exceeded, the result validity
+    must be INCOMPLETE and status must be BLOCKED / RESULT_INVALID, deliverable=False.
+    """
+    from abaqus_ai_agent.acceptance import evaluate_result_acceptance, evaluate_production_acceptance
+
+    # 1. evaluate_result_acceptance with missing evidence and physical criteria failure
+    criteria = [{"name": "stress_check", "value_key": "max_mises", "operator": "<=", "limit": 200.0}]
+    numerical = {"max_mises": 350.0}  # Physical failure: 350 > 200
+
+    res = evaluate_result_acceptance(
+        result_status="completed",
+        numerical=numerical,
+        criteria=criteria,
+        require_evidence=True,
+        evidence_manifest=None,
+    )
+    assert res.acceptance_status == "RESULT_INVALID", (
+        f"Expected RESULT_INVALID for missing evidence, got {res.acceptance_status}"
+    )
+    assert res.result_validity == "RESULT_INVALID", (
+        f"Expected RESULT_INVALID result_validity for missing evidence, got {res.result_validity}"
+    )
+    assert res.status == "BLOCKED"
+    assert res.passed is False
+    assert res.deliverable is False
+
+    # 2. evaluate_production_acceptance with missing INP artifact and physical failure
+    files = ["Job_missing_inp.odb", "Job_missing_inp.sta", "Job_missing_inp.dat"]
+    for fn in files:
+        fp = tmp_path / fn
+        if fn.endswith(".odb"):
+            fp.write_bytes(b"\x00\x00\x00\x00" + b"\x53\x49\x4d" + b"\x00" * 2000)
+        else:
+            fp.write_text("dummy artifact\n", encoding="utf-8")
+
+    manifest = build_evidence_manifest_v2(
+        run_id="run_missing_inp_phys_fail",
+        case_id="case_missing_inp_phys_fail",
+        artifacts_dir=str(tmp_path),
+        artifact_filenames=files,
+    )
+    run = AnalysisRun(
+        id="run_missing_inp_phys_fail",
+        model_name="Model_Test",
+        job_name="Job_missing_inp",
+        state=AnalysisRunState.COMPLETED,
+        job_status=JobStatus(name="Job_missing_inp", state=JobState.COMPLETED),
+        odb_path=str(tmp_path / "Job_missing_inp.odb"),
+        provenance=AnalysisProvenance(
+            run_id="run_missing_inp_phys_fail",
+            model_name="Model_Test",
+            job_name="Job_missing_inp",
+            input_hash="c" * 64,
+        ),
+        metrics=(EngineeringMetric(name="max_mises", value=450.0, unit="MPa"),),
+    )
+
+    prod_res = evaluate_production_acceptance(
+        run,
+        criteria=[{"name": "mises", "value_key": "max_mises", "operator": "<=", "limit": 200.0}],
+        evidence_manifest=manifest,
+        base_dir=str(tmp_path),
+    )
+    assert prod_res.acceptance_status == "BLOCKED"
+    assert prod_res.result_validity == "INCOMPLETE"
+    assert prod_res.deliverable is False
+    assert any("missing_inp_artifact" in e for e in prod_res.findings.evidence_errors)
+
+
+def test_evaluate_criteria_rejects_boolean_and_nonfinite():
+    """P1 Contract: evaluate_criteria must strictly reject boolean coercion, NaN, Inf, and infinite tolerance."""
+    from abaqus_ai_agent.acceptance import evaluate_criteria
+
+    # 1. Boolean actual value rejected
+    with pytest.raises(TypeError, match="cannot be boolean"):
+        evaluate_criteria({"stress": True}, [{"operator": "<=", "limit": 200.0, "value_key": "stress"}])
+
+    # 2. Boolean limit rejected
+    with pytest.raises(TypeError, match="cannot be boolean"):
+        evaluate_criteria({"stress": 150.0}, [{"operator": "<=", "limit": True, "value_key": "stress"}])
+
+    # 3. Boolean tolerance rejected
+    with pytest.raises(TypeError, match="cannot be boolean"):
+        evaluate_criteria({"stress": 150.0}, [{"operator": "<=", "limit": 200.0, "relative_tolerance": True, "value_key": "stress"}])
+
+    # 4. NaN actual value rejected
+    with pytest.raises(ValueError, match="must be a finite number"):
+        evaluate_criteria({"stress": float("nan")}, [{"operator": "<=", "limit": 200.0, "value_key": "stress"}])
+
+    # 5. NaN limit rejected
+    with pytest.raises(ValueError, match="must be a finite number"):
+        evaluate_criteria({"stress": 150.0}, [{"operator": "<=", "limit": float("nan"), "value_key": "stress"}])
+
+    # 6. Inf actual value rejected
+    with pytest.raises(ValueError, match="must be a finite number"):
+        evaluate_criteria({"stress": float("inf")}, [{"operator": "<=", "limit": 200.0, "value_key": "stress"}])
+
+    # 7. Inf tolerance rejected (cannot use infinite tolerance to bypass limits)
+    with pytest.raises(ValueError, match="must be a finite non-negative number"):
+        evaluate_criteria({"stress": 999999.0}, [{"operator": "<=", "limit": 200.0, "relative_tolerance": float("inf"), "value_key": "stress"}])
+
+    # 8. Negative tolerance rejected
+    with pytest.raises(ValueError, match="must be a finite non-negative number"):
+        evaluate_criteria({"stress": 150.0}, [{"operator": "<=", "limit": 200.0, "relative_tolerance": -0.1, "value_key": "stress"}])
+
+    # 9. Valid finite criteria evaluation succeeds
+    res = evaluate_criteria({"stress": 180.0}, [{"operator": "<=", "limit": 200.0, "relative_tolerance": 0.05, "value_key": "stress"}])
+    assert res.passed is True
+    assert len(res.criteria) == 1
+    assert res.criteria[0].passed is True

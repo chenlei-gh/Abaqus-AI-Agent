@@ -1,3 +1,4 @@
+import math
 import os
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -198,10 +199,27 @@ def evaluate_criteria(values, criteria, required_keys: Optional[Sequence[str]] =
                 continue
         if op not in operators:
             raise ValueError("unsupported operator: %s" % op)
-        actual, limit = float(values_map[key]), float(c["limit"])
-        tolerance = float(c.get("relative_tolerance", 0.0))
-        if tolerance < 0:
-            raise ValueError("relative_tolerance must be >= 0")
+        raw_actual = values_map[key]
+        raw_limit = c.get("limit")
+        raw_tol = c.get("relative_tolerance", 0.0)
+
+        if isinstance(raw_actual, bool) or isinstance(raw_limit, bool) or isinstance(raw_tol, bool):
+            raise TypeError("criterion actual value, limit, and tolerance cannot be boolean")
+
+        try:
+            actual = float(raw_actual)
+            limit = float(raw_limit)
+            tolerance = float(raw_tol)
+        except (ValueError, TypeError) as exc:
+            raise ValueError("criterion numerical values for %r must be valid numbers: %s" % (key, exc))
+
+        if math.isnan(actual) or math.isinf(actual):
+            raise ValueError("actual value for criterion %r must be a finite number, got %r" % (key, actual))
+        if math.isnan(limit) or math.isinf(limit):
+            raise ValueError("limit for criterion %r must be a finite number, got %r" % (key, limit))
+        if math.isnan(tolerance) or math.isinf(tolerance) or tolerance < 0.0 or tolerance >= 1e6:
+            raise ValueError("relative_tolerance for criterion %r must be a finite non-negative number in [0, 1e6), got %r" % (key, tolerance))
+
         effective_limit = limit
         if tolerance and op in ("<", "<="):
             effective_limit = limit * (1.0 + tolerance)
@@ -580,24 +598,44 @@ def evaluate_result_acceptance(result_status, numerical=None, engineering=None,
         gates["required_results"] = "NOT_SPECIFIED"
 
     # Gate 12: Criteria Gate
-    criteria_result = evaluate_criteria(values_map, criteria or (), required_keys=effective_required_metrics)
-    failures.extend(
-        "criterion:%s" % item.name for item in criteria_result.criteria if not item.passed
-    )
-    warnings.extend(criteria_result.warnings)
-    # Deduplicate blocked entries from criteria_result that were already added
-    for b in criteria_result.blocked:
-        if b not in blocked:
-            blocked.append(b)
-
-    if criteria_result.blocked:
-        gates["criteria"] = "BLOCKED"
-    elif any(not item.passed for item in criteria_result.criteria):
+    criteria_eval_error = False
+    try:
+        criteria_result = evaluate_criteria(values_map, criteria or (), required_keys=effective_required_metrics)
+    except (ValueError, TypeError) as exc:
+        criteria_eval_error = True
+        failures.append("criteria_evaluation_error:%s" % exc)
+        blocked.append("criteria_evaluation_error:%s" % exc)
         gates["criteria"] = "FAIL"
-    elif criteria:
-        gates["criteria"] = "PASS"
-    else:
-        gates["criteria"] = "SKIPPED"
+        criteria_result = AcceptanceResult(
+            passed=False,
+            criteria=(),
+            failures=tuple(failures),
+            warnings=tuple(warnings),
+            status="FAIL",
+            blocked=tuple(blocked),
+            acceptance_status="RESULT_INVALID",
+            deliverable=False,
+            findings=AcceptanceFindings(failures=tuple(failures), blocked=tuple(blocked)),
+        )
+
+    if not criteria_eval_error:
+        failures.extend(
+            "criterion:%s" % item.name for item in criteria_result.criteria if not item.passed
+        )
+        warnings.extend(criteria_result.warnings)
+        # Deduplicate blocked entries from criteria_result that were already added
+        for b in criteria_result.blocked:
+            if b not in blocked:
+                blocked.append(b)
+
+        if criteria_result.blocked:
+            gates["criteria"] = "BLOCKED"
+        elif any(not item.passed for item in criteria_result.criteria):
+            gates["criteria"] = "FAIL"
+        elif criteria:
+            gates["criteria"] = "PASS"
+        else:
+            gates["criteria"] = "SKIPPED"
 
     if not criteria and values is None:
         warnings.append("no_explicit_acceptance_criteria")
@@ -680,7 +718,13 @@ def evaluate_result_acceptance(result_status, numerical=None, engineering=None,
         for f in failures
     )
 
-    if evidence_status in ("TAMPERED", "EVIDENCE_TAMPERED"):
+    if criteria_eval_error:
+        acceptance_status = "RESULT_INVALID"
+        result_validity = ResultValidity("RESULT_INVALID")
+        passed = False
+        deliverable = False
+        status = "BLOCKED"
+    elif evidence_status in ("TAMPERED", "EVIDENCE_TAMPERED"):
         acceptance_status = "RESULT_INVALID"
         result_validity = ResultValidity("EVIDENCE_TAMPERED")
         passed = False
@@ -701,6 +745,12 @@ def evaluate_result_acceptance(result_status, numerical=None, engineering=None,
     elif evidence_status in ("INCOMPLETE", "EVIDENCE_INCOMPLETE"):
         acceptance_status = "RESULT_INVALID"
         result_validity = ResultValidity("INCOMPLETE")
+        passed = False
+        deliverable = False
+        status = "BLOCKED"
+    elif evidence_status in ("MISSING", "EVIDENCE_MISSING") and (require_evidence or "evidence_sufficiency" in effective_required_gates):
+        acceptance_status = "RESULT_INVALID"
+        result_validity = ResultValidity("RESULT_INVALID")
         passed = False
         deliverable = False
         status = "BLOCKED"
@@ -1090,6 +1140,8 @@ def evaluate_production_acceptance(
 
         if str(new_validity) in ("EVIDENCE_TAMPERED", "EVIDENCE_CORRUPT", "EVIDENCE_STALE", "SOLVER_FAILED", "RESULT_INVALID"):
             new_status = "RESULT_INVALID"
+        elif str(new_validity) == "INCOMPLETE":
+            new_status = "BLOCKED"
         elif res.acceptance_status == "FAIL":
             # Physical failure takes precedence only when evidence is authentic and uncompromised
             new_status = "FAIL"
