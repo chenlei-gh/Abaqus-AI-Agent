@@ -829,6 +829,11 @@ class AnalysisRunner:
                     kind="uncertainty", source="analysis",
                     locator=job_name, value=uncertainty,
                 ))
+            if run_manifest is not None:
+                verification_evidence.append(Evidence(
+                    kind="evidence_manifest_v2", source="manifest",
+                    locator=job_name, value=run_manifest,
+                ))
             evidence = EvidenceBundle((Evidence(
                 kind="odb_summary", source="odb", locator=path, value=odb
             ), Evidence(
@@ -880,6 +885,7 @@ class AnalysisRunner:
                 action_plan=tuple(normalized_action_plan),
                 verification=verification_map,
                 evidence=evidence, artifacts=artifacts, metrics=run_metrics,
+                metadata=dict(run.metadata, evidence_manifest=run_manifest) if run_manifest is not None else dict(run.metadata),
                 extractions=tuple(extractions if result_source == "odb" else ()))
         except Exception as exc:
             artifacts = _collect_artifacts(self.executor, job_name, workdir=workdir)

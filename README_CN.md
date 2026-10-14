@@ -7,7 +7,7 @@
 [![CI](https://github.com/chenlei-gh/Abaqus-AI-Agent/actions/workflows/ci.yml/badge.svg)](https://github.com/chenlei-gh/Abaqus-AI-Agent/actions/workflows/ci.yml)
 [![Python](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12-blue.svg)](https://www.python.org/)
 [![Abaqus](https://img.shields.io/badge/SIMULIA%20Abaqus-2025%20%E8%AE%A4%E8%AF%81-brightgreen.svg)](https://www.3ds.com/products-services/simulia/products/abaqus/)
-[![Tests](https://img.shields.io/badge/%E8%87%AA%E5%8A%A8%E5%8C%96%E5%9B%9E%E5%BD%92%E6%B5%8B%E8%AF%95-1346%20%E9%80%9A%E8%BF%87%20%280%20%E8%AD%A6%E5%91%8A%29-success.svg)](tests/)
+[![Tests](https://img.shields.io/badge/%E8%87%AA%E5%8A%A8%E5%8C%96%E5%9B%9E%E5%BD%92%E6%B5%8B%E8%AF%95-1349%20%E9%80%9A%E8%BF%87%20%280%20%E8%AD%A6%E5%91%8A%29-success.svg)](tests/)
 [![JEV 意图引擎](https://img.shields.io/badge/JEV%20%E6%84%8F%E5%9B%BE%E7%BC%96%E8%AF%91-TypeSafe%20%E5%8F%8C%E6%A8%A1%E6%B7%B7%E5%90%88-blueviolet.svg)](src/abaqus_ai_agent/typesafe_intent.py)
 [![JEV 评测状态](https://img.shields.io/badge/REQ--P1--045-IN__REVIEW-orange.svg)](docs/p1-product-requirements.md)
 [![Golden Matrix](https://img.shields.io/badge/golden%20matrix-13%2F13%20L4%20%E5%AE%A1%E8%AE%A1-success.svg)](machine_validation/)
@@ -65,7 +65,7 @@ flowchart TD
     FailClosedGate -->|完备且已通过接地| Compiler[Abaqus CAE 脚本确定性编译器<br>66 种 Action AST 深度校验]
 ```
 
-- **确定性离线基线（Offline Deterministic Baseline）**：即使在完全无外部大模型 API、断网或纯内网保密机房环境下，系统依靠 1,339 项确定性回归测试支撑的规则引擎，保障 100% 确定性、零幻觉执行标准工况。
+- **确定性离线基线（Offline Deterministic Baseline）**：即使在完全无外部大模型 API、断网或纯内网保密机房环境下，系统依靠 1,349 项确定性回归测试支撑的规则引擎，保障 100% 确定性、零幻觉执行标准工况。
 - **真实 JEV Provider（认知增强平面）**：接入商业大模型 Provider 后，系统获得应对非标准语言句式、跨段落隐式力学因果关系及复杂多工况约束编排的能力。
 
 ### 3. 工程客观现实与已知边界（不搞虚假宣传）
@@ -74,7 +74,7 @@ flowchart TD
 
 | 技术评估维度 | 当前代码实现与审计事实 | 工程裁决结论 |
 | :--- | :--- | :--- |
-| **离线规则安全底线** | 1,339 项自动化测试在 Python 3.10–3.12 跨平台全通过（0 警告、0 错误）。 | ✅ **已核实闭环 (VERIFIED)** |
+| **离线规则安全底线** | 1,349 项自动化测试在 Python 3.10–3.12 跨平台全通过（0 警告、0 错误）。 | ✅ **已核实闭环 (VERIFIED)** |
 | **子句隔离（Clause Scoping）** | 标点子句物理隔离，彻底阻断跨子句盗用区域。 | ✅ **已核实闭环 (VERIFIED)** |
 | **热边界与材质分级** | 热对流/辐射参数全保真传递、温标（°C 转 K）归一化，严格区分 `REFERENCE_LIBRARY` 与 `VERIFIED_PROPERTIES`。 | ✅ **已核实闭环 (VERIFIED)** |
 | **外部 STEP 1-to-1 拓扑接地** | 强制有限实数三维锚点坐标（`anchor_point`），拒绝 `resolved=False` 与 NaN/Inf 坐标。 | ✅ **已核实闭环 (VERIFIED)** |
@@ -180,32 +180,37 @@ flowchart TD
   - *威胁模型边界*：当前机制基于无密钥的单向哈希函数 SHA-256，不包含非对称公私钥或服务端私密密钥（HMAC/PKI）。在攻击者获得完全本地写权限且主动重算哈希的对抗场景下，无法提供不可抵赖的身份认证。若企业生产环境需要防范高权限主动伪造，需外挂企业级 PKI/CA 签名体系。
 - **工作区目录越界防御（Path Traversal Guard）**：`verify_evidence_integrity()` 对照指定的 `base_dir` 检查工件声明路径，拦截相对路径逃逸（`..`）、跨盘符绝对路径及符号链接伪造，标记 `path_traversal_out_of_bounds` 并将清单判定为 `validity = "TAMPERED"`。未显式传入 `base_dir` 时默认绑定当前工作目录并对未受限绝对路径记录警告。
 
-### 5. 66 类 Action 动态 AST 契约与无吞异常执行验证
+### 5. ODB 区域表达式 AST 安全白名单与 Provider 信任边界
+- **ODB 区域表达式白名单 AST 解析器**：彻底废除 `eval(...)` 动态解析模式，采用受限抽象语法树白名单机制（`_resolve_safe_odb_region`），仅允许从 `odb` 根节点遍历属性与字符串下标集合，严格禁止调用方法、访问私有/魔术属性或执行外部逻辑。解析失败直接触发类型化异常（`ExtractionFieldNotFoundError` / `OdbExtractionError`），严禁将原始未解析字符串回退给底层 Abaqus C++ 接口。
+- **TypeSafe Provider 传输与主机信任边界**：在 `typesafe_intent.py` 中，TypeSafe 模式下严格要求 HTTPS 加密传输，并将默认主机限制为可信域名（`api.typesafe.ai`），防止由于端点误配置将 API 密钥泄露给不可信代理。自定义代理主机必须显式通过 `allow_custom_host=True` 或环境变量 `EXTERNAL_INTENT_ALLOW_CUSTOM_HOST=1` 进行授权。
+- **静态悬臂梁生产交付基线与凭据持久化**：全链路端到端验收门禁（`tools/production_delivery_e2e.py`）对接真实 Abaqus 2025 求解器，严格断言清单签名、ODB 实际 SHA-256 与因果 Run ID 绑定，并支持通过 `--output` 导出不可篡改的持久化验收记录。
+
+### 6. 66 类 Action 动态 AST 契约与无吞异常执行验证
 确保校验阶段与执行阶段的绝对一致性：
 - **100% AST 执行分发器对齐**：执行分发器 `actions/script.py` 的抽象语法树直接与验证白名单 `SUPPORTED_ACTION_TYPES` 进行双向集合比对，保证 66 种 Action 类型零漂移。
 - **通用区域前检对齐**：统一提取并导出 `ACTIONS_REQUIRING_REGION`（18 类边界、载荷与网格核心 Action），供动作校验与模型 Preflight 共享。
 - **测试零异常吞噬**：彻底移除 `tests/test_actions.py` 中的宽泛捕获（`except Exception: pass`），为全部 66 种 Action 建立最小有效参数用例集，保证生成的 Python/CAE 脚本非空且语义正确。
 
-### 6. EngineeringMetric 入口安全与物理量纲守恒
+### 7. EngineeringMetric 入口安全与物理量纲守恒
 在 `contracts/metrics.py` 的指标实例化入口：
 - **类型隔离**：拦截布尔值、`NaN`、正负无穷。
 - **大整数防溢出**：捕获超大整数转换为双精度浮点时可能触发的 `OverflowError`。
 
-### 7. Viewport 拓扑接地与 STEP 几何验证
+### 8. Viewport 拓扑接地与 STEP 几何验证
 - **1-to-1 模型真实拓扑解析**：消除裸“固定”默认回退到 `RootFace` 等启发式猜测，强制要求每个区域必须在当前 CAE/INP 模型中完成确定性 1-to-1 映射。
 - **外部 STEP 几何严格门禁**：外部 STEP 几何严格验证所有被引用的载荷与边界区域具有解析成功的有限实数三维锚点坐标（`anchor_point`, `anchor_points`），缺失或未接地映射时直接触发 `missing_load_application_region` 澄清中断。
 
-### 8. 渐近网格收敛门禁（Multi-Level Mesh Convergence Gate）
+### 9. 渐近网格收敛门禁（Multi-Level Mesh Convergence Gate）
 - **严苛三级渐近收敛**：强制要求至少三个独立的网格加密层级（$\text{Levels} \ge 3$），坚决拦截两级偶然巧合带来的虚假收敛。
 - **同质指标追踪**：各层级间仅允许对比完全同质的网格度量（纯单元数或纯布种尺寸）。
 - **应力符号严格验证**：对带符号物理量（静水压力、正应力）执行严格变号校核；对真非负标量（von Mises、Tresca）豁免符号检查。
 
-### 9. 单一正式报告管线（Phase P2 统一收敛架构）
+### 10. 单一正式报告管线（Phase P2 统一收敛架构）
 - **杜绝双轨漂移**：彻底废弃旧式草稿生成器。所有生产作业统一流经 `DeterministicReportPipeline.build_and_render()`，确保 Markdown 与离线单文件纯 HTML 在数据层面绝对对称。
 - **诊断草稿严格隔离**：未交付或排错运行严格输出带有 `[DIAGNOSTIC / NON-DELIVERABLE DRAFT]` 标识的调试记录，且强制 `report_html = None`。
 - **防止残留泄漏**：当下游验收被阻断（`DELIVERY_BLOCKED`）时，系统原子清空旧有报告并注销 `ReportDeliveryCard`。
 
-### 10. 自主发散自愈与无头 Viewer 离屏渲染
+### 11. 自主发散自愈与无头 Viewer 离屏渲染
 - **自主发散自愈**：动态监听解析 `.msg` 严重残余与 `.sta` 切步频率，准确定位 `CONTACT_CHATTER`、`LOCAL_SINGULARITY` 与 `TIME_INCREMENT_EXHAUSTED`，自适应注入阻尼完成闭环修复。
 - **官方无头原生离屏渲染**：应力、变形等云图直接由 Dassault Abaqus Viewer 原生执行离屏渲染（`abaqus viewer -noGUI`），绑定 `run_id`、`input_hash`、`odb_sha256` 生成防伪会话图件。
 
@@ -250,7 +255,7 @@ machine_validation/p2_cases/
 ```text
                ┌─────────────────────────────────────────────────────────┐
                │ Tier 1: CI 自动化软件契约门禁                           │
-               │ (1,339 项确定性测试，Python 3.10-3.12 零警告全通过)      │
+               │ (1,349 项确定性测试，Python 3.10-3.12 零警告全通过)      │
                ├─────────────────────────────────────────────────────────┤
                │ Tier 2: 黄金证据矩阵防篡改审计                          │
                │ (13/13 项 L4 资产完整性核验，SHA-256 清单一致性)         │
@@ -262,7 +267,7 @@ machine_validation/p2_cases/
 
 | 验证分层 | 运行环境与执行器 | 工具链依赖 | 覆盖范围与考核指标 |
 | :--- | :--- | :--- | :--- |
-| **Tier 1: CI 软件契约门禁** | GitHub Actions (Ubuntu / macOS / Windows) | 纯 Python 环境（Python 3.10–3.12） | • **1,339 项自动化回归测试通过（0 警告、0 错误）**<br>• 22 项 Dassault Tier A 物理标杆基准<br>• 7 项 Tier B 扩展力学校准基准<br>• 66 种 Action AST 双向一致性及最小有效参数执行验证<br>• 严格负向错误码 CLI 冒烟门禁（`missing_load_application_region`）<br>• 全仓库零泄露静态安全审计 |
+| **Tier 1: CI 软件契约门禁** | GitHub Actions (Ubuntu / macOS / Windows) | 纯 Python 环境（Python 3.10–3.12） | • **1,349 项自动化回归测试通过（0 警告、0 错误）**<br>• 22 项 Dassault Tier A 物理标杆基准<br>• 7 项 Tier B 扩展力学校准基准<br>• 66 种 Action AST 双向一致性及最小有效参数执行验证<br>• 严格负向错误码 CLI 冒烟门禁（`missing_load_application_region`）<br>• 全仓库零泄露静态安全审计 |
 | **Tier 2: 黄金证据矩阵防篡改审计** | 本地及临时沙箱环境 (`machine_validation/`) | Python 3.10+ 与 SHA-256 密码学签名核验工具 | • **13/13 项 Golden Matrix L4 证据包全量审计**<br>• Level 4 密码学证据溯源核验<br>• 清单有效性签名及路径越界（Path Traversal）安全审查<br>• 资产零篡改只读治理 |
 | **Tier 3: 真机物理求解执行门禁** | 部署 Abaqus 2025 的专用 Windows 服务器 | SIMULIA Abaqus 商业浮动/节点许可 | • 真实 CAE 批处理脚本生成与二进制 ODB 提取<br>• 原生无头 Abaqus Viewer 离屏云图生成<br>• 密码学交付卡签名与防伪核验<br>• 真实非线性接触求解与收敛自愈 |
 
@@ -293,7 +298,7 @@ python -m pip install -e ".[test]"
 
 ```bash
 python -m pytest tests -W error -q
-# 预期输出：1346 passed, 0 warnings across all test suites
+# 预期输出：1349 passed, 0 warnings across all test suites
 ```
 
 ### 3. Python 极简调用示例
@@ -370,7 +375,7 @@ Abaqus-AI-Agent/
 │   ├── planning/             # 动作规划编排与机构图编译器
 │   ├── reporting/            # 单一正式确定性报告管线 (DeterministicReportPipeline)
 │   └── validation/           # 量纲相容性、网格渐近收敛与 4D 正交验收门禁
-├── tests/                    # 1,339 项确定性回归测试用例（0 警告，覆盖 Python 3.10-3.12）
+├── tests/                    # 1,349 项确定性回归测试用例（0 警告，覆盖 Python 3.10-3.12）
 └── tools/                    # JEV 基准套件、真机黄金驱动、探针与认证套件
 ```
 

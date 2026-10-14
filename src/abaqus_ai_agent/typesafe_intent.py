@@ -1459,6 +1459,7 @@ class GenericHttpIntentProvider:
         payload_builder: Optional[Callable[[str, "GenericHttpIntentProvider"], Dict[str, Any]]] = None,
         response_normalizer: Optional[Callable[[Any], Dict[str, Any]]] = None,
         provider_type: Optional[str] = None,
+        allow_custom_host: bool = False,
     ):
         raw_api_key = api_key or _get_external_config("EXTERNAL_INTENT_API_KEY", "INTENT_API_KEY", "TYPESAFE_API_KEY")
         self.api_key = raw_api_key.strip() if raw_api_key else None
@@ -1479,6 +1480,28 @@ class GenericHttpIntentProvider:
             self.endpoint = None
 
         is_typesafe = (self.provider_type == "typesafe") or (bool(self.endpoint) and "typesafe.ai" in self.endpoint)
+
+        # Enforce strict transport and host trust boundaries for TypeSafe provider
+        if is_typesafe and self.endpoint:
+            from urllib.parse import urlparse
+            parsed_url = urlparse(self.endpoint)
+            scheme = (parsed_url.scheme or "").lower()
+            if scheme != "https":
+                raise ExternalIntentApiError(
+                    f"TypeSafe endpoint must use secure HTTPS scheme; got {self.endpoint!r}"
+                )
+            host = (parsed_url.hostname or "").lower()
+            trusted_hosts = {"api.typesafe.ai", "typesafe.ai"}
+            authorized_custom = allow_custom_host or bool(
+                os.environ.get("EXTERNAL_INTENT_ALLOW_CUSTOM_HOST")
+                or os.environ.get("TYPESAFE_ALLOW_CUSTOM_HOST")
+            )
+            if not authorized_custom and host not in trusted_hosts and not host.endswith(".typesafe.ai"):
+                raise ExternalIntentApiError(
+                    f"Untrusted endpoint host for TypeSafe provider: {host!r}. "
+                    "TypeSafe provider strictly enforces https://api.typesafe.ai. "
+                    "Pass allow_custom_host=True or set EXTERNAL_INTENT_ALLOW_CUSTOM_HOST=1 to authorize custom proxies."
+                )
 
         raw_model = model or _get_external_config("EXTERNAL_INTENT_MODEL", "INTENT_MODEL")
         if raw_model:
@@ -1644,6 +1667,7 @@ class EngineeringIntentRouter:
         api_url: Optional[str] = None,
         external_provider: Optional[Any] = None,
         provider_type: Optional[str] = None,
+        allow_custom_host: bool = False,
     ):
         raw_key = api_key or _get_external_config("EXTERNAL_INTENT_API_KEY", "INTENT_API_KEY", "TYPESAFE_API_KEY")
         self.api_key = raw_key.strip() if raw_key else None
@@ -1695,6 +1719,7 @@ class EngineeringIntentRouter:
                 endpoint=self.api_url,
                 api_key=self.api_key,
                 provider_type=self.provider_type,
+                allow_custom_host=allow_custom_host,
             )
         else:
             self.external_provider = None

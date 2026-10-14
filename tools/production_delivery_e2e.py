@@ -1,13 +1,15 @@
 #!/usr/bin/env python3
-"""Execute the real Abaqus 2025 Production Delivery Full-Chain Acceptance Gate (REQ-ISO-002, REQ-P1-036).
+"""Execute the real Abaqus 2025 Static Cantilever Baseline E2E Delivery Verification (REQ-ISO-002, REQ-P1-036).
 
 Strict Engineering Contracts:
-1. Production Isolation: Enforces require_production=True with a verified ExternalProjectContext.
-2. Causal Lineage: Authentic binary ODB -> Field Extraction -> Input INP SHA256 -> Manifest V2.
-3. Decoupled 4D Acceptance: Verifies deliverable=True, acceptance_status=PASS, result_validity=VALID,
+1. Baseline Scope: Establishes a verified full-chain production delivery baseline on a 3D linear elastic
+   cantilever benchmark, asserting physical validity, solver completion, and authentic ODB extraction.
+2. Production Isolation: Enforces require_production=True with a verified ExternalProjectContext outside the repo.
+3. Causal Lineage: Authentic binary ODB -> Field Extraction -> Input INP SHA256 -> Signed Manifest V2.
+4. Decoupled 4D Acceptance: Verifies deliverable=True, acceptance_status=PASS, result_validity=VALID,
    and run.state=AnalysisRunState.ACCEPTED with zero ambient warnings or evidence bypasses.
-4. Clean Workspace: Complete execution takes place strictly outside the repository in an external
-   temporary directory, with automatic cleanup ensuring zero repository pollution.
+5. Evidence Integrity & Persistence: Verifies authentic manifest signature, run_id binding, ODB SHA-256,
+   and optionally exports a permanent evidence record without repo pollution.
 """
 
 from __future__ import annotations
@@ -350,6 +352,27 @@ if accepted is None:
 if accepted is None:
     raise RuntimeError('Production delivery run missing acceptance evaluation: run.acceptance is None')
 
+manifest = None
+if hasattr(run.evidence, 'manifest') and run.evidence.manifest:
+    manifest = run.evidence.manifest
+elif hasattr(run.evidence, 'entries'):
+    for ev in run.evidence.entries:
+        if getattr(ev, 'kind', None) in ('evidence_manifest_v2', 'manifest'):
+            manifest = getattr(ev, 'value', None)
+            break
+if manifest is None and getattr(run, 'metadata', None):
+    manifest = run.metadata.get('evidence_manifest') or run.metadata.get('manifest')
+
+manifest_verified = False
+if manifest is not None and hasattr(manifest, 'verify_signature'):
+    manifest_verified = bool(manifest.verify_signature())
+
+actual_odb_sha256 = None
+if run.odb_path and os.path.isfile(run.odb_path):
+    import hashlib
+    with open(run.odb_path, 'rb') as _f:
+        actual_odb_sha256 = hashlib.sha256(_f.read()).hexdigest()
+
 report = {
     'status': 'pass' if (
         run.solver_completed
@@ -358,7 +381,10 @@ report = {
         and getattr(accepted, 'deliverable', False) is True
         and getattr(accepted, 'acceptance_status', '') == 'PASS'
         and reaction_report.passed
+        and manifest_verified
+        and bool(actual_odb_sha256)
     ) else 'fail',
+    'baseline_type': 'static_cantilever_beam_linear_elastic',
     'run_id': run.id,
     'run_state': run.state.value,
     'engineering_status': run.engineering_status,
@@ -368,6 +394,10 @@ report = {
     'audit_summary': getattr(accepted, 'audit_summary', ''),
     'reaction_balance_passed': reaction_report.passed,
     'reaction_summary': reaction_summary,
+    'manifest_signature_verified': manifest_verified,
+    'causal_run_id_bound': bool(manifest and getattr(manifest, 'run_id', None) == run.id),
+    'actual_odb_sha256': actual_odb_sha256,
+    'odb_sha256': actual_odb_sha256,
     'metrics': {
         getattr(m, 'name', None) or getattr(m, 'value_key', None): getattr(m, 'value', None)
         for m in (run.metrics or ())
@@ -498,7 +528,13 @@ def run_production_delivery_e2e(
         assert report["acceptance_status"] == "PASS", f"Expected acceptance PASS, got {report['acceptance_status']}"
         assert report["result_validity"] == "VALID", f"Expected VALID result_validity, got {report['result_validity']}"
         assert report["reaction_balance_passed"] is True, "Reaction balance gate failed"
+        assert report["manifest_signature_verified"] is True, "EvidenceManifest signature verification failed"
+        assert report["causal_run_id_bound"] is True, "Causal run ID binding failed between run and manifest"
+        assert bool(report.get("actual_odb_sha256") or report.get("odb_sha256")), "Missing authentic ODB SHA-256 in report"
+        assert bool(report.get("inp_hash")), "Missing authentic INP input_hash in report"
 
+        # 4. Evidence Persistence Handling
+        report["persistence"] = "persisted" if output_path else "ephemeral_verified"
         if output_path:
             output_path.parent.mkdir(parents=True, exist_ok=True)
             output_path.write_text(json.dumps(report, indent=2, sort_keys=True), encoding="utf-8")
@@ -520,7 +556,7 @@ def main(argv=None):
 
     out_path = Path(args.output).resolve() if args.output else None
     print("=" * 80)
-    print("Abaqus-AI-Agent Production Delivery Full-Chain Acceptance Verification")
+    print("Abaqus-AI-Agent Static Cantilever Baseline E2E Delivery Verification")
     print("=" * 80)
 
     report = run_production_delivery_e2e(

@@ -7,7 +7,7 @@
 [![CI](https://github.com/chenlei-gh/Abaqus-AI-Agent/actions/workflows/ci.yml/badge.svg)](https://github.com/chenlei-gh/Abaqus-AI-Agent/actions/workflows/ci.yml)
 [![Python](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12-blue.svg)](https://www.python.org/)
 [![Abaqus](https://img.shields.io/badge/SIMULIA%20Abaqus-2025%20Certified-brightgreen.svg)](https://www.3ds.com/products-services/simulia/products/abaqus/)
-[![Tests](https://img.shields.io/badge/regression%20tests-1346%20passed%20%280%20warn%29-success.svg)](tests/)
+[![Tests](https://img.shields.io/badge/regression%20tests-1349%20passed%20%280%20warn%29-success.svg)](tests/)
 [![JEV Intent Engine](https://img.shields.io/badge/JEV%20Cognitive%20Engine-Hybrid%20TypeSafe-blueviolet.svg)](src/abaqus_ai_agent/typesafe_intent.py)
 [![JEV Benchmark Status](https://img.shields.io/badge/REQ--P1--045-IN__REVIEW-orange.svg)](docs/p1-product-requirements.md)
 [![Golden Matrix](https://img.shields.io/badge/golden%20matrix-13%2F13%20L4%20audited-success.svg)](machine_validation/)
@@ -65,7 +65,7 @@ flowchart TD
     FailClosedGate -->|Complete & Verified| Compiler[Abaqus CAE Script Compiler<br>66 Action AST Hardened]
 ```
 
-- **Offline Deterministic Baseline**: Fully functional without any external LLM APIs. Backed by 1,339 deterministic regression tests, it guarantees reproducible, zero-hallucination execution for standard engineering scenarios.
+- **Offline Deterministic Baseline**: Fully functional without any external LLM APIs. Backed by 1,349 deterministic regression tests, it guarantees reproducible, zero-hallucination execution for standard engineering scenarios.
 - **Live JEV Provider (Cognitive Plane)**: When enabled with valid credentials, JEV resolves non-standard linguistic structures, disambiguates complex multi-step boundary conditions, and infers subtle engineering relationships across clauses.
 
 ### 3. Engineering Reality & Known Boundaries (No Overselling)
@@ -74,7 +74,7 @@ We uphold engineering honesty over marketing claims. The status of JEV integrati
 
 | Dimension | Current Implementation Status | Engineering Audit Verdict |
 | :--- | :--- | :--- |
-| **Offline Safety Baseline** | 1,339 automated tests passing with zero warnings across Python 3.10–3.12. | ✅ **VERIFIED (Closed)** |
+| **Offline Safety Baseline** | 1,349 automated tests passing with zero warnings across Python 3.10–3.12. | ✅ **VERIFIED (Closed)** |
 | **Clause Scoping Isolation** | Load and acceptance clauses strictly isolated via punctuation scoping. | ✅ **VERIFIED (Closed)** |
 | **Thermal & Material Grounding** | Thermal parameters (°C to K) and material evidence levels (`REFERENCE_LIBRARY` vs `VERIFIED_PROPERTIES`) strictly segregated. | ✅ **VERIFIED (Closed)** |
 | **STEP 1-to-1 Topology Grounding** | 3D finite coordinate anchor points (`anchor_point`) enforced. Rejects `resolved=False` and non-finite coordinates. | ✅ **VERIFIED (Closed)** |
@@ -180,32 +180,37 @@ Evidence verification in `contracts/evidence.py` enforces data integrity and san
   - *Threat Model Boundary*: The SHA-256 digest is an unkeyed hash, not an asymmetric digital signature or HMAC. It does NOT provide non-repudiation against an active adversary with full filesystem write access who can recompute the hash. True cryptographic non-repudiation requires external corporate PKI/CA signing.
 - **Workspace Directory Traversal Guard**: `verify_evidence_integrity()` inspects declared artifact paths against the designated `base_dir`. Relative directory escapes (`..`), cross-drive absolute paths, and symlink redirects pointing outside `base_dir` are trapped, flagging `path_traversal_out_of_bounds` and setting `validity = "TAMPERED"`. Unbounded absolute paths without an explicit `base_dir` trigger audit warnings.
 
-### 5. 66-Action AST Parity & Non-Swallowing Dynamic Contract
+### 5. Secure ODB Region Whitelist AST Parser & Provider Trust Boundaries
+- **Secure ODB Region Whitelist AST Parser**: Replaced arbitrary `eval(...)` with `_resolve_safe_odb_region()`. Enforces an explicit AST node whitelist (attribute traversal and string subscripts on `odb` only), blocking function/method calls, imports, and dunder properties. Parsing failures immediately trigger typed exceptions (`ExtractionFieldNotFoundError` / `OdbExtractionError`) and strictly forbid falling back to passing raw strings into Abaqus C++ subsets.
+- **Provider Endpoint Transport & Host Trust Boundary**: In `typesafe_intent.py`, TypeSafe providers strictly enforce HTTPS scheme and restrict default endpoints to verified hosts (`api.typesafe.ai`), guarding API keys against insecure transmission or unintended proxy redirection. Custom proxies require explicit opt-in via `allow_custom_host=True` or `EXTERNAL_INTENT_ALLOW_CUSTOM_HOST=1`.
+- **Static Cantilever Production Delivery Baseline**: End-to-end integration gate (`tools/production_delivery_e2e.py`) verified against live Abaqus 2025, asserting signed Manifest V2, ODB SHA-256, run ID causal lineage, and supporting non-volatile export (`--output`).
+
+### 6. 66-Action AST Parity & Non-Swallowing Dynamic Contract
 The platform maintains strict bidirectional consistency between validation gates and execution dispatchers:
 - **100% AST Dispatcher Parity**: The AST of `actions/script.py` is systematically compared against `SUPPORTED_ACTION_TYPES`, ensuring zero drift across all 66 supported action types.
 - **Universal Region Preflight Alignment**: Centrally exports `ACTIONS_REQUIRING_REGION` (18 boundary, load, and mesh actions) shared by both structural validation and model preflight.
 - **Zero-Swallowing Dynamic Tests**: All broad `except Exception: pass` patterns in `tests/test_actions.py` have been eliminated. Each of the 66 actions is validated against a certified minimal-valid-argument fixture.
 
-### 6. EngineeringMetric Boundary Hardening
+### 7. EngineeringMetric Boundary Hardening
 Physical metrics defined in `contracts/metrics.py` undergo strict type and domain sanitation upon instantiation:
 - **Type Discrimination**: Blocks boolean types, `NaN`, and positive/negative infinity.
 - **Overflow Protection**: Traps arbitrary-precision Python integer conversions exceeding IEEE-754 64-bit float limits (`OverflowError`).
 
-### 7. Viewport Topology Grounding & STEP Verification
+### 8. Viewport Topology Grounding & STEP Verification
 - **1-to-1 CAD / INP Topology Resolution**: Rejects vague naming heuristics (e.g., bare "fixed" arbitrarily defaulting to `RootFace`). Grounding requires strict 1-to-1 mapping against verified model geometry sets or surfaces.
 - **Fail-Closed External STEP Gate**: For imported STEP geometries, referenced regions must possess verified 3D finite coordinate anchor points (`anchor_point`, `anchor_points`). Missing or ungrounded mappings trigger `missing_load_application_region` clarification rather than guessing.
 
-### 8. Multi-Level Mesh Convergence Gate
+### 9. Multi-Level Mesh Convergence Gate
 - **Strict Asymptotic Hierarchy**: Requires a minimum of three distinct refinement tiers ($\text{Levels} \ge 3$) to prove asymptotic convergence, strictly rejecting two-level false positives.
 - **Homogeneous Metric Tracking**: Compares consistent indicators across all tiers (strictly element count or seed size; mixing nodes and elements across tiers is prohibited).
 - **Physical Stress Sign Verification**: Enforces sign consistency checks for signed components while exempting true non-negative invariants (von Mises, Tresca).
 
-### 9. Unified Single-Path Engineering Reporting
+### 10. Unified Single-Path Engineering Reporting
 - **Zero Dual-Track Divergence**: Eliminated parallel legacy draft builders. All production runs flow through `DeterministicReportPipeline.build_and_render()`, generating semantically identical Markdown and single-file interactive HTML reports.
 - **Diagnostic Draft Isolation**: Non-deliverable or exploratory executions strictly output a Markdown diagnostic record prefixed with `[DIAGNOSTIC / NON-DELIVERABLE DRAFT]` and force `report_html = None`.
 - **Zero Stale Draft Leakage**: If downstream delivery criteria are blocked (`DELIVERY_BLOCKED`), the system atomically clears prior report text and revokes the `ReportDeliveryCard`.
 
-### 10. Autonomous Solver Doctor & Headless Viewer
+### 11. Autonomous Solver Doctor & Headless Viewer
 - **Autonomous Convergence Doctor**: Dynamically inspects `.msg` force residuals and `.sta` cutback frequencies, diagnosing contact chatter, local singularities, and increment exhaustion to apply physical stabilization damping.
 - **Authentic Headless Viewer Off-Screen Rendering**: Contours are directly exported by the live Dassault Abaqus Viewer (`abaqus viewer -noGUI`), binding `run_id`, `input_hash`, `odb_sha256`, and field components to the visual assets.
 
@@ -248,7 +253,7 @@ machine_validation/p2_cases/
 ```text
                ┌─────────────────────────────────────────────────────────┐
                │ Tier 1: CI Software Contract Gate                       │
-               │ (1,339 deterministic tests, 0 warnings across Python 3.10-3.12) │
+               │ (1,349 deterministic tests, 0 warnings across Python 3.10-3.12) │
                ├─────────────────────────────────────────────────────────┤
                │ Tier 2: Golden Matrix Evidence Audit                    │
                │ (13/13 L4 asset integrity, SHA-256 manifest check)      │
@@ -260,7 +265,7 @@ machine_validation/p2_cases/
 
 | Verification Tier | Runner & Environment | Dependencies | Scope & Certification Target |
 | :--- | :--- | :--- | :--- |
-| **Tier 1: CI Software Contract Gate** | GitHub Actions (Ubuntu / macOS / Windows) | Zero Abaqus license required (Python 3.10–3.12) | • **1,339 automated tests passing (0 warnings, 0 errors)**<br>• 22 Dassault Tier A physical benchmarks<br>• 7 Tier B advanced mechanics baselines<br>• 66 Action AST bidirectional parity and schema tests<br>• Strict negative error-code CLI smoke gates (`missing_load_application_region`)<br>• Full repository zero-leakage security audit |
+| **Tier 1: CI Software Contract Gate** | GitHub Actions (Ubuntu / macOS / Windows) | Zero Abaqus license required (Python 3.10–3.12) | • **1,349 automated tests passing (0 warnings, 0 errors)**<br>• 22 Dassault Tier A physical benchmarks<br>• 7 Tier B advanced mechanics baselines<br>• 66 Action AST bidirectional parity and schema tests<br>• Strict negative error-code CLI smoke gates (`missing_load_application_region`)<br>• Full repository zero-leakage security audit |
 | **Tier 2: Golden Matrix Evidence Audit** | Local / Staging Sandbox (`machine_validation/`) | Python 3.10+ & SHA-256 verification tools | • **13/13 Golden Matrix L4 bundles fully audited**<br>• Level 4 cryptographic provenance verification<br>• Manifest SHA-256 verification and path traversal boundary checks<br>• Zero-modification read-only asset governance |
 | **Tier 3: Real-Machine Execution Gate** | Dedicated Windows Server with SIMULIA Abaqus 2025 | Abaqus 2025 commercial floating/node license | • Real CAE batch script execution and binary ODB extraction<br>• Off-screen Abaqus Viewer headless contour visualization<br>• Cryptographic Delivery Card authorization<br>• Autonomous convergence recovery and cutback healing |
 
@@ -291,7 +296,7 @@ Run the deterministic regression suite:
 
 ```bash
 python -m pytest tests -W error -q
-# Expected result: 1346 passed, 0 warnings across all test suites
+# Expected result: 1349 passed, 0 warnings across all test suites
 ```
 
 ### 3. Minimal Python Usage
@@ -368,7 +373,7 @@ Abaqus-AI-Agent/
 │   ├── planning/             # Action planning & mechanism graph compiler
 │   ├── reporting/            # Single-path DeterministicReportPipeline, HTML & MD renderers
 │   └── validation/           # Dimensional consistency, mesh convergence, and 4D acceptance gates
-├── tests/                    # 1,339 deterministic regression tests (0 warnings across Python 3.10-3.12)
+├── tests/                    # 1,349 deterministic regression tests (0 warnings across Python 3.10-3.12)
 └── tools/                    # JEV benchmarks, real-machine drivers, probes, and qualification scripts
 ```
 

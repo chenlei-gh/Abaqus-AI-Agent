@@ -7,6 +7,7 @@ import pytest
 
 from abaqus_ai_agent.typesafe_intent import (
     ChoiceJudgment,
+    ExternalIntentApiError,
     GenericHttpIntentProvider,
     IntentAmbiguityError,
     JevDecisionBundle,
@@ -136,14 +137,16 @@ def test_jev_intent_context_merge_unblocks_existing_model_evidence():
 
 
 def test_typesafe_provider_configuration_contracts(monkeypatch):
-    """Verify explicit provider_type and endpoint resolution contracts."""
-    # Ensure no ambient typesafe environment variables
-    monkeypatch.delenv("TYPESAFE_API_KEY", raising=False)
-    monkeypatch.delenv("TYPESAFE_API_URL", raising=False)
-    monkeypatch.delenv("INTENT_API_KEY", raising=False)
-    monkeypatch.delenv("INTENT_API_URL", raising=False)
-    monkeypatch.delenv("EXTERNAL_INTENT_API_KEY", raising=False)
-    monkeypatch.delenv("EXTERNAL_INTENT_API_URL", raising=False)
+    """Verify explicit provider_type, trust boundaries, and endpoint resolution contracts."""
+    # Ensure no ambient typesafe or external intent environment variables
+    env_vars_to_clear = [
+        "TYPESAFE_API_KEY", "TYPESAFE_API_URL", "TYPESAFE_PROVIDER", "TYPESAFE_RUN_MODE", "TYPESAFE_ALLOW_CUSTOM_HOST",
+        "EXTERNAL_INTENT_API_KEY", "EXTERNAL_INTENT_API_URL", "EXTERNAL_INTENT_PROVIDER", "EXTERNAL_INTENT_MODEL",
+        "EXTERNAL_INTENT_RUN_MODE", "EXTERNAL_INTENT_ALLOW_CUSTOM_HOST",
+        "INTENT_API_KEY", "INTENT_API_URL", "INTENT_PROVIDER", "INTENT_MODEL", "INTENT_RUN_MODE",
+    ]
+    for var in env_vars_to_clear:
+        monkeypatch.delenv(var, raising=False)
 
     # 1. API key containing 'typesafe' substring must NOT implicitly trigger typesafe endpoint
     generic_p = GenericHttpIntentProvider(api_key="custom_typesafe_substring_key")
@@ -161,12 +164,25 @@ def test_typesafe_provider_configuration_contracts(monkeypatch):
     assert env_p.endpoint == TYPESAFE_SYSTEMONE_DEFAULT_URL
     assert env_p.model == TYPESAFE_DEFAULT_MODEL
 
-    # 4. Custom endpoint overrides TypeSafe default even with typesafe provider_type
+    # 4. Insecure HTTP scheme for TypeSafe provider strictly rejected
+    with pytest.raises(ExternalIntentApiError, match="must use secure HTTPS scheme"):
+        GenericHttpIntentProvider(endpoint="http://api.typesafe.ai/v1", provider_type="typesafe")
+
+    # 5. Untrusted arbitrary external host for TypeSafe provider rejected by default
+    with pytest.raises(ExternalIntentApiError, match="Untrusted endpoint host for TypeSafe provider"):
+        GenericHttpIntentProvider(endpoint="https://untrusted.arbitrary-host.com/v1", provider_type="typesafe")
+
+    # 6. Authorized custom endpoint overrides TypeSafe default with allow_custom_host
     custom_url = "https://custom.gateway.internal/v1"
-    custom_p = GenericHttpIntentProvider(endpoint=custom_url, provider_type="typesafe")
+    custom_p = GenericHttpIntentProvider(endpoint=custom_url, provider_type="typesafe", allow_custom_host=True)
     assert custom_p.endpoint == custom_url
 
-    # 5. EngineeringIntentRouter contracts
+    monkeypatch.setenv("EXTERNAL_INTENT_ALLOW_CUSTOM_HOST", "1")
+    custom_env_p = GenericHttpIntentProvider(endpoint=custom_url, provider_type="typesafe")
+    assert custom_env_p.endpoint == custom_url
+    monkeypatch.delenv("EXTERNAL_INTENT_ALLOW_CUSTOM_HOST", raising=False)
+
+    # 7. EngineeringIntentRouter contracts
     monkeypatch.delenv("TYPESAFE_API_KEY", raising=False)
     router_unconfigured = JevIntentRouter(api_key="has_typesafe_in_key")
     assert router_unconfigured.api_url is None

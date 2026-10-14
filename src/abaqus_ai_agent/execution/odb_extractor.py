@@ -16,6 +16,7 @@ Contract & Fail-Closed Discipline:
 
 from __future__ import annotations
 
+import ast
 import hashlib
 import json
 import math
@@ -87,6 +88,67 @@ class OdbExtractionReport:
             if req.value_key == value_key or req.name == value_key:
                 return ext
         return None
+
+
+def _resolve_safe_odb_region(odb: Any, expr: Any) -> Any:
+    """Safely resolve an ODB region expression without invoking arbitrary code execution.
+
+    Enforces a strict AST whitelist:
+    - Base variable must strictly be `odb`.
+    - Allowed operations: attribute traversal and subscripting with string constants only.
+    - Disallowed: function/method calls, arithmetic, comprehension, imports, dunder attributes.
+    - Fail-Closed: Raises ExtractionFieldNotFoundError or OdbExtractionError on any
+      unrecognized syntax or resolution failure. NEVER falls back to returning the raw string.
+    """
+    if not isinstance(expr, str):
+        return expr
+
+    expr_clean = expr.strip()
+    if not expr_clean:
+        raise OdbExtractionError("Empty ODB region expression")
+
+    try:
+        tree = ast.parse(expr_clean, mode="eval")
+    except SyntaxError as exc:
+        raise OdbExtractionError(f"Malformed ODB region syntax {expr!r}: {exc}") from exc
+
+    def _eval_node(node: ast.AST) -> Any:
+        if isinstance(node, ast.Expression):
+            return _eval_node(node.body)
+        if isinstance(node, ast.Name):
+            if node.id == "odb":
+                return odb
+            raise OdbExtractionError(f"Unauthorized identifier in region expression: {node.id!r}")
+        if isinstance(node, ast.Attribute):
+            val = _eval_node(node.value)
+            attr = node.attr
+            if attr.startswith("_"):
+                raise OdbExtractionError(f"Access to private/dunder attribute {attr!r} forbidden")
+            try:
+                return getattr(val, attr)
+            except AttributeError as exc:
+                raise ExtractionFieldNotFoundError(f"Attribute {attr!r} not found on ODB object: {exc}") from exc
+        if isinstance(node, ast.Subscript):
+            val = _eval_node(node.value)
+            slice_node = node.slice
+            if isinstance(slice_node, ast.Index):  # Compatibility for Python < 3.9
+                slice_node = slice_node.value
+            if isinstance(slice_node, ast.Constant) and isinstance(slice_node.value, str):
+                key = slice_node.value
+            elif isinstance(slice_node, getattr(ast, "Str", type(None))):
+                key = slice_node.s
+            else:
+                raise OdbExtractionError("Only string constant subscripts are permitted in region expressions")
+            try:
+                return val[key]
+            except (KeyError, IndexError, TypeError) as exc:
+                raise ExtractionFieldNotFoundError(f"Key {key!r} not found in ODB collection: {exc}") from exc
+        raise OdbExtractionError(f"Disallowed AST node type {type(node).__name__} in region expression: {expr!r}")
+
+    resolved = _eval_node(tree)
+    if resolved is None or isinstance(resolved, str):
+        raise OdbExtractionError(f"Region expression {expr!r} did not resolve to an authentic ODB set object")
+    return resolved
 
 
 class HeadlessAbaqusPythonExecutor(AbaqusExecutor):
@@ -318,12 +380,7 @@ def _extract_single_requirement_in_process(
             fo = fo.getSubset(position=pos_const)
     if requirement.region:
         if hasattr(fo, "getSubset"):
-            reg_val = requirement.region
-            if isinstance(reg_val, str):
-                try:
-                    reg_val = eval(reg_val, {"odb": odb})
-                except Exception:
-                    pass
+            reg_val = _resolve_safe_odb_region(odb, requirement.region)
             fo = fo.getSubset(region=reg_val)
 
     if requirement.invariant:
