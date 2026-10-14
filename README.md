@@ -7,7 +7,7 @@
 [![CI](https://github.com/chenlei-gh/Abaqus-AI-Agent/actions/workflows/ci.yml/badge.svg)](https://github.com/chenlei-gh/Abaqus-AI-Agent/actions/workflows/ci.yml)
 [![Python](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12-blue.svg)](https://www.python.org/)
 [![Abaqus](https://img.shields.io/badge/SIMULIA%20Abaqus-2025%20Certified-brightgreen.svg)](https://www.3ds.com/products-services/simulia/products/abaqus/)
-[![Tests](https://img.shields.io/badge/regression%20tests-1339%20passed%20%280%20warn%29-success.svg)](tests/)
+[![Tests](https://img.shields.io/badge/regression%20tests-1346%20passed%20%280%20warn%29-success.svg)](tests/)
 [![JEV Intent Engine](https://img.shields.io/badge/JEV%20Cognitive%20Engine-Hybrid%20TypeSafe-blueviolet.svg)](src/abaqus_ai_agent/typesafe_intent.py)
 [![JEV Benchmark Status](https://img.shields.io/badge/REQ--P1--045-IN__REVIEW-orange.svg)](docs/p1-product-requirements.md)
 [![Golden Matrix](https://img.shields.io/badge/golden%20matrix-13%2F13%20L4%20audited-success.svg)](machine_validation/)
@@ -291,7 +291,7 @@ Run the deterministic regression suite:
 
 ```bash
 python -m pytest tests -W error -q
-# Expected result: 1339 passed, 0 warnings across all test suites
+# Expected result: 1346 passed, 0 warnings across all test suites
 ```
 
 ### 3. Minimal Python Usage

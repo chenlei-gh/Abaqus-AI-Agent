@@ -307,10 +307,24 @@ def _extract_single_requirement_in_process(
 
     if requirement.position:
         if hasattr(fo, "getSubset"):
-            fo = fo.getSubset(position=requirement.position)
+            pos_const = requirement.position
+            try:
+                import sys as _sys
+                abq_consts = _sys.modules.get("abaqusConstants")
+                if abq_consts and isinstance(pos_const, str):
+                    pos_const = getattr(abq_consts, pos_const, pos_const)
+            except Exception:
+                pass
+            fo = fo.getSubset(position=pos_const)
     if requirement.region:
         if hasattr(fo, "getSubset"):
-            fo = fo.getSubset(region=requirement.region)
+            reg_val = requirement.region
+            if isinstance(reg_val, str):
+                try:
+                    reg_val = eval(reg_val, {"odb": odb})
+                except Exception:
+                    pass
+            fo = fo.getSubset(region=reg_val)
 
     if requirement.invariant:
         if hasattr(fo, "getScalarField"):

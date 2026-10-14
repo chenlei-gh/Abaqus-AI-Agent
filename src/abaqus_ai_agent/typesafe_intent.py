@@ -1458,29 +1458,39 @@ class GenericHttpIntentProvider:
         model: Optional[str] = None,
         payload_builder: Optional[Callable[[str, "GenericHttpIntentProvider"], Dict[str, Any]]] = None,
         response_normalizer: Optional[Callable[[Any], Dict[str, Any]]] = None,
+        provider_type: Optional[str] = None,
     ):
         raw_api_key = api_key or _get_external_config("EXTERNAL_INTENT_API_KEY", "INTENT_API_KEY", "TYPESAFE_API_KEY")
         self.api_key = raw_api_key.strip() if raw_api_key else None
 
+        raw_provider_type = provider_type or _get_external_config("EXTERNAL_INTENT_PROVIDER", "INTENT_PROVIDER", "TYPESAFE_PROVIDER")
+        self.provider_type = raw_provider_type.strip().lower() if raw_provider_type else None
+
         raw_endpoint = endpoint or _get_external_config("EXTERNAL_INTENT_API_URL", "INTENT_API_URL", "TYPESAFE_API_URL")
         if raw_endpoint:
             self.endpoint = raw_endpoint.strip()
-        elif bool(os.environ.get("TYPESAFE_API_KEY")) or (self.api_key and "typesafe" in self.api_key.lower()):
+        elif self.provider_type == "typesafe":
             self.endpoint = TYPESAFE_SYSTEMONE_DEFAULT_URL
+        elif bool(os.environ.get("TYPESAFE_API_KEY")):
+            self.endpoint = TYPESAFE_SYSTEMONE_DEFAULT_URL
+            if not self.provider_type:
+                self.provider_type = "typesafe"
         else:
             self.endpoint = None
+
+        is_typesafe = (self.provider_type == "typesafe") or (bool(self.endpoint) and "typesafe.ai" in self.endpoint)
 
         raw_model = model or _get_external_config("EXTERNAL_INTENT_MODEL", "INTENT_MODEL")
         if raw_model:
             self.model = raw_model.strip()
-        elif self.endpoint and "typesafe.ai" in self.endpoint:
+        elif is_typesafe:
             self.model = TYPESAFE_DEFAULT_MODEL
         else:
             self.model = "external-intent-v1"
 
         if payload_builder is not None:
             self._payload_builder = payload_builder
-        elif self.endpoint and "typesafe.ai" in self.endpoint:
+        elif is_typesafe:
             self._payload_builder = build_typesafe_systemone_payload
         else:
             self._payload_builder = None
@@ -1633,14 +1643,23 @@ class EngineeringIntentRouter:
         timeout: float = 5.0,
         api_url: Optional[str] = None,
         external_provider: Optional[Any] = None,
+        provider_type: Optional[str] = None,
     ):
         raw_key = api_key or _get_external_config("EXTERNAL_INTENT_API_KEY", "INTENT_API_KEY", "TYPESAFE_API_KEY")
         self.api_key = raw_key.strip() if raw_key else None
+
+        raw_provider_type = provider_type or _get_external_config("EXTERNAL_INTENT_PROVIDER", "INTENT_PROVIDER", "TYPESAFE_PROVIDER")
+        self.provider_type = raw_provider_type.strip().lower() if raw_provider_type else None
+
         raw_url = api_url or _get_external_config("EXTERNAL_INTENT_API_URL", "INTENT_API_URL", "TYPESAFE_API_URL")
         if raw_url:
             self.api_url = raw_url.strip()
-        elif bool(os.environ.get("TYPESAFE_API_KEY")) or (self.api_key and "typesafe" in self.api_key.lower()):
+        elif self.provider_type == "typesafe":
             self.api_url = TYPESAFE_SYSTEMONE_DEFAULT_URL
+        elif bool(os.environ.get("TYPESAFE_API_KEY")):
+            self.api_url = TYPESAFE_SYSTEMONE_DEFAULT_URL
+            if not self.provider_type:
+                self.provider_type = "typesafe"
         else:
             self.api_url = None
         self.timeout = timeout
@@ -1675,6 +1694,7 @@ class EngineeringIntentRouter:
             self.external_provider = GenericHttpIntentProvider(
                 endpoint=self.api_url,
                 api_key=self.api_key,
+                provider_type=self.provider_type,
             )
         else:
             self.external_provider = None

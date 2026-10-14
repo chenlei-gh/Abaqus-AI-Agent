@@ -7,7 +7,7 @@
 [![CI](https://github.com/chenlei-gh/Abaqus-AI-Agent/actions/workflows/ci.yml/badge.svg)](https://github.com/chenlei-gh/Abaqus-AI-Agent/actions/workflows/ci.yml)
 [![Python](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12-blue.svg)](https://www.python.org/)
 [![Abaqus](https://img.shields.io/badge/SIMULIA%20Abaqus-2025%20%E8%AE%A4%E8%AF%81-brightgreen.svg)](https://www.3ds.com/products-services/simulia/products/abaqus/)
-[![Tests](https://img.shields.io/badge/%E8%87%AA%E5%8A%A8%E5%8C%96%E5%9B%9E%E5%BD%92%E6%B5%8B%E8%AF%95-1339%20%E9%80%9A%E8%BF%87%20%280%20%E8%AD%A6%E5%91%8A%29-success.svg)](tests/)
+[![Tests](https://img.shields.io/badge/%E8%87%AA%E5%8A%A8%E5%8C%96%E5%9B%9E%E5%BD%92%E6%B5%8B%E8%AF%95-1346%20%E9%80%9A%E8%BF%87%20%280%20%E8%AD%A6%E5%91%8A%29-success.svg)](tests/)
 [![JEV 意图引擎](https://img.shields.io/badge/JEV%20%E6%84%8F%E5%9B%BE%E7%BC%96%E8%AF%91-TypeSafe%20%E5%8F%8C%E6%A8%A1%E6%B7%B7%E5%90%88-blueviolet.svg)](src/abaqus_ai_agent/typesafe_intent.py)
 [![JEV 评测状态](https://img.shields.io/badge/REQ--P1--045-IN__REVIEW-orange.svg)](docs/p1-product-requirements.md)
 [![Golden Matrix](https://img.shields.io/badge/golden%20matrix-13%2F13%20L4%20%E5%AE%A1%E8%AE%A1-success.svg)](machine_validation/)
@@ -293,7 +293,7 @@ python -m pip install -e ".[test]"
 
 ```bash
 python -m pytest tests -W error -q
-# 预期输出：1339 passed, 0 warnings across all test suites
+# 预期输出：1346 passed, 0 warnings across all test suites
 ```
 
 ### 3. Python 极简调用示例

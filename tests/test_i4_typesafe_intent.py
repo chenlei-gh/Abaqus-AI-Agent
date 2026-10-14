@@ -7,11 +7,14 @@ import pytest
 
 from abaqus_ai_agent.typesafe_intent import (
     ChoiceJudgment,
+    GenericHttpIntentProvider,
     IntentAmbiguityError,
     JevDecisionBundle,
     JevIntentRouter,
     NoulJudgment,
     ScoreJudgment,
+    TYPESAFE_SYSTEMONE_DEFAULT_URL,
+    TYPESAFE_DEFAULT_MODEL,
 )
 from tools.i4_jev_intent_e2e import run_jev_intent_e2e
 
@@ -130,3 +133,46 @@ def test_jev_intent_context_merge_unblocks_existing_model_evidence():
     assert res_with_ctx.intent.metadata.get("dimensions") == [{"value": 200.0, "unit": "mm"}]
     assert len(res_with_ctx.intent.loads) > 0
     assert len(res_with_ctx.intent.boundary_conditions) > 0
+
+
+def test_typesafe_provider_configuration_contracts(monkeypatch):
+    """Verify explicit provider_type and endpoint resolution contracts."""
+    # Ensure no ambient typesafe environment variables
+    monkeypatch.delenv("TYPESAFE_API_KEY", raising=False)
+    monkeypatch.delenv("TYPESAFE_API_URL", raising=False)
+    monkeypatch.delenv("INTENT_API_KEY", raising=False)
+    monkeypatch.delenv("INTENT_API_URL", raising=False)
+    monkeypatch.delenv("EXTERNAL_INTENT_API_KEY", raising=False)
+    monkeypatch.delenv("EXTERNAL_INTENT_API_URL", raising=False)
+
+    # 1. API key containing 'typesafe' substring must NOT implicitly trigger typesafe endpoint
+    generic_p = GenericHttpIntentProvider(api_key="custom_typesafe_substring_key")
+    assert generic_p.endpoint is None
+    assert generic_p.model == "external-intent-v1"
+
+    # 2. Explicit provider_type="typesafe" correctly defaults to TypeSafe System One
+    explicit_p = GenericHttpIntentProvider(api_key="any_key", provider_type="typesafe")
+    assert explicit_p.endpoint == TYPESAFE_SYSTEMONE_DEFAULT_URL
+    assert explicit_p.model == TYPESAFE_DEFAULT_MODEL
+
+    # 3. Explicit TYPESAFE_API_KEY environment variable correctly defaults to TypeSafe System One
+    monkeypatch.setenv("TYPESAFE_API_KEY", "env_ts_key")
+    env_p = GenericHttpIntentProvider()
+    assert env_p.endpoint == TYPESAFE_SYSTEMONE_DEFAULT_URL
+    assert env_p.model == TYPESAFE_DEFAULT_MODEL
+
+    # 4. Custom endpoint overrides TypeSafe default even with typesafe provider_type
+    custom_url = "https://custom.gateway.internal/v1"
+    custom_p = GenericHttpIntentProvider(endpoint=custom_url, provider_type="typesafe")
+    assert custom_p.endpoint == custom_url
+
+    # 5. EngineeringIntentRouter contracts
+    monkeypatch.delenv("TYPESAFE_API_KEY", raising=False)
+    router_unconfigured = JevIntentRouter(api_key="has_typesafe_in_key")
+    assert router_unconfigured.api_url is None
+    assert router_unconfigured.external_provider is None
+
+    router_explicit = JevIntentRouter(api_key="any_key", provider_type="typesafe")
+    assert router_explicit.api_url == TYPESAFE_SYSTEMONE_DEFAULT_URL
+    assert router_explicit.external_provider is not None
+    assert router_explicit.external_provider.model == TYPESAFE_DEFAULT_MODEL
