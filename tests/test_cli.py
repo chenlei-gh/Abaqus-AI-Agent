@@ -147,11 +147,16 @@ def test_cli_report(tmp_path, capsys):
         "acceptance": {"criteria": [], "passed": True},
     }), encoding="utf-8")
 
-    # Arbitrary JSON is not an Agent run record and must not be written as a deliverable.
-    ret = main(["report", str(ev_file), "--format", "markdown"])
-    assert ret == 2
+    # Markdown is not a customer report format. argparse exits before any
+    # renderer or delivery gate runs, and must not create a report file.
+    with pytest.raises(SystemExit) as exc:
+        main(["report", str(ev_file), "--format", "markdown"])
+    assert exc.value.code == 2
     captured = capsys.readouterr()
-    assert "BLOCKED" in captured.err
+    assert "invalid choice" in captured.err
+    assert "markdown" in captured.err
+    assert not (tmp_path / "report.md").exists()
+    assert not (tmp_path / "report.html").exists()
 
     out_html = tmp_path / "report.html"
     ret = main(["report", str(ev_file), "--format", "html", "-o", str(out_html)])

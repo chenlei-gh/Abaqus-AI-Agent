@@ -26,7 +26,8 @@ from .golden_registry import (
     GoldenCaseDefinition,
     standard_golden_catalog,
 )
-from .reporting.renderer import render_markdown, render_html
+from .reporting.delivery import write_gated_engineering_report
+from .reporting.renderer import render_html
 from .contracts.report import EngineeringReportData
 
 
@@ -73,11 +74,11 @@ def _build_parser() -> argparse.ArgumentParser:
     p_rep.add_argument("evidence_file", help="Path to evidence or AnalysisRun JSON file.")
     p_rep.add_argument(
         "--format",
-        choices=["html", "markdown"],
+        choices=["html"],
         default="html",
-        help="Output format. html is the only formal deliverable (default). markdown is an explicit preview and is never written as report.html.",
+        help="Formal deliverable format. HTML is the only file the product writes.",
     )
-    p_rep.add_argument("--output", "-o", help="Output file path (default: stdout). Formal writes must be .html unless --format markdown is explicit.")
+    p_rep.add_argument("--output", "-o", help="Output file path (default: stdout). A formal file must be HTML.")
     p_rep.add_argument("--title", help="Override report title.")
     p_rep.add_argument(
         "--allow-preview",
@@ -701,9 +702,19 @@ def handle_report(args: argparse.Namespace) -> int:
     gate_record = dict(raw_unnormalized) if isinstance(raw_unnormalized, dict) else {}
     if isinstance(raw, dict):
         gate_record = dict(gate_record)
-        gate_record.setdefault("provenance", raw.get("provenance"))
-        gate_record.setdefault("results", raw.get("results") or raw.get("metrics"))
-        gate_record.setdefault("odb_path", raw.get("odb_path"))
+        # Normalization may replace an issued provenance with launcher metadata.
+        # Keep the caller's stamped record when the envelope has no Agent stamp.
+        issued = gate_record.get("provenance")
+        normalized = raw.get("provenance")
+        issued_stamped = isinstance(issued, dict) and bool((issued.get("metadata") or {}).get("delivery_stamp"))
+        normalized_stamped = isinstance(normalized, dict) and bool((normalized.get("metadata") or {}).get("delivery_stamp"))
+        if normalized_stamped or not issued_stamped:
+            gate_record["provenance"] = normalized or issued
+        raw_results = gate_record.get("results") or gate_record.get("metrics")
+        envelope_results = raw.get("results") or raw.get("metrics") or raw.get("result_evidence")
+        if not raw_results and envelope_results:
+            gate_record["results"] = envelope_results
+        gate_record.setdefault("odb_path", raw.get("odb_path") or (raw.get("odb") or {}).get("path"))
     gate = verify_deliverable(gate_record)
     metadata = dict(raw.get("metadata") or {})
     metadata["deliverable_authorization"] = gate
@@ -721,13 +732,19 @@ def handle_report(args: argparse.Namespace) -> int:
         metadata=metadata,
     )
 
-    requested_format = args.format or "html"
-    if args.output and requested_format == "markdown":
-        preview_name = Path(args.output).name.lower()
-        preview_suffix = Path(args.output).suffix.lower()
-        if preview_name == "report.html" or preview_suffix == ".html":
+    requested_format = (args.format or "html").lower()
+    if requested_format != "html":
+        print(
+            "BLOCKED: refusing to write a Markdown engineering report. "
+            "HTML is the only formal deliverable.",
+            file=sys.stderr,
+        )
+        return 2
+    if args.output:
+        requested_suffix = Path(args.output).suffix.lower()
+        if requested_suffix in {".md", ".markdown"}:
             print(
-                "BLOCKED: refusing to write Markdown content as report.html. "
+                "BLOCKED: refusing to write a Markdown engineering report. "
                 "HTML is the only formal deliverable.",
                 file=sys.stderr,
             )
@@ -748,38 +765,41 @@ def handle_report(args: argparse.Namespace) -> int:
             file=sys.stderr,
         )
 
-    requested_format = args.format or "html"
-    if requested_format not in ("html", "markdown"):
-        print(f"Error: unsupported report format '{requested_format}'. Formal deliverable is html.", file=sys.stderr)
-        return 2
-    output_str = render_html(report) if requested_format == "html" else render_markdown(report)
+    output_str = render_html(report)
 
     if args.output:
         out_path = Path(args.output)
         suffix = out_path.suffix.lower()
-        # A formal filename is HTML. Markdown is only written when the caller
-        # explicitly asked for it, and never under the official report.html name.
-        if requested_format != "markdown":
-            if suffix and suffix != ".html":
-                print(
-                    f"BLOCKED: formal report must be HTML, not '{suffix}'. "
-                    "Pass --format markdown only for an explicit non-deliverable preview.",
-                    file=sys.stderr,
-                )
-                return 2
-            if not suffix:
-                out_path = out_path.with_suffix(".html")
-        elif out_path.name.lower() == "report.html" or suffix == ".html":
+        if suffix in {".md", ".markdown"}:
             print(
-                "BLOCKED: refusing to write Markdown content as report.html. "
+                "BLOCKED: refusing to write a Markdown engineering report. "
                 "HTML is the only formal deliverable.",
                 file=sys.stderr,
             )
             return 2
-        out_path.write_text(output_str, encoding="utf-8")
-        if requested_format == "markdown":
-            print("NOTE: markdown preview is not an engineering deliverable.", file=sys.stderr)
-        print(f"Report written to: {out_path.resolve()}")
+        if suffix and suffix != ".html":
+            print(
+                f"BLOCKED: formal report must be HTML, not '{suffix}'.",
+                file=sys.stderr,
+            )
+            return 2
+        if not suffix:
+            out_path = out_path.with_suffix(".html")
+        try:
+            written = write_gated_engineering_report(
+                out_path,
+                report=report,
+                record=gate_record,
+                fmt="html",
+                allow_diagnostic_draft=False,
+            )
+        except PermissionError as exc:
+            print(f"BLOCKED: {exc}", file=sys.stderr)
+            return 2
+        if written.get("kind") != "deliverable":
+            print("BLOCKED: refusing to write an engineering deliverable.", file=sys.stderr)
+            return 2
+        print(f"Report written to: {Path(written['path']).resolve()}")
     else:
         if not gate["deliverable_file_allowed"] and not args.allow_preview:
             print("BLOCKED: refusing to print a deliverable. Pass --allow-preview for a non-deliverable preview.", file=sys.stderr)

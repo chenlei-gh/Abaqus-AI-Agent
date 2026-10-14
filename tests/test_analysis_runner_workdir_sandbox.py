@@ -41,9 +41,12 @@ def test_analysis_runner_auto_sandbox_isolation(tmp_path):
     assert "runs" in chdir_cmds[0]
 
     run_id = run_res.id
-    assigned_dir = repo_root / "runs" / run_id
-    # 2. Verify workdir was created under runs/<run_id>
+    from abaqus_ai_agent.paths import resolve_runs_root
+
+    assigned_dir = resolve_runs_root() / run_id
+    # 2. Verify workdir was created outside the repository.
     assert assigned_dir.exists()
+    assert not assigned_dir.resolve().is_relative_to(repo_root.resolve())
 
     # 3. Verify project root has zero temporary job artifacts
     root_artifacts = list(repo_root.glob("Job_AutoSandboxTest.*"))

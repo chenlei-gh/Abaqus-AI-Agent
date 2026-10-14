@@ -7,6 +7,8 @@ import pytest
 
 # Explicit Test Mode Marker (Contract: Never rely on Mock/Dummy class names in production)
 os.environ.setdefault("ABAQUS_AGENT_TEST_MODE", "1")
+# Tests may read committed evidence. They must not rewrite it.
+os.environ.setdefault("ABAQUS_AGENT_EVIDENCE_READONLY", "1")
 
 
 @pytest.fixture(scope="session", autouse=True)
@@ -31,3 +33,24 @@ def clean_ephemeral_test_runs():
     mock_dir = repo_root / "MagicMock"
     if mock_dir.exists():
         shutil.rmtree(mock_dir, ignore_errors=True)
+
+
+def pytest_sessionfinish(session, exitstatus):
+    """Fail the session if a test rewrote tracked evidence despite the read-only guard."""
+    from abaqus_ai_agent.evidence_guard import (
+        EvidenceRewriteError,
+        tracked_evidence_dirty,
+    )
+
+    try:
+        dirty = tracked_evidence_dirty()
+    except EvidenceRewriteError:
+        return
+    if dirty:
+        session.exitstatus = 1
+        reporter = session.config.pluginmanager.getplugin("terminalreporter")
+        message = "Tracked evidence was rewritten during tests:\n" + "\n".join(dirty)
+        if reporter is not None:
+            reporter.write_line(message, red=True)
+        else:
+            print(message)

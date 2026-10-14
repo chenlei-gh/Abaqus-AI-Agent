@@ -1,6 +1,9 @@
 """Tests for R5: Engineering Task Acceptance Matrix (T1–T6)."""
 
 from pathlib import Path
+import pytest
+
+from abaqus_ai_agent.evidence_guard import EvidenceRewriteError
 from tools.m_engineering_task_matrix import (
     run_all_engineering_tasks,
     run_t1_static_strength_and_fos,
@@ -55,12 +58,22 @@ def test_t6_diagnostics_and_self_healing():
     assert res.metrics["final_equilibrium_residual"] <= 1e-4
 
 
-def test_run_all_engineering_tasks_manifest():
-    manifest = run_all_engineering_tasks()
-    assert manifest["schema_version"] == "engineering_task_matrix_v1"
-    assert manifest["total_tasks"] == 6
-    assert manifest["passed_tasks"] == 6
-    assert manifest["all_passed"] is True
+def test_engineering_task_results_pass_without_persisting():
+    tasks = [
+        run_t1_static_strength_and_fos(),
+        run_t2_coupled_thermal_stress(),
+        run_t3_contact_tribology(),
+        run_t4_plastic_residual_stress(),
+        run_t5_dynamic_energy_balance(),
+        run_t6_diagnostics_and_self_healing(),
+    ]
+    assert len(tasks) == 6
+    assert all(task.passed for task in tasks)
 
+
+def test_run_all_engineering_tasks_manifest_does_not_rewrite_tracked_evidence():
     ev_path = ROOT / "machine_validation" / "m_engineering_task_evidence.json"
-    assert ev_path.exists()
+    before = ev_path.read_bytes()
+    with pytest.raises(EvidenceRewriteError, match="read-only"):
+        run_all_engineering_tasks()
+    assert ev_path.read_bytes() == before

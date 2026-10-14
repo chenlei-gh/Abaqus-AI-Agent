@@ -560,9 +560,15 @@ odb.close()
         "acceptance": acceptance_res.to_dict(),
     }
 
-    # Persist official evidence in machine_validation/ga263_golden_evidence.json
+    # Persist official evidence only outside the pytest read-only lock. Tests
+    # assert the returned manifest and must not refresh the tracked golden JSON.
+    from abaqus_ai_agent.evidence_guard import evidence_writes_locked
+
     evidence_out_path = ROOT / "machine_validation" / "ga263_golden_evidence.json"
-    evidence_out_path.write_text(json.dumps(evidence_manifest, indent=2), encoding="utf-8")
+    if not evidence_writes_locked():
+        evidence_out_path.write_text(json.dumps(evidence_manifest, indent=2), encoding="utf-8")
+    else:
+        print("Evidence write skipped: machine_validation is read-only in this process.")
 
     print("================================================================================")
     print(f" [GA-2.6.3 RESULT] Status: {evidence_manifest['status']} | Tier: {evidence_tier}")

@@ -71,7 +71,7 @@ These are current code facts, not future promises.
 
 **The main path now loads the solved deck itself.** `AnalysisRunner` reads `<workdir>/<job>.inp` when it exists, records contract warnings, and builds `elastic_validity` when both yield strength and a finite extracted stress are present. `solve_requirement()` passes that deck text into `build_and_render()`. A declared element type or plasticity claim that contradicts `*ELEMENT` / `*PLASTIC` still forces `is_deliverable=False`. Peak stress and the 99.5th percentile are both reported; the percentile cannot hide the peak. A C3D4 warning does not by itself fail a legitimate model.
 
-**The formal report is HTML.** `abaqus-ai-agent report` defaults to HTML and refuses to write Markdown as `report.html`. A failed gate does not create `report.html`. The agent may write `report.diagnostic.html` with a non-deliverable banner. `solve_user_inp(generate_report=True)` still does not invent an official deliverable: without an Agent acceptance verdict and run record it writes no `report.html` and no `report.md`. A handwritten file outside the pipeline is still not protected.
+**The formal report file is HTML only.** `abaqus-ai-agent report` no longer accepts `--format markdown` and does not write an explicitly requested `.md` path. The gated writer also refuses Markdown, including an authorized request: it writes neither `report.md` nor `*.preview.md`. A failed gate does not create `report.html`. A diagnostic draft can only be bannered `report.diagnostic.html`. `solve_user_inp(generate_report=True)` writes neither `report.html` nor `report.md` without an Agent acceptance verdict and run record. Deleting the in-memory Markdown renderer would not stop a coding agent from writing a file with its own editor tool. That file is outside this product exit and is not an Agent deliverable.
 
 **Tie scripts use legal Abaqus enums.** Generated `Tie` calls use `positionToleranceMethod=COMPUTED`, with a `main`/`secondary` call and a `master`/`slave` fallback. `COMPUTED_TOLERANCE` is not a legal Abaqus 2025 value and is not emitted.
 
@@ -138,8 +138,12 @@ src/abaqus_ai_agent/
   acceptance.py
 tests/            contract and regression tests
 tools/            machine probes and shadow benchmarks; not the production API
-machine_validation/  audited evidence bundles; do not rewrite during tests
+machine_validation/  audited evidence bundles; pytest and CI must not rewrite them
 ```
+
+Scratch solver runs default to a user-local directory outside this repository (`%LOCALAPPDATA%\AbaqusAIAgent\runs` on Windows, `$XDG_STATE_HOME/abaqus-ai-agent/runs` elsewhere). `ABAQUS_AGENT_RUNS_DIR` can override that scratch location.
+
+Customer delivery follows the customer directory. The formal report is `<customer directory>/delivery/report.html`, or `report.html` in an explicit `deliverables_dir`. The product does not write a Markdown engineering report, including when a caller asks for one. Delivery is not redirected to AppData and is not written into this agent repository by default. A coding agent that writes Markdown with its own file tool is outside this product exit; that file is not an Agent deliverable. `python tools/check_workspace_pollution.py` fails if `machine_validation/`, `deliverables/`, or `runs/` is dirty in git.
 
 There are 65 supported action types in `SUPPORTED_ACTION_TYPES`. The script dispatcher is checked against that set. Do not add a second registry.
 

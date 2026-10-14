@@ -11,6 +11,7 @@ Validates multi-step, real-world engineering tasks combining:
 
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
+import argparse
 import json
 import math
 from pathlib import Path
@@ -328,8 +329,8 @@ def run_t6_diagnostics_and_self_healing() -> EngineeringTaskResult:
     )
 
 
-def run_all_engineering_tasks() -> Dict[str, Any]:
-    """Execute all T1–T6 engineering tasks and persist manifest."""
+def run_all_engineering_tasks(out_file: Optional[Path] = None) -> Dict[str, Any]:
+    """Execute all T1-T6 engineering tasks and persist manifest."""
     tasks = [
         run_t1_static_strength_and_fos(),
         run_t2_coupled_thermal_stress(),
@@ -349,15 +350,22 @@ def run_all_engineering_tasks() -> Dict[str, Any]:
         "tasks": [t.to_dict() for t in tasks],
     }
 
-    out_file = ROOT / "machine_validation" / "m_engineering_task_evidence.json"
-    with open(out_file, "w", encoding="utf-8") as f:
+    target = out_file or (ROOT / "machine_validation" / "m_engineering_task_evidence.json")
+    from abaqus_ai_agent.evidence_guard import refuse_evidence_rewrite
+
+    refuse_evidence_rewrite(target, ROOT)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    with open(target, "w", encoding="utf-8") as f:
         json.dump(manifest, f, indent=2)
 
     return manifest
 
 
 if __name__ == "__main__":
-    res = run_all_engineering_tasks()
+    parser = argparse.ArgumentParser(description="Phase M engineering task acceptance matrix")
+    parser.add_argument("--out", type=Path, default=None, help="Summary output JSON")
+    args = parser.parse_args()
+    res = run_all_engineering_tasks(out_file=args.out)
     print("=" * 80)
     print(" Phase M (R5): Engineering Task Acceptance Matrix (T1–T6)")
     print("=" * 80)

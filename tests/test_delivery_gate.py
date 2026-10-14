@@ -148,7 +148,7 @@ def test_tool_write_without_stamp_refuses_when_draft_disabled(tmp_path):
     assert not list(tmp_path.glob("*.html"))
 
 
-def test_authorized_markdown_request_is_preview_not_formal_report(tmp_path):
+def test_authorized_markdown_request_writes_no_file(tmp_path):
     from abaqus_ai_agent.contracts.provenance import issue_agent_run_record
 
     issued = issue_agent_run_record(
@@ -161,33 +161,30 @@ def test_authorized_markdown_request_is_preview_not_formal_report(tmp_path):
     )
     report = EngineeringReportData(title="Qualification", provenance=issued.to_dict(), results=())
     requested = tmp_path / "report.md"
-    written = write_gated_engineering_report(
-        requested,
-        report=report,
-        record=issued,
-        odb_sha256="c" * 64,
-        allow_diagnostic_draft=False,
-    )
-    assert written["kind"] == "markdown_preview"
+    with pytest.raises(PermissionError, match="Markdown engineering reports are not written"):
+        write_gated_engineering_report(
+            requested,
+            report=report,
+            record=issued,
+            odb_sha256="c" * 64,
+            allow_diagnostic_draft=False,
+        )
     assert not requested.exists()
-    preview = Path(written["path"])
-    assert preview.name == "report.preview.md"
-    assert "not an engineering deliverable" in preview.read_text(encoding="utf-8")
+    assert not list(tmp_path.rglob("*.md"))
+    assert not list(tmp_path.rglob("*.html"))
 
 
 def test_refused_markdown_request_does_not_file_markdown(tmp_path):
     requested = tmp_path / "engineering_report.md"
-    written = write_gated_engineering_report(
-        requested,
-        content="# fake engineering report",
-        allow_diagnostic_draft=True,
-    )
-    assert written["kind"] == "diagnostic_draft"
+    with pytest.raises(PermissionError, match="Markdown engineering reports are not written"):
+        write_gated_engineering_report(
+            requested,
+            content="# fake engineering report",
+            allow_diagnostic_draft=True,
+        )
     assert not requested.exists()
     assert not list(tmp_path.glob("*.md"))
-    draft = Path(written["path"])
-    assert draft.suffix == ".html"
-    assert "DIAGNOSTIC" in draft.read_text(encoding="utf-8")
+    assert not list(tmp_path.glob("*.html"))
 
 
 def test_engineering_intent_record_may_file_but_not_claim_jev(tmp_path):

@@ -54,3 +54,4 @@ jobs:
           python tools/i2_failure_matrix.py
           python tools/i3_reproducibility.py
           python tools/m_engineering_task_matrix.py
+          python tools/check_workspace_pollution.py

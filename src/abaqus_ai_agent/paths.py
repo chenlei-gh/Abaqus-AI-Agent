@@ -8,7 +8,7 @@ This module provides deterministic, priority-ordered path resolution for:
 Contract Resolution Order:
 1. Explicit argument passed by caller (e.g. pytest tmp_path fixture or caller-specified workdir)
 2. Environment variable override (ABAQUS_AGENT_RUNS_DIR, ABAQUS_AGENT_DELIVERABLES_DIR, etc.)
-3. Canonical fallback anchored to the project root
+3. User-local fallback outside the git repository
 """
 
 from __future__ import annotations
@@ -229,36 +229,117 @@ def get_repo_root() -> Path:
     return Path(__file__).resolve().parents[2]
 
 
+def default_local_workspace_root() -> Path:
+    """Return the user-local workspace root used when no override is configured.
+
+    This is intentionally outside the git repository. Windows uses LOCALAPPDATA;
+    other platforms use the XDG state home. A missing environment variable falls
+    back to the user home directory, never to the repository.
+    """
+    if os.name == "nt":
+        base = os.environ.get("LOCALAPPDATA", "").strip()
+        if not base:
+            base = str(Path.home() / "AppData" / "Local")
+        return (Path(base) / "AbaqusAIAgent").resolve()
+    base = os.environ.get("XDG_STATE_HOME", "").strip()
+    if not base:
+        base = str(Path.home() / ".local" / "state")
+    return (Path(base) / "abaqus-ai-agent").resolve()
+
+
 def resolve_runs_root(override: Optional[Union[str, Path]] = None) -> Path:
     """Resolve the root directory for ephemeral execution runs.
 
     Priority:
     1. Explicit override
     2. ABAQUS_AGENT_RUNS_DIR environment variable
-    3. get_repo_root() / "runs"
+    3. A user-local directory outside the git repository
     """
     if override is not None:
         return Path(override).resolve()
     env_val = os.environ.get(ENV_RUNS_DIR, "").strip()
     if env_val:
         return Path(env_val).resolve()
-    return (get_repo_root() / "runs").resolve()
+    return (default_local_workspace_root() / "runs").resolve()
 
 
-def resolve_deliverables_root(override: Optional[Union[str, Path]] = None) -> Path:
-    """Resolve the root directory for authoritative engineering deliverables.
+def resolve_customer_project_root(
+    project_context: Optional[Any] = None,
+    project_root: Optional[Union[str, Path]] = None,
+) -> Optional[Path]:
+    """Return the customer data/requirements directory when one was supplied.
+
+    A customer project is not the agent repository and not a machine-local
+    scratch directory. Delivery belongs with the data the customer provided.
+    """
+    if project_context is not None:
+        rooted = getattr(project_context, "project_root", None)
+        if rooted:
+            return Path(rooted).resolve()
+    if project_root is not None:
+        return Path(project_root).resolve()
+    configured = resolve_project_root(fail_closed=False)
+    return configured.resolve() if configured is not None else None
+
+
+def resolve_customer_delivery_dir(
+    project_context: Optional[Any] = None,
+    project_root: Optional[Union[str, Path]] = None,
+    deliverables_dir: Optional[Union[str, Path]] = None,
+    source_path: Optional[Union[str, Path]] = None,
+) -> Path:
+    """Resolve the delivery directory inside the customer-provided project.
 
     Priority:
-    1. Explicit override
-    2. ABAQUS_AGENT_DELIVERABLES_DIR environment variable
-    3. get_repo_root() / "deliverables"
+    1. Explicit deliverables_dir
+    2. ExternalProjectContext.delivery_dir
+    3. <customer project root>/delivery
+    4. <directory containing the customer source file>/delivery
+
+    There is no machine-local or agent-repository fallback. A job without a
+    customer directory cannot invent a delivery location.
+    """
+    if deliverables_dir is not None:
+        return Path(deliverables_dir).resolve()
+    if project_context is not None:
+        delivery = getattr(project_context, "delivery_dir", None)
+        if delivery:
+            return Path(delivery).resolve()
+    customer_root = resolve_customer_project_root(project_context, project_root)
+    if customer_root is not None:
+        return (customer_root / "delivery").resolve()
+    if source_path is not None:
+        return (Path(source_path).resolve().parent / "delivery").resolve()
+    raise ValueError(
+        "Customer delivery directory is unresolved. Pass the customer data/requirements "
+        "directory as project_root, project_context, deliverables_dir, or source_path. "
+        "Delivery is not written to the agent repository or a machine-local AppData directory."
+    )
+
+
+def resolve_deliverables_root(
+    override: Optional[Union[str, Path]] = None,
+    *,
+    project_context: Optional[Any] = None,
+    project_root: Optional[Union[str, Path]] = None,
+    source_path: Optional[Union[str, Path]] = None,
+) -> Path:
+    """Resolve the customer delivery directory.
+
+    ``ABAQUS_AGENT_DELIVERABLES_DIR`` remains an explicit override for a caller
+    that already chose a delivery directory. It is not a substitute for the
+    customer project directory.
     """
     if override is not None:
         return Path(override).resolve()
     env_val = os.environ.get(ENV_DELIVERABLES_DIR, "").strip()
     if env_val:
         return Path(env_val).resolve()
-    return (get_repo_root() / "deliverables").resolve()
+    return resolve_customer_delivery_dir(
+        project_context=project_context,
+        project_root=project_root,
+        source_path=source_path,
+    )
 
 
 def resolve_validation_assets_root(override: Optional[Union[str, Path]] = None) -> Path:

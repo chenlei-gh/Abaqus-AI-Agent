@@ -9,8 +9,10 @@ from abaqus_ai_agent.paths import (
     ENV_DELIVERABLES_DIR,
     ENV_VALIDATION_ASSETS_DIR,
     get_repo_root,
+    default_local_workspace_root,
     resolve_runs_root,
     resolve_deliverables_root,
+    resolve_customer_delivery_dir,
     resolve_validation_assets_root,
     create_run_workdir,
     ExternalProjectContext,
@@ -30,9 +32,17 @@ def test_get_repo_root_detects_project():
 
 def test_resolve_runs_root_default(monkeypatch):
     monkeypatch.delenv(ENV_RUNS_DIR, raising=False)
-    root = get_repo_root()
     runs_dir = resolve_runs_root()
-    assert runs_dir == (root / "runs").resolve()
+    repo = get_repo_root().resolve()
+    assert runs_dir == (default_local_workspace_root() / "runs").resolve()
+    assert runs_dir != repo
+    assert not runs_dir.is_relative_to(repo)
+
+
+def test_default_runtime_roots_ignore_repo_even_if_repo_dirs_exist(monkeypatch):
+    monkeypatch.delenv(ENV_RUNS_DIR, raising=False)
+    repo = get_repo_root().resolve()
+    assert not resolve_runs_root().is_relative_to(repo)
 
 
 def test_resolve_runs_root_env_override(monkeypatch, tmp_path):
@@ -48,11 +58,17 @@ def test_resolve_runs_root_explicit_param(monkeypatch, tmp_path):
     assert resolve_runs_root(override=explicit_dir) == explicit_dir.resolve()
 
 
-def test_resolve_deliverables_root_default(monkeypatch):
+def test_customer_delivery_follows_customer_directory(tmp_path, monkeypatch):
     monkeypatch.delenv(ENV_DELIVERABLES_DIR, raising=False)
-    root = get_repo_root()
-    deliv_dir = resolve_deliverables_root()
-    assert deliv_dir == (root / "deliverables").resolve()
+    monkeypatch.delenv(ENV_PROJECT_ROOT, raising=False)
+    customer = tmp_path / "13L"
+    customer.mkdir()
+    assert resolve_customer_delivery_dir(project_root=customer) == (customer / "delivery").resolve()
+    assert resolve_deliverables_root(project_root=customer) == (customer / "delivery").resolve()
+    source = customer / "input" / "handle.inp"
+    assert resolve_customer_delivery_dir(source_path=source) == (source.parent / "delivery").resolve()
+    with pytest.raises(ValueError, match="Customer delivery directory is unresolved"):
+        resolve_deliverables_root()
 
 
 def test_resolve_deliverables_root_override(monkeypatch, tmp_path):
@@ -194,6 +210,18 @@ def test_resolve_project_root_priority_and_fail_closed(monkeypatch, tmp_path):
     # Explicit override takes highest precedence
     explicit_proj = tmp_path / "explicit_proj"
     assert resolve_project_root(override=explicit_proj) == explicit_proj.resolve()
+
+
+def test_pytest_refuses_tracked_evidence_rewrite(tmp_path, monkeypatch):
+    from abaqus_ai_agent.evidence_guard import EvidenceRewriteError, refuse_evidence_rewrite
+
+    monkeypatch.setenv("ABAQUS_AGENT_EVIDENCE_READONLY", "1")
+    protected = get_repo_root() / "machine_validation" / "m_engineering_task_evidence.json"
+    with pytest.raises(EvidenceRewriteError, match="read-only"):
+        refuse_evidence_rewrite(protected)
+
+    external = tmp_path / "scratch_evidence.json"
+    refuse_evidence_rewrite(external)
 
 
 def test_analysis_runner_integrates_with_external_project_context(tmp_path):

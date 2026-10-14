@@ -90,9 +90,9 @@ class AbaqusAIAgent:
         from pathlib import Path
         from .execution.odb_rendering import render_odb_animation_headless
         if output_path is None:
-            from .paths import resolve_deliverables_root
+            from .paths import resolve_customer_delivery_dir
             odb_stem = Path(odb_path).stem
-            output_path = resolve_deliverables_root() / f"{odb_stem}_{field_name}_animation.gif"
+            output_path = resolve_customer_delivery_dir(source_path=odb_path) / f"{odb_stem}_{field_name}_animation.gif"
 
         eff_launcher = launcher or getattr(self.executor, "launcher", None)
         return render_odb_animation_headless(
@@ -243,8 +243,8 @@ class AbaqusAIAgent:
 
         out_dir = output_dir or getattr(run, "work_dir", None)
         if not out_dir:
-            from .paths import resolve_deliverables_root
-            out_dir = str(resolve_deliverables_root())
+            from .paths import resolve_runs_root
+            out_dir = str(resolve_runs_root() / str(getattr(run, "id", "scratch")))
         os.makedirs(out_dir, exist_ok=True)
 
         job_name = getattr(run, "job_name", "Job") or "Job"
@@ -927,14 +927,27 @@ class AbaqusAIAgent:
             if v_key:
                 metric_dict[v_key] = m_val
 
-        # 7a. Result Intelligence & Graphical Assets (P1.3 Delivery)
-        if project_context is not None:
-            out_dir = str(project_context.delivery_dir)
-        else:
-            out_dir = target_workdir or (os.path.dirname(run.odb_path) if getattr(run, "odb_path", None) else None)
-            if not out_dir:
-                from .paths import resolve_deliverables_root
-                out_dir = str(resolve_deliverables_root())
+        # 7a. Scratch assets stay with the solver run. The customer delivery
+        # directory is resolved only when official HTML is actually authorized.
+        # A diagnostic draft must not fail the task merely because no customer
+        # directory was supplied, and it must not land in that directory.
+        from .paths import resolve_customer_delivery_dir, resolve_runs_root
+        source = getattr(run, "odb_path", None) or getattr(run, "inp_path", None)
+        scratch_dir = (
+            getattr(run, "work_dir", None)
+            or target_workdir
+            or str(resolve_runs_root() / str(getattr(run, "id", "scratch")))
+        )
+        official_dir = None
+        try:
+            official_dir = str(resolve_customer_delivery_dir(
+                project_context=project_context,
+                project_root=target_workdir,
+                source_path=source,
+            ))
+        except ValueError:
+            official_dir = None
+        out_dir = scratch_dir
         ri_bundle, generated_figures = self.extract_result_intelligence(
             run=run,
             intent=intent,
@@ -1201,8 +1214,13 @@ class AbaqusAIAgent:
                 deck_text = (getattr(run, "metadata", None) or {}).get("inp_text")
                 if not deck_text:
                     deck_text = self._load_plan_inp_text(plan, target_workdir or getattr(run, "work_dir", None))
+                if official_dir is None:
+                    raise ValueError(
+                        "Official HTML delivery requires the customer data/requirements directory."
+                    )
+                out_dir = official_dir
                 deterministic_delivery_card, _, det_report_data = pipeline.build_and_render(
-                    output_dir=Path(out_dir),
+                    output_dir=Path(official_dir),
                     title=report_title,
                     case_id=plan.job_name,
                     run_id=getattr(run, "id", "RUN-AUTH"),
@@ -1344,7 +1362,8 @@ class AbaqusAIAgent:
 
             report_md = "\n".join(diag_lines)
             report_html_str = self._render_diagnostic_html(draft_title, diag_lines)
-            self._write_diagnostic_html(out_dir, report_html_str)
+            self._write_diagnostic_html(scratch_dir, report_html_str)
+            out_dir = scratch_dir
 
         task_status = TaskStatus.COMPLETED if is_completed else TaskStatus.FAILED
 

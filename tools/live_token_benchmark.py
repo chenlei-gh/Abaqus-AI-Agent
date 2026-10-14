@@ -332,10 +332,16 @@ def run_benchmark(live_api: bool = True) -> Dict[str, Any]:
 
         results["cases"][case_key] = case_record
 
-    # Persist evidence
-    evidence_path = REPO_ROOT / "machine_validation" / "live_token_benchmark_evidence.json"
-    evidence_path.write_text(json.dumps(results, indent=2, ensure_ascii=False), encoding="utf-8")
-    print(f"\nBenchmark evidence persisted to: {evidence_path}")
+    # Persist only outside the pytest read-only lock. Dry-run tests assert the
+    # returned metrics and must not refresh the tracked golden JSON.
+    from abaqus_ai_agent.evidence_guard import evidence_writes_locked
+
+    if not evidence_writes_locked():
+        evidence_path = REPO_ROOT / "machine_validation" / "live_token_benchmark_evidence.json"
+        evidence_path.write_text(json.dumps(results, indent=2, ensure_ascii=False), encoding="utf-8")
+        print(f"\nBenchmark evidence persisted to: {evidence_path}")
+    else:
+        print("\nEvidence write skipped: machine_validation is read-only in this process.")
     return results
 
 

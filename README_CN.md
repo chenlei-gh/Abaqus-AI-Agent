@@ -71,7 +71,7 @@ JEV **不会**：
 
 **主路径现在会自己读取已求解的 deck。** `AnalysisRunner` 在 `<workdir>/<job>.inp` 存在时读取它，记录契约警告，并在屈服强度和提取应力都是有限数时组装 `elastic_validity`。`solve_requirement()` 会把这份 deck 文本传给 `build_and_render()`。声明的单元类型或塑性与 `*ELEMENT` / `*PLASTIC` 矛盾，仍然强制 `is_deliverable=False`。报告同时保留全场峰值和 99.5% 分位，分位数不能掩盖峰值。`C3D4` 警告本身不会把合法模型判失败。
 
-**正式报告是 HTML。** `abaqus-ai-agent report` 默认输出 HTML，并拒绝把 Markdown 写成 `report.html`。门禁失败不会创建 `report.html`。代理可以写带非正式横幅的 `report.diagnostic.html`。`solve_user_inp(generate_report=True)` 仍然不会编造正式交付：没有代理验收结论和运行记录时，不写 `report.html`，也不写 `report.md`。管线外的手写文件仍然不受保护。
+**正式报告只能是 HTML 文件。** `abaqus-ai-agent report` 不再接受 `--format markdown`，也不会把显式请求的 `.md` 路径写成文件。带门禁的写文件函数同样拒绝 Markdown，包括已授权的请求：不写 `report.md`，也不写 `*.preview.md`。门禁失败不会创建 `report.html`。诊断草稿只能是带非正式横幅的 `report.diagnostic.html`。`solve_user_inp(generate_report=True)` 没有代理验收结论和运行记录时，不写 `report.html`，也不写 `report.md`。删掉内存中的 Markdown 渲染器，并不能阻止编码代理用自己的编辑器工具直接写文件。这种文件不属于产品出口，也不是 Agent 正式交付。
 
 **Tie 脚本使用合法枚举。** 生成的 `Tie` 使用 `positionToleranceMethod=COMPUTED`，先尝试 `main`/`secondary`，类型不匹配时回退 `master`/`slave`。`COMPUTED_TOLERANCE` 不是 Abaqus 2025 的合法值，生成器不会写出它。
 
@@ -138,8 +138,12 @@ src/abaqus_ai_agent/
   acceptance.py
 tests/            契约与回归测试
 tools/            真机探针和影子评测；不是生产 API
-machine_validation/  已审计证据包；测试时不要改写
+machine_validation/  已审计证据包；pytest 和 CI 不得改写
 ```
+
+临时求解目录默认在本仓库之外（Windows 为 `%LOCALAPPDATA%\AbaqusAIAgent\runs`，其他系统为 `$XDG_STATE_HOME/abaqus-ai-agent/runs`）。`ABAQUS_AGENT_RUNS_DIR` 可以覆盖这个临时目录。
+
+客户交付跟随客户目录。客户给出数据和需求所在目录后，正式报告写入 `<客户目录>/delivery/report.html`；如果这次作业显式传入了 `deliverables_dir`，就写入该目录。正式文件只能是 HTML。交付不会改写到 AppData，也不会默认写入本 Agent 仓库。`python tools/check_workspace_pollution.py` 会在 `machine_validation/`、`deliverables/` 或 `runs/` 出现 Git 差异时失败。
 
 `SUPPORTED_ACTION_TYPES` 中有 65 种受支持动作。脚本分发器与该集合对齐。不要再维护第二份注册表。
 

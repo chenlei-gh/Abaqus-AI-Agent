@@ -257,13 +257,19 @@ def run_comprehensive_physics_suite(strict: bool = True) -> Dict[str, Any]:
         "benchmarks": [asdict(r) for r in results],
     }
 
-    # Save evidence envelope
-    validation_dir = ROOT / "machine_validation"
-    validation_dir.mkdir(parents=True, exist_ok=True)
-    evidence_path = validation_dir / "j_comprehensive_physics_evidence.json"
-    with open(evidence_path, "w", encoding="utf-8") as f:
-        json.dump(envelope, f, indent=2)
-    print(f"Saved theoretical evidence envelope to: {evidence_path}")
+    # Persist only outside the pytest read-only lock. Tests assert the returned
+    # envelope; they must not refresh the tracked golden JSON.
+    from abaqus_ai_agent.evidence_guard import evidence_writes_locked
+
+    if not evidence_writes_locked():
+        validation_dir = ROOT / "machine_validation"
+        validation_dir.mkdir(parents=True, exist_ok=True)
+        evidence_path = validation_dir / "j_comprehensive_physics_evidence.json"
+        with open(evidence_path, "w", encoding="utf-8") as f:
+            json.dump(envelope, f, indent=2)
+        print(f"Saved theoretical evidence envelope to: {evidence_path}")
+    else:
+        print("Evidence write skipped: machine_validation is read-only in this process.")
 
     return envelope
 
