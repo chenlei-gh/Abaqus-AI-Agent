@@ -69,7 +69,9 @@ These are current code facts, not future promises.
 
 **Elastic stress past yield is not plasticity.** If the caller passes `elastic_validity` with a purely elastic deck, a finite yield strength, and a finite peak stress above yield, acceptance returns `RESULT_INVALID` and `deliverable=False`. The result must not be narrated as plastic deformation.
 
-**Those two inputs are not yet auto-wired on the main agent path.** `AbaqusAIAgent.solve_requirement()` does not currently pass `inp_text` into `build_and_render()`, and it does not build `elastic_validity` for `evaluate_result_acceptance()`. Callers and tests that supply them are protected. A handwritten Markdown file outside the pipeline is not protected. Do not treat a pipeline gate as a guarantee over every file an analyst can edit by hand.
+**The main path now loads the solved deck itself.** `AnalysisRunner` reads `<workdir>/<job>.inp` when it exists, records contract warnings, and builds `elastic_validity` when both yield strength and a finite extracted stress are present. `solve_requirement()` passes that deck text into `build_and_render()`. A declared element type or plasticity claim that contradicts `*ELEMENT` / `*PLASTIC` still forces `is_deliverable=False`. Peak stress and the 99.5th percentile are both reported; the percentile cannot hide the peak. A C3D4 warning does not by itself fail a legitimate model.
+
+**The formal report is HTML.** `abaqus-ai-agent report` defaults to HTML and refuses to write Markdown as `report.html`. A failed gate does not create `report.html`. The agent may write `report.diagnostic.html` with a non-deliverable banner. `solve_user_inp(generate_report=True)` still does not invent an official deliverable: without an Agent acceptance verdict and run record it writes no `report.html` and no `report.md`. A handwritten file outside the pipeline is still not protected.
 
 **Tie scripts use legal Abaqus enums.** Generated `Tie` calls use `positionToleranceMethod=COMPUTED`, with a `main`/`secondary` call and a `master`/`slave` fallback. `COMPUTED_TOLERANCE` is not a legal Abaqus 2025 value and is not emitted.
 

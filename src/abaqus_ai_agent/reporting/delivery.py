@@ -98,13 +98,15 @@ def write_gated_engineering_report(
 ) -> Dict[str, Any]:
     """Write a report only if the same delivery gate used by the product allows it.
 
-    Returns a dict with written, kind ('deliverable' or 'diagnostic_draft'),
-    path, and the gate decision. A refused formal write never creates the
-    requested formal filename.
+    HTML is the only formal deliverable. A `.md` request is never written as a
+    formal report: an authorized caller gets an explicit `*.preview.md`, and a
+    refused caller gets a bannered `*.diagnostic.html`. A refused formal write
+    never creates the requested formal filename.
     """
     target = Path(path)
     suffix = target.suffix.lower()
-    resolved_fmt = fmt or ("html" if suffix == ".html" else "markdown")
+    requested_markdown = fmt == "markdown" or suffix in {".md", ".markdown"}
+    resolved_fmt = "markdown" if requested_markdown else "html"
     payload = _as_record(record, odb_sha256=odb_sha256, results=results)
     if report is not None and not payload.get("results"):
         report_results = getattr(report, "results", None) or ()
@@ -117,7 +119,17 @@ def write_gated_engineering_report(
 
     gate = verify_deliverable(payload)
     allowed = bool(gate.get("deliverable_file_allowed"))
-    formal_name = target.stem.lower() in _FORMAL_STEMS or target.name.lower() in {"report.html", "report.md"}
+    formal_name = (
+        target.stem.lower() in _FORMAL_STEMS
+        or target.name.lower() in {"report.html", "report.md"}
+    )
+    write_path = target
+    write_kind = "deliverable"
+    if requested_markdown:
+        # Markdown is a preview, including when the run record is otherwise valid.
+        write_path = target.with_name(target.stem + ".preview.md")
+        write_kind = "markdown_preview"
+        resolved_fmt = "markdown"
 
     if allowed:
         provenance = payload.get("provenance")
@@ -126,18 +138,28 @@ def write_gated_engineering_report(
             body = render_html(stamped, language=language) if resolved_fmt == "html" else render_markdown(stamped, language=language)
         else:
             body = content or ""
+            if requested_markdown and body.lstrip().startswith("<!"):
+                raise ValueError("Refusing to write HTML bytes into a Markdown preview.")
             if "Abaqus-AI-Agent 编制" in body or "Prepared by Abaqus-AI-Agent" in body:
                 if not gate.get("allow_agent_attribution"):
                     raise PermissionError(
                         "Refusing to write a pre-rendered report that claims Agent authorship "
                         "without a JEV-routed run record."
                     )
-        target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_text(body, encoding="utf-8")
+        if requested_markdown and not body.startswith("NOTE: markdown preview"):
+            body = (
+                "NOTE: markdown preview is not an engineering deliverable.\n\n" + body
+            )
+        write_path.parent.mkdir(parents=True, exist_ok=True)
+        write_path.write_text(body, encoding="utf-8")
+        if requested_markdown and target.suffix.lower() in {".md", ".markdown"} and target != write_path:
+            if target.exists():
+                target.unlink()
         return {
             "written": True,
-            "kind": "deliverable",
-            "path": str(target),
+            "kind": write_kind,
+            "path": str(write_path),
+            "formal_path_refused": str(target) if write_path != target else None,
             "gate": gate,
         }
 
@@ -153,12 +175,15 @@ def write_gated_engineering_report(
             % ", ".join(gate.get("reasons") or ["unspecified"])
         )
 
-    draft_path = target.with_name(target.stem + ".diagnostic" + target.suffix)
+    # A refused report is never filed as Markdown. HTML keeps the banner visible.
+    draft_suffix = ".html" if requested_markdown else (target.suffix or ".html")
+    draft_path = target.with_name(target.stem + ".diagnostic" + draft_suffix)
+    draft_fmt = "html" if requested_markdown else resolved_fmt
     if report is not None:
         draft = _diagnostic_report(report, gate)
-        body = render_html(draft, language=language) if resolved_fmt == "html" else render_markdown(draft, language=language)
+        body = render_html(draft, language=language) if draft_fmt == "html" else render_markdown(draft, language=language)
     else:
-        body = _diagnostic_text(content or "", resolved_fmt)
+        body = _diagnostic_text(content or "", draft_fmt)
     if "Abaqus-AI-Agent 编制" in body:
         body = body.replace("Abaqus-AI-Agent 编制", "未授权署名")
     draft_path.parent.mkdir(parents=True, exist_ok=True)

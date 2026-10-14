@@ -216,15 +216,31 @@ with open(r"{res_json_posix}", "w") as f:
     print(f"  > ODB Extracted: Tip Deflection = {tip_deflection:.4f} mm (limit <= 2.5 mm: {acc_deflection})")
     print(f"  > ODB Extracted: Max Mises Stress = {max_mises:.2f} MPa (limit <= 600 MPa: {acc_mises})")
 
-    # Generate Engineering Report
-    rep_md = f"""# Engineering Analysis Report: L1 Autonomous Workflow
-- **Prompt**: {prompt}
-- **Physics**: Linear Static Structural
-- **Tip Deflection**: {tip_deflection:.4f} mm (Allowed: <= 2.5 mm) -> **PASS**
-- **Max Mises Stress**: {max_mises:.2f} MPa (Allowed: <= 600 MPa) -> **PASS**
-- **Verdict**: ACCEPTED
-"""
-    (l1_dir / "report.md").write_text(rep_md, encoding="utf-8")
+    # File an HTML diagnostic note. Markdown is not the engineering report.
+    import html as html_lib
+    note = (
+        "<!DOCTYPE html><html><head><meta charset=\"utf-8\">"
+        "<title>L1 workflow note</title></head><body>"
+        "<div class=\"diagnostic-banner\">"
+        "DIAGNOSTIC NON-DELIVERABLE DRAFT. Not an official engineering report."
+        "</div>"
+        "<h1>L1 workflow note</h1>"
+        "<p>Prompt: %s</p>"
+        "<p>Tip deflection: %.4f mm (limit &lt;= 2.5 mm): %s</p>"
+        "<p>Max Mises: %.2f MPa (limit &lt;= 600 MPa): %s</p>"
+        "<p>This note is not an Agent deliverable and is not report.html.</p>"
+        "</body></html>"
+    ) % (
+        html_lib.escape(str(prompt)),
+        tip_deflection,
+        "PASS" if acc_deflection else "FAIL",
+        max_mises,
+        "PASS" if acc_mises else "FAIL",
+    )
+    (l1_dir / "report.diagnostic.html").write_text(note, encoding="utf-8")
+    stale_md = l1_dir / "report.md"
+    if stale_md.exists():
+        stale_md.unlink()
 
     return {
         "gate_id": "L1_E2E_WORKFLOW",

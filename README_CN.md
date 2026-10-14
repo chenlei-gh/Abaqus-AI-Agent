@@ -69,7 +69,9 @@ JEV **不会**：
 
 **弹性应力超过屈服不是塑性。** 调用方传入 `elastic_validity`，且 deck 为纯弹性、屈服强度和峰值应力都是有限数、峰值超过屈服时，验收返回 `RESULT_INVALID`，`deliverable=False`。结果不得写成塑性变形。
 
-**这两项输入尚未自动接入主代理路径。** `AbaqusAIAgent.solve_requirement()` 目前没有把 `inp_text` 传给 `build_and_render()`，也没有为 `evaluate_result_acceptance()` 组装 `elastic_validity`。显式传入的调用方和测试受保护。管线外手写的 Markdown 不受保护。不要把管线门禁理解成“任何人工文件都不会写错”。
+**主路径现在会自己读取已求解的 deck。** `AnalysisRunner` 在 `<workdir>/<job>.inp` 存在时读取它，记录契约警告，并在屈服强度和提取应力都是有限数时组装 `elastic_validity`。`solve_requirement()` 会把这份 deck 文本传给 `build_and_render()`。声明的单元类型或塑性与 `*ELEMENT` / `*PLASTIC` 矛盾，仍然强制 `is_deliverable=False`。报告同时保留全场峰值和 99.5% 分位，分位数不能掩盖峰值。`C3D4` 警告本身不会把合法模型判失败。
+
+**正式报告是 HTML。** `abaqus-ai-agent report` 默认输出 HTML，并拒绝把 Markdown 写成 `report.html`。门禁失败不会创建 `report.html`。代理可以写带非正式横幅的 `report.diagnostic.html`。`solve_user_inp(generate_report=True)` 仍然不会编造正式交付：没有代理验收结论和运行记录时，不写 `report.html`，也不写 `report.md`。管线外的手写文件仍然不受保护。
 
 **Tie 脚本使用合法枚举。** 生成的 `Tie` 使用 `positionToleranceMethod=COMPUTED`，先尝试 `main`/`secondary`，类型不匹配时回退 `master`/`slave`。`COMPUTED_TOLERANCE` 不是 Abaqus 2025 的合法值，生成器不会写出它。
 

@@ -1,7 +1,9 @@
 """Deterministic diagnostic pattern library for Abaqus solver artifacts."""
 
+import os
 import re
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 
@@ -254,6 +256,28 @@ def extract_inp_element_types(inp_text: str = "") -> frozenset:
 def extract_inp_has_plasticity(inp_text: str = "") -> bool:
     """Return True when the deck defines any *PLASTIC hardening block."""
     return "*PLASTIC" in (inp_text or "").upper()
+
+
+def read_job_inp_text(workdir=None, job_name=None, inp_path=None):
+    """Read the job deck that was actually solved, if it is on disk.
+
+    Prefers an explicit path, then ``<workdir>/<job_name>.inp``. Returns
+    ``(text, source_path)`` or ``(None, None)``. Never raises: a missing or
+    unreadable deck means the caller cannot apply a deck-dependent gate.
+    """
+    candidates = []
+    if inp_path:
+        candidates.append(inp_path)
+    if workdir and job_name:
+        candidates.append(os.path.join(str(workdir), "%s.inp" % job_name))
+    for candidate in candidates:
+        try:
+            path = Path(candidate)
+            if path.is_file():
+                return path.read_text(encoding="utf-8", errors="ignore"), str(path)
+        except Exception:
+            continue
+    return None, None
 
 
 def diagnose_inp_contract(inp_text: str = "", source: Optional[str] = None) -> Tuple[DiagnosticIssue, ...]:

@@ -138,6 +138,9 @@ class DeterministicReportPipeline:
             model_contract_mismatch = _reconcile_model_claims(model_info, inp_text)
             if model_contract_mismatch is not None:
                 is_deliverable = False
+                if isinstance(model_info, dict):
+                    model_info = dict(model_info)
+                    model_info["model_contract_mismatch"] = model_contract_mismatch
 
         if require_deliverable and not is_deliverable:
             raise PermissionError(

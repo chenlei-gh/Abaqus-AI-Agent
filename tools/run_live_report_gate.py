@@ -197,15 +197,8 @@ from abaqus_ai_agent.reporting.delivery import write_gated_engineering_report
 target_dir = {repr(str(workdir))}
 issued = getattr(task_result.run, "provenance", None) if task_result.run else None
 odb_sha = getattr(issued, "output_hash", None) if issued is not None else None
-if task_result.report_markdown:
-    write_gated_engineering_report(
-        os.path.join(target_dir, "engineering_report.md"),
-        content=task_result.report_markdown,
-        record=issued,
-        odb_sha256=odb_sha,
-        allow_diagnostic_draft=True,
-    )
-if task_result.report_html:
+	# Markdown stays in the task result. The filed engineering report is HTML.
+	if task_result.report_html:
     write_gated_engineering_report(
         os.path.join(target_dir, "engineering_report.html"),
         content=task_result.report_html,
@@ -411,7 +404,6 @@ def main():
     print(f"  Extracted Metrics:             {metrics}")
     print(f"  Hotspot Count (Top-K):         {summary.get('hotspot_count', 0)}")
     print(f"  Response Curve Count:          {summary.get('curve_count', 0)}")
-    print(f"  Report Markdown Size:          {artifacts.get('engineering_report.md', {}).get('size_bytes', 0)} B")
     print(f"  Report HTML Size:              {artifacts.get('engineering_report.html', {}).get('size_bytes', 0)} B")
 
     if dm:

@@ -287,13 +287,59 @@ class AnalysisRunner:
         )
         return run.with_state(run.state, diagnostics=tuple(run.diagnostics) + new_diags)
 
+    def _load_job_inp_text(self, workdir, job_name):
+        from ..diagnostics.solver_patterns import read_job_inp_text
+        return read_job_inp_text(workdir=workdir, job_name=job_name)
+
+    def _resolve_yield_strength(self, engineering_intent):
+        """Finite yield from the intent material, or None. Never invents one."""
+        if engineering_intent is None:
+            return None
+        mats = []
+        if getattr(engineering_intent, "materials", None):
+            mats.extend(engineering_intent.materials)
+        if getattr(engineering_intent, "material", None):
+            mats.append(engineering_intent.material)
+        try:
+            from ..reasoning.material_catalog import resolve_material_to_definition
+        except Exception:
+            resolve_material_to_definition = None
+        for mat in mats:
+            if resolve_material_to_definition is not None:
+                try:
+                    mat_def = resolve_material_to_definition(mat, fail_closed=False)
+                except Exception:
+                    mat_def = None
+                if mat_def is not None:
+                    plastic = getattr(mat_def, "plastic", None)
+                    ys = getattr(plastic, "yield_stress", None) if plastic is not None else None
+                    if ys:
+                        return float(ys)
+                    meta = getattr(mat_def, "metadata", None) or {}
+                    if meta.get("yield_strength_mpa"):
+                        return float(meta["yield_strength_mpa"])
+            props = mat.get("properties") if isinstance(mat, dict) else getattr(mat, "properties", None)
+            props = props or (mat if isinstance(mat, dict) else {})
+            for key in ("yield_strength", "yield_strength_mpa", "yield"):
+                raw = props.get(key) if isinstance(props, dict) else None
+                if isinstance(raw, bool) or raw is None:
+                    continue
+                try:
+                    number = float(raw)
+                except (TypeError, ValueError):
+                    continue
+                if number == number and number not in (float("inf"), float("-inf")):
+                    return number
+        return None
+
     def run(self, model_name, job_name, odb_path=None, criteria=(),
             result_values=None, numerical_verification=None, engineering_checks=None,
             mesh_quality=None, mesh_convergence=None, fatigue=None, contact_diagnostics=None,
             connector_kinematics=None, fmbd_dynamics=None, sensitivity=None, uncertainty=None,
             timeout=3600, action_plan=(), environment=None, engineering_intent=None,
             postprocess_profile=None, workdir=None, physics_domain=None, require_evidence=None,
-            require_production=None, project_context=None):
+            require_production=None, project_context=None, elastic_validity=None,
+            inp_text=None):
         if require_production is None:
             # Explicit test flag via environment or executor attribute takes precedence
             is_explicit_test = (
@@ -528,9 +574,17 @@ class AnalysisRunner:
 
             # Model-contract diagnosis (MS13L lesson): surface C3D4-only bending,
             # pin tie+fix overconstraint, oversized fixed sets, and elastic-only
-            # decks that claim plasticity. This is advisory (WARNING) and never
-            # blocks a legitimate run; it makes the smells visible in run.diagnostics
-            # instead of only in the standalone CLI diagnose command.
+            # decks that claim plasticity. Warnings stay advisory. The deck text
+            # itself is kept so acceptance and the report cannot skip it.
+            deck_text = inp_text
+            deck_source = None
+            if not deck_text:
+                deck_text, deck_source = self._load_job_inp_text(workdir, job_name)
+            if deck_text:
+                run = run.with_state(
+                    run.state,
+                    metadata=dict(run.metadata, inp_text=deck_text, inp_source=deck_source),
+                )
             run = self._attach_inp_contract_diagnostics(run, workdir, job_name)
 
             from ..contracts.fatigue import IntentFatigueSpec, FatigueResult
@@ -774,6 +828,15 @@ class AnalysisRunner:
                 domain_to_eval = None
 
             effective_require_evidence = require_evidence if require_evidence is not None else (True if result_source == "odb" else False)
+            from ..acceptance import build_elastic_validity
+            deck_for_gate = (run.metadata or {}).get("inp_text") or inp_text
+            auto_elastic = build_elastic_validity(
+                inp_text=deck_for_gate,
+                yield_strength=self._resolve_yield_strength(engineering_intent),
+                values=result_values if isinstance(result_values, dict) else None,
+            )
+            effective_elastic = elastic_validity if elastic_validity is not None else auto_elastic
+
             if require_production:
                 run_snapshot_for_acc = run.with_state(
                     run.state,
@@ -800,6 +863,7 @@ class AnalysisRunner:
                     base_dir=art_dir if result_source == "odb" else None,
                     physics_domain=domain_to_eval,
                     result_extractions=extractions if result_source == "odb" else None,
+                    elastic_validity=effective_elastic,
                 )
             else:
                 accepted = evaluate_result_acceptance(
@@ -820,6 +884,7 @@ class AnalysisRunner:
                     expected_run_id=run_id if result_source == "odb" else None,
                     require_evidence=effective_require_evidence,
                     physics_domain=domain_to_eval,
+                    elastic_validity=effective_elastic,
                 )
             verification_evidence = []
             if numerical_verification is not None:

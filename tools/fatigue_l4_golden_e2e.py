@@ -361,13 +361,6 @@ def run_fatigue_l4_golden(workdir: Path, launcher: str) -> Dict[str, Any]:
         metadata={"run_id": run_id, "status": "ACCEPTED", "engineering_status": "RESULT_VALID"},
         provenance=issued.to_dict(),
     )
-    md_write = write_gated_engineering_report(
-        case_dir / "fatigue_engineering_report.md",
-        report=rep_data,
-        record=issued,
-        odb_sha256=odb_sha,
-        allow_diagnostic_draft=False,
-    )
     html_write = write_gated_engineering_report(
         case_dir / "fatigue_engineering_report.html",
         report=rep_data,
@@ -375,7 +368,7 @@ def run_fatigue_l4_golden(workdir: Path, launcher: str) -> Dict[str, Any]:
         odb_sha256=odb_sha,
         allow_diagnostic_draft=False,
     )
-    print("Rendered gated Markdown and HTML engineering reports: %s, %s" % (md_write["kind"], html_write["kind"]))
+    print("Rendered gated HTML engineering report: %s" % html_write["kind"])
 
     print("\n" + "=" * 70)
     print("STEP 7: Negative Probes (Fail-Closed Verification)")

@@ -214,7 +214,9 @@ def test_solve_requirement_end_to_end_completed():
     assert result.report_markdown is not None
     assert "Engineering Analysis Report" in result.report_markdown
     assert "[DIAGNOSTIC / NON-DELIVERABLE DRAFT]" in result.report_markdown
-    assert result.report_html is None
+    assert result.report_html is not None
+    assert "diagnostic-banner" in result.report_html
+    assert result.metadata.get("formal_report_written") is False
     assert "120.0" in result.report_markdown
     assert "Verification Dimension" in result.report_markdown
 
@@ -240,4 +242,6 @@ def test_solve_requirement_natural_language_completed():
     assert result.report_markdown is not None
     assert "Engineering Analysis Report" in result.report_markdown
     assert "[DIAGNOSTIC / NON-DELIVERABLE DRAFT]" in result.report_markdown
-    assert result.report_html is None
+    assert result.report_html is not None
+    assert "diagnostic-banner" in result.report_html
+    assert result.metadata.get("formal_report_written") is False

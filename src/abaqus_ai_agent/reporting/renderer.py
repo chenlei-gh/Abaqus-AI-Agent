@@ -492,7 +492,7 @@ def _render_custom_table_for_section(heading, value, is_zh=False):
     elif heading.startswith("8. Results") and isinstance(value, (tuple, list)) and value:
         rows = []
         for m in value:
-            name = getattr(m, "name", None) or (m.get("name") if isinstance(m, dict) else str(m))
+            name = getattr(m, "name", None) or (m.get("name") or m.get("metric") if isinstance(m, dict) else str(m))
             v = getattr(m, "value", None) if hasattr(m, "value") else (m.get("value") if isinstance(m, dict) else "-")
             u = getattr(m, "unit", "") if hasattr(m, "unit") else (m.get("unit", "") if isinstance(m, dict) else "")
             src = getattr(m, "source", "odb") if hasattr(m, "source") else (m.get("source", "odb") if isinstance(m, dict) else "odb")
@@ -500,6 +500,9 @@ def _render_custom_table_for_section(heading, value, is_zh=False):
         if rows:
             th = ["物理指标名称 / Metric Name", "计算数值 / Value", "工程单位 / Unit", "数据源 / Source"] if is_zh else ["Metric Name", "Value", "Unit", "Source"]
             lines += [_format_markdown_table(th, rows), ""]
+            peak_note = _stress_peak_note(value, is_zh=is_zh)
+            if peak_note:
+                lines += [peak_note, ""]
 
     # 8b. Result Intelligence & Derived Metrics
     elif heading.startswith("8b. Result Intelligence") and value is not None:
@@ -1847,6 +1850,48 @@ def _attribution_note(report, is_zh=False):
     )
 
 
+def _metric_name(item):
+    if isinstance(item, dict):
+        return str(item.get("name") or item.get("metric") or item.get("label") or "")
+    return str(getattr(item, "name", None) or getattr(item, "metric", None) or "")
+
+
+def _metric_value(item):
+    if isinstance(item, dict):
+        return item.get("value")
+    return getattr(item, "value", None)
+
+
+def _stress_peak_note(results, is_zh=False):
+    """State peak and 99.5% values together. A percentile must not hide the peak."""
+    peak_keys = ("max_mises", "max_stress", "s_mises", "mises", "peak_mises", "peak_stress")
+    p995_keys = ("mises_p995", "p995_mises", "stress_p995", "percentile_99_5", "mises_percentile_995")
+    peak = None
+    percentile = None
+    for item in results or ():
+        name = _metric_name(item).lower()
+        value = _metric_value(item)
+        if peak is None and name in peak_keys:
+            peak = value
+        if percentile is None and name in p995_keys:
+            percentile = value
+    if peak is None and percentile is None:
+        return ""
+    if is_zh:
+        parts = ["应力报告同时保留全场峰值和 99.5% 分位。分位数不能掩盖峰值，也不能单独作为交付应力。"]
+        if peak is not None:
+            parts.append("全场峰值: %s。" % peak)
+        if percentile is not None:
+            parts.append("99.5%% 分位: %s。" % percentile)
+        return "> " + "".join(parts)
+    parts = ["Peak and 99.5th-percentile stress are both retained. The percentile must not hide or replace the peak."]
+    if peak is not None:
+        parts.append("Peak: %s." % peak)
+    if percentile is not None:
+        parts.append("99.5th percentile: %s." % percentile)
+    return "> " + " ".join(parts)
+
+
 def _conclusion(report, is_zh=False):
     acceptance = report.acceptance
     audit_summary = ""
@@ -1896,8 +1941,10 @@ def _conclusion(report, is_zh=False):
         detail_parts.append("EVIDENCE INCOMPLETE: Mandatory solver artifacts are missing from disk.")
     if any("evidence_stale" in f for f in failures):
         detail_parts.append("EVIDENCE STALE: Run ID mismatch or timestamp expired; stale evidence reuse is prohibited.")
-    if result_validity == "RESULT_INVALID":
-        detail_parts.append("Engineering conclusion is REJECTED (RESULT_INVALID): Required physical outputs or mandatory verification gates were not satisfied.")
+    if str(result_validity) == "RESULT_INVALID" or any("elastic_range_exceeded" in f for f in failures):
+        detail_parts.append(
+            "Engineering conclusion is REJECTED (RESULT_INVALID): a purely elastic result past yield is not plastic deformation, and a percentile must not replace the peak."
+        )
     if missing_metrics:
         detail_parts.append(f"Missing required physical metrics: {', '.join(missing_metrics)}.")
     if missing_gates:

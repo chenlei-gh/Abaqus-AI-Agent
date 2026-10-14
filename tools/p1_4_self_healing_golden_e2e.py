@@ -214,27 +214,20 @@ def run_p1_4_self_healing_golden(workdir: Path, launcher: Optional[str] = None) 
         objective="Verify automated self-healing from singular stiffness matrix to fully accepted state.",
         self_healing=healing_result,
     )
-    # Synthetic healed run has no ODB hash. File a labeled diagnostic draft only.
-    md_write = write_gated_engineering_report(
-        case_dir / "engineering_report.md",
-        report=report_data,
-        allow_diagnostic_draft=True,
-    )
+    # Synthetic healed run has no ODB hash. File a labeled HTML diagnostic draft only.
     html_write = write_gated_engineering_report(
         case_dir / "engineering_report.html",
         report=report_data,
         allow_diagnostic_draft=True,
     )
-    md_path = Path(md_write["path"])
     html_path = Path(html_write["path"])
-    report_md = md_path.read_text(encoding="utf-8")
     report_html = html_path.read_text(encoding="utf-8")
-    assert md_write["kind"] == "diagnostic_draft"
+    assert html_write["kind"] == "diagnostic_draft"
     assert not (case_dir / "engineering_report.html").exists()
-    print(f"  Markdown Report length: {len(report_md)} bytes")
-    print(f"  HTML Report length:     {len(report_html)} bytes")
-    assert "14b. Solver Diagnostics & Self-Healing Audit" in report_md
-    assert "NUMERICAL_SINGULARITY" in report_md or "ZERO_PIVOT" in report_md
+    assert not (case_dir / "engineering_report.md").exists()
+    print(f"  HTML diagnostic length: {len(report_html)} bytes")
+    assert "14b. Solver Diagnostics & Self-Healing Audit" in report_html
+    assert "NUMERICAL_SINGULARITY" in report_html or "ZERO_PIVOT" in report_html
 
     print("=" * 70)
     print("STEP 5: Validate 10 Anti-Tamper & Self-Healing Probes")
@@ -259,7 +252,7 @@ def run_p1_4_self_healing_golden(workdir: Path, launcher: Optional[str] = None) 
     p6 = (healed_run.acceptance is not None and healed_run.acceptance.passed is True)
 
     # Probe 7: Chapter 14b rendered
-    p7 = ("14b. Solver Diagnostics & Self-Healing Audit" in report_md and "YES (Self-Healed)" in report_md)
+    p7 = ("14b. Solver Diagnostics & Self-Healing Audit" in report_html and "YES (Self-Healed)" in report_html)
 
     # Probe 8: Unhealable mode safeguard (verified via SolverRemediator contract)
     lic_issue = DiagnosticIssue(
@@ -329,7 +322,6 @@ def run_p1_4_self_healing_golden(workdir: Path, launcher: Optional[str] = None) 
             "engineering_status": healed_run.engineering_status,
             "acceptance_passed": healed_run.acceptance_passed,
             "self_healing": healing_result.to_dict(),
-            "report_md_length": len(report_md),
             "report_html_length": len(report_html),
         },
         "physical_results": {
@@ -342,12 +334,6 @@ def run_p1_4_self_healing_golden(workdir: Path, launcher: Optional[str] = None) 
             "total_attempts": healing_result.total_attempts,
         },
         "artifacts": {
-            md_path.name: {
-                "sha256": _sha256(md_path),
-                "size_bytes": md_path.stat().st_size,
-                "exists": True,
-                "kind": "diagnostic_draft",
-            },
             html_path.name: {
                 "sha256": _sha256(html_path),
                 "size_bytes": html_path.stat().st_size,

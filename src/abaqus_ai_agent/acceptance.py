@@ -43,6 +43,88 @@ def is_invalid_result_validity(val) -> bool:
     return str(val) in _INVALID_RESULT_STATES
 
 
+_PEAK_STRESS_KEYS = (
+    "max_mises",
+    "max_stress",
+    "S_Mises",
+    "s_mises",
+    "MISES",
+    "mises",
+    "peak_mises",
+    "peak_stress",
+)
+
+_PERCENTILE_STRESS_KEYS = (
+    "mises_p995",
+    "p995_mises",
+    "stress_p995",
+    "percentile_99_5",
+    "mises_percentile_995",
+)
+
+
+def finite_number(value):
+    """Return a finite float, or None. Booleans are not numbers here."""
+    if isinstance(value, bool) or value is None:
+        return None
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return None
+    if not math.isfinite(number):
+        return None
+    return number
+
+
+def lookup_metric(mapping, keys):
+    """Return the first finite number stored under any of ``keys``."""
+    if not isinstance(mapping, dict):
+        return None
+    folded = {str(key).lower(): value for key, value in mapping.items()}
+    for key in keys:
+        if key in mapping:
+            number = finite_number(mapping[key])
+            if number is not None:
+                return number
+        folded_value = folded.get(str(key).lower())
+        number = finite_number(folded_value)
+        if number is not None:
+            return number
+    return None
+
+
+def build_elastic_validity(inp_text=None, yield_strength=None, values=None, is_purely_elastic=None):
+    """Assemble the elastic-range payload from the solved deck and extracted stress.
+
+    Returns None when yield strength or peak stress is not a verified finite
+    number. A missing payload does not invent a failure; a complete payload
+    with peak stress above yield does.
+
+    The peak is never replaced by a percentile. If both are present, the
+    larger one is the value that can invalidate a linear-elastic assumption.
+    """
+    peak = lookup_metric(values, _PEAK_STRESS_KEYS)
+    percentile = lookup_metric(values, _PERCENTILE_STRESS_KEYS)
+    governing = peak
+    if percentile is not None and (governing is None or percentile > governing):
+        governing = percentile
+    yield_value = finite_number(yield_strength)
+    if governing is None or yield_value is None:
+        return None
+    if is_purely_elastic is None:
+        if not inp_text:
+            return None
+        from .diagnostics.solver_patterns import extract_inp_has_plasticity
+        is_purely_elastic = not extract_inp_has_plasticity(inp_text)
+    return {
+        "is_purely_elastic": is_purely_elastic is True,
+        "yield_strength": yield_value,
+        "max_stress": governing,
+        "peak_stress": peak,
+        "percentile_995": percentile,
+    }
+
+
 def _detect_elastic_range_failure(elastic_validity) -> Optional[str]:
     """Return a failure reason when a purely elastic model is used past yield.
 
@@ -944,6 +1026,7 @@ def evaluate_production_acceptance(
     odb_status: Optional[str] = None,
     max_age_seconds: Optional[float] = None,
     mandatory_roles: Optional[Sequence[str]] = None,
+    elastic_validity: Optional[Dict[str, Any]] = None,
     **kwargs,
 ) -> AcceptanceResult:
     """Strict Production Acceptance Gate with Full Causal & Grounding Binding.
@@ -1191,6 +1274,7 @@ def evaluate_production_acceptance(
         odb_status=odb_status,
         max_age_seconds=max_age_seconds,
         mandatory_roles=mandatory_roles,
+        elastic_validity=elastic_validity,
     )
 
     if causal_failures or causal_blocked or causal_evidence_errors:

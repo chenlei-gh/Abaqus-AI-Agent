@@ -180,15 +180,8 @@ from abaqus_ai_agent.reporting.delivery import write_gated_engineering_report
 work_dir = getattr(task_result.run, "work_dir", None) or os.getcwd()
 issued = getattr(task_result.run, "provenance", None) if task_result.run else None
 odb_sha = getattr(issued, "output_hash", None) if issued is not None else None
-if task_result.report_markdown:
-    write_gated_engineering_report(
-        os.path.join(work_dir, "engineering_report.md"),
-        content=task_result.report_markdown,
-        record=issued,
-        odb_sha256=odb_sha,
-        allow_diagnostic_draft=True,
-    )
-if task_result.report_html:
+	# Markdown stays in the task result for length checks. It is not filed.
+	if task_result.report_html:
     write_gated_engineering_report(
         os.path.join(work_dir, "engineering_report.html"),
         content=task_result.report_html,
@@ -239,14 +232,10 @@ print("AIAgent_P1_3_RESULT_SUCCESS")
     artifacts = _collect_artifacts(case_dir, actual_job_name)
 
     # Collect generated report and figure artifacts
-    md_path = case_dir / "engineering_report.md"
     html_path = case_dir / "engineering_report.html"
-    if md_path.exists():
-        artifacts["engineering_report.md"] = {
-            "sha256": _sha256(md_path),
-            "size_bytes": md_path.stat().st_size,
-            "exists": True,
-        }
+    stale_md = case_dir / "engineering_report.md"
+    if stale_md.exists():
+        stale_md.unlink()
     if html_path.exists():
         artifacts["engineering_report.html"] = {
             "sha256": _sha256(html_path),
@@ -345,9 +334,9 @@ def main():
     print(f"  Top-K Hotspots Extracted: {len(hotspots)}")
     assert len(hotspots) > 0, "No spatial hotspots extracted from real ODB"
 
-    # 3. Report deliverables check
-    assert summary.get("report_md_length", 0) > 500, "Markdown report too short or empty"
+    # 3. Report deliverable check. HTML is the filed report; Markdown length is in-memory only.
     assert summary.get("report_html_length", 0) > 500, "HTML report too short or empty"
+    assert not (case_dir / "engineering_report.md").exists(), "Markdown must not be filed as the engineering report"
 
     # 4. Manifest generation
     manifest_data = {

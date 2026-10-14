@@ -457,7 +457,9 @@ def test_solve_requirement_self_healing_end_to_end():
     assert "[DIAGNOSTIC / NON-DELIVERABLE DRAFT]" in result.report_markdown
     assert "自愈审计上下文 (Self-Healing Context)" in result.report_markdown
     assert "HEALED" in result.report_markdown
-    assert result.report_html is None
+    assert result.report_html is not None
+    assert "diagnostic-banner" in result.report_html
+    assert result.metadata.get("formal_report_written") is False
 
 
 def test_solve_requirement_self_healing_disabled():

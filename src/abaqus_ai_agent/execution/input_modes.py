@@ -929,9 +929,58 @@ def _attach_delivery_report_if_requested(
     }
 
     # A completed solver job is not an Agent engineering deliverable.
-    # Direct INP execution has no JEV routing and no acceptance verdict, so it
-    # must not invent deliverable=True or write an official report.
+    # Direct INP execution still reads the deck and, when yield and peak stress
+    # are both known, runs the same elastic-range gate. It must not invent
+    # deliverable=True or write report.html without an Agent acceptance verdict.
+    inp_text = None
+    inp_source = solve_res.get("edited_inp_path") or solve_res.get("inp_path")
+    if inp_source:
+        try:
+            inp_text = Path(inp_source).read_text(encoding="utf-8", errors="ignore")
+        except Exception:
+            inp_text = None
+    solve_res["inp_text_loaded"] = bool(inp_text)
+    if inp_text:
+        try:
+            from ..diagnostics.solver_patterns import diagnose_inp_contract
+            solve_res["inp_contract_diagnostics"] = [
+                issue.to_dict() for issue in diagnose_inp_contract(inp_text, source=str(inp_source))
+            ]
+        except Exception as diag_err:
+            solve_res["inp_contract_error"] = str(diag_err)
+
     recorded_acceptance = solve_res.get("acceptance")
+    yield_strength = solve_res.get("yield_strength")
+    if yield_strength is None and isinstance(solve_res.get("material"), dict):
+        yield_strength = solve_res["material"].get("yield_strength")
+    stress_values = {}
+    for item in results_info:
+        key = item.get("metric") or item.get("name")
+        if key:
+            stress_values[key] = item.get("value")
+    for key in ("max_mises", "max_stress", "mises_p995", "p995_mises"):
+        if key in solve_res and key not in stress_values:
+            stress_values[key] = solve_res[key]
+    try:
+        from ..acceptance import build_elastic_validity, evaluate_result_acceptance
+        elastic_validity = build_elastic_validity(
+            inp_text=inp_text,
+            yield_strength=yield_strength,
+            values=stress_values,
+        )
+    except Exception:
+        elastic_validity = None
+        evaluate_result_acceptance = None
+    if elastic_validity is not None:
+        solve_res["elastic_validity"] = elastic_validity
+    if evaluate_result_acceptance is not None and recorded_acceptance is None and elastic_validity is not None:
+        recorded_acceptance = evaluate_result_acceptance(
+            "completed" if solve_res.get("status") == "COMPLETED" else "error",
+            values=stress_values,
+            elastic_validity=elastic_validity,
+        )
+        solve_res["acceptance"] = recorded_acceptance
+
     acceptance_deliverable = False
     if isinstance(recorded_acceptance, dict):
         acceptance_deliverable = recorded_acceptance.get("deliverable") is True
@@ -939,11 +988,18 @@ def _attach_delivery_report_if_requested(
         acceptance_deliverable = getattr(recorded_acceptance, "deliverable", None) is True
     issued = solve_res.get("provenance")
     if not acceptance_deliverable or issued is None:
-        solve_res["report_generation_error"] = (
+        reason = (
             "Official report refused: solve_user_inp has no Agent acceptance verdict "
             "and no Agent run record. Use solve_requirement() for a deliverable."
         )
+        if elastic_validity and elastic_validity.get("max_stress", 0) > elastic_validity.get("yield_strength", 0) and elastic_validity.get("is_purely_elastic") is True:
+            reason = (
+                "Official report refused: purely elastic deck exceeded yield "
+                "(RESULT_INVALID). No report.html written."
+            )
+        solve_res["report_generation_error"] = reason
         solve_res["report_authorized"] = False
+        solve_res["formal_report_written"] = False
         return
 
     acceptance_info = recorded_acceptance
@@ -965,9 +1021,18 @@ def _attach_delivery_report_if_requested(
             launcher=launcher,
             include_animation=include_animation,
             provenance=issued,
+            inp_text=inp_text,
         )
-        solve_res["report_path"] = str(eff_delivery_dir / "report.html")
-        solve_res["report_md_path"] = str(eff_delivery_dir / "report.md")
+        html_path = eff_delivery_dir / "report.html"
+        if not html_path.is_file():
+            solve_res["report_generation_error"] = "Official HTML report was not written."
+            solve_res["report_authorized"] = False
+            solve_res["formal_report_written"] = False
+            return
+        solve_res["report_path"] = str(html_path)
+        solve_res["report_format"] = "html"
+        solve_res["formal_report_written"] = True
+        solve_res.pop("report_md_path", None)
         solve_res["figures"] = [str(f.path) for f in report_data.figures]
         solve_res["delivery_card"] = delivery_card
     except Exception as rep_err:

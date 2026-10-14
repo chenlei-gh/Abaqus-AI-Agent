@@ -5,7 +5,7 @@ Provides a unified command-line tool for:
 2. matrix: list, validate, and summarize Golden Case evidence.
 3. diff: compute deterministic run-level diff between two runs.
 4. diagnose: deterministic diagnosis of Abaqus solver artifacts (.msg, .sta, .dat, .log).
-5. report: render Markdown/HTML engineering report from evidence or AnalysisRun.
+5. report: render an HTML engineering report from evidence or AnalysisRun. Markdown is an explicit preview only.
 6. fmbd: inspect mechanism topology and action compilation plan for MBD/FMBD models.
 """
 
@@ -69,10 +69,15 @@ def _build_parser() -> argparse.ArgumentParser:
     p_diag.add_argument("--json", action="store_true", help="Output structured diagnostic issues as JSON.")
 
     # 5. report
-    p_rep = subparsers.add_parser("report", help="Render engineering report deliverable from evidence JSON.")
+    p_rep = subparsers.add_parser("report", help="Render an HTML engineering report from evidence JSON.")
     p_rep.add_argument("evidence_file", help="Path to evidence or AnalysisRun JSON file.")
-    p_rep.add_argument("--format", choices=["markdown", "html"], default="markdown", help="Output format (default: markdown)")
-    p_rep.add_argument("--output", "-o", help="Output file path (default: stdout)")
+    p_rep.add_argument(
+        "--format",
+        choices=["html", "markdown"],
+        default="html",
+        help="Output format. html is the only formal deliverable (default). markdown is an explicit preview and is never written as report.html.",
+    )
+    p_rep.add_argument("--output", "-o", help="Output file path (default: stdout). Formal writes must be .html unless --format markdown is explicit.")
     p_rep.add_argument("--title", help="Override report title.")
     p_rep.add_argument(
         "--allow-preview",
@@ -716,6 +721,18 @@ def handle_report(args: argparse.Namespace) -> int:
         metadata=metadata,
     )
 
+    requested_format = args.format or "html"
+    if args.output and requested_format == "markdown":
+        preview_name = Path(args.output).name.lower()
+        preview_suffix = Path(args.output).suffix.lower()
+        if preview_name == "report.html" or preview_suffix == ".html":
+            print(
+                "BLOCKED: refusing to write Markdown content as report.html. "
+                "HTML is the only formal deliverable.",
+                file=sys.stderr,
+            )
+            return 2
+
     if not gate["deliverable_file_allowed"] and args.output:
         print("BLOCKED: refusing to write an engineering deliverable.", file=sys.stderr)
         print(f"Reasons: {', '.join(gate['reasons']) or 'unspecified'}", file=sys.stderr)
@@ -731,11 +748,37 @@ def handle_report(args: argparse.Namespace) -> int:
             file=sys.stderr,
         )
 
-    output_str = render_html(report) if args.format == "html" else render_markdown(report)
+    requested_format = args.format or "html"
+    if requested_format not in ("html", "markdown"):
+        print(f"Error: unsupported report format '{requested_format}'. Formal deliverable is html.", file=sys.stderr)
+        return 2
+    output_str = render_html(report) if requested_format == "html" else render_markdown(report)
 
     if args.output:
         out_path = Path(args.output)
+        suffix = out_path.suffix.lower()
+        # A formal filename is HTML. Markdown is only written when the caller
+        # explicitly asked for it, and never under the official report.html name.
+        if requested_format != "markdown":
+            if suffix and suffix != ".html":
+                print(
+                    f"BLOCKED: formal report must be HTML, not '{suffix}'. "
+                    "Pass --format markdown only for an explicit non-deliverable preview.",
+                    file=sys.stderr,
+                )
+                return 2
+            if not suffix:
+                out_path = out_path.with_suffix(".html")
+        elif out_path.name.lower() == "report.html" or suffix == ".html":
+            print(
+                "BLOCKED: refusing to write Markdown content as report.html. "
+                "HTML is the only formal deliverable.",
+                file=sys.stderr,
+            )
+            return 2
         out_path.write_text(output_str, encoding="utf-8")
+        if requested_format == "markdown":
+            print("NOTE: markdown preview is not an engineering deliverable.", file=sys.stderr)
         print(f"Report written to: {out_path.resolve()}")
     else:
         if not gate["deliverable_file_allowed"] and not args.allow_preview:

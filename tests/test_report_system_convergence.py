@@ -189,7 +189,7 @@ def test_zero_stale_report_leakage_when_delivery_blocked(tmp_path: Path, monkeyp
     assert task_res.summary_card["engineering_status"] == "DELIVERY_BLOCKED"
     assert task_res.summary_card["delivery_card"] is None
     assert task_res.report_markdown is None, "Stale markdown report must not leak when delivery is blocked"
-    assert task_res.report_html is None, "Stale HTML report must not leak when delivery is blocked"
+    assert task_res.report_html is None, "Blocked official delivery must not emit a report, including a diagnostic draft"
     assert len(task_res.errors) >= 1
     assert any("DELIVERY_BLOCKED" in str(e) or "delivery blocked" in str(e).lower() for e in task_res.errors)
 
@@ -327,8 +327,12 @@ def test_non_deliverable_draft_diagnostic_contract(tmp_path: Path, monkeypatch):
     assert task_res.status == TaskStatus.COMPLETED
     assert task_res.summary_card["delivery_card"] is None, "Non-production mode must not issue official delivery card"
 
-    # 2. Strict single-pipeline contract: No official HTML report generated on non-deliverable path
-    assert task_res.report_html is None, "Non-deliverable path must not generate secondary HTML report"
+    # 2. Diagnostic HTML is allowed; official report.html is not.
+    assert task_res.report_html is not None
+    assert "diagnostic-banner" in task_res.report_html
+    assert "DIAGNOSTIC NON-DELIVERABLE DRAFT" in task_res.report_html
+    assert task_res.metadata.get("formal_report_written") is False
+    assert not (tmp_path / "report.html").exists()
 
     # 3. Explicit anti-masquerade check: Title must be unambiguously marked as diagnostic draft
     assert task_res.report_markdown is not None

@@ -484,6 +484,42 @@ class AbaqusAIAgent:
         from .execution.odb import inspect_odb
         return summarize_odb(inspect_odb(self.executor, path))
 
+    def _render_diagnostic_html(self, title, diag_lines):
+        """Bannered HTML draft. Not a formal report.html."""
+        import html as html_lib
+        body = "".join(
+            "<p>%s</p>" % html_lib.escape(line)
+            for line in diag_lines
+            if line is not None
+        )
+        return (
+            "<!DOCTYPE html><html><head><meta charset=\"utf-8\">"
+            "<title>%s</title></head><body>"
+            "<div class=\"diagnostic-banner\">"
+            "DIAGNOSTIC NON-DELIVERABLE DRAFT. Not an official engineering report. "
+            "禁止作为正式工程报告交付。"
+            "</div><h1>%s</h1>%s</body></html>"
+        ) % (html_lib.escape(title), html_lib.escape(title), body)
+
+    def _write_diagnostic_html(self, out_dir, html_text):
+        """Write only report.diagnostic.html. Never create or replace report.html."""
+        if not out_dir or not html_text:
+            return None
+        target_dir = Path(out_dir)
+        try:
+            target_dir.mkdir(parents=True, exist_ok=True)
+            draft = target_dir / "report.diagnostic.html"
+            draft.write_text(html_text, encoding="utf-8")
+            return draft
+        except Exception:
+            return None
+
+    def _load_plan_inp_text(self, plan, workdir):
+        from .diagnostics.solver_patterns import read_job_inp_text
+        job_name = getattr(plan, "job_name", None)
+        text, _source = read_job_inp_text(workdir=workdir, job_name=job_name)
+        return text
+
     def solve_requirement(
         self,
         requirement,
@@ -1148,12 +1184,16 @@ class AbaqusAIAgent:
                         issued = attach_delivery_stamp(issued.replace(
                             output_hash=hashlib.sha256(odb_file.read_bytes()).hexdigest(),
                         ))
+                deck_text = (getattr(run, "metadata", None) or {}).get("inp_text")
+                if not deck_text:
+                    deck_text = self._load_plan_inp_text(plan, target_workdir or getattr(run, "work_dir", None))
                 deterministic_delivery_card, _, det_report_data = pipeline.build_and_render(
                     output_dir=Path(out_dir),
                     title=report_title,
                     case_id=plan.job_name,
                     run_id=getattr(run, "id", "RUN-AUTH"),
                     provenance=issued,
+                    inp_text=deck_text,
                     model_info={
                         "name": plan.model_name,
                         "material": final_mat_def.name if final_mat_def else "Steel",
@@ -1187,11 +1227,11 @@ class AbaqusAIAgent:
                 report_html_str = None
                 delivery_block_error = f"Official delivery blocked: {d_exc}"
         else:
-            # Non-deliverable diagnostic report path:
-            # Strictly preserves diagnostic and failure context, but does NOT construct
-            # a secondary authoritative deliverable or render HTML.
+            # Non-deliverable diagnostic path. This is not an official deliverable:
+            # it never writes report.html and never sets deliverable=True. The
+            # diagnostic HTML is a bannered draft so a failed gate is not left as
+            # an unmarked Markdown file that can be filed as the CAE report.
             draft_title = f"[DIAGNOSTIC / NON-DELIVERABLE DRAFT] {report_title}"
-            report_html_str = None  # Official deliverable HTML reports are exclusively produced by official pipeline
 
             diag_lines = [
                 f"# {draft_title}\n",
@@ -1270,6 +1310,8 @@ class AbaqusAIAgent:
                 diag_lines.append("")
 
             report_md = "\n".join(diag_lines)
+            report_html_str = self._render_diagnostic_html(draft_title, diag_lines)
+            self._write_diagnostic_html(out_dir, report_html_str)
 
         task_status = TaskStatus.COMPLETED if is_completed else TaskStatus.FAILED
 
@@ -1311,6 +1353,14 @@ class AbaqusAIAgent:
         report_meta = getattr(det_report_data, "metadata", None) if "det_report_data" in locals() else None
         if isinstance(report_meta, dict) and report_meta.get("deliverable_authorization"):
             task_metadata["deliverable_authorization"] = report_meta["deliverable_authorization"]
+        if not is_official:
+            task_metadata["report_kind"] = "diagnostic_draft"
+            task_metadata["formal_report_written"] = False
+            if out_dir:
+                task_metadata["diagnostic_report_path"] = str(Path(out_dir) / "report.diagnostic.html")
+        else:
+            task_metadata["report_kind"] = "official_html"
+            task_metadata["formal_report_written"] = True
         return EngineeringTaskResult(
             status=task_status,
             intent=intent,
