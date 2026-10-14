@@ -88,7 +88,7 @@ class TestP1ProductEntryAudit:
         )
         res = agent.solve_requirement(intent)
         assert res.status == TaskStatus.UNSUPPORTED
-        assert "outside the 20 L4 verified Abaqus FEA" in res.errors[0]
+        assert "outside the implemented Abaqus FEA workflows" in res.errors[0]
         assert res.plan is None
         assert res.run is None
 
@@ -344,7 +344,9 @@ class TestP1ProductEntryAudit:
         cap = resolve_capability(intent)
         assert cap.capability_id == capability_id, f"Resolved {cap.capability_id} != expected {capability_id}"
         assert cap.status == CapabilityStatus.SUPPORTED
-        assert cap.qualification_level == "L4"
+        assert cap.qualification_level == "WORKFLOW"
+        assert cap.metadata.get("machine_validation_certificate") is False
+        assert "Qualified under" not in cap.reason
         assert cap.physics_domain is not None
         assert cap.reason != ""
 

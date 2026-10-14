@@ -76,9 +76,15 @@ class SelfHealingOrchestrator:
         workdir: Optional[str] = None,
         criteria: Sequence[Any] = (),
         postprocess_profile: Optional[Any] = None,
+        confirm_model_change: bool = False,
         **kwargs,
     ) -> Tuple[AnalysisRun, SelfHealingResult]:
-        """Execute bounded self-healing cycle and return final run and audit result."""
+        """Diagnose a failed run. Re-execute only after explicit model-change consent.
+
+        Without ``confirm_model_change=True`` this returns the original failed run
+        plus a proposal. It must not add boundary conditions, damping, or step
+        controls, and it must not replace the failed run with a healed run.
+        """
         from ..planning.compiler import compile_engineering_intent
         from ..validation.preflight import preflight_plan
 
@@ -150,6 +156,11 @@ class SelfHealingOrchestrator:
             for r in healable_remediations:
                 if r not in all_remediations:
                     all_remediations.append(r)
+
+            # Model-changing remediations are proposals until the caller confirms.
+            # Diagnosis is still recorded; the original failed run stays authoritative.
+            if not confirm_model_change:
+                break
 
             # 4. Apply remediations to derive enriched intent
             enriched_intent = SolverRemediator.apply_remediations(current_intent, healable_remediations)
@@ -230,6 +241,8 @@ class SelfHealingOrchestrator:
             iss.diagnosis_id for iss in all_diagnosed_issues
             if not healed and iss.severity == "ERROR"
         )
+        proposed = tuple(all_remediations) if not confirm_model_change else ()
+        applied = tuple(all_remediations) if confirm_model_change else ()
 
         healing_result = SelfHealingResult(
             healed=healed,
@@ -237,13 +250,17 @@ class SelfHealingOrchestrator:
             initial_status=initial_status,
             final_status=getattr(current_run, "engineering_status", "FAILED"),
             diagnosed_issues=tuple(all_diagnosed_issues),
-            remediations_applied=tuple(all_remediations),
+            remediations_applied=applied,
             attempts=tuple(attempts_records),
             final_run_diff=final_diff,
             unresolved_issues=unresolved,
             metadata={
                 "max_attempts_budget": bounded_max_attempts,
                 "healed": healed,
+                "confirm_model_change": bool(confirm_model_change),
+                "model_change_applied": bool(confirm_model_change and attempts_records),
+                "awaiting_confirmation": bool(proposed),
+                "proposed_remediations": [r.to_dict() for r in proposed],
             },
         )
 

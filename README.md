@@ -79,6 +79,10 @@ These are current code facts, not future promises.
 
 **ODB regions fail closed.** Only whitelisted attribute and subscript syntax under `odb` is resolved. Calls, private names, and parse failures raise. They are not passed through as raw strings.
 
+**A capability label is not this job's certificate.** `resolve_capability()` returns `qualification_level="WORKFLOW"`. That means the workflow is implemented. It does not mean this project, this run, or this machine has passed machine validation. A historical bundle marked `QUALIFIED` is not copied onto a new job.
+
+**Self-healing does not change the problem by default.** A failed solve can be diagnosed, and proposed boundary, damping, or increment changes can be recorded. Without `confirm_model_change=True`, the agent does not add `ENCASTRE`, does not rerun, and does not replace the failed run. Mechanism models and license failures remain refused. A confirmed rerun must say what changed.
+
 ## Verification levels
 
 Do not collapse these into one "certified" claim.
@@ -90,7 +94,7 @@ Do not collapse these into one "certified" claim.
 | Golden evidence audit | Existing evidence bundles still hash-check | A new physical solve |
 | Abaqus 2025 machine run | One recorded job, ODB, and log on a licensed host | Every industrial physics capability |
 
-Local regression on the MS13L tool-defect branch was **1373 passed** (`python -m pytest -q --tb=line`). That number is a local run, not a CI badge. CI on `main` must be read from the workflow run for that commit. Golden audit is not a machine solve. A single cantilever or handle assembly solve is not proof that contact, plasticity, thermal coupling, fatigue, and imported assemblies are all production-qualified.
+Local regression on the MS13L tool-defect branch was **1373 passed** (`python -m pytest -q --tb=line`). That number is a local run, not a CI badge. CI on `main` must be read from the workflow run for that commit. Golden audit is not a machine solve. A single cantilever or handle assembly solve is not proof that contact, plasticity, thermal coupling, fatigue, and imported assemblies are all production-qualified. A workflow capability label is not that proof either.
 
 The static cantilever production script is an integration probe. It is not a universal production certificate. Read its `require_production` setting and retained evidence before citing it.
 

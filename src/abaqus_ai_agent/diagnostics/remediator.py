@@ -102,8 +102,11 @@ class SolverRemediator:
                         "bc_type": "ENCASTRE",
                         "name": f"BC_Remediated_{uuid.uuid4().hex[:4]}",
                     },
-                    rationale="Unconstrained structural rigid body motion causes singular tangent stiffness matrix.",
-                    risk_level=RemediationRisk.LOW,
+                    rationale=(
+                        "Unconstrained rigid-body motion can singularize the stiffness matrix. "
+                        "Adding ENCASTRE changes the physical problem and requires explicit confirmation."
+                    ),
+                    risk_level=RemediationRisk.HIGH,
                 )
             )
 
@@ -131,8 +134,12 @@ class SolverRemediator:
                         "stabilization_magnitude": 2e-4,
                         "max_dissipation_ratio": 0.05,
                     },
-                    rationale="Relaxing increment floor and providing numerical dissipation stabilizes convergence without distorting physics (dissipation <= 5%).",
-                    risk_level=RemediationRisk.LOW,
+                    rationale=(
+                        "Smaller increments and artificial damping can change the solved problem. "
+                        "A 5% dissipation cap is a guard, not proof the physics is unchanged. "
+                        "Application requires explicit confirmation."
+                    ),
+                    risk_level=RemediationRisk.HIGH,
                 )
             )
 
@@ -150,8 +157,11 @@ class SolverRemediator:
                         "contact_damping": True,
                         "max_dissipation_ratio": 0.05,
                     },
-                    rationale="Transient contact open/close chattering requires viscous damping near interfacial gap closure.",
-                    risk_level=RemediationRisk.LOW,
+                    rationale=(
+                        "Contact damping changes interfacial dissipation. "
+                        "Application requires explicit confirmation."
+                    ),
+                    risk_level=RemediationRisk.HIGH,
                 )
             )
 
@@ -168,8 +178,11 @@ class SolverRemediator:
                         "stabilization_magnitude": 1e-4,
                         "max_dissipation_ratio": 0.05,
                     },
-                    rationale="Local instabilities or geometric pre-buckling manifest as negative eigenvalues.",
-                    risk_level=RemediationRisk.LOW,
+                    rationale=(
+                        "Automatic damping can hide or alter a physical instability. "
+                        "Application requires explicit confirmation."
+                    ),
+                    risk_level=RemediationRisk.HIGH,
                 )
             )
 

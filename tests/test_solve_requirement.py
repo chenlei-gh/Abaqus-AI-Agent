@@ -77,7 +77,7 @@ def test_solve_requirement_unsupported_physics_fail_closed():
     assert result.status == TaskStatus.UNSUPPORTED
     assert result.capability is not None
     assert result.capability.status == CapabilityStatus.UNSUPPORTED
-    assert "outside the 20 L4 verified" in result.errors[0]
+    assert "outside the implemented Abaqus FEA workflows" in result.errors[0]
     assert result.summary_card["status"] == "UNSUPPORTED"
 
 
@@ -186,7 +186,8 @@ def test_solve_requirement_end_to_end_completed():
     assert result.capability is not None
     assert result.capability.capability_id == "linear_static"
     assert result.capability.physics_domain == "static"
-    assert result.capability.qualification_level == "L4"
+    assert result.capability.qualification_level == "WORKFLOW"
+    assert result.capability.metadata.get("machine_validation_certificate") is False
 
     # 3. Plan & Preflight
     assert result.plan is not None

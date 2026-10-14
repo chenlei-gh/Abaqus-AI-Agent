@@ -135,7 +135,9 @@ def test_remediator_zero_pivot_singularity():
     )
     actions = remediator.generate_remediations([issue], intent)
     assert len(actions) >= 1
-    assert any(a.category == RemediationCategory.BOUNDARY_CONDITION for a in actions)
+    bc_actions = [a for a in actions if a.category == RemediationCategory.BOUNDARY_CONDITION]
+    assert bc_actions
+    assert all(a.risk_level == RemediationRisk.HIGH for a in bc_actions)
 
     # Apply remediation
     remediated_intent = remediator.apply_remediations(intent, actions)
@@ -269,6 +271,7 @@ def test_orchestrator_max_attempts_cutoff():
         geometry=geom,
         material=mat,
         max_attempts=2,
+        confirm_model_change=True,
     )
 
     assert result.healed is False
@@ -350,6 +353,7 @@ def test_orchestrator_success_on_first_remediation():
         geometry=geom,
         material=mat,
         max_attempts=2,
+        confirm_model_change=True,
     )
 
     assert result.healed is True
@@ -435,6 +439,7 @@ def test_solve_requirement_self_healing_end_to_end():
         geometry=geom,
         material=mat,
         enable_self_healing=True,
+        confirm_model_change=True,
         max_healing_attempts=2,
     )
 
@@ -456,7 +461,7 @@ def test_solve_requirement_self_healing_end_to_end():
     assert result.report_markdown is not None
     assert "[DIAGNOSTIC / NON-DELIVERABLE DRAFT]" in result.report_markdown
     assert "自愈审计上下文 (Self-Healing Context)" in result.report_markdown
-    assert "HEALED" in result.report_markdown
+    assert "APPLIED_AFTER_CONFIRMATION" in result.report_markdown
     assert result.report_html is not None
     assert "diagnostic-banner" in result.report_html
     assert result.metadata.get("formal_report_written") is False
@@ -511,6 +516,88 @@ def test_solve_requirement_self_healing_disabled():
     assert result.status == TaskStatus.FAILED
     assert run_invocations == 1
     assert result.metadata.get("self_healing") is None
+
+
+def test_unconfirmed_healing_does_not_replace_failed_run():
+    """Default diagnosis must not mutate the problem or authorize delivery."""
+    agent = AbaqusAIAgent(executor=MockExecutor())
+    run_invocations = 0
+
+    def fake_analysis_run(*args, **kwargs):
+        nonlocal run_invocations
+        run_invocations += 1
+        acc = AcceptanceResult(
+            passed=True,
+            criteria=(),
+            status="PASS",
+            result_validity="VALID",
+            evidence_status="VALID",
+            deliverable=True,
+        )
+        if run_invocations == 1:
+            return AnalysisRun(
+                id="run_original_failure",
+                model_name="BracketModel",
+                job_name="BracketJob",
+                state=AnalysisRunState.FAILED,
+                engineering_status="SOLVER_SINGULARITY",
+                acceptance_passed=False,
+                acceptance=None,
+                diagnostics=({
+                    "diagnosis_id": "NUMERICAL_SINGULARITY",
+                    "severity": "ERROR",
+                    "likely_cause": "Underconstrained boundary conditions.",
+                },),
+            )
+        return AnalysisRun(
+            id="run_should_not_replace_original",
+            model_name="BracketModel",
+            job_name="BracketJob_Healed",
+            state=AnalysisRunState.ACCEPTED,
+            engineering_status="RESULT_VALID",
+            acceptance_passed=True,
+            acceptance=acc,
+        )
+
+    agent.analysis_run = fake_analysis_run
+    geom = IntentGeometrySpec(shape="cantilever_box", length=120.0, width=12.0, height=8.0)
+    mat = MaterialDefinition(
+        name="Steel_Q235",
+        unit_system="MM_N_MPA",
+        elastic=ElasticProperties(youngs_modulus=210000.0, poisson_ratio=0.3),
+        density=7.85e-9,
+    )
+    intent = EngineeringIntent(
+        id="REQ-HEAL-NO-CONSENT",
+        kind="linear_static",
+        description="Bracket with missing boundary condition causing singularity",
+        material={"name": "Steel_Q235", "elastic_modulus": 210000.0, "poisson_ratio": 0.3},
+        boundary_conditions=({"type": "displacement", "region": "FixedFace", "u1": 0.0},),
+        loads=({"type": "concentrated_force", "region": "TipFace", "magnitude": 1000.0, "direction": "-Y"},),
+        metadata={"dimensions": {"shape": "cantilever_box", "length": 120.0, "width": 12.0, "height": 8.0}},
+    )
+
+    result = agent.solve_requirement(
+        requirement=intent,
+        geometry=geom,
+        material=mat,
+        enable_self_healing=True,
+    )
+
+    assert run_invocations == 1
+    assert result.status == TaskStatus.FAILED
+    assert result.run.id == "run_original_failure"
+    assert getattr(result.acceptance, "deliverable", False) is not True
+    healing = result.metadata.get("self_healing") or {}
+    assert healing.get("healed") is not True
+    assert healing.get("total_attempts") == 0
+    assert healing.get("metadata", {}).get("awaiting_confirmation") is True
+    assert healing.get("metadata", {}).get("model_change_applied") is False
+    assert healing.get("remediations_applied") == []
+    assert result.report_markdown is not None
+    assert "PROPOSED_NOT_APPLIED" in result.report_markdown
+    assert "not a machine-validation certificate" in result.report_markdown
+    assert result.metadata.get("formal_report_written") is False
 
 
 def test_remediator_contact_chatter_stabilization():

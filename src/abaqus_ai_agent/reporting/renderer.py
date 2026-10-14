@@ -734,9 +734,25 @@ def _render_custom_table_for_section(heading, value, is_zh=False):
     # 14b. Solver Diagnostics & Self-Healing Audit
     elif heading.startswith("14b. Solver Diagnostics") and value is not None:
         sh_dict = value.to_dict() if hasattr(value, "to_dict") else (value if isinstance(value, dict) else {})
-        healed_str = ("已成功自愈 (Self-Healed)" if is_zh else "YES (Self-Healed)") if sh_dict.get("healed") else ("未完全自愈 / 需人工介入" if is_zh else "NO (Unresolved / Escalated)")
+        sh_meta = sh_dict.get("metadata") if isinstance(sh_dict.get("metadata"), dict) else {}
+        if sh_meta.get("awaiting_confirmation"):
+            healed_str = (
+                "仅提出修改，未执行 / 等待确认 (Proposed, not applied)"
+                if is_zh else "PROPOSED, NOT APPLIED"
+            )
+        elif sh_dict.get("healed") and sh_meta.get("model_change_applied"):
+            healed_str = (
+                "已在确认后改题重跑 (Applied after confirmation)"
+                if is_zh else "APPLIED AFTER CONFIRMATION"
+            )
+        elif sh_dict.get("healed"):
+            healed_str = ("已成功自愈 (Self-Healed)" if is_zh else "YES (Self-Healed)")
+        else:
+            healed_str = ("未完全自愈 / 需人工介入" if is_zh else "NO (Unresolved / Escalated)")
         summary_rows = [
             ["自愈闭环最终结果 / Outcome" if is_zh else "Self-Healing Outcome", healed_str],
+            ["模型修改是否已确认 / Model Change Confirmed" if is_zh else "Model Change Confirmed", str(bool(sh_meta.get("confirm_model_change")))],
+            ["模型修改是否已执行 / Model Change Applied" if is_zh else "Model Change Applied", str(bool(sh_meta.get("model_change_applied")))],
             ["自愈尝试总次数 / Total Attempts" if is_zh else "Total Healing Attempts", str(sh_dict.get("total_attempts", 0))],
             ["初始求解器故障状态 / Initial Status" if is_zh else "Initial Solver Status", str(sh_dict.get("initial_status", "-"))],
             ["自愈后最终工程状态 / Final Status" if is_zh else "Final Engineering Status", str(sh_dict.get("final_status", "-"))],
@@ -760,6 +776,26 @@ def _render_custom_table_for_section(heading, value, is_zh=False):
             lines += [sub_title, "", _format_markdown_table(th, iss_rows), ""]
 
         # Remediations Applied
+        proposed = sh_meta.get("proposed_remediations") or ()
+        if proposed:
+            prop_rows = []
+            for r in proposed:
+                if not isinstance(r, dict):
+                    continue
+                prop_rows.append([
+                    r.get("action_id", "-"),
+                    r.get("category", "-"),
+                    r.get("description", "-"),
+                    r.get("risk_level", "-"),
+                ])
+            if prop_rows:
+                sub_title = (
+                    "### 待确认的模型修改建议（尚未执行） (Proposed Model Changes, Not Applied)"
+                    if is_zh else "### Proposed Model Changes (Not Applied)"
+                )
+                th = ["措施动作 ID", "类别 / Category", "建议描述 / Description", "工程风险等级 / Risk Level"] if is_zh else ["Action ID", "Category", "Description", "Risk Level"]
+                lines += [sub_title, "", _format_markdown_table(th, prop_rows), ""]
+
         remeds = sh_dict.get("remediations_applied") or ()
         if remeds:
             rem_rows = []

@@ -83,4 +83,4 @@ def test_resolve_capability_for_20_domains():
     res_cfd = resolve_capability(intent_cfd)
     assert res_cfd.status == ContractCapabilityStatus.UNSUPPORTED
     assert res_cfd.is_supported is False
-    assert "outside the 20 L4 verified" in res_cfd.reason
+    assert "outside the implemented Abaqus FEA workflows" in res_cfd.reason

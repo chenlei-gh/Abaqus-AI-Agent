@@ -536,6 +536,7 @@ class AbaqusAIAgent:
         odb_path=None,
         result_values=None,
         enable_self_healing=True,
+        confirm_model_change=False,
         max_healing_attempts=2,
         **kwargs,
     ):
@@ -870,14 +871,18 @@ class AbaqusAIAgent:
         )
 
         healing_result = None
+        original_failed_run = run
         if not initial_ok and enable_self_healing and odb_path is None and result_values is None:
             from .diagnostics.orchestrator import SelfHealingOrchestrator
             heal_kwargs = dict(kwargs)
+            # Consent is an explicit product flag. Do not let a leaked kwarg
+            # silently authorize a model-changing rerun.
+            heal_kwargs.pop("confirm_model_change", None)
             heal_workdir = heal_kwargs.pop("workdir", getattr(run, "work_dir", None))
             if not heal_workdir:
                 from .paths import resolve_runs_root
                 heal_workdir = str(resolve_runs_root() / getattr(run, "id", "heal_scratch"))
-            run, healing_result = SelfHealingOrchestrator.attempt_healing(
+            healed_run, healing_result = SelfHealingOrchestrator.attempt_healing(
                 agent=self,
                 failed_run=run,
                 intent=intent,
@@ -892,8 +897,17 @@ class AbaqusAIAgent:
                 workdir=heal_workdir,
                 criteria=criteria,
                 postprocess_profile=capability.profile,
+                confirm_model_change=bool(confirm_model_change),
                 **heal_kwargs,
             )
+            model_change_applied = bool(
+                (getattr(healing_result, "metadata", None) or {}).get("model_change_applied")
+            )
+            if confirm_model_change and model_change_applied:
+                run = healed_run
+            else:
+                # Diagnosis may exist, but the failed physical problem stays the run.
+                run = original_failed_run
 
         # 7. Summary Card & Markdown Engineering Report
         metrics = getattr(run, "metrics", ()) or ()
@@ -1198,6 +1212,9 @@ class AbaqusAIAgent:
                         "name": plan.model_name,
                         "material": final_mat_def.name if final_mat_def else "Steel",
                         "standard_reference": final_mat_def.provenance if final_mat_def else "",
+                        "capability_id": capability.capability_id,
+                        "capability_label": capability.qualification_level,
+                        "capability_scope": "workflow label; not a machine-validation certificate for this project",
                         "max_mises_mpa": metric_dict.get("max_mises") or metric_dict.get("S_Mises"),
                         "max_displacement_mm": metric_dict.get("max_displacement") or metric_dict.get("U_magnitude"),
                         "total_elements": actual_total_elements if actual_total_elements is not None else "UNAVAILABLE",
@@ -1243,6 +1260,7 @@ class AbaqusAIAgent:
                 f"- **Engineering Status**: {eng_status}",
                 f"- **Acceptance Passed**: {bool(getattr(run, 'acceptance_passed', False))}",
                 f"- **Physics Capability**: {getattr(capability, 'capability_id', 'UNKNOWN')} ({getattr(capability, 'physics_domain', 'UNKNOWN')})",
+                f"- **Capability Label**: {getattr(capability, 'qualification_level', 'WORKFLOW')} (workflow label, not a machine-validation certificate)",
                 f"- **Job Name**: {getattr(plan, 'job_name', 'N/A')}",
                 f"- **Model Name**: {getattr(plan, 'model_name', 'N/A')}",
                 f"- **ODB Path**: {getattr(run, 'odb_path', 'UNAVAILABLE')}\n",
@@ -1292,11 +1310,26 @@ class AbaqusAIAgent:
 
             if healing_result:
                 diag_lines.append("## 5. 自愈审计上下文 (Self-Healing Context)")
+                heal_meta = getattr(healing_result, "metadata", None) or {}
                 is_healed = getattr(healing_result, "healed", False)
-                heal_status = "HEALED" if is_healed else getattr(healing_result, "final_status", "UNRESOLVED")
+                if heal_meta.get("awaiting_confirmation"):
+                    heal_status = "PROPOSED_NOT_APPLIED"
+                elif is_healed and heal_meta.get("model_change_applied"):
+                    heal_status = "APPLIED_AFTER_CONFIRMATION"
+                else:
+                    heal_status = getattr(healing_result, "final_status", "UNRESOLVED")
                 attempts = getattr(healing_result, "total_attempts", 0)
                 diag_lines.append(f"- **Healing Status**: {heal_status}")
-                diag_lines.append(f"- **Total Attempts**: {attempts}\n")
+                diag_lines.append(f"- **Model Change Confirmed**: {bool(heal_meta.get('confirm_model_change'))}")
+                diag_lines.append(f"- **Model Change Applied**: {bool(heal_meta.get('model_change_applied'))}")
+                diag_lines.append(f"- **Total Attempts**: {attempts}")
+                proposed = heal_meta.get("proposed_remediations") or ()
+                if proposed:
+                    diag_lines.append("- **Proposed Changes (not applied)**:")
+                    for item in proposed:
+                        desc = item.get("description") if isinstance(item, dict) else str(item)
+                        diag_lines.append(f"  - {desc}")
+                diag_lines.append("")
 
             diag_errs = []
             if not is_completed:
