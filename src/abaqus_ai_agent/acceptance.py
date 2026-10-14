@@ -227,6 +227,12 @@ def evaluate_criteria(values, criteria, required_keys: Optional[Sequence[str]] =
             effective_limit = limit * (1.0 - tolerance)
         elif tolerance:
             warnings.append("relative_tolerance_ignored_for_%s" % op)
+
+        if not math.isfinite(effective_limit):
+            raise ValueError(
+                "effective_limit for criterion %r overflowed to non-finite value (%r) after applying tolerance"
+                % (key, effective_limit)
+            )
         passed = operators[op](actual, effective_limit)
         denominator = max(abs(limit), 1e-30)
         item = CriterionResult(

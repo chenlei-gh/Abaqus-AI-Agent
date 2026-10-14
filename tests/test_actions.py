@@ -262,3 +262,76 @@ def test_validate_action_and_preflight_reject_unknown_action_type():
     assert "static_step" in SUPPORTED_ACTION_TYPES
     assert "fixed_bc" in SUPPORTED_ACTION_TYPES
     assert len(SUPPORTED_ACTION_TYPES) >= 60
+
+
+def test_supported_action_types_exact_match_script_dispatcher():
+    """Verify bidirectional 1-to-1 exact set equality between SUPPORTED_ACTION_TYPES and script dispatcher.
+
+    Prevents silent drift between validation whitelist and execution script dispatcher:
+    - No action type implemented in script.py is omitted from SUPPORTED_ACTION_TYPES.
+    - No action type declared in SUPPORTED_ACTION_TYPES lacks implementation in script.py.
+    """
+    import ast
+    from pathlib import Path
+    from abaqus_ai_agent.contracts.action import AbaqusAction
+    from abaqus_ai_agent.actions.script import action_to_script
+    from abaqus_ai_agent.validation.actions import SUPPORTED_ACTION_TYPES
+
+    script_path = Path(__file__).parent.parent / "src" / "abaqus_ai_agent" / "actions" / "script.py"
+    assert script_path.is_file(), f"script.py not found at {script_path}"
+
+    with open(script_path, "r", encoding="utf-8") as f:
+        tree = ast.parse(f.read(), filename=str(script_path))
+
+    dispatched_types = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Compare):
+            left = node.left
+            is_action_check = False
+            if isinstance(left, ast.Name) and left.id == "k":
+                is_action_check = True
+            elif isinstance(left, ast.Attribute) and left.attr == "action_type":
+                is_action_check = True
+
+            if is_action_check:
+                for op, comp in zip(node.ops, node.comparators):
+                    if isinstance(op, ast.Eq) and isinstance(comp, ast.Constant) and isinstance(comp.value, str):
+                        dispatched_types.add(comp.value)
+                    elif isinstance(op, ast.In) and isinstance(comp, (ast.Tuple, ast.List, ast.Set)):
+                        for elt in comp.elts:
+                            if isinstance(elt, ast.Constant) and isinstance(elt.value, str):
+                                dispatched_types.add(elt.value)
+
+    # 1. Bidirectional set difference check
+    missing_in_whitelist = dispatched_types - SUPPORTED_ACTION_TYPES
+    unimplemented_in_script = SUPPORTED_ACTION_TYPES - dispatched_types
+
+    assert not missing_in_whitelist, (
+        f"Action types implemented in script.py but missing from SUPPORTED_ACTION_TYPES: {missing_in_whitelist}"
+    )
+    assert not unimplemented_in_script, (
+        f"Action types declared in SUPPORTED_ACTION_TYPES but not handled in script.py: {unimplemented_in_script}"
+    )
+    assert dispatched_types == SUPPORTED_ACTION_TYPES
+    assert len(SUPPORTED_ACTION_TYPES) == 66
+
+    # 2. Dynamic runtime invocation verification:
+    # Ensure every supported action type is dispatched by action_to_script without falling into
+    # the fallback 'unsupported action type' ValueError.
+    for at in SUPPORTED_ACTION_TYPES:
+        dummy_action = AbaqusAction(
+            action_type=at,
+            model_name="Model-Dummy",
+            target="Assembly",
+            parameters={},
+        )
+        try:
+            action_to_script(dummy_action)
+        except ValueError as exc:
+            assert "unsupported action type" not in str(exc).lower(), (
+                f"action_to_script raised unsupported action type error for {at!r}: {exc}"
+            )
+        except Exception:
+            # Missing parameter errors (KeyError, TypeError) are expected with empty parameters,
+            # but routing must recognize the action_type.
+            pass

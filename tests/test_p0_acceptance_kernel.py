@@ -1496,3 +1496,44 @@ def test_evaluate_criteria_rejects_boolean_and_nonfinite():
     assert res.passed is True
     assert len(res.criteria) == 1
     assert res.criteria[0].passed is True
+
+
+def test_evaluate_criteria_effective_limit_overflow_fails_closed():
+    """Verify that if effective_limit overflows to inf or -inf, evaluation strictly fails closed."""
+    from abaqus_ai_agent.acceptance import evaluate_criteria, evaluate_result_acceptance
+
+    # 1. Positive limit overflow with <=
+    with pytest.raises(ValueError, match="overflowed to non-finite value"):
+        evaluate_criteria(
+            {"stress": 1e308},
+            [{"operator": "<=", "limit": 1e308, "relative_tolerance": 10.0, "value_key": "stress"}],
+        )
+
+    # 2. Negative limit overflow with <= (magnified in negative direction -> -inf)
+    with pytest.raises(ValueError, match="overflowed to non-finite value"):
+        evaluate_criteria(
+            {"disp": -1.0},
+            [{"operator": "<=", "limit": -1e308, "relative_tolerance": 10.0, "value_key": "disp"}],
+        )
+
+    # 3. Negative limit overflow with >= (1.0 - 10.0 = -9.0, -1e308 * -9.0 -> +inf)
+    with pytest.raises(ValueError, match="overflowed to non-finite value"):
+        evaluate_criteria(
+            {"disp": 1.0},
+            [{"operator": ">=", "limit": -1e308, "relative_tolerance": 10.0, "value_key": "disp"}],
+        )
+
+    # 4. End-to-end evaluate_result_acceptance with overflowing criterion must fail-closed:
+    # Status must be BLOCKED, acceptance_status must be RESULT_INVALID, deliverable must be False.
+    res = evaluate_result_acceptance(
+        result_status="completed",
+        values={"stress": 1e308},
+        criteria=[{"name": "stress_overflow", "operator": "<=", "limit": 1e308, "relative_tolerance": 10.0, "value_key": "stress"}],
+    )
+    assert res.status == "BLOCKED"
+    assert res.acceptance_status == "RESULT_INVALID"
+    assert res.result_validity == "RESULT_INVALID"
+    assert res.deliverable is False
+    assert res.gates["criteria"] == "FAIL"
+    assert any("criteria_evaluation_error" in f for f in res.failures)
+    assert any("criteria_evaluation_error" in b for b in res.blocked)
