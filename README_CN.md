@@ -1,20 +1,18 @@
 # Abaqus AI Agent (企业级工业自主仿真智能体平台)
 
-> **面向高端制造与复杂工程的下一代自主有限元仿真（CAE）平台 —— 将自然语言工程规格书直接编译为严密 CAD 视口拓扑接地、Dassault SIMULIA Abaqus 2025 原生隐式求解、非线性发散闭环自愈、无头 Viewer 离屏渲染密码学防伪验签，以及单一出口权威工程交付物。**
+> **面向高端制造与复杂工程的下一代自主有限元仿真（CAE）平台 —— 将 TypeSafe AI (JEV) 认知意图编译与确定性 Dassault SIMULIA Abaqus 2025 物理求解、非线性发散自愈和可审计工程交付物深度融合。**
 
-[English Documentation / 英文文档](README.md) · [企业商业咨询与私有化部署](#企业级支持与商业合作) · [核心技术架构](#核心技术支柱) · [多层工程验证体系](#多层工程门禁验证体系) · [快速入门](#快速开始)
+[English Documentation / 英文文档](README.md) · [JEV 认知架构与工程现实](#jev-认知架构与工程现实) · [企业商业咨询与私有化部署](#企业级支持与商业合作) · [核心技术架构](#核心技术支柱) · [多层工程验证体系](#多层工程验证体系) · [快速入门](#快速开始)
 
 [![CI](https://github.com/chenlei-gh/Abaqus-AI-Agent/actions/workflows/ci.yml/badge.svg)](https://github.com/chenlei-gh/Abaqus-AI-Agent/actions/workflows/ci.yml)
 [![Python](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12-blue.svg)](https://www.python.org/)
 [![Abaqus](https://img.shields.io/badge/SIMULIA%20Abaqus-2025%20%E8%AE%A4%E8%AF%81-brightgreen.svg)](https://www.3ds.com/products-services/simulia/products/abaqus/)
 [![Tests](https://img.shields.io/badge/%E8%87%AA%E5%8A%A8%E5%8C%96%E5%9B%9E%E5%BD%92%E6%B5%8B%E8%AF%95-1339%20%E9%80%9A%E8%BF%87%20%280%20%E8%AD%A6%E5%91%8A%29-success.svg)](tests/)
+[![JEV 意图引擎](https://img.shields.io/badge/JEV%20%E6%84%8F%E5%9B%BE%E7%BC%96%E8%AF%91-TypeSafe%20%E5%8F%8C%E6%A8%A1%E6%B7%B7%E5%90%88-blueviolet.svg)](src/abaqus_ai_agent/typesafe_intent.py)
+[![JEV 评测状态](https://img.shields.io/badge/REQ--P1--045-IN__REVIEW-orange.svg)](docs/p1-product-requirements.md)
 [![Golden Matrix](https://img.shields.io/badge/golden%20matrix-13%2F13%20L4%20%E5%AE%A1%E8%AE%A1-success.svg)](machine_validation/)
 [![Official Benchmarks](https://img.shields.io/badge/tier%20a%20benchmarks-22%2F22%20passed-success.svg)](tools/j_comprehensive_physics_matrix.py)
-[![Tier B Benchmarks](https://img.shields.io/badge/tier%20b%20benchmarks-7%2F7%20passed-success.svg)](tools/j3_tier_b_extended_physics.py)
-[![Live Abaqus Gate](https://img.shields.io/badge/live%20abaqus%20gate-22%2F22%20passed-brightgreen.svg)](tools/j_live_abaqus_matrix.py)
-[![Task Matrix](https://img.shields.io/badge/task%20matrix-T1--T6%20passed-brightgreen.svg)](tools/m_engineering_task_matrix.py)
 [![验收模型](https://img.shields.io/badge/%E9%AA%8C%E6%94%B6%E6%A8%A1%E5%9E%8B-4D%20%E6%AD%A3%E4%BA%A4%E9%97%AD%E7%8E%AF-brightgreen.svg)](src/abaqus_ai_agent/acceptance.py)
-[![密码学防伪](https://img.shields.io/badge/%E6%B8%85%E5%8D%95%E9%AA%8C%E7%AD%BE-Manifest%20V2%20%2B%20%E8%B6%8A%E7%95%8C%E9%98%B2%E5%BE%A1-blue.svg)](src/abaqus_ai_agent/contracts/evidence.py)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 
 ---
@@ -25,16 +23,73 @@
 1. **人才门槛极高，重复劳作消耗 70% 研发带宽**：资深专家陷入漫长繁琐的几何清理、拾取面建立约束、网格局部加密布种及手动汇总截图写报告中。
 2. **通用大模型存在致命的“仿真幻觉陷阱”**：通用 LLM 与普通代码 Copilot 经常生成“语法正确但物理荒谬”的脚本——胡乱编造材料本构参数、臆测容易随网格漂移的实体内部数字编号（如 `Face 14`）、遇到接触切步或数值奇异崩溃发散时毫无自愈能力，甚至把数兆字节的节点数组往上下文中倾倒导致 Token 瞬间耗尽崩溃。
 
-**Abaqus AI Agent** 是专为工业高可靠生产环境设计的企业级自主仿真引擎。以**严格反伪造公理（Anti-Fabrication Axiom）**为基石，将自然语言意图编译、视口拓扑接地、自愈收敛诊断、无头 Viewer 离屏渲染密码学验签与唯一确定性交付报告融为一体。
+**Abaqus AI Agent** 是专为工业高可靠生产环境设计的企业级自主仿真引擎。其核心架构由两大幅面构成：**TypeSafe AI (JEV) 认知意图编译平面**与**确定性工业 CAE 执行平面**。
 
 ```mermaid
 graph LR
-    A[工程师需求输入<br>自然语言 / 规格书] --> B[Abaqus AI Agent<br>强类型意图编译 + 拓扑接地]
-    B --> C[SIMULIA Abaqus 2025<br>真实求解器沙箱执行]
-    C --> D[结果智能与自愈门禁<br>Solver Doctor + ODB 张量提取]
-    D --> E[无头 Viewer 离屏渲染<br>云图渲染 + 会话签名验签]
-    E --> F[单一出口权威交付物<br>交付卡 + 单文件 HTML/MD]
+    A[工程师需求输入<br>自然语言 / 规格书] --> B[JEV 认知意图引擎<br>TypeSafe 实体与物理分类编译]
+    B --> C[视口空间拓扑接地<br>1-to-1 空间坐标 findAt 绑定]
+    C --> D[SIMULIA Abaqus 2025<br>真实求解器沙箱执行]
+    D --> E[Solver Doctor 与结果智能<br>发散自愈 + ODB 张量提取]
+    E --> F[单一权威交付物<br>4D 正交验收 + 交互式 HTML/MD]
 ```
+
+---
+
+## JEV 认知架构与工程现实
+
+### 1. 为什么必须引入 JEV？（破解通用大模型的 CAE 幻觉陷阱）
+通用大模型将工程仿真需求视为松散的闲聊文本。如果直接要求大模型“对悬臂梁自由端施加载荷进行有限元分析”，裸模型往往会胡乱臆测材料参数、凭空捏造不存在的几何编号，或生成在真实求解器中因切步发散而瞬间崩溃的代码。
+
+**JEV（TypeSafe AI 认知引擎）**充当确定性力学编译器：
+- **强类型量纲实体解析**：将非结构化自然语言编译为具有严格类型与量纲约束的 `PhysicsIntent` 物理意图实体。
+- **Fail-Closed 物理边界拦截**：一旦缺失载荷施加端面、材料本构或分析步时间等物理不变量，主动阻断并输出结构化澄清需求（`NEEDS_CLARIFICATION`，如 `missing_load_application_region`），绝不擅自猜测。
+- **子句隔离语义绑定（Clause Scoping）**：通过标点与语法子句物理隔离，防止后文验收条件（如“校核端部挠度”）中的区域词汇被前文未指明区域的载荷语句非法窃取。
+
+### 2. 双模混合架构：确定性离线基线 + 真实 JEV 认知增强
+
+系统采用确定性与大模型认知并存的双模混合设计：
+
+```mermaid
+flowchart TD
+    Prompt[工程师自然语言输入] --> Gateway{是否配置 JEV Provider?}
+    
+    Gateway -->|已配置: 联网 API 模式| JEV[JEV 真实 Provider<br>高阶复杂语义推理与解耦]
+    Gateway -->|未配置: 纯离线 / 气隙内网| Baseline[离线确定性规则基线<br>正则引擎 + 强类型工程契约]
+    
+    JEV --> IntentMerge[TypeSafe 意图规范化与量纲对齐]
+    Baseline --> IntentMerge
+    
+    IntentMerge --> FailClosedGate{物理不变量完备且校验通过?}
+    FailClosedGate -->|缺失必需物理条件| Halt[退出码 2: NEEDS_CLARIFICATION<br>抛出结构化缺失项, 拒绝盲猜]
+    FailClosedGate -->|完备且已通过接地| Compiler[Abaqus CAE 脚本确定性编译器<br>66 种 Action AST 深度校验]
+```
+
+- **确定性离线基线（Offline Deterministic Baseline）**：即使在完全无外部大模型 API、断网或纯内网保密机房环境下，系统依靠 1,339 项确定性回归测试支撑的规则引擎，保障 100% 确定性、零幻觉执行标准工况。
+- **真实 JEV Provider（认知增强平面）**：接入商业大模型 Provider 后，系统获得应对非标准语言句式、跨段落隐式力学因果关系及复杂多工况约束编排的能力。
+
+### 3. 工程客观现实与已知边界（不搞虚假宣传）
+
+我们坚持以严密的工程实证代替宣传统战。当前 JEV 集成的真实工程成熟度边界如下：
+
+| 技术评估维度 | 当前代码实现与审计事实 | 工程裁决结论 |
+| :--- | :--- | :--- |
+| **离线规则安全底线** | 1,339 项自动化测试在 Python 3.10–3.12 跨平台全通过（0 警告、0 错误）。 | ✅ **已核实闭环 (VERIFIED)** |
+| **子句隔离（Clause Scoping）** | 标点子句物理隔离，彻底阻断跨子句盗用区域。 | ✅ **已核实闭环 (VERIFIED)** |
+| **热边界与材质分级** | 热对流/辐射参数全保真传递、温标（°C 转 K）归一化，严格区分 `REFERENCE_LIBRARY` 与 `VERIFIED_PROPERTIES`。 | ✅ **已核实闭环 (VERIFIED)** |
+| **外部 STEP 1-to-1 拓扑接地** | 强制有限实数三维锚点坐标（`anchor_point`），拒绝 `resolved=False` 与 NaN/Inf 坐标。 | ✅ **已核实闭环 (VERIFIED)** |
+| **真实 JEV Provider 增益评测** | 建立 Shadow 评测体系，在 26 个标杆案例上追踪覆盖率、准确率与有效率。 | ⏳ **审查中 (`REQ-P1-045: IN_REVIEW`)** |
+
+> **关于 `REQ-P1-045` 处于 `IN_REVIEW` 的真实工程说明**：
+> 离线规则已经实现了完备的数学 Fail-Closed 闭环，但要将真实外部 JEV Provider 认证为成熟的工程级能力（`QUALIFIED`），必须在固定版本的 26 个工业标杆集上完成大规模实测并积累足够的同集对照数据。在获得充分的外部真实模型同集准确率证据之前，我们严格将该需求保持在 **`IN_REVIEW`** 状态，拒绝把离线规则的成功冒充为大模型能力的胜任。
+
+### 4. Shadow 影子评测机制
+为客观度量外部大模型 Provider 相对确定性离线基线的真实增益，平台在 `tools/jev_engineering_benchmark.py` 中实现了标准化的影子评测体系：
+- **数据集 SHA-256 内容指纹（`cases_hash`）**：对规范化用例属性进行散列，防止评测集跨版本漂移或篡改。
+- **三维决策评价指标（拒绝统计失真）**：
+  - $\text{评测覆盖率 (Coverage \%)} = \frac{N_{\text{evaluated}}}{N_{\text{total}}}$：直接惩罚网络超时、格式违规与未配置异常。
+  - $\text{决策准确率 (Success Accuracy \%)} = \frac{N_{\text{correct}}}{N_{\text{evaluated}}}$：仅在成功返回决策的样本中统计匹配率。
+  - $\text{端到端有效率 (Effective Accuracy \%)} = \frac{N_{\text{correct}}}{N_{\text{total}}}$：以全量基准集为分母，衡量工业落地的真实可靠性净收益。
 
 ---
 
@@ -45,20 +100,14 @@ graph LR
 | 评估维度 | 通用大模型 (ChatGPT / Claude 原生) | 脚本生成类 Copilot 工具 | Abaqus AI Agent 企业级平台 |
 | :--- | :--- | :--- | :--- |
 | **物理计算真实性** | ❌ 严重幻觉；编造未经验证的经验公式与数值 | ❌ 盲目生成代码；完全无法感知物理求解成败 | 🏆 **绝对反伪造保障**：100% 真实 Dassault Abaqus 2025 二进制 ODB 张量提取与平衡验证 |
-| **工程输入不完备** | ❌ 盲目猜测几何尺寸、材料参数与温标 | ❌ 照单全收，运行时必然报错闪退 | 🛡️ **Fail-Closed 安全阻断**：缺少关键物理不变量时主动停止并给出结构化澄清提示（如 `missing_load_application_region`） |
+| **意图编译 (JEV)** | ❌ 脆弱的普通 Prompt，易出现长文本语义漂移 | ❌ 盲目代码映射，无力学语义感知 | 🧠 **TypeSafe JEV 引擎**：认知与确定性双模编译器，具备子句隔离与温标量纲归一化 |
+| **工程输入不完备** | ❌ 盲目猜测几何尺寸、材料参数与温标 | ❌ 照单全收，运行时必然报错闪退 | 🛡️ **Fail-Closed 安全阻断**：缺少关键物理不变量时主动停止并给出结构化澄清提示 |
 | **非线性收敛保障** | ❌ 无法感知接触颤振、塑性失稳与切步发散 | ❌ 报非零退出码后流程彻底中断瘫痪 | 🩺 **自主 Solver Doctor**：实时解析 `.msg`/`.sta`，自动施加自适应阻尼并缩紧切步闭环自愈 |
-| **几何拓扑映射** | ❌ 臆测脆弱的数字内部 ID（如 `Face 12`） | ❌ 极易因几何重构导致编号漂移失效 | 🎯 **1-to-1 视口空间拓扑接地**：3D 空间射线投影求交，确定性映射到有限实数 `findAt(...)`；外部 STEP 几何严格验真防放行 |
-| **全链路数值安全** | ❌ 易出现浮点溢出、除零与布尔混入计算 | ❌ 裸露 `float()` 强转，遇到异常崩溃或逻辑穿透 | 🔒 **全链路判据数值安全**：捕获 `OverflowError`、负限值工程容差方向修正，Gate 12 异常严格 Fail-Closed |
+| **几何拓扑映射** | ❌ 臆测脆弱的数字内部 ID（如 `Face 12`） | ❌ 极易因几何重构导致编号漂移失效 | 🎯 **1-to-1 视口空间拓扑接地**：3D 空间射线投影求交，确定性映射到有限实数 `findAt(...)` |
+| **全链路数值安全** | ❌ 易出现浮点溢出、除零与布尔混入计算 | ❌ 裸露 `float()` 强转，遇到异常崩溃或逻辑穿透 | 🔒 **全链路判据数值安全**：捕获 `OverflowError`、负限值工程容差方向修正，Gate 12 严格 Fail-Closed |
 | **Token 成本与治理** | ❌ 上下文直接塞满 ODB 数组，Token 迅速耗尽 | ❌ 无治理机制，长流程必雪崩 | ⚡ **三平面解耦与 Token 隔离**：P0-1~P0-5 协议隔离，仅交换轻量工件指针与标量查询边界 |
-| **图件存证与证据防伪** | ❌ 文本 ASCII 示意图或无图件 | ❌ 零散本地图片，缺乏血统与来源绑定 | 🔐 **密码学存证与越界防御**：Manifest 将有效性纳入不可逆散列签名，工作区基目录越界防御（Path Traversal Guard） |
-| **工程交付成果** | ❌ 破碎的代码片段 | ❌ 简陋的 Markdown 散落文档 | 📊 **单一权威交付体系**：中英双语、零依赖单文件纯 HTML（内嵌矢量图与动图）+ 密码学交付卡 |
+| **图件可视化与报告** | ❌ 文本 ASCII 示意图或本地破碎路径 | ❌ 零散本地图片，缺乏血统与来源绑定 | 📊 **单一权威交付体系**：无头 Abaqus Viewer 离屏原生渲染，单文件零依赖纯 HTML + 交付卡 |
 | **工程验收状态模型** | ❌ 误将进程退出码 0 当成力学计算合格 | ❌ 粗糙字符串判定，遗漏证据损坏与求解失败 | ⚖️ **4D 正交工程验收模型**：数学解耦求解状态、证据真实性、工程门禁与交付授权，满足传递性等价公理 |
-| **企业生产调度** | ❌ 仅限单机单用户 Demo | ❌ 本地进程极易死锁导致环境污染 | 🏢 **企业级工业基座**：独立 UUID 隔离沙箱、原子持久化任务队列、FlexNet/DSLS 浮动许可治理 |
-
-### 商业投资回报率（ROI）
-- **5x–10x 研发流转提速**：标准工况与参数化复核周期从“数天”直接压缩至“分钟级”。
-- **不可篡改的高合规审计**：全链路集成 SHA-256 密码学指纹，每项指标与云图像素均可穿透回溯到物理 ODB 求解产物。
-- **企业专家知识资产化沉淀**：将资深专家的建模规范、材料门禁准则、ASME/ISO 规范校验沉淀为确定性可执行资产。
 
 ---
 
@@ -66,9 +115,9 @@ graph LR
 
 ```mermaid
 flowchart TD
-    subgraph Cognitive_Plane["1. LLM 认知平面（极小上下文边界）"]
-        A[工程师自然语言 Prompt / 规格书] --> B[意图编译器与物理分类器]
-        B --> C[子句隔离与参数歧义澄清]
+    subgraph Cognitive_Plane["1. LLM 认知平面（JEV 意图引擎）"]
+        A[工程师自然语言 Prompt / 规格书] --> B[TypeSafe 意图编译器与物理分类器]
+        B --> C[子句隔离与语义歧义澄清]
         C --> D[结构化定性分析卡片]
     end
 
@@ -110,54 +159,46 @@ flowchart TD
 ### 3. 全链路判据数值安全与负限值工程容差闭环
 在 `acceptance.py` 判据求值核心中，对所有代数计算路径施加严格防御：
 - **安全浮点数类型转换**：对指标实测值、控制限值及容差统一捕获 `(ValueError, TypeError, OverflowError)`，在入口阶段即彻底拒绝布尔值（`True`/`False`）、`NaN`、正负无穷（`Infinity`）。
-- **负限值工程容差方向修正**：严格符合力学工程直觉的容差扩展机制：
+- **负限值工程容差方向修正**：
   - 上限校核（$\text{actual} \le \text{limit}$）：$\text{effective\_limit} = \text{limit} + |\text{limit}| \times \text{tol}$。
   - 下限校核（$\text{actual} \ge \text{limit}$）：$\text{effective\_limit} = \text{limit} - |\text{limit}| \times \text{tol}$。
   - 彻底消除了传统算法在负数阈值（如主应力压应力限值、最小支反力）下因负号导致的判据错误反向收紧。
 - **零限值相对容差预警机制**：当 $\text{limit} = 0$ 时相对容差在数学上退化失效，自动记录 `relative_tolerance_ineffective_for_zero_limit_{key}` 警告，引导使用绝对容差。
 - **Fail-Closed 验收门禁 Gate 12**：捕获任何因数值溢出或异常计算逃逸的异常，统一映射至受控错误路径并彻底剥离交付资格（`deliverable = False`）。
 
-### 4. 证据清单不可逆审计签名与路径越界安全防御
-在 `contracts/evidence.py` 中构建防伪与沙箱安全防线：
-- **有效性载荷深度签名**：清单自身的有效性标识（`validity`）直接深度混入 SHA-256 `audit_signature` 计算载荷，对任何证据有效性字段的人为纂改均会导致验签失败。
-- **路径越界安全防御（Path Traversal Guard）**：`verify_evidence_integrity()` 递归检查工件声明路径，对相对路径逃逸（`..`）、跨盘符绝对路径及符号链接伪造实施拦截，一经发现立即标记 `path_traversal_out_of_bounds`，并将清单判定为 `validity = "TAMPERED"`，严阻跨工况越界盗用。
-- **不可磨灭的溯源元数据**：强制绑定 `run_id`、`input_hash`、`odb_sha256` 及求解环境哈希。
+### 4. 证据清单溯源与工作区沙箱防护
+在 `contracts/evidence.py` 中构建审计安全防线：
+- **有效性载荷深度签名**：清单自身的有效性标识（`validity`）深度混入 SHA-256 `audit_signature` 计算载荷，对任何证据有效性字段的人为篡改均会导致验签失败。
+- **路径越界安全防御（Path Traversal Guard）**：`verify_evidence_integrity()` 检查工件声明路径，拦截相对路径逃逸（`..`）、跨盘符绝对路径及符号链接伪造，标记 `path_traversal_out_of_bounds` 并将清单置为 `validity = "TAMPERED"`。
 
 ### 5. 66 类 Action 动态 AST 契约与无吞异常执行验证
 确保校验阶段与执行阶段的绝对一致性：
 - **100% AST 执行分发器对齐**：执行分发器 `actions/script.py` 的抽象语法树直接与验证白名单 `SUPPORTED_ACTION_TYPES` 进行双向集合比对，保证 66 种 Action 类型零漂移。
-- **通用区域前检对齐**：统一提取并导出 `ACTIONS_REQUIRING_REGION`（18 类边界、载荷与网格核心 Action），供动作校验与模型 Preflight 共享，彻底消除前置检查与后置执行间的断层。
+- **通用区域前检对齐**：统一提取并导出 `ACTIONS_REQUIRING_REGION`（18 类边界、载荷与网格核心 Action），供动作校验与模型 Preflight 共享。
 - **测试零异常吞噬**：彻底移除 `tests/test_actions.py` 中的宽泛捕获（`except Exception: pass`），为全部 66 种 Action 建立最小有效参数用例集，保证生成的 Python/CAE 脚本非空且语义正确。
 
 ### 6. EngineeringMetric 入口安全与物理量纲守恒
 在 `contracts/metrics.py` 的指标实例化入口：
 - **类型隔离**：拦截布尔值、`NaN`、正负无穷。
-- **大整数防溢出**：捕获超大整数转换为 IEEE-754 双精度浮点时可能触发的 `OverflowError`，确保任何非受控异常均无法逃逸至下游验收或报告管线。
+- **大整数防溢出**：捕获超大整数转换为双精度浮点时可能触发的 `OverflowError`。
 
-### 7. Fail-Closed 意图编译与严格 1-to-1 拓扑接地
-- **子句隔离语义绑定**：通过标点与语法子句物理隔离，防止载荷或约束跨子句借用验收条件中提及的区域名称。
+### 7. Viewport 拓扑接地与 STEP 几何验证
 - **1-to-1 模型真实拓扑解析**：消除裸“固定”默认回退到 `RootFace` 等启发式猜测，强制要求每个区域必须在当前 CAE/INP 模型中完成确定性 1-to-1 映射。
-- **外部 STEP 几何严格门禁**：对于导入的外部 STEP 几何，严格验证所有被引用的载荷与边界区域具有解析成功的有限实数三维锚点坐标（`anchor_point`, `anchor_points`）。缺失或未接地映射时直接触发 `missing_load_application_region` 澄清中断，绝不盲目猜测自由端。
-- **物理参数全链路保留**：热对流（环境温度、换热系数）、热辐射（环境温度、发射率）及复杂接触参数在路由、归一化、编译与下发中完整保真传递，并实施严格温标归一化（°C 转 K）。
-- **材料证据等级分级治理**：严密区分参考假设（`REFERENCE_LIBRARY`）与真实材质卡验证数据（`VERIFIED_PROPERTIES`），阻止硬编码默认值冒充核验数据。
+- **外部 STEP 几何严格门禁**：外部 STEP 几何严格验证所有被引用的载荷与边界区域具有解析成功的有限实数三维锚点坐标（`anchor_point`, `anchor_points`），缺失或未接地映射时直接触发 `missing_load_application_region` 澄清中断。
 
-### 8. Shadow 评测与真实 JEV 语义评测契约
-为了对外部大模型决策与离线规则基线进行严谨的同集对照，在 `tools/jev_engineering_benchmark.py` 中实现了标准化的 Shadow 评测契约：
-- **确定性内容摘要指纹（cases_hash）**：基于规范化用例属性生成不可伪造的 SHA-256 内容指纹，确保多轮实验数据集定义严格一致。
-- **三维决策评价指标**：
-  - **评测覆盖率（Coverage %）**：成功获得外部决策的用例占总用例的比例。
-  - **决策准确率（Success Accuracy %）**：成功评测且具有真值标签用例中，物理域与关键参数匹配的比例。
-  - **端到端有效率（Effective Accuracy %）**：以全集真值用例为分母，直接惩罚超时、格式违规、未配置与逻辑分歧的真实净准确率。
+### 8. 渐近网格收敛门禁（Multi-Level Mesh Convergence Gate）
+- **严苛三级渐近收敛**：强制要求至少三个独立的网格加密层级（$\text{Levels} \ge 3$），坚决拦截两级偶然巧合带来的虚假收敛。
+- **同质指标追踪**：各层级间仅允许对比完全同质的网格度量（纯单元数或纯布种尺寸）。
+- **应力符号严格验证**：对带符号物理量（静水压力、正应力）执行严格变号校核；对真非负标量（von Mises、Tresca）豁免符号检查。
 
 ### 9. 单一正式报告管线（Phase P2 统一收敛架构）
 - **杜绝双轨漂移**：彻底废弃旧式草稿生成器。所有生产作业统一流经 `DeterministicReportPipeline.build_and_render()`，确保 Markdown 与离线单文件纯 HTML 在数据层面绝对对称。
 - **诊断草稿严格隔离**：未交付或排错运行严格输出带有 `[DIAGNOSTIC / NON-DELIVERABLE DRAFT]` 标识的调试记录，且强制 `report_html = None`。
-- **防止残留泄漏**：当下游验收被阻断（`DELIVERY_BLOCKED`）时，系统原子清空旧有报告并注销 `ReportDeliveryCard`，防止中间过程误作正式结论交付。
+- **防止残留泄漏**：当下游验收被阻断（`DELIVERY_BLOCKED`）时，系统原子清空旧有报告并注销 `ReportDeliveryCard`。
 
-### 10. 无头 Viewer 离屏渲染与自主自愈
-- **官方无头原生离屏渲染**：应力、变形等云图直接由 Dassault Abaqus Viewer 原生执行渲染（`abaqus viewer -noGUI`），彻底淘汰外部模拟图件。
-- **密码学验签 Token**：每个图件资产均盖有随机凭据，将 `run_id`、`input_hash`、`odb_sha256`、物理场分量与 `image_sha256` 绑定为可校验的 `viewer_session_token`。
+### 10. 自主发散自愈与无头 Viewer 离屏渲染
 - **自主发散自愈**：动态监听解析 `.msg` 严重残余与 `.sta` 切步频率，准确定位 `CONTACT_CHATTER`、`LOCAL_SINGULARITY` 与 `TIME_INCREMENT_EXHAUSTED`，自适应注入阻尼完成闭环修复。
+- **官方无头原生离屏渲染**：应力、变形等云图直接由 Dassault Abaqus Viewer 原生执行离屏渲染（`abaqus viewer -noGUI`），绑定 `run_id`、`input_hash`、`odb_sha256` 生成防伪会话图件。
 
 ---
 
@@ -168,13 +209,13 @@ flowchart TD
 ```text
 machine_validation/p2_cases/
 ├── case_01_bolted_pipe_flange/                  # 案例 1: 管道螺栓法兰连接与垫片非线性密封
-│   ├── case_01_flange_manifest.json            # 密码学防伪清单 (SHA-256)
+│   ├── case_01_flange_manifest.json            # 溯源清单 (SHA-256)
 │   └── Case_01_Bolted_Flange_Report.html       # 独立纯 HTML 交付报告 (内嵌动图与矢量图)
 ├── case_02_reactor_pressure_vessel_closure/     # 案例 2: 核电 RPV 顶盖 ASME Section III 规范核算
-│   ├── case_02_rpv_manifest.json               # 密码学防伪清单 (SHA-256)
+│   ├── case_02_rpv_manifest.json               # 溯源清单 (SHA-256)
 │   └── Case_02_RPV_Closure_Report.html         # 独立纯 HTML 交付报告 (内嵌动图与矢量图)
 └── case_03_exhaust_manifold/                    # 案例 3: 4合1 排气歧管热机耦合接触滑移
-    ├── case_03_manifold_manifest.json          # 密码学防伪清单 (SHA-256)
+    ├── case_03_manifold_manifest.json          # 溯源清单 (SHA-256)
     ├── Case_03_Exhaust_Manifold_Report.html    # 独立纯 HTML 交付报告 (内嵌动图与矢量图)
     └── case_03_render_contours_headless.py     # 无头离屏云图渲染脚本
 ```
@@ -195,30 +236,24 @@ machine_validation/p2_cases/
 
 ---
 
-## 多层工程门禁验证体系
+## 多层工程验证体系
 
 ```text
                ┌─────────────────────────────────────────────────────────┐
-               │ Level 1: 真实 Abaqus 2025 求解器门禁                    │
-               │ (真实进程执行、二进制 ODB 提取、SHA-256 签名)           │
+               │ Tier 1: CI 自动化软件契约门禁                           │
+               │ (1,339 项确定性测试，Python 3.10-3.12 零警告全通过)      │
                ├─────────────────────────────────────────────────────────┤
-               │ Level 2: 理论力学解析解基准门禁                         │
-               │ (经典连续介质力学闭式解比对，相对误差 ≤0.01%)           │
+               │ Tier 2: 黄金证据矩阵防篡改审计                          │
+               │ (13/13 项 L4 资产完整性核验，SHA-256 清单一致性)         │
                ├─────────────────────────────────────────────────────────┤
-               │ Level 3: 非线性物理收敛与材料门禁                       │
-               │ (三级渐近网格收敛、显式真实/工程应变分类)               │
-               ├─────────────────────────────────────────────────────────┤
-               │ Level 4: 自动化确定性回归测试集                         │
-               │ (1339 项 CI 测试全通过，Python 3.10-3.12 零警告)        │
-               ├─────────────────────────────────────────────────────────┤
-               │ Level 5: 自主非线性发散自愈门禁                         │
-               │ (.msg/.sta 闭环诊断自愈与自适应阻尼参数注入)            │
+               │ Tier 3: 真实 Abaqus 2025 求解器门禁                    │
+               │ (真实物理进程执行、二进制 ODB 提取、反力能量平衡)       │
                └─────────────────────────────────────────────────────────┘
 ```
 
 | 验证分层 | 运行环境与执行器 | 工具链依赖 | 覆盖范围与考核指标 |
 | :--- | :--- | :--- | :--- |
-| **Tier 1: CI 软件契约门禁** | GitHub Actions (Ubuntu / macOS / Windows) | 纯 Python 环境（Python 3.10–3.12） | • **1339 项自动化回归测试通过（0 警告、0 错误）**<br>• 22 项 Dassault Tier A 物理标杆基准<br>• 7 项 Tier B 扩展力学校准基准<br>• 66 种 Action AST 双向一致性及最小有效参数执行验证<br>• 严格负向错误码 CLI 冒烟门禁（`missing_load_application_region`）<br>• 全仓库零泄露静态安全审计 |
+| **Tier 1: CI 软件契约门禁** | GitHub Actions (Ubuntu / macOS / Windows) | 纯 Python 环境（Python 3.10–3.12） | • **1,339 项自动化回归测试通过（0 警告、0 错误）**<br>• 22 项 Dassault Tier A 物理标杆基准<br>• 7 项 Tier B 扩展力学校准基准<br>• 66 种 Action AST 双向一致性及最小有效参数执行验证<br>• 严格负向错误码 CLI 冒烟门禁（`missing_load_application_region`）<br>• 全仓库零泄露静态安全审计 |
 | **Tier 2: 黄金证据矩阵防篡改审计** | 本地及临时沙箱环境 (`machine_validation/`) | Python 3.10+ 与 SHA-256 密码学签名核验工具 | • **13/13 项 Golden Matrix L4 证据包全量审计**<br>• Level 4 密码学证据溯源核验<br>• 清单有效性签名及路径越界（Path Traversal）安全审查<br>• 资产零篡改只读治理 |
 | **Tier 3: 真机物理求解执行门禁** | 部署 Abaqus 2025 的专用 Windows 服务器 | SIMULIA Abaqus 商业浮动/节点许可 | • 真实 CAE 批处理脚本生成与二进制 ODB 提取<br>• 原生无头 Abaqus Viewer 离屏云图生成<br>• 密码学交付卡签名与防伪核验<br>• 真实非线性接触求解与收敛自愈 |
 
@@ -293,8 +328,8 @@ abaqus-ai-agent intent "对 100mm 悬臂梁自由端端面施加 1000N 载荷，
 abaqus-ai-agent ask "Apply 1000N vertical load to 100mm cantilever beam, material steel, fixed root" --dry-run
 # 返回退出码 2，输出精确错误诊断：missing_load_application_region
 
-# 4. 执行 Dassault Tier A 物理标杆基准矩阵（22 基础案例）
-python tools/j_comprehensive_physics_matrix.py
+# 4. 执行 JEV Shadow 影子评测对比基准
+python tools/jev_engineering_benchmark.py --mode shadow
 
 # 5. 从经审计的证据包生成独立权威 HTML 交付报告
 abaqus-ai-agent report machine_validation/static_golden_e2e.json --format html --output report.html
@@ -313,7 +348,7 @@ Abaqus-AI-Agent/
 │   ├── engineering-run-evidence-roadmap.md # 核心执行与验收闭环路线图
 │   ├── rc1-release-audit.md                # 官方 RC 1.0 审计报告
 │   ├── p1-product-requirements.md          # 正式产品需求规格书与需求追溯矩阵
-│   └── ai-agent-capability-boundary.md     # LLM 与确定性 CAE 边界定义
+│   └── ai-agent-capability-boundary.md     # LLM vs 确定性 CAE 边界定义
 ├── machine_validation/       # 经真机审计的黄金证据包与标杆案例库
 │   └── p2_cases/             # 工业标杆案例（法兰密封、核电封头、排气歧管）
 ├── scripts/                  # 工作区治理、审计与文件清理工具
@@ -326,8 +361,8 @@ Abaqus-AI-Agent/
 │   ├── planning/             # 动作规划编排与机构图编译器
 │   ├── reporting/            # 单一正式确定性报告管线 (DeterministicReportPipeline)
 │   └── validation/           # 量纲相容性、网格渐近收敛与 4D 正交验收门禁
-├── tests/                    # 1339 项确定性回归测试用例（0 警告，覆盖 Python 3.10-3.12）
-└── tools/                    # 黄金驱动脚本、负向探针与真机认证套件
+├── tests/                    # 1,339 项确定性回归测试用例（0 警告，覆盖 Python 3.10-3.12）
+└── tools/                    # JEV 基准套件、真机黄金驱动、探针与认证套件
 ```
 
 ---
