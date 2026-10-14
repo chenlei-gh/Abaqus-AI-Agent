@@ -206,7 +206,8 @@ plan = build_static_plan(
 )
 
 actions = list(plan.actions[:-1])
-actions.insert(3, section_assignment(
+# solid_section is at index 3; assign section must happen after section creation (index 4)
+actions.insert(4, section_assignment(
     model_name, part_name, 'BeamSection',
     "mdb.models['StaticGolden'].parts['Beam'].sets['AllCells']",
 ))
@@ -293,6 +294,7 @@ run = AnalysisRunner(executor).run(
     criteria=criteria,
     timeout=3600,
     action_plan=tuple(actions),
+    require_production=False,
     engineering_intent=EngineeringIntent(
         id='static-golden',
         kind='linear_static_cantilever',

@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 from typing import Any, Dict
+from unittest.mock import patch
 
 import pytest
 
@@ -937,8 +938,9 @@ def test_thermal_flux_without_region_fails_closed_end_to_end():
 
 def test_jev_engineering_benchmark_shadow_mode_reporting():
     """Verify benchmark harness aggregates shadow mode differences and unconfigured status."""
-    # 1. Unconfigured external provider in shadow mode
-    report_unconf = run_engineering_benchmark(mode="shadow")
+    # 1. Unconfigured external provider in shadow mode (isolated from developer ambient env credentials)
+    with patch.dict("os.environ", {}, clear=True):
+        report_unconf = run_engineering_benchmark(mode="shadow")
     assert report_unconf["provider_type"] == "shadow_comparative_eval"
     assert report_unconf["is_offline_baseline"] is False
     assert report_unconf["shadow_metrics"] is not None
@@ -1170,8 +1172,9 @@ def test_shadow_mode_status_conservation_law():
     """Verify shadow evaluation satisfies status conservation: N_total = N_eval + N_fail + N_not_conf."""
     from tools.jev_engineering_benchmark import run_engineering_benchmark
 
-    # 1. Unconfigured scenario: all cases are NOT_CONFIGURED
-    report_unconf = run_engineering_benchmark(mode="shadow")
+    # 1. Unconfigured scenario: all cases are NOT_CONFIGURED (isolated from ambient env)
+    with patch.dict("os.environ", {}, clear=True):
+        report_unconf = run_engineering_benchmark(mode="shadow")
     sm_u = report_unconf["shadow_metrics"]
     assert sm_u["status_conservation_verified"] is True
     assert sm_u["total_cases"] == sm_u["evaluated_cases"] + sm_u["failed_cases"] + sm_u["not_configured_cases"]

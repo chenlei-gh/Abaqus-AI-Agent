@@ -1356,6 +1356,83 @@ class IntentDecisionBundle:
 JevDecisionBundle = IntentDecisionBundle
 
 
+TYPESAFE_SYSTEMONE_DEFAULT_URL: str = "https://api.typesafe.ai/v1/systemone"
+TYPESAFE_DEFAULT_MODEL: str = "jev-latest"
+
+
+def build_typesafe_systemone_payload(
+    prompt: str, provider: Optional[Any] = None
+) -> Dict[str, Any]:
+    """Build compliant TypeSafe System One payload for engineering intent judgment."""
+    model_name = TYPESAFE_DEFAULT_MODEL
+    if provider is not None and hasattr(provider, "model") and provider.model:
+        if provider.model != "external-intent-v1":
+            model_name = provider.model
+
+    return {
+        "model": model_name,
+        "state": prompt,
+        "questions": {
+            "physics": {
+                "type": "choice",
+                "instructions": "Determine the primary engineering physics domain for finite element simulation.",
+                "criteria": {
+                    "linear_static": "Static structural analysis with small deformations and linear material.",
+                    "steady_thermal": "Steady-state heat transfer or thermal conduction/convection.",
+                    "transient_dynamic": "Dynamic transient or time-dependent shock/vibration.",
+                    "modal_frequency": "Eigenvalue natural frequency or modal extraction.",
+                    "contact_frictional": "Nonlinear contact and frictional interaction.",
+                    "fatigue_damage": "Cyclic fatigue life or damage accumulation.",
+                },
+            },
+            "units": {
+                "type": "choice",
+                "instructions": "Determine the consistent engineering unit system used or implied in the prompt.",
+                "criteria": {
+                    "MM_N_MPA": "Millimeters, Newtons, Megapascals, tonnes (standard CAE engineering units).",
+                    "SI": "Meters, Newtons, Pascals, kilograms (standard SI).",
+                    "IN_LBF_PSI": "Inches, pounds-force, pounds per square inch (US customary units).",
+                },
+            },
+            "solver": {
+                "type": "choice",
+                "instructions": "Select the appropriate Abaqus solver engine for this analysis.",
+                "criteria": {
+                    "abaqus_standard": "Implicit solver for static, steady-state thermal, or eigen-frequency analysis.",
+                    "abaqus_explicit": "Explicit dynamics solver for high-speed dynamic or severe nonlinear impact.",
+                },
+            },
+            "well_constrained": {
+                "type": "noul",
+                "instructions": "Is the boundary condition and constraint specification sufficient to prevent rigid body motion?",
+                "criteria": {
+                    "true": "Adequately constrained or fixed roots/boundaries specified.",
+                    "false": "Under-constrained, unconstrained, or missing structural supports.",
+                },
+            },
+            "has_acceptance_criteria": {
+                "type": "noul",
+                "instructions": "Does the prompt specify explicit quantitative engineering acceptance criteria or limits?",
+                "criteria": {
+                    "true": "Explicit quantitative limit or threshold provided (e.g. deflection, stress, temperature).",
+                    "false": "No explicit quantitative acceptance criterion specified.",
+                },
+            },
+            "completeness": {
+                "type": "score",
+                "instructions": "Rate the engineering completeness and clarity of the FEA simulation prompt.",
+                "criteria": [
+                    "Completely missing vital information",
+                    "Severely under-specified",
+                    "Moderately complete but missing minor details",
+                    "Mostly complete engineering specification",
+                    "Fully specified complete engineering problem",
+                ],
+            },
+        },
+    }
+
+
 @runtime_checkable
 class ExternalIntentProviderProtocol(Protocol):
     """Protocol for optional external AI decision providers."""
@@ -1382,29 +1459,74 @@ class GenericHttpIntentProvider:
         payload_builder: Optional[Callable[[str, "GenericHttpIntentProvider"], Dict[str, Any]]] = None,
         response_normalizer: Optional[Callable[[Any], Dict[str, Any]]] = None,
     ):
-        raw_endpoint = endpoint or _get_external_config("EXTERNAL_INTENT_API_URL", "INTENT_API_URL", "TYPESAFE_API_URL")
-        self.endpoint = raw_endpoint.strip() if raw_endpoint else None
-
         raw_api_key = api_key or _get_external_config("EXTERNAL_INTENT_API_KEY", "INTENT_API_KEY", "TYPESAFE_API_KEY")
         self.api_key = raw_api_key.strip() if raw_api_key else None
 
-        raw_model = model or _get_external_config("EXTERNAL_INTENT_MODEL", "INTENT_MODEL")
-        self.model = raw_model.strip() if raw_model else "external-intent-v1"
+        raw_endpoint = endpoint or _get_external_config("EXTERNAL_INTENT_API_URL", "INTENT_API_URL", "TYPESAFE_API_URL")
+        if raw_endpoint:
+            self.endpoint = raw_endpoint.strip()
+        elif bool(os.environ.get("TYPESAFE_API_KEY")) or (self.api_key and "typesafe" in self.api_key.lower()):
+            self.endpoint = TYPESAFE_SYSTEMONE_DEFAULT_URL
+        else:
+            self.endpoint = None
 
-        self._payload_builder = payload_builder
+        raw_model = model or _get_external_config("EXTERNAL_INTENT_MODEL", "INTENT_MODEL")
+        if raw_model:
+            self.model = raw_model.strip()
+        elif self.endpoint and "typesafe.ai" in self.endpoint:
+            self.model = TYPESAFE_DEFAULT_MODEL
+        else:
+            self.model = "external-intent-v1"
+
+        if payload_builder is not None:
+            self._payload_builder = payload_builder
+        elif self.endpoint and "typesafe.ai" in self.endpoint:
+            self._payload_builder = build_typesafe_systemone_payload
+        else:
+            self._payload_builder = None
+
         self._response_normalizer = response_normalizer or self._default_response_normalizer
 
     @staticmethod
     def _default_response_normalizer(raw_data: Any) -> Dict[str, Any]:
         """Normalize provider response into standard engineering judgment dictionary.
 
-        Supports both direct standard judgment dicts and wrapped dicts (e.g. {'answers': ...}).
+        Supports direct standard judgment dicts, wrapped dicts (e.g. {'answers': ...}),
+        and native TypeSafe System One response format (mapping 'noul' to 'probability',
+        'probabilities' to 'distribution', and 0-indexed legend scores).
         """
         if not isinstance(raw_data, dict):
             return {}
-        if "answers" in raw_data and isinstance(raw_data["answers"], dict):
-            return raw_data["answers"]
-        return raw_data
+        answers = raw_data.get("answers") if ("answers" in raw_data and isinstance(raw_data["answers"], dict)) else raw_data
+        if not isinstance(answers, dict):
+            return {}
+
+        normalized = {}
+        for q_name, q_val in answers.items():
+            if not isinstance(q_val, dict):
+                normalized[q_name] = q_val
+                continue
+            item = dict(q_val)
+            if "probabilities" in item and "distribution" not in item:
+                item["distribution"] = item["probabilities"]
+            if "noul" in item and "probability" not in item:
+                item["probability"] = item["noul"]
+            # Only adapt TypeSafe native score when legend is explicitly present (indicating 0-based rubric levels)
+            # and score is a valid finite numeric value (not a boolean)
+            if (
+                "legend" in item
+                and "score" in item
+                and not isinstance(item["score"], bool)
+                and isinstance(item["score"], (int, float))
+            ):
+                import math
+                s_val = float(item["score"])
+                if math.isfinite(s_val) and 0.0 <= s_val <= 4.0:
+                    item["score"] = round(s_val + 1.0, 3)
+
+            normalized[q_name] = item
+
+        return normalized
 
     def is_configured(self) -> bool:
         """Return True only if both endpoint and credentials are provided."""
@@ -1515,7 +1637,12 @@ class EngineeringIntentRouter:
         raw_key = api_key or _get_external_config("EXTERNAL_INTENT_API_KEY", "INTENT_API_KEY", "TYPESAFE_API_KEY")
         self.api_key = raw_key.strip() if raw_key else None
         raw_url = api_url or _get_external_config("EXTERNAL_INTENT_API_URL", "INTENT_API_URL", "TYPESAFE_API_URL")
-        self.api_url = raw_url.strip() if raw_url else None
+        if raw_url:
+            self.api_url = raw_url.strip()
+        elif bool(os.environ.get("TYPESAFE_API_KEY")) or (self.api_key and "typesafe" in self.api_key.lower()):
+            self.api_url = TYPESAFE_SYSTEMONE_DEFAULT_URL
+        else:
+            self.api_url = None
         self.timeout = timeout
 
         if mode is not None:

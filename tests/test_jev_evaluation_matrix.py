@@ -970,3 +970,84 @@ def test_shadow_mode_records_structured_error_category():
         diff2 = res2.decision_bundle.shadow_diff
         assert diff2["status"] == "LIVE_FAILED"
         assert diff2["error_category"] == "PROVIDER_HTTP_ERROR"
+
+
+def test_typesafe_api_key_without_url_defaults_to_systemone_endpoint():
+    """When TYPESAFE_API_KEY is present without TYPESAFE_API_URL, default to official System One endpoint."""
+    from abaqus_ai_agent.typesafe_intent import (
+        TYPESAFE_SYSTEMONE_DEFAULT_URL,
+        EngineeringIntentRouter,
+        GenericHttpIntentProvider,
+    )
+
+    with patch.dict("os.environ", {"TYPESAFE_API_KEY": "ts-test-credential"}, clear=True):
+        provider = GenericHttpIntentProvider()
+        assert provider.is_configured() is True
+        assert provider.endpoint == TYPESAFE_SYSTEMONE_DEFAULT_URL
+        assert provider.api_key == "ts-test-credential"
+
+        router = EngineeringIntentRouter(mode="shadow")
+        assert router.external_provider is not None
+        assert router.api_url == TYPESAFE_SYSTEMONE_DEFAULT_URL
+        assert router.api_key == "ts-test-credential"
+
+
+def test_typesafe_native_response_normalization():
+    """Native TypeSafe System One payload and answers must be cleanly normalized."""
+    from abaqus_ai_agent.typesafe_intent import (
+        EngineeringIntentRouter,
+        GenericHttpIntentProvider,
+    )
+
+    raw_typesafe_response = {
+        "model": "jev-1.13.0",
+        "answers": {
+            "physics": {
+                "type": "choice",
+                "choice": "linear_static",
+                "confidence": 1.0,
+                "probabilities": {"linear_static": 1.0, "steady_thermal": 0.0},
+            },
+            "units": {
+                "type": "choice",
+                "choice": "MM_N_MPA",
+                "confidence": 0.98,
+                "probabilities": {"MM_N_MPA": 0.98, "SI": 0.02},
+            },
+            "solver": {
+                "type": "choice",
+                "choice": "abaqus_standard",
+                "confidence": 1.0,
+                "probabilities": {"abaqus_standard": 1.0, "abaqus_explicit": 0.0},
+            },
+            "well_constrained": {
+                "type": "noul",
+                "noul": 0.95,
+            },
+            "has_acceptance_criteria": {
+                "type": "noul",
+                "noul": 0.99,
+            },
+            "completeness": {
+                "type": "score",
+                "score": 1.6,
+                "confidence": 0.4,
+                "legend": {"0": "1", "1": "2", "2": "3", "3": "4", "4": "5"},
+                "probabilities": {"0": 0.1, "1": 0.3, "2": 0.4, "3": 0.2, "4": 0.0},
+            },
+        },
+    }
+
+    norm = GenericHttpIntentProvider._default_response_normalizer(raw_typesafe_response)
+    assert norm["well_constrained"]["probability"] == 0.95
+    assert norm["has_acceptance_criteria"]["probability"] == 0.99
+    assert norm["physics"]["distribution"] == {"linear_static": 1.0, "steady_thermal": 0.0}
+    assert norm["completeness"]["score"] == 2.6  # 1.6 + 1.0
+
+    router = EngineeringIntentRouter(mode="offline")
+    bundle = router._parse_provider_response(norm, "test prompt")
+    assert bundle.physics_choice.value == "linear_static"
+    assert bundle.is_well_constrained_noul.probability == 0.95
+    assert bundle.is_well_constrained_noul.is_yes is True
+    assert bundle.has_acceptance_criteria_noul.probability == 0.99
+    assert bundle.completeness_score.score == 2.6
