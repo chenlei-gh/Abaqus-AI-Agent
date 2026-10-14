@@ -1608,6 +1608,26 @@ def test_evaluate_criteria_negative_limit_tolerance_direction():
     )
     assert res_zero.passed is True
     assert any("relative_tolerance_ineffective_for_zero_limit_disp" in w for w in res_zero.warnings)
+    # verify effective_limit remains 0.0 without distortion
+    assert res_zero.criteria[0].limit == 0.0
+
+    # 4. Subnormal / near-zero limit (< 1e-30): engineering effectively-zero threshold
+    # Also treated as ineffective relative tolerance and issues zero-limit warning
+    res_near_zero = evaluate_criteria(
+        {"disp": 1e-32},
+        [{"operator": "<=", "limit": 1e-35, "relative_tolerance": 0.05, "value_key": "disp"}],
+    )
+    assert any("relative_tolerance_ineffective_for_zero_limit_disp" in w for w in res_near_zero.warnings)
+    # limit was not expanded by relative tolerance because limit is below numerical threshold
+    assert res_near_zero.passed is False
+
+    # 5. Small but well-above underflow threshold (e.g., 1e-10): scales normally
+    res_small = evaluate_criteria(
+        {"disp": 1.04e-10},
+        [{"operator": "<=", "limit": 1.0e-10, "relative_tolerance": 0.05, "value_key": "disp"}],
+    )
+    assert not any("relative_tolerance_ineffective_for_zero_limit_disp" in w for w in res_small.warnings)
+    assert res_small.passed is True  # 1.04e-10 <= 1.0e-10 * 1.05 = 1.05e-10
 
 
 def test_evaluate_criteria_overflow_error_and_gate_12_fail_closed():

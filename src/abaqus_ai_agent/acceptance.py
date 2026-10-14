@@ -217,11 +217,19 @@ def evaluate_criteria(values, criteria, required_keys: Optional[Sequence[str]] =
             raise ValueError("actual value for criterion %r must be a finite number, got %r" % (key, actual))
         if math.isnan(limit) or math.isinf(limit):
             raise ValueError("limit for criterion %r must be a finite number, got %r" % (key, limit))
+        # Defensive upper bound on relative_tolerance in [0, 1e6) prevents arithmetic overflow
+        # during effective_limit scaling. In actual engineering practice, realistic relative tolerances
+        # are typically in [0.0, 0.20]; values exceeding 1e6 fail closed as invalid input.
         if math.isnan(tolerance) or math.isinf(tolerance) or tolerance < 0.0 or tolerance >= 1e6:
             raise ValueError("relative_tolerance for criterion %r must be a finite non-negative number in [0, 1e6), got %r" % (key, tolerance))
 
         effective_limit = limit
         if tolerance:
+            # Mathematical & Numerical Zero Contract:
+            # When limit == 0.0, relative tolerance is mathematically undefined/ineffective (0 * tol = 0).
+            # When abs(limit) < 1e-30 (subnormal / numerical underflow threshold), relative tolerance scaling
+            # produces a change smaller than engineering precision, so it is treated as effectively zero.
+            # In both cases, the limit is NOT expanded, and a warning is emitted guiding absolute tolerances.
             if abs(limit) < 1e-30:
                 warnings.append("relative_tolerance_ineffective_for_zero_limit_%s" % key)
             elif op in ("<", "<="):

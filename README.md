@@ -150,11 +150,11 @@ flowchart TD
 
 ### 2. 4D Orthogonal Engineering Acceptance Model
 To prevent critical engineering misclassifications, the platform implements a 4-dimensional orthogonal evaluation architecture:
-- **Solver State** (`completed`, `failed`, `running`, `unsubmitted`): Execution lifecycle status of the Abaqus solver process.
-- **Evidence Integrity** (`VALID`, `EVIDENCE_TAMPERED`, `EVIDENCE_CORRUPT`, `EVIDENCE_STALE`, `INCOMPLETE`, `SOLVER_FAILED`): Verified through cryptographic SHA-256 provenance manifest hashing and file-tree integrity checks.
-- **Result Validity Equivalence Contract**: `ResultValidity` strictly obeys mathematical equivalence axioms (reflexive, symmetric, transitive). Categorical state membership is cleanly queried via `.is_invalid` and `.is_valid`.
-- **Physical Gate Qualification** (`PASS`, `FAIL`, `BLOCKED`, `WARNING`): Independent verification of stress limits, reaction forces, displacements, mesh quality, contact chattering, and thermal balances.
-- **Delivery Authorization Gate** (`deliverable: bool`): Atomic binary release gate ensuring unverified, tampered, or physically failed results are permanently barred from release authorization.
+1. **Solver Execution State** (`completed`, `failed`, `running`, `unsubmitted`): Lifecycle execution status of the Abaqus solver process.
+2. **Evidence Validity** (`VALID`, `EVIDENCE_TAMPERED`, `EVIDENCE_CORRUPT`, `EVIDENCE_STALE`, `INCOMPLETE`, `SOLVER_FAILED`): Verified through deterministic SHA-256 provenance manifest hashing and file-tree integrity checks.
+   - *Mathematical Equivalence Contract*: `ResultValidity` strictly obeys mathematical equivalence axioms (reflexive, symmetric, transitive). Loose cross-state collapsing in `__eq__` is prohibited; categorical state membership is cleanly queried via `.is_invalid` and `.is_valid`.
+3. **Physical Gate Qualification** (`PASS`, `FAIL`, `BLOCKED`, `WARNING`): Independent verification of stress limits, reaction forces, displacements, mesh quality, contact chattering, and thermal balances.
+4. **Delivery Authorization Gate** (`deliverable: bool`): Atomic binary release gate ensuring unverified, corrupt, or physically failed results are permanently barred from release authorization.
 
 ### 3. End-to-End Criteria Numerical Safety & Directional Tolerances
 Engineering criteria verification in `acceptance.py` enforces absolute numerical safety:
@@ -163,13 +163,21 @@ Engineering criteria verification in `acceptance.py` enforces absolute numerical
   - Upper-bound check ($\text{actual} \le \text{limit}$): $\text{effective\_limit} = \text{limit} + |\text{limit}| \times \text{tol}$.
   - Lower-bound check ($\text{actual} \ge \text{limit}$): $\text{effective\_limit} = \text{limit} - |\text{limit}| \times \text{tol}$.
   - Prevents inverted tightening on negative engineering limits (e.g., minimum principal stress or compression thresholds).
-- **Zero-Limit Warning**: Emits `relative_tolerance_ineffective_for_zero_limit_{key}` when relative tolerance is mathematically ineffective for $\text{limit} = 0$, guiding users to absolute tolerances.
-- **Fail-Closed Gate 12**: Arithmetic overflow or evaluation anomalies cleanly map to an invalid result state, revoking delivery authorization (`deliverable = False`).
+- **Zero & Subnormal Limit Numerical Contract**:
+  - For strict zero ($\text{limit} = 0.0$), relative tolerance is mathematically undefined/ineffective ($0 \times \text{tol} = 0$).
+  - For near-zero subnormal thresholds ($|\text{limit}| < 10^{-30}$), relative tolerance produces variations smaller than engineering precision, treated as effectively zero.
+  - In both cases, the limit is NOT expanded, and a `relative_tolerance_ineffective_for_zero_limit_{key}` warning is emitted, guiding users to absolute tolerances.
+- **Defensive Tolerance Bounds & Fail-Closed Gate 12**:
+  - Relative tolerance is restricted to $[0, 10^6)$ as a defensive numerical bound against arithmetic overflow during scaling.
+  - Any unexpected arithmetic overflow or evaluation anomaly is trapped in Gate 12, cleanly mapping to an invalid result state and revoking delivery authorization (`deliverable = False`).
 
-### 4. Manifest Provenance & Workspace Sandboxing
-Evidence verification in `contracts/evidence.py` guarantees untampered lineage and secure execution:
-- **Signed Validity State**: Manifest `validity` is embedded into the SHA-256 `audit_signature`. Mutation of evidence validity invalidates the signature.
-- **Path Traversal Guard**: `verify_evidence_integrity()` inspects all declared artifact paths. Relative directory escapes (`..`), cross-drive absolute paths, and symlink redirects pointing outside the workspace `base_dir` are trapped, flagging `path_traversal_out_of_bounds` and setting `validity = "TAMPERED"`.
+### 4. Manifest Provenance & Workspace Sandboxing (Integrity & Threat Model)
+Evidence verification in `contracts/evidence.py` enforces data integrity and sandbox boundary checks:
+- **Manifest Content Integrity Digest**: Computes a deterministic SHA-256 digest (`audit_signature`) over canonical manifest fields, including `validity`. Unsynchronized manual edits to `validity` or artifacts immediately cause digest mismatches.
+- **Threat Model Scope & Honest Boundaries**:
+  - *Protected Scope*: Detects accidental data corruption, partial unsynchronized file edits, missing artifacts, and execution drift across pipelines.
+  - *Threat Model Boundary*: The SHA-256 digest is an unkeyed hash, not an asymmetric digital signature or HMAC. It does NOT provide non-repudiation against an active adversary with full filesystem write access who can recompute the hash. True cryptographic non-repudiation requires external corporate PKI/CA signing.
+- **Workspace Directory Traversal Guard**: `verify_evidence_integrity()` inspects declared artifact paths against the designated `base_dir`. Relative directory escapes (`..`), cross-drive absolute paths, and symlink redirects pointing outside `base_dir` are trapped, flagging `path_traversal_out_of_bounds` and setting `validity = "TAMPERED"`. Unbounded absolute paths without an explicit `base_dir` trigger audit warnings.
 
 ### 5. 66-Action AST Parity & Non-Swallowing Dynamic Contract
 The platform maintains strict bidirectional consistency between validation gates and execution dispatchers:

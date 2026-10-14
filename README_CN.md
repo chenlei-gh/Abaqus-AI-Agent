@@ -150,11 +150,11 @@ flowchart TD
 
 ### 2. 4D 正交工程验收模型（4D Orthogonal Acceptance Model）
 平台确立了四个相互正交、职责严格解耦的评估维度：
-- **求解器执行状态** (`completed`, `failed`, `running`, `unsubmitted`)：Abaqus 进程级生命周期。
-- **证据真实性状态** (`VALID`, `EVIDENCE_TAMPERED`, `EVIDENCE_CORRUPT`, `EVIDENCE_STALE`, `INCOMPLETE`, `SOLVER_FAILED`)：基于 SHA-256 跨文件散列清单校验。
-- **严格数学等价性契约**：`ResultValidity` 严格满足等价关系公理（自反性、对称性、传递性），杜绝在 `__eq__` 中进行松弛的跨状态伪合并；通过 `.is_invalid`、`.is_valid` 分类谓词提供完备判定。
-- **物理工程门禁评定** (`PASS`, `FAIL`, `BLOCKED`, `WARNING`)：校核应力限值、反力、变形、网格质量、接触稳定性与热平衡。
-- **交付许可硬门禁** (`deliverable: bool`)：原子级布尔门禁，任何未通过求解、证据存疑或物理失效的结果均绝对禁止发放交付资质。
+1. **求解器执行状态** (`completed`, `failed`, `running`, `unsubmitted`)：Abaqus 进程级生命周期。
+2. **证据有效性状态** (`VALID`, `EVIDENCE_TAMPERED`, `EVIDENCE_CORRUPT`, `EVIDENCE_STALE`, `INCOMPLETE`, `SOLVER_FAILED`)：基于确定性 SHA-256 跨文件清单哈希与物理文件树校验。
+   - *数学等价性契约*：`ResultValidity` 状态类型严格满足等价关系公理（自反性、对称性、传递性），杜绝在 `__eq__` 中进行松弛的跨状态伪合并；通过 `.is_invalid`、`.is_valid` 分类谓词提供完备判定。
+3. **物理工程门禁评定** (`PASS`, `FAIL`, `BLOCKED`, `WARNING`)：独立校核应力限值、反力自平衡、变形、网格质量、接触稳定性与热平衡。
+4. **交付授权许可门禁** (`deliverable: bool`)：原子级布尔门禁，任何未通过求解、证据存疑、损坏或物理失效的结果均绝对禁止发放交付资质。
 
 ### 3. 全链路判据数值安全与负限值工程容差闭环
 在 `acceptance.py` 判据求值核心中，对所有代数计算路径施加严格防御：
@@ -163,13 +163,21 @@ flowchart TD
   - 上限校核（$\text{actual} \le \text{limit}$）：$\text{effective\_limit} = \text{limit} + |\text{limit}| \times \text{tol}$。
   - 下限校核（$\text{actual} \ge \text{limit}$）：$\text{effective\_limit} = \text{limit} - |\text{limit}| \times \text{tol}$。
   - 彻底消除了传统算法在负数阈值（如主应力压应力限值、最小支反力）下因负号导致的判据错误反向收紧。
-- **零限值相对容差预警机制**：当 $\text{limit} = 0$ 时相对容差在数学上退化失效，自动记录 `relative_tolerance_ineffective_for_zero_limit_{key}` 警告，引导使用绝对容差。
-- **Fail-Closed 验收门禁 Gate 12**：捕获任何因数值溢出或异常计算逃逸的异常，统一映射至受控错误路径并彻底剥离交付资格（`deliverable = False`）。
+- **严格零与近零限值数值契约**：
+  - 当限值为数学严格零（$\text{limit} = 0.0$）时，相对容差计算（$0 \times \text{tol} = 0$）在代数上完全失效；
+  - 当限值处于极小或次正规数区间（$|\text{limit}| < 10^{-30}$）时，相对容差带来的变化量低于工程有效精度阈值，同样判定为相对容差失效；
+  - 上述两种场景下，系统均不对限值进行虚假放宽，并自动记录 `relative_tolerance_ineffective_for_zero_limit_{key}` 警告，引导工程师使用绝对容差。
+- **防御性容差边界与 Gate 12 Fail-Closed**：
+  - 相对容差在数值入口处限制于 $[0, 10^6)$，作为防御性上限防止浮点乘法溢出非有限数；实际工程业务中建议相对容差处于合理工程区间（如 $[0.0, 0.20]$）。
+  - Gate 12 验收内核捕获任何代数溢出或求值异常，统一映射至无效结果状态并彻底剥离交付资格（`deliverable = False`）。
 
-### 4. 证据清单溯源与工作区沙箱防护
-在 `contracts/evidence.py` 中构建审计安全防线：
-- **有效性载荷深度签名**：清单自身的有效性标识（`validity`）深度混入 SHA-256 `audit_signature` 计算载荷，对任何证据有效性字段的人为篡改均会导致验签失败。
-- **路径越界安全防御（Path Traversal Guard）**：`verify_evidence_integrity()` 检查工件声明路径，拦截相对路径逃逸（`..`）、跨盘符绝对路径及符号链接伪造，标记 `path_traversal_out_of_bounds` 并将清单置为 `validity = "TAMPERED"`。
+### 4. 证据清单完整性校验与工作区沙箱防护（威胁模型与边界）
+在 `contracts/evidence.py` 中构建数据完整性与工作区沙箱安全屏障：
+- **清单内容 SHA-256 完整性摘要**：对清单的标准规范化字段（深度包含 `validity` 字段）计算单向 SHA-256 摘要（`audit_signature`）。任何未同步重新计算摘要的字段篡改或损坏，均会导致验签失败。
+- **威胁模型明确范围与诚实边界**：
+  - *防护范围*：能有效检测工件存储与流水线流转过程中的静默数据损坏、部分字段未同步更新（如单方面篡改 `validity` 状态）、文件缺失和意外内容漂移。
+  - *威胁模型边界*：当前机制基于无密钥的单向哈希函数 SHA-256，不包含非对称公私钥或服务端私密密钥（HMAC/PKI）。在攻击者获得完全本地写权限且主动重算哈希的对抗场景下，无法提供不可抵赖的身份认证。若企业生产环境需要防范高权限主动伪造，需外挂企业级 PKI/CA 签名体系。
+- **工作区目录越界防御（Path Traversal Guard）**：`verify_evidence_integrity()` 对照指定的 `base_dir` 检查工件声明路径，拦截相对路径逃逸（`..`）、跨盘符绝对路径及符号链接伪造，标记 `path_traversal_out_of_bounds` 并将清单判定为 `validity = "TAMPERED"`。未显式传入 `base_dir` 时默认绑定当前工作目录并对未受限绝对路径记录警告。
 
 ### 5. 66 类 Action 动态 AST 契约与无吞异常执行验证
 确保校验阶段与执行阶段的绝对一致性：
