@@ -538,7 +538,7 @@ warnings=[]
 if not nodes: warnings.append('no_nodes')
 if not elements: warnings.append('no_elements')
 print({'part':%r,'node_count':len(nodes),'element_count':len(elements),'element_types':types,'warnings':warnings})
-""" % (model,part)
+""" % (model, part, part)
 
 
 def _contact_property_script(model, p):

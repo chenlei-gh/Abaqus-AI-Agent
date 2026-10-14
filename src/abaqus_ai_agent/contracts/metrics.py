@@ -1,3 +1,4 @@
+import math
 from dataclasses import dataclass, field
 from typing import Any, Dict, Optional, Tuple
 
@@ -21,8 +22,15 @@ class EngineeringMetric:
     def __post_init__(self):
         if not self.name:
             raise ValueError("metric name is required")
-        if not isinstance(self.value, (int, float)):
-            raise TypeError("metric value must be numeric")
+        if isinstance(self.value, bool) or not isinstance(self.value, (int, float)):
+            raise TypeError("metric value must be a non-boolean numeric type")
+        try:
+            val_float = float(self.value)
+        except (OverflowError, ValueError) as exc:
+            raise ValueError("metric value for %r exceeds float range: %s" % (self.name, exc))
+        if math.isnan(val_float) or math.isinf(val_float):
+            raise ValueError("metric value for %r must be a finite number, got %r" % (self.name, val_float))
+        object.__setattr__(self, "value", val_float)
 
     def is_traceable(self) -> bool:
         """Verify whether metric is traceable to ODB evidence or locator."""

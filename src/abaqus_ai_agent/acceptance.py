@@ -210,7 +210,7 @@ def evaluate_criteria(values, criteria, required_keys: Optional[Sequence[str]] =
             actual = float(raw_actual)
             limit = float(raw_limit)
             tolerance = float(raw_tol)
-        except (ValueError, TypeError) as exc:
+        except (ValueError, TypeError, OverflowError) as exc:
             raise ValueError("criterion numerical values for %r must be valid numbers: %s" % (key, exc))
 
         if math.isnan(actual) or math.isinf(actual):
@@ -221,12 +221,15 @@ def evaluate_criteria(values, criteria, required_keys: Optional[Sequence[str]] =
             raise ValueError("relative_tolerance for criterion %r must be a finite non-negative number in [0, 1e6), got %r" % (key, tolerance))
 
         effective_limit = limit
-        if tolerance and op in ("<", "<="):
-            effective_limit = limit * (1.0 + tolerance)
-        elif tolerance and op in (">", ">="):
-            effective_limit = limit * (1.0 - tolerance)
-        elif tolerance:
-            warnings.append("relative_tolerance_ignored_for_%s" % op)
+        if tolerance:
+            if abs(limit) < 1e-30:
+                warnings.append("relative_tolerance_ineffective_for_zero_limit_%s" % key)
+            elif op in ("<", "<="):
+                effective_limit = limit + abs(limit) * tolerance
+            elif op in (">", ">="):
+                effective_limit = limit - abs(limit) * tolerance
+            else:
+                warnings.append("relative_tolerance_ignored_for_%s" % op)
 
         if not math.isfinite(effective_limit):
             raise ValueError(
@@ -235,9 +238,16 @@ def evaluate_criteria(values, criteria, required_keys: Optional[Sequence[str]] =
             )
         passed = operators[op](actual, effective_limit)
         denominator = max(abs(limit), 1e-30)
+        try:
+            diff = abs(actual - limit)
+            rel_err = diff / denominator
+            if not math.isfinite(rel_err):
+                rel_err = None
+        except (OverflowError, ZeroDivisionError):
+            rel_err = None
         item = CriterionResult(
             c.get("name", key), passed, actual, op, limit, c.get("unit", ""),
-            abs(actual - limit) / denominator
+            rel_err
         )
         results.append(item)
         if not passed:
@@ -607,7 +617,7 @@ def evaluate_result_acceptance(result_status, numerical=None, engineering=None,
     criteria_eval_error = False
     try:
         criteria_result = evaluate_criteria(values_map, criteria or (), required_keys=effective_required_metrics)
-    except (ValueError, TypeError) as exc:
+    except (ValueError, TypeError, OverflowError) as exc:
         criteria_eval_error = True
         failures.append("criteria_evaluation_error:%s" % exc)
         blocked.append("criteria_evaluation_error:%s" % exc)

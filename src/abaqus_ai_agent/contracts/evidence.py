@@ -153,23 +153,28 @@ class EvidenceManifestV2:
     metadata: Dict[str, Any] = field(default_factory=dict)
 
     def compute_audit_signature(self) -> str:
-        """Compute deterministic SHA-256 over canonical manifest fields."""
+        """Compute deterministic SHA-256 over canonical manifest fields.
+
+        Scope: Provides cryptographic data-integrity and tamper-detection across all
+        canonical identity, environment, artifact, verification, acceptance, and validity fields.
+        """
         payload = {
             "schema_version": self.schema_version,
             "run_id": self.run_id,
             "case_id": self.case_id,
             "created_at": self.created_at,
-            "environment": self.environment,
-            "intent_summary": self.intent_summary,
-            "required_results": self.required_results,
+            "environment": dict(self.environment),
+            "intent_summary": dict(self.intent_summary),
+            "required_results": dict(self.required_results),
             "artifacts": {
                 k: (v.to_dict() if hasattr(v, "to_dict") else v)
                 for k, v in sorted(self.artifacts.items())
             },
-            "verification": self.verification,
-            "acceptance": self.acceptance,
-            "provenance": self.provenance,
-            "metadata": self.metadata,
+            "verification": dict(self.verification),
+            "acceptance": dict(self.acceptance),
+            "provenance": dict(self.provenance),
+            "validity": self.validity,
+            "metadata": dict(self.metadata),
         }
         canonical_str = json.dumps(payload, sort_keys=True, ensure_ascii=False, separators=(",", ":"))
         return hashlib.sha256(canonical_str.encode("utf-8")).hexdigest()
@@ -462,6 +467,30 @@ def verify_evidence_integrity(
                 p = Path(base_dir) / art.path
             else:
                 p = Path.cwd() / art.path
+
+        # Path traversal and unauthorized directory escape defense
+        out_of_bounds = False
+        if base_dir is not None:
+            base_resolved = Path(base_dir).resolve()
+            p_resolved = p.resolve()
+            try:
+                p_resolved.relative_to(base_resolved)
+            except ValueError:
+                out_of_bounds = True
+
+        if out_of_bounds:
+            tampered_artifacts.append(name)
+            failures.append(f"evidence_tampered:path_traversal_out_of_bounds:{name}")
+            current_validity = "TAMPERED"
+            artifact_checks[name] = {
+                "exists": p.is_file(),
+                "role": art.role,
+                "expected_sha256": art.sha256,
+                "actual_sha256": None,
+                "matched": False,
+                "error": "path_traversal_out_of_bounds",
+            }
+            continue
 
         if not p.is_file():
             missing_artifacts.append(name)

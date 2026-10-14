@@ -312,3 +312,58 @@ def test_official_evidence_v2_qualification_manifest():
     assert vectors["V5_timestamp_expiry_stale"]["fail_closed"] is True
     assert vectors["V6_manifest_signature_tamper"]["fail_closed"] is True
     assert vectors["V7_report_synchronization"]["fail_closed"] is True
+
+
+def test_evidence_manifest_validity_tampering_detected():
+    """Verify that mutating the validity field invalidates the cryptographic audit signature."""
+    m = EvidenceManifestV2(
+        run_id="run_validity_001",
+        case_id="case_sample",
+        created_at="2026-10-14T00:00:00Z",
+        validity="VALID",
+        artifacts={},
+    )
+    m.audit_signature = m.compute_audit_signature()
+    assert m.verify_signature() is True
+
+    # Mutate validity field without re-signing
+    tampered = EvidenceManifestV2(
+        run_id=m.run_id,
+        case_id=m.case_id,
+        created_at=m.created_at,
+        validity="INVALID",
+        artifacts=m.artifacts,
+        audit_signature=m.audit_signature,
+    )
+    assert tampered.verify_signature() is False
+
+
+def test_evidence_path_traversal_out_of_bounds_detected(tmp_path: Path):
+    """Verify that relative or absolute path traversal outside base_dir is flagged as TAMPERED."""
+    base_dir = tmp_path / "sandbox"
+    base_dir.mkdir()
+    outside_file = tmp_path / "outside.inp"
+    outside_file.write_bytes(b"OUTSIDE")
+
+    manifest = EvidenceManifestV2(
+        run_id="run_escape_001",
+        case_id="escape_case",
+        created_at="2026-10-14T00:00:00Z",
+        validity="VALID",
+        artifacts={
+            "escape.inp": ArtifactRecord(
+                name="escape.inp",
+                path="../outside.inp",
+                role="inp",
+                exists=True,
+                size_bytes=len(b"OUTSIDE"),
+                sha256="dummy",
+                mandatory=True,
+            )
+        },
+    )
+    manifest.audit_signature = manifest.compute_audit_signature()
+
+    res = verify_evidence_integrity(manifest, base_dir=base_dir)
+    assert res.validity == "TAMPERED"
+    assert any("path_traversal_out_of_bounds" in f for f in res.failures)

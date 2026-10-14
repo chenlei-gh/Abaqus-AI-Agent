@@ -63,6 +63,14 @@ SUPPORTED_ACTION_TYPES = frozenset({
     "connector_section", "wire_connector", "coupling_constraint",
 })
 
+ACTIONS_REQUIRING_REGION = (
+    "fixed_bc", "displacement_bc", "symmetry_bc", "temperature_bc",
+    "pressure_load", "concentrated_force", "concentrated_moment", "bolt_load",
+    "body_force", "body_heat_flux", "surface_heat_flux",
+    "initial_temperature", "initial_stress", "section_assignment",
+    "local_seed_size", "local_seed_number", "mesh_controls", "element_type",
+)
+
 
 def validate_action(action):
     if not isinstance(action, AbaqusAction):
@@ -73,11 +81,7 @@ def validate_action(action):
         raise ValueError("action_type is required")
     if action.action_type not in SUPPORTED_ACTION_TYPES:
         raise ValueError("unsupported action_type: %s" % action.action_type)
-    if action.action_type in (
-        "fixed_bc", "displacement_bc", "symmetry_bc", "pressure_load",
-        "concentrated_force", "body_force", "body_heat_flux", "surface_heat_flux", "temperature_bc", "initial_temperature", "initial_stress", "section_assignment",
-        "local_seed_size", "local_seed_number", "mesh_controls", "element_type"
-    ) and not action.parameters.get("region_expression"):
+    if action.action_type in ACTIONS_REQUIRING_REGION and not action.parameters.get("region_expression"):
         raise ValueError("region_expression is required for %s" % action.action_type)
     if action.action_type == "tie":
         if not action.parameters.get("name"):

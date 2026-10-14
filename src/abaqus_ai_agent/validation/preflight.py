@@ -10,6 +10,7 @@ from .actions import (
     VALID_CONNECTOR_TRANSLATIONAL_TYPES,
     VALID_CONNECTOR_ROTATIONAL_TYPES,
     SUPPORTED_ACTION_TYPES,
+    ACTIONS_REQUIRING_REGION,
 )
 
 
@@ -67,10 +68,7 @@ def preflight_action(action, snapshot=None):
     except Exception as e:
         check("action_quantities_valid", False, str(e))
 
-    if action.action_type in ("fixed_bc", "displacement_bc", "symmetry_bc",
-                              "pressure_load", "concentrated_force", "concentrated_moment",
-                              "bolt_load",
-                              "body_force", "section_assignment", "initial_temperature", "initial_stress"):
+    if action.action_type in ACTIONS_REQUIRING_REGION:
         raw_reg = action.parameters.get("region_expression")
         check("region_expression", bool(raw_reg))
         if raw_reg:

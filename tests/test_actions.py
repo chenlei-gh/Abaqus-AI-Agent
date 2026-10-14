@@ -316,22 +316,119 @@ def test_supported_action_types_exact_match_script_dispatcher():
     assert len(SUPPORTED_ACTION_TYPES) == 66
 
     # 2. Dynamic runtime invocation verification:
-    # Ensure every supported action type is dispatched by action_to_script without falling into
-    # the fallback 'unsupported action type' ValueError.
-    for at in SUPPORTED_ACTION_TYPES:
-        dummy_action = AbaqusAction(
+    # Ensure every supported action type is dispatched by action_to_script using minimal valid parameters
+    # and produces a non-empty, valid script string without catching/swallowing unexpected exceptions.
+    minimal_valid_params = {
+        "python": {"code": "print('hello')"},
+        "material_elastic": {"name": "Steel", "youngs_modulus": 210000.0, "poisson": 0.3},
+        "material_density": {"name": "Steel", "density": 7.85e-9},
+        "material_plastic": {"name": "Steel", "table": ((200.0, 0.0), (300.0, 0.05))},
+        "material_conductivity": {"name": "Steel", "table": ((45.0,),)},
+        "material_specific_heat": {"name": "Steel", "table": ((460.0,),)},
+        "material_expansion": {"name": "Steel", "table": ((1.2e-5,),)},
+        "solid_section": {"name": "SolidSec", "material": "Steel"},
+        "section_assignment": {"part": "Part-1", "region_expression": "p.cells", "section": "SolidSec"},
+        "static_step": {"name": "Step-1"},
+        "dynamic_explicit_step": {"name": "Step-1", "time_period": 0.05},
+        "implicit_dynamic_step": {"name": "Step-1"},
+        "frequency_step": {"name": "Step-1", "num_eigen": 5},
+        "heat_transfer_step": {"name": "Step-1"},
+        "coupled_temp_displacement_step": {"name": "Step-1"},
+        "tabular_amplitude": {"name": "Amp1", "data": ((0.0, 0.0), (1.0, 1.0))},
+        "smooth_step_amplitude": {"name": "Amp1", "data": ((0.0, 0.0), (1.0, 1.0))},
+        "periodic_amplitude": {"name": "Amp1", "frequency": 1.0, "start": 0.0, "a0": 0.0, "data": ((1.0, 0.0),)},
+        "equally_spaced_amplitude": {"name": "Amp1", "fixed_interval": 0.1, "data": (0.0, 1.0)},
+        "fixed_bc": {"name": "BC-Fix", "region_expression": "a.sets['Fix']"},
+        "displacement_bc": {"name": "BC-Disp", "region_expression": "a.sets['Disp']", "u1": 0.0},
+        "symmetry_bc": {"name": "BC-Symm", "region_expression": "a.sets['Symm']", "plane": "X"},
+        "temperature_bc": {"name": "BC-Temp", "region_expression": "a.sets['Temp']", "magnitude": 100.0},
+        "initial_temperature": {"name": "T0", "region_expression": "a.sets['All']", "magnitude": 25.0},
+        "initial_stress": {"name": "S0", "region_expression": "a.sets['All']", "sigma11": 10.0},
+        "gravity": {"name": "Gravity", "comp3": -9810.0},
+        "pressure_load": {"name": "Pressure", "region_expression": "a.surfaces['Press']", "magnitude": 5.0},
+        "concentrated_force": {"name": "Force", "region_expression": "a.sets['LoadPt']", "cf2": -1000.0},
+        "body_force": {"name": "BodyForce", "region_expression": "a.cells", "comp3": -10.0},
+        "body_heat_flux": {"name": "HeatFlux", "region_expression": "a.cells", "magnitude": 500.0},
+        "surface_heat_flux": {"name": "SurfHeatFlux", "region_expression": "a.surfaces['Heat']", "magnitude": 250.0},
+        "bolt_load": {"name": "BoltLoad", "region_expression": "a.surfaces['BoltSurf']", "magnitude": 8000.0},
+        "bolt_load_set_values": {"name": "BoltLoad", "step": "Step-2"},
+        "concentrated_moment": {"name": "Moment", "region_expression": "a.sets['RP']", "cm3": 1500.0},
+        "expression_field": {"name": "Field-1", "expression": "X + 2*Y"},
+        "assembly_inspect": {},
+        "instance_translate": {"instance": "Part-1-1", "vector": (10.0, 0.0, 0.0)},
+        "instance_rotate": {"instance": "Part-1-1", "axis_point": (0.0, 0.0, 0.0), "axis_direction": (0.0, 0.0, 1.0), "angle": 45.0},
+        "instance_linear_pattern": {"instances": ("Part-1-1",), "number1": 2, "spacing1": 50.0},
+        "export_inp": {"job_name": "Job-1"},
+        "export_odb_csv": {"odb_path": "Job-1.odb", "output_path": "out.csv", "variable": "S"},
+        "field_output": {"request": "F-Out", "variables": ("S", "U")},
+        "history_output": {"request": "H-Out", "variables": ("ALLIE",)},
+        "create_job": {"name": "Job-1"},
+        "submit_job": {"name": "Job-1"},
+        "seed_part": {"part": "Part-1", "size": 5.0},
+        "generate_mesh": {"part": "Part-1"},
+        "local_seed_size": {"part": "Part-1", "region_expression": "e[0]", "size": 2.5},
+        "local_seed_number": {"part": "Part-1", "region_expression": "e[0]", "number": 8},
+        "mesh_controls": {"part": "Part-1", "region_expression": "c[0]", "technique": "FREE"},
+        "element_type": {"part": "Part-1", "region_expression": "c[0]", "elem_code": "C3D8R"},
+        "inspect_geometry": {"part": "Part-1"},
+        "ignore_entity": {"part": "Part-1", "region_expression": "e[0]"},
+        "restore_entity": {"part": "Part-1", "region_expression": "e[0]"},
+        "repair_geometry": {"part": "Part-1"},
+        "remove_redundant_entities": {"part": "Part-1"},
+        "inspect_mesh": {"part": "Part-1"},
+        "mesh_quality": {"part": "Part-1", "max_aspect_ratio": 5.0},
+        "tie": {"name": "Tie-1", "master_expression": "a.surfaces['M']", "slave_expression": "a.surfaces['S']"},
+        "contact_property": {"name": "FricProp"},
+        "contact": {"name": "Contact-1", "master_expression": "a.surfaces['M']", "slave_expression": "a.surfaces['S']", "property": "FricProp"},
+        "reference_point": {"name": "RP-1", "coordinates": (0.0, 0.0, 100.0)},
+        "rigid_body": {"name": "RB-1", "ref_point_expression": "a.sets['RP']"},
+        "connector_section": {"name": "ConnSec", "assembled_type": "BEAM"},
+        "wire_connector": {"name": "Wire-1", "section_name": "ConnSec", "point1_name": "RP-1", "point2_name": "RP-2"},
+        "coupling_constraint": {"name": "Coupling-1", "control_point_name": "RP-1", "surface_name": "Surf-1"},
+    }
+
+    assert set(minimal_valid_params.keys()) == SUPPORTED_ACTION_TYPES, (
+        f"Missing minimal valid params for: {SUPPORTED_ACTION_TYPES - set(minimal_valid_params.keys())}"
+    )
+
+    from abaqus_ai_agent.validation.actions import validate_action
+
+    for at in sorted(SUPPORTED_ACTION_TYPES):
+        params = minimal_valid_params[at]
+        valid_action = AbaqusAction(
             action_type=at,
-            model_name="Model-Dummy",
+            model_name="Model-Test",
             target="Assembly",
-            parameters={},
+            parameters=params,
         )
-        try:
-            action_to_script(dummy_action)
-        except ValueError as exc:
-            assert "unsupported action type" not in str(exc).lower(), (
-                f"action_to_script raised unsupported action type error for {at!r}: {exc}"
-            )
-        except Exception:
-            # Missing parameter errors (KeyError, TypeError) are expected with empty parameters,
-            # but routing must recognize the action_type.
-            pass
+        # 1. Validation must succeed without raising
+        validate_action(valid_action)
+
+        # 2. Script generation must produce a non-empty string without swallowing exceptions
+        script = action_to_script(valid_action)
+        assert isinstance(script, str) and len(script.strip()) > 0, (
+            f"action_to_script produced empty output for {at!r}"
+        )
+
+
+def test_actions_requiring_region_fail_closed_when_missing():
+    """Verify that all actions in ACTIONS_REQUIRING_REGION fail-closed when region_expression is omitted."""
+    from abaqus_ai_agent.contracts.action import AbaqusAction
+    from abaqus_ai_agent.validation.actions import validate_action, ACTIONS_REQUIRING_REGION
+    from abaqus_ai_agent.validation.preflight import preflight_action
+
+    for at in ACTIONS_REQUIRING_REGION:
+        action = AbaqusAction(
+            action_type=at,
+            model_name="Model-1",
+            target="Assembly",
+            parameters={"name": "Test", "part": "Part-1", "magnitude": 10.0, "size": 1.0, "number": 2, "technique": "FREE"},
+        )
+        # validate_action must reject missing region_expression
+        with pytest.raises(ValueError, match="region_expression is required"):
+            validate_action(action)
+
+        # preflight_action must report blocker
+        res = preflight_action(action)
+        assert res.passed is False
+        assert any(b["name"] == "region_expression" and b["ok"] is False for b in res.blockers)

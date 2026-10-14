@@ -1537,3 +1537,105 @@ def test_evaluate_criteria_effective_limit_overflow_fails_closed():
     assert res.gates["criteria"] == "FAIL"
     assert any("criteria_evaluation_error" in f for f in res.failures)
     assert any("criteria_evaluation_error" in b for b in res.blocked)
+
+
+def test_engineering_metric_numerical_hardening():
+    """Verify that EngineeringMetric strictly rejects bool, NaN, Inf, and overflow integers."""
+    from abaqus_ai_agent.contracts.metrics import EngineeringMetric
+
+    # 1. Rejects boolean
+    for bad_bool in (True, False):
+        with pytest.raises(TypeError, match="metric value must be a non-boolean numeric type"):
+            EngineeringMetric(name="m", value=bad_bool, unit="MPa")
+
+    # 2. Rejects NaN and Inf
+    for non_finite in (float("nan"), float("inf"), float("-inf")):
+        with pytest.raises(ValueError, match="must be a finite number"):
+            EngineeringMetric(name="m", value=non_finite, unit="MPa")
+
+    # 3. Rejects overflow integers
+    with pytest.raises(ValueError, match="exceeds float range"):
+        EngineeringMetric(name="m", value=10**400, unit="MPa")
+
+    # 4. Valid int coerced to finite float
+    m = EngineeringMetric(name="m", value=42, unit="mm")
+    assert isinstance(m.value, float)
+    assert m.value == 42.0
+
+
+def test_evaluate_criteria_negative_limit_tolerance_direction():
+    """Verify mathematical consistency of relative tolerance on negative and zero limits."""
+    from abaqus_ai_agent.acceptance import evaluate_criteria
+
+    # 1. Negative limit with <=: limit = -100, tol = 5% -> effective_limit = -100 + 5 = -95
+    # actual = -98 is <= -95 (passes within relaxed tolerance)
+    res_pass = evaluate_criteria(
+        {"disp": -98.0},
+        [{"operator": "<=", "limit": -100.0, "relative_tolerance": 0.05, "value_key": "disp"}],
+    )
+    assert res_pass.passed is True
+    assert res_pass.criteria[0].passed is True
+
+    # actual = -90 exceeds relaxed limit -95 (fails)
+    res_fail = evaluate_criteria(
+        {"disp": -90.0},
+        [{"operator": "<=", "limit": -100.0, "relative_tolerance": 0.05, "value_key": "disp"}],
+    )
+    assert res_fail.passed is False
+    assert res_fail.criteria[0].passed is False
+
+    # 2. Negative limit with >=: limit = -100, tol = 5% -> effective_limit = -100 - 5 = -105
+    # actual = -103 is >= -105 (passes within relaxed tolerance)
+    res_pass_ge = evaluate_criteria(
+        {"disp": -103.0},
+        [{"operator": ">=", "limit": -100.0, "relative_tolerance": 0.05, "value_key": "disp"}],
+    )
+    assert res_pass_ge.passed is True
+    assert res_pass_ge.criteria[0].passed is True
+
+    # actual = -110 is below -105 (fails)
+    res_fail_ge = evaluate_criteria(
+        {"disp": -110.0},
+        [{"operator": ">=", "limit": -100.0, "relative_tolerance": 0.05, "value_key": "disp"}],
+    )
+    assert res_fail_ge.passed is False
+    assert res_fail_ge.criteria[0].passed is False
+
+    # 3. Zero limit with tolerance: generates warning and does not scale
+    res_zero = evaluate_criteria(
+        {"disp": 0.0},
+        [{"operator": "<=", "limit": 0.0, "relative_tolerance": 0.05, "value_key": "disp"}],
+    )
+    assert res_zero.passed is True
+    assert any("relative_tolerance_ineffective_for_zero_limit_disp" in w for w in res_zero.warnings)
+
+
+def test_evaluate_criteria_overflow_error_and_gate_12_fail_closed():
+    """Verify that extreme integer values causing OverflowError fail closed deterministically in Gate 12."""
+    from abaqus_ai_agent.acceptance import evaluate_criteria, evaluate_result_acceptance
+
+    # 1. Overflow in evaluate_criteria converts to ValueError
+    with pytest.raises(ValueError, match="must be valid numbers"):
+        evaluate_criteria(
+            {"stress": 10**400},
+            [{"operator": "<=", "limit": 200.0, "value_key": "stress"}],
+        )
+
+    with pytest.raises(ValueError, match="must be valid numbers"):
+        evaluate_criteria(
+            {"stress": 100.0},
+            [{"operator": "<=", "limit": 10**400, "value_key": "stress"}],
+        )
+
+    # 2. Gate 12 catches OverflowError/ValueError and fails closed without escaping
+    res = evaluate_result_acceptance(
+        result_status="completed",
+        values={"stress": 10**400},
+        criteria=[{"name": "stress_check", "operator": "<=", "limit": 200.0, "value_key": "stress"}],
+    )
+    assert res.acceptance_status == "RESULT_INVALID"
+    assert res.result_validity == "RESULT_INVALID"
+    assert res.deliverable is False
+    assert res.status == "BLOCKED"
+    assert res.gates["criteria"] == "FAIL"
+    assert any("criteria_evaluation_error" in f for f in res.failures)
