@@ -229,6 +229,7 @@ def test_analysis_runner_require_production_full_causal_binding_and_delivery(tmp
         require_deliverable=True,
         odb_path=run_res.odb_path,
         input_hash=run_res.provenance.input_hash,
+        provenance=run_res.provenance,
     )
 
     assert delivery_card.deliverable is True

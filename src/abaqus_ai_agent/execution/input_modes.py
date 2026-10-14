@@ -928,12 +928,25 @@ def _attach_delivery_report_if_requested(
         "run_id": run_id,
     }
 
-    acceptance_info = {
-        "status": "PASS",
-        "deliverable": True,
-        "verified_odb": solve_res.get("odb_verified", False),
-        "summary": "Direct solver execution and authentic CAE postprocessing completed successfully.",
-    }
+    # A completed solver job is not an Agent engineering deliverable.
+    # Direct INP execution has no JEV routing and no acceptance verdict, so it
+    # must not invent deliverable=True or write an official report.
+    recorded_acceptance = solve_res.get("acceptance")
+    acceptance_deliverable = False
+    if isinstance(recorded_acceptance, dict):
+        acceptance_deliverable = recorded_acceptance.get("deliverable") is True
+    elif recorded_acceptance is not None:
+        acceptance_deliverable = getattr(recorded_acceptance, "deliverable", None) is True
+    issued = solve_res.get("provenance")
+    if not acceptance_deliverable or issued is None:
+        solve_res["report_generation_error"] = (
+            "Official report refused: solve_user_inp has no Agent acceptance verdict "
+            "and no Agent run record. Use solve_requirement() for a deliverable."
+        )
+        solve_res["report_authorized"] = False
+        return
+
+    acceptance_info = recorded_acceptance
 
     try:
         from ..reporting.pipeline import DeterministicReportPipeline
@@ -951,6 +964,7 @@ def _attach_delivery_report_if_requested(
             input_hash=inp_sha,
             launcher=launcher,
             include_animation=include_animation,
+            provenance=issued,
         )
         solve_res["report_path"] = str(eff_delivery_dir / "report.html")
         solve_res["report_md_path"] = str(eff_delivery_dir / "report.md")

@@ -70,7 +70,8 @@ from abaqus_ai_agent.planning.compiler import (
     IntentLoadSpec,
     IntentMeshSpec,
 )
-from abaqus_ai_agent.reporting.renderer import render_markdown, render_html
+from abaqus_ai_agent.contracts.provenance import issue_agent_run_record
+from abaqus_ai_agent.reporting.delivery import write_gated_engineering_report
 
 
 # Structural Steel S-N Curve: (Alternating Stress Amplitude [MPa], Cycles to Failure Nf)
@@ -339,21 +340,42 @@ def run_fatigue_l4_golden(workdir: Path, launcher: str) -> Dict[str, Any]:
         raise RuntimeError(f"Acceptance evaluation failed for golden fatigue run: {acceptance.failures}")
 
     print("\n" + "=" * 70)
-    print("STEP 6: Unforgeable Engineering Report Rendering")
+    print("STEP 6: Gated Engineering Report Rendering")
     print("=" * 70)
+    odb_sha = (artifacts.get(f"{job_name}.odb") or {}).get("sha256")
+    issued = issue_agent_run_record(
+        run_id=run_id,
+        model_name=model_name,
+        job_name=job_name,
+        output_hash=odb_sha,
+        executor="qualification_script",
+        jev_routed=False,
+        requirement_kind="engineering_intent",
+        agent_entry="fatigue_l4_golden_e2e",
+    )
     rep_data = EngineeringReportData(
         title="High-Cycle Fatigue Life & Cumulative Damage Engineering Report",
         objective="Verify multi-step cyclic stress reversal, rainflow counting, Goodman mean-stress correction, and Palmgren-Miner life.",
         acceptance=acceptance,
         fatigue=fatigue_res,
         metadata={"run_id": run_id, "status": "ACCEPTED", "engineering_status": "RESULT_VALID"},
-        provenance={"run_id": run_id, "artifacts": artifacts},
+        provenance=issued.to_dict(),
     )
-    md_report = render_markdown(rep_data)
-    html_report = render_html(rep_data)
-    (case_dir / "fatigue_engineering_report.md").write_text(md_report, encoding="utf-8")
-    (case_dir / "fatigue_engineering_report.html").write_text(html_report, encoding="utf-8")
-    print("Rendered unforgeable Markdown and HTML engineering reports.")
+    md_write = write_gated_engineering_report(
+        case_dir / "fatigue_engineering_report.md",
+        report=rep_data,
+        record=issued,
+        odb_sha256=odb_sha,
+        allow_diagnostic_draft=False,
+    )
+    html_write = write_gated_engineering_report(
+        case_dir / "fatigue_engineering_report.html",
+        report=rep_data,
+        record=issued,
+        odb_sha256=odb_sha,
+        allow_diagnostic_draft=False,
+    )
+    print("Rendered gated Markdown and HTML engineering reports: %s, %s" % (md_write["kind"], html_write["kind"]))
 
     print("\n" + "=" * 70)
     print("STEP 7: Negative Probes (Fail-Closed Verification)")

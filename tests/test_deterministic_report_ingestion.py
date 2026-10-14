@@ -19,6 +19,7 @@ import pytest
 
 from abaqus_ai_agent.acceptance import AcceptanceResult, CriterionResult
 from abaqus_ai_agent.contracts.artifact import ArtifactPointer
+from abaqus_ai_agent.contracts.provenance import issue_agent_run_record
 from abaqus_ai_agent.contracts.report import ReportFigure
 from abaqus_ai_agent.reporting import (
     AdaptiveReportBuilder,
@@ -180,6 +181,15 @@ def test_visualization_spec_and_deterministic_figure_binding(tmp_path: Path):
         acceptance_info={"status": "PASS", "deliverable": True},
         visualization_specs=[spec],
         figures=[fig],
+        provenance=issue_agent_run_record(
+            run_id=test_run_id,
+            model_name="BoltedFlange",
+            job_name="case_03_flange",
+            input_hash=test_input_hash,
+            output_hash=odb_sha256,
+            requirement_kind="engineering_intent",
+            jev_routed=False,
+        ),
     )
 
     # Verify physical file artifact binding
@@ -370,6 +380,15 @@ def test_ab_qualification_full_llm_report_vs_deterministic_pipeline(tmp_path: Pa
         loads_info=({"name": "BoltPreload", "magnitude": 1000.0, "direction": "-Z"},),
         bcs_info=({"name": "EncastreBase", "type": "ENCASTRE"},),
         language="bilingual",
+        provenance=issue_agent_run_record(
+            run_id=ab_run_id,
+            model_name="FlangeJoint",
+            job_name="case_03_bolted_joint",
+            input_hash=ab_input_hash,
+            output_hash=odb_sha_ab,
+            requirement_kind="engineering_intent",
+            jev_routed=False,
+        ),
     )
 
     # 1. Branch A: Simulated Full LLM Output (Full 70KB HTML Report dumped into LLM output)

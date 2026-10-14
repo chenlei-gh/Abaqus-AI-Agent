@@ -147,19 +147,16 @@ def test_cli_report(tmp_path, capsys):
         "acceptance": {"criteria": [], "passed": True},
     }), encoding="utf-8")
 
-    # Test Markdown
+    # Arbitrary JSON is not an Agent run record and must not be written as a deliverable.
     ret = main(["report", str(ev_file), "--format", "markdown"])
-    assert ret == 0
+    assert ret == 2
     captured = capsys.readouterr()
-    assert "# Test Structural Verification" in captured.out
-    assert "## 1. Executive Summary" in captured.out
+    assert "BLOCKED" in captured.err
 
-    # Test HTML output to file
     out_html = tmp_path / "report.html"
     ret = main(["report", str(ev_file), "--format", "html", "-o", str(out_html)])
-    assert ret == 0
-    assert out_html.is_file()
-    assert "<!doctype html>" in out_html.read_text(encoding="utf-8")
+    assert ret == 2
+    assert not out_html.exists()
 
 
 def test_cli_fmbd_topology(capsys):

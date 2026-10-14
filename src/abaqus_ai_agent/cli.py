@@ -16,8 +16,8 @@ import sys
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
-from .contracts.provenance import AnalysisProvenance
-from .diagnostics.solver_patterns import DiagnosticIssue, diagnose_solver_artifacts
+from .contracts.provenance import AnalysisProvenance, verify_deliverable
+from .diagnostics.solver_patterns import DiagnosticIssue, diagnose_inp_contract, diagnose_solver_artifacts
 from .golden_evidence import (
     load_and_normalize_evidence_file,
     validate_golden_evidence_dict,
@@ -65,6 +65,7 @@ def _build_parser() -> argparse.ArgumentParser:
     p_diag = subparsers.add_parser("diagnose", help="Diagnose Abaqus solver artifacts (.msg, .sta, .dat, .log).")
     p_diag.add_argument("path", help="Path to a solver artifact file or directory containing job artifacts.")
     p_diag.add_argument("--job-name", help="Optional job name prefix when path is a directory.")
+    p_diag.add_argument("--inp", help="Optional INP path for model-contract warnings.")
     p_diag.add_argument("--json", action="store_true", help="Output structured diagnostic issues as JSON.")
 
     # 5. report
@@ -73,6 +74,19 @@ def _build_parser() -> argparse.ArgumentParser:
     p_rep.add_argument("--format", choices=["markdown", "html"], default="markdown", help="Output format (default: markdown)")
     p_rep.add_argument("--output", "-o", help="Output file path (default: stdout)")
     p_rep.add_argument("--title", help="Override report title.")
+    p_rep.add_argument(
+        "--allow-preview",
+        action="store_true",
+        help="Print a non-deliverable preview even when the Agent run record is missing. Does not write a file.",
+    )
+
+    # 5b. verify-deliverable
+    p_vd = subparsers.add_parser(
+        "verify-deliverable",
+        help="Check whether a JSON record may be filed as an Agent engineering report.",
+    )
+    p_vd.add_argument("evidence_file", help="Path to evidence or AnalysisRun JSON file.")
+    p_vd.add_argument("--json", action="store_true", help="Output the gate result as JSON.")
 
     # 6. fmbd
     p_fmbd = subparsers.add_parser("fmbd", help="Inspect and compile Flexible Multibody Dynamics (FMBD) mechanisms.")
@@ -249,7 +263,10 @@ def handle_ask(args: argparse.Namespace) -> int:
             print(f"Prompt:               {args.prompt}")
             print(f"Status:               BLOCKED (Fail-Closed)")
             print(f"Missing Prereqs:      {', '.join(routing_res.missing_requirements)}")
-            print(f"Clarification Needed: {routing_res.clarification_prompt}")
+            print("Clarification Needed: {routing_res.clarification_prompt}")
+            print("Solver invoked:       NO")
+            print("Report authorized:    NO")
+            print("Modeling is not authorized until the missing prerequisites are resolved.")
         return 2
 
     if args.json:
@@ -267,6 +284,9 @@ def handle_ask(args: argparse.Namespace) -> int:
                 "acceptance_criteria": list(intent.acceptance_criteria),
             } if intent else None,
             "jev_decision_bundle": bundle.to_dict(),
+            "solver_invoked": False,
+            "report_authorized": False,
+            "note": "ask routes intent only; it does not solve and does not authorize an engineering report.",
         }
         print(json.dumps(out, indent=2, ensure_ascii=False))
     else:
@@ -285,6 +305,9 @@ def handle_ask(args: argparse.Namespace) -> int:
             print(f"Acceptance Criteria:{len(intent.acceptance_criteria)} defined")
         if args.dry_run:
             print("[DRY-RUN] Intent and plan contracts verified successfully. No solver invoked.")
+        print("Solver invoked:     NO")
+        print("Report authorized:  NO")
+        print("This command routes intent only. It does not solve, and it does not authorize an engineering report.")
 
     return 0
 
@@ -588,12 +611,28 @@ def handle_diagnose(args: argparse.Namespace) -> int:
             elif s == ".log":
                 log_text = text
 
-    issues = diagnose_solver_artifacts(
+    issues = list(diagnose_solver_artifacts(
         msg_text=msg_text,
         sta_text=sta_text,
         dat_text=dat_text,
         log_text=log_text,
-    )
+    ))
+    inp_path = Path(args.inp) if getattr(args, "inp", None) else None
+    if inp_path is None:
+        if p.is_file() and p.suffix.lower() == ".inp":
+            inp_path = p
+        elif p.is_dir():
+            job_prefix = args.job_name or ""
+            candidates = [
+                item for item in p.iterdir()
+                if item.is_file() and item.suffix.lower() == ".inp"
+                and (not job_prefix or item.name.startswith(job_prefix))
+            ]
+            if len(candidates) == 1:
+                inp_path = candidates[0]
+    if inp_path is not None and inp_path.is_file():
+        inp_text = inp_path.read_text(encoding="utf-8", errors="ignore")
+        issues.extend(diagnose_inp_contract(inp_text, source=str(inp_path)))
 
     if args.json:
         print(json.dumps([iss.to_dict() for iss in issues], indent=2, ensure_ascii=False))
@@ -654,6 +693,16 @@ def handle_report(args: argparse.Namespace) -> int:
     acc_obj = raw.get("acceptance") or raw_unnormalized.get("acceptance") or raw_unnormalized.get("report", {}).get("acceptance")
     checks_obj = raw.get("verification") or raw_unnormalized.get("verification") or raw_unnormalized.get("report", {}).get("engineering_checks")
 
+    gate_record = dict(raw_unnormalized) if isinstance(raw_unnormalized, dict) else {}
+    if isinstance(raw, dict):
+        gate_record = dict(gate_record)
+        gate_record.setdefault("provenance", raw.get("provenance"))
+        gate_record.setdefault("results", raw.get("results") or raw.get("metrics"))
+        gate_record.setdefault("odb_path", raw.get("odb_path"))
+    gate = verify_deliverable(gate_record)
+    metadata = dict(raw.get("metadata") or {})
+    metadata["deliverable_authorization"] = gate
+
     report = EngineeringReportData(
         title=title,
         objective=objective,
@@ -664,8 +713,23 @@ def handle_report(args: argparse.Namespace) -> int:
         fatigue=raw.get("fatigue") or raw_unnormalized.get("fatigue") or raw_unnormalized.get("report", {}).get("fatigue"),
         mechanism=raw.get("mechanism_topology") or raw.get("kinematics") or raw_unnormalized.get("mechanism"),
         provenance=raw.get("provenance") or raw_unnormalized.get("provenance"),
-        metadata=raw.get("metadata", {}),
+        metadata=metadata,
     )
+
+    if not gate["deliverable_file_allowed"] and args.output:
+        print("BLOCKED: refusing to write an engineering deliverable.", file=sys.stderr)
+        print(f"Reasons: {', '.join(gate['reasons']) or 'unspecified'}", file=sys.stderr)
+        print(
+            "A formal report requires an Agent-issued run record. "
+            "This is not a keyed signature; rewriting the JSON and recomputing the digest does not create one.",
+            file=sys.stderr,
+        )
+        return 2
+    if not gate["allow_agent_attribution"]:
+        print(
+            "NOTE: this record is not authorized to be captioned as an Abaqus-AI-Agent JEV deliverable.",
+            file=sys.stderr,
+        )
 
     output_str = render_html(report) if args.format == "html" else render_markdown(report)
 
@@ -674,9 +738,38 @@ def handle_report(args: argparse.Namespace) -> int:
         out_path.write_text(output_str, encoding="utf-8")
         print(f"Report written to: {out_path.resolve()}")
     else:
+        if not gate["deliverable_file_allowed"] and not args.allow_preview:
+            print("BLOCKED: refusing to print a deliverable. Pass --allow-preview for a non-deliverable preview.", file=sys.stderr)
+            print(f"Reasons: {', '.join(gate['reasons']) or 'unspecified'}", file=sys.stderr)
+            return 2
         print(output_str)
 
     return 0
+
+
+def handle_verify_deliverable(args: argparse.Namespace) -> int:
+    ev_path = Path(args.evidence_file)
+    if not ev_path.is_file():
+        print(f"Error: Evidence file '{ev_path}' not found.", file=sys.stderr)
+        return 2
+    try:
+        record = json.loads(ev_path.read_text(encoding="utf-8"))
+    except Exception as exc:
+        print(f"Error: cannot read JSON evidence: {exc}", file=sys.stderr)
+        return 2
+    gate = verify_deliverable(record if isinstance(record, dict) else {})
+    if args.json:
+        print(json.dumps(gate, indent=2, ensure_ascii=False))
+    else:
+        print(f"=== Deliverable Gate: {gate['status']} ===")
+        print(f"File allowed:            {'YES' if gate['deliverable_file_allowed'] else 'NO'}")
+        print(f"Agent attribution:       {'YES' if gate['allow_agent_attribution'] else 'NO'}")
+        print(f"JEV routed:              {'YES' if gate['jev_routed'] else 'NO'}")
+        print(f"Requirement kind:        {gate['requirement_kind']}")
+        if gate["reasons"]:
+            print(f"Reasons:                 {', '.join(gate['reasons'])}")
+        print("Guarantee:               agent run record, not a keyed signature")
+    return 0 if gate["deliverable_file_allowed"] else 2
 
 
 def _build_case_graph(case: str):
@@ -1012,6 +1105,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         "diff": handle_diff,
         "diagnose": handle_diagnose,
         "report": handle_report,
+        "verify-deliverable": handle_verify_deliverable,
         "fmbd": handle_fmbd,
         "memory": handle_memory,
         "ask": handle_ask,

@@ -594,6 +594,16 @@ class AbaqusAIAgent:
                     metadata={"missing_requirements": routing_res.missing_requirements},
                 )
             intent = routing_res.intent
+            kwargs.setdefault("environment", {})
+            if not isinstance(kwargs.get("environment"), dict):
+                kwargs["environment"] = {}
+            kwargs["environment"] = dict(kwargs["environment"])
+            kwargs["environment"].update({
+                "agent_entry": "solve_requirement",
+                "jev_routed": True,
+                "jev_mode": getattr(router, "mode", jev_mode) or "offline",
+                "requirement_kind": "natural_language",
+            })
         elif isinstance(requirement, EngineeringIntent):
             if not getattr(requirement, "is_executable", True):
                 return EngineeringTaskResult(
@@ -608,6 +618,15 @@ class AbaqusAIAgent:
                     },
                 )
             intent = requirement
+            kwargs.setdefault("environment", {})
+            if not isinstance(kwargs.get("environment"), dict):
+                kwargs["environment"] = {}
+            kwargs["environment"] = dict(kwargs["environment"])
+            kwargs["environment"].update({
+                "agent_entry": "solve_requirement",
+                "jev_routed": False,
+                "requirement_kind": "engineering_intent",
+            })
         else:
             raise TypeError(
                 f"requirement must be str or EngineeringIntent, got {type(requirement).__name__}"
@@ -1119,11 +1138,22 @@ class AbaqusAIAgent:
                 if mesh_extraction_error:
                     mesh_info_payload["extraction_error"] = mesh_extraction_error
 
+                issued = getattr(run, "provenance", None)
+                odb_for_report = getattr(run, "odb_path", None)
+                if issued is not None and odb_for_report and not getattr(issued, "output_hash", None):
+                    from .contracts.provenance import attach_delivery_stamp
+                    import hashlib
+                    odb_file = Path(odb_for_report)
+                    if odb_file.is_file():
+                        issued = attach_delivery_stamp(issued.replace(
+                            output_hash=hashlib.sha256(odb_file.read_bytes()).hexdigest(),
+                        ))
                 deterministic_delivery_card, _, det_report_data = pipeline.build_and_render(
                     output_dir=Path(out_dir),
                     title=report_title,
                     case_id=plan.job_name,
                     run_id=getattr(run, "id", "RUN-AUTH"),
+                    provenance=issued,
                     model_info={
                         "name": plan.model_name,
                         "material": final_mat_def.name if final_mat_def else "Steel",
@@ -1277,6 +1307,10 @@ class AbaqusAIAgent:
             if delivery_block_error:
                 err_list.append(delivery_block_error)
 
+        task_metadata = {"self_healing": healing_result.to_dict() if healing_result else None}
+        report_meta = getattr(det_report_data, "metadata", None) if "det_report_data" in locals() else None
+        if isinstance(report_meta, dict) and report_meta.get("deliverable_authorization"):
+            task_metadata["deliverable_authorization"] = report_meta["deliverable_authorization"]
         return EngineeringTaskResult(
             status=task_status,
             intent=intent,
@@ -1290,5 +1324,5 @@ class AbaqusAIAgent:
             report_html=report_html_str,
             result_intelligence=ri_bundle,
             errors=tuple(err_list),
-            metadata={"self_healing": healing_result.to_dict() if healing_result else None},
+            metadata=task_metadata,
         )

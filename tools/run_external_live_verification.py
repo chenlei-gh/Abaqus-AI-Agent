@@ -399,9 +399,18 @@ def run_verification(project_root: Path = DEFAULT_PROJECT_ROOT, launcher: str = 
 </body>
 </html>
 """
+    # Hand-written HTML has no Agent run record. File a labeled diagnostic
+    # draft only; do not create the formal live_test_report.html name.
+    from abaqus_ai_agent.reporting.delivery import write_gated_engineering_report
     report_path = ctx.delivery_dir / "live_test_report.html"
-    report_path.write_text(html_text, encoding="utf-8")
-    print(f"  HTML report written to: {report_path}")
+    written = write_gated_engineering_report(
+        report_path,
+        content=html_text,
+        allow_diagnostic_draft=True,
+    )
+    report_path = Path(written["path"])
+    print(f"  Diagnostic HTML draft written to: {report_path}")
+    print("  Formal live_test_report.html was not written: no Agent run record.")
     print("\n=======================================================================")
     print("  Abaqus 2025 Real-Machine Verification: 100% COMPLETE & QUALIFIED!   ")
     print("=======================================================================")

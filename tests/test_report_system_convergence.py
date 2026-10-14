@@ -28,6 +28,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from abaqus_ai_agent.agent import AbaqusAIAgent
+from abaqus_ai_agent.contracts.provenance import issue_agent_run_record
 from abaqus_ai_agent.acceptance import AcceptanceResult, CriterionResult
 from abaqus_ai_agent.contracts.artifact import ArtifactPointer
 from abaqus_ai_agent.contracts.intent import EngineeringIntent
@@ -432,6 +433,15 @@ def test_result_intelligence_auxiliary_figures_do_not_block_official_delivery(tm
         visualization_specs=[spec],
         figures=[cae_fig],
         require_deliverable=True,
+        provenance=issue_agent_run_record(
+            run_id=run_id,
+            model_name="Cantilever",
+            job_name="case_valid_01",
+            input_hash=input_hash,
+            output_hash=odb_sha,
+            requirement_kind="engineering_intent",
+            jev_routed=False,
+        ),
     )
 
     assert delivery_card is not None

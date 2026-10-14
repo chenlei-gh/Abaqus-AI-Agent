@@ -1461,7 +1461,7 @@ ODB Tensor Extraction & Equilibrium Verification (RF vs Applied Error = 0.002%) 
   - [x] All 4 Golden benchmarks compiled dynamically from `EngineeringIntent` via `compile_intent_to_actions` into native Abaqus actions and executable CAE scripts (zero hardcoded manual model creation).
   - [x] Implemented deterministic ODB field gating (`odb_fields` against `PhysicsResultProfile.required_fields`) across all domains in `evaluate_result_acceptance`.
   - [x] Executed negative probes for all 4 cases: missing key physical outputs (`NT`, `CSHEAR`, `RF`, `ALLKE`) deterministically triggered fail-closed rejection as `RESULT_INVALID` / `BLOCKED`.
-  - [x] Validated unforgeable executive reporting audit summaries (`Solver: PASS | ODB: PASS | Required Result: PASS | Engineering Acceptance: PASS`) and persisted cryptographic SHA-256 provenance in `machine_validation/multi_physics_golden_manifest.json` (Tier `REAL_ABAQUS`). 600/600 regression tests passing.
+  - [x] Validated executive reporting audit summaries (`Solver: PASS | ODB: PASS | Required Result: PASS | Engineering Acceptance: PASS`) and persisted SHA-256 content digests in `machine_validation/multi_physics_golden_manifest.json` (Tier `REAL_ABAQUS`). A content digest detects unsynced edits; it is not an unforgeable signature. 600/600 regression tests passing.
 
 - [x] **GA-CL.2: Real-Machine Failure-Path Matrix & State Preservation [CLOSED & QUALIFIED]**
   - [x] Upgrade `tools/i2_failure_matrix.py` and implement `tools/real_failure_matrix_e2e.py` with genuine Abaqus 2025 error injection & cryptographic tamper protection:
@@ -1491,9 +1491,9 @@ ODB Tensor Extraction & Equilibrium Verification (RF vs Applied Error = 0.002%) 
   - [x] Executive Report Sync: synchronized `reporting/renderer.py` to display Evidence V2 Manifest ID, cryptographic integrity status, and provenance audit traces; prohibits unverified results from being rendered as valid engineering conclusions.
   - [x] Live Real-Machine Validation: verified 7 vectors in `tools/evidence_v2_qualification_e2e.py` and persisted `machine_validation/evidence_v2_manifest.json` (Tier `REAL_ABAQUS`). 608/608 regression tests passing.
 
-- [x] **GA-CL.5: Engineering Report Cross-Physics Consistency & Unforgeable Audit [CLOSED & QUALIFIED]**
+- [x] **GA-CL.5: Engineering Report Cross-Physics Consistency & Audit Summary [CLOSED & QUALIFIED]**
   - [x] Extend `src/abaqus_ai_agent/reporting/renderer.py` to render structured Verification Integrity & Audit Summary and Verification Gates Detailed Audit tables with engineering justifications.
-  - [x] Deterministically format unforgeable audit summary line: `Solver: PASS | ODB: PASS | Required Result: FAIL | Engineering Acceptance: FAIL`.
+  - [x] Deterministically format the audit summary line: `Solver: PASS | ODB: PASS | Required Result: FAIL | Engineering Acceptance: FAIL`. This line is a status record, not an unforgeable signature.
   - [x] Explicitly reject engineering conclusion (`REJECTED (RESULT_INVALID)`) when required outputs or gates are missing, verified on real Abaqus 2025 ODB evidence.
 
 - [x] **GA-CL.6: RC Evidence Freeze & Legacy Manifest Isolation [CLOSED & QUALIFIED]**
@@ -2182,7 +2182,7 @@ For full requirements backlog, input/output schemas, anti-hallucination constrai
   - 贯通 `agent.py` → `AnalysisRunner` → `odb_extractor` → `evaluate_production_acceptance` 链路。
 - **阶段 3：工程意图自适应图件选择系统 (Adaptive Figure Selector)**
   - 落地 `reporting/figure_selector.py`，根据物理域和 ODB 输出场自适应推荐图件规格。
-  - 对接 `DeterministicReportPipeline`，实现按意图自动选择、自动渲染与元数据不可伪造绑定。
+  - 对接 `DeterministicReportPipeline`，实现按意图自动选择、自动渲染，并把图件元数据与当次运行的内容摘要绑定。该绑定用于发现未同步修改，不是不可伪造签名。
 - **阶段 4：P1 细节收口与回归验证 (P1 Polish & Full Regression)**
   - 消除静默异常捕获，解耦接触与密封章节。
   - 执行本地全量测试（目标保持 950+ 全部通过，零假 PASS），核对 CI 状态。
@@ -2192,9 +2192,9 @@ For full requirements backlog, input/output schemas, anti-hallucination constrai
 
 ### 28.7 图件凭据闭环与交付门禁加固实施记录 (Figure Provenance Hardening)
 
-- [x] **漏洞 1 闭环：加密安全 Viewer Session Nonce 与不可伪造会话凭据** `[CLOSED]`
+- [x] **漏洞 1 闭环：Viewer Session Nonce 与内容摘要会话凭据** `[CLOSED]`
   - `odb_rendering.py` 在受控渲染会话开始时生成 16 字节随机 nonce (`secrets.token_hex(16)`)。
-  - 构造包含 `session_nonce`、`run_id`、`odb_sha256`、`target_filename` 和 `image_sha256` 的加密哈希会话凭证 `viewer_session_token`。
+  - 构造包含 `session_nonce`、`run_id`、`odb_sha256`、`target_filename` 和 `image_sha256` 的 SHA-256 内容摘要会话凭证 `viewer_session_token`。能改文件的人也能重算摘要，因此这不是不可伪造凭据。
   - `admit_figure_for_reuse` Category C 强制核验 `viewer_rendered is True` 且 `viewer_session_token` 存在且非空。
 - [x] **漏洞 2 闭环：根除磁盘文件自动洗白风险 (Eliminate Ambient File Adoption)** `[CLOSED]`
   - `pipeline.py` 在正式交付模式下，对未通过准入白名单且未在当前受控会话由 Viewer 渲染的磁盘同名残留文件一律抛出 `PermissionError` fail-closed，严禁自动打标收编为 Viewer 产物。
@@ -2228,7 +2228,7 @@ For full requirements backlog, input/output schemas, anti-hallucination constrai
 ### 28.9 渲染执行凭证、真实 PNG 校验、报告原子发布与多图防重收口实施记录 (Atomic Publishing & Verification Hardening)
 
 - [x] **P0-1 闭环：可核验渲染会话凭证 (`RenderExecutionEvidence`)** `[CLOSED]`
-  - 在 `odb_rendering.py` 中定义 `RenderExecutionEvidence`，固化 `session_nonce`、`run_id`、`odb_sha256`、`timestamp_utc`、图件清单摘要及密码学签名 `session_signature`。
+  - 在 `odb_rendering.py` 中定义 `RenderExecutionEvidence`，固化 `session_nonce`、`run_id`、`odb_sha256`、`timestamp_utc`、图件清单摘要及内容摘要 `session_signature`。该字段是无密钥 SHA-256，不是密码学身份签名。
   - 在 `render_authentic_visualizations()` 中自动签发凭证并注入图件元数据；在 `pipeline.py` 与 `figure_selector.py` 准入及交付门禁中验证凭证签名与运行时强一致性。
 - [x] **P0-2 & P0-10 闭环：PNG 二进制魔数与 IHDR 正向尺寸完整性校验** `[CLOSED]`
   - 实现 `verify_png_image_integrity()`，严格检查 PNG 8 字节魔数签名 (`\x89PNG\r\n\x1a\n`) 及 IHDR chunk，确保 width > 0 且 height > 0。
@@ -2599,12 +2599,12 @@ Abaqus-AI-Agent/
      - 登记官方与工业权威基准 `validation_assets/references/official_examples.json`（覆盖 Abaqus 2025 Example Problems, ASME BPVC, SAE, ASTM, NASA SP-8007, Numisheet）。
      - 建立统一资产注册表 `validation_assets/registry.json` 与各案例清单（`case_01` 至 `case_06` 达到 QUALIFIED 闭环，`case_07` 至 `case_10` 完成统一 PRE_RESERVED 扩展预留）。
   5. **阶段 E（CLI 工具与生态接入）**:
-     - CLI 增强 `assets` 子命令（`python -m abaqus_ai_agent.cli assets [--list|--case|--json]`），实现案例资产统一查询与验证。
+     - CLI 增强 `assets` 子命令（`python -m abaqus_ai_agent assets [--list|--case|--json]`），实现案例资产统一查询与验证。
      - `matrix` 子命令候选路径无缝兼容 `validation_assets`。
   6. **阶段 F（全链路自动化测试守护）**:
      - 新增 `tests/test_paths.py` (11 项)、`tests/test_clean_workspace.py` (4 项)、`tests/test_validation_assets.py` (4 项)。
      - 全仓全量自动化回归测试达到 **1117 passed in 60.61s (100% 成功，0 失败)**。
-     - 原有 157 项受控黄金证据、密码学签名及未提交工作区改动保持完整，零意外破坏。
+     - 原有 157 项受控黄金证据、SHA-256 内容摘要及未提交工作区改动保持完整，零意外破坏。
 
 ---
 
@@ -2666,7 +2666,7 @@ Abaqus-AI-Agent/
 **2. 交付与验证准则 (Exit Criteria)**：
 - 产出 `test_assets/engineering_cases/case_07_jounce_bumper_self_contact/problem_statement.json`。
 - 实现 E2E 执行驱动及无头 ODB 提取脚本。
-- 生成密码学签名防篡改凭证 `case_07_jounce_bumper_manifest.json` 与 Evidence V2 审计摘要。
+- 生成 SHA-256 内容摘要防意外篡改凭证 `case_07_jounce_bumper_manifest.json` 与 Evidence V2 审计摘要。摘要不能单独证明签署者身份。
 - 产出独立单文件 HTML 交付报告（嵌入矢量 SVG 与应力/接触云图）。
 - 在 `validation_assets/registry.json` 中更新资格状态为 `QUALIFIED`，并登记 official reference。
 - 在 `tests/test_p2_package_b_cases.py` 补充物理验收断言与负向探针（接触自穿透、材料参数失效应阻断）。
@@ -2754,7 +2754,7 @@ Abaqus-AI-Agent/
   - 读取 `input/reference_results_roupa_147.txt`，计算轨迹均方根误差 (RMSE) 与相关系数，量化对比动力学一致性。
 - **阶段 D：工程交付与受控防伪闭环**
   - 渲染高保真机构运动轨迹图、关键时刻构型图与能量守恒曲线；
-  - 输出统一独立 HTML 工程交付报告至 `delivery/`，生成不可伪造的 Evidence Manifest 至 `evidence/`；
+  - 输出统一独立 HTML 工程交付报告至 `delivery/`，生成带 SHA-256 内容摘要的 Evidence Manifest 至 `evidence/`。摘要用于发现未同步修改，不是不可伪造签名；
   - 验证交付成果中的 CAE 模型与 ODB 可重新打开且拓扑完整；
   - 确认核心仓库工作区干净，实现真正的空间与资产完全隔离。
 

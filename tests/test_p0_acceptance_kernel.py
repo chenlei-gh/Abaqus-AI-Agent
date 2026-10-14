@@ -1361,6 +1361,7 @@ def test_p0_d_authentic_cae_visualization_asset_succeeds_in_official_delivery(tm
     fig.metadata["session_nonce"] = auth_nonce
     fig.metadata["viewer_session_token"] = auth_token
     fig.metadata["render_execution_evidence"] = auth_ev.to_dict()
+    from abaqus_ai_agent.contracts.provenance import issue_agent_run_record
 
     card, pointer, data = pipeline.build_and_render(
         output_dir=out_dir,
@@ -1375,6 +1376,15 @@ def test_p0_d_authentic_cae_visualization_asset_succeeds_in_official_delivery(tm
         visualization_specs=specs,
         figures=[fig],
         require_deliverable=True,
+        provenance=issue_agent_run_record(
+            run_id="run_authentic_asset",
+            model_name="Authentic",
+            job_name="case_authentic_asset",
+            input_hash=auth_input_hash,
+            output_hash=h_odb,
+            requirement_kind="engineering_intent",
+            jev_routed=False,
+        ),
     )
 
     assert card.deliverable is True

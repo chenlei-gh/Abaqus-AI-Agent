@@ -135,7 +135,7 @@ flowchart TD
         M[SIMULIA Abaqus 2025 Solver] --> N[Binary ODB / .sta / .msg / .dat]
         N --> O[Headless Abaqus Viewer Session]
         O --> P[Rendered Visualization Assets]
-        P --> Q[Cryptographic Report Delivery Card]
+        P --> Q[Agent Run-Record Delivery Card]
     end
 
     B -.->|Exposes only phase-specific tools| E
@@ -266,8 +266,8 @@ machine_validation/p2_cases/
 | Verification Tier | Runner & Environment | Dependencies | Scope & Certification Target |
 | :--- | :--- | :--- | :--- |
 | **Tier 1: CI Software Contract Gate** | GitHub Actions (Ubuntu / macOS / Windows) | Zero Abaqus license required (Python 3.10–3.12) | • **1,349 automated tests passing (0 warnings, 0 errors)**<br>• 22 Dassault Tier A physical benchmarks<br>• 7 Tier B advanced mechanics baselines<br>• 66 Action AST bidirectional parity and schema tests<br>• Strict negative error-code CLI smoke gates (`missing_load_application_region`)<br>• Full repository zero-leakage security audit |
-| **Tier 2: Golden Matrix Evidence Audit** | Local / Staging Sandbox (`machine_validation/`) | Python 3.10+ & SHA-256 verification tools | • **13/13 Golden Matrix L4 bundles fully audited**<br>• Level 4 cryptographic provenance verification<br>• Manifest SHA-256 verification and path traversal boundary checks<br>• Zero-modification read-only asset governance |
-| **Tier 3: Real-Machine Execution Gate** | Dedicated Windows Server with SIMULIA Abaqus 2025 | Abaqus 2025 commercial floating/node license | • Real CAE batch script execution and binary ODB extraction<br>• Off-screen Abaqus Viewer headless contour visualization<br>• Cryptographic Delivery Card authorization<br>• Autonomous convergence recovery and cutback healing |
+| **Tier 2: Golden Matrix Evidence Audit** | Local / Staging Sandbox (`machine_validation/`) | Python 3.10+ & SHA-256 content-digest checks | • **13/13 Golden Matrix L4 bundles fully audited**<br>• Level 4 content-digest consistency (unkeyed SHA-256, not an identity signature)<br>• Manifest digest and path traversal boundary checks<br>• Zero-modification read-only asset governance |
+| **Tier 3: Real-Machine Execution Gate** | Dedicated Windows Server with SIMULIA Abaqus 2025 | Abaqus 2025 commercial floating/node license | • Real CAE batch script execution and binary ODB extraction<br>• Off-screen Abaqus Viewer headless contour visualization<br>• Formal report attribution only after an Agent run record is bound to the ODB<br>• Autonomous convergence recovery and cutback healing |
 
 ---
 
@@ -324,7 +324,7 @@ elif result.status == "COMPLETED":
     print("Reaction Equilibrium:", result.result_intelligence.derived_metrics.equilibrium_error)
     print("Maximum von Mises:", result.metrics.get("max_mises"), "MPa")
     print("Official HTML Report:", result.report_html_path)
-    print("Cryptographic Delivery Card:", result.delivery_card.card_id)
+    print("Delivery record:", result.delivery_card.card_id)
 ```
 
 ### 4. Command-Line Interface (CLI)

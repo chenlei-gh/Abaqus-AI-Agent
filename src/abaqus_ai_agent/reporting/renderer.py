@@ -608,7 +608,7 @@ def _render_custom_table_for_section(heading, value, is_zh=False):
                 ev_status = getattr(value, "evidence_status", None) or (value.get("evidence_status") if isinstance(value, dict) else None)
                 if ev_status and ev_gate != "PASS":
                     ev_gate = f"{ev_gate} ({ev_status})"
-                ev_desc = "经哈希校验真实完整 (SHA-256 Provenance Confirmed)" if is_zh else "Verified Authentic & Intact (SHA-256 Provenance Confirmed)"
+                ev_desc = "内容摘要未发现未同步修改 (SHA-256 content digest; not a keyed signature)" if is_zh else "Content digest matches (SHA-256; not a keyed signature)"
                 integrity_rows.append(["电子证据链与产物完整性 / Evidence" if is_zh else "Evidence & Artifact Integrity", ev_desc, ev_gate])
             sub_title = "### 工程验证完整性与门禁审计总览 (Verification Integrity & Audit)" if is_zh else "### Verification Integrity & Audit Summary"
             th = ["验证维度 / Dimension", "测定状态与输出 / Output", "门禁裁决 / Verdict"] if is_zh else ["Verification Dimension", "Actual State / Output", "Gate Verdict"]
@@ -817,7 +817,7 @@ def _render_custom_table_for_section(heading, value, is_zh=False):
                 ["工程案例编号 (Case ID)" if is_zh else "Case ID", case_id],
                 ["生成审计时间 (Created At)" if is_zh else "Created At", manifest_data.get("created_at", "-")],
                 ["证据有效性状态 (Evidence Validity)" if is_zh else "Evidence Validity", val],
-                ["防篡改审计签名 (Audit Signature)" if is_zh else "Audit Signature", sig_display],
+                ["内容摘要 (Content Digest)" if is_zh else "Content Digest", sig_display],
             ]
             sub_title = "### 电子证据链清单摘要 (Evidence Manifest Summary)" if is_zh else "### Evidence Manifest Summary"
             th = ["清单元数据属性 / Property", "对应数值 / Value"] if is_zh else ["Manifest Property", "Value"]
@@ -835,8 +835,8 @@ def _render_custom_table_for_section(heading, value, is_zh=False):
                         sha_short = f"{sha[:12]}..." if sha and len(sha) > 12 else (sha or "-")
                         art_rows.append([a_name, role, exists, size, sha_short])
                 if art_rows:
-                    sub_title = "### 仿真产物哈希防伪与出处清单 (Cryptographic Artifact Provenance)" if is_zh else "### Cryptographic Artifact Provenance"
-                    th = ["产物文件名 / Artifact Name", "工程角色 / Role", "物理存在 / Exists", "大小 (字节)", "SHA-256 哈希签名"] if is_zh else ["Artifact Name", "Role", "Exists", "Size (bytes)", "SHA-256"]
+                    sub_title = "### 仿真产物内容摘要与出处清单 (Artifact Content Digest)" if is_zh else "### Artifact Content Digest"
+                    th = ["产物文件名 / Artifact Name", "工程角色 / Role", "物理存在 / Exists", "大小 (字节)", "SHA-256 内容摘要"] if is_zh else ["Artifact Name", "Role", "Exists", "Size (bytes)", "SHA-256 digest"]
                     lines += [sub_title, "", _format_markdown_table(th, art_rows), ""]
 
     # 10. Engineering Checks -> Detailed Engineering Verification Checks Table
@@ -1022,7 +1022,7 @@ def render_markdown(report, language=None):
         ("14b. Solver Diagnostics & Self-Healing Audit", "求解器自愈生命周期审计", getattr(report, "self_healing", None)),
         ("15. Mechanism Kinematics & Topology", "机构运动学与拓扑参数", report.mechanism),
         ("16. Assumptions / Limitations", "基础工程假设与分析局限性", (report.assumptions, report.limitations)),
-        ("17. Evidence", "电子证据链与产物完整性防伪", report.evidence),
+        ("17. Evidence", "电子证据链与产物内容摘要", report.evidence),
         ("18. Provenance", "模型版本与运行出处追溯", report.provenance),
     ]
     for heading, zh_heading, value in sections:
@@ -1074,7 +1074,7 @@ def render_markdown(report, language=None):
             else:
                 lines += ["```json", json.dumps(_plain(value), indent=2, ensure_ascii=False, default=str), "```", ""]
     conc_title = "## 19. Conclusion / 工程分析最终裁决结论" if is_zh else "## 19. Conclusion"
-    lines += [conc_title, "", _conclusion(report, is_zh=is_zh), ""]
+    lines += [conc_title, "", _conclusion(report, is_zh=is_zh), "", _attribution_note(report, is_zh=is_zh), ""]
     return "\n".join(lines)
 
 
@@ -1347,7 +1347,7 @@ def render_html(report, language=None, base_dir=None):
         ("14b. Solver Diagnostics & Self-Healing Audit", "求解器自愈生命周期审计", getattr(report, "self_healing", None)),
         ("15. Mechanism Kinematics & Topology", "机构运动学与拓扑参数", report.mechanism),
         ("16. Assumptions / Limitations", "基础工程假设与分析局限性", (report.assumptions, report.limitations)),
-        ("17. Evidence", "电子证据链与产物完整性防伪", report.evidence),
+        ("17. Evidence", "电子证据链与产物内容摘要", report.evidence),
         ("18. Provenance", "模型版本与运行出处追溯", report.provenance),
     ]
 
@@ -1401,6 +1401,7 @@ def render_html(report, language=None, base_dir=None):
     conc_title = "19. Conclusion / 工程分析最终裁决结论" if is_zh else "19. Conclusion"
     body_parts.append(f'<h2 class="section-heading">{html.escape(conc_title)}</h2>')
     body_parts.append(_render_rich_text_to_html(_conclusion(report, is_zh=is_zh), is_zh=is_zh))
+    body_parts.append(f'<p class="report-quote">{html.escape(_attribution_note(report, is_zh=is_zh))}</p>')
 
     content_html = "\n".join(body_parts)
 
@@ -1804,6 +1805,47 @@ def render_report(report, fmt="html", language=None):
         return render_markdown(report, language=language)
     raise ValueError(f"Unsupported report format: {fmt}. Standardized deliverable format is 'html'.")
     return render_html(report, language=language)
+
+def _attribution_note(report, is_zh=False):
+    """State who may claim authorship. Never invent an Agent caption.
+
+    A content digest is not a keyed signature. Attribution is allowed only when
+    the report carries an Agent run record that passed JEV routing.
+    """
+    meta = getattr(report, "metadata", None) or {}
+    gate = meta.get("deliverable_authorization") if isinstance(meta, dict) else None
+    if not isinstance(gate, dict):
+        gate = {}
+    if gate.get("allow_agent_attribution"):
+        if is_zh:
+            return (
+                "报告编制：Abaqus-AI-Agent。本次自然语言需求已经过 JEV 路由；"
+                "该署名表示存在 Agent 运行记录，不是无密钥 SHA-256 的身份认证。"
+            )
+        return (
+            "Prepared by Abaqus-AI-Agent after JEV routing. "
+            "This caption records an Agent run; it is not a keyed signature."
+        )
+    if gate.get("deliverable_file_allowed"):
+        if is_zh:
+            return (
+                "本文件由 Abaqus-AI-Agent 运行记录生成，但本次求解未经过 JEV 需求路由，"
+                "不得写成自然语言工程需求的正式编制交付。"
+            )
+        return (
+            "Filed from an Abaqus-AI-Agent run record, but this solve did not pass JEV routing "
+            "and must not be captioned as a natural-language Agent deliverable."
+        )
+    if is_zh:
+        return (
+            "未授权署名 Abaqus-AI-Agent 编制。缺少可核对的 Agent 运行记录，"
+            "或自然语言需求未经过 JEV 路由。不得把本文件当作 Agent 交付。"
+        )
+    return (
+        "Not authorized to be captioned as prepared by Abaqus-AI-Agent. "
+        "No verifiable Agent run record, or the natural-language requirement was not JEV-routed."
+    )
+
 
 def _conclusion(report, is_zh=False):
     acceptance = report.acceptance

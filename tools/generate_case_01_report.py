@@ -22,6 +22,7 @@ if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
 from abaqus_ai_agent.acceptance import AcceptanceResult, CriterionResult
+from abaqus_ai_agent.contracts.provenance import issue_agent_run_record
 from abaqus_ai_agent.execution.batch import resolve_default_launcher
 from abaqus_ai_agent.reporting.pipeline import DeterministicReportPipeline
 from abaqus_ai_agent.reporting.visualization_spec import VisualizationSpec
@@ -46,6 +47,7 @@ def generate_case_01_report(
 
     resolved_launcher = resolve_default_launcher(launcher or "abaqus")
     input_hash = hashlib.sha256(inp_path.read_bytes()).hexdigest()
+    output_hash = hashlib.sha256(odb_path.read_bytes()).hexdigest()
 
     with open(golden_json, "r", encoding="utf-8") as f:
         g_data = json.load(f)
@@ -129,6 +131,17 @@ def generate_case_01_report(
         odb_path=odb_path,
         input_hash=input_hash,
         launcher=resolved_launcher,
+        provenance=issue_agent_run_record(
+            run_id="run_case_01_qualification_001",
+            model_name="StaticGolden",
+            job_name="StaticGoldenJob",
+            input_hash=input_hash,
+            output_hash=output_hash,
+            executor="qualification_script",
+            requirement_kind="engineering_intent",
+            jev_routed=False,
+            agent_entry="generate_case_01_report",
+        ),
     )
 
     manifest = {

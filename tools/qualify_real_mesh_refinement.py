@@ -30,6 +30,7 @@ SRC = ROOT / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
+from abaqus_ai_agent.contracts.provenance import issue_agent_run_record
 from abaqus_ai_agent.execution.batch import BatchExecutor, resolve_default_launcher
 from abaqus_ai_agent.execution.odb_rendering import render_authentic_visualizations
 from abaqus_ai_agent.execution.solver import (
@@ -750,6 +751,17 @@ def run_qualification(workdir: Path, launcher: str = "abaqus") -> Dict[str, Any]
         figures=rendered_figs,
         visualization_specs=fig_specs,
         require_deliverable=True,
+        provenance=issue_agent_run_record(
+            run_id=run_id,
+            model_name="Model_Ultra",
+            job_name=str(ultra_odb.stem),
+            input_hash=input_hash,
+            output_hash=odb_hash,
+            executor="qualification_script",
+            requirement_kind="engineering_intent",
+            jev_routed=False,
+            agent_entry="qualify_real_mesh_refinement",
+        ),
     )
 
     html_file = Path(report_pointer.location)

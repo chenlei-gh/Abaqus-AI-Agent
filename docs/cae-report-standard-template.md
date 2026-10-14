@@ -37,7 +37,7 @@
 12b. Deep Engineering Mechanism Analysis (深度物理机理与失效诱因解析)
 13b. Design Recommendations & Countermeasures (工程设计改进方案与对策)
 16. Assumptions & Scope of Limitations (工程假设与适用局限性)
-17. Evidence Manifest & Cryptographic Signatures (SHA-256 哈希工件可信溯源)
+17. Evidence Manifest & Content Digests (SHA-256 工件摘要，不是身份签名)
 ```
 
 ---
@@ -126,8 +126,8 @@
 2. **汇流过渡倒角结构优化**: 增大两管交汇处过渡圆角半径（如 $R4 \rightarrow R6\,\text{mm}$），改善应力流过渡，预计可降低峰值应力 20%~30%；
 3. **分步扭矩-转角拧紧工艺**: 制定合理的螺栓拧紧顺序（由中心向外对称交替打紧），避免冷装配初期法兰翘曲。
 
-### 3.13 Evidence Manifest & Cryptographic Signatures
-- **工件指纹**: 输出每个生成文件（INP、ODB、MSG、DAT、SVG、MD、HTML）的字节大小与 SHA-256 签名，保障防篡改合规。
+### 3.13 Evidence Manifest & Content Digests
+- **工件指纹**: 输出每个生成文件（INP、ODB、MSG、DAT、SVG、MD、HTML）的字节大小与 SHA-256 内容摘要。摘要用于发现未同步修改和文件损坏，不能单独证明签署者身份，也不能称为不可伪造签名。
 
 ---
 

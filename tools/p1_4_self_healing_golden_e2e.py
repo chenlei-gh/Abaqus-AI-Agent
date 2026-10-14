@@ -51,7 +51,7 @@ from abaqus_ai_agent.diagnostics.solver_patterns import (
 from abaqus_ai_agent.diagnostics.remediator import SolverRemediator
 from abaqus_ai_agent.diagnostics.orchestrator import SelfHealingOrchestrator
 from abaqus_ai_agent.acceptance import AcceptanceResult
-from abaqus_ai_agent.reporting.renderer import render_markdown, render_html
+from abaqus_ai_agent.reporting.delivery import write_gated_engineering_report
 
 
 def _sha256(filepath: Path) -> str:
@@ -214,13 +214,23 @@ def run_p1_4_self_healing_golden(workdir: Path, launcher: Optional[str] = None) 
         objective="Verify automated self-healing from singular stiffness matrix to fully accepted state.",
         self_healing=healing_result,
     )
-    report_md = render_markdown(report_data)
-    report_html = render_html(report_data)
-
-    md_path = case_dir / "engineering_report.md"
-    html_path = case_dir / "engineering_report.html"
-    md_path.write_text(report_md, encoding="utf-8")
-    html_path.write_text(report_html, encoding="utf-8")
+    # Synthetic healed run has no ODB hash. File a labeled diagnostic draft only.
+    md_write = write_gated_engineering_report(
+        case_dir / "engineering_report.md",
+        report=report_data,
+        allow_diagnostic_draft=True,
+    )
+    html_write = write_gated_engineering_report(
+        case_dir / "engineering_report.html",
+        report=report_data,
+        allow_diagnostic_draft=True,
+    )
+    md_path = Path(md_write["path"])
+    html_path = Path(html_write["path"])
+    report_md = md_path.read_text(encoding="utf-8")
+    report_html = html_path.read_text(encoding="utf-8")
+    assert md_write["kind"] == "diagnostic_draft"
+    assert not (case_dir / "engineering_report.html").exists()
     print(f"  Markdown Report length: {len(report_md)} bytes")
     print(f"  HTML Report length:     {len(report_html)} bytes")
     assert "14b. Solver Diagnostics & Self-Healing Audit" in report_md
@@ -332,8 +342,18 @@ def run_p1_4_self_healing_golden(workdir: Path, launcher: Optional[str] = None) 
             "total_attempts": healing_result.total_attempts,
         },
         "artifacts": {
-            "engineering_report.md": {"sha256": _sha256(md_path), "size_bytes": md_path.stat().st_size, "exists": True},
-            "engineering_report.html": {"sha256": _sha256(html_path), "size_bytes": html_path.stat().st_size, "exists": True},
+            md_path.name: {
+                "sha256": _sha256(md_path),
+                "size_bytes": md_path.stat().st_size,
+                "exists": True,
+                "kind": "diagnostic_draft",
+            },
+            html_path.name: {
+                "sha256": _sha256(html_path),
+                "size_bytes": html_path.stat().st_size,
+                "exists": True,
+                "kind": "diagnostic_draft",
+            },
         },
         "probes": probes,
     }

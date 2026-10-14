@@ -390,8 +390,8 @@ def run_evidence_v2_qualification() -> Dict[str, Any]:
     )
     md_valid = render_markdown(report_valid_data)
     has_valid_table = "### Evidence Manifest Summary" in md_valid
-    has_artifacts_table = "### Cryptographic Artifact Provenance" in md_valid
-    has_verified_audit = "Verified Authentic & Intact" in md_valid
+    has_artifacts_table = "### Artifact Content Digest" in md_valid
+    has_verified_audit = "Content digest matches" in md_valid
     has_pass_conclusion = "Acceptance criteria passed based on the structured evidence" in md_valid
 
     # Report 2: Tampered Evidence

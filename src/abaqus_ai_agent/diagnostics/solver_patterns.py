@@ -172,3 +172,160 @@ def diagnose_solver_artifacts(
             )
 
     return tuple(issues)
+
+
+def _nset_sizes(inp_text: str) -> Dict[str, Optional[int]]:
+    """Best-effort node-set sizes. Unparseable generate sets stay None and are not flagged."""
+    sizes: Dict[str, Optional[int]] = {}
+    current_name: Optional[str] = None
+    generated = False
+    count = 0
+    known = True
+
+    def _flush() -> None:
+        if current_name is not None:
+            sizes[current_name] = count if known else None
+
+    for raw in (inp_text or "").splitlines():
+        body = raw.split("**", 1)[0].strip()
+        if not body:
+            continue
+        if body.startswith("*"):
+            _flush()
+            current_name = None
+            if body.upper().startswith("*NSET"):
+                name_match = re.search(r"nset\s*=\s*([^,\s]+)", body, re.IGNORECASE)
+                if name_match:
+                    current_name = name_match.group(1)
+                    generated = "GENERATE" in body.upper()
+                    count = 0
+                    known = True
+            continue
+        if current_name is None:
+            continue
+        parts = [p.strip() for p in body.split(",") if p.strip()]
+        if generated and len(parts) >= 2:
+            try:
+                start = int(float(parts[0]))
+                end = int(float(parts[1]))
+                step = int(float(parts[2])) if len(parts) > 2 else 1
+                if step <= 0 or end < start:
+                    known = False
+                else:
+                    count += ((end - start) // step) + 1
+            except ValueError:
+                known = False
+        else:
+            count += len(parts)
+    _flush()
+    return sizes
+
+
+def _following_data(inp_text: str, header_line: str) -> List[str]:
+    lines = (inp_text or "").splitlines()
+    try:
+        start = next(i for i, line in enumerate(lines) if line == header_line)
+    except StopIteration:
+        return []
+    data = []
+    for line in lines[start + 1:]:
+        body = line.split("**", 1)[0].strip()
+        if not body:
+            continue
+        if body.startswith("*"):
+            break
+        data.append(body)
+    return data
+
+
+def diagnose_inp_contract(inp_text: str = "", source: Optional[str] = None) -> Tuple[DiagnosticIssue, ...]:
+    """Warn on model-contract smells seen in the MS13L bypass.
+
+    Severity is WARNING. These checks must not fail a legitimate model that
+    happens to use C3D4, a tie, or an elastic material for a different purpose.
+    """
+    text = inp_text or ""
+    upper = text.upper()
+    issues: List[DiagnosticIssue] = []
+
+    element_types = set(re.findall(r"\*ELEMENT\s*,\s*TYPE\s*=\s*([A-Z0-9]+)", upper))
+    has_static = "*STATIC" in upper
+    has_load = any(token in upper for token in ("*CLOAD", "*DLOAD", "*DSLOAD"))
+    if has_static and has_load and element_types == {"C3D4"}:
+        issues.append(DiagnosticIssue(
+            diagnosis_id="STATIC_BENDING_TET4_ONLY",
+            severity="WARNING",
+            supporting_evidence=("element type set is exactly C3D4 under *STATIC with applied load",),
+            likely_cause=(
+                "A static loaded model discretized only with linear tetrahedra can lock "
+                "and mis-state bending stiffness."
+            ),
+            suggested_remediation=(
+                "Do not treat C3D4-only bending results as deliverable without a higher-order "
+                "or hex mesh check. This warning does not reject every C3D4 model."
+            ),
+            file_source=source or "inp",
+        ))
+
+    tie_names = re.findall(r"\*TIE\s*,\s*NAME\s*=\s*([^,\s]+)", text, re.IGNORECASE)
+    encastre = "ENCASTRE" in upper or re.search(r",\s*1\s*,\s*6\s*$", text, re.MULTILINE) is not None
+    pin_named = any(re.search(r"pin|\u9500", name, re.IGNORECASE) for name in tie_names)
+    if tie_names and encastre and pin_named:
+        issues.append(DiagnosticIssue(
+            diagnosis_id="PIN_HOLE_TIED_AND_FIXED",
+            severity="WARNING",
+            supporting_evidence=tuple(tie_names[:5]),
+            likely_cause=(
+                "A pin-named tie combined with a fully fixed boundary can remove the mechanism "
+                "the pin was supposed to allow."
+            ),
+            suggested_remediation=(
+                "Confirm the pin is not both tied through the hole and fully fixed. "
+                "Use a connector or contact if rotation is part of the requirement."
+            ),
+            file_source=source or "inp",
+        ))
+
+    large_sets = []
+    try:
+        sizes = _nset_sizes(text)
+        for raw in text.splitlines():
+            body = raw.split("**", 1)[0].strip()
+            if not body.upper().startswith("*BOUNDARY"):
+                continue
+            for item in _following_data(text, raw):
+                parts = [p.strip() for p in item.split(",")]
+                if not parts:
+                    continue
+                fixed = any(token in item.upper() for token in ("ENCASTRE", "PINNED")) or (
+                    len(parts) >= 3 and parts[1] == "1" and parts[2] == "6"
+                )
+                if not fixed:
+                    continue
+                size = sizes.get(parts[0])
+                if size is not None and size > 200:
+                    large_sets.append(f"{parts[0]}:{size}")
+    except Exception:
+        large_sets = []
+    if large_sets:
+        issues.append(DiagnosticIssue(
+            diagnosis_id="OVERSIZED_FIXED_NODE_SET",
+            severity="WARNING",
+            supporting_evidence=tuple(large_sets[:10]),
+            likely_cause="A fully fixed node set is large enough to over-constrain a mechanism or contact pair.",
+            suggested_remediation="Review whether the fixed set is a support or an accidental weld of a moving surface.",
+            file_source=source or "inp",
+        ))
+
+    claims_plastic = bool(re.search(r"elastoplastic|\u5f39\u5851\u6027|plasticity", text, re.IGNORECASE))
+    if claims_plastic and "*PLASTIC" not in upper and "*ELASTIC" in upper:
+        issues.append(DiagnosticIssue(
+            diagnosis_id="ELASTIC_ONLY_CLAIMS_PLASTICITY",
+            severity="WARNING",
+            supporting_evidence=("*Elastic present, *Plastic absent, plasticity claimed in text",),
+            likely_cause="The deck is linear-elastic while surrounding text claims elastoplastic behavior.",
+            suggested_remediation="Add a *Plastic definition or stop claiming plasticity for this run.",
+            file_source=source or "inp",
+        ))
+
+    return tuple(issues)

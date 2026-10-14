@@ -16,7 +16,7 @@ Executes four authentic multi-physics cases through the complete Agent chain:
         ↓
   Acceptance (evaluate_result_acceptance with ODB Field Gating)
         ↓
-  Unforgeable Engineering Reporting (renderer.py)
+  Gated engineering reporting (content digest, not a keyed signature)
         ↓
   Cryptographic Provenance Archival (multi_physics_golden_manifest.json)
 
@@ -33,7 +33,7 @@ Four Golden Cases:
 
 Negative Probes:
 For each golden case, an intentional required-field/metric omission probe is executed to verify:
-  Missing Required Output -> RESULT_INVALID -> Acceptance BLOCKED -> Unforgeable Report flags REJECTED.
+  Missing Required Output -> RESULT_INVALID -> Acceptance BLOCKED -> report flags REJECTED.
 """
 
 from __future__ import annotations
@@ -76,8 +76,40 @@ from abaqus_ai_agent.contracts.material import (
     ElasticProperties,
     ThermalProperties,
 )
-from abaqus_ai_agent.reporting.renderer import render_markdown, render_html
+from abaqus_ai_agent.contracts.provenance import issue_agent_run_record
 from abaqus_ai_agent.contracts.report import EngineeringReportData
+from abaqus_ai_agent.reporting.delivery import write_gated_engineering_report
+
+
+def _write_mp_report(case_dir, filename, title, objective, acceptance, job_name, odb_sha, inp_sha):
+    """File a qualification report only through the shared delivery gate."""
+    issued = issue_agent_run_record(
+        run_id="run_%s" % Path(filename).stem,
+        model_name=job_name,
+        job_name=job_name,
+        input_hash=inp_sha,
+        output_hash=odb_sha,
+        executor="qualification_script",
+        jev_routed=False,
+        requirement_kind="engineering_intent",
+        agent_entry="multi_physics_golden_e2e",
+    )
+    report_data = EngineeringReportData(
+        title=title,
+        objective=objective,
+        acceptance=acceptance,
+        provenance=issued.to_dict(),
+    )
+    written = write_gated_engineering_report(
+        case_dir / filename,
+        report=report_data,
+        record=issued,
+        odb_sha256=odb_sha,
+        allow_diagnostic_draft=False,
+    )
+    if written["kind"] != "deliverable":
+        raise RuntimeError("Qualification report was not filed: %s" % written)
+    return written
 
 
 def _sha256(filepath: Path) -> str:
@@ -304,20 +336,16 @@ with open("extract_mp1.json", "w") as f:
         thermal_balance=type("TB", (), {"passed": True})(),
     )
 
-    # Generate Unforgeable Engineering Report
-    report_data = EngineeringReportData(
-        title="MP-1 Sequential Thermal-Structural Golden Report",
-        objective="Verify two-phase sequential coupling: pure steady heat transfer (DC3D8) -> static thermal stress (C3D8R).",
-        acceptance=acc_pos,
-        provenance={
-            "thermal_inp_sha256": artifacts[f"{th_job_name}.inp"]["sha256"],
-            "thermal_odb_sha256": artifacts[f"{th_job_name}.odb"]["sha256"],
-            "structural_inp_sha256": artifacts[f"{st_job_name}.inp"]["sha256"],
-            "structural_odb_sha256": artifacts[f"{st_job_name}.odb"]["sha256"],
-        },
+    _write_mp_report(
+        case_dir,
+        "report_mp1.md",
+        "MP-1 Sequential Thermal-Structural Golden Report",
+        "Verify two-phase sequential coupling: pure steady heat transfer (DC3D8) -> static thermal stress (C3D8R).",
+        acc_pos,
+        st_job_name,
+        artifacts[f"{st_job_name}.odb"]["sha256"],
+        artifacts[f"{st_job_name}.inp"]["sha256"],
     )
-    md_report = render_markdown(report_data)
-    (case_dir / "report_mp1.md").write_text(md_report, encoding="utf-8")
 
     return {
         "case_id": "MP1_SEQUENTIAL_THERMAL_STRUCTURAL",
@@ -491,14 +519,16 @@ odb.close()
         contact_diagnostics=ValidContactDiagnostics(),
     )
 
-    report_data = EngineeringReportData(
-        title="MP-2 Frictional Contact Large-Sliding Golden Report",
-        objective="Verify non-linear penalty contact, Coulomb frictional shear limit, and normal reaction equilibrium.",
-        acceptance=acc_pos,
-        provenance={"inp_sha256": artifacts[f"{job_name}.inp"]["sha256"], "odb_sha256": artifacts[f"{job_name}.odb"]["sha256"]},
+    _write_mp_report(
+        case_dir,
+        "report_mp2.md",
+        "MP-2 Frictional Contact Large-Sliding Golden Report",
+        "Verify non-linear penalty contact, Coulomb frictional shear limit, and normal reaction equilibrium.",
+        acc_pos,
+        job_name,
+        artifacts[f"{job_name}.odb"]["sha256"],
+        artifacts[f"{job_name}.inp"]["sha256"],
     )
-    md_report = render_markdown(report_data)
-    (case_dir / "report_mp2.md").write_text(md_report, encoding="utf-8")
 
     return {
         "case_id": "MP2_FRICTION_CONTACT",
@@ -651,14 +681,16 @@ odb.close()
         procedure_verification=type("PV", (), {"verified": True})(),
     )
 
-    report_data = EngineeringReportData(
-        title="MP-3 Preloaded Dynamics & Modal Golden Report",
-        objective="Verify multi-step state inheritance from tensile preload to eigenvalue frequency extraction.",
-        acceptance=acc_pos,
-        provenance={"inp_sha256": artifacts[f"{job_name}.inp"]["sha256"], "odb_sha256": artifacts[f"{job_name}.odb"]["sha256"]},
+    _write_mp_report(
+        case_dir,
+        "report_mp3.md",
+        "MP-3 Preloaded Dynamics & Modal Golden Report",
+        "Verify multi-step state inheritance from tensile preload to eigenvalue frequency extraction.",
+        acc_pos,
+        job_name,
+        artifacts[f"{job_name}.odb"]["sha256"],
+        artifacts[f"{job_name}.inp"]["sha256"],
     )
-    md_report = render_markdown(report_data)
-    (case_dir / "report_mp3.md").write_text(md_report, encoding="utf-8")
 
     return {
         "case_id": "MP3_PRELOADED_MODAL",
@@ -815,14 +847,16 @@ odb.close()
         ],
     )
 
-    report_data = EngineeringReportData(
-        title="MP-4 Explicit Dynamics Impact & Energy Balance Golden Report",
-        objective="Verify explicit central difference integration, dynamic kinetic/strain energy conservation, and wave response.",
-        acceptance=acc_pos,
-        provenance={"inp_sha256": artifacts[f"{job_name}.inp"]["sha256"], "odb_sha256": artifacts[f"{job_name}.odb"]["sha256"]},
+    _write_mp_report(
+        case_dir,
+        "report_mp4.md",
+        "MP-4 Explicit Dynamics Impact & Energy Balance Golden Report",
+        "Verify explicit central difference integration, dynamic kinetic/strain energy conservation, and wave response.",
+        acc_pos,
+        job_name,
+        artifacts[f"{job_name}.odb"]["sha256"],
+        artifacts[f"{job_name}.inp"]["sha256"],
     )
-    md_report = render_markdown(report_data)
-    (case_dir / "report_mp4.md").write_text(md_report, encoding="utf-8")
 
     return {
         "case_id": "MP4_EXPLICIT_DYNAMIC",

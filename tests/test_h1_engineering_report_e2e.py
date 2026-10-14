@@ -4,8 +4,8 @@ from tools.h1_engineering_report_e2e import run_h1_report_generation
 
 ROOT = Path(__file__).resolve().parent.parent
 
-def test_h1_engineering_report_generator_e2e():
-    evidence = run_h1_report_generation()
+def test_h1_engineering_report_generator_e2e(tmp_path):
+    evidence = run_h1_report_generation(output_dir=tmp_path)
     assert evidence["status"] == "PASS"
     assert evidence["acceptance_verdict"] == "PASS"
     assert evidence["metrics_reported_count"] >= 3
@@ -17,8 +17,8 @@ def test_h1_engineering_report_generator_e2e():
     assert report_meta.get("self_contained") is True
 
     # Verify single-file HTML report existence & purge of legacy .md
-    html_path = ROOT / evidence["html_report_path"] if not Path(evidence["html_report_path"]).is_absolute() else Path(evidence["html_report_path"])
-    md_path = ROOT / "machine_validation" / "static_golden_engineering_report.md"
+    html_path = Path(evidence["html_report_path"])
+    md_path = tmp_path / "static_golden_engineering_report.md"
     assert html_path.exists()
     assert not md_path.exists(), "Legacy markdown report must not exist on disk."
 

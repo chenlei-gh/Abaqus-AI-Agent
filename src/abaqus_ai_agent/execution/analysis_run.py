@@ -9,7 +9,7 @@ from .jobs import JobController, JobState, JobStatus
 from ..engineering_status import EngineeringStatus
 from ..evidence.result import summarize_odb
 from ..evidence.model import Evidence, EvidenceBundle
-from ..contracts.provenance import AnalysisProvenance
+from ..contracts.provenance import AnalysisProvenance, attach_delivery_stamp, provenance_from_mapping
 from ..provenance import stable_hash
 from ..acceptance import evaluate_production_acceptance, evaluate_result_acceptance
 
@@ -177,17 +177,13 @@ class AnalysisRun:
         raw_prov = data.get("provenance")
         prov = None
         if isinstance(raw_prov, dict):
-            from ..contracts.provenance import AnalysisProvenance
-            prov = AnalysisProvenance(
-                run_id=raw_prov.get("run_id", data.get("id", "")),
-                model_name=raw_prov.get("model_name", data.get("model_name", "")),
-                job_name=raw_prov.get("job_name", data.get("job_name", "")),
-                model_hash=raw_prov.get("model_hash"),
-                input_hash=raw_prov.get("input_hash"),
-                output_hash=raw_prov.get("output_hash"),
-                environment=dict(raw_prov.get("environment", {})),
-                metadata=dict(raw_prov.get("metadata", {})),
-            )
+            prov = provenance_from_mapping(raw_prov)
+            if prov is not None and not prov.run_id:
+                prov = prov.replace(
+                    run_id=str(data.get("id") or ""),
+                    model_name=prov.model_name or str(data.get("model_name") or ""),
+                    job_name=prov.job_name or str(data.get("job_name") or ""),
+                )
 
         return cls(
             id=data.get("id", str(uuid.uuid4())),
@@ -344,6 +340,12 @@ class AnalysisRunner:
                 if initial_snapshot is not None else None,
                 "content_hash_scope": "not_captured",
                 "action_plan_scope": "caller" if normalized_action_plan else "none",
+                "agent_issued": True,
+                "issued_by": "abaqus-ai-agent",
+                "agent_entry": (environment or {}).get("agent_entry") or "analysis_runner",
+                "jev_routed": bool((environment or {}).get("jev_routed")),
+                "jev_mode": (environment or {}).get("jev_mode"),
+                "requirement_kind": (environment or {}).get("requirement_kind") or "unspecified",
             },
         )
         run = AnalysisRun(
@@ -404,19 +406,8 @@ class AnalysisRunner:
             if not action_plan and output_actions:
                 run = run.with_state(
                     run.state,
-                    provenance=AnalysisProvenance(
-                        run_id=run.provenance.run_id,
-                        model_name=run.provenance.model_name,
-                        job_name=run.provenance.job_name,
-                        model_hash=run.provenance.model_hash,
-                        input_hash=run.provenance.input_hash,
-                        output_hash=run.provenance.output_hash,
-                        artifact_manifest_hash=run.provenance.artifact_manifest_hash,
-                        abaqus_version=run.provenance.abaqus_version,
-                        python_version=run.provenance.python_version,
-                        executor=run.provenance.executor,
+                    provenance=run.provenance.replace(
                         action_plan=_action_records(output_actions),
-                        environment=dict(run.provenance.environment),
                         metadata=dict(run.provenance.metadata, action_plan_scope="output_plan"),
                     ),
                 )
@@ -913,26 +904,38 @@ def _provenance_with_artifacts(provenance, artifacts):
                       bool(getattr(a, "exists", False)), getattr(a, "size", None),
                       getattr(a, "modified_time", None)) for a in artifacts or ())
     inp_hash = provenance.input_hash
-    if not inp_hash:
+    output_hash = provenance.output_hash
+    if not inp_hash or not output_hash:
         import hashlib
         for a in artifacts or ():
-            if getattr(a, "suffix", "") == ".inp" and getattr(a, "exists", False):
-                p = getattr(a, "path", None)
-                if p and os.path.isfile(p):
-                    try:
-                        with open(p, "rb") as f:
-                            inp_hash = hashlib.sha256(f.read()).hexdigest()
-                        break
-                    except Exception:
-                        pass
-    return AnalysisProvenance(
-        run_id=provenance.run_id, model_name=provenance.model_name,
-        job_name=provenance.job_name, model_hash=provenance.model_hash,
-        input_hash=inp_hash, output_hash=provenance.output_hash,
+            suffix = getattr(a, "suffix", "")
+            if suffix not in (".inp", ".odb") or not getattr(a, "exists", False):
+                continue
+            if suffix == ".inp" and inp_hash:
+                continue
+            if suffix == ".odb" and output_hash:
+                continue
+            p = getattr(a, "path", None)
+            if not p or not os.path.isfile(p):
+                continue
+            try:
+                with open(p, "rb") as f:
+                    digest = hashlib.sha256(f.read()).hexdigest()
+            except Exception:
+                continue
+            if suffix == ".inp" and not inp_hash:
+                inp_hash = digest
+            elif suffix == ".odb" and not output_hash:
+                output_hash = digest
+    updated = provenance.replace(
+        input_hash=inp_hash,
+        output_hash=output_hash,
         artifact_manifest_hash=stable_hash(manifest),
-        abaqus_version=provenance.abaqus_version, python_version=provenance.python_version,
-        executor=provenance.executor, action_plan=provenance.action_plan,
-        environment=provenance.environment, metadata=dict(provenance.metadata))
+        metadata=dict(provenance.metadata),
+    )
+    if updated.metadata.get("agent_issued"):
+        updated = attach_delivery_stamp(updated)
+    return updated
 
 def _collect_diagnostics(executor, job_name, workdir=None):
     try:

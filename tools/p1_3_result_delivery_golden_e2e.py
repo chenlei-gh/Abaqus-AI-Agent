@@ -173,14 +173,29 @@ if task_result.result_intelligence:
     if ri.derived_metrics:
         out_summary["derived_metrics"] = ri.derived_metrics.to_dict()
 
-# Save markdown and html reports to disk
+# File reports only through the shared delivery gate. solve_requirement already
+# refuses an official HTML body when the run record is missing; this second
+# write must not recreate a formal filename from an unbound body.
+from abaqus_ai_agent.reporting.delivery import write_gated_engineering_report
 work_dir = getattr(task_result.run, "work_dir", None) or os.getcwd()
+issued = getattr(task_result.run, "provenance", None) if task_result.run else None
+odb_sha = getattr(issued, "output_hash", None) if issued is not None else None
 if task_result.report_markdown:
-    with open(os.path.join(work_dir, "engineering_report.md"), "w", encoding="utf-8") as f:
-        f.write(task_result.report_markdown)
+    write_gated_engineering_report(
+        os.path.join(work_dir, "engineering_report.md"),
+        content=task_result.report_markdown,
+        record=issued,
+        odb_sha256=odb_sha,
+        allow_diagnostic_draft=True,
+    )
 if task_result.report_html:
-    with open(os.path.join(work_dir, "engineering_report.html"), "w", encoding="utf-8") as f:
-        f.write(task_result.report_html)
+    write_gated_engineering_report(
+        os.path.join(work_dir, "engineering_report.html"),
+        content=task_result.report_html,
+        record=issued,
+        odb_sha256=odb_sha,
+        allow_diagnostic_draft=False,
+    )
 
 with open(os.path.join(work_dir, "p1_3_result_summary.json"), "w", encoding="utf-8") as f:
     json.dump(out_summary, f, indent=2)

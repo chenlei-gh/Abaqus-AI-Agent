@@ -15,16 +15,21 @@ SRC = ROOT / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
-from abaqus_ai_agent.contracts.provenance import AnalysisProvenance
+from abaqus_ai_agent.contracts.provenance import issue_agent_run_record
 from abaqus_ai_agent.contracts.metrics import EngineeringMetric
+from abaqus_ai_agent.reporting.delivery import write_gated_engineering_report
 from abaqus_ai_agent.evidence.model import Evidence, EvidenceBundle
 from abaqus_ai_agent.acceptance import AcceptanceResult, CriterionResult
 from abaqus_ai_agent.execution.analysis_run import AnalysisRun, AnalysisRunState
 from abaqus_ai_agent.reporting.renderer import render_analysis_report
 
 
-def run_h1_report_generation():
+def run_h1_report_generation(output_dir=None):
     validation_dir = ROOT / "machine_validation"
+    # Golden assets stay read-only. Tests and local runs file reports outside
+    # machine_validation unless a caller explicitly chooses another directory.
+    report_dir = Path(output_dir) if output_dir is not None else (ROOT / "deliverables" / "h1_engineering_report")
+    report_dir.mkdir(parents=True, exist_ok=True)
     golden_evidence_file = validation_dir / "static_golden_e2e.json"
     if not golden_evidence_file.exists():
         raise RuntimeError("Required golden evidence file not found: %s" % golden_evidence_file)
@@ -76,17 +81,25 @@ def run_h1_report_generation():
     ]
     evidence_bundle = EvidenceBundle(items=tuple(ev_items))
 
-    # 4. Build Provenance
+    # 4. Build an engineering-intent run record. This is not a JEV route.
     prov_dict = report_dict.get("provenance", {})
+    odb_file = validation_dir / "StaticGoldenJob.odb"
     odb_file_path = "machine_validation/StaticGoldenJob.odb"
-    provenance = AnalysisProvenance(
+    import hashlib
+    odb_sha = hashlib.sha256(odb_file.read_bytes()).hexdigest() if odb_file.is_file() else None
+    provenance = issue_agent_run_record(
         run_id="run_static_golden_001",
         model_name=report_dict.get("model", "StaticGolden"),
         job_name=report_dict.get("job_name", "StaticGoldenJob"),
-        abaqus_version="Abaqus 2025",
-        executor="BatchExecutor",
-        metadata=dict(prov_dict, odb_path=odb_file_path),
+        output_hash=odb_sha,
+        executor="qualification_script",
+        jev_routed=False,
+        requirement_kind="engineering_intent",
+        agent_entry="h1_engineering_report_e2e",
     )
+    provenance = provenance.replace(metadata=dict(provenance.metadata, odb_path=odb_file_path, **prov_dict))
+    from abaqus_ai_agent.contracts.provenance import attach_delivery_stamp
+    provenance = attach_delivery_stamp(provenance)
 
     # 5. Build canonical AnalysisRun
     run = AnalysisRun(
@@ -134,11 +147,20 @@ def run_h1_report_generation():
     self_contained_audit = verify_html_self_contained(report_html)
     assert self_contained_audit["self_contained"] is True, f"Report must be 100% self-contained: {self_contained_audit}"
 
-    # 8. Save single-file self-contained HTML deliverable and purge obsolete .md
-    html_out_path = validation_dir / "static_golden_engineering_report.html"
-    html_out_path.write_text(report_html, encoding="utf-8")
+    # 8. File the HTML only through the same delivery gate. Without an ODB
+    # content hash this stays a labeled diagnostic draft, not a deliverable.
+    html_out_path = report_dir / "static_golden_engineering_report.html"
+    written = write_gated_engineering_report(
+        html_out_path,
+        content=report_html,
+        record=provenance,
+        odb_sha256=odb_sha,
+        results=[{"name": m.name, "value": m.value} for m in metrics_list],
+        allow_diagnostic_draft=True,
+    )
+    html_out_path = Path(written["path"])
 
-    md_out_path = validation_dir / "static_golden_engineering_report.md"
+    md_out_path = report_dir / "static_golden_engineering_report.md"
     if md_out_path.exists():
         md_out_path.unlink()
 
@@ -150,11 +172,12 @@ def run_h1_report_generation():
         "run_id": run.id,
         "report": {
             "format": "html",
-            "path": "machine_validation/static_golden_engineering_report.html",
+            "path": str(html_out_path),
             "bytes": html_out_path.stat().st_size,
             "self_contained": True,
+            "kind": written["kind"],
         },
-        "html_report_path": "machine_validation/static_golden_engineering_report.html",
+        "html_report_path": str(html_out_path),
         "html_size_bytes": html_out_path.stat().st_size,
         "metrics_reported_count": len(metrics_list),
         "criteria_reported_count": len(crit_objs),
@@ -162,7 +185,7 @@ def run_h1_report_generation():
         "provenance_verified": True,
         "source_first_guarantee": True,
     }
-    evidence_path = validation_dir / "h1_engineering_report_evidence.json"
+    evidence_path = report_dir / "h1_engineering_report_evidence.json"
     with open(evidence_path, "w", encoding="utf-8") as f:
         json.dump(evidence_payload, f, indent=2)
 

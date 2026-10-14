@@ -268,8 +268,8 @@ machine_validation/p2_cases/
 | 验证分层 | 运行环境与执行器 | 工具链依赖 | 覆盖范围与考核指标 |
 | :--- | :--- | :--- | :--- |
 | **Tier 1: CI 软件契约门禁** | GitHub Actions (Ubuntu / macOS / Windows) | 纯 Python 环境（Python 3.10–3.12） | • **1,349 项自动化回归测试通过（0 警告、0 错误）**<br>• 22 项 Dassault Tier A 物理标杆基准<br>• 7 项 Tier B 扩展力学校准基准<br>• 66 种 Action AST 双向一致性及最小有效参数执行验证<br>• 严格负向错误码 CLI 冒烟门禁（`missing_load_application_region`）<br>• 全仓库零泄露静态安全审计 |
-| **Tier 2: 黄金证据矩阵防篡改审计** | 本地及临时沙箱环境 (`machine_validation/`) | Python 3.10+ 与 SHA-256 密码学签名核验工具 | • **13/13 项 Golden Matrix L4 证据包全量审计**<br>• Level 4 密码学证据溯源核验<br>• 清单有效性签名及路径越界（Path Traversal）安全审查<br>• 资产零篡改只读治理 |
-| **Tier 3: 真机物理求解执行门禁** | 部署 Abaqus 2025 的专用 Windows 服务器 | SIMULIA Abaqus 商业浮动/节点许可 | • 真实 CAE 批处理脚本生成与二进制 ODB 提取<br>• 原生无头 Abaqus Viewer 离屏云图生成<br>• 密码学交付卡签名与防伪核验<br>• 真实非线性接触求解与收敛自愈 |
+| **Tier 2: 黄金证据矩阵防篡改审计** | 本地及临时沙箱环境 (`machine_validation/`) | Python 3.10+ 与 SHA-256 内容摘要核验 | • **13/13 项 Golden Matrix L4 证据包全量审计**<br>• Level 4 内容摘要一致性核验（无密钥 SHA-256，不是身份签名）<br>• 清单摘要及路径越界（Path Traversal）检查<br>• 资产零篡改只读治理 |
+| **Tier 3: 真机物理求解执行门禁** | 部署 Abaqus 2025 的专用 Windows 服务器 | SIMULIA Abaqus 商业浮动/节点许可 | • 真实 CAE 批处理脚本生成与二进制 ODB 提取<br>• 原生无头 Abaqus Viewer 离屏云图生成<br>• Agent 运行记录与 ODB 绑定后才允许正式报告署名<br>• 真实非线性接触求解与收敛自愈 |
 
 ---
 
@@ -326,7 +326,7 @@ elif result.status == "COMPLETED":
     print("支座反力自平衡误差：", result.result_intelligence.derived_metrics.equilibrium_error)
     print("最大 von Mises 应力：", result.metrics.get("max_mises"), "MPa")
     print("权威 HTML 交付报告：", result.report_html_path)
-    print("密码学防伪交付卡：", result.delivery_card.card_id)
+    print("交付记录：", result.delivery_card.card_id)
 ```
 
 ### 4. 命令行交互（CLI）

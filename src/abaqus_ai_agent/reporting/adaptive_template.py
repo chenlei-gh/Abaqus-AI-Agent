@@ -93,6 +93,8 @@ class AdaptiveReportBuilder:
         language: str = "bilingual",
         result_intelligence: Optional[Any] = None,
         self_healing: Optional[Any] = None,
+        provenance: Any = None,
+        extra_metadata: Optional[Dict[str, Any]] = None,
     ) -> EngineeringReportData:
         """Deterministically assemble the polymorphic EngineeringReportData."""
         active_sections = self.determine_active_sections()
@@ -107,6 +109,8 @@ class AdaptiveReportBuilder:
             "language": language,
             "bilingual": language.lower() in ("bilingual", "dual", "zh_en"),
         }
+        if extra_metadata:
+            meta.update(dict(extra_metadata))
 
         # Embed Interpretation Card if provided (read-only for LLM thoughts)
         assumptions: List[str] = []
@@ -197,6 +201,7 @@ class AdaptiveReportBuilder:
             limitations=tuple(limitations),
             result_intelligence=result_intelligence,
             self_healing=self_healing,
+            provenance=provenance,
             metadata=meta,
         )
 

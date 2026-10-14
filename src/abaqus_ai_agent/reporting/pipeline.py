@@ -16,6 +16,7 @@ import tempfile
 from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
 
 from ..contracts.artifact import ArtifactPointer
+from ..contracts.provenance import provenance_from_mapping, verify_deliverable
 from ..contracts.report import EngineeringReportData, ReportFigure
 from .adaptive_template import AdaptiveReportBuilder, AnalysisObjective
 from .interpretation_card import InterpretationCard, ReportDeliveryCard
@@ -52,6 +53,7 @@ class DeterministicReportPipeline:
         launcher: Optional[str] = None,
         result_intelligence: Optional[Any] = None,
         self_healing: Optional[Any] = None,
+        provenance: Any = None,
         include_animation: bool = False,
         include_mesh: bool = False,
         include_keypoint_detail: bool = False,
@@ -437,7 +439,35 @@ class DeterministicReportPipeline:
                         f"Official delivery blocked: Figure '{f_path.name}' content sha256 mismatch with signed evidence: {live_sha256} != {rf_sha}"
                     )
 
+        # 1.6 Agent run-record gate. Official files are written only after this.
+        # A content digest is not a keyed signature. Missing or unbound records
+        # must not produce report.html and must not be captioned as Agent work.
+        issued = provenance_from_mapping(
+            provenance.to_dict() if hasattr(provenance, "to_dict") else provenance
+        ) if provenance is not None else None
+        gate_record = {
+            "provenance": issued.to_dict() if issued is not None else None,
+            "results": list(results_info or ()),
+            "odb_path": str(odb_path) if odb_path else None,
+            "odb_sha256": eff_odb_hash,
+        }
+        delivery_gate = verify_deliverable(gate_record)
+        if is_official_delivery and not delivery_gate.get("deliverable_file_allowed"):
+            reasons = ", ".join(delivery_gate.get("reasons") or ["unspecified"])
+            raise PermissionError(
+                "Official engineering delivery blocked: Agent run record refused "
+                f"({reasons}). No report artifacts were written. "
+                "This gate checks an Agent-issued run record, not a keyed signature."
+            )
+        if is_official_delivery and issued is not None and eff_odb_hash:
+            if str(issued.output_hash or "") != str(eff_odb_hash):
+                raise PermissionError(
+                    "Official engineering delivery blocked: run-record output_hash does not "
+                    "match the ODB file on disk. No report artifacts were written."
+                )
+
         # 2. Build polymorphic EngineeringReportData
+        report_provenance = issued.to_dict() if issued is not None else None
         report_data = self.builder.build_report_data(
             title=effective_title,
             case_id=case_id,
@@ -454,6 +484,8 @@ class DeterministicReportPipeline:
             language=language,
             result_intelligence=result_intelligence,
             self_healing=self_healing,
+            provenance=report_provenance,
+            extra_metadata={"deliverable_authorization": delivery_gate},
         )
 
         # 3. Deterministically render Semantic HTML (Single authoritative deliverable, atomic publication)

@@ -14,11 +14,11 @@ Executes end-to-end live verification on Dassault SIMULIA Abaqus 2025:
 6. Authentic headless Abaqus Viewer off-screen contour rendering:
    - von Mises stress contour (mises_stress_hotspot.png).
    - Displacement vector contour (displacement_contour.png).
-   - Cryptographic viewer_session_token & signed render_execution_evidence.
+   - viewer_session_token bound to a content digest, not a keyed signature.
 7. Single authoritative DeterministicReportPipeline execution:
-   - Symmetrically rendered engineering_report.md.
-   - Self-contained standalone single-file engineering_report.html.
-   - Signed ReportDeliveryCard manifest.
+   - engineering_report.md and engineering_report.html are filed only after
+     the shared Agent run-record gate. The record digest is not a keyed signature.
+   - ReportDeliveryCard manifest.
 8. Artifact archiving and audit evidence generation in deliverables/.
 """
 
@@ -192,15 +192,27 @@ if task_result.result_intelligence:
     if ri.derived_metrics:
         out_summary["derived_metrics"] = ri.derived_metrics.to_dict()
 
-# Write reports to target directory if returned in task_result
+# File reports only through the shared delivery gate.
+from abaqus_ai_agent.reporting.delivery import write_gated_engineering_report
 target_dir = {repr(str(workdir))}
+issued = getattr(task_result.run, "provenance", None) if task_result.run else None
+odb_sha = getattr(issued, "output_hash", None) if issued is not None else None
 if task_result.report_markdown:
-    with open(os.path.join(target_dir, "engineering_report.md"), "w", encoding="utf-8") as f:
-        f.write(task_result.report_markdown)
-
+    write_gated_engineering_report(
+        os.path.join(target_dir, "engineering_report.md"),
+        content=task_result.report_markdown,
+        record=issued,
+        odb_sha256=odb_sha,
+        allow_diagnostic_draft=True,
+    )
 if task_result.report_html:
-    with open(os.path.join(target_dir, "engineering_report.html"), "w", encoding="utf-8") as f:
-        f.write(task_result.report_html)
+    write_gated_engineering_report(
+        os.path.join(target_dir, "engineering_report.html"),
+        content=task_result.report_html,
+        record=issued,
+        odb_sha256=odb_sha,
+        allow_diagnostic_draft=False,
+    )
 
 with open(os.path.join(target_dir, "live_gate_summary.json"), "w", encoding="utf-8") as f:
     json.dump(out_summary, f, indent=2)
