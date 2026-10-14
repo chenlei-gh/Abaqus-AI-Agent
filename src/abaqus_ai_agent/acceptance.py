@@ -217,9 +217,11 @@ def evaluate_criteria(values, criteria, required_keys: Optional[Sequence[str]] =
             raise ValueError("actual value for criterion %r must be a finite number, got %r" % (key, actual))
         if math.isnan(limit) or math.isinf(limit):
             raise ValueError("limit for criterion %r must be a finite number, got %r" % (key, limit))
-        # Defensive upper bound on relative_tolerance in [0, 1e6) prevents arithmetic overflow
-        # during effective_limit scaling. In actual engineering practice, realistic relative tolerances
-        # are typically in [0.0, 0.20]; values exceeding 1e6 fail closed as invalid input.
+        # Defensive two-layer overflow mitigation:
+        # 1. Input guard: restricts relative_tolerance to [0, 1e6) to reject negative, non-finite, or absurdly large inputs.
+        #    (In realistic engineering practice, tolerances are typically within [0.0, 0.20]).
+        # 2. Post-computation guard: checks math.isfinite(effective_limit) after scaling, preventing any overflow
+        #    (e.g., limit near 1e308 scaled by tolerance) from bypassing criteria evaluation, failing closed via Gate 12.
         if math.isnan(tolerance) or math.isinf(tolerance) or tolerance < 0.0 or tolerance >= 1e6:
             raise ValueError("relative_tolerance for criterion %r must be a finite non-negative number in [0, 1e6), got %r" % (key, tolerance))
 

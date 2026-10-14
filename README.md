@@ -167,9 +167,10 @@ Engineering criteria verification in `acceptance.py` enforces absolute numerical
   - For strict zero ($\text{limit} = 0.0$), relative tolerance is mathematically undefined/ineffective ($0 \times \text{tol} = 0$).
   - For near-zero subnormal thresholds ($|\text{limit}| < 10^{-30}$), relative tolerance produces variations smaller than engineering precision, treated as effectively zero.
   - In both cases, the limit is NOT expanded, and a `relative_tolerance_ineffective_for_zero_limit_{key}` warning is emitted, guiding users to absolute tolerances.
-- **Defensive Tolerance Bounds & Fail-Closed Gate 12**:
-  - Relative tolerance is restricted to $[0, 10^6)$ as a defensive numerical bound against arithmetic overflow during scaling.
-  - Any unexpected arithmetic overflow or evaluation anomaly is trapped in Gate 12, cleanly mapping to an invalid result state and revoking delivery authorization (`deliverable = False`).
+- **Two-Layer Overflow Defense & Fail-Closed Gate 12**:
+  - Restricts relative tolerance inputs to $[0, 10^6)$ to filter out extreme/abnormal inputs (realistic engineering tolerances are typically in $[0.0, 0.20]$).
+  - Enforces mandatory post-computation finiteness validation on `effective_limit` (`math.isfinite`) so that any multiplication overflow (e.g., extreme limit values scaled by tolerance) is trapped immediately, rather than relying on tolerance bounds alone.
+  - Evaluation anomalies cleanly map to an invalid result state in Gate 12, revoking delivery authorization (`deliverable = False`).
 
 ### 4. Manifest Provenance & Workspace Sandboxing (Integrity & Threat Model)
 Evidence verification in `contracts/evidence.py` enforces data integrity and sandbox boundary checks:
