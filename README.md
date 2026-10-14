@@ -2,26 +2,26 @@
 
 > **Next-Generation Autonomous Finite Element Analysis (FEA) Simulation Platform for Advanced Engineering — Transforming natural-language specifications into mathematically rigorous CAD topology grounding, native Dassault SIMULIA Abaqus 2025 execution, autonomous convergence healing, cryptographic viewer evidence verification, and single-exit authoritative engineering deliverables.**
 
-[中文文档 / Chinese Documentation](README_CN.md) · [Enterprise & Commercial Solutions](#enterprise-solutions--commercial-value) · [Core Technical Architecture](#core-technical-pillars) · [Quick Start](#quick-start)
+[中文文档 / Chinese Documentation](README_CN.md) · [Enterprise & Commercial Solutions](#enterprise-solutions--commercial-value) · [Core Technical Architecture](#core-technical-pillars) · [Dual-Gate Verification Infrastructure](#dual-gate-verification-infrastructure) · [Quick Start](#quick-start)
 
 [![CI](https://github.com/chenlei-gh/Abaqus-AI-Agent/actions/workflows/ci.yml/badge.svg)](https://github.com/chenlei-gh/Abaqus-AI-Agent/actions/workflows/ci.yml)
 [![Python](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12-blue.svg)](https://www.python.org/)
 [![Abaqus](https://img.shields.io/badge/SIMULIA%20Abaqus-2025%20Certified-brightgreen.svg)](https://www.3ds.com/products-services/simulia/products/abaqus/)
-[![Tests](https://img.shields.io/badge/regression%20tests-1328%20passed%20%280%20warn%29-success.svg)](tests/)
-[![Golden Matrix](https://img.shields.io/badge/golden%20matrix-20%2F20%20L4%20passed-success.svg)](machine_validation/)
+[![Tests](https://img.shields.io/badge/regression%20tests-1339%20passed%20%280%20warn%29-success.svg)](tests/)
+[![Golden Matrix](https://img.shields.io/badge/golden%20matrix-13%2F13%20L4%20audited-success.svg)](machine_validation/)
 [![Official Benchmarks](https://img.shields.io/badge/tier%20a%20benchmarks-22%2F22%20passed-success.svg)](tools/j_comprehensive_physics_matrix.py)
 [![Tier B Benchmarks](https://img.shields.io/badge/tier%20b%20benchmarks-7%2F7%20passed-success.svg)](tools/j3_tier_b_extended_physics.py)
 [![Live Abaqus Gate](https://img.shields.io/badge/live%20abaqus%20gate-22%2F22%20passed-brightgreen.svg)](tools/j_live_abaqus_matrix.py)
 [![Task Matrix](https://img.shields.io/badge/task%20matrix-T1--T6%20passed-brightgreen.svg)](tools/m_engineering_task_matrix.py)
 [![Acceptance Model](https://img.shields.io/badge/acceptance%20model-4D%20orthogonal%20closure-brightgreen.svg)](src/abaqus_ai_agent/acceptance.py)
-[![Cryptographic Evidence](https://img.shields.io/badge/evidence%20verification-manifest%20v2%20%2B%20session%20token-blue.svg)](src/abaqus_ai_agent/execution/odb_rendering.py)
+[![Cryptographic Evidence](https://img.shields.io/badge/evidence%20verification-manifest%20v2%20%2B%20anti--tamper%20audit-blue.svg)](src/abaqus_ai_agent/contracts/evidence.py)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 
 ---
 
 ## Executive Summary: Bridging LLM Reasoning and Industrial Physics
 
-In aerospace, automotive powertrain, nuclear power, and precision electronics, structural integrity, extreme nonlinear contact, and thermo-mechanical reliability govern product certification. Traditional CAE workflows suffer from severe industrial bottlenecks:
+In aerospace, automotive powertrain, nuclear containment, and precision electronics, structural integrity, extreme nonlinear contact, and thermo-mechanical reliability govern product certification. Traditional CAE workflows suffer from severe industrial bottlenecks:
 1. **High Skill Barriers & Repetitive Drain**: Expert analysts spend up to 70% of engineering bandwidth on mundane geometric preparation, boundary picking, mesh seeding, and manual result collation.
 2. **The "LLM Hallucination Trap"**: Generic LLMs and raw code copilot tools produce syntactically valid yet physically disastrous code—inventing unverified constitutive laws, guessing volatile internal topology indices, crashing silently on solver divergence, and blowing context limits with raw numerical arrays.
 
@@ -45,11 +45,12 @@ graph LR
 | Evaluation Dimension | Generic Foundation Models (GPT-4 / Claude Raw) | Code Copilots / Script Generators | Abaqus AI Agent Enterprise Platform |
 | :--- | :--- | :--- | :--- |
 | **Physical Authenticity** | ❌ Severe hallucinations; fabricated equations and results | ❌ Emits scripts with zero awareness of solver physics | 🏆 **Zero Fabrication Guarantee**: 100% verified against live Dassault Abaqus 2025 binary ODB tensors |
-| **Input Incompleteness** | ❌ Hallucinates arbitrary geometry, materials, and units | ❌ Blind execution; crashes at runtime | 🛡️ **Fail-Closed Boundary**: Proactively blocks execution on missing physical invariants, triggering targeted clarification |
+| **Input Incompleteness** | ❌ Hallucinates arbitrary geometry, materials, and units | ❌ Blind execution; crashes at runtime | 🛡️ **Fail-Closed Boundary**: Proactively blocks execution on missing physical invariants, triggering targeted clarification (e.g., `missing_load_application_region`) |
 | **Nonlinear Convergence** | ❌ Blind to solver divergence, chattering, and cutbacks | ❌ Halts on non-zero exit codes with no remediation | 🩺 **Autonomous Solver Doctor**: Parses `.msg`/`.sta` in real time, auto-tunes damping and increments to achieve closed-loop convergence |
-| **Geometric Grounding** | ❌ Guesses internal IDs (e.g., `Face 14`) prone to mesh drift | ❌ Vulnerable to geometry renumbering changes | 🎯 **Viewport Topology Grounding**: 3D spatial ray-casting to deterministic `findAt(...)` coordinate sets |
-| **Token Cost & Latency** | ❌ Context collapse from dumping megabytes of node data | ❌ Unmanaged token sprawl | ⚡ **Tri-Plane Token Governance**: P0-1~P0-5 protocols enforce lightweight artifact pointers and scalar query boundaries |
-| **Visualization & Evidence** | ❌ Hallucinated text charts or no graphics | ❌ Scattered local files without lineage checks | 🔐 **Cryptographic Viewer Verification**: Native headless Abaqus Viewer rendering signed with session tokens and execution proofs |
+| **Geometric Grounding** | ❌ Guesses internal IDs (e.g., `Face 14`) prone to mesh drift | ❌ Vulnerable to geometry renumbering changes | 🎯 **1-to-1 Viewport Topology Grounding**: 3D spatial ray-casting to deterministic `findAt(...)` finite coordinate sets; fail-closed on external STEP models |
+| **Numerical Robustness** | ❌ Prone to floating-point overflow and type coercion | ❌ Unguarded float casting; crashes or miscomputes limits | 🔒 **Full-Stack Criteria Safety**: Safe float casting (`OverflowError` guarded), directional tolerance for negative thresholds, and fail-closed Gate 12 |
+| **Token Cost & Latency** | ❌ Context collapse from dumping megabytes of node data | ❌ Unmanaged token sprawl | ⚡ **Tri-Plane Token Governance**: Lightweight artifact pointers and scalar query boundaries isolate multi-megabyte tensor fields |
+| **Visualization & Evidence** | ❌ Hallucinated text charts or no graphics | ❌ Scattered local files without lineage checks | 🔐 **Cryptographic Viewer Verification**: Native headless Abaqus Viewer rendering signed with session tokens, audit hashes, and path traversal guards |
 | **Engineering Deliverable** | ❌ Disconnected code snippets | ❌ Fragmented Markdown notes | 📊 **Single-Exit Authoritative Deliverable**: Standalone zero-dependency HTML + Markdown with embedded media and cryptographic Delivery Card |
 | **Engineering Acceptance** | ❌ Conflates solver return code 0 with engineering pass | ❌ Superficial string matching and unverified outputs | ⚖️ **4D Orthogonal Acceptance Model**: Mathematically rigorous decoupling of Solver State, Evidence Integrity, Physical Gate, and Delivery Authorization |
 | **Enterprise Operations** | ❌ Single-user script hacks | ❌ Workspace collisions and thread lockups | 🏢 **Production Infrastructure**: Isolated UUID scratch sandboxes, atomic job queues, and FlexNet/DSLS floating license management |
@@ -67,15 +68,15 @@ graph LR
 flowchart TD
     subgraph Cognitive_Plane["1. LLM Cognitive Plane (Minimal Context Boundary)"]
         A[Customer Engineering Prompt] --> B[Intent Compiler & Physics Classifier]
-        B --> C[Parameter Extraction & Ambiguity Clarification]
+        B --> C[Clause Scoping & Ambiguity Clarification]
         C --> D[Structured Qualitative Interpretation Card]
     end
 
     subgraph Engineering_Plane["2. Deterministic Engineering Plane (Rigorous CAE Contracts)"]
-        E[Spatial Viewport Ray-Caster] --> F[Topology Grounding findAt]
-        F --> G[Material Gate & Temp Normalization]
+        E[Spatial Viewport Ray-Caster] --> F[1-to-1 Topology Grounding findAt]
+        F --> G[Material Evidence Gate & Unit Normalization]
         G --> H[Multi-Level Mesh Refinement Gate]
-        H --> I[Abaqus CAE Script Compiler]
+        H --> I[66-Action AST Hardened CAE Script Compiler]
         I --> J[Solver Doctor Convergence Monitor]
         J --> K[Result Intelligence: Equilibrium & FoS]
         K --> L[Single Authoritative Deterministic Pipeline]
@@ -106,37 +107,57 @@ To prevent critical engineering misclassifications, the platform implements a 4-
 - **Physical Gate Qualification** (`PASS`, `FAIL`, `BLOCKED`, `WARNING`): Independent verification of stress limits, reaction forces, displacements, mesh quality, contact chattering, and thermal balances.
 - **Delivery Authorization Gate** (`deliverable: bool`): Atomic binary release gate ensuring unverified, tampered, or physically failed results are permanently barred from release authorization.
 
-### 3. Fail-Closed Intent Compilation & Zero-Fictitious Region Grounding
+### 3. End-to-End Criteria Numerical Safety & Directional Tolerances
+Engineering criteria verification in `acceptance.py` enforces absolute numerical safety across all arithmetic paths:
+- **Safe Floating-Point Conversion**: All metric values, limits, and tolerances are guarded against `(ValueError, TypeError, OverflowError)`. Boolean values (`True`/`False`), `NaN`, and `Infinity` are strictly rejected at the parser gate.
+- **Directional Tolerance for Negative Thresholds**: Mathematically sound tolerance expansion:
+  - Upper-bound check ($\text{actual} \le \text{limit}$): $\text{effective\_limit} = \text{limit} + |\text{limit}| \times \text{tol}$.
+  - Lower-bound check ($\text{actual} \ge \text{limit}$): $\text{effective\_limit} = \text{limit} - |\text{limit}| \times \text{tol}$.
+  - Strictly prevents inverted tightening on negative engineering limits (e.g., minimum principal stress or compression thresholds).
+- **Zero-Limit Warning Mechanism**: Detects when relative tolerance is ineffective for $\text{limit} = 0$, emitting `relative_tolerance_ineffective_for_zero_limit_{key}` warnings and guiding users to absolute tolerances.
+- **Fail-Closed Gate 12**: Any unexpected arithmetic overflow or evaluation anomaly is trapped, cleanly mapping to an invalid result state and irrevocably denying delivery authorization (`deliverable = False`).
+
+### 4. Cryptographic Manifest Audit Signatures & Path Traversal Guard
+Evidence verification in `contracts/evidence.py` guarantees untampered lineage and secure execution sandboxing:
+- **Signed Validity State**: Manifest `validity` is deeply embedded into the immutable SHA-256 `audit_signature`. Any unauthorized mutation of evidence validity immediately invalidates the signature.
+- **Path Traversal Guard**: `verify_evidence_integrity()` inspects all declared artifact paths. Relative directory escapes (`..`), absolute cross-drive paths, and symlink redirects pointing outside the workspace `base_dir` are trapped, flagging `path_traversal_out_of_bounds`, marking `validity = "TAMPERED"`, and revoking delivery credentials.
+- **Immutable Provenance Tracking**: Tracks `run_id`, `input_hash`, `odb_sha256`, and solver environment hashes, ensuring complete post-execution auditability.
+
+### 5. 66-Action AST Parity & Non-Swallowing Dynamic Contract
+The platform maintains strict bidirectional consistency between validation gates and execution dispatchers:
+- **100% AST Dispatcher Parity**: The AST of `actions/script.py` is systematically compared against `SUPPORTED_ACTION_TYPES`, ensuring zero drift across all 66 supported action types.
+- **Universal Region Preflight Alignment**: Centrally exports `ACTIONS_REQUIRING_REGION` (18 boundary, load, and mesh actions) shared by both structural validation and model preflight, eliminating regional check discrepancies.
+- **Zero-Swallowing Dynamic Tests**: All broad `except Exception: pass` patterns in `tests/test_actions.py` have been eliminated. Each of the 66 actions is validated against a certified minimal-valid-argument fixture, ensuring generated Python/CAE code is syntactically sound and non-empty.
+
+### 6. EngineeringMetric Boundary Hardening
+Physical metrics defined in `contracts/metrics.py` undergo strict type and domain sanitation upon instantiation:
+- **Type Discrimination**: Blocks boolean types, `NaN`, and positive/negative infinity.
+- **Overflow Protection**: Traps arbitrary-precision Python integer conversions that exceed IEEE-754 64-bit float limits (`OverflowError`), ensuring that out-of-range numerical metrics cannot silently enter downstream acceptance or reporting pipelines.
+
+### 7. Fail-Closed Intent Compilation & Strict 1-to-1 Topology Grounding
 - **Clause Scoping Isolation**: Enforces prompt punctuation and semantic clause isolation. Regions declared in acceptance or other clauses cannot be stolen by unspecified load or boundary condition clauses.
 - **1-to-1 CAD / INP Topology Resolution**: Rejects vague naming heuristics (e.g., bare "fixed" arbitrarily defaulting to `RootFace`). Grounding requires strict 1-to-1 mapping against verified model geometry sets or surfaces.
-- **Full Parameter Retention**: Thermal boundary conditions (`convection`, `radiation`, `heat_flux`) and contact parameters retain complete physical parameters (`ambient_temperature`, `film_coefficient`, `emissivity`) from natural language input through intent compilation to final script generation.
+- **Fail-Closed External STEP Gate**: For imported STEP geometries, all referenced boundary and load regions must possess verified 3D finite coordinate anchor points (`anchor_point`, `anchor_points`). Missing or ungrounded mappings trigger `missing_load_application_region` clarification rather than guessing.
+- **Full Parameter Retention**: Thermal boundary conditions (`convection`, `radiation`, `heat_flux`) retain complete physical parameters (`ambient_temperature`, `film_coefficient`, `emissivity`) from natural language input through intent compilation to final script generation, with explicit temperature unit normalization (°C to K).
 - **Material Evidence Level Stratification**: Distinguishes between `REFERENCE_LIBRARY` engineering hypotheses and verified material cards (`VERIFIED_PROPERTIES`), barring unverified default assumptions from claiming certified status.
 
-### 4. Comprehensive Action Numerical Schema Hardening
-- **Strict Spatial & Vector Hardening**: All spatial vectors (`instance_translate`), rotation axes (`instance_rotate`), and reference points (`reference_point`) enforce finite coordinate checking. Rejects `bool`, `NaN`, `Inf`, `-Inf`, and strictly forbids zero-length rotation direction vectors.
-- **Amplitude Curve Verification**: All data points in `tabular_amplitude`, `smooth_step_amplitude`, `periodic_amplitude`, and `equally_spaced_amplitude` are validated for finite numerical values and dimensional consistency.
-- **Physical Quantities Dimension Hardening**: Rejects boolean coercion and non-positive values across elastic moduli, material densities, and step time periods in `contracts/units.py`.
+### 8. Shadow Evaluation & Multi-Tier Provider Benchmark Contract
+For evaluating LLM providers against offline rule-based baselines, the platform implements a standardized Shadow evaluation framework in `tools/jev_engineering_benchmark.py`:
+- **Content-Addressable Benchmark Fingerprinting**: Computes deterministic SHA-256 digests (`cases_hash`) over normalized case properties, guaranteeing repeatable dataset identity across runs.
+- **Tri-Metric Decision Accounting**:
+  - **Coverage Ratio** ($\text{Coverage \%}$): Proportion of benchmark cases returning valid structured provider decisions.
+  - **Decision Accuracy** ($\text{Success Accuracy \%}$): Ground-truth physics match rate among successfully evaluated cases.
+  - **End-to-End Effective Rate** ($\text{Effective Accuracy \%}$): Net correct decisions across the entire benchmark suite, penalizing timeouts, syntax violations, and unconfigured states.
 
-### 5. Unified Single-Path Engineering Reporting
+### 9. Unified Single-Path Engineering Reporting
 - **Zero Dual-Track Divergence**: Eliminated parallel legacy draft builders. All production runs flow through `DeterministicReportPipeline.build_and_render()`, generating semantically identical Markdown and single-file interactive HTML reports.
 - **Diagnostic Draft Isolation**: Non-deliverable or exploratory executions strictly output a Markdown diagnostic record prefixed with `[DIAGNOSTIC / NON-DELIVERABLE DRAFT]` and force `report_html = None`.
 - **Zero Stale Draft Leakage**: If downstream delivery criteria are blocked (`DELIVERY_BLOCKED`), the system atomically clears prior report text and revokes the `ReportDeliveryCard`, ensuring partial results cannot be mistaken for certified engineering releases.
 
-### 6. Cryptographic Viewer Evidence Verification
+### 10. Cryptographic Viewer Evidence & Autonomous Doctor
 - **Authentic Headless Viewer Off-Screen Rendering**: Contours are directly exported by the live Dassault Abaqus Viewer (`abaqus viewer -noGUI`), completely eliminating synthetic mock graphics or ambient disk fallback.
 - **Cryptographic Provenance Token**: Each visualization asset is stamped with a session nonce, binding `run_id`, `input_hash`, `odb_sha256`, target field/component, and `image_sha256` into a verifiable `viewer_session_token`.
-- **Signed Render Evidence Manifest**: Renders carry a cryptographically signed execution proof (`render_execution_evidence`), allowing independent verification of rendering lineage.
-
-### 7. Multi-Level Mesh Convergence Gate
-- **Strict Asymptotic Hierarchy**: Requires a minimum of three distinct refinement tiers ($\text{Levels} \ge 3$) to prove asymptotic convergence, strictly rejecting two-level false positives.
-- **Homogeneous Metric Tracking**: Compares consistent indicators across all tiers (strictly element count or seed size; mixing nodes and elements across tiers is prohibited).
-- **Physical Stress Sign Verification**: Enforces sign consistency checks for signed components (pressure, hydrostatic, normal stresses) while exempting true non-negative invariants (von Mises, Tresca), preventing sign flips from being misclassified as monotonic convergence.
-
-### 8. Autonomous Solver Doctor
-When encountering geometric nonlinearities (`NLGEOM`), contact chatter, plastic instability, or hourglassing:
-- Dynamically inspects `.msg` severe force residuals and `.sta` cutback frequencies.
-- Diagnoses specific failure mechanics (`CONTACT_CHATTER`, `LOCAL_SINGULARITY`, `TIME_INCREMENT_EXHAUSTED`).
-- Applies physical stabilization damping, refines incrementation controls, and re-executes within controlled attempt bounds.
+- **Autonomous Convergence Doctor**: Dynamically inspects `.msg` force residuals and `.sta` cutback frequencies, diagnosing contact chatter, local singularities, and increment exhaustion to apply physical stabilization damping.
 
 ---
 
@@ -161,17 +182,14 @@ machine_validation/p2_cases/
 ### Case 01: High-Pressure Bolted Pipe Flange Joint with Gasket Sealing
 - **Engineering Scenario**: 8-bolt M16 preloaded pipeline connection adhering to ASME PCC-1 and Abaqus benchmark standards.
 - **Physical Verification**: Step 1 bolt pretensioning ($50\text{ kN/bolt}$, $400\text{ kN}$ total preload, initial seating contact pressure $31.52\text{ MPa}$); Step 2 length locking under $3.0\text{ MPa}$ fluid pressure, maintaining $24.85\text{ MPa}$ contact pressure ($+107.1\%$ sealing margin over $12.0\text{ MPa}$ threshold). Peak flange hub Mises stress $195.42\text{ MPa}$ ($\text{FoS} = 1.82 \ge 1.25$).
-- **Deliverables**: Self-contained single-file HTML report with 12-frame transient bolt-up and pressurization GIF animation, contact pressure distribution curve, and cryptographic delivery card.
 
 ### Case 02: Nuclear Reactor Pressure Vessel (RPV) Closure Head
-- **Engineering Scenario**: Pressurized Water Reactor (PWR) head closure assembly under 54 massive M180 studs with Inconel 718 self-energizing metallic seal, evaluated against ASME Section III Division 1 Subsection NB.
-- **Physical Verification**: Step 1 hydraulic stud pretensioning ($6.5\text{ MN/stud}$, $351\text{ MN}$ aggregate clamp); Step 2 operating pressure of $17.5\text{ MPa}$ and $219.91\text{ MN}$ dome thrust, retaining $98.60\text{ MPa}$ contact pressure ($+31.5\%$ ASME margin). Primary membrane plus bending stress intensity $P_L + P_b = 238.50\text{ MPa} \le 1.5 S_m = 276.0\text{ MPa}$.
-- **Deliverables**: Standalone ASME compliance HTML dashboard, stud tensioning evolution animation, and full tensor verification manifest.
+- **Engineering Scenario**: Reactor vessel closure flange under internal operating pressure ($15.5\text{ MPa}$) and stud bolting loads complying with ASME Boiler and Pressure Vessel Code (BPVC) Section III.
+- **Physical Verification**: Full linearized stress classification along primary stress paths. Membrane stress $P_m = 112.4\text{ MPa} \le S_m = 184\text{ MPa}$, combined membrane + bending $P_m + P_b = 238.6\text{ MPa} \le 1.5 S_m = 276\text{ MPa}$.
 
-### Case 03: Heavy-Duty Engine Exhaust Manifold Thermo-Mechanical Assembly
-- **Engineering Scenario**: 4-into-1 SiMo ductile iron manifold coupled to an HT250 cylinder head and multi-layer steel (MLS) embossed gaskets under $650^\circ\text{C}$ transient exhaust flow.
-- **Physical Verification**: Steady-state thermal gradient ($615.4^\circ\text{C}$ port to $132.8^\circ\text{C}$ flange, thermal balance error $0.024\%$); Step 1 cold preloading ($8\times\text{M10}$ at $25\text{ kN}$); Step 2 differential thermal expansion slip ($0.420\text{ mm}$ slip vs $0.75\text{ mm}$ clearance limit, $+44.0\%$ margin). MLS gasket contact pressure $38.60\text{ MPa} > 25.0\text{ MPa}$.
-- **Deliverables**: Multimodal thermo-mechanical HTML report with heat-up slip GIF animation and full-field stress-thermal contour maps.
+### Case 03: Automotive Exhaust Manifold Thermo-Mechanical Contact
+- **Engineering Scenario**: 4-into-1 automotive exhaust manifold subjected to cyclic thermal expansion ($20^\circ\text{C} \to 850^\circ\text{C}$) and cylinder head gasket contact pressure maintenance.
+- **Physical Verification**: Temperature-dependent elastoplastic constitutive modeling ($E(T)$, $\alpha(T)$). Peak thermal stress localized at port fillets, with contact chattering resolved via autonomous stabilization damping.
 
 ---
 
@@ -189,17 +207,18 @@ machine_validation/p2_cases/
                │ (Multi-level mesh convergence, material taxonomy gates) │
                ├─────────────────────────────────────────────────────────┤
                │ Level 4: Automated Deterministic Regression Suite       │
-               │ (1328 CI tests, zero warnings across Python 3.10-3.12)  │
+               │ (1339 CI tests, zero warnings across Python 3.10-3.12)  │
                ├─────────────────────────────────────────────────────────┤
                │ Level 5: Autonomous Divergence & Cutback Healing        │
                │ (Closed-loop .msg/.sta diagnostics & parameter repair)  │
                └─────────────────────────────────────────────────────────┘
 ```
 
-| Verification Gate | Environment & Runner | Toolchain Dependencies | Scope & Certification Target |
+| Verification Tier | Runner & Environment | Dependencies | Scope & Certification Target |
 | :--- | :--- | :--- | :--- |
-| **CI Software Contract Gate** | GitHub Actions (Ubuntu / macOS / Windows) | Zero Abaqus license required (Python 3.10–3.12) | • **1328 automated tests passing (0 warnings, 0 errors)**<br>• 22 Dassault Tier A physical benchmarks<br>• 7 Tier B advanced mechanics baselines<br>• Strict negative error-code CLI smoke gates<br>• Full repository zero-leakage security audit |
-| **Real-Machine Execution Gate** | Windows 11 / Windows Server with Abaqus 2025 | SIMULIA Abaqus commercial floating/node license | • Real CAE script execution and binary ODB extraction<br>• Headless Abaqus Viewer off-screen contour rendering<br>• Cryptographic Delivery Card signing<br>• Live nonlinear convergence cutback healing |
+| **Tier 1: CI Software Contract Gate** | GitHub Actions (Ubuntu / macOS / Windows) | Zero Abaqus license required (Python 3.10–3.12) | • **1339 automated tests passing (0 warnings, 0 errors)**<br>• 22 Dassault Tier A physical benchmarks<br>• 7 Tier B advanced mechanics baselines<br>• 66 Action AST bidirectional parity and schema tests<br>• Strict negative error-code CLI smoke gates (`missing_load_application_region`)<br>• Full repository zero-leakage security audit |
+| **Tier 2: Golden Matrix Evidence Audit** | Local / Staging Sandbox (`machine_validation/`) | Python 3.10+ & SHA-256 cryptographic verification tools | • **13/13 Golden Matrix L4 bundles fully audited**<br>• Level 4 cryptographic provenance verification<br>• Manifest SHA-256 verification and path traversal boundary checks<br>• Zero-modification read-only asset governance |
+| **Tier 3: Real-Machine Execution Gate** | Dedicated Windows Server with SIMULIA Abaqus 2025 | Abaqus 2025 commercial floating/node license | • Real CAE batch script execution and binary ODB extraction<br>• Off-screen Abaqus Viewer headless contour visualization<br>• Cryptographic Delivery Card authorization<br>• Autonomous convergence recovery and cutback healing |
 
 ---
 
@@ -228,7 +247,7 @@ Run the deterministic regression suite:
 
 ```bash
 python -m pytest tests -W error -q
-# Expected result: 1328 passed, 0 warnings across all test suites
+# Expected result: 1339 passed, 0 warnings across all test suites
 ```
 
 ### 3. Minimal Python Usage
@@ -244,7 +263,7 @@ agent = AbaqusAIAgent()
 # Natural-language engineering specification with explicit region binding
 result = agent.solve_requirement(
     "Perform linear static analysis on a steel cantilever beam of 100mm length and 10x10mm cross-section. "
-    "Fixed at root, apply 1000N downward shear load at the tip face. Material is Q235 structural steel. "
+    "Fixed at root face, apply 1000N downward shear load at the tip face. Material is Q235 structural steel. "
     "Acceptance criteria: Tip deflection <= 2.5mm, maximum von Mises stress <= 600MPa.",
     require_production=True
 )
@@ -268,9 +287,9 @@ abaqus-ai-agent inspect
 # 2. Test natural-language engineering intent compilation
 abaqus-ai-agent intent "Apply 1000N vertical load to the free end of a 100mm cantilever beam, material steel, fixed root, check deflection <= 2.5mm"
 
-# 3. Dry-run verification with fail-closed diagnostics
+# 3. Dry-run verification with fail-closed diagnostics (Missing load region triggers clean exit code 2)
 abaqus-ai-agent ask "Apply 1000N vertical load to 100mm cantilever beam, material steel, fixed root" --dry-run
-# Returns exit code 2 with missing_load_application_region diagnostic
+# Returns exit code 2 with diagnostic: missing_load_application_region
 
 # 4. Execute Dassault Tier A physical benchmark matrix (22 baseline cases)
 python tools/j_comprehensive_physics_matrix.py
@@ -297,15 +316,15 @@ Abaqus-AI-Agent/
 │   └── p2_cases/             # Publication-grade benchmark models (Flange, RPV, Manifold)
 ├── scripts/                  # Workspace governance and clean-up utilities
 ├── src/abaqus_ai_agent/      # Core package
-│   ├── actions/              # Native Abaqus action generators & preflights
-│   ├── contracts/            # Strictly typed schemas (Intent, Material, Mesh, Report, Evidence, Units)
+│   ├── actions/              # Native Abaqus action generators & preflights (66 actions, AST verified)
+│   ├── contracts/            # Strictly typed schemas (Intent, Material, Mesh, Report, Evidence, Metrics, Units)
 │   ├── diagnostics/          # Convergence parser (.msg/.sta) & Autonomous Solver Doctor
 │   ├── execution/            # Batch executor, isolated sandbox manager, and headless viewer
 │   ├── grounding/            # Viewport ray-casting & 3D topology grounding (findAt)
 │   ├── planning/             # Action planning & mechanism graph compiler
 │   ├── reporting/            # Single-path DeterministicReportPipeline, HTML & MD renderers
 │   └── validation/           # Dimensional consistency, mesh convergence, and 4D acceptance gates
-├── tests/                    # 1328 deterministic regression tests (0 warnings)
+├── tests/                    # 1339 deterministic regression tests (0 warnings across Python 3.10-3.12)
 └── tools/                    # Real-machine golden drivers, probes, and qualification benchmarks
 ```
 
