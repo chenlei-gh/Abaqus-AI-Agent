@@ -735,6 +735,26 @@ class AbaqusAIAgent:
         effective_mesh = mesh or reasoning_res.inferred_mesh
         effective_material = material or reasoning_res.inferred_material
 
+        # Bind multi-solid CAD before execution. An incomplete scope is a hard
+        # refusal, not a license to solve the handle alone.
+        from .planning.compiler import _bind_step_assembly_scope
+        from .planning.compiler import IntentGeometrySpec as _IntentGeometrySpec
+
+        if isinstance(geometry, _IntentGeometrySpec):
+            try:
+                geometry = _bind_step_assembly_scope(geometry)
+            except (ValueError, TypeError) as exc:
+                return EngineeringTaskResult(
+                    status=TaskStatus.BLOCKED,
+                    intent=intent,
+                    capability=capability,
+                    errors=(str(exc),),
+                    summary_card={
+                        "status": "ASSEMBLY_SCOPE_BLOCKED",
+                        "error": str(exc),
+                    },
+                )
+
         from .reasoning.material_catalog import resolve_material_to_definition
         effective_mat_def = resolve_material_to_definition(
             effective_material,

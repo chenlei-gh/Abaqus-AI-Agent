@@ -43,6 +43,14 @@ from .features import (
     detect_contact_planes,
     detect_features,
 )
+from .assembly_scope import (
+    AssemblyPart,
+    AssemblyScope,
+    InstallationFixture,
+    MatingContact,
+    build_assembly_scope,
+    require_complete_assembly_scope,
+)
 from .meshability import (
     MeshabilityResult,
     MeshabilityRisk,
@@ -87,6 +95,12 @@ __all__ = [
     "detect_ribs",
     "detect_contact_planes",
     "detect_features",
+    "AssemblyPart",
+    "AssemblyScope",
+    "InstallationFixture",
+    "MatingContact",
+    "build_assembly_scope",
+    "require_complete_assembly_scope",
     "MeshabilityResult",
     "MeshabilityRisk",
     "MeshabilityRiskKind",

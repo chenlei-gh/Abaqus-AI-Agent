@@ -158,12 +158,15 @@ class CadSolid:
     id: str
     shell_ids: Tuple[str, ...] = ()
     volume: Optional[float] = None
+    step_body_index: Optional[int] = None
 
     def __post_init__(self):
         if not self.id:
             raise ValueError("CadSolid id cannot be empty")
         if self.volume is not None and self.volume < 0:
             raise ValueError("CadSolid volume cannot be negative")
+        if self.step_body_index is not None and self.step_body_index < 1:
+            raise ValueError("CadSolid step_body_index is 1-based and must be positive")
 
 
 @dataclass(frozen=True)

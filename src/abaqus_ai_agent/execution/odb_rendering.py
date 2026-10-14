@@ -751,15 +751,24 @@ def generate_headless_viewer_script(
                     f"        raise ValueError('Failed to set primary variable \"{v_label}\" at outputPosition {pos}: ' + str(_pos_err))",
                 ]
 
-        # View Orientation & Safe Centering Margin
+        # View Orientation & Legend clearance
+        # Contour legends occupy the right ~25-30% of the viewport. fitView()
+        # centers the model in the full viewport, so the right edge of the
+        # part sits under the legend. Zoom out, then pan the camera left so
+        # the model occupies the legend-free region. Mesh plots have no
+        # legend and stay centered. Explicit zoom overrides are respected.
         v_orient = req.view_orientation
-        eff_zoom = (
-            req.viewport_zoom_factor
-            if req.viewport_zoom_factor is not None
-            else (0.80 if is_anim else 0.85)
-        )
+        if req.viewport_zoom_factor is not None:
+            eff_zoom = float(req.viewport_zoom_factor)
+        elif is_mesh_plot:
+            eff_zoom = 0.90
+        elif is_anim:
+            eff_zoom = 0.72
+        else:
+            eff_zoom = 0.75
+        legend_pan_x = 0.0 if is_mesh_plot else -0.12
         code_lines += [
-            f"    # 4. Camera view orientation & safe margin centering: {v_orient}",
+            f"    # 4. Camera view orientation & legend clearance: {v_orient}",
             f"    if {v_orient!r} in session.views:",
             f"        vp.view.setValues(session.views[{v_orient!r}])",
             "    vp.view.fitView()",
@@ -767,6 +776,12 @@ def generate_headless_viewer_script(
             f"        vp.view.zoom(factor={float(eff_zoom)})",
             "    except Exception as _zm_err:",
             "        print('[HeadlessViewer] WARNING: Viewport zoom adjustment bypassed: %s' % _zm_err)",
+            "    try:",
+            "        # Shift the model off the right-side contour legend.",
+            "        # pan() uses normalized viewport fractions; negative x moves left.",
+            f"        vp.view.pan(xFraction={float(legend_pan_x)}, yFraction=0.0)",
+            "    except Exception as _pan_err:",
+            "        print('[HeadlessViewer] WARNING: Viewport pan adjustment bypassed: %s' % _pan_err)",
             "",
         ]
 

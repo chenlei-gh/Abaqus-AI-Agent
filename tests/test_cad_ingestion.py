@@ -113,6 +113,7 @@ def test_step_solid_ingestion_and_provenance():
         assert model.provenance.preprocessor == "Abaqus 2025"
         assert model.unit == CadUnit.MM
         assert model.solid_count == 1
+        assert model.solids[0].step_body_index == 1
         assert model.shell_count == 1
         assert model.face_count == 2
         assert model.edge_count == 2
@@ -153,6 +154,31 @@ def test_step_open_shell_assisted_classification():
         cap = classify_cad_model(model)
         assert cap.status == CapabilityStatus.ASSISTED
         assert "open shell" in cap.reason
+
+
+def test_multi_solid_assembly_is_not_silently_reduced_to_one_part():
+    """A handle plus related parts must not be classified as one autonomous solid."""
+    two_solids = MINIMAL_STEP_SOLID.replace(
+        "#60 = MANIFOLD_SOLID_BREP('SOLID_1', #50);",
+        "#60 = MANIFOLD_SOLID_BREP('HANDLE', #50);\n"
+        "#61 = MANIFOLD_SOLID_BREP('PIN', #50);",
+    )
+    with tempfile.TemporaryDirectory() as tmpdir:
+        step_path = os.path.join(tmpdir, "handle_assembly.stp")
+        with open(step_path, "w", encoding="utf-8") as f:
+            f.write(two_solids)
+
+        model = ingest_cad_file(step_path)
+        assert model.solid_count == 2
+        assert [solid.step_body_index for solid in model.solids] == [1, 2]
+        assert model.is_manifold_solid is True
+
+        cap = classify_cad_model(model)
+        assert cap.status == CapabilityStatus.ASSISTED
+        assert cap.status != CapabilityStatus.SUPPORTED
+        assert "Multi-solid" in cap.reason
+        assert "contact" in cap.reason
+        assert "S_60" in cap.reason and "S_61" in cap.reason
 
 
 def test_iges_ingestion():

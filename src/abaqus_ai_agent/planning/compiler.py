@@ -8,6 +8,7 @@ Eliminates hardcoded CAE scripts in favor of dynamic intent compilation.
 from __future__ import annotations
 
 import math
+import os
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
 
@@ -57,6 +58,7 @@ class IntentGeometrySpec:
     radius: Optional[float] = None
     thickness: Optional[float] = None
     step_file_path: Optional[str] = None
+    assembly_scope: Optional[Any] = None
 
 
 @dataclass(frozen=True)
@@ -186,6 +188,7 @@ def compile_intent_to_actions(
     bolt_pretensions: Optional[Sequence[BoltPretensionLifecycleSpec]] = None,
     moments: Optional[Sequence[MomentLoadSpec]] = None,
     interactions: Optional[Sequence[IntentInteractionSpec]] = None,
+    assembly_scope: Optional[Any] = None,
     predefined_fields: Optional[Sequence[IntentPredefinedFieldSpec]] = None,
     connectors: Optional[Sequence[IntentConnectorSpec]] = None,
     fmbd: Optional[IntentFMBDSpec] = None,
@@ -198,6 +201,12 @@ def compile_intent_to_actions(
     material = eff_material
 
     actions: List[AbaqusAction] = []
+    active_scope = assembly_scope if assembly_scope is not None else getattr(geometry, "assembly_scope", None)
+    if active_scope is not None and geometry.shape != "step_assembly":
+        raise ValueError(
+            "assembly_scope is only valid for shape='step_assembly'; refusing to attach "
+            "multi-part contact and fixture data to a single-part template"
+        )
 
     # 1. Geometry Construction (Native Python CAE Action)
     model_init = (
@@ -237,6 +246,31 @@ def compile_intent_to_actions(
             f"p.BaseSolidExtrude(sketch=s, depth={p_depth})\n"
             f"del mdb.models['{model_name}'].sketches['__profile__']\n"
         )
+    elif geometry.shape == "step_assembly":
+        scope = active_scope
+        if scope is None or not getattr(scope, "is_complete", False):
+            raise ValueError(
+                "step_assembly requires a complete assembly scope covering every solid, "
+                "at least one mating contact, and one installation fixture"
+            )
+        step_path = (geometry.step_file_path or "").replace("\\", "/")
+        if not step_path:
+            raise ValueError("step_assembly requires geometry.step_file_path")
+        part_blocks = []
+        for index, part in enumerate(scope.parts):
+            body_num = getattr(part, "step_body_index", None)
+            if not isinstance(body_num, int) or body_num < 1:
+                raise ValueError(
+                    f"step_assembly part {getattr(part, 'solid_id', part)} has no STEP body index; "
+                    "refusing to guess bodyNum from part name or list position"
+                )
+            part_blocks.append(
+                f"imported_{index} = mdb.openStep(fileName=r'{step_path}', scaleFromFile=OFF)\n"
+                f"p_{index} = mdb.models['{model_name}'].PartFromGeometryFile(\n"
+                f"    name='{part.name}', geometryFile=imported_{index}, bodyNum={body_num},\n"
+                f"    combine=False, dimensionality=THREE_D, type=DEFORMABLE_BODY)\n"
+            )
+        geo_code = model_init + "".join(part_blocks)
     elif geometry.shape == "two_blocks_contact":
         base_w = geometry.width if geometry.width > 0 else 100.0
         base_h = geometry.height if geometry.height > 0 else 20.0
@@ -346,7 +380,16 @@ def compile_intent_to_actions(
     # 3. Section and Assignment
     sec_name = f"{material.name}_Section"
     actions.append(builders.solid_section(model=model_name, name=sec_name, material=material.name))
-    if geometry.shape != "two_blocks_contact":
+    if geometry.shape == "step_assembly":
+        assign_lines = []
+        for index, part in enumerate(active_scope.parts):
+            assign_lines.append(
+                f"p_{index} = mdb.models['{model_name}'].parts['{part.name}']\n"
+                f"reg_{index} = p_{index}.Set(cells=p_{index}.cells, name='AllCells')\n"
+                f"p_{index}.SectionAssignment(region=reg_{index}, sectionName='{sec_name}')\n"
+            )
+        sec_assign_code = "".join(assign_lines)
+    elif geometry.shape != "two_blocks_contact":
         sec_assign_code = (
             f"p = mdb.models['{model_name}'].parts['{part_name}']\n"
             f"c = p.cells\n"
@@ -365,7 +408,36 @@ def compile_intent_to_actions(
     actions.append(builders.python_action(model_name, sec_assign_code))
 
     # 4. Assembly Instance
-    if geometry.shape != "two_blocks_contact":
+    if geometry.shape == "step_assembly":
+        inst_lines = [
+            f"a = mdb.models['{model_name}'].rootAssembly\n",
+            "a.DatumCsysByDefault(CARTESIAN)\n",
+        ]
+        for index, part in enumerate(active_scope.parts):
+            inst_lines.append(
+                f"p_{index} = mdb.models['{model_name}'].parts['{part.name}']\n"
+                f"a.Instance(name='{part.instance_name}', part=p_{index}, dependent=ON)\n"
+            )
+        for contact in active_scope.contacts:
+            mx, my, mz = contact.master_point
+            sx, sy, sz = contact.slave_point
+            inst_lines.append(
+                f"main_faces = a.instances['{contact.master_instance}'].faces.findAt((({mx}, {my}, {mz}),))\n"
+                f"a.Surface(side1Faces=main_faces, name='{contact.master_surface}')\n"
+                f"secondary_faces = a.instances['{contact.slave_instance}'].faces.findAt((({sx}, {sy}, {sz}),))\n"
+                f"a.Surface(side1Faces=secondary_faces, name='{contact.slave_surface}')\n"
+            )
+        fixture = active_scope.fixture
+        fx, fy, fz = fixture.point
+        inst_lines.append(
+            f"fixed_faces = a.instances['{fixture.instance_name}'].faces.findAt((({fx}, {fy}, {fz}),))\n"
+            f"a.Set(faces=fixed_faces, name='{fixture.set_name}')\n"
+            f"mdb.models['{model_name}'].EncastreBC(name='{fixture.name}', createStepName='Initial', "
+            f"region=a.sets['{fixture.set_name}'])\n"
+        )
+        inst_name = active_scope.parts[0].instance_name
+        inst_code = "".join(inst_lines)
+    elif geometry.shape != "two_blocks_contact":
         inst_name = f"{part_name}-1"
         inst_code = (
             f"a = mdb.models['{model_name}'].rootAssembly\n"
@@ -533,6 +605,17 @@ def compile_intent_to_actions(
         default_step_name = active_step.name
 
     # 6b. Contact Interactions
+    if geometry.shape == "step_assembly" and active_scope is not None:
+        derived = [
+            IntentInteractionSpec(
+                name=contact.name,
+                master_region=contact.master_surface,
+                slave_region=contact.slave_surface,
+                friction_coefficient=contact.friction_coefficient,
+            )
+            for contact in active_scope.contacts
+        ]
+        interactions = tuple(derived) + tuple(interactions or ())
     if interactions:
         for inter in interactions:
             prop_name = f"{inter.name}_Prop"
@@ -1305,7 +1388,23 @@ def compile_intent_to_actions(
                 ))
 
     # 11. Mesh Generation Actions
-    if geometry.shape == "two_blocks_contact":
+    if geometry.shape == "step_assembly":
+        if getattr(mesh, "local_seeds", None):
+            raise ValueError(
+                "step_assembly does not accept part-local seeds until each seed names its solid; "
+                "refusing to apply them to one part only"
+            )
+        mesh_lines = ["import mesh\nfrom abaqusConstants import *\n"]
+        for index, part in enumerate(active_scope.parts):
+            mesh_lines.append(
+                f"p_{index} = mdb.models['{model_name}'].parts['{part.name}']\n"
+                f"p_{index}.seedPart(size={mesh.global_size}, deviationFactor={mesh.deviation_factor})\n"
+                f"elemType1 = mesh.ElemType(elemCode={mesh.element_type}, elemLibrary={mesh.element_library})\n"
+                f"p_{index}.setElementType(regions=(p_{index}.cells,), elemTypes=(elemType1,))\n"
+                f"p_{index}.generateMesh()\n"
+            )
+        actions.append(builders.python_action(model_name, "".join(mesh_lines)))
+    elif geometry.shape == "two_blocks_contact":
         if getattr(mesh, "local_seeds", None):
             raise ValueError(
                 f"Geometry shape 'two_blocks_contact' does not currently support local_seeds; "
@@ -1450,6 +1549,7 @@ def compile_intent_to_actions(
             "shape": geometry.shape,
             "dimensions": [geometry.length, geometry.width, geometry.height],
             "step_file_path": geometry.step_file_path,
+            "assembly_scope": None if active_scope is None else active_scope.to_dict(),
         },
         "material": material.to_dict(),
         "material_name": material.name,
@@ -1624,6 +1724,72 @@ def _is_valid_grounded_region(gr: Any) -> bool:
     return False
 
 
+def _geometry_model_from_value(value: Any):
+    """Return a GeometryModel when the caller passed one, including a wrapped dict."""
+    from ..geometry.model import GeometryModel
+
+    if isinstance(value, GeometryModel):
+        return value
+    if isinstance(value, dict):
+        nested = value.get("geometry_model") or value.get("model")
+        if isinstance(nested, GeometryModel):
+            return nested
+    return None
+
+
+def _bind_step_assembly_scope(
+    geometry: IntentGeometrySpec,
+    *,
+    allow_missing_step_file: bool = False,
+) -> IntentGeometrySpec:
+    """Attach a complete multi-solid scope, or refuse to keep solving one part.
+
+    Contact and fixture geometry are never invented here. A multi-solid STEP
+    model whose mating faces or installation face cannot be grounded raises.
+    """
+    from ..geometry.assembly_scope import build_assembly_scope
+    from ..geometry.cad_ingestion import ingest_cad_file
+    from ..geometry.model import GeometryModel
+
+    raw_scope = getattr(geometry, "assembly_scope", None)
+    model = _geometry_model_from_value(raw_scope) or _geometry_model_from_value(geometry)
+    step_path = getattr(geometry, "step_file_path", None)
+    # A primitive template may cite a STEP fixture for provenance. Only an
+    # explicit STEP/assembly request, or a supplied CAD model, changes scope.
+    should_ingest = (
+        model is None
+        and bool(step_path)
+        and geometry.shape in ("step_file", "step_assembly")
+    )
+    if should_ingest and not allow_missing_step_file:
+        if not os.path.isfile(step_path):
+            raise ValueError(
+                f"STEP geometry file does not exist: {step_path}. "
+                "Refusing to compile a single-part template for an unread multi-solid model."
+            )
+        model = ingest_cad_file(step_path)
+    if not isinstance(model, GeometryModel) or model.solid_count <= 1:
+        return geometry
+
+    scope = build_assembly_scope(model)
+    if not scope.is_complete:
+        raise ValueError(
+            "Multi-solid STEP model cannot be reduced to one part. "
+            f"Assembly scope is incomplete: {list(scope.gaps)}. "
+            "Related parts, mating contact, and the installation fixture must all be grounded."
+        )
+    return IntentGeometrySpec(
+        shape="step_assembly",
+        length=geometry.length,
+        width=geometry.width,
+        height=geometry.height,
+        radius=geometry.radius,
+        thickness=geometry.thickness,
+        step_file_path=step_path or model.provenance.file_path,
+        assembly_scope=scope,
+    )
+
+
 def compile_engineering_intent(
     intent: EngineeringIntent,
     model_name: Optional[str] = None,
@@ -1634,6 +1800,7 @@ def compile_engineering_intent(
     mesh: Optional[IntentMeshSpec] = None,
     grounded_regions: Optional[Dict[str, GroundedRegion]] = None,
     submit_job: bool = False,
+    allow_missing_step_file: bool = False,
 ) -> CompiledAgentPlan:
     """Compile a high-level EngineeringIntent directly into a CompiledAgentPlan.
 
@@ -1705,6 +1872,10 @@ def compile_engineering_intent(
             "Cannot compile engineering intent: missing geometry specification. "
             "Provide geometry via intent.metadata['geometry'] or explicit geometry parameter."
         )
+    eff_geom = _bind_step_assembly_scope(
+        eff_geom,
+        allow_missing_step_file=allow_missing_step_file,
+    )
 
     # 3. Material Resolution (Fail-closed on complete omission)
     raw_mat = material if material is not None else intent.material
@@ -1914,7 +2085,19 @@ def compile_engineering_intent(
     if not isinstance(eff_grounded, dict):
         eff_grounded = {}
 
-    if is_step_or_external:
+    active_scope = getattr(eff_geom, "assembly_scope", None) or intent.metadata.get("assembly_scope")
+    if active_scope is not None and getattr(eff_geom, "shape", "") != "step_assembly":
+        raise ValueError(
+            "Multi-part assembly_scope cannot be compiled through a single-part geometry shape. "
+            "Use shape='step_assembly' so every solid, contact, and fixture is emitted."
+        )
+    if getattr(eff_geom, "shape", "") == "step_assembly" and not getattr(active_scope, "is_complete", False):
+        raise ValueError(
+            "step_assembly refused: assembly scope is missing or incomplete. "
+            "A handle plus its related parts cannot be solved as one solid."
+        )
+
+    if is_step_or_external and getattr(eff_geom, "shape", "") != "step_assembly":
         referenced_regions = set()
         for bc in compiled_bcs:
             if getattr(bc, "region", None):
@@ -1963,6 +2146,7 @@ def compile_engineering_intent(
         bolt_pretensions=eff_bolts,
         moments=eff_moments,
         interactions=eff_interactions,
+        assembly_scope=active_scope,
         predefined_fields=eff_predefined,
         fatigue=eff_fatigue,
         connectors=eff_connectors,

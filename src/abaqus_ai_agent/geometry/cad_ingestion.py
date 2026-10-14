@@ -491,13 +491,26 @@ def _parse_step_file(file_path: str, provenance: CadProvenance) -> GeometryModel
                 is_closed=is_closed,
             )
 
-    # Step 13: Extract MANIFOLD_SOLID_BREP and BREP_WITH_VOIDS entities
+    # Step 13: Extract MANIFOLD_SOLID_BREP and BREP_WITH_VOIDS entities.
+    # body index follows STEP file order, which is the order Abaqus openStep exposes.
     solids: List[CadSolid] = []
-    for ent_id, (ent_type, args) in raw_entities.items():
+    solid_order: List[Tuple[int, str, Tuple[str, ...]]] = []
+    for match in entity_pattern.finditer(clean_content):
+        ent_id = match.group(1)
+        ent = raw_entities.get(ent_id)
+        if ent is None:
+            continue
+        ent_type, args = ent
         if ent_type in ("MANIFOLD_SOLID_BREP", "BREP_WITH_VOIDS", "SOLID_MODEL"):
             shell_ref = _clean_ref(args[1]) if len(args) > 1 else None
             shell_ids = (f"SH_{shell_ref}",) if shell_ref else ()
-            solids.append(CadSolid(id=f"S_{ent_id}", shell_ids=shell_ids))
+            solid_order.append((len(solid_order) + 1, ent_id, shell_ids))
+    for body_index, ent_id, shell_ids in solid_order:
+        solids.append(CadSolid(
+            id=f"S_{ent_id}",
+            shell_ids=shell_ids,
+            step_body_index=body_index,
+        ))
 
     # Compute bounding box from vertices
     bbox = None
@@ -766,9 +779,10 @@ def ingest_cad_file(file_path: str) -> GeometryModel:
 def classify_cad_model(model: GeometryModel) -> CapabilityBoundary:
     """Evaluate ingested CAD model against the project's canonical 4-state capability contract.
 
-    - SUPPORTED: Clean, closed manifold 3D solid(s) ready for autonomous meshing.
-    - ASSISTED: Contains sheet bodies / open shells or multi-body intersections requiring
-                secondary heuristic guidance (e.g. tetrahedral fallback or user input).
+    - SUPPORTED: Exactly one clean, closed manifold solid ready for autonomous meshing.
+    - ASSISTED: Open shells, or more than one closed solid. Multiple solids are an
+                assembly-scope problem (which parts, contacts, and fixtures) and must
+                not be silently reduced to one part.
     - BLOCKED: Empty geometry, degraded zero-volume envelope, or unresolvable topological defect.
     - UNSUPPORTED: CAD format is UNKNOWN or completely unhandled geometry paradigm.
     """
@@ -827,12 +841,40 @@ def classify_cad_model(model: GeometryModel) -> CapabilityBoundary:
             engineering_verified=True,
         )
 
-    if model.solid_count > 0 and model.is_manifold_solid:
+    if model.solid_count > 1 and model.is_manifold_solid:
+        from .assembly_scope import build_assembly_scope
+
+        scope = build_assembly_scope(model)
+        solid_ids = ", ".join(part.solid_id for part in scope.parts[:8])
+        extra = "" if scope.part_count <= 8 else f", ... (+{scope.part_count - 8} more)"
+        if scope.is_complete and scope.fixture is not None:
+            return CapabilityBoundary(
+                status=CapabilityStatus.SUPPORTED,
+                action_type="assembly_scope",
+                reason=(
+                    f"Multi-solid assembly scope grounded ({scope.part_count} solids: {solid_ids}{extra}; "
+                    f"{len(scope.contacts)} mating contact(s); fixture {scope.fixture.set_name}). "
+                    "All related solids stay in the analysis."
+                ),
+                engineering_verified=True,
+            )
+        return CapabilityBoundary(
+            status=CapabilityStatus.ASSISTED,
+            action_type="assembly_scope",
+            reason=(
+                f"Multi-solid CAD model ({scope.part_count} closed solids: {solid_ids}{extra}) "
+                f"cannot be reduced to one part. Assembly scope is incomplete: {list(scope.gaps)}. "
+                "Related parts, mating contact, and the installation fixture must all be grounded."
+            ),
+            engineering_verified=True,
+        )
+
+    if model.solid_count == 1 and model.is_manifold_solid:
         return CapabilityBoundary(
             status=CapabilityStatus.SUPPORTED,
             action_type="cad_ingestion",
             reason=(
-                f"Valid manifold closed solid CAD model ({model.solid_count} solids, "
+                f"Valid single manifold closed solid ({model.solid_count} solid, "
                 f"{model.face_count} faces, {model.vertex_count} vertices). Ready for autonomous meshing."
             ),
             engineering_verified=True,

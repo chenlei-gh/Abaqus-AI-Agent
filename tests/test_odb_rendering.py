@@ -663,7 +663,7 @@ def test_contour_plot_request_safe_margin_and_motion_detection_defaults():
 
 
 def test_generate_headless_viewer_script_safe_margin_zoom():
-    """Verify generated script applies viewport zoom factor to prevent clipping and fit centered."""
+    """Verify contour plots zoom out and pan left so the right-side legend does not cover the model."""
     req_static = ContourPlotRequest(
         output_filename="stress.png",
         variable_label="S",
@@ -679,22 +679,31 @@ def test_generate_headless_viewer_script_safe_margin_zoom():
         variable_label="S",
         viewport_zoom_factor=0.78,
     )
+    req_mesh = ContourPlotRequest(
+        output_filename="mesh.png",
+        variable_label="MESH",
+        plot_state="UNDEFORMED",
+    )
 
     script = generate_headless_viewer_script(
         odb_path="dummy.odb",
-        requests=[req_static, req_anim, req_explicit_zoom],
+        requests=[req_static, req_anim, req_explicit_zoom, req_mesh],
         output_dir="dummy_out",
     )
 
-    # 1. Static contour default zoom is 0.85
     assert "vp.view.fitView()" in script
-    assert "vp.view.zoom(factor=0.85)" in script
-
-    # 2. Animation default zoom is 0.80 to accommodate large kinematic displacements
-    assert "vp.view.zoom(factor=0.8)" in script
-
-    # 3. Explicit override factor is respected
+    # Contour legend occupies the right of the viewport; default zoom must leave clearance.
+    assert "vp.view.zoom(factor=0.75)" in script
+    assert "vp.view.zoom(factor=0.85)" not in script
+    # Animation keeps extra margin for deformed envelopes.
+    assert "vp.view.zoom(factor=0.72)" in script
+    # Explicit override is respected, and still pans away from the legend.
     assert "vp.view.zoom(factor=0.78)" in script
+    assert script.count("vp.view.pan(xFraction=-0.12, yFraction=0.0)") == 3
+    # Mesh plots have no legend and must stay centered.
+    assert "vp.view.zoom(factor=0.9)" in script
+    assert "vp.view.pan(xFraction=0.0, yFraction=0.0)" in script
+    assert "Viewport pan adjustment bypassed" in script
 
 
 def test_prune_static_animation_frames_and_difference():
