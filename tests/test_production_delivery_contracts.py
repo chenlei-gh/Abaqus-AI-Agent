@@ -14,9 +14,11 @@ from abaqus_ai_agent.paths import (
 from abaqus_ai_agent.execution.solver import find_abaqus_executable
 from abaqus_ai_agent.execution.odb_extractor import (
     _resolve_safe_odb_region,
+    _extract_single_requirement_in_process,
     OdbExtractionError,
     ExtractionFieldNotFoundError,
 )
+from abaqus_ai_agent.contracts.results import ResultRequirement
 from abaqus_ai_agent.acceptance import (
     evaluate_production_acceptance,
     ResultValidity,
@@ -142,6 +144,104 @@ def test_production_acceptance_tampered_manifest_fails_closed(tmp_path: Path):
     assert res.acceptance_status in ("FAIL", "BLOCKED", "RESULT_INVALID")
     assert res.acceptance_status != "PASS"
     assert str(res.result_validity) in ("EVIDENCE_TAMPERED", "RESULT_INVALID")
+
+
+def test_odb_extractor_missing_getsubset_fails_closed():
+    """Verify that in-process ODB extraction fails closed when subset/filtering methods are missing."""
+    class DummyFieldOutputWithoutSubset:
+        values = []
+
+    class DummyFrame:
+        fieldOutputs = {"S": DummyFieldOutputWithoutSubset()}
+
+    class DummyStep:
+        frames = [DummyFrame()]
+
+    dummy_odb = type("DummyOdb", (), {"steps": {"Step-1": DummyStep()}})()
+
+    # 1. Position requested but getSubset missing
+    req_pos = ResultRequirement(
+        name="test_pos",
+        value_key="stress",
+        field="S",
+        position="INTEGRATION_POINT",
+    )
+    with pytest.raises(OdbExtractionError, match="does not support position filtering"):
+        _extract_single_requirement_in_process(dummy_odb, req_pos)
+
+    # 2. Region requested but getSubset missing
+    req_reg = ResultRequirement(
+        name="test_reg",
+        value_key="stress",
+        field="S",
+        region="odb.rootAssembly.nodeSets['SET']",
+    )
+    with pytest.raises(OdbExtractionError, match="does not support region filtering"):
+        _extract_single_requirement_in_process(dummy_odb, req_reg)
+
+    # 3. Invariant requested but getScalarField missing
+    req_inv = ResultRequirement(
+        name="test_inv",
+        value_key="stress",
+        field="S",
+        invariant="MISES",
+    )
+    with pytest.raises(OdbExtractionError, match="does not support invariant extraction"):
+        _extract_single_requirement_in_process(dummy_odb, req_inv)
+
+    # 4. Component requested but getScalarField missing
+    req_comp = ResultRequirement(
+        name="test_comp",
+        value_key="stress",
+        field="S",
+        component="S11",
+    )
+    with pytest.raises(OdbExtractionError, match="does not support component extraction"):
+        _extract_single_requirement_in_process(dummy_odb, req_comp)
+
+
+def test_production_acceptance_mismatched_odb_fails_closed(tmp_path: Path):
+    """Verify that evaluate_production_acceptance fails closed when ODB live hash does not match manifest."""
+    art_dir = tmp_path / "artifacts"
+    art_dir.mkdir(parents=True)
+    inp_file = art_dir / "Job-1.inp"
+    inp_file.write_text("*HEADING\nCantilever Benchmark\n", encoding="utf-8")
+    odb_file = art_dir / "Job-1.odb"
+    odb_file.write_bytes(b"DUMMY_AUTHENTIC_SIMULIA_ODB_BINARY_CONTENT")
+
+    manifest = build_evidence_manifest_v2(
+        run_id="run-prod-002",
+        case_id="Job-1",
+        artifacts_dir=art_dir,
+        artifact_filenames=["Job-1.inp", "Job-1.odb"],
+        intent_summary={"model": "Cantilever"},
+        required_results={"criteria": []},
+    )
+
+    # Now tamper with the ODB file on disk (or simulate swapped/corrupted ODB)
+    odb_file.write_bytes(b"TAMPERED_SUBSTITUTED_ODB_CONTENT")
+
+    class MockRun:
+        id = "run-prod-002"
+        job_status = type("MockStatus", (), {"state": "completed"})()
+        state = "completed"
+        odb_path = str(odb_file)
+        provenance = type("MockProv", (), {"input_hash": manifest.artifacts["Job-1.inp"].sha256})()
+        metrics = ()
+
+    res = evaluate_production_acceptance(
+        analysis_run=MockRun(),
+        result_status="completed",
+        evidence_manifest=manifest,
+        values={"stress": 100.0},
+        criteria=[{"name": "stress", "limit": 200.0, "operator": "<="}],
+    )
+
+    assert res.deliverable is False
+    assert res.acceptance_status in ("FAIL", "BLOCKED", "RESULT_INVALID")
+    assert res.acceptance_status != "PASS"
+    assert str(res.result_validity) in ("EVIDENCE_TAMPERED", "RESULT_INVALID")
+    assert any("evidence_tampered" in str(f) or "sha256_mismatch" in str(f) for f in res.findings.failures)
 
 
 def test_production_delivery_context_isolation_contracts():

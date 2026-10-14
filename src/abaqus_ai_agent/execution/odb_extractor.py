@@ -368,35 +368,52 @@ def _extract_single_requirement_in_process(
         )
 
     if requirement.position:
-        if hasattr(fo, "getSubset"):
-            pos_const = requirement.position
-            try:
-                import sys as _sys
-                abq_consts = _sys.modules.get("abaqusConstants")
-                if abq_consts and isinstance(pos_const, str):
-                    pos_const = getattr(abq_consts, pos_const, pos_const)
-            except Exception:
-                pass
-            fo = fo.getSubset(position=pos_const)
+        if not hasattr(fo, "getSubset"):
+            raise OdbExtractionError(
+                f"FieldOutput for '{fld}' does not support position filtering (getSubset missing) "
+                f"but position={requirement.position!r} was explicitly requested"
+            )
+        pos_const = requirement.position
+        try:
+            import sys as _sys
+            abq_consts = _sys.modules.get("abaqusConstants")
+            if abq_consts and isinstance(pos_const, str):
+                pos_const = getattr(abq_consts, pos_const, pos_const)
+        except Exception:
+            pass
+        fo = fo.getSubset(position=pos_const)
+
     if requirement.region:
-        if hasattr(fo, "getSubset"):
-            reg_val = _resolve_safe_odb_region(odb, requirement.region)
-            fo = fo.getSubset(region=reg_val)
+        if not hasattr(fo, "getSubset"):
+            raise OdbExtractionError(
+                f"FieldOutput for '{fld}' does not support region filtering (getSubset missing) "
+                f"but region={requirement.region!r} was explicitly requested"
+            )
+        reg_val = _resolve_safe_odb_region(odb, requirement.region)
+        fo = fo.getSubset(region=reg_val)
 
     if requirement.invariant:
-        if hasattr(fo, "getScalarField"):
-            inv_const = requirement.invariant
-            try:
-                import sys as _sys
-                abq_consts = _sys.modules.get("abaqusConstants")
-                if abq_consts:
-                    inv_const = getattr(abq_consts, requirement.invariant, inv_const)
-            except Exception:
-                pass
-            fo = fo.getScalarField(invariant=inv_const)
+        if not hasattr(fo, "getScalarField"):
+            raise OdbExtractionError(
+                f"FieldOutput for '{fld}' does not support invariant extraction (getScalarField missing) "
+                f"but invariant={requirement.invariant!r} was explicitly requested"
+            )
+        inv_const = requirement.invariant
+        try:
+            import sys as _sys
+            abq_consts = _sys.modules.get("abaqusConstants")
+            if abq_consts:
+                inv_const = getattr(abq_consts, requirement.invariant, inv_const)
+        except Exception:
+            pass
+        fo = fo.getScalarField(invariant=inv_const)
     elif requirement.component:
-        if hasattr(fo, "getScalarField"):
-            fo = fo.getScalarField(componentLabel=requirement.component)
+        if not hasattr(fo, "getScalarField"):
+            raise OdbExtractionError(
+                f"FieldOutput for '{fld}' does not support component extraction (getScalarField missing) "
+                f"but component={requirement.component!r} was explicitly requested"
+            )
+        fo = fo.getScalarField(componentLabel=requirement.component)
 
     vals = getattr(fo, "values", [])
     if not vals:

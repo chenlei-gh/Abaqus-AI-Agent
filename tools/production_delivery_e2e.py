@@ -373,6 +373,30 @@ if run.odb_path and os.path.isfile(run.odb_path):
     with open(run.odb_path, 'rb') as _f:
         actual_odb_sha256 = hashlib.sha256(_f.read()).hexdigest()
 
+manifest_odb_sha256 = None
+if manifest is not None:
+    arts = getattr(manifest, 'artifacts', {})
+    if isinstance(arts, dict):
+        for a_name, a_rec in arts.items():
+            role = getattr(a_rec, 'role', None) or (a_rec.get('role') if isinstance(a_rec, dict) else None)
+            path_str = str(a_name) + str(getattr(a_rec, 'path', '') or (a_rec.get('path') if isinstance(a_rec, dict) else ''))
+            if role == 'odb' or path_str.endswith('.odb'):
+                manifest_odb_sha256 = getattr(a_rec, 'sha256', None) or (a_rec.get('sha256') if isinstance(a_rec, dict) else None)
+                break
+    elif isinstance(arts, (list, tuple)):
+        for a_rec in arts:
+            role = getattr(a_rec, 'role', None) or (a_rec.get('role') if isinstance(a_rec, dict) else None)
+            path_str = str(getattr(a_rec, 'path', '') or (a_rec.get('path') if isinstance(a_rec, dict) else ''))
+            if role == 'odb' or path_str.endswith('.odb'):
+                manifest_odb_sha256 = getattr(a_rec, 'sha256', None) or (a_rec.get('sha256') if isinstance(a_rec, dict) else None)
+                break
+
+odb_hash_matches_manifest = bool(
+    actual_odb_sha256
+    and manifest_odb_sha256
+    and (actual_odb_sha256 == manifest_odb_sha256)
+)
+
 report = {
     'status': 'pass' if (
         run.solver_completed
@@ -383,6 +407,7 @@ report = {
         and reaction_report.passed
         and manifest_verified
         and bool(actual_odb_sha256)
+        and odb_hash_matches_manifest
     ) else 'fail',
     'baseline_type': 'static_cantilever_beam_linear_elastic',
     'run_id': run.id,
@@ -394,9 +419,12 @@ report = {
     'audit_summary': getattr(accepted, 'audit_summary', ''),
     'reaction_balance_passed': reaction_report.passed,
     'reaction_summary': reaction_summary,
+    'manifest_integrity_verified': manifest_verified,
     'manifest_signature_verified': manifest_verified,
     'causal_run_id_bound': bool(manifest and getattr(manifest, 'run_id', None) == run.id),
     'actual_odb_sha256': actual_odb_sha256,
+    'manifest_odb_sha256': manifest_odb_sha256,
+    'odb_hash_matches_manifest': odb_hash_matches_manifest,
     'odb_sha256': actual_odb_sha256,
     'metrics': {
         getattr(m, 'name', None) or getattr(m, 'value_key', None): getattr(m, 'value', None)
@@ -528,8 +556,13 @@ def run_production_delivery_e2e(
         assert report["acceptance_status"] == "PASS", f"Expected acceptance PASS, got {report['acceptance_status']}"
         assert report["result_validity"] == "VALID", f"Expected VALID result_validity, got {report['result_validity']}"
         assert report["reaction_balance_passed"] is True, "Reaction balance gate failed"
-        assert report["manifest_signature_verified"] is True, "EvidenceManifest signature verification failed"
-        assert report["causal_run_id_bound"] is True, "Causal run ID binding failed between run and manifest"
+        assert (
+            report.get("manifest_integrity_verified") is True
+            or report.get("manifest_signature_verified") is True
+        ), "EvidenceManifest integrity verification failed"
+        assert report.get("causal_run_id_bound") is True, "Causal run ID binding failed between run and manifest"
+        assert report.get("odb_hash_matches_manifest") is True, "Live ODB hash does not match manifest entry"
+        assert report.get("actual_odb_sha256") == report.get("manifest_odb_sha256"), "Live ODB hash mismatch with manifest"
         assert bool(report.get("actual_odb_sha256") or report.get("odb_sha256")), "Missing authentic ODB SHA-256 in report"
         assert bool(report.get("inp_hash")), "Missing authentic INP input_hash in report"
 
