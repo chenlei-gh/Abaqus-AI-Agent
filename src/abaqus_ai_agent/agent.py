@@ -28,6 +28,196 @@ def _screening_error_text(exc):
     return f"{name}: {detail}"
 
 
+def _intent_routing_failure(exc):
+    """Keep an unresolved natural-language request unresolved.
+
+    A live provider timeout is not a reason to guess the analysis, and it is
+    not a reason to block an already validated EngineeringIntent. That path
+    never calls this function.
+    """
+    from .contracts.task import EngineeringTaskResult, TaskStatus
+
+    detail = _screening_error_text(exc)
+    return EngineeringTaskResult(
+        status=TaskStatus.NEEDS_CLARIFICATION,
+        clarification_prompt=(
+            "Natural-language intent is still unresolved because optional JEV "
+            f"routing failed: {detail}. This is not a successful parse and does "
+            "not authorize solving. A validated EngineeringIntent can be solved "
+            "without JEV."
+        ),
+        errors=(detail,),
+        summary_card={
+            "status": "INTENT_ROUTING_UNRESOLVED",
+            "passed": False,
+            "routing_error": detail,
+            "jev_required": False,
+        },
+    )
+
+
+def _record_payload(item):
+    if item is None:
+        return None
+    if hasattr(item, "to_dict"):
+        try:
+            return item.to_dict()
+        except Exception:
+            return None
+    if isinstance(item, dict):
+        return dict(item)
+    payload = {}
+    for key in (
+        "name", "solid_id", "instance_name", "role", "bc_type", "region",
+        "load_type", "magnitude", "direction", "master_surface", "slave_surface",
+        "master_instance", "slave_instance", "friction_coefficient", "set_name",
+        "point", "normal", "master_point", "slave_point", "gap", "face_id",
+    ):
+        if hasattr(item, key):
+            payload[key] = getattr(item, key)
+    return payload or None
+
+
+def _analysis_scope_for_figures(plan, geometry):
+    """Reuse the already compiled assembly scope. Do not rescreen parts here."""
+    summary = getattr(plan, "intent_summary", None) or {}
+    geometry_summary = summary.get("geometry") if isinstance(summary, dict) else None
+    scope = None
+    if isinstance(geometry_summary, dict):
+        scope = geometry_summary.get("assembly_scope")
+    if scope is None:
+        scope = getattr(geometry, "assembly_scope", None)
+    if scope is None:
+        return None
+    if isinstance(scope, dict):
+        # Prefer the compiler summary only when it still carries instance identity.
+        # A solid-id list cannot isolate parts or place fixture arrows.
+        if scope.get("part_records") or scope.get("fixture_record") or scope.get("contact_records"):
+            return scope
+        live = getattr(geometry, "assembly_scope", None)
+        if live is not None and not isinstance(live, dict):
+            scope = live
+        else:
+            return scope
+    parts = []
+    for part in getattr(scope, "parts", ()) or ():
+        payload = _record_payload(part)
+        if payload:
+            parts.append(payload)
+    if not parts:
+        return None
+    return {
+        "part_records": parts,
+        "part_count": len(parts),
+        "contacts": [
+            payload for payload in (
+                _record_payload(item) for item in (getattr(scope, "contacts", ()) or ())
+            ) if payload
+        ],
+        "contact_records": [
+            payload for payload in (
+                _record_payload(item) for item in (getattr(scope, "contacts", ()) or ())
+            ) if payload
+        ],
+        "fixture": _record_payload(getattr(scope, "fixture", None)),
+        "fixture_record": _record_payload(getattr(scope, "fixture", None)),
+    }
+
+
+def _boundary_evidence_for_figures(plan, intent):
+    """Collect load, fixture, and contact records already accepted by the compiler."""
+    summary = getattr(plan, "intent_summary", None) or {}
+    geometry_summary = summary.get("geometry") if isinstance(summary, dict) else {}
+    scope = geometry_summary.get("assembly_scope") if isinstance(geometry_summary, dict) else None
+    loads = [
+        payload for payload in (
+            _record_payload(item) for item in (getattr(intent, "loads", ()) or ())
+        ) if payload
+    ]
+    bcs = [
+        payload for payload in (
+            _record_payload(item) for item in (getattr(intent, "boundary_conditions", ()) or ())
+        ) if payload
+    ]
+    contacts = []
+    fixture = None
+    if isinstance(scope, dict):
+        contacts = [
+            item for item in (scope.get("contact_records") or ())
+            if isinstance(item, dict)
+        ]
+        fixture = scope.get("fixture_record") or scope.get("fixture")
+        if isinstance(fixture, str):
+            fixture = {"name": fixture, "set_name": fixture, "bc_type": "ENCASTRE"}
+    elif scope is not None:
+        contacts = [
+            payload for payload in (
+                _record_payload(item) for item in (getattr(scope, "contacts", ()) or ())
+            ) if payload
+        ]
+        fixture = _record_payload(getattr(scope, "fixture", None))
+    if not any((loads, bcs, contacts, fixture)):
+        return None
+    return {
+        "loads": loads,
+        "bcs": bcs,
+        "contacts": contacts,
+        "fixture": fixture,
+    }
+
+
+def _report_loads(boundary):
+    """Loads shown in the report must say where the force acts and which way it points."""
+    rows = []
+    for item in ((boundary or {}).get("loads") or ()):
+        if not isinstance(item, dict):
+            continue
+        row = dict(item)
+        direction = row.get("direction") or row.get("vector")
+        row.setdefault("type", row.get("load_type") or "mechanical_load")
+        row.setdefault(
+            "description",
+            f"Force application at {row.get('region') or row.get('name') or 'unspecified region'}"
+            + (f", direction {direction}" if direction else ""),
+        )
+        rows.append(row)
+    return tuple(rows)
+
+
+def _report_bcs(boundary):
+    """Installation fixture is the model restraint when no separate BC list exists."""
+    rows = []
+    for item in ((boundary or {}).get("bcs") or ()):
+        if isinstance(item, dict):
+            row = dict(item)
+            row.setdefault("type", row.get("bc_type") or "displacement")
+            row.setdefault("description", "Boundary restraint applied to the stated region")
+            rows.append(row)
+    fixture = (boundary or {}).get("fixture")
+    if isinstance(fixture, dict):
+        already = any(
+            str(row.get("set_name") or row.get("region") or "") == str(fixture.get("set_name") or fixture.get("region") or "")
+            for row in rows
+        )
+        if not already:
+            point = fixture.get("point")
+            rows.append({
+                "name": fixture.get("name") or "InstallationFixed",
+                "region": fixture.get("region") or fixture.get("set_name") or fixture.get("instance_name"),
+                "type": fixture.get("bc_type") or "ENCASTRE",
+                "bc_type": fixture.get("bc_type") or "ENCASTRE",
+                "instance_name": fixture.get("instance_name"),
+                "point": point,
+                "normal": fixture.get("normal"),
+                "description": (
+                    "Whole-model installation fixture: encastre on "
+                    f"{fixture.get('instance_name') or fixture.get('part_id') or 'installation face'}"
+                    + (f" at {point}" if point else "")
+                ),
+            })
+    return tuple(rows)
+
+
 def _screening_failure_screen(model, requirement, exc):
     """Turn a screening-service failure into a pending screen, not a pass."""
     from .geometry.assembly_scope import AnalysisScreen, ScreenedPart
@@ -690,7 +880,13 @@ class AbaqusAIAgent:
             jev_mode = kwargs.pop("jev_mode", None)
             context = kwargs.pop("context", None)
             router = JevIntentRouter(mode=jev_mode)
-            routing_res = router.route(requirement, context=context)
+            try:
+                routing_res = router.route(requirement, context=context)
+            except Exception as exc:
+                from .typesafe_intent import JevApiError
+                if not isinstance(exc, (JevApiError, ValueError, TypeError, TimeoutError)):
+                    raise
+                return _intent_routing_failure(exc)
             if routing_res.status == "NEEDS_CLARIFICATION":
                 return EngineeringTaskResult(
                     status=TaskStatus.NEEDS_CLARIFICATION,
@@ -725,6 +921,7 @@ class AbaqusAIAgent:
                 "jev_routed": True,
                 "jev_mode": getattr(router, "mode", jev_mode) or "offline",
                 "requirement_kind": "natural_language",
+                "route_record_meaning": "path_audit_not_engineering_approval",
             })
             intent = self._attach_jev_part_screen(intent, geometry, router, requirement)
             screen = (getattr(intent, "metadata", None) or {}).get("assembly_screen")
@@ -1118,6 +1315,8 @@ class AbaqusAIAgent:
         inc_mesh = bool(kwargs.get("include_mesh", req_prod or wants_mesh_kw))
         inc_anim = bool(kwargs.get("include_animation", req_prod or wants_anim_kw or is_dynamic_case))
 
+        scope_for_figures = _analysis_scope_for_figures(plan, geometry)
+        boundary_for_figures = _boundary_evidence_for_figures(plan, intent)
         figure_selection = select_engineering_figures(
             intent=intent,
             physics_domain=capability.physics_domain,
@@ -1131,6 +1330,8 @@ class AbaqusAIAgent:
             output_dir=out_dir,
             include_mesh=inc_mesh,
             include_animation=inc_anim,
+            assembly_scope=scope_for_figures,
+            boundary_evidence=boundary_for_figures,
         )
 
         all_figures = list(generated_figures) + list(figure_selection.reused_figures)
@@ -1351,6 +1552,7 @@ class AbaqusAIAgent:
                         "Official HTML delivery requires the customer data/requirements directory."
                     )
                 out_dir = official_dir
+                scope_payload = _analysis_scope_for_figures(plan, geometry) or {}
                 deterministic_delivery_card, _, det_report_data = pipeline.build_and_render(
                     output_dir=Path(official_dir),
                     title=report_title,
@@ -1361,6 +1563,13 @@ class AbaqusAIAgent:
                     model_info={
                         "name": plan.model_name,
                         "material": final_mat_def.name if final_mat_def else "Steel",
+                        "assembly_components": (
+                            scope_payload.get("part_records") or scope_payload.get("parts") or []
+                        ),
+                        "analyzed_part_count": (
+                            scope_payload.get("part_count")
+                            or len(scope_payload.get("part_records") or scope_payload.get("parts") or ())
+                        ),
                         "standard_reference": final_mat_def.provenance if final_mat_def else "",
                         "capability_id": capability.capability_id,
                         "capability_label": capability.qualification_level,
@@ -1376,6 +1585,8 @@ class AbaqusAIAgent:
                     visualization_specs=figure_selection.specs,
                     figures=list(figure_selection.reused_figures),
                     materials_info=materials_payload,
+                    loads_info=_report_loads(boundary_for_figures),
+                    bcs_info=_report_bcs(boundary_for_figures),
                     mesh_info=mesh_info_payload,
                     require_deliverable=True,
                     odb_path=getattr(run, "odb_path", None),
@@ -1385,7 +1596,7 @@ class AbaqusAIAgent:
                     self_healing=healing_result,
                 )
                 report_md = render_markdown(det_report_data)
-                report_html_str = render_html(det_report_data)
+                report_html_str = render_html(det_report_data, base_dir=out_dir)
             except Exception as d_exc:
                 is_completed = False
                 eng_status = "DELIVERY_BLOCKED"

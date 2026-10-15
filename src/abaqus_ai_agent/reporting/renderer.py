@@ -356,14 +356,18 @@ def _render_custom_table_for_section(heading, value, is_zh=False):
         bc_rows = []
         for bc in value:
             if isinstance(bc, dict):
-                reg = bc.get("region") or bc.get("name") or "-"
-                b_type = bc.get("type") or ("位移约束" if is_zh else "Displacement")
+                reg = bc.get("region") or bc.get("set_name") or bc.get("name") or "-"
+                b_type = bc.get("type") or bc.get("bc_type") or ("位移约束" if is_zh else "Displacement")
                 dofs = []
                 for dof_k in ("u1", "u2", "u3", "ur1", "ur2", "ur3"):
                     if dof_k in bc:
                         dofs.append(f"{dof_k.upper()}={bc[dof_k]}")
                 if "magnitude" in bc:
                     dofs.append(f"Mag={bc['magnitude']}")
+                if bc.get("point"):
+                    dofs.append(f"point={bc['point']}")
+                if bc.get("instance_name"):
+                    dofs.append(f"instance={bc['instance_name']}")
                 dof_str = ", ".join(dofs) if dofs else ("全固定约束" if is_zh else "Fixed / Encastre")
                 step_str = f"Step {bc.get('step')}" if "step" in bc else ("全部工步" if is_zh else "All Steps")
                 purp = bc.get("description") or bc.get("purpose") or ("基础运动学支承" if is_zh else "Kinematic Support / Boundary Equilibrium")
@@ -379,13 +383,15 @@ def _render_custom_table_for_section(heading, value, is_zh=False):
         for ld in value:
             if isinstance(ld, dict):
                 reg = ld.get("region") or ld.get("name") or "-"
-                l_type = ld.get("type") or ("机械载荷" if is_zh else "Mechanical Load")
+                l_type = ld.get("type") or ld.get("load_type") or ("机械载荷" if is_zh else "Mechanical Load")
                 mag_parts = []
                 if "magnitude" in ld: mag_parts.append(f"{ld['magnitude']}")
                 if "film_coeff" in ld: mag_parts.append(f"h={ld['film_coeff']} W/m²·K")
                 if "sink_temp" in ld: mag_parts.append(f"T_sink={ld['sink_temp']} °C")
                 if "condition" in ld: mag_parts.append(f"Condition={ld['condition']}")
                 if "source" in ld: mag_parts.append(f"From {ld['source']}")
+                if ld.get("direction"): mag_parts.append(f"dir={ld['direction']}")
+                if ld.get("point"): mag_parts.append(f"point={ld['point']}")
                 mag_str = "; ".join(mag_parts) if mag_parts else "-"
                 step_str = f"Step {ld.get('step')}" if "step" in ld else ("运行分析步" if is_zh else "Operational Step")
                 desc = ld.get("description") or ("主要运行激励" if is_zh else "Primary Operational Excitation")
@@ -1836,20 +1842,24 @@ def verify_html_self_contained(html_text, max_size_bytes: int = 50 * 1024 * 1024
     }
 
 
-def render_report(report, fmt="html", language=None):
-    """Unified entrypoint for deterministic report rendering. HTML is the sole standardized delivery format."""
+def render_report(report, fmt="html", language=None, base_dir=None):
+    """Unified entrypoint for deterministic report rendering. HTML is the sole standardized delivery format.
+
+    ``base_dir`` is the directory that owns this run's figure files. HTML embeds
+    those files as data URIs so a single forwarded report still shows every image.
+    """
     if fmt == "html":
-        return render_html(report, language=language)
+        return render_html(report, language=language, base_dir=base_dir)
     elif fmt == "markdown":
         return render_markdown(report, language=language)
     raise ValueError(f"Unsupported report format: {fmt}. Standardized deliverable format is 'html'.")
-    return render_html(report, language=language)
 
 def _attribution_note(report, is_zh=False):
     """State who may claim authorship. Never invent an Agent caption.
 
     A content digest is not a keyed signature. Attribution is allowed only when
-    the report carries an Agent run record that passed JEV routing.
+    the report carries an Agent run record. ``jev_routed`` records the routing
+    path; it does not certify the parse, the model, or the solve.
     """
     meta = getattr(report, "metadata", None) or {}
     gate = meta.get("deliverable_authorization") if isinstance(meta, dict) else None
@@ -1858,12 +1868,13 @@ def _attribution_note(report, is_zh=False):
     if gate.get("allow_agent_attribution"):
         if is_zh:
             return (
-                "报告编制：Abaqus-AI-Agent。本次自然语言需求已经过 JEV 路由；"
-                "该署名表示存在 Agent 运行记录，不是无密钥 SHA-256 的身份认证。"
+                "报告编制：Abaqus-AI-Agent。运行记录显示本次自然语言需求经过产品路由；"
+                "这只证明处理路径，不证明解析正确、模型合格、求解成功或工程验收通过。"
             )
         return (
-            "Prepared by Abaqus-AI-Agent after JEV routing. "
-            "This caption records an Agent run; it is not a keyed signature."
+            "Prepared by Abaqus-AI-Agent. The run record shows this natural-language "
+            "request passed product routing. That records the path only; it does not "
+            "certify the parse, the model, the solve, or engineering acceptance."
         )
     if gate.get("deliverable_file_allowed"):
         if is_zh:

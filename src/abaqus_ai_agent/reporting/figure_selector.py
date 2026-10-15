@@ -423,6 +423,8 @@ def select_engineering_figures(
     include_mesh: bool = False,
     include_animation: bool = False,
     include_keypoint_detail: bool = False,
+    assembly_scope: Optional[Any] = None,
+    boundary_evidence: Optional[Dict[str, Any]] = None,
 ) -> FigureSelectionResult:
     """Select the most engineering-relevant authentic CAE visualizations.
 
@@ -697,6 +699,60 @@ def select_engineering_figures(
             "AUTO_FIT",
         ))
 
+    scope_parts = _assembly_parts(assembly_scope)
+    scope_instances = tuple(
+        str(part.get("instance_name") or "").strip()
+        for part in scope_parts
+        if str(part.get("instance_name") or "").strip()
+    )
+    # A multi-part result that only frames the dominant solid is not evidence
+    # that every retained part was analyzed. Add one contour per retained part.
+    if len(scope_parts) > 1:
+        for index, part in enumerate(scope_parts, 1):
+            instance_name = str(part.get("instance_name") or "").strip()
+            label = str(part.get("name") or part.get("solid_id") or f"Part_{index}")
+            safe = _safe_figure_token(instance_name or label or f"part_{index}")
+            candidates.append((
+                "part_stress",
+                "S",
+                "mises",
+                f"part_{index:02d}_{safe}_mises.png",
+                f"分析零件 {index}: {label} 等效应力云图",
+                f"Analyzed part {index}: {label} von Mises stress",
+                "ISOMETRIC",
+            ))
+    boundary = boundary_evidence or {}
+    if boundary.get("loads"):
+        candidates.append((
+            "load_application",
+            "U",
+            "magnitude",
+            "load_application.png",
+            "施力点与载荷方向示意图",
+            "Load application points and directions",
+            "ISOMETRIC",
+        ))
+    if boundary.get("bcs") or boundary.get("fixture"):
+        candidates.append((
+            "boundary_conditions",
+            "U",
+            "magnitude",
+            "boundary_conditions.png",
+            "固定与边界约束示意图",
+            "Fixture and boundary-condition locations",
+            "ISOMETRIC",
+        ))
+    if boundary.get("contacts"):
+        candidates.append((
+            "contact_definition",
+            "S",
+            "mises",
+            "contact_definition.png",
+            "接触/连接关系示意图",
+            "Contact and connection definition",
+            "ISOMETRIC",
+        ))
+
     selected_specs: List[VisualizationSpec] = []
     reused: List[ReportFigure] = []
     unavailable: List[Dict[str, str]] = []
@@ -744,8 +800,27 @@ def select_engineering_figures(
 
         # Priority 2: Create authentic VisualizationSpec for Viewer dispatch
         is_hotspot = ("hotspot" in kind or "stress" in kind or f_name == "S" or "keypoint" in kind)
+        part_match = next(
+            (
+                part for part in scope_parts
+                if kind == "part_stress" and filename.startswith("part_")
+                and _part_filename_matches(filename, part)
+            ),
+            None,
+        )
+        visible = ()
+        if part_match is not None and part_match.get("instance_name"):
+            visible = (str(part_match["instance_name"]),)
+        elif kind in ("stress_hotspot", "displacement_contour", "part_stress", "deformation_animation", "mesh_discretization") and scope_instances:
+            visible = scope_instances
+        symbols = {
+            "load_application": "loads",
+            "boundary_conditions": "bcs",
+            "contact_definition": "contacts",
+        }.get(kind, "")
+        markers = _boundary_markers(kind, boundary)
         spec = VisualizationSpec(
-            artifact_id=f"FIG-{kind.upper()}-{f_name}-{r_id}",
+            artifact_id=f"FIG-{kind.upper()}-{f_name}-{r_id}-{_safe_figure_token(filename)}",
             visualization_type=kind,
             field_name=f_name,
             component=comp,
@@ -761,6 +836,9 @@ def select_engineering_figures(
             caption_zh=zh,
             caption_en=en,
             target_filename=filename,
+            visible_instances=visible,
+            plot_symbols=symbols,
+            boundary_markers=tuple(markers),
         )
         selected_specs.append(spec)
 
@@ -773,5 +851,180 @@ def select_engineering_figures(
             "run_id": r_id,
             "step_name": step,
             "hotspot_attached": bool(elem_id or node_id or hotspot_coords),
+            "analyzed_instances": list(scope_instances),
+            "part_figure_count": sum(1 for spec in selected_specs if spec.visualization_type == "part_stress"),
+            "boundary_figure_kinds": [
+                spec.visualization_type
+                for spec in selected_specs
+                if spec.plot_symbols
+            ],
         },
     )
+
+
+def _boundary_markers(kind: str, boundary: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """Markers that say where the model is fixed and where each force points.
+
+    These are the already accepted load, fixture, and contact records. Missing
+    coordinates stay missing; they are not guessed from the part centroid.
+    """
+    markers: List[Dict[str, Any]] = []
+    if kind == "load_application":
+        for item in boundary.get("loads") or ():
+            if not isinstance(item, dict):
+                continue
+            point = item.get("point") or item.get("application_point")
+            vector = _load_direction_vector(item.get("direction") or item.get("vector"))
+            # A direction without a point is not a location. Do not draw it at
+            # the origin or at a guessed centroid.
+            if not isinstance(point, (list, tuple)) or len(point) < 3 or vector is None:
+                continue
+            markers.append({
+                "kind": "load",
+                "name": str(item.get("name") or item.get("region") or "Load"),
+                "point": list(point),
+                "vector": list(vector),
+                "label": _load_marker_label(item),
+            })
+    elif kind == "boundary_conditions":
+        fixture = boundary.get("fixture") if isinstance(boundary.get("fixture"), dict) else None
+        sources = list(boundary.get("bcs") or ())
+        if fixture:
+            sources.append(fixture)
+        for item in sources:
+            if not isinstance(item, dict):
+                continue
+            point = item.get("point")
+            normal = item.get("normal")
+            if point is None:
+                continue
+            markers.append({
+                "kind": "fixture",
+                "name": str(item.get("name") or item.get("set_name") or "Fixed"),
+                "point": list(point),
+                "vector": list(normal) if normal is not None else None,
+                "label": (
+                    "FIXED "
+                    + str(item.get("instance_name") or item.get("region") or item.get("set_name") or "")
+                ).strip(),
+            })
+    elif kind == "contact_definition":
+        for item in boundary.get("contacts") or ():
+            if not isinstance(item, dict):
+                continue
+            for side, point_key in (("master", "master_point"), ("slave", "slave_point")):
+                point = item.get(point_key)
+                if point is None:
+                    continue
+                markers.append({
+                    "kind": "contact",
+                    "name": str(item.get("name") or "Contact"),
+                    "point": list(point),
+                    "vector": None,
+                    "label": f"{item.get('name') or 'Contact'} {side}",
+                })
+    return markers
+
+
+def _load_direction_vector(raw):
+    if isinstance(raw, (list, tuple)) and len(raw) >= 3:
+        try:
+            return (float(raw[0]), float(raw[1]), float(raw[2]))
+        except (TypeError, ValueError):
+            return None
+    text = str(raw or "").strip().upper()
+    signed = {
+        "CF1": (1.0, 0.0, 0.0),
+        "+X": (1.0, 0.0, 0.0),
+        "X+": (1.0, 0.0, 0.0),
+        "-CF1": (-1.0, 0.0, 0.0),
+        "-X": (-1.0, 0.0, 0.0),
+        "X-": (-1.0, 0.0, 0.0),
+        "CF2": (0.0, 1.0, 0.0),
+        "+Y": (0.0, 1.0, 0.0),
+        "Y+": (0.0, 1.0, 0.0),
+        "-CF2": (0.0, -1.0, 0.0),
+        "-Y": (0.0, -1.0, 0.0),
+        "Y-": (0.0, -1.0, 0.0),
+        "CF3": (0.0, 0.0, 1.0),
+        "+Z": (0.0, 0.0, 1.0),
+        "Z+": (0.0, 0.0, 1.0),
+        "-CF3": (0.0, 0.0, -1.0),
+        "-Z": (0.0, 0.0, -1.0),
+        "Z-": (0.0, 0.0, -1.0),
+    }
+    return signed.get(text)
+
+
+def _load_marker_label(item: Dict[str, Any]) -> str:
+    name = str(item.get("name") or item.get("region") or "Load")
+    magnitude = item.get("magnitude")
+    direction = item.get("direction") or ""
+    parts = [name]
+    if magnitude is not None:
+        parts.append(str(magnitude))
+    if direction:
+        parts.append(str(direction))
+    return " ".join(parts)
+
+
+def _safe_figure_token(raw: str) -> str:
+    cleaned = "".join(ch if ch.isalnum() else "_" for ch in str(raw or ""))
+    cleaned = cleaned.strip("_").lower()
+    return (cleaned[:32] or "part")
+
+
+def _part_filename_matches(filename: str, part: Dict[str, str]) -> bool:
+    """Match a part figure to one retained part, not to a shared name fragment.
+
+    `part_01_pin_1_mises.png` must select Pin-1 even when another part is also
+    named Pin. A bare token such as `pin` is not enough, because it is contained
+    in `pin_1`.
+    """
+    stem = str(filename or "").lower()
+    if not stem.startswith("part_"):
+        return False
+    instance = _safe_figure_token(str(part.get("instance_name") or ""))
+    label = _safe_figure_token(str(part.get("name") or part.get("solid_id") or ""))
+    token = instance or label
+    if not token or token == "part":
+        return False
+    marker = f"_{token}_"
+    return marker in f"_{stem}_" or stem.endswith(f"_{token}")
+
+
+def _assembly_parts(assembly_scope: Optional[Any]) -> List[Dict[str, str]]:
+    """Read retained analysis parts from an AssemblyScope or its serialized dict.
+
+    This does not invent part identity. If the scope only has solid ids, those
+    ids are labels; instance isolation is applied only when an instance name exists.
+    """
+    if assembly_scope is None:
+        return []
+    raw_parts = None
+    if isinstance(assembly_scope, dict):
+        raw_parts = assembly_scope.get("part_records") or assembly_scope.get("parts")
+    else:
+        raw_parts = getattr(assembly_scope, "parts", None)
+    if not raw_parts:
+        return []
+    records: List[Dict[str, str]] = []
+    for item in raw_parts:
+        if isinstance(item, str):
+            records.append({"solid_id": item, "name": item, "instance_name": ""})
+            continue
+        if isinstance(item, dict):
+            solid_id = str(item.get("solid_id") or item.get("name") or "")
+            records.append({
+                "solid_id": solid_id,
+                "name": str(item.get("name") or solid_id),
+                "instance_name": str(item.get("instance_name") or ""),
+            })
+            continue
+        solid_id = str(getattr(item, "solid_id", "") or getattr(item, "name", ""))
+        records.append({
+            "solid_id": solid_id,
+            "name": str(getattr(item, "name", "") or solid_id),
+            "instance_name": str(getattr(item, "instance_name", "") or ""),
+        })
+    return [item for item in records if item.get("solid_id") or item.get("name")]

@@ -766,3 +766,89 @@ def test_verify_png_image_integrity_chunk_constraints(monkeypatch):
     monkeypatch.setattr(mod, "_PILImage", None)
     with pytest.raises(RuntimeError, match="Official delivery requires Pillow"):
         verify_png_image_integrity(MINIMAL_VALID_PNG_BYTES)
+
+
+def test_each_retained_part_gets_its_own_isolated_figure():
+    """A three-part analysis must not collapse to one visually dominant handle."""
+    scope = {
+        "part_records": [
+            {"solid_id": "S_HANDLE", "name": "Handle", "instance_name": "Handle-1"},
+            {"solid_id": "S_PIN", "name": "Pin", "instance_name": "Pin-1"},
+            {"solid_id": "S_BASE", "name": "Base", "instance_name": "Base-1"},
+        ],
+    }
+
+    result = select_engineering_figures(
+        physics_domain="static",
+        run_id="RUN-PARTS",
+        assembly_scope=scope,
+    )
+
+    part_specs = [spec for spec in result.specs if spec.visualization_type == "part_stress"]
+    assert len(part_specs) == 3
+    assert [spec.visible_instances for spec in part_specs] == [
+        ("Handle-1",),
+        ("Pin-1",),
+        ("Base-1",),
+    ]
+    assert all("分析零件" in spec.caption_zh for spec in part_specs)
+
+
+def test_boundary_figures_carry_fixture_and_force_direction():
+    """The boundary image must say where the model is fixed and which way the force points."""
+    result = select_engineering_figures(
+        physics_domain="static",
+        run_id="RUN-BOUNDARY",
+        assembly_scope={
+            "part_records": [
+                {"solid_id": "S_HANDLE", "name": "Handle", "instance_name": "Handle-1"},
+            ],
+        },
+        boundary_evidence={
+            "loads": [{
+                "name": "HandleForce",
+                "region": "TipFace",
+                "magnitude": 100.0,
+                "direction": "CF2",
+                "point": (10.0, 20.0, 30.0),
+            }],
+            "fixture": {
+                "name": "InstallationFixed",
+                "set_name": "InstallationFixed",
+                "instance_name": "Base-1",
+                "bc_type": "ENCASTRE",
+                "point": (0.0, 0.0, 0.0),
+                "normal": (0.0, 0.0, -1.0),
+            },
+            "contacts": [{
+                "name": "Contact_1",
+                "master_point": (1.0, 2.0, 3.0),
+                "slave_point": (1.1, 2.0, 3.0),
+            }],
+        },
+    )
+
+    load_spec = next(spec for spec in result.specs if spec.visualization_type == "load_application")
+    fixture_spec = next(spec for spec in result.specs if spec.visualization_type == "boundary_conditions")
+    contact_spec = next(spec for spec in result.specs if spec.visualization_type == "contact_definition")
+    assert load_spec.boundary_markers[0]["point"] == [10.0, 20.0, 30.0]
+    assert load_spec.boundary_markers[0]["vector"] == [0.0, 1.0, 0.0]
+    assert fixture_spec.boundary_markers[0]["point"] == [0.0, 0.0, 0.0]
+    assert fixture_spec.boundary_markers[0]["vector"] == [0.0, 0.0, -1.0]
+    assert "Base-1" in fixture_spec.boundary_markers[0]["label"]
+    assert len(contact_spec.boundary_markers) == 2
+
+
+def test_boundary_figure_does_not_invent_a_missing_force_point():
+    result = select_engineering_figures(
+        physics_domain="static",
+        boundary_evidence={
+            "loads": [{"name": "UnknownForce", "direction": "CF2", "magnitude": 10.0}],
+            "fixture": {"name": "InstallationFixed", "set_name": "InstallationFixed"},
+        },
+    )
+
+    load_spec = next(spec for spec in result.specs if spec.visualization_type == "load_application")
+    fixture_spec = next(spec for spec in result.specs if spec.visualization_type == "boundary_conditions")
+    assert load_spec.boundary_markers == ()
+    assert fixture_spec.boundary_markers == ()

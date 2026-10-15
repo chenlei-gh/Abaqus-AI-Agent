@@ -58,7 +58,7 @@ def test_unstamped_preview_does_not_claim_agent_authorship(tmp_path, capsys):
     captured = capsys.readouterr()
     assert ret == 0
     assert "Not authorized to be captioned as prepared by Abaqus-AI-Agent" in captured.out
-    assert "Prepared by Abaqus-AI-Agent after JEV routing" not in captured.out
+    assert "Prepared by Abaqus-AI-Agent. The run record shows" not in captured.out
 
 
 def test_natural_language_solve_without_jev_cannot_be_attributed():
@@ -85,8 +85,8 @@ def test_jev_routed_record_may_be_attributed():
         metadata={"deliverable_authorization": gate, "language": "en"},
     )
     text = render_markdown(report, language="en")
-    assert "Prepared by Abaqus-AI-Agent after JEV routing" in text
-    assert "not a keyed signature" in text
+    assert "Prepared by Abaqus-AI-Agent. The run record shows" in text
+    assert "does not certify the parse" in text
 
 
 def test_tampered_stamp_is_blocked():
@@ -133,7 +133,7 @@ def test_tool_write_without_stamp_does_not_create_formal_html(tmp_path):
     text = draft.read_text(encoding="utf-8")
     assert "DIAGNOSTIC" in text
     assert "Abaqus-AI-Agent 编制" not in text
-    assert "Prepared by Abaqus-AI-Agent after JEV routing" not in text
+    assert "Prepared by Abaqus-AI-Agent. The run record shows" not in text
 
 
 def test_tool_write_without_stamp_refuses_when_draft_disabled(tmp_path):
@@ -214,7 +214,7 @@ def test_engineering_intent_record_may_file_but_not_claim_jev(tmp_path):
     assert written["kind"] == "deliverable"
     assert formal.exists()
     text = formal.read_text(encoding="utf-8")
-    assert "Prepared by Abaqus-AI-Agent after JEV routing" not in text
+    assert "Prepared by Abaqus-AI-Agent. The run record shows" not in text
     assert "must not be captioned as a natural-language Agent deliverable" in text
 
 

@@ -163,13 +163,58 @@ class AssemblyScope:
             "source_model_id": self.source_model_id,
             "part_count": self.part_count,
             "parts": [part.solid_id for part in self.parts],
+            "part_records": [_part_record(part) for part in self.parts],
             "excluded": list(self.excluded_solid_ids),
             "contacts": [contact.name for contact in self.contacts],
+            "contact_records": [_contact_record(contact) for contact in self.contacts],
             "fixture": None if self.fixture is None else self.fixture.set_name,
+            "fixture_record": None if self.fixture is None else _fixture_record(self.fixture),
             "gaps": list(self.gaps),
             "is_complete": self.is_complete,
             "screen": None if self.screen is None else self.screen.to_dict(),
         }
+
+
+def _part_record(part: AssemblyPart) -> dict:
+    """Serializable identity used by figure selection. Names stay attached to instances."""
+    return {
+        "solid_id": part.solid_id,
+        "name": part.name,
+        "instance_name": part.instance_name,
+        "step_body_index": part.step_body_index,
+    }
+
+
+def _contact_record(contact: MatingContact) -> dict:
+    return {
+        "name": contact.name,
+        "master_part": contact.master_part,
+        "slave_part": contact.slave_part,
+        "master_instance": contact.master_instance,
+        "slave_instance": contact.slave_instance,
+        "master_surface": contact.master_surface,
+        "slave_surface": contact.slave_surface,
+        "master_point": list(contact.master_point),
+        "slave_point": list(contact.slave_point),
+        "gap": contact.gap,
+        "friction_coefficient": contact.friction_coefficient,
+    }
+
+
+def _fixture_record(fixture: InstallationFixture) -> dict:
+    return {
+        "name": fixture.name,
+        "bc_type": "ENCASTRE",
+        "part_id": fixture.part_id,
+        "instance_name": fixture.instance_name,
+        "region": fixture.set_name,
+        "set_name": fixture.set_name,
+        "face_id": fixture.face_id,
+        "point": list(fixture.point),
+        "normal": list(fixture.normal),
+        "area": fixture.area,
+        "description": "Installation fixture accepted by assembly scope",
+    }
 
 
 def _safe_name(raw: str, fallback: str) -> str:

@@ -553,8 +553,25 @@ class DeterministicReportPipeline:
             extra_metadata={"deliverable_authorization": delivery_gate},
         )
 
-        # 3. Deterministically render Semantic HTML (Single authoritative deliverable, atomic publication)
-        html_content = render_report(report_data, fmt="html")
+        # 3. Deterministically render Semantic HTML (Single authoritative deliverable, atomic publication).
+        # Pass the delivery directory so relative figure paths become embedded data URIs.
+        # A forwarded HTML file must not depend on sibling PNG/GIF files.
+        html_content = render_report(report_data, fmt="html", base_dir=target_dir)
+        containment = None
+        try:
+            from .renderer import verify_html_self_contained
+            containment = verify_html_self_contained(html_content)
+        except Exception:
+            containment = None
+        if is_official_delivery and report_figures and (
+            containment is None or not containment.get("self_contained") or containment.get("has_external_images")
+        ):
+            reasons = [] if containment is None else list(containment.get("external_references") or [])
+            raise PermissionError(
+                "Official engineering delivery blocked: HTML report is not self-contained. "
+                "Images must be embedded as data URIs so the file can be forwarded without its asset directory. "
+                + ("; ".join(reasons) if reasons else "image embedding was not verified.")
+            )
         html_bytes = html_content.encode("utf-8")
         html_sha256 = hashlib.sha256(html_bytes).hexdigest()
 

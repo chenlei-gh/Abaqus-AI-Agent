@@ -37,6 +37,9 @@ class VisualizationSpec:
     region: str = "WHOLE_MODEL"
     output_position: str = "INTEGRATION_POINT"
     actual_frame_index: Optional[int] = None
+    visible_instances: Tuple[str, ...] = ()
+    plot_symbols: str = ""
+    boundary_markers: Tuple[Dict[str, Any], ...] = ()
 
     def to_report_figure(self, physical_image_path: str) -> ReportFigure:
         """Produce the ReportFigure record for the deterministic renderer."""
@@ -59,6 +62,9 @@ class VisualizationSpec:
                 "component": self.component,
                 "region": self.region or "WHOLE_MODEL",
                 "output_position": self.output_position or "INTEGRATION_POINT",
+                "visible_instances": list(self.visible_instances),
+                "plot_symbols": self.plot_symbols,
+                "boundary_markers": [dict(item) for item in self.boundary_markers],
                 "element_id": self.element_id,
                 "node_id": self.node_id,
                 "hotspot_location": list(self.hotspot_location) if self.hotspot_location else None,
@@ -96,6 +102,9 @@ class VisualizationSpec:
                 "actual_frame": self.actual_frame_index,
                 "region": self.region or "WHOLE_MODEL",
                 "output_position": self.output_position or "INTEGRATION_POINT",
+                "visible_instances": list(self.visible_instances),
+                "plot_symbols": self.plot_symbols,
+                "boundary_markers": [dict(item) for item in self.boundary_markers],
                 "is_animation": is_anim,
             },
         )

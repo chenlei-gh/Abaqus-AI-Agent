@@ -512,6 +512,9 @@ class ContourPlotRequest:
     caption: str = ""
     description: str = ""
     region: str = "WHOLE_MODEL"
+    visible_instances: Tuple[str, ...] = ()
+    plot_symbols: str = ""  # "", "loads", "bcs", "contacts", "boundary"
+    boundary_markers: Tuple[Dict[str, Any], ...] = ()
     is_animation: bool = False
     animation_frames: int = 12
     animation_duration_ms: int = 120
@@ -520,6 +523,67 @@ class ContourPlotRequest:
     animation_mode: str = "full_timeline"  # "full_timeline" (忠实时程完整保留) or "active_presentation" (活跃演示修剪尾帧)
     active_motion_only: bool = True
     motion_threshold: float = 0.005
+
+
+def _boundary_marker_lines(markers, request_index: int) -> List[str]:
+    """Draw accepted fixture and load arrows on the whole model.
+
+    A marker without a point is omitted. The script does not invent a location
+    from the part centroid, and a missing arrow API is a render error rather
+    than a silent contour-only image.
+    """
+    usable = []
+    for item in markers or ():
+        if not isinstance(item, dict):
+            continue
+        point = item.get("point")
+        if not isinstance(point, (list, tuple)) or len(point) < 3:
+            continue
+        try:
+            origin = (float(point[0]), float(point[1]), float(point[2]))
+        except (TypeError, ValueError):
+            continue
+        vector = item.get("vector")
+        direction = None
+        if isinstance(vector, (list, tuple)) and len(vector) >= 3:
+            try:
+                direction = (float(vector[0]), float(vector[1]), float(vector[2]))
+            except (TypeError, ValueError):
+                direction = None
+        usable.append({
+            "kind": str(item.get("kind") or "boundary"),
+            "name": str(item.get("name") or "marker"),
+            "point": origin,
+            "vector": direction,
+            "label": str(item.get("label") or item.get("name") or ""),
+        })
+    if not usable:
+        return []
+    lines = [
+        "    # Explicit fixture / load / contact markers. These coordinates come",
+        "    # from the compiled model, not from a visual guess.",
+        f"    boundary_markers_{request_index} = {usable!r}",
+        "    try:",
+        "        from abaqus import session as _marker_session",
+        "    except Exception:",
+        "        _marker_session = session",
+        "    _arrow_api = getattr(_marker_session, 'Arrow', None)",
+        "    if _arrow_api is None:",
+        "        raise RuntimeError('Abaqus session.Arrow is unavailable; refusing a boundary figure without load/fixture arrows')",
+        f"    for _marker_i, _marker in enumerate(boundary_markers_{request_index}):",
+        "        _origin = tuple(_marker['point'])",
+        "        _vector = _marker.get('vector') or (0.0, 0.0, 1.0)",
+        "        _scale = 12.0",
+        "        _tip = (",
+        "            _origin[0] + float(_vector[0]) * _scale,",
+        "            _origin[1] + float(_vector[1]) * _scale,",
+        "            _origin[2] + float(_vector[2]) * _scale,",
+        "        )",
+        "        _name = 'BoundaryMarker_%d_%d' % (" + str(int(request_index)) + ", _marker_i)",
+        "        _arrow_api(name=_name, startPoint=_tip, endPoint=_origin)",
+        "        print('[HeadlessViewer] boundary marker %s %s at %s direction %s' % (_marker.get('kind'), _marker.get('label'), _origin, _vector))",
+    ]
+    return lines
 
 
 def generate_headless_viewer_script(
@@ -567,15 +631,22 @@ def generate_headless_viewer_script(
         "session.printOptions.setValues(vpBackground=OFF)",
         "try:",
         "    vp.viewportAnnotationOptions.setValues(",
-        "        triad=ON,",
+        "        triad=OFF,",
         "        legend=ON,",
         "        title=OFF,",
         "        state=OFF,",
-        "        annotations=OFF,",
+        "        annotations=ON,",
+        "        compass=OFF,",
         "    )",
         "    vp.odbDisplay.commonOptions.setValues(renderStyle=SHADED)",
         "except Exception as _vp_err:",
         "    print('[HeadlessViewer] WARNING: Viewport cosmetic annotations degraded: %s' % _vp_err)",
+        # The model tree is a GUI panel, not engineering evidence. A failed hide
+        # must stop the figure; a warning would still deliver a covered screenshot.
+        "try:",
+        "    session.hideTree()",
+        "except Exception as _tree_err:",
+        "    raise RuntimeError('Abaqus session.hideTree failed; refusing a figure covered by the model tree: %s' % _tree_err)",
         "",
     ]
 
@@ -656,6 +727,25 @@ def generate_headless_viewer_script(
                 "        pass",
             ]
 
+        visible_names = tuple(
+            str(name).strip()
+            for name in (getattr(req, "visible_instances", ()) or ())
+            if str(name).strip()
+        )
+        if visible_names:
+            code_lines += [
+                "    # Isolate retained analysis instances. An assembly contour must not",
+                "    # silently show only the visually dominant part.",
+                f"    requested_instances = {list(visible_names)!r}",
+                "    inst_map = odb.rootAssembly.instances",
+                "    missing_instances = [name for name in requested_instances if name not in inst_map.keys()]",
+                "    if missing_instances:",
+                "        raise KeyError('Requested analysis instances not in ODB: ' + str(missing_instances))",
+                "    kept = tuple(inst_map[name] for name in requested_instances)",
+                "    dg = session.DisplayGroup(name='AnalyzedParts', leaf=kept)",
+                "    vp.odbDisplay.setValues(visibleDisplayGroups=(dg,))",
+                "    vp.odbDisplay.displayGroup.replace(leaf=kept)",
+            ]
         if req.region and req.region != "WHOLE_MODEL":
             code_lines += [
                 f"    # Region set filtering: {req.region}",
@@ -677,6 +767,32 @@ def generate_headless_viewer_script(
                 "        raise KeyError('Requested region \"' + reg_name + '\" not found in ODB assembly or instance sets')",
                 "    vp.odbDisplay.setValues(visibleDisplayGroups=(found_reg,))",
             ]
+        symbol_kind = str(getattr(req, "plot_symbols", "") or "").strip().lower()
+        if symbol_kind:
+            symbol_state = {
+                "loads": "(SYMBOLS_ON_UNDEF,)",
+                "bcs": "(SYMBOLS_ON_UNDEF,)",
+                "contacts": "(SYMBOLS_ON_UNDEF,)",
+                "boundary": "(SYMBOLS_ON_UNDEF,)",
+            }.get(symbol_kind, "(SYMBOLS_ON_UNDEF,)")
+            code_lines += [
+                f"    # Boundary evidence plot: {symbol_kind}",
+                "    # Show the undeformed assembly so the fixture and force location",
+                "    # are the modeled locations, not the deformed contour.",
+                "    try:",
+                "        vp.odbDisplay.basicOptions.setValues(bcDisplay=ON, loadDisplay=ON, connectorDisplay=ON)",
+                "    except Exception as _sym_basic_err:",
+                "        print('[HeadlessViewer] WARNING: basic symbol options unavailable: %s' % _sym_basic_err)",
+                "    try:",
+                "        vp.odbDisplay.symbolOptions.setValues(symbolDensity=5, tensorPosition=INTEGRATION_POINT)",
+                "    except Exception:",
+                "        pass",
+                "    try:",
+                f"        vp.odbDisplay.display.setValues(plotState={symbol_state})",
+                "    except Exception as _sym_err:",
+                "        print('[HeadlessViewer] WARNING: symbol plot state unavailable, keeping contour: %s' % _sym_err)",
+            ]
+            code_lines.extend(_boundary_marker_lines(getattr(req, "boundary_markers", ()) or (), idx))
 
         # Deformation scale factor
         if not is_mesh_plot:
@@ -1038,6 +1154,18 @@ def render_authentic_visualizations(
         if is_anim and getattr(spec, "field_name", "") == "ANIMATION":
             out_pos = "NODAL"
 
+        visible = getattr(spec, "visible_instances", ()) or ()
+        if isinstance(visible, str):
+            visible = (visible,)
+        symbol_kind = str(getattr(spec, "plot_symbols", "") or "")
+        if not symbol_kind:
+            kind_name = str(getattr(spec, "visualization_type", "") or "").lower()
+            if kind_name in ("load_application", "loads"):
+                symbol_kind = "loads"
+            elif kind_name in ("boundary_conditions", "fixture"):
+                symbol_kind = "bcs"
+            elif kind_name in ("contact_definition", "contacts"):
+                symbol_kind = "contacts"
         req = ContourPlotRequest(
             output_filename=spec.target_filename,
             variable_label="U" if is_anim and getattr(spec, "field_name", "") == "ANIMATION" else spec.field_name,
@@ -1049,6 +1177,9 @@ def render_authentic_visualizations(
             view_orientation=v_orient,
             caption=getattr(spec, "caption_zh", "") or getattr(spec, "caption_en", ""),
             region=getattr(spec, "region", "WHOLE_MODEL") or "WHOLE_MODEL",
+            visible_instances=tuple(str(item) for item in visible if str(item).strip()),
+            plot_symbols=symbol_kind,
+            boundary_markers=tuple(getattr(spec, "boundary_markers", ()) or ()),
             is_animation=is_anim,
         )
         requests.append(req)

@@ -863,3 +863,51 @@ def test_animation_mode_dual_modal_full_timeline_and_presentation():
         animation_mode="full_timeline",
     )
     assert req_full.animation_mode == "full_timeline"
+
+
+def test_headless_script_hides_tree_and_draws_accepted_boundary_arrows():
+    """Model tree is a GUI panel. Fixture and force arrows must be explicit coordinates."""
+    part_req = ContourPlotRequest(
+        output_filename="part_pin.png",
+        variable_label="S",
+        visible_instances=("Pin-1",),
+    )
+    boundary_req = ContourPlotRequest(
+        output_filename="boundary_conditions.png",
+        variable_label="U",
+        plot_symbols="bcs",
+        boundary_markers=(
+            {
+                "kind": "fixture",
+                "name": "InstallationFixed",
+                "point": (1.0, 2.0, 3.0),
+                "vector": (0.0, 0.0, -1.0),
+                "label": "FIXED Base-1",
+            },
+            {
+                "kind": "load",
+                "name": "HandleForce",
+                "point": (10.0, 20.0, 30.0),
+                "vector": (0.0, 1.0, 0.0),
+                "label": "HandleForce CF2",
+            },
+        ),
+    )
+
+    script = generate_headless_viewer_script(
+        odb_path="dummy.odb",
+        requests=[part_req, boundary_req],
+        output_dir="dummy_out",
+    )
+
+    compile(script, "<headless-viewer>", "exec")
+    assert "session.hideTree()" in script
+    assert "refusing a figure covered by the model tree" in script
+    assert "'Pin-1'" in script
+    assert "session.DisplayGroup" in script
+    assert "missing_instances" in script
+    assert "(1.0, 2.0, 3.0)" in script
+    assert "(10.0, 20.0, 30.0)" in script
+    assert "(0.0, 1.0, 0.0)" in script
+    assert "startPoint=_tip, endPoint=_origin" in script
+    assert "session.Arrow is unavailable" in script

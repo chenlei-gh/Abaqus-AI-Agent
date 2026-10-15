@@ -430,6 +430,63 @@ def test_natural_language_entry_uses_jev_screen_before_solving():
     assert pending.status != TaskStatus.COMPLETED
 
 
+def test_live_routing_failure_stays_unresolved_and_does_not_solve(monkeypatch):
+    from abaqus_ai_agent.agent import AbaqusAIAgent
+    from abaqus_ai_agent.contracts.task import TaskStatus
+    from abaqus_ai_agent.typesafe_intent import JevApiError
+
+    class _DeadRouter:
+        mode = "live"
+
+        def route(self, requirement, context=None):
+            raise JevApiError("provider timed out")
+
+        def screen_parts(self, requirement, solids):
+            raise AssertionError("screening must not run after routing failed")
+
+    monkeypatch.setattr(
+        "abaqus_ai_agent.typesafe_intent.JevIntentRouter",
+        lambda *args, **kwargs: _DeadRouter(),
+    )
+    agent = AbaqusAIAgent(executor=None)
+    result = agent.solve_requirement(
+        "Analyze the handle",
+        jev_mode="live",
+        submit_job=False,
+    )
+
+    assert result.status == TaskStatus.NEEDS_CLARIFICATION
+    assert result.is_completed is False
+    assert result.summary_card["status"] == "INTENT_ROUTING_UNRESOLVED"
+    assert result.summary_card["passed"] is False
+    assert result.summary_card["jev_required"] is False
+    assert "provider timed out" in result.summary_card["routing_error"]
+    assert "provider timed out" in result.errors[0]
+
+
+def test_validated_intent_does_not_call_jev(monkeypatch):
+    from abaqus_ai_agent.agent import AbaqusAIAgent
+    from abaqus_ai_agent.contracts.intent import EngineeringIntent
+
+    def _forbidden(*args, **kwargs):
+        raise AssertionError("a validated EngineeringIntent must not call JEV")
+
+    monkeypatch.setattr("abaqus_ai_agent.typesafe_intent.JevIntentRouter", _forbidden)
+    intent = EngineeringIntent(
+        id="already-validated",
+        kind="linear_static",
+        description="validated cantilever",
+        analysis_type="linear_static",
+        unit_system="MM_N_MPA",
+        material={"name": "PA66", "elastic_modulus": 3000.0, "poisson_ratio": 0.35},
+        boundary_conditions=(),
+        loads=(),
+    )
+    result = AbaqusAIAgent(executor=None).solve_requirement(intent, submit_job=False)
+
+    assert result.summary_card.get("status") != "INTENT_ROUTING_UNRESOLVED"
+
+
 def test_live_screening_error_becomes_pending_not_a_crash(monkeypatch):
     from abaqus_ai_agent.agent import AbaqusAIAgent
     from abaqus_ai_agent.contracts.task import TaskStatus
@@ -626,3 +683,62 @@ def test_numbered_solids_stay_pending_without_a_source_name():
     scope = build_assembly_scope(unlabeled, screen=screen)
     assert scope.parts == ()
     assert scope.is_complete is False
+
+
+def test_scope_dict_keeps_part_identity_and_boundary_points():
+    """Serialized scope must still tell the report which instance is fixed and where."""
+    scope = build_assembly_scope(
+        _mated_handle_model(),
+        requirement={"include_solid_ids": ["S_HANDLE", "S_PIN"]},
+    )
+    payload = scope.to_dict()
+
+    assert payload["parts"] == ["S_PIN", "S_HANDLE"]
+    assert [item["instance_name"] for item in payload["part_records"]] == ["S_PIN-1", "S_HANDLE-1"]
+    assert payload["fixture"] == "InstallationFixed"
+    assert payload["fixture_record"]["instance_name"] == "S_HANDLE-1"
+    assert len(payload["fixture_record"]["point"]) == 3
+    assert len(payload["fixture_record"]["normal"]) == 3
+    assert len(payload["contact_records"][0]["master_point"]) == 3
+    assert len(payload["contact_records"][0]["slave_point"]) == 3
+
+
+def test_report_tables_show_installation_fixture_and_force_direction():
+    from types import SimpleNamespace
+
+    from abaqus_ai_agent.agent import _boundary_evidence_for_figures, _report_bcs, _report_loads
+    from abaqus_ai_agent.contracts.intent import EngineeringIntent
+
+    scope = build_assembly_scope(
+        _mated_handle_model(),
+        requirement={"include_solid_ids": ["S_HANDLE", "S_PIN"]},
+    )
+    plan = SimpleNamespace(intent_summary={
+        "geometry": {"assembly_scope": scope.to_dict()},
+    })
+    intent = EngineeringIntent(
+        id="INT-LOAD",
+        kind="static",
+        description="Handle load",
+        loads=(
+            SimpleNamespace(
+                name="HandleForce",
+                region="TipFace",
+                load_type="concentrated_force",
+                magnitude=100.0,
+                direction="CF2",
+                point=(10.0, 20.0, 30.0),
+            ),
+        ),
+    )
+
+    boundary = _boundary_evidence_for_figures(plan, intent)
+    loads = _report_loads(boundary)
+    bcs = _report_bcs(boundary)
+
+    assert loads[0]["direction"] == "CF2"
+    assert loads[0]["point"] == (10.0, 20.0, 30.0)
+    assert "CF2" in loads[0]["description"]
+    assert bcs[0]["bc_type"] == "ENCASTRE"
+    assert bcs[0]["instance_name"] == "S_HANDLE-1"
+    assert bcs[0]["point"] == list(scope.fixture.point)

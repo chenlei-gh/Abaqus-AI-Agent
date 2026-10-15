@@ -109,9 +109,10 @@ def issue_agent_run_record(
 ) -> AnalysisProvenance:
     """Issue a programmatic Agent run record bound to the current hashes.
 
-    This is not a keyed signature. Natural-language delivery still requires
-    jev_routed=True. A qualification script may file an engineering-intent
-    record, but must not be captioned as a JEV-routed deliverable.
+    This is not a keyed signature. ``jev_routed`` records that a natural-language
+    request passed the product router. It does not certify the parse, the model,
+    the solve, or engineering acceptance. A qualification script may file an
+    engineering-intent record, but must not be captioned as JEV-routed.
     """
     provenance = AnalysisProvenance(
         run_id=str(run_id),
@@ -195,9 +196,10 @@ def verify_deliverable(record: Any) -> Dict[str, Any]:
     jev_routed = bool(meta.get("jev_routed"))
     requirement_kind = meta.get("requirement_kind") or "unspecified"
     allow_file = not reasons
-    # Natural-language engineering delivery must have passed JEV routing.
-    # A programmatic EngineeringIntent solved by the Agent may be filed as an
-    # Agent run record, but must not be captioned as a JEV-routed deliverable.
+    # A natural-language file must show that it passed the product router.
+    # jev_routed is path evidence only: it does not approve the parse, the
+    # constraints, the solve, or the engineering acceptance. A programmatic
+    # EngineeringIntent may be filed, but must not be captioned as JEV-routed.
     allow_agent_attribution = allow_file and jev_routed
     if allow_file and requirement_kind == "natural_language" and not jev_routed:
         reasons.append("natural_language_requirement_not_jev_routed")

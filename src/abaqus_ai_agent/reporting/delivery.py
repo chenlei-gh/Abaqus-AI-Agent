@@ -138,7 +138,7 @@ def write_gated_engineering_report(
         provenance = payload.get("provenance")
         if report is not None:
             stamped = _with_authorization(report, gate, provenance)
-            body = render_html(stamped, language=language)
+            body = render_html(stamped, language=language, base_dir=target.parent)
         else:
             body = content or ""
             if "Abaqus-AI-Agent \u7f16\u5236" in body or "Prepared by Abaqus-AI-Agent" in body:
@@ -176,7 +176,7 @@ def write_gated_engineering_report(
     draft_path = target.with_name(target.stem + ".diagnostic" + draft_suffix)
     if report is not None:
         draft = _diagnostic_report(report, gate)
-        body = render_html(draft, language=language)
+        body = render_html(draft, language=language, base_dir=target.parent)
     else:
         body = _diagnostic_text(content or "", "html")
     if "Abaqus-AI-Agent 编制" in body:

@@ -301,7 +301,8 @@ def handle_ask(args: argparse.Namespace) -> int:
         print(f"Inferred Physics:   {bundle.physics_choice.value} (Confidence: {bundle.physics_choice.confidence:.2f})")
         print(f"Unit System:        {bundle.unit_system_choice.value}")
         print(f"Target Solver:      {bundle.solver_choice.value}")
-        print(f"Well-Constrained:   {'YES' if bundle.is_well_constrained_noul.is_yes else 'WARNING: Potential rigid modes'}")
+        print(f"Constraint wording:  {'PRESENT' if bundle.is_well_constrained_noul.is_yes else 'NOT ESTABLISHED FROM TEXT'}")
+        print("Constraint note:     text sufficiency only; not a stiffness-rank or fixture proof")
         print(f"Completeness Score: {bundle.completeness_score.score:.1f} / 5.0")
         if intent and intent.material:
             print(f"Material Detected:  {intent.material.get('name')} (E={intent.material.get('elastic_modulus')} MPa)")

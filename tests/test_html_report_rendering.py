@@ -331,3 +331,26 @@ def test_html_report_renders_placeholder_on_cross_directory_collision_attempt():
     assert "some_other_run/l_bracket_screenshot.png" in html_out
     # 绝对不能把 test_assets 的图片以 Base64 数据形式误内嵌
     assert "data:image/png;base64," not in html_out
+
+
+def test_relative_figure_is_embedded_against_delivery_dir(tmp_path):
+    """A forwarded HTML file must carry the image, not a sibling path."""
+    delivery = tmp_path / "customer"
+    delivery.mkdir()
+    png = delivery / "part_stress.png"
+    png.write_bytes(base64.b64decode(
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
+    ))
+    report = EngineeringReportData(
+        title="Delivery embedding",
+        figures=[ReportFigure(path="part_stress.png", caption="零件应力", kind="contour")],
+        acceptance=True,
+    )
+
+    html_out = render_html(report, language="zh", base_dir=delivery)
+
+    assert 'src="data:image/png;base64,' in html_out
+    assert 'src="part_stress.png"' not in html_out
+    audit = verify_html_self_contained(html_out)
+    assert audit["self_contained"] is True
+    assert audit["has_external_images"] is False
