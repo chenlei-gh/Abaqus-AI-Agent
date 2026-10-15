@@ -47,3 +47,23 @@ machine_validation/*
 *.fil
 *.sim
 runs/
+
+# Abaqus session scratch written into the launch directory.
+# Product runs must use an external workdir. These rules only stop
+# an interactive CAE/noGUI session from showing up as repository changes.
+abq.app_cache
+*.app_cache
+*.sat
+*.sab
+*.smb
+*.jnl
+*.cae
+*.odb_f
+abaqus.rpy*
+abaqus_acis.log
+abaqus_v6.env
+*.exception
+
+# One-off probes must not live in the repository root.
+/test_probe_*.py
+/probe_*.py

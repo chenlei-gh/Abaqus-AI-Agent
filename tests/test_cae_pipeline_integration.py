@@ -1107,8 +1107,8 @@ def test_negative_p1_d_missing_required_criterion_blocks_task_completion_and_del
     from abaqus_ai_agent.contracts.task import TaskStatus
     from abaqus_ai_agent.planning.compiler import IntentGeometrySpec
 
-    workdir = tmp_path / "req_diag_run"
-    workdir.mkdir()
+    ctx = _make_test_ctx(tmp_path, "req_diag_project")
+    workdir = ctx.create_run_solver_dir("req_diag_run")
     executor = MockCaeExecutor(workdir, job_name="Job_ReqDiag")
 
     # Mock extraction returning only optional displacement U, missing required max_mises S
@@ -1155,6 +1155,7 @@ def test_negative_p1_d_missing_required_criterion_blocks_task_completion_and_del
         material=mat,
         workdir=str(workdir),
         require_production=True,
+        project_context=ctx,
     )
 
     # Must fail-closed: TaskStatus.FAILED, engineering_status == RESULT_INVALID, deliverable is False
@@ -1172,8 +1173,8 @@ def test_negative_p1_d_required_criterion_with_nan_inf_bool_or_unavailable_diagn
     from abaqus_ai_agent.planning.compiler import IntentGeometrySpec
     import abaqus_ai_agent.execution.results as res_mod
 
-    workdir = tmp_path / "req_nan_run"
-    workdir.mkdir()
+    ctx = _make_test_ctx(tmp_path, "req_nan_project")
+    workdir = ctx.create_run_solver_dir("req_nan_run")
     executor = MockCaeExecutor(workdir, job_name="Job_ReqNonFinite")
 
     req = ResultRequirement(
@@ -1219,6 +1220,7 @@ def test_negative_p1_d_required_criterion_with_nan_inf_bool_or_unavailable_diagn
             material=mat,
             workdir=str(workdir),
             require_production=True,
+            project_context=ctx,
         )
         assert result.status == TaskStatus.FAILED
         assert result.summary_card["engineering_status"] == "RESULT_INVALID"
@@ -1249,6 +1251,7 @@ def test_negative_p1_d_required_criterion_with_nan_inf_bool_or_unavailable_diagn
         material=mat,
         workdir=str(workdir),
         require_production=True,
+        project_context=ctx,
     )
     assert result_diag.status == TaskStatus.FAILED
     assert result_diag.summary_card["engineering_status"] == "RESULT_INVALID"

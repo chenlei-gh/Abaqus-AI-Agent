@@ -19,7 +19,7 @@ import shutil
 import struct
 import subprocess
 import sys
-import tempfile
+import uuid
 from typing import Any, Dict, List, Optional, Sequence, Set, Tuple, Union
 import zlib
 
@@ -988,8 +988,9 @@ def render_odb_contours_headless(
                 "Headless viewer rendering requires authentic Abaqus installation."
             )
 
-    with tempfile.TemporaryDirectory(prefix="viewer_render_scratch_") as scratch_str:
-        scratch_dir = Path(scratch_str).resolve()
+    from ..paths import resolve_production_scratch
+    scratch_dir = resolve_production_scratch(source_path=odb, project_root=out_dir, prefix="viewer")
+    try:
         script_path = scratch_dir / "_headless_viewer_post.py"
         script_content = generate_headless_viewer_script(
             odb_path=odb,
@@ -1089,6 +1090,8 @@ def render_odb_contours_headless(
             )
 
         return produced
+    finally:
+        shutil.rmtree(scratch_dir, ignore_errors=True)
 
 
 def render_authentic_visualizations(

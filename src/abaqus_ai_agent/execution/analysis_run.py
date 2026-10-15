@@ -386,14 +386,28 @@ class AnalysisRunner:
                 workdir = str(project_context.create_run_solver_dir(run_id))
             run_evidence_dir = project_context.create_run_evidence_dir(run_id)
         elif not workdir:
+            from ..paths import get_repo_root, resolve_runs_root
+            repo_root = get_repo_root().resolve()
+            launch_dir = Path.cwd().resolve()
             if orig_executor_workdir:
-                workdir = orig_executor_workdir
+                cand = Path(orig_executor_workdir).resolve()
+                inside_repo = cand == repo_root or cand.is_relative_to(repo_root)
+                if inside_repo or cand == launch_dir:
+                    workdir = os.path.join(str(resolve_runs_root()), run_id)
+                else:
+                    workdir = str(cand)
             else:
-                from ..paths import resolve_runs_root
-                runs_root = resolve_runs_root()
-                workdir = os.path.join(str(runs_root), run_id)
+                workdir = os.path.join(str(resolve_runs_root()), run_id)
         os.makedirs(workdir, exist_ok=True)
         workdir = os.path.abspath(workdir)
+        resolved_workdir = Path(workdir).resolve()
+        from ..paths import get_repo_root as _repo_root
+        repo_root = _repo_root().resolve()
+        if resolved_workdir == repo_root or resolved_workdir.is_relative_to(repo_root):
+            raise PermissionError(
+                f"Execution workdir '{workdir}' is inside the agent repository. "
+                "Solver files and generated scripts must stay in the customer project or an isolated scratch directory."
+            )
 
         if hasattr(self.executor, "workdir"):
             self.executor.workdir = workdir

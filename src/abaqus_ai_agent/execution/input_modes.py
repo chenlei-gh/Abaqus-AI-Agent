@@ -13,7 +13,7 @@ from enum import Enum
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Sequence, Union
 
-from ..paths import ExternalProjectContext
+from ..paths import ExternalProjectContext, require_customer_project_context
 
 
 class UserInputKind(str, Enum):
@@ -315,9 +315,15 @@ def solve_user_inp(
     eff_run_id = run_id or f"run_inp_{uuid.uuid4().hex[:8]}"
     eff_job_name = job_name or inp_file.stem
 
-    effective_workdir: Optional[Path] = None
-    if project_context is not None:
-        effective_workdir = project_context.create_run_solver_dir(eff_run_id)
+    if project_context is None:
+        try:
+            project_context = require_customer_project_context(
+                source_path=inp_file,
+                project_name=eff_job_name,
+            )
+        except ValueError:
+            project_context = None
+    effective_workdir = project_context.create_run_solver_dir(eff_run_id) if project_context is not None else None
 
     synced_dependencies: List[Dict[str, Any]] = []
     # Preflight inspection of *INCLUDE dependencies and workspace synchronization

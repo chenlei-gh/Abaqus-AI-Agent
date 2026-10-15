@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import os
 import re
+import uuid
 from dataclasses import dataclass
 from pathlib import Path
 import shutil
@@ -229,12 +230,113 @@ def get_repo_root() -> Path:
     return Path(__file__).resolve().parents[2]
 
 
+def infer_customer_project_root(
+    source_path: Optional[Union[str, Path]] = None,
+    project_root: Optional[Union[str, Path]] = None,
+) -> Optional[Path]:
+    """Find the customer project that should own production artifacts.
+
+    A customer project is recognized by its ``input/working/solver/evidence/delivery``
+    layout, or by an explicit root. Source files that merely sit next to a repository
+    are not enough: production must not invent a project inside the agent checkout
+    or inside the process launch directory.
+    """
+    explicit = resolve_project_root(project_root, fail_closed=False)
+    if explicit is not None:
+        try:
+            return assert_path_outside_repo(explicit)
+        except PermissionError:
+            return None
+    if source_path is None:
+        return None
+    current = Path(source_path).resolve()
+    start = current.parent if current.is_file() or current.suffix else current
+    markers = {"input", "working", "solver", "evidence", "delivery"}
+    for candidate in [start] + list(start.parents):
+        try:
+            assert_path_outside_repo(candidate)
+        except PermissionError:
+            return None
+        if candidate.is_dir() and markers.issubset({item.name for item in candidate.iterdir()}):
+            return candidate
+        if candidate.name in markers and candidate.parent.is_dir():
+            parent = candidate.parent
+            try:
+                assert_path_outside_repo(parent)
+            except PermissionError:
+                return None
+            if markers.issubset({item.name for item in parent.iterdir()}):
+                return parent
+    return None
+
+
+def require_customer_project_context(
+    *,
+    source_path: Optional[Union[str, Path]] = None,
+    project_root: Optional[Union[str, Path]] = None,
+    project_name: Optional[str] = None,
+    project_context: Optional[ExternalProjectContext] = None,
+) -> ExternalProjectContext:
+    """Return the customer project that must own every production artifact.
+
+    Production scripts, solver files, and reports are not allowed to fall back to
+    the agent repository, the process cwd, or a machine-local scratch directory.
+    """
+    if project_context is not None:
+        assert_path_outside_repo(project_context.project_root)
+        return project_context
+    root = infer_customer_project_root(source_path=source_path, project_root=project_root)
+    if root is None:
+        hint = f" source={source_path!s}" if source_path else ""
+        raise ValueError(
+            "Production artifacts require the customer project directory. "
+            "Pass project_root/project_context, or place the source inside a project "
+            "that has input/, working/, solver/, evidence/, and delivery/. "
+            "Nothing is written to the agent repository or the launch directory."
+            + hint
+        )
+    return create_external_project_context(
+        root,
+        project_name=project_name or root.name,
+        enforce_outside_repo=True,
+    )
+
+
+def resolve_production_scratch(
+    *,
+    source_path: Optional[Union[str, Path]] = None,
+    project_root: Optional[Union[str, Path]] = None,
+    project_context: Optional[ExternalProjectContext] = None,
+    prefix: str = "scratch",
+) -> Path:
+    """Return a scratch directory that cannot pollute the agent repository.
+
+    A recognized customer project owns the scratch under ``solver/``. When no
+    customer project can be inferred, the scratch is an isolated temporary
+    directory outside the repository and outside the process launch directory.
+    """
+    import tempfile
+    try:
+        context = require_customer_project_context(
+            source_path=source_path,
+            project_root=project_root,
+            project_context=project_context,
+            project_name=prefix,
+        )
+    except ValueError:
+        return Path(tempfile.mkdtemp(prefix=f"{prefix}_"))
+    return context.create_run_solver_dir(f"{prefix}_{uuid.uuid4().hex[:8]}")
+
+
 def default_local_workspace_root() -> Path:
     """Return the user-local workspace root used when no override is configured.
 
     This is intentionally outside the git repository. Windows uses LOCALAPPDATA;
     other platforms use the XDG state home. A missing environment variable falls
     back to the user home directory, never to the repository.
+
+    Production customer jobs must not use this directory. It remains only for
+    explicit non-production scratch when no customer project exists.
     """
     if os.name == "nt":
         base = os.environ.get("LOCALAPPDATA", "").strip()

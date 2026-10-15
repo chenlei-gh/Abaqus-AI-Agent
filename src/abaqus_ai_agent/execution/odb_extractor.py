@@ -167,7 +167,11 @@ class HeadlessAbaqusPythonExecutor(AbaqusExecutor):
         custom_runner: Optional[Callable[[str], Any]] = None,
     ):
         self.launcher_cmd = launcher_cmd
-        self.workdir = Path(workdir).resolve() if workdir else Path(".").resolve()
+        if workdir:
+            self.workdir = Path(workdir).resolve()
+        else:
+            from ..paths import resolve_production_scratch
+            self.workdir = resolve_production_scratch(prefix="extract")
         self.timeout = timeout
         self.custom_runner = custom_runner
 

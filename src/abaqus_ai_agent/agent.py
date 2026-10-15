@@ -1135,36 +1135,39 @@ class AbaqusAIAgent:
         # In real production mode, solver execution inside the core repository is strictly forbidden.
         if prod_req:
             if project_context is None:
-                from .paths import get_repo_root, resolve_runs_root, resolve_project_root, create_external_project_context
+                from .paths import get_repo_root, resolve_project_root, create_external_project_context
                 ext_root = resolve_project_root(fail_closed=False)
                 if ext_root:
                     project_context = create_external_project_context(ext_root, project_name=plan.job_name or "Project")
-                elif target_workdir:
-                    repo_r = get_repo_root().resolve()
-                    cand_target = Path(target_workdir).resolve()
-                    if cand_target == repo_r or cand_target.is_relative_to(repo_r):
-                        raise PermissionError(
-                            f"Production execution blocked (REQ-ISO-003): Target workdir '{cand_target}' "
-                            f"resides inside the core repository '{repo_r}'. Production runs must use an external project context."
-                        )
-                    # Automatically establish project context rooted at external workdir
-                    proj_root = cand_target.parent if cand_target.name in ("solver", "working", "input", "delivery", "evidence") else cand_target
-                    project_context = create_external_project_context(
-                        proj_root,
-                        project_name=plan.job_name or "Project",
-                        enforce_outside_repo=False if is_test_double else True,
-                    )
-                    # Ensure target_workdir satisfies solver_dir boundary
-                    if not cand_target.is_relative_to(project_context.solver_dir.resolve()):
-                        target_workdir = str(project_context.create_run_solver_dir(plan.job_name or "run"))
                 else:
-                    runs_root = resolve_runs_root().resolve()
-                    repo_r = get_repo_root().resolve()
-                    if runs_root == repo_r or runs_root.is_relative_to(repo_r):
-                        raise RuntimeError(
-                            "[Production Guard] Execution in production mode requires a valid ExternalProjectContext. "
-                            "Silent fallback to repository-internal runs/ is strictly prohibited."
-                        )
+                    from .paths import require_customer_project_context
+                    source_hint = (
+                        target_workdir
+                        or getattr(intent, "source_path", None)
+                        or getattr(intent, "step_file_path", None)
+                        or getattr(geometry, "source_path", None)
+                        or getattr(geometry, "step_file_path", None)
+                    )
+                    if target_workdir:
+                        repo_r = get_repo_root().resolve()
+                        cand_target = Path(target_workdir).resolve()
+                        if cand_target == repo_r or cand_target.is_relative_to(repo_r):
+                            raise PermissionError(
+                                f"Production execution blocked (REQ-ISO-003): Target workdir '{cand_target}' "
+                                f"resides inside the core repository '{repo_r}'. Production runs must use an external project context."
+                            )
+                    project_context = require_customer_project_context(
+                        source_path=source_hint,
+                        project_name=plan.job_name or "Project",
+                    )
+                    if target_workdir:
+                        cand_target = Path(target_workdir).resolve()
+                        if cand_target.is_relative_to(project_context.solver_dir.resolve()):
+                            target_workdir = str(cand_target)
+                        else:
+                            target_workdir = str(project_context.create_run_solver_dir(plan.job_name or "run"))
+                    else:
+                        target_workdir = str(project_context.create_run_solver_dir(plan.job_name or "run"))
 
         # 5. Apply Plan Actions to CAE Environment
         self.apply_plan(plan)
@@ -1209,8 +1212,11 @@ class AbaqusAIAgent:
             heal_kwargs.pop("confirm_model_change", None)
             heal_workdir = heal_kwargs.pop("workdir", getattr(run, "work_dir", None))
             if not heal_workdir:
-                from .paths import resolve_runs_root
-                heal_workdir = str(resolve_runs_root() / getattr(run, "id", "heal_scratch"))
+                if project_context is not None:
+                    heal_workdir = str(project_context.create_run_solver_dir(getattr(run, "id", "heal")))
+                else:
+                    from .paths import resolve_runs_root
+                    heal_workdir = str(resolve_runs_root() / getattr(run, "id", "heal_scratch"))
             healed_run, healing_result = SelfHealingOrchestrator.attempt_healing(
                 agent=self,
                 failed_run=run,
