@@ -465,9 +465,12 @@ def select_engineering_figures(
                 if available_fields is None:
                     fld_set = set()
                     for _s_name, s_data in steps_data.items():
-                        for fld in s_data.get("fields", []):
+                        if not isinstance(s_data, dict):
+                            continue
+                        for fld in s_data.get("fields", []) or ():
                             fld_set.add(str(fld).upper())
-                    available_fields = sorted(list(fld_set))
+                    if fld_set:
+                        available_fields = sorted(list(fld_set))
                 if step in steps_data:
                     n_fr = steps_data[step].get("frames", 0)
                     if frame_index == -1 and n_fr > 0:
@@ -760,9 +763,12 @@ def select_engineering_figures(
 
     for kind, f_name, comp, filename, zh, en, view_mode in candidates:
         cand_output_pos = "NODAL" if f_name.upper() in ("U", "UR", "RF", "RM", "NT", "NT11", "COORD", "ANIMATION") else "INTEGRATION_POINT"
-        # Priority 1: Check if already exists in verified existing_figures for THIS run
+        # Priority 1: Check if already exists in verified existing_figures for THIS run.
+        # Preprocessing figures prove a fixture, contact, or load location. A stress
+        # or displacement contour of the same field is not that evidence.
         admitted_fig = None
-        if existing_figures:
+        preprocessing_kinds = {"load_application", "boundary_conditions", "contact_definition"}
+        if existing_figures and kind not in preprocessing_kinds:
             for cand_fig in existing_figures:
                 if not isinstance(cand_fig, ReportFigure) or cand_fig.path in already_reused_paths:
                     continue
@@ -788,9 +794,12 @@ def select_engineering_figures(
             already_reused_paths.add(admitted_fig.path)
             continue
 
-        # Priority 3: Check ODB field availability
+        # Priority 3: Check ODB field availability.
+        # Fixture, contact, and load figures are model-definition evidence. They
+        # are not withheld because a result field is absent from the ODB probe.
         is_topo_or_anim = f_name.upper() in ("MESH", "GRID", "UNDEFORMED", "ANIMATION")
-        if not is_topo_or_anim and avail_set is not None and f_name.upper() not in avail_set:
+        is_preprocessing = kind in ("load_application", "boundary_conditions", "contact_definition")
+        if not is_topo_or_anim and not is_preprocessing and avail_set is not None and f_name.upper() not in avail_set:
             unavailable.append({
                 "field": f_name,
                 "kind": kind,

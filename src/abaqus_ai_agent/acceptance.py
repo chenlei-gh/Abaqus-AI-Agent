@@ -46,6 +46,7 @@ def is_invalid_result_validity(val) -> bool:
 _PEAK_STRESS_KEYS = (
     "max_mises",
     "max_stress",
+    "stress",
     "S_Mises",
     "s_mises",
     "MISES",
@@ -62,6 +63,25 @@ _PERCENTILE_STRESS_KEYS = (
     "mises_percentile_995",
 )
 
+_STRESS_METRIC_KEYWORDS = ("stress", "mises", "von_mises", "tresca")
+_YIELD_METRIC_KEYWORDS = ("yield", "yield_strength", "yield_stress", "yield_ratio")
+
+
+def _is_stress_identifier(name_or_key: Optional[str]) -> bool:
+    if not name_or_key or not isinstance(name_or_key, str):
+        return False
+    lower = name_or_key.lower()
+    if lower in {k.lower() for k in _PEAK_STRESS_KEYS} or lower in {k.lower() for k in _PERCENTILE_STRESS_KEYS}:
+        return True
+    return any(kw in lower for kw in _STRESS_METRIC_KEYWORDS)
+
+
+def _is_yield_identifier(name_or_key: Optional[str]) -> bool:
+    if not name_or_key or not isinstance(name_or_key, str):
+        return False
+    lower = name_or_key.lower()
+    return any(kw in lower for kw in _YIELD_METRIC_KEYWORDS)
+
 
 def finite_number(value):
     """Return a finite float, or None. Booleans are not numbers here."""
@@ -69,7 +89,7 @@ def finite_number(value):
         return None
     try:
         number = float(value)
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):
         return None
     if not math.isfinite(number):
         return None
@@ -93,12 +113,22 @@ def lookup_metric(mapping, keys):
     return None
 
 
-def build_elastic_validity(inp_text=None, yield_strength=None, values=None, is_purely_elastic=None):
+def build_elastic_validity(
+    inp_text=None,
+    yield_strength=None,
+    values=None,
+    is_purely_elastic=None,
+    requires_stress_check=None,
+    requires_yield_check=None,
+    material_mapping_complete=None,
+    missing_material_regions=None,
+):
     """Assemble the elastic-range payload from the solved deck and extracted stress.
 
-    Returns None when yield strength or peak stress is not a verified finite
-    number. A missing payload does not invent a failure; a complete payload
-    with peak stress above yield does.
+    Returns None when neither stress check nor yield check is explicitly demanded
+    and yield strength or peak stress is not a verified finite number. When explicit
+    check requirements or material mapping statuses are supplied, returns the full
+    contract payload to allow fail-closed gate evaluation.
 
     The peak is never replaced by a percentile. If both are present, the
     larger one is the value that can invalidate a linear-elastic assumption.
@@ -109,19 +139,37 @@ def build_elastic_validity(inp_text=None, yield_strength=None, values=None, is_p
     if percentile is not None and (governing is None or percentile > governing):
         governing = percentile
     yield_value = finite_number(yield_strength)
-    if governing is None or yield_value is None:
+
+    has_explicit_contract = (
+        requires_stress_check is not None
+        or requires_yield_check is not None
+        or material_mapping_complete is not None
+        or (missing_material_regions is not None and len(missing_material_regions) > 0)
+    )
+
+    if not has_explicit_contract and (governing is None or yield_value is None):
         return None
+
     if is_purely_elastic is None:
-        if not inp_text:
-            return None
-        from .diagnostics.solver_patterns import extract_inp_has_plasticity
-        is_purely_elastic = not extract_inp_has_plasticity(inp_text)
+        if inp_text:
+            try:
+                from .diagnostics.solver_patterns import extract_inp_has_plasticity
+                is_purely_elastic = not extract_inp_has_plasticity(inp_text)
+            except Exception:
+                is_purely_elastic = None
+        else:
+            is_purely_elastic = None
+
     return {
-        "is_purely_elastic": is_purely_elastic is True,
+        "is_purely_elastic": is_purely_elastic is True if is_purely_elastic is not None else None,
         "yield_strength": yield_value,
         "max_stress": governing,
         "peak_stress": peak,
         "percentile_995": percentile,
+        "requires_stress_check": requires_stress_check,
+        "requires_yield_check": requires_yield_check,
+        "material_mapping_complete": material_mapping_complete,
+        "missing_material_regions": tuple(missing_material_regions or ()),
     }
 
 
@@ -160,6 +208,155 @@ def _detect_elastic_range_failure(elastic_validity) -> Optional[str]:
             "physically invalid past yield and cannot support a plastic-deformation conclusion."
         )
     return None
+
+
+def _audit_material_and_stress_acceptance(
+    values_map: Dict[str, Any],
+    criteria: Sequence[Any],
+    required_metrics: Sequence[str],
+    result_requirements: Sequence[Any],
+    physics_domain: Optional[str],
+    elastic_validity: Optional[Dict[str, Any]],
+    explicit_requires_stress: Optional[bool] = None,
+    explicit_requires_yield: Optional[bool] = None,
+    explicit_material_mapping_complete: Optional[bool] = None,
+    explicit_missing_regions: Optional[Sequence[str]] = None,
+) -> Dict[str, Any]:
+    """Fail-closed engineering evaluation covering 5 specific stress & material scenarios.
+
+    1. Stress check required, but no valid stress extracted -> blocks delivery.
+    2. Yield check required, but yield strength missing or unverified -> blocks delivery.
+    3. Purely elastic model stress exceeds verified yield strength -> RESULT_INVALID.
+    4. Non-stress check task without yield strength data -> does not block delivery alone.
+    5. Check required, but material mapping to critical regions incomplete -> blocks delivery.
+    """
+    ev = elastic_validity if isinstance(elastic_validity, dict) else {}
+
+    # Scenario 1 intent: Is stress evaluation required?
+    req_stress = explicit_requires_stress
+    if req_stress is None:
+        req_stress = ev.get("requires_stress_check")
+    if req_stress is None:
+        has_stress_crit = any(
+            _is_stress_identifier(c.get("value_key") if isinstance(c, dict) else getattr(c, "value_key", None))
+            or _is_stress_identifier(c.get("name") if isinstance(c, dict) else getattr(c, "name", None))
+            for c in (criteria or ())
+        )
+        has_stress_metric = any(_is_stress_identifier(rm) for rm in (required_metrics or ()))
+        has_stress_req = any(
+            _is_stress_identifier(r.get("name") if isinstance(r, dict) else getattr(r, "name", None))
+            or _is_stress_identifier(r.get("value_key") if isinstance(r, dict) else getattr(r, "value_key", None))
+            for r in (result_requirements or ())
+        )
+        domain_stress = str(physics_domain or "").lower() in ("structural_static", "strength", "static_stress")
+        req_stress = bool(has_stress_crit or has_stress_metric or has_stress_req or domain_stress)
+
+    # Scenario 2 intent: Is yield evaluation required?
+    req_yield = explicit_requires_yield
+    if req_yield is None:
+        req_yield = ev.get("requires_yield_check")
+    if req_yield is None:
+        has_yield_crit = any(
+            _is_yield_identifier(c.get("value_key") if isinstance(c, dict) else getattr(c, "value_key", None))
+            or _is_yield_identifier(c.get("name") if isinstance(c, dict) else getattr(c, "name", None))
+            for c in (criteria or ())
+        )
+        has_yield_metric = any(_is_yield_identifier(rm) for rm in (required_metrics or ()))
+        has_yield_req = any(
+            _is_yield_identifier(r.get("name") if isinstance(r, dict) else getattr(r, "name", None))
+            or _is_yield_identifier(r.get("value_key") if isinstance(r, dict) else getattr(r, "value_key", None))
+            for r in (result_requirements or ())
+        )
+        req_yield = bool(has_yield_crit or has_yield_metric or has_yield_req)
+
+    # Resolve governing stress
+    governing_stress = ev.get("max_stress")
+    if governing_stress is None or not math.isfinite(governing_stress):
+        governing_stress = lookup_metric(values_map, _PEAK_STRESS_KEYS)
+    if governing_stress is None:
+        governing_stress = lookup_metric(values_map, _PERCENTILE_STRESS_KEYS)
+    if governing_stress is None:
+        for c in (criteria or ()):
+            vk = c.get("value_key") if isinstance(c, dict) else getattr(c, "value_key", None)
+            if vk and _is_stress_identifier(vk):
+                val = lookup_metric(values_map, (vk,))
+                if val is not None:
+                    governing_stress = val
+                    break
+
+    # Resolve verified yield strength
+    yield_val = ev.get("yield_strength")
+    if yield_val is None or not math.isfinite(yield_val):
+        yield_val = lookup_metric(values_map, ("yield_strength", "yield_strength_mpa", "yield"))
+    verified_yield = finite_number(yield_val)
+
+    # Material mapping resolution
+    mat_mapping_complete = explicit_material_mapping_complete
+    if mat_mapping_complete is None:
+        mat_mapping_complete = ev.get("material_mapping_complete")
+    missing_regions = list(explicit_missing_regions or ev.get("missing_material_regions") or ())
+
+    failures: List[str] = []
+    blocked: List[str] = []
+
+    stress_extraction_failed = False
+    yield_verification_failed = False
+    material_mapping_failed = False
+    elastic_range_exceeded = False
+
+    # Scenario 1 evaluation
+    if req_stress and governing_stress is None:
+        stress_extraction_failed = True
+        err = "stress_check:no_valid_stress_extracted: stress evaluation requested, but no valid finite stress metric was extracted."
+        failures.append(err)
+        blocked.append(err)
+
+    # Scenario 2 evaluation
+    if req_yield and verified_yield is None:
+        yield_verification_failed = True
+        err = "yield_check:yield_strength_missing_or_unverified: yield verification requested, but yield strength data is missing or non-finite."
+        failures.append(err)
+        blocked.append(err)
+
+    # Scenario 3 evaluation: Purely elastic deck exceeded yield
+    elastic_failure_msg = _detect_elastic_range_failure(elastic_validity)
+    if elastic_failure_msg:
+        elastic_range_exceeded = True
+        failures.append(elastic_failure_msg)
+    elif ev.get("is_purely_elastic") is True and governing_stress is not None and verified_yield is not None:
+        if governing_stress > verified_yield:
+            elastic_range_exceeded = True
+            err = (
+                f"elastic_range_exceeded: purely elastic model extracted peak stress "
+                f"{governing_stress} exceeds material yield {verified_yield}; "
+                "linear-elastic result is physically invalid past yield and cannot support a plastic-deformation conclusion."
+            )
+            failures.append(err)
+
+    # Scenario 5 evaluation: Material mapping incomplete for critical regions
+    check_demanded = req_stress or req_yield or (criteria and len(criteria) > 0)
+    if check_demanded:
+        if mat_mapping_complete is False or len(missing_regions) > 0:
+            material_mapping_failed = True
+            regions_disp = ", ".join(str(r) for r in missing_regions) if missing_regions else "unspecified_critical_regions"
+            err = f"material_mapping:incomplete_assignment_to_critical_regions: required material properties not mapped to critical regions: [{regions_disp}]."
+            failures.append(err)
+            blocked.append(err)
+
+    # Scenario 4: Non-stress check tasks with no yield data DO NOT fail or block by this alone.
+
+    return {
+        "requires_stress_check": req_stress,
+        "requires_yield_check": req_yield,
+        "governing_stress": governing_stress,
+        "verified_yield": verified_yield,
+        "stress_extraction_failed": stress_extraction_failed,
+        "yield_verification_failed": yield_verification_failed,
+        "elastic_range_exceeded": elastic_range_exceeded,
+        "material_mapping_failed": material_mapping_failed,
+        "failures": tuple(failures),
+        "blocked": tuple(blocked),
+    }
 
 
 class ResultValidity(str):
@@ -427,7 +624,9 @@ def evaluate_result_acceptance(result_status, numerical=None, engineering=None,
                                odb_status=None, gate_justifications=None, procedure_verification=None,
                                thermal_balance=None, connector_kinematics=None, fmbd_dynamics=None, odb_fields=None, required_fields=None,
                                evidence_manifest=None, expected_run_id=None, base_dir=None,
-                               max_age_seconds=None, mandatory_roles=None, elastic_validity=None):
+                               max_age_seconds=None, mandatory_roles=None, elastic_validity=None,
+                               explicit_requires_stress=None, explicit_requires_yield=None,
+                               explicit_material_mapping_complete=None, explicit_missing_regions=None):
     """Combine execution/result evidence with deterministic acceptance criteria.
 
     - ResultRequirement & Physics Domain profile drive mandatory gates & required metrics.
@@ -735,7 +934,33 @@ def evaluate_result_acceptance(result_status, numerical=None, engineering=None,
                 failures.append("missing_required_field:%s" % rf)
                 blocked.append("missing_required_field:%s" % rf)
 
-    if missing_required_metrics or missing_required_fields:
+    # Material & Stress Acceptance Audit
+    mat_audit = _audit_material_and_stress_acceptance(
+        values_map=values_map,
+        criteria=criteria or (),
+        required_metrics=effective_required_metrics,
+        result_requirements=result_requirements or (),
+        physics_domain=physics_domain,
+        elastic_validity=elastic_validity,
+        explicit_requires_stress=explicit_requires_stress,
+        explicit_requires_yield=explicit_requires_yield,
+        explicit_material_mapping_complete=explicit_material_mapping_complete,
+        explicit_missing_regions=explicit_missing_regions,
+    )
+    for f in mat_audit.get("failures", ()):
+        if f not in failures:
+            failures.append(f)
+    for b in mat_audit.get("blocked", ()):
+        if b not in blocked:
+            blocked.append(b)
+
+    if (
+        missing_required_metrics
+        or missing_required_fields
+        or mat_audit.get("stress_extraction_failed")
+        or mat_audit.get("yield_verification_failed")
+        or mat_audit.get("material_mapping_failed")
+    ):
         gates["required_results"] = "BLOCKED"
     elif effective_required_metrics or effective_required_fields:
         gates["required_results"] = "PASS"
@@ -859,8 +1084,13 @@ def evaluate_result_acceptance(result_status, numerical=None, engineering=None,
     # linear result past yield is physically invalid and must fail closed as
     # RESULT_INVALID; it must not be narrated as "plastic deformation" or delivered.
     elastic_range_failure = _detect_elastic_range_failure(elastic_validity)
-    if elastic_range_failure:
+    if elastic_range_failure and elastic_range_failure not in failures:
         failures.append(elastic_range_failure)
+
+    is_elastic_exceeded = bool(mat_audit.get("elastic_range_exceeded") or elastic_range_failure)
+    is_stress_ext_failed = bool(mat_audit.get("stress_extraction_failed"))
+    is_mat_map_failed = bool(mat_audit.get("material_mapping_failed"))
+    is_yield_verif_failed = bool(mat_audit.get("yield_verification_failed"))
 
     physical_criteria_failed = criteria_failed or any(
         ("failed" in f or "exceeded" in f or "violation" in f or "limit" in f)
@@ -869,16 +1099,14 @@ def evaluate_result_acceptance(result_status, numerical=None, engineering=None,
         and not f.startswith("unsupported_")
         and not f.startswith("evidence_")
         and not f.startswith("corrupt_")
+        and not f.startswith("stress_check:")
+        and not f.startswith("yield_check:")
+        and not f.startswith("material_mapping:")
+        and not f.startswith("elastic_range_exceeded")
         for f in failures
     )
 
     if criteria_eval_error:
-        acceptance_status = "RESULT_INVALID"
-        result_validity = ResultValidity("RESULT_INVALID")
-        passed = False
-        deliverable = False
-        status = "BLOCKED"
-    elif elastic_range_failure:
         acceptance_status = "RESULT_INVALID"
         result_validity = ResultValidity("RESULT_INVALID")
         passed = False
@@ -917,6 +1145,34 @@ def evaluate_result_acceptance(result_status, numerical=None, engineering=None,
     elif result_status not in ("completed",):
         acceptance_status = "RESULT_INVALID" if result_status in ("unsubmitted", "probe_only") else "BLOCKED"
         result_validity = ResultValidity("SOLVER_FAILED")
+        passed = False
+        deliverable = False
+        status = "BLOCKED"
+    elif is_elastic_exceeded:
+        # Scenario 3: Purely elastic deck exceeding yield -> physically invalid result past yield
+        acceptance_status = "RESULT_INVALID"
+        result_validity = ResultValidity("RESULT_INVALID")
+        passed = False
+        deliverable = False
+        status = "BLOCKED"
+    elif is_stress_ext_failed:
+        # Scenario 1: Stress check required, but no valid stress extracted -> blocks delivery
+        acceptance_status = "BLOCKED"
+        result_validity = ResultValidity("RESULT_INVALID")
+        passed = False
+        deliverable = False
+        status = "BLOCKED"
+    elif is_mat_map_failed:
+        # Scenario 5: Check required, but material mapping to critical regions incomplete -> blocks delivery
+        acceptance_status = "BLOCKED"
+        result_validity = ResultValidity("RESULT_INVALID")
+        passed = False
+        deliverable = False
+        status = "BLOCKED"
+    elif is_yield_verif_failed:
+        # Scenario 2: Yield check required, but yield strength missing or unverified -> blocks delivery
+        acceptance_status = "BLOCKED"
+        result_validity = ResultValidity("INCOMPLETE")
         passed = False
         deliverable = False
         status = "BLOCKED"
@@ -1027,6 +1283,10 @@ def evaluate_production_acceptance(
     max_age_seconds: Optional[float] = None,
     mandatory_roles: Optional[Sequence[str]] = None,
     elastic_validity: Optional[Dict[str, Any]] = None,
+    explicit_requires_stress: Optional[bool] = None,
+    explicit_requires_yield: Optional[bool] = None,
+    explicit_material_mapping_complete: Optional[bool] = None,
+    explicit_missing_regions: Optional[Sequence[str]] = None,
     **kwargs,
 ) -> AcceptanceResult:
     """Strict Production Acceptance Gate with Full Causal & Grounding Binding.
@@ -1275,6 +1535,10 @@ def evaluate_production_acceptance(
         max_age_seconds=max_age_seconds,
         mandatory_roles=mandatory_roles,
         elastic_validity=elastic_validity,
+        explicit_requires_stress=explicit_requires_stress,
+        explicit_requires_yield=explicit_requires_yield,
+        explicit_material_mapping_complete=explicit_material_mapping_complete,
+        explicit_missing_regions=explicit_missing_regions,
     )
 
     if causal_failures or causal_blocked or causal_evidence_errors:

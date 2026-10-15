@@ -18,6 +18,7 @@ from ..planning.compiler import IntentMeshSpec
 from .material_catalog import match_engineering_material
 from .mesh_inference import infer_mesh_specification
 from .plausibility import audit_engineering_plausibility
+from ..validation.condition_fidelity import audit_condition_fidelity
 
 
 class IntentReasoningEngine:
@@ -88,6 +89,16 @@ class IntentReasoningEngine:
             material=resolved_mat,
             geometry=geometry,
         )
+
+        fidelity = audit_condition_fidelity(intent, description=intent.description or "")
+        if fidelity["blockers"]:
+            fidelity_msg = (
+                "Condition fidelity is unresolved: "
+                + "; ".join(fidelity["blockers"])
+                + ". Missing coating or indenter evidence is not filled with a default."
+            )
+            blockers.append(fidelity_msg)
+            clarifications.append(fidelity_msg)
 
         for check in plausibility_results:
             if not check.passed:

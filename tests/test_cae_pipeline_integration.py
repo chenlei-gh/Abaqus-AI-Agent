@@ -361,6 +361,7 @@ def test_agent_solve_requirement_require_production_full_closure_and_delivery(tm
         odb_sha256 = ""
         if odb_path and Path(odb_path).exists():
             odb_sha256 = hashlib.sha256(Path(odb_path).read_bytes()).hexdigest()
+        input_hash = str(kwargs.get("input_hash") or "")
         rendered_summary = []
         for s in specs:
             out_file = Path(output_dir) / s.target_filename
@@ -375,6 +376,7 @@ def test_agent_solve_requirement_require_production_full_closure_and_delivery(tm
             run_id=run_id,
             odb_sha256=odb_sha256,
             rendered_figures=rendered_summary,
+            input_hash=input_hash,
         )
 
         for s in specs:
@@ -390,9 +392,9 @@ def test_agent_solve_requirement_require_production_full_closure_and_delivery(tm
             )
             rendered.append(
                 ReportFigure(
-                    kind=s.kind,
+                    kind=s.visualization_type,
                     path=str(out_file.as_posix()),
-                    caption=s.caption,
+                    caption=getattr(s, "caption_zh", "") or getattr(s, "caption", ""),
                     source=f"{s.field_name}.{s.component}",
                     metadata={
                         "field": s.field_name,

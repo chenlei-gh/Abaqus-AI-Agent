@@ -1855,6 +1855,16 @@ def compile_engineering_intent(
     if not getattr(intent, "is_executable", True):
         raise ValueError("Draft or non-executable EngineeringIntent cannot be compiled into an execution plan.")
 
+    from ..validation.condition_fidelity import audit_condition_fidelity
+    fidelity = audit_condition_fidelity(intent, description=intent.description or "")
+    if fidelity["blockers"]:
+        raise ValueError(
+            "Cannot compile engineering intent: condition fidelity is unresolved ("
+            + "; ".join(fidelity["blockers"])
+            + "). No default coating thickness, modulus, cracking strain, indenter size, "
+            "friction, or regulation mapping is assumed."
+        )
+
     # 1. Resolved Names
     safe_id = "".join(c if c.isalnum() or c == "_" else "_" for c in intent.id)
     eff_model = model_name or intent.metadata.get("model_name") or f"Model_{safe_id}"

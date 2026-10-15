@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from typing import Any, Dict, Optional, Union
+from typing import Any, Dict, Optional, Tuple, Union
 
 from .connector import (
     ConnectorType,
@@ -19,6 +19,7 @@ from .fmbd import (
     IntentFMBDSpec,
     FMBDKinematicsVerification,
 )
+from .condition import ContactLoadingSpec, SurfaceTreatmentSpec
 from .geometry import ImagePoint
 
 
@@ -49,4 +50,6 @@ class EngineeringIntent:
     fatigue: Optional[IntentFatigueSpec] = None
     connectors: tuple = ()
     fmbd: Optional[IntentFMBDSpec] = None
+    surface_treatments: Tuple[SurfaceTreatmentSpec, ...] = ()
+    contact_loadings: Tuple[ContactLoadingSpec, ...] = ()
     is_executable: bool = True

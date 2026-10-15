@@ -5,6 +5,7 @@ fail-closed boundary gates, and anti-fabrication single-exit acceptance.
 """
 
 from dataclasses import dataclass
+from pathlib import Path
 from unittest.mock import MagicMock
 import pytest
 
@@ -236,7 +237,7 @@ class TestP1ProductEntryAudit:
         assert cap_bolt.capability_id == "bolt_pretension"
         assert cap_bolt.physics_domain == "multi_step"
 
-    def test_p1_08_successful_solve_contract_and_report(self, agent, monkeypatch):
+    def test_p1_08_successful_solve_contract_and_report(self, agent, monkeypatch, tmp_path: Path):
         """Mocked authentic full pass proving EngineeringTaskResult structure and report output."""
         intent = EngineeringIntent(
             id="intent-pass-01",
@@ -258,6 +259,7 @@ class TestP1ProductEntryAudit:
         mock_run.id = "run-p1-pass-001"
         mock_run.model_name = "Model_intent_pass_01"
         mock_run.job_name = "Job_intent_pass_01"
+        mock_run.work_dir = str(tmp_path)
         mock_run.state = AnalysisRunState.ACCEPTED
         mock_run.engineering_status = "RESULT_VALID"
         mock_run.acceptance_passed = True
@@ -394,7 +396,7 @@ class TestP1ProductEntryAudit:
         assert "contact_diagnostics" in res.summary_card["forbidden_keys"]
         assert any("Direct injection of internal verification objects" in err for err in res.errors)
 
-    def test_p1_11_six_state_strong_equivalence_consistency(self, agent, monkeypatch):
+    def test_p1_11_six_state_strong_equivalence_consistency(self, agent, monkeypatch, tmp_path: Path):
         """Assert strict bidirectional state equivalence across TaskResult, AnalysisRun, and Acceptance.
 
         TaskStatus.COMPLETED <=> run.state == ACCEPTED <=> run.acceptance_passed == True
@@ -415,6 +417,7 @@ class TestP1ProductEntryAudit:
 
         # Case A: Fully Authentic Success
         mock_run_pass = MagicMock(spec=AnalysisRun)
+        mock_run_pass.work_dir = str(tmp_path / "pass")
         mock_run_pass.state = AnalysisRunState.ACCEPTED
         mock_run_pass.engineering_status = "RESULT_VALID"
         mock_run_pass.acceptance_passed = True
@@ -433,6 +436,7 @@ class TestP1ProductEntryAudit:
 
         # Case B: Desynchronized Failure (acceptance_passed False while run_state claims ACCEPTED)
         mock_run_desync = MagicMock(spec=AnalysisRun)
+        mock_run_desync.work_dir = str(tmp_path / "desync")
         mock_run_desync.state = AnalysisRunState.ACCEPTED
         mock_run_desync.engineering_status = "RESULT_INVALID"
         mock_run_desync.acceptance_passed = False

@@ -154,6 +154,7 @@ def test_zero_stale_report_leakage_when_delivery_blocked(tmp_path: Path, monkeyp
     mock_run.id = "run-test-blocked-001"
     mock_run.model_name = "Model_Cantilever"
     mock_run.job_name = "Job_Cantilever"
+    mock_run.work_dir = str(tmp_path)
     mock_run.state = AnalysisRunState.ACCEPTED
     mock_run.engineering_status = "RESULT_VALID"
     mock_run.acceptance_passed = True
@@ -179,10 +180,14 @@ def test_zero_stale_report_leakage_when_delivery_blocked(tmp_path: Path, monkeyp
     # - report_markdown is None
     # - report_html is None
     # - delivery_card is None
+    from abaqus_ai_agent.paths import create_external_project_context
+
+    project = create_external_project_context(tmp_path / "customer", enforce_outside_repo=False)
     task_res = agent.solve_requirement(
         _build_test_intent(),
         require_production=True,
-        workdir=str(tmp_path),
+        workdir=str(project.solver_dir),
+        project_context=project,
     )
 
     assert task_res.status == TaskStatus.FAILED
@@ -305,6 +310,7 @@ def test_non_deliverable_draft_diagnostic_contract(tmp_path: Path, monkeypatch):
     mock_run.id = "run-test-draft-001"
     mock_run.model_name = "Model_Cantilever"
     mock_run.job_name = "Job_Cantilever"
+    mock_run.work_dir = str(tmp_path)
     mock_run.state = AnalysisRunState.ACCEPTED
     mock_run.engineering_status = "RESULT_VALID"
     mock_run.acceptance_passed = True
@@ -482,6 +488,7 @@ def test_missing_required_criterion_field_extraction_invalidates_delivery(tmp_pa
     mock_run.id = "run-test-req-crit-001"
     mock_run.model_name = "Model_Cantilever"
     mock_run.job_name = "Job_Cantilever"
+    mock_run.work_dir = str(tmp_path)
     mock_run.state = AnalysisRunState.ACCEPTED
     mock_run.engineering_status = "RESULT_VALID"
     mock_run.acceptance_passed = True

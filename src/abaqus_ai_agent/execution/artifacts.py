@@ -85,8 +85,8 @@ for suffix in ('.msg', '.sta', '.dat', '.log'):
     if not os.path.exists(path):
         continue
     try:
-        with open(path, 'r') as fh:
-            lines=fh.readlines()
+        with open(path, 'rb') as fh:
+            lines = [l.decode('latin-1', 'replace') for l in fh.readlines()]
         result[suffix]={'path':path, 'tail':''.join(lines[-tail:])}
     except Exception as exc:
         result[suffix]={'path':path, 'error':str(exc)}

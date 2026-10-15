@@ -1566,6 +1566,15 @@ class AbaqusAIAgent:
                     )
                 out_dir = official_dir
                 scope_payload = _analysis_scope_for_figures(plan, geometry) or {}
+                from .validation.condition_fidelity import required_preprocessing_figure_kinds
+                required_figures = required_preprocessing_figure_kinds(
+                    boundary_evidence=boundary_for_figures,
+                    loads=_report_loads(boundary_for_figures),
+                    bcs=_report_bcs(boundary_for_figures),
+                    contacts=(scope_payload.get("contact_records") or scope_payload.get("contacts") or ()),
+                    description=getattr(intent, "description", "") or "",
+                    intent=intent,
+                )
                 deterministic_delivery_card, _, det_report_data = pipeline.build_and_render(
                     output_dir=Path(official_dir),
                     title=report_title,
@@ -1607,6 +1616,7 @@ class AbaqusAIAgent:
                     launcher=getattr(self.executor, "launcher", None),
                     result_intelligence=ri_bundle,
                     self_healing=healing_result,
+                    required_preprocessing_figures=required_figures,
                 )
                 report_md = render_markdown(det_report_data)
                 report_html_str = render_html(det_report_data, base_dir=out_dir)

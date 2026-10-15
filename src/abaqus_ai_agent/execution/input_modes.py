@@ -289,6 +289,8 @@ def solve_user_inp(
     requirements: Sequence[Any] = (),
     include_animation: bool = True,
     launcher: Optional[str] = None,
+    assembly_scope: Optional[Any] = None,
+    loaded_instances: Optional[Sequence[str]] = None,
 ) -> Dict[str, Any]:
     """Execute direct solver computation on a user-provided .inp input deck.
 
@@ -349,6 +351,21 @@ def solve_user_inp(
             )
         synced_dependencies = _execute_include_sync(plans)
         _verify_solver_dependencies(synced_dependencies)
+
+    # Pre-submission Assembly Contract Audit (P0.2 Fail-Closed)
+    if assembly_scope is not None:
+        from ..validation.assembly_guard import audit_inp_assembly_contract, AssemblyContractViolation
+        with open(inp_file, "r", encoding="utf-8", errors="replace") as f:
+            deck_text = f.read()
+        audit_res = audit_inp_assembly_contract(
+            deck_text,
+            assembly_scope=assembly_scope,
+            loaded_instances=loaded_instances,
+        )
+        if not audit_res.passed:
+            raise AssemblyContractViolation(
+                f"Direct INP solve blocked prior to solver invocation: {audit_res.reason}"
+            )
 
     # Track pre-existing candidate ODB to prevent stale artifact masquerading
     candidate_odb = (effective_workdir if effective_workdir else inp_file.parent) / f"{eff_job_name}.odb"

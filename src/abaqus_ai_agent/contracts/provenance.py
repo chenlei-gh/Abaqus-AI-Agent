@@ -205,6 +205,32 @@ def verify_deliverable(record: Any) -> Dict[str, Any]:
         reasons.append("natural_language_requirement_not_jev_routed")
         allow_file = False
         allow_agent_attribution = False
+    fidelity = payload.get("condition_fidelity") if isinstance(payload, dict) else None
+    if isinstance(fidelity, dict) and fidelity.get("blockers"):
+        reasons.extend("condition_fidelity:" + str(item) for item in fidelity.get("blockers") or ())
+        allow_file = False
+        allow_agent_attribution = False
+    elif isinstance(payload, dict) and payload.get("formal_report_allowed") is False:
+        reasons.append("condition_fidelity_blocks_formal_report")
+        allow_file = False
+        allow_agent_attribution = False
+    missing_figures = payload.get("missing_preprocessing_figures") if isinstance(payload, dict) else None
+    if missing_figures:
+        reasons.append("formal_report_missing_preprocessing_figures:" + ",".join(str(item) for item in missing_figures))
+        allow_file = False
+        allow_agent_attribution = False
+    elif isinstance(payload, dict) and payload.get("require_preprocessing_figures"):
+        from ..validation.condition_fidelity import required_formal_figure_kinds
+        present = {
+            str(item.get("kind") or item.get("visualization_type") or "").strip().lower()
+            for item in (payload.get("figures") or ())
+            if isinstance(item, dict) and (item.get("path") or item.get("embedded"))
+        }
+        absent = [kind for kind in required_formal_figure_kinds() if kind not in present]
+        if absent:
+            reasons.append("formal_report_missing_preprocessing_figures:" + ",".join(absent))
+            allow_file = False
+            allow_agent_attribution = False
     status = "PASS" if allow_file else "BLOCKED"
     return {
         "status": status,

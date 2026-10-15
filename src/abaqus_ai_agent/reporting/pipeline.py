@@ -106,6 +106,7 @@ class DeterministicReportPipeline:
         include_mesh: bool = False,
         include_keypoint_detail: bool = False,
         inp_text: Optional[str] = None,
+        required_preprocessing_figures: Sequence[str] = (),
     ) -> Tuple[ReportDeliveryCard, ArtifactPointer, EngineeringReportData]:
         """Compile report, render HTML & Markdown, register artifacts, and produce LLM card."""
         # 0. Early Delivery Gate: Verify authorization BEFORE any file creation or disk I/O.
@@ -529,6 +530,19 @@ class DeterministicReportPipeline:
                 raise PermissionError(
                     "Official engineering delivery blocked: run-record output_hash does not "
                     "match the ODB file on disk. No report artifacts were written."
+                )
+        if is_official_delivery and required_preprocessing_figures:
+            from ..validation.condition_fidelity import missing_preprocessing_figures
+            missing_figures = missing_preprocessing_figures(
+                report_figures,
+                required=tuple(required_preprocessing_figures),
+            )
+            if missing_figures:
+                raise PermissionError(
+                    "Official engineering delivery blocked: formal report is missing preprocessing evidence "
+                    "(%s). A stress contour is not a substitute for fixture, contact, and load figures. "
+                    "No report artifacts were written."
+                    % ", ".join(missing_figures)
                 )
 
         # 2. Build polymorphic EngineeringReportData
