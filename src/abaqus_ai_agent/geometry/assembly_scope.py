@@ -134,13 +134,17 @@ def build_assembly_scope(
     model: GeometryModel,
     *,
     friction_coefficient: float = 0.15,
+    fixture_face_id: Optional[str] = None,
+    allow_unverified_exterior_fixture: bool = False,
 ) -> AssemblyScope:
     """Ground every solid, mating contact, and one installation fixture.
 
     Contact is accepted only when two planar faces belong to different solids,
     their normals oppose, and the faces are within a small absolute/relative gap.
-    The fixture is the largest planar face whose outward normal points away from
-    the assembly centroid. Missing either result is recorded as a gap.
+    Installation fixture requires explicit semantic ground (e.g. named fixture_face_id
+    or verifiable base/mount/fixture semantics) to prevent assigning constraints to
+    movable components such as pins or handles. Missing verified fixture records
+    'installation_fixture_not_grounded'.
     """
     if friction_coefficient < 0.0:
         raise ValueError(f"friction_coefficient cannot be negative, got {friction_coefficient}")
@@ -252,41 +256,90 @@ def build_assembly_scope(
     if model.bounding_box is not None:
         centroid = model.bounding_box.center
     fixture: Optional[InstallationFixture] = None
-    best_key: Optional[Tuple[int, float]] = None
-    for part, face, normal, point in planar:
-        if face.id in used_faces:
-            continue
-        outward = _dot(_sub(point, centroid), normal)
-        if outward <= 1e-6:
-            continue
-        # Installation support is the outermost exterior face along its normal,
-        # not the largest interior face of one part.
-        axis = max(range(3), key=lambda i: abs(normal[i]))
-        if abs(normal[axis]) < 0.95:
-            continue
-        signed = point[axis] if normal[axis] > 0.0 else -point[axis]
-        same_direction = [
-            (item[3][axis] if item[2][axis] > 0.0 else -item[3][axis])
-            for item in planar
-            if item[1].id not in used_faces and abs(item[2][axis]) >= 0.95 and (item[2][axis] > 0.0) == (normal[axis] > 0.0)
-        ]
-        if abs(signed - max(same_direction)) > 1e-6:
-            continue
-        area = float(face.area or 0.0)
-        key = (signed, area)
-        if best_key is not None and key <= best_key:
-            continue
-        best_key = key
-        fixture = InstallationFixture(
-            name="InstallationFixed",
-            part_id=part.solid_id,
-            instance_name=part.instance_name,
-            face_id=face.id,
-            set_name="InstallationFixed",
-            point=point,
-            normal=normal,
-            area=area,
-        )
+
+    # Priority 1: Explicitly requested fixture_face_id
+    if fixture_face_id is not None:
+        for part, face, normal, point in planar:
+            if face.id == fixture_face_id:
+                fixture = InstallationFixture(
+                    name="InstallationFixed",
+                    part_id=part.solid_id,
+                    instance_name=part.instance_name,
+                    face_id=face.id,
+                    set_name="InstallationFixed",
+                    point=point,
+                    normal=normal,
+                    area=float(face.area or 0.0),
+                )
+                break
+
+    # Priority 2: Semantic name matching on Face ID or Part ID (e.g. FIX, BASE, MOUNT, GROUND)
+    if fixture is None:
+        semantic_keywords = ("fix", "base", "mount", "ground", "housing")
+        disqualified_faces = ("pin", "lever", "spring", "bolt", "screw")
+        semantic_candidates = []
+        for part, face, normal, point in planar:
+            if face.id in used_faces:
+                continue
+            face_tag = face.id.lower()
+            part_tag = part.solid_id.lower()
+            if any(dq in face_tag for dq in disqualified_faces):
+                continue
+            if any(kw in face_tag for kw in semantic_keywords) or any(kw in part_tag for kw in semantic_keywords):
+                outward = _dot(_sub(point, centroid), normal)
+                if outward > 1e-6:
+                    area = float(face.area or 0.0)
+                    semantic_candidates.append((area, part, face, normal, point))
+        if semantic_candidates:
+            # Pick the largest area among semantic base faces
+            semantic_candidates.sort(key=lambda item: item[0], reverse=True)
+            chosen = semantic_candidates[0]
+            fixture = InstallationFixture(
+                name="InstallationFixed",
+                part_id=chosen[1].solid_id,
+                instance_name=chosen[1].instance_name,
+                face_id=chosen[2].id,
+                set_name="InstallationFixed",
+                point=chosen[4],
+                normal=chosen[3],
+                area=chosen[0],
+            )
+
+    # Priority 3: Fallback ONLY if explicitly allowed by allow_unverified_exterior_fixture=True
+    if fixture is None and allow_unverified_exterior_fixture:
+        best_key: Optional[Tuple[int, float]] = None
+        for part, face, normal, point in planar:
+            if face.id in used_faces:
+                continue
+            outward = _dot(_sub(point, centroid), normal)
+            if outward <= 1e-6:
+                continue
+            axis = max(range(3), key=lambda i: abs(normal[i]))
+            if abs(normal[axis]) < 0.95:
+                continue
+            signed = point[axis] if normal[axis] > 0.0 else -point[axis]
+            same_direction = [
+                (item[3][axis] if item[2][axis] > 0.0 else -item[3][axis])
+                for item in planar
+                if item[1].id not in used_faces and abs(item[2][axis]) >= 0.95 and (item[2][axis] > 0.0) == (normal[axis] > 0.0)
+            ]
+            if abs(signed - max(same_direction)) > 1e-6:
+                continue
+            area = float(face.area or 0.0)
+            key = (signed, area)
+            if best_key is not None and key <= best_key:
+                continue
+            best_key = key
+            fixture = InstallationFixture(
+                name="InstallationFixed",
+                part_id=part.solid_id,
+                instance_name=part.instance_name,
+                face_id=face.id,
+                set_name="InstallationFixed",
+                point=point,
+                normal=normal,
+                area=area,
+            )
 
     gaps: List[str] = []
     if len(parts) >= 2 and any(part.step_body_index is None for part in parts):

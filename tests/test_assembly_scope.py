@@ -92,8 +92,8 @@ def test_related_parts_receive_contact_and_installation_fixture():
     assert {scope.contacts[0].master_part, scope.contacts[0].slave_part} == {"S_HANDLE", "S_PIN"}
     assert scope.fixture is not None
     assert scope.fixture.set_name == "InstallationFixed"
-    assert scope.fixture.part_id == "S_PIN"
-    assert scope.fixture.face_id == "F_pin_top"
+    assert scope.fixture.part_id == "S_HANDLE"
+    assert scope.fixture.face_id == "F_base_bot"
     assert scope.gaps == ()
 
     cap = classify_cad_model(_mated_handle_model())
@@ -280,3 +280,54 @@ def test_product_entry_blocks_incomplete_multi_solid_scope():
     assert result.status == TaskStatus.BLOCKED
     assert result.summary_card["status"] == "ASSEMBLY_SCOPE_BLOCKED"
     assert "cannot be reduced to one part" in result.errors[0]
+
+
+def test_unverified_exterior_fixture_fails_closed_without_semantics():
+    # Model without any semantic tags (no 'base', 'fix', etc.)
+    vertices = (
+        CadVertex("V1", (0.0, 0.0, 0.0)),
+        CadVertex("V2", (40.0, 20.0, 0.0)),
+        CadVertex("V3", (0.0, 0.0, 30.0)),
+        CadVertex("V4", (40.0, 20.0, 30.0)),
+        CadVertex("V5", (5.0, 2.0, 30.0)),
+        CadVertex("V6", (25.0, 16.0, 30.0)),
+        CadVertex("V7", (5.0, 2.0, 50.0)),
+        CadVertex("V8", (25.0, 16.0, 50.0)),
+    )
+    edges = (
+        CadEdge("E1", start_vertex_id="V1", end_vertex_id="V2"),
+        CadEdge("E2", start_vertex_id="V3", end_vertex_id="V4"),
+        CadEdge("E3", start_vertex_id="V5", end_vertex_id="V6"),
+        CadEdge("E4", start_vertex_id="V7", end_vertex_id="V8"),
+    )
+    # Generic names with no semantic keyword
+    faces = (
+        CadFace("F_p1_1", surface_type="PLANE", edge_ids=("E1",), normal=(0.0, 0.0, -1.0), is_planar=True, area=800.0),
+        CadFace("F_p1_2", surface_type="PLANE", edge_ids=("E2",), normal=(0.0, 0.0, 1.0), is_planar=True, area=800.0),
+        CadFace("F_p2_1", surface_type="PLANE", edge_ids=("E3",), normal=(0.0, 0.0, -1.0), is_planar=True, area=280.0),
+        CadFace("F_p2_2", surface_type="PLANE", edge_ids=("E4",), normal=(0.0, 0.0, 1.0), is_planar=True, area=280.0),
+    )
+    shells = (
+        CadShell("SH1", face_ids=("F_p1_1", "F_p1_2"), is_closed=True),
+        CadShell("SH2", face_ids=("F_p2_1", "F_p2_2"), is_closed=True),
+    )
+    solids = (
+        CadSolid("SOLID_ALPHA", shell_ids=("SH1",), step_body_index=1),
+        CadSolid("SOLID_BETA", shell_ids=("SH2",), step_body_index=2),
+    )
+    bbox = CadBoundingBox(0.0, 0.0, 0.0, 40.0, 20.0, 50.0)
+    model = _model(solids, shells, faces, edges, vertices, bbox)
+
+    # Without verified semantic tags or explicit fixture_face_id, must fail-closed:
+    scope = build_assembly_scope(model, allow_unverified_exterior_fixture=False)
+    assert scope.fixture is None
+    assert "installation_fixture_not_grounded" in scope.gaps
+    assert scope.is_complete is False
+
+    # When explicit fixture_face_id is provided, grounds successfully:
+    scope_grounded = build_assembly_scope(model, fixture_face_id="F_p1_1")
+    assert scope_grounded.fixture is not None
+    assert scope_grounded.fixture.face_id == "F_p1_1"
+    assert scope_grounded.fixture.part_id == "SOLID_ALPHA"
+    assert "installation_fixture_not_grounded" not in scope_grounded.gaps
+    assert scope_grounded.is_complete is True

@@ -255,8 +255,11 @@ def compile_intent_to_actions(
             )
         step_path = (geometry.step_file_path or "").replace("\\", "/")
         if not step_path:
-            raise ValueError("step_assembly requires geometry.step_file_path")
-        part_blocks = []
+            raise ValueError("step_assembly requires a non-empty step_file_path")
+        part_blocks = [
+            "from step import *\n"
+            f"mdb.openStep(fileName=r'{step_path}', scaleFromFile=OFF)\n"
+        ]
         for index, part in enumerate(scope.parts):
             body_num = getattr(part, "step_body_index", None)
             if not isinstance(body_num, int) or body_num < 1:
@@ -265,9 +268,8 @@ def compile_intent_to_actions(
                     "refusing to guess bodyNum from part name or list position"
                 )
             part_blocks.append(
-                f"imported_{index} = mdb.openStep(fileName=r'{step_path}', scaleFromFile=OFF)\n"
                 f"p_{index} = mdb.models['{model_name}'].PartFromGeometryFile(\n"
-                f"    name='{part.name}', geometryFile=imported_{index}, bodyNum={body_num},\n"
+                f"    name='{part.name}', geometryFile=mdb.acis, bodyNum={body_num},\n"
                 f"    combine=False, dimensionality=THREE_D, type=DEFORMABLE_BODY)\n"
             )
         geo_code = model_init + "".join(part_blocks)
