@@ -106,6 +106,104 @@ def parse_inp_parts_and_instances(inp_text: str) -> Tuple[Dict[str, bool], Dict[
     return parts_has_elements, instance_to_part, root_has_elements
 
 
+def _is_exact_or_canonical_instance_match(req_name: str, candidate_name: str) -> bool:
+    """Check if candidate instance matches requested instance or canonical Part-1 format.
+    
+    Strictly forbids loose substring containment (e.g., 'Handle' must NOT match 'Handle_Base').
+    """
+    req_norm = _normalize_name(req_name)
+    cand_norm = _normalize_name(candidate_name)
+    if req_norm == cand_norm:
+        return True
+    # If request is 'PartName' and candidate is 'PartName1' (Abaqus auto PartName-1 instance)
+    if cand_norm == f"{req_norm}1":
+        return True
+    if req_norm == f"{cand_norm}1":
+        return True
+    return False
+
+
+def parse_inp_interactions(inp_text: str) -> List[Tuple[str, str]]:
+    """Parse *TIE and *CONTACT PAIR definitions from INP to extract connected surface/instance pairs."""
+    lines = inp_text.splitlines()
+    pairs: List[Tuple[str, str]] = []
+    in_interaction = False
+
+    for line in lines:
+        stripped = line.strip()
+        if not stripped or stripped.startswith("**"):
+            continue
+        upper = stripped.upper()
+
+        if upper.startswith("*CONTACT PAIR") or upper.startswith("*TIE"):
+            in_interaction = True
+            continue
+        elif upper.startswith("*"):
+            in_interaction = False
+            continue
+
+        if in_interaction:
+            # Data line: slave_surface, master_surface
+            parts = [p.strip() for p in stripped.split(",")]
+            if len(parts) >= 2:
+                s1 = _normalize_name(parts[0])
+                s2 = _normalize_name(parts[1])
+                if s1 and s2:
+                    pairs.append((s1, s2))
+
+    return pairs
+
+
+def parse_inp_surfaces(inp_text: str) -> Dict[str, Set[str]]:
+    """Parse surface definitions and map normalized surface name to associated instance names."""
+    lines = inp_text.splitlines()
+    surf_to_insts: Dict[str, Set[str]] = {}
+    current_instance: Optional[str] = None
+    current_surface: Optional[str] = None
+
+    for line in lines:
+        stripped = line.strip()
+        if not stripped or stripped.startswith("**"):
+            continue
+        upper = stripped.upper()
+
+        if upper.startswith("*INSTANCE"):
+            inst_match = re.search(r"NAME\s*=\s*([^,\s]+)", stripped, re.IGNORECASE)
+            if inst_match:
+                current_instance = _normalize_name(inst_match.group(1))
+            continue
+        elif upper.startswith("*END INSTANCE"):
+            current_instance = None
+            continue
+
+        if upper.startswith("*SURFACE"):
+            surf_match = re.search(r"NAME\s*=\s*([^,\s]+)", stripped, re.IGNORECASE)
+            if surf_match:
+                current_surface = _normalize_name(surf_match.group(1))
+                if current_surface not in surf_to_insts:
+                    surf_to_insts[current_surface] = set()
+                if current_instance:
+                    surf_to_insts[current_surface].add(current_instance)
+            continue
+        elif upper.startswith("*"):
+            current_surface = None
+            continue
+
+        if current_surface and current_instance:
+            surf_to_insts[current_surface].add(current_instance)
+        elif current_surface:
+            # Assembly level surface: check if data line references instance (e.g. InstName.Elset)
+            parts = stripped.split(",")
+            for p in parts:
+                p_clean = p.strip()
+                if "." in p_clean:
+                    inst_part = _normalize_name(p_clean.split(".")[0])
+                    if inst_part:
+                        surf_to_insts[current_surface].add(inst_part)
+
+    return surf_to_insts
+
+
 def _has_contact_or_interaction(inp_text: str) -> bool:
     """Check whether multi-part load transfer definitions exist in INP."""
     upper = inp_text.upper()
@@ -118,6 +216,106 @@ def _has_contact_or_interaction(inp_text: str) -> bool:
         "*COHESIVE SECTION",
     ]
     return any(kw in upper for kw in keywords)
+
+
+def _verify_contacts_covered(
+    inp_text: str,
+    scope_contacts: Sequence[Dict[str, Any]],
+    inst_to_part: Dict[str, str],
+) -> Tuple[bool, Optional[str]]:
+    """Verify that required mating contacts in AssemblyScope have corresponding load transfer in INP."""
+    if not scope_contacts:
+        return True, None
+
+    # Check keyword existence first
+    if not _has_contact_or_interaction(inp_text):
+        return (
+            False,
+            "Assembly contract fidelity violation: multi-part contract requires load-transfer contact pairs, "
+            "but no *CONTACT PAIR, *TIE, or *SURFACE INTERACTION was found in the deck.",
+        )
+
+    pairs = parse_inp_interactions(inp_text)
+    if not pairs:
+        # Fallback to general interaction keyword if specific pair lines couldn't be parsed
+        return True, None
+
+    surf_to_insts = parse_inp_surfaces(inp_text)
+
+    # Check if each required contact pair's instances/surfaces appear in the interaction definitions
+    for sc in scope_contacts:
+        m_inst = sc.get("master") or sc.get("master_instance") or sc.get("master_part") or ""
+        s_inst = sc.get("slave") or sc.get("slave_instance") or sc.get("slave_part") or ""
+        m_norm = _normalize_name(m_inst)
+        s_norm = _normalize_name(s_inst)
+        m_surf = _normalize_name(sc.get("master_surface") or "")
+        s_surf = _normalize_name(sc.get("slave_surface") or "")
+
+        pair_matched = False
+        m_candidates = {m_norm, re.sub(r"\d+$", "", m_norm)}
+        s_candidates = {s_norm, re.sub(r"\d+$", "", s_norm)}
+        if m_norm in inst_to_part:
+            m_candidates.add(inst_to_part[m_norm])
+        if s_norm in inst_to_part:
+            s_candidates.add(inst_to_part[s_norm])
+
+        for p1, p2 in pairs:
+            # 1. Exact or canonical surface name match
+            if (m_surf and s_surf) and (
+                (_is_exact_or_canonical_instance_match(s_surf, p1) and _is_exact_or_canonical_instance_match(m_surf, p2))
+                or (_is_exact_or_canonical_instance_match(m_surf, p1) and _is_exact_or_canonical_instance_match(s_surf, p2))
+            ):
+                pair_matched = True
+                break
+
+            # 2. Match surface references containing instance prefixes or via surf_to_insts
+            p1_insts = set(surf_to_insts.get(p1, set()))
+            p2_insts = set(surf_to_insts.get(p2, set()))
+            if "." in p1:
+                p1_insts.add(p1.split(".")[0])
+            if "." in p2:
+                p2_insts.add(p2.split(".")[0])
+            for inst, parent_part in inst_to_part.items():
+                inst_root = re.sub(r"\d+$", "", inst)
+                if inst in p1 or parent_part in p1 or (inst_root and inst_root in p1):
+                    p1_insts.add(inst)
+                    p1_insts.add(parent_part)
+                if inst in p2 or parent_part in p2 or (inst_root and inst_root in p2):
+                    p2_insts.add(inst)
+                    p2_insts.add(parent_part)
+
+            m_match = any(
+                (cand and cand in p1) or any(_is_exact_or_canonical_instance_match(cand, p1_c) for p1_c in p1_insts)
+                for cand in m_candidates if cand
+            )
+            s_match = any(
+                (cand and cand in p2) or any(_is_exact_or_canonical_instance_match(cand, p2_c) for p2_c in p2_insts)
+                for cand in s_candidates if cand
+            )
+            if m_match and s_match:
+                pair_matched = True
+                break
+
+            m_match_rev = any(
+                (cand and cand in p2) or any(_is_exact_or_canonical_instance_match(cand, p2_c) for p2_c in p2_insts)
+                for cand in m_candidates if cand
+            )
+            s_match_rev = any(
+                (cand and cand in p1) or any(_is_exact_or_canonical_instance_match(cand, p1_c) for p1_c in p1_insts)
+                for cand in s_candidates if cand
+            )
+            if m_match_rev and s_match_rev:
+                pair_matched = True
+                break
+
+        if not pair_matched:
+            return (
+                False,
+                f"Assembly contract fidelity violation: required load transfer between '{m_inst}' "
+                f"and '{s_inst}' is not defined in any *CONTACT PAIR or *TIE interaction.",
+            )
+
+    return True, None
 
 
 def _detect_overconstrained_actuator(inp_text: str, loaded_instances: Sequence[str]) -> Optional[str]:
@@ -145,7 +343,8 @@ def _detect_overconstrained_actuator(inp_text: str, loaded_instances: Sequence[s
             # Check for ENCASTRE or all-DOFs fixed on actuator instance
             if "ENCASTRE" in upper:
                 for inst in normalized_loaded:
-                    if inst in _normalize_name(stripped):
+                    norm_line = _normalize_name(stripped)
+                    if inst in norm_line or f"{inst}1" in norm_line:
                         return f"Actuator instance '{inst}' is completely locked with ENCASTRE in *BOUNDARY"
     return None
 
@@ -161,7 +360,7 @@ def audit_inp_assembly_contract(
     - If assembly_scope requires multiple parts, all retained parts must exist
       with verified element definitions.
     - If contact interactions are specified in the scope, load-transfer pairs
-      must exist in the INP.
+      must exist in the INP and reference valid mating objects.
     - If primary loaded members are specified, they must not be completely locked.
     """
     if not inp_text or not inp_text.strip():
@@ -173,6 +372,16 @@ def audit_inp_assembly_contract(
     has_any_elements = root_elements or any(parts_elements.values())
     if not has_any_elements:
         return AssemblyAuditResult(passed=False, reason="INP contains no valid *ELEMENT definitions")
+
+    # 2. Actuator boundary check MUST execute regardless of single-part or multi-part
+    if loaded_instances:
+        overconstrained_err = _detect_overconstrained_actuator(inp_text, loaded_instances)
+        if overconstrained_err:
+            return AssemblyAuditResult(
+                passed=False,
+                reason=f"Assembly boundary condition violation: {overconstrained_err}",
+                diagnostics={"loaded_instances": list(loaded_instances)},
+            )
 
     # If no assembly scope is provided, ensure at least one valid part/mesh exists
     if assembly_scope is None:
@@ -192,7 +401,16 @@ def audit_inp_assembly_contract(
             for p in getattr(assembly_scope, "parts", ())
         ]
         scope_contacts = [
-            {"master": c.master_instance, "slave": c.slave_instance}
+            {
+                "master": c.master_instance,
+                "slave": c.slave_instance,
+                "master_instance": c.master_instance,
+                "slave_instance": c.slave_instance,
+                "master_surface": c.master_surface,
+                "slave_surface": c.slave_surface,
+                "master_part": c.master_part,
+                "slave_part": c.slave_part,
+            }
             for c in getattr(assembly_scope, "contacts", ())
         ]
 
@@ -212,21 +430,13 @@ def audit_inp_assembly_contract(
 
     for sp in scope_parts:
         req_inst = sp.get("instance_name") or sp.get("name") or ""
-        req_norm = _normalize_name(req_inst)
-
-        # Look for matching instance in INP
+        
+        # Look for strictly matching instance in INP (no arbitrary substring match, no fallback to Part)
         matched_inst = None
         for inp_inst in inst_to_part:
-            if req_norm == inp_inst or req_norm in inp_inst or inp_inst in req_norm:
+            if _is_exact_or_canonical_instance_match(req_inst, inp_inst):
                 matched_inst = inp_inst
                 break
-
-        # Also fallback to part name matching if instances aren't uniquely renamed
-        if matched_inst is None:
-            for inp_part in parts_elements:
-                if req_norm == inp_part or req_norm in inp_part or inp_part in req_norm:
-                    matched_inst = inp_part
-                    break
 
         if matched_inst is None:
             missing_instances.append(req_inst)
@@ -264,25 +474,13 @@ def audit_inp_assembly_contract(
             diagnostics=diagnostics,
         )
 
-    # Multi-part load transfer path check
-    if scope_contacts and not _has_contact_or_interaction(inp_text):
+    # Multi-part load transfer path check with reference verification
+    contact_ok, contact_err = _verify_contacts_covered(inp_text, scope_contacts, inst_to_part)
+    if not contact_ok:
         return AssemblyAuditResult(
             passed=False,
-            reason=(
-                "Assembly contract fidelity violation: multi-part contract requires load-transfer contact pairs, "
-                "but no *CONTACT PAIR, *TIE, or *SURFACE INTERACTION was found in the deck."
-            ),
+            reason=contact_err,
             diagnostics=diagnostics,
         )
-
-    # Actuator boundary check
-    if loaded_instances:
-        overconstrained_err = _detect_overconstrained_actuator(inp_text, loaded_instances)
-        if overconstrained_err:
-            return AssemblyAuditResult(
-                passed=False,
-                reason=f"Assembly boundary condition violation: {overconstrained_err}",
-                diagnostics=diagnostics,
-            )
 
     return AssemblyAuditResult(passed=True, diagnostics=diagnostics)

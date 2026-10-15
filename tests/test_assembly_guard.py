@@ -205,3 +205,99 @@ def test_overconstrained_actuator_fails_audit():
     )
     assert res.passed is False
     assert "Actuator instance 'handle1' is completely locked with ENCASTRE" in res.reason
+
+
+def test_instance_matching_rejects_loose_substring():
+    """Verify that 'HANDLE_1' does NOT falsely match 'HANDLE_BASE_1'."""
+    inp_with_similar_name = """
+*HEADING
+Model with similar instance name
+*PART, NAME=HANDLE_BASE
+*ELEMENT, TYPE=C3D10M, ELSET=E1
+1, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10
+*END PART
+*ASSEMBLY, NAME=ASSEMBLY
+*INSTANCE, NAME=HANDLE_BASE_1, PART=HANDLE_BASE
+*END INSTANCE
+*END ASSEMBLY
+*STEP
+*STATIC
+*END STEP
+"""
+    scope = {
+        "parts": [
+            {"instance_name": "HANDLE_1"},
+            {"instance_name": "OTHER_1"},
+        ],
+    }
+    res = audit_inp_assembly_contract(inp_with_similar_name, assembly_scope=scope)
+    assert res.passed is False
+    assert "required retained instance(s) ['HANDLE_1', 'OTHER_1'] are missing" in res.reason
+
+
+def test_unrelated_contact_pair_fails_audit():
+    """Verify that contact pairs referencing unrelated objects fail the multi-part contract."""
+    inp_with_unrelated_contacts = """
+*HEADING
+Model with unrelated contact pairs
+*PART, NAME=HANDLE
+*ELEMENT, TYPE=C3D10M, ELSET=E1
+1, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10
+*END PART
+*PART, NAME=BASE
+*ELEMENT, TYPE=C3D10M, ELSET=E2
+100, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10
+*END PART
+*ASSEMBLY, NAME=ASSEMBLY
+*INSTANCE, NAME=HANDLE_1, PART=HANDLE
+*END INSTANCE
+*INSTANCE, NAME=BASE_1, PART=BASE
+*END INSTANCE
+*CONTACT PAIR
+FIXTURE_SURF, GROUND_SURF
+*END ASSEMBLY
+"""
+    scope = {
+        "parts": [
+            {"instance_name": "HANDLE_1"},
+            {"instance_name": "BASE_1"},
+        ],
+        "contacts": [{"master": "HANDLE_1", "slave": "BASE_1"}],
+    }
+    res = audit_inp_assembly_contract(inp_with_unrelated_contacts, assembly_scope=scope)
+    assert res.passed is False
+    assert "required load transfer between 'HANDLE_1' and 'BASE_1' is not defined" in res.reason
+
+
+def test_single_part_overconstrained_actuator_fails_audit():
+    """Verify single-part contract does not early-return and skip actuator boundary checks."""
+    inp_single_part_locked = """
+*HEADING
+Single part cantilever with encastre
+*PART, NAME=BEAM
+*ELEMENT, TYPE=C3D8R, ELSET=BEAM_ELEMS
+1, 1, 2, 3, 4, 5, 6, 7, 8
+*END PART
+*ASSEMBLY, NAME=ASSEMBLY
+*INSTANCE, NAME=BEAM_1, PART=BEAM
+*END INSTANCE
+*END ASSEMBLY
+*BOUNDARY
+BEAM_1.ALL_NODES, ENCASTRE
+*STEP
+*STATIC
+*END STEP
+"""
+    scope = {
+        "parts": [
+            {"instance_name": "BEAM_1"},
+        ]
+    }
+    res = audit_inp_assembly_contract(
+        inp_single_part_locked,
+        assembly_scope=scope,
+        loaded_instances=["BEAM_1"],
+    )
+    assert res.passed is False
+    assert "Assembly boundary condition violation" in res.reason
+    assert "Actuator instance 'beam1' is completely locked with ENCASTRE" in res.reason

@@ -270,8 +270,8 @@ def _audit_material_and_stress_acceptance(
         req_yield = bool(has_yield_crit or has_yield_metric or has_yield_req)
 
     # Resolve governing stress
-    governing_stress = ev.get("max_stress")
-    if governing_stress is None or not math.isfinite(governing_stress):
+    governing_stress = finite_number(ev.get("max_stress"))
+    if governing_stress is None:
         governing_stress = lookup_metric(values_map, _PEAK_STRESS_KEYS)
     if governing_stress is None:
         governing_stress = lookup_metric(values_map, _PERCENTILE_STRESS_KEYS)
@@ -285,10 +285,9 @@ def _audit_material_and_stress_acceptance(
                     break
 
     # Resolve verified yield strength
-    yield_val = ev.get("yield_strength")
-    if yield_val is None or not math.isfinite(yield_val):
-        yield_val = lookup_metric(values_map, ("yield_strength", "yield_strength_mpa", "yield"))
-    verified_yield = finite_number(yield_val)
+    verified_yield = finite_number(ev.get("yield_strength"))
+    if verified_yield is None:
+        verified_yield = lookup_metric(values_map, ("yield_strength", "yield_strength_mpa", "yield"))
 
     # Material mapping resolution
     mat_mapping_complete = explicit_material_mapping_complete

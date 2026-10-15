@@ -182,3 +182,42 @@ def test_p03_anti_masking_in_production_acceptance(tmp_path: Path):
     assert res.deliverable is False
     assert res.acceptance_status == "RESULT_INVALID"
     assert res.result_validity == "RESULT_INVALID"
+
+
+@pytest.mark.parametrize(
+    "invalid_stress",
+    ["not_a_number", "250.0 MPa", float("nan"), float("inf"), float("-inf"), True, False, None, [100.0]],
+)
+def test_non_numeric_stress_fails_closed_without_exceptions(invalid_stress):
+    """Verify that non-numeric or non-finite stress inputs do not crash and fail-closed."""
+    res = evaluate_result_acceptance(
+        result_status="completed",
+        values={"max_mises": invalid_stress},
+        criteria=[{"name": "mises_limit", "value_key": "max_mises", "limit": 250.0, "operator": "<="}],
+        required_metrics=["max_mises"],
+        physics_domain="structural_static",
+    )
+    assert res.deliverable is False
+    assert res.passed is False
+    assert res.acceptance_status in ("BLOCKED", "RESULT_INVALID")
+    assert any("stress_check:no_valid_stress_extracted" in f for f in res.failures)
+
+
+@pytest.mark.parametrize(
+    "invalid_yield",
+    ["unknown_yield", float("nan"), float("inf"), None, True, {}],
+)
+def test_non_numeric_yield_strength_fails_closed_without_exceptions(invalid_yield):
+    """Verify that non-numeric or non-finite yield strength inputs do not crash and fail-closed."""
+    res = evaluate_result_acceptance(
+        result_status="completed",
+        values={"max_mises": 180.0},
+        criteria=[{"name": "yield_margin", "value_key": "yield_strength", "limit": 200.0, "operator": ">="}],
+        explicit_requires_yield=True,
+        elastic_validity={"yield_strength": invalid_yield, "max_stress": 180.0, "is_purely_elastic": True},
+    )
+    assert res.deliverable is False
+    assert res.passed is False
+    assert res.acceptance_status == "BLOCKED"
+    assert any("yield_check:yield_strength_missing_or_unverified" in f for f in res.failures)
+
