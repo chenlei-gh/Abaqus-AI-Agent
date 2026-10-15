@@ -19,21 +19,54 @@ class RunResult:
     odb_summary: object = None
 
 
+def _screening_error_text(exc):
+    """Keep the original exception text without turning it into a pass."""
+    detail = str(exc).strip()
+    name = type(exc).__name__
+    if not detail or detail == name:
+        return name
+    return f"{name}: {detail}"
+
+
 def _screening_failure_screen(model, requirement, exc):
     """Turn a screening-service failure into a pending screen, not a pass."""
     from .geometry.assembly_scope import AnalysisScreen, ScreenedPart
 
+    detail = _screening_error_text(exc)
     decisions = tuple(
         ScreenedPart(
             solid.id,
             "pending",
             "screening_failed",
-            f"{type(exc).__name__}: part screening failed closed",
+            detail,
             evidence=("screening_error",),
         )
         for solid in model.solids
     )
     return AnalysisScreen(str(requirement), decisions, source="screening_error")
+
+
+def _pending_screen_card(screen):
+    """Expose why a screen is unresolved. Pending is never a pass."""
+    roles = tuple(dict.fromkeys(
+        item.role for item in screen.decisions if item.disposition == "pending" and item.role
+    ))
+    errors = tuple(dict.fromkeys(
+        item.reason for item in screen.decisions
+        if item.disposition == "pending" and "screening_error" in item.evidence and item.reason
+    ))
+    card = {
+        "status": "ASSEMBLY_SCREEN_PENDING",
+        "screen_source": screen.source,
+        "pending": list(screen.pending_ids),
+        "excluded": list(screen.excluded_ids),
+        "retained": list(screen.retained_ids),
+        "pending_roles": list(roles),
+        "passed": False,
+    }
+    if errors:
+        card["screening_errors"] = list(errors)
+    return card
 
 
 class AbaqusAIAgent:
@@ -696,20 +729,24 @@ class AbaqusAIAgent:
             intent = self._attach_jev_part_screen(intent, geometry, router, requirement)
             screen = (getattr(intent, "metadata", None) or {}).get("assembly_screen")
             if screen is not None and not screen.is_resolved:
+                card = _pending_screen_card(screen)
+                reason = (
+                    f"Screen source {screen.source} left {list(screen.pending_ids)} pending. "
+                    "This is not a pass and does not authorize solving the whole product."
+                )
+                if card.get("screening_errors"):
+                    reason = f"{reason} Screening error: {card['screening_errors'][0]}"
                 return EngineeringTaskResult(
                     status=TaskStatus.NEEDS_CLARIFICATION,
                     intent=intent,
                     clarification_prompt=(
                         "The analysis requirement does not uniquely identify which solids to retain. "
                         f"Pending: {list(screen.pending_ids)}. Excluded: {list(screen.excluded_ids)}. "
-                        "Confirm the analysis object before solving; the whole product will not be analyzed by default."
+                        f"{reason}"
                     ),
-                    summary_card={
-                        "status": "ASSEMBLY_SCREEN_PENDING",
-                        "pending": list(screen.pending_ids),
-                        "excluded": list(screen.excluded_ids),
-                        "retained": list(screen.retained_ids),
-                    },
+                    summary_card=card,
+                    errors=tuple(card.get("screening_errors") or ()),
+                    metadata={"assembly_screen": screen.to_dict()},
                 )
         elif isinstance(requirement, EngineeringIntent):
             if not getattr(requirement, "is_executable", True):

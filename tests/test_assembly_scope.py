@@ -423,6 +423,11 @@ def test_natural_language_entry_uses_jev_screen_before_solving():
     )
     assert pending.status == TaskStatus.NEEDS_CLARIFICATION
     assert pending.summary_card["status"] == "ASSEMBLY_SCREEN_PENDING"
+    assert pending.summary_card["passed"] is False
+    assert pending.summary_card["screen_source"] == "requirement"
+    assert "unclassified" in pending.summary_card["pending_roles"]
+    assert "identity_missing" not in pending.summary_card["pending_roles"]
+    assert pending.status != TaskStatus.COMPLETED
 
 
 def test_live_screening_error_becomes_pending_not_a_crash(monkeypatch):
@@ -461,6 +466,59 @@ def test_live_screening_error_becomes_pending_not_a_crash(monkeypatch):
     assert result.status == TaskStatus.NEEDS_CLARIFICATION
     assert result.summary_card["status"] == "ASSEMBLY_SCREEN_PENDING"
     assert result.summary_card["retained"] == []
+    assert result.summary_card["passed"] is False
+    assert result.summary_card["screen_source"] == "screening_error"
+    assert result.summary_card["pending_roles"] == ["screening_failed"]
+    assert result.summary_card["screening_errors"] == ["ExternalIntentApiError: provider timed out"]
+    assert result.errors == ("ExternalIntentApiError: provider timed out",)
+    assert "provider timed out" in result.clarification_prompt
+    assert result.metadata["assembly_screen"]["source"] == "screening_error"
+    assert result.status != TaskStatus.COMPLETED
+
+
+def test_numbered_solids_in_solve_requirement_produce_identity_missing_contract():
+    from abaqus_ai_agent.agent import AbaqusAIAgent
+    from abaqus_ai_agent.contracts.task import TaskStatus
+
+    model = _three_part_product()
+    numbered = tuple(
+        CadSolid(solid.id, shell_ids=solid.shell_ids, step_body_index=solid.step_body_index)
+        for solid in model.solids
+    )
+    unlabeled = GeometryModel(
+        model_id=model.model_id,
+        provenance=model.provenance,
+        bounding_box=model.bounding_box,
+        solids=numbered,
+        shells=model.shells,
+        faces=model.faces,
+        edges=model.edges,
+        vertices=model.vertices,
+    )
+    agent = AbaqusAIAgent(executor=None)
+    result = agent.solve_requirement(
+        "Analyze the handle and its pin",
+        geometry=IntentGeometrySpec(shape="step_file", assembly_scope=unlabeled),
+        submit_job=False,
+        context={
+            "dimensions": {"length": 100.0, "unit": "mm"},
+            "material": {"name": "PA66", "elastic_modulus": 3000.0, "poisson_ratio": 0.35},
+            "boundary_conditions": [{"type": "encastre", "region": "Base"}],
+            "loads": [{"type": "concentrated_force", "magnitude": 100.0, "region": "Handle"}],
+        },
+    )
+
+    # Contract verification: identity_missing is never COMPLETED or pass
+    assert result.status == TaskStatus.NEEDS_CLARIFICATION
+    assert result.is_completed is False
+    assert result.summary_card["status"] == "ASSEMBLY_SCREEN_PENDING"
+    assert result.summary_card["passed"] is False
+    assert result.summary_card["screen_source"] == "requirement"
+    assert "identity_missing" in result.summary_card["pending_roles"]
+    assert result.summary_card["retained"] == []
+    assert set(result.summary_card["pending"]) == {"S_HANDLE", "S_PIN", "S_SCREW"}
+    assert result.run is None
+    assert result.acceptance is None
 
 
 def test_requirement_screen_keeps_named_parts_and_drops_fastener():
