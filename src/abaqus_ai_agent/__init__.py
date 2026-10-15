@@ -45,6 +45,8 @@ from .paths import (
     create_external_project_context,
     resolve_project_root,
     assert_path_outside_repo,
+    get_core_workspace_root,
+    assert_path_outside_core_workspace,
     ENV_PROJECT_ROOT,
 )
 

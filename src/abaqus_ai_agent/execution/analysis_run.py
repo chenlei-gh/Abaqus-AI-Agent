@@ -385,14 +385,19 @@ class AnalysisRunner:
             else:
                 workdir = str(project_context.create_run_solver_dir(run_id))
             run_evidence_dir = project_context.create_run_evidence_dir(run_id)
+        elif require_production:
+            raise RuntimeError(
+                "[Production Guard] Production execution has no customer solver directory. "
+                "Refusing to create a solver copy in the core workspace, the launch directory, or a machine-local scratch directory."
+            )
         elif not workdir:
-            from ..paths import get_repo_root, resolve_runs_root
-            repo_root = get_repo_root().resolve()
+            from ..paths import get_core_workspace_root, resolve_runs_root
+            core_root = get_core_workspace_root().resolve()
             launch_dir = Path.cwd().resolve()
             if orig_executor_workdir:
                 cand = Path(orig_executor_workdir).resolve()
-                inside_repo = cand == repo_root or cand.is_relative_to(repo_root)
-                if inside_repo or cand == launch_dir:
+                inside_core = cand == core_root or cand.is_relative_to(core_root)
+                if inside_core or cand == launch_dir:
                     workdir = os.path.join(str(resolve_runs_root()), run_id)
                 else:
                     workdir = str(cand)
@@ -401,13 +406,14 @@ class AnalysisRunner:
         os.makedirs(workdir, exist_ok=True)
         workdir = os.path.abspath(workdir)
         resolved_workdir = Path(workdir).resolve()
-        from ..paths import get_repo_root as _repo_root
-        repo_root = _repo_root().resolve()
-        if resolved_workdir == repo_root or resolved_workdir.is_relative_to(repo_root):
+        from ..paths import assert_path_outside_core_workspace
+        try:
+            assert_path_outside_core_workspace(resolved_workdir)
+        except PermissionError as exc:
             raise PermissionError(
-                f"Execution workdir '{workdir}' is inside the agent repository. "
-                "Solver files and generated scripts must stay in the customer project or an isolated scratch directory."
-            )
+                f"Execution workdir '{workdir}' is inside the core workspace. "
+                "Solver copies must stay in the customer project directory."
+            ) from exc
 
         if hasattr(self.executor, "workdir"):
             self.executor.workdir = workdir

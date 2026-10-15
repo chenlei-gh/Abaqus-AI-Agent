@@ -100,6 +100,7 @@ def test_extraction_fail_closed_on_subprocess_error(tmp_path):
             run_id="run_fail_1",
             input_hash="hash_123",
             custom_runner=failing_runner,
+            workdir=tmp_path,
         )
 
 

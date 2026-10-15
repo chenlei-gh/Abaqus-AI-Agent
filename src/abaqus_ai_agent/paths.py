@@ -149,19 +149,45 @@ class ExternalProjectContext:
         return dest_path
 
 
-def assert_path_outside_repo(path: Union[str, Path], repo_root: Optional[Path] = None) -> Path:
-    """Validate that an external project path strictly does not reside inside the core repo (REQ-ISO-003).
+def get_core_workspace_root(repo_root: Optional[Path] = None) -> Path:
+    """Return the core file tree that must not hold customer solver copies.
 
-    Raises PermissionError if the path points to or inside get_repo_root().
+    The product checkout is ``get_repo_root()``. The core workspace is its parent,
+    for example ``D:/Vault/Abaqus`` when the checkout is ``D:/Vault/Abaqus/Abaqus-AI-Agent``.
+    A solver copy such as ``<core>/ms13l_project`` is still inside the core files even
+    though it is outside the git repository.
+    """
+    resolved_repo = (repo_root or get_repo_root()).resolve()
+    parent = resolved_repo.parent
+    if parent == resolved_repo:
+        return resolved_repo
+    return parent
+
+
+def assert_path_outside_core_workspace(path: Union[str, Path], repo_root: Optional[Path] = None) -> Path:
+    """Reject a production path that lands in the repository or its parent workspace.
+
+    Customer solver copies, reports, and scratch files belong in the customer project
+    directory. They must not be written beside the product checkout.
     """
     resolved_path = Path(path).resolve()
-    resolved_repo = (repo_root or get_repo_root()).resolve()
-    if resolved_path == resolved_repo or resolved_path.is_relative_to(resolved_repo):
+    core_root = get_core_workspace_root(repo_root)
+    if resolved_path == core_root or resolved_path.is_relative_to(core_root):
         raise PermissionError(
-            f"Security violation (REQ-ISO-003): External engineering project path '{resolved_path}' "
-            f"cannot reside inside the core Abaqus-AI-Agent repository '{resolved_repo}'."
+            f"Security violation (REQ-ISO-003): Production path '{resolved_path}' "
+            f"cannot reside inside the core workspace '{core_root}'. "
+            "Solver copies belong in the customer project directory, not beside the product checkout."
         )
     return resolved_path
+
+
+def assert_path_outside_repo(path: Union[str, Path], repo_root: Optional[Path] = None) -> Path:
+    """Validate that an external project path is outside the core workspace (REQ-ISO-003).
+
+    Raises PermissionError if the path points to the product repository, anything inside
+    that repository, or the parent workspace that holds the checkout.
+    """
+    return assert_path_outside_core_workspace(path, repo_root=repo_root)
 
 
 def resolve_project_root(
@@ -309,23 +335,21 @@ def resolve_production_scratch(
     project_context: Optional[ExternalProjectContext] = None,
     prefix: str = "scratch",
 ) -> Path:
-    """Return a scratch directory that cannot pollute the agent repository.
+    """Return a scratch directory owned by the customer project ``solver/`` tree.
 
-    A recognized customer project owns the scratch under ``solver/``. When no
-    customer project can be inferred, the scratch is an isolated temporary
-    directory outside the repository and outside the process launch directory.
+    Production scratch is not allowed to fall back to the process temporary directory,
+    the launch directory, the product repository, or the core workspace beside it.
+    A missing customer project is a hard failure, not a silent relocation.
     """
-    import tempfile
-    try:
-        context = require_customer_project_context(
-            source_path=source_path,
-            project_root=project_root,
-            project_context=project_context,
-            project_name=prefix,
-        )
-    except ValueError:
-        return Path(tempfile.mkdtemp(prefix=f"{prefix}_"))
-    return context.create_run_solver_dir(f"{prefix}_{uuid.uuid4().hex[:8]}")
+    context = require_customer_project_context(
+        source_path=source_path,
+        project_root=project_root,
+        project_context=project_context,
+        project_name=prefix,
+    )
+    target = context.create_run_solver_dir(f"{prefix}_{uuid.uuid4().hex[:8]}")
+    assert_path_outside_core_workspace(target)
+    return target
 
 
 def default_local_workspace_root() -> Path:

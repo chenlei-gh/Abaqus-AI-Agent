@@ -19,6 +19,10 @@ from abaqus_ai_agent.paths import (
     create_external_project_context,
     resolve_project_root,
     assert_path_outside_repo,
+    get_core_workspace_root,
+    assert_path_outside_core_workspace,
+    require_customer_project_context,
+    resolve_production_scratch,
     ENV_PROJECT_ROOT,
 )
 
@@ -98,6 +102,44 @@ def test_create_run_workdir(tmp_path):
     workdir = create_run_workdir(run_id, runs_root=tmp_path)
     assert workdir.is_dir()
     assert workdir == (tmp_path / run_id).resolve()
+
+
+def test_solver_copy_beside_checkout_is_rejected():
+    core = get_core_workspace_root()
+    repo = get_repo_root().resolve()
+    assert core == repo.parent
+    leaked = core / "ms13l_project" / "solver" / "run_1"
+    with pytest.raises(PermissionError, match="core workspace"):
+        assert_path_outside_repo(leaked)
+    with pytest.raises(PermissionError, match="core workspace"):
+        assert_path_outside_core_workspace(core)
+    with pytest.raises(PermissionError, match="core workspace"):
+        assert_path_outside_repo(repo / "runs" / "job")
+
+
+def test_customer_project_outside_core_workspace_is_accepted(tmp_path):
+    customer = tmp_path / "13L"
+    ctx = create_external_project_context(customer, project_name="13L")
+    assert_path_outside_core_workspace(ctx.solver_dir)
+    run_dir = ctx.create_run_solver_dir("run_case1")
+    assert run_dir.is_relative_to(customer.resolve())
+    assert not run_dir.is_relative_to(get_core_workspace_root())
+
+
+def test_production_scratch_requires_customer_project(tmp_path):
+    with pytest.raises(ValueError, match="customer project directory"):
+        resolve_production_scratch()
+    customer = tmp_path / "13L"
+    scratch = resolve_production_scratch(project_root=customer, prefix="viewer")
+    assert scratch.is_dir()
+    assert scratch.is_relative_to((customer / "solver").resolve())
+    assert not scratch.is_relative_to(get_core_workspace_root())
+
+
+def test_explicit_project_inside_core_workspace_is_not_inferred(monkeypatch):
+    monkeypatch.setenv(ENV_PROJECT_ROOT, str(get_core_workspace_root() / "ms13l_project"))
+    with pytest.raises(ValueError, match="customer project directory"):
+        require_customer_project_context()
 
 
 def test_analysis_runner_respects_external_runs_dir(monkeypatch, tmp_path):
@@ -189,7 +231,7 @@ def test_external_project_context_path_traversal_prevention(tmp_path):
 def test_assert_path_outside_repo_rejects_repo_subdirectories():
     repo_root = get_repo_root()
     inside_candidate = repo_root / "runs" / "illegal_user_project"
-    with pytest.raises(PermissionError, match="cannot reside inside the core Abaqus-AI-Agent repository"):
+    with pytest.raises(PermissionError, match="cannot reside inside the core workspace"):
         assert_path_outside_repo(inside_candidate)
 
 
@@ -575,13 +617,18 @@ def test_agent_production_mode_blocks_execution_in_repo_runs(tmp_path):
         boundary_conditions=({"type": "encastre", "region": "RootFace"},),
     )
 
-    # 1. No project_context and no workdir -> would fallback to repo runs/ -> must fail
-    with pytest.raises((RuntimeError, PermissionError)) as exc_info:
+    # 1. No project_context and no workdir -> must fail closed, not invent a solver copy.
+    with pytest.raises((RuntimeError, PermissionError, ValueError)) as exc_info:
         agent.solve_requirement(
             intent,
             require_production=True,
         )
-    assert "Production execution blocked" in str(exc_info.value) or "Production Guard" in str(exc_info.value)
+    message = str(exc_info.value)
+    assert (
+        "Production execution blocked" in message
+        or "Production Guard" in message
+        or "customer project directory" in message
+    )
 
     # 2. workdir explicitly passed pointing inside the repo -> must fail
     repo_workdir = get_repo_root() / "runs" / "illegal_run"

@@ -1149,12 +1149,14 @@ class AbaqusAIAgent:
                         or getattr(geometry, "step_file_path", None)
                     )
                     if target_workdir:
-                        repo_r = get_repo_root().resolve()
+                        from .paths import get_core_workspace_root
+                        core_r = get_core_workspace_root().resolve()
                         cand_target = Path(target_workdir).resolve()
-                        if cand_target == repo_r or cand_target.is_relative_to(repo_r):
+                        if cand_target == core_r or cand_target.is_relative_to(core_r):
                             raise PermissionError(
                                 f"Production execution blocked (REQ-ISO-003): Target workdir '{cand_target}' "
-                                f"resides inside the core repository '{repo_r}'. Production runs must use an external project context."
+                                f"resides inside the core workspace '{core_r}'. "
+                                "Solver copies must use the customer project directory, not a folder beside the product checkout."
                             )
                     project_context = require_customer_project_context(
                         source_path=source_hint,
@@ -1214,6 +1216,11 @@ class AbaqusAIAgent:
             if not heal_workdir:
                 if project_context is not None:
                     heal_workdir = str(project_context.create_run_solver_dir(getattr(run, "id", "heal")))
+                elif prod_req:
+                    raise RuntimeError(
+                        "[Production Guard] Self-healing has no customer solver directory. "
+                        "Refusing to create a solver copy in the core workspace."
+                    )
                 else:
                     from .paths import resolve_runs_root
                     heal_workdir = str(resolve_runs_root() / getattr(run, "id", "heal_scratch"))

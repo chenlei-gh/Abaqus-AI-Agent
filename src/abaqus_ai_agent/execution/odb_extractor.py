@@ -170,8 +170,10 @@ class HeadlessAbaqusPythonExecutor(AbaqusExecutor):
         if workdir:
             self.workdir = Path(workdir).resolve()
         else:
-            from ..paths import resolve_production_scratch
-            self.workdir = resolve_production_scratch(prefix="extract")
+            # Do not invent a solver directory at construction time. A missing
+            # customer project must fail when execution is requested, not silently
+            # land beside the product checkout or in the process temp directory.
+            self.workdir = None
         self.timeout = timeout
         self.custom_runner = custom_runner
 
@@ -180,6 +182,14 @@ class HeadlessAbaqusPythonExecutor(AbaqusExecutor):
             return self.custom_runner(code)
 
         effective_timeout = timeout or self.timeout
+        if self.workdir is None:
+            raise ValueError(
+                "ODB extraction requires a customer project workdir. "
+                "Pass workdir inside the customer project solver/ directory. "
+                "Nothing is written beside the product checkout."
+            )
+        from ..paths import assert_path_outside_core_workspace
+        assert_path_outside_core_workspace(self.workdir)
         resolved_launcher = find_abaqus_executable(self.launcher_cmd)
         if not resolved_launcher:
             if has_native_odb_access() and sys.executable:
@@ -599,7 +609,6 @@ def extract_odb_results(
         )
 
     odb_sha256 = compute_file_sha256(odb)
-    eff_workdir = Path(workdir).resolve() if workdir else odb.parent
 
     # Normalize inputs to typed ResultRequirement objects
     normalized_reqs: List[ResultRequirement] = []
@@ -627,6 +636,16 @@ def extract_odb_results(
             metrics={},
             evidence=(),
         )
+
+    if workdir:
+        eff_workdir = Path(workdir).resolve()
+    else:
+        from ..paths import require_customer_project_context
+        eff_workdir = require_customer_project_context(source_path=odb).create_run_solver_dir(
+            f"extract_{uuid.uuid4().hex[:8]}"
+        )
+    from ..paths import assert_path_outside_core_workspace
+    assert_path_outside_core_workspace(eff_workdir)
 
     if custom_runner is not None:
         executor = HeadlessAbaqusPythonExecutor(
