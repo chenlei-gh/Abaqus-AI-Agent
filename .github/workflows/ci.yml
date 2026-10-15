@@ -48,10 +48,11 @@ jobs:
       - name: Run Golden Evidence & Release Quality Audits
         shell: bash
         run: |
+          audit_tmp=$(mktemp -d)
           python tools/run_golden_matrix.py --validate-evidence all
-          python tools/i6_release_audit.py
-          python tools/i1_engineering_case_matrix.py
-          python tools/i2_failure_matrix.py
-          python tools/i3_reproducibility.py
-          python tools/m_engineering_task_matrix.py
+          python tools/i6_release_audit.py --out "$audit_tmp/i6_release_audit.json"
+          python tools/i1_engineering_case_matrix.py --out "$audit_tmp/i1_engineering_case_matrix.json"
+          python tools/i2_failure_matrix.py --out "$audit_tmp/i2_failure_matrix.json"
+          python tools/i3_reproducibility.py --out "$audit_tmp/i3_reproducibility.json"
+          python tools/m_engineering_task_matrix.py --out "$audit_tmp/m_engineering_task_matrix.json"
           python tools/check_workspace_pollution.py
