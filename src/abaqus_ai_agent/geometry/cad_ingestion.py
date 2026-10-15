@@ -505,9 +505,11 @@ def _parse_step_file(file_path: str, provenance: CadProvenance) -> GeometryModel
         if ent_type in ("MANIFOLD_SOLID_BREP", "BREP_WITH_VOIDS", "SOLID_MODEL"):
             shell_ref = _clean_ref(args[1]) if len(args) > 1 else None
             shell_ids = (f"SH_{shell_ref}",) if shell_ref else ()
+            source_name = args[0] if args and isinstance(args[0], str) else None
             solids.append(CadSolid(
                 id=f"S_{ent_id}",
                 shell_ids=shell_ids,
+                source_name=source_name,
             ))
 
     # Compute bounding box from vertices

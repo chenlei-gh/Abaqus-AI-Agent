@@ -154,11 +154,16 @@ class CadShell:
 
 @dataclass(frozen=True)
 class CadSolid:
-    """3D volumetric entity bounded by closed shells."""
+    """3D volumetric entity bounded by closed shells.
+
+    ``source_name`` is the STEP entity name when the file supplies one. It is
+    not an inferred engineering role, and it is not an Abaqus body number.
+    """
     id: str
     shell_ids: Tuple[str, ...] = ()
     volume: Optional[float] = None
     step_body_index: Optional[int] = None
+    source_name: Optional[str] = None
 
     def __post_init__(self):
         if not self.id:
@@ -167,6 +172,9 @@ class CadSolid:
             raise ValueError("CadSolid volume cannot be negative")
         if self.step_body_index is not None and self.step_body_index < 1:
             raise ValueError("CadSolid step_body_index is 1-based and must be positive")
+        if self.source_name is not None:
+            cleaned = str(self.source_name).strip()
+            object.__setattr__(self, "source_name", cleaned or None)
 
 
 @dataclass(frozen=True)

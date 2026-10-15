@@ -239,6 +239,61 @@ def _explicit_ids(requirement: Optional[Union[str, Mapping[str, object]]]) -> Op
     return tuple(str(item) for item in raw)
 
 
+def _solid_label(solid: CadSolid) -> str:
+    """Return a source name only when the file actually supplied one.
+
+    A generated id such as ``S_60`` is not a part name. Callers must not invent
+    one from volume, file order, or an Abaqus body number.
+    """
+    name = getattr(solid, "source_name", None)
+    if isinstance(name, str) and name.strip() and name.strip() != solid.id:
+        return name.strip()
+    return ""
+
+
+def _identity_text(solid: CadSolid) -> str:
+    return " ".join(part for part in (solid.id, _solid_label(solid)) if part).lower()
+
+
+def _shares_face_boundary(model: GeometryModel, left: CadSolid, right: CadSolid) -> bool:
+    """True only when two solids share a recorded face or edge.
+
+    This is topological evidence, not a guess that nearby parts carry load.
+    """
+    shells = {shell.id: shell for shell in model.shells}
+    faces = {face.id: face for face in model.faces}
+
+    def boundary(solid: CadSolid) -> Tuple[set, set]:
+        face_ids = set()
+        edge_ids = set()
+        for shell_id in solid.shell_ids:
+            shell = shells.get(shell_id)
+            if shell is None:
+                continue
+            for face_id in shell.face_ids:
+                face_ids.add(face_id)
+                face = faces.get(face_id)
+                if face is not None:
+                    edge_ids.update(face.edge_ids)
+        return face_ids, edge_ids
+
+    left_faces, left_edges = boundary(left)
+    right_faces, right_edges = boundary(right)
+    return bool(left_faces & right_faces) or bool(left_edges & right_edges)
+
+
+def _dependency_hold(model: GeometryModel, solid: CadSolid, retained: Sequence[CadSolid]) -> Optional[str]:
+    """Return a hold reason when exclusion is not proven safe.
+
+    A shared boundary is evidence. Absence of a boundary is not proof that the
+    solid is outside the load path, so the solid stays pending instead of being
+    restored to a whole-product analysis.
+    """
+    if any(_shares_face_boundary(model, solid, kept) for kept in retained):
+        return "shares a boundary with a retained solid; exclusion is not proven safe"
+    return None
+
+
 def screen_assembly_requirement(
     model: GeometryModel,
     requirement: Optional[Union[str, Mapping[str, object]]] = None,
@@ -270,6 +325,7 @@ def screen_assembly_requirement(
                 + ",".join(unknown)
             )
         wanted = set(explicit)
+        retained = tuple(solid for solid in model.solids if solid.id in wanted)
         for solid in model.solids:
             if solid.id in wanted:
                 decisions.append(ScreenedPart(
@@ -278,85 +334,123 @@ def screen_assembly_requirement(
                     evidence=("explicit_solid_id",),
                     confidence=1.0,
                 ))
+                continue
+            hold = _dependency_hold(model, solid, retained)
+            if hold:
+                decisions.append(ScreenedPart(
+                    solid.id, "pending", "dependency_unproven",
+                    hold,
+                    evidence=("explicit_solid_id", "shared_boundary"),
+                ))
             else:
                 decisions.append(ScreenedPart(
-                    solid.id, "exclude", "out_of_scope",
-                    "not named by the analysis requirement",
-                    evidence=("explicit_solid_id",),
-                    confidence=1.0,
+                    solid.id, "pending", "dependency_unproven",
+                    "not named, and no topological evidence proves it is outside the load path",
+                    evidence=("explicit_solid_id", "dependency_unproven"),
                 ))
         return AnalysisScreen(text or "explicit solid ids", tuple(decisions), source="explicit")
 
     folded = text.lower()
     asks_full_product = any(token in folded for token in ("全部零件", "所有零件", "entire product", "all parts", "whole assembly"))
+    preliminary: List[ScreenedPart] = []
     for solid in model.solids:
-        label = solid.id.lower()
+        identity = _identity_text(solid)
+        label = _solid_label(solid)
         judgment = (judgments or {}).get(solid.id)
         if judgment is not None:
             probability = judgment.get("probability", judgment.get("noul"))
             if not isinstance(probability, (int, float)) or isinstance(probability, bool):
-                decisions.append(ScreenedPart(
+                preliminary.append(ScreenedPart(
                     solid.id, "pending", "unclassified",
                     "JEV judgment for this solid has no probability",
                     evidence=("jev",),
                 ))
                 continue
             probability = float(probability)
+            if not label and not asks_full_product:
+                preliminary.append(ScreenedPart(
+                    solid.id, "pending", "identity_missing",
+                    "JEV was not given a source name, so this numbered solid stays pending",
+                    evidence=("jev", "identity_missing"),
+                    confidence=probability,
+                ))
+                continue
             if probability >= retain_threshold:
                 disposition, role = "retain", str(judgment.get("role") or "analysis_path")
             elif probability <= exclude_threshold:
                 disposition, role = "exclude", "out_of_scope"
             else:
                 disposition, role = "pending", "unclassified"
-            decisions.append(ScreenedPart(
+            preliminary.append(ScreenedPart(
                 solid.id, disposition, role,
                 str(judgment.get("reason") or "JEV relevance judgment"),
-                evidence=("jev",),
+                evidence=("jev", "source_name"),
                 confidence=probability,
             ))
             continue
         if not text:
-            decisions.append(ScreenedPart(
+            preliminary.append(ScreenedPart(
                 solid.id, "pending", "unclassified",
                 "no analysis requirement was supplied",
                 evidence=("missing_requirement",),
             ))
             continue
         if asks_full_product:
-            decisions.append(ScreenedPart(
+            preliminary.append(ScreenedPart(
                 solid.id, "retain", "analysis_object",
                 "requirement explicitly asks for the whole product",
                 evidence=("requirement_text",),
                 confidence=1.0,
             ))
             continue
+        if not label:
+            preliminary.append(ScreenedPart(
+                solid.id, "pending", "identity_missing",
+                "source file did not supply a part name; numbered id is not an engineering identity",
+                evidence=("identity_missing",),
+            ))
+            continue
         named_roles = []
-        if any(cue in folded and cue in label for cue in _TARGET_CUES):
+        if any(cue in folded and cue in identity for cue in _TARGET_CUES):
             named_roles.append("analysis_object")
-        if any(cue in folded and cue in label for cue in _LOAD_PATH_CUES):
+        if any(cue in folded and cue in identity for cue in _LOAD_PATH_CUES):
             named_roles.append("load_path")
-        if any(cue in folded and cue in label for cue in _INSTALL_CUES):
+        if any(cue in folded and cue in identity for cue in _INSTALL_CUES):
             named_roles.append("installation")
         if named_roles:
-            decisions.append(ScreenedPart(
+            preliminary.append(ScreenedPart(
                 solid.id, "retain", named_roles[0],
-                "solid id matches a part named by the requirement",
-                evidence=("requirement_text", "solid_id"),
+                "source name matches a part named by the requirement",
+                evidence=("requirement_text", "source_name"),
                 confidence=0.9,
             ))
-        elif any(cue in label for cue in _FASTENER_CUES) and not any(cue in folded for cue in _FASTENER_CUES):
-            decisions.append(ScreenedPart(
+        elif any(cue in identity for cue in _FASTENER_CUES) and not any(cue in folded for cue in _FASTENER_CUES):
+            preliminary.append(ScreenedPart(
                 solid.id, "exclude", "fastener",
-                "fastener is outside the named analysis object",
-                evidence=("solid_id",),
+                "named fastener is outside the named analysis object",
+                evidence=("source_name",),
                 confidence=0.9,
             ))
         else:
-            decisions.append(ScreenedPart(
+            preliminary.append(ScreenedPart(
                 solid.id, "pending", "unclassified",
-                "solid identity is not uniquely tied to the requirement",
+                "source name is not uniquely tied to the requirement",
                 evidence=("insufficient_identity",),
             ))
+    by_id = {item.solid_id: item for item in preliminary}
+    retained = tuple(solid for solid in model.solids if by_id[solid.id].disposition == "retain")
+    for solid in model.solids:
+        item = by_id[solid.id]
+        if item.disposition == "exclude":
+            hold = _dependency_hold(model, solid, retained)
+            if hold:
+                item = ScreenedPart(
+                    solid.id, "pending", "dependency_unproven",
+                    hold,
+                    evidence=item.evidence + ("shared_boundary",),
+                    confidence=item.confidence,
+                )
+        decisions.append(item)
     source = "jev" if judgments else "requirement"
     return AnalysisScreen(text, tuple(decisions), source=source)
 

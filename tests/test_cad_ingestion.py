@@ -114,6 +114,7 @@ def test_step_solid_ingestion_and_provenance():
         assert model.unit == CadUnit.MM
         assert model.solid_count == 1
         assert model.solids[0].step_body_index is None
+        assert model.solids[0].source_name == "SOLID_1"
         assert model.shell_count == 1
         assert model.face_count == 2
         assert model.edge_count == 2
@@ -171,6 +172,7 @@ def test_multi_solid_assembly_is_not_silently_reduced_to_one_part():
         model = ingest_cad_file(step_path)
         assert model.solid_count == 2
         assert [solid.step_body_index for solid in model.solids] == [None, None]
+        assert {solid.source_name for solid in model.solids} == {"HANDLE", "PIN"}
         assert model.is_manifold_solid is True
 
         cap = classify_cad_model(model)

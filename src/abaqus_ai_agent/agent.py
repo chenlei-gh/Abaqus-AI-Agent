@@ -19,6 +19,23 @@ class RunResult:
     odb_summary: object = None
 
 
+def _screening_failure_screen(model, requirement, exc):
+    """Turn a screening-service failure into a pending screen, not a pass."""
+    from .geometry.assembly_scope import AnalysisScreen, ScreenedPart
+
+    decisions = tuple(
+        ScreenedPart(
+            solid.id,
+            "pending",
+            "screening_failed",
+            f"{type(exc).__name__}: part screening failed closed",
+            evidence=("screening_error",),
+        )
+        for solid in model.solids
+    )
+    return AnalysisScreen(str(requirement), decisions, source="screening_error")
+
+
 class AbaqusAIAgent:
     """Orchestrates planning, validation, native execution and evidence.
 
@@ -536,8 +553,21 @@ class AbaqusAIAgent:
         model = model or _geometry_model_from_value(geometry)
         if not isinstance(model, GeometryModel) or model.solid_count <= 1:
             return intent
-        solids = [{"solid_id": solid.id, "label": solid.id, "volume": solid.volume} for solid in model.solids]
-        screen = router.screen_parts(str(requirement), solids)
+        solids = [
+            {
+                "solid_id": solid.id,
+                "source_name": getattr(solid, "source_name", None),
+                "volume": solid.volume,
+            }
+            for solid in model.solids
+        ]
+        try:
+            screen = router.screen_parts(str(requirement), solids)
+        except Exception as exc:
+            from .typesafe_intent import JevApiError
+            if not isinstance(exc, (JevApiError, ValueError, TypeError, TimeoutError)):
+                raise
+            screen = _screening_failure_screen(model, str(requirement), exc)
         metadata = dict(getattr(intent, "metadata", None) or {})
         metadata["assembly_screen"] = screen
         return replace(intent, metadata=metadata)

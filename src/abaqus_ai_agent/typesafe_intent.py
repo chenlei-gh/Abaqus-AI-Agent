@@ -1453,8 +1453,9 @@ def build_part_screening_questions(solids: Sequence[Mapping[str, Any]]) -> Dict[
                 ),
                 "candidate": {
                     "solid_id": solid_id,
-                    "label": solid.get("label") or solid_id,
+                    "source_name": solid.get("source_name") or solid.get("label") or None,
                     "volume": solid.get("volume"),
+                    "identity": "source_name" if solid.get("source_name") or solid.get("label") else "missing",
                 },
                 "not_sufficient": [
                     "The solid merely exists in the same STEP file.",
@@ -3073,7 +3074,13 @@ def _screening_model(solids: Sequence[Mapping[str, Any]]):
             ingested_at="1970-01-01T00:00:00Z",
             cad_format=CadFormat.STEP,
         ),
-        solids=tuple(CadSolid(str(item["solid_id"])) for item in solids),
+        solids=tuple(
+            CadSolid(
+                str(item["solid_id"]),
+                source_name=item.get("source_name") or item.get("label"),
+            )
+            for item in solids
+        ),
     )
 
 

@@ -75,8 +75,8 @@ def _mated_handle_model():
         CadShell("SH_pin", face_ids=("F_pin_bot", "F_pin_top"), is_closed=True),
     )
     solids = (
-        CadSolid("S_HANDLE", shell_ids=("SH_base",), step_body_index=2),
-        CadSolid("S_PIN", shell_ids=("SH_pin",), step_body_index=1),
+        CadSolid("S_HANDLE", shell_ids=("SH_base",), step_body_index=2, source_name="handle"),
+        CadSolid("S_PIN", shell_ids=("SH_pin",), step_body_index=1, source_name="pin"),
     )
     bbox = CadBoundingBox(0.0, 0.0, 0.0, 40.0, 20.0, 50.0)
     return _model(solids, shells, faces, edges, vertices, bbox)
@@ -391,7 +391,7 @@ def _three_part_product():
         normal=(0.0, 0.0, 1.0), is_planar=True, area=20.0,
     )
     screw_shell = CadShell("SH_screw", face_ids=("F_screw",), is_closed=True)
-    screw = CadSolid("S_SCREW", shell_ids=("SH_screw",), step_body_index=3)
+    screw = CadSolid("S_SCREW", shell_ids=("SH_screw",), step_body_index=3, source_name="screw")
     return GeometryModel(
         model_id=model.model_id,
         provenance=model.provenance,
@@ -425,6 +425,44 @@ def test_natural_language_entry_uses_jev_screen_before_solving():
     assert pending.summary_card["status"] == "ASSEMBLY_SCREEN_PENDING"
 
 
+def test_live_screening_error_becomes_pending_not_a_crash(monkeypatch):
+    from abaqus_ai_agent.agent import AbaqusAIAgent
+    from abaqus_ai_agent.contracts.task import TaskStatus
+    from abaqus_ai_agent.typesafe_intent import JevApiError
+
+    class _BrokenRouter:
+        mode = "offline"
+
+        def route(self, requirement, context=None):
+            from abaqus_ai_agent.typesafe_intent import EngineeringIntentRouter
+            return EngineeringIntentRouter(mode="offline").route(requirement, context=context)
+
+        def screen_parts(self, requirement, solids):
+            raise JevApiError("provider timed out")
+
+    monkeypatch.setattr(
+        "abaqus_ai_agent.typesafe_intent.JevIntentRouter",
+        lambda *args, **kwargs: _BrokenRouter(),
+    )
+    model = _three_part_product()
+    agent = AbaqusAIAgent(executor=None)
+    result = agent.solve_requirement(
+        "Analyze the handle and its pin",
+        geometry=IntentGeometrySpec(shape="step_file", assembly_scope=model),
+        submit_job=False,
+        context={
+            "dimensions": {"length": 100.0, "unit": "mm"},
+            "material": {"name": "PA66", "elastic_modulus": 3000.0, "poisson_ratio": 0.35},
+            "boundary_conditions": [{"type": "encastre", "region": "Base"}],
+            "loads": [{"type": "concentrated_force", "magnitude": 100.0, "region": "Handle"}],
+        },
+    )
+
+    assert result.status == TaskStatus.NEEDS_CLARIFICATION
+    assert result.summary_card["status"] == "ASSEMBLY_SCREEN_PENDING"
+    assert result.summary_card["retained"] == []
+
+
 def test_requirement_screen_keeps_named_parts_and_drops_fastener():
     model = _three_part_product()
     screen = screen_assembly_requirement(model, "Analyze the handle and its pin")
@@ -453,9 +491,8 @@ def test_ambiguous_identity_stays_pending_instead_of_full_analysis():
     model = _three_part_product()
     screen = screen_assembly_requirement(model, "Check the strength of this product")
 
-    assert "S_SCREW" in screen.excluded_ids
-    assert "S_HANDLE" in screen.pending_ids
-    assert "S_PIN" in screen.pending_ids
+    assert screen.excluded_ids == ("S_SCREW",)
+    assert set(screen.pending_ids) == {"S_HANDLE", "S_PIN"}
     scope = build_assembly_scope(model, screen=screen)
     assert scope.parts == ()
     assert any(gap.startswith("screening_pending") for gap in scope.gaps)
@@ -488,3 +525,46 @@ def test_jev_probability_thresholds_do_not_force_a_middle_value():
     assert uncertain.parts == ()
     assert any("S_PIN" in gap for gap in uncertain.gaps)
     assert uncertain.is_complete is False
+
+
+def test_explicit_ids_do_not_exclude_a_connected_part():
+    model = _three_part_product()
+    screen = screen_assembly_requirement(
+        model,
+        {"include_solid_ids": ["S_HANDLE"]},
+    )
+
+    assert screen.retained_ids == ("S_HANDLE",)
+    assert "S_PIN" in screen.pending_ids
+    assert screen.excluded_ids == ()
+    assert screen.is_resolved is False
+    scope = build_assembly_scope(model, screen=screen)
+    assert scope.parts == ()
+    assert scope.is_complete is False
+
+
+def test_numbered_solids_stay_pending_without_a_source_name():
+    model = _three_part_product()
+    numbered = tuple(
+        CadSolid(solid.id, shell_ids=solid.shell_ids, step_body_index=solid.step_body_index)
+        for solid in model.solids
+    )
+    unlabeled = GeometryModel(
+        model_id=model.model_id,
+        provenance=model.provenance,
+        bounding_box=model.bounding_box,
+        solids=numbered,
+        shells=model.shells,
+        faces=model.faces,
+        edges=model.edges,
+        vertices=model.vertices,
+    )
+    screen = screen_assembly_requirement(unlabeled, "Analyze the handle and its pin")
+
+    assert screen.retained_ids == ()
+    assert screen.excluded_ids == ()
+    assert set(screen.pending_ids) == {"S_HANDLE", "S_PIN", "S_SCREW"}
+    assert all("identity_missing" in item.evidence for item in screen.decisions)
+    scope = build_assembly_scope(unlabeled, screen=screen)
+    assert scope.parts == ()
+    assert scope.is_complete is False
