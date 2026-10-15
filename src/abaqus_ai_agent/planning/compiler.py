@@ -256,9 +256,27 @@ def compile_intent_to_actions(
         step_path = (geometry.step_file_path or "").replace("\\", "/")
         if not step_path:
             raise ValueError("step_assembly requires a non-empty step_file_path")
+        # Abaqus 2025 noGUI does not bind mdb.openStep until auxImportGeom is
+        # imported. Open once and reuse the returned ACIS object: each
+        # importGeomFromStep call reconverts the whole file.
+        # Non-ASCII paths make the converter report a valid file as corrupt.
         part_blocks = [
-            "from step import *\n"
-            f"mdb.openStep(fileName=r'{step_path}', scaleFromFile=OFF)\n"
+            "import os\n"
+            "import shutil\n"
+            "import tempfile\n"
+            "import auxImportGeom\n"
+            f"_step_source = r'{step_path}'\n"
+            "_step_open_path = _step_source\n"
+            "_step_staged = None\n"
+            "if not _step_source.isascii():\n"
+            "    _step_staged = os.path.join(tempfile.gettempdir(), 'abaqus_step_' + format(abs(hash(_step_source)), 'x') + '.stp')\n"
+            "    shutil.copy2(_step_source, _step_staged)\n"
+            "    _step_open_path = _step_staged\n"
+            "_step_file = mdb.openStep(_step_open_path, scaleFromFile=OFF)\n"
+            "if _step_staged and os.path.exists(_step_staged):\n"
+            "    os.remove(_step_staged)\n"
+            "if int(getattr(_step_file, 'numberOfParts', 0) or 0) < 1:\n"
+            "    raise RuntimeError('STEP conversion produced no ACIS bodies')\n"
         ]
         for index, part in enumerate(scope.parts):
             body_num = getattr(part, "step_body_index", None)
@@ -269,7 +287,7 @@ def compile_intent_to_actions(
                 )
             part_blocks.append(
                 f"p_{index} = mdb.models['{model_name}'].PartFromGeometryFile(\n"
-                f"    name='{part.name}', geometryFile=mdb.acis, bodyNum={body_num},\n"
+                f"    name='{part.name}', geometryFile=_step_file, bodyNum={body_num},\n"
                 f"    combine=False, dimensionality=THREE_D, type=DEFORMABLE_BODY)\n"
             )
         geo_code = model_init + "".join(part_blocks)
@@ -1739,15 +1757,31 @@ def _geometry_model_from_value(value: Any):
     return None
 
 
+def _screen_inputs_from_intent(intent: Optional[object]) -> dict:
+    """Read an already-resolved screen. Do not invent part membership here."""
+    if intent is None:
+        return {}
+    metadata = getattr(intent, "metadata", None) or {}
+    if not isinstance(metadata, dict):
+        return {}
+    screen = metadata.get("assembly_screen")
+    if screen is None:
+        return {}
+    return {"screen": screen}
+
+
 def _bind_step_assembly_scope(
     geometry: IntentGeometrySpec,
     *,
     allow_missing_step_file: bool = False,
+    requirement: Optional[object] = None,
+    screen: Optional[object] = None,
+    judgments: Optional[object] = None,
 ) -> IntentGeometrySpec:
-    """Attach a complete multi-solid scope, or refuse to keep solving one part.
+    """Attach the requirement-screened scope, or refuse an unresolved inventory.
 
     Contact and fixture geometry are never invented here. A multi-solid STEP
-    model whose mating faces or installation face cannot be grounded raises.
+    model is not analyzed in full unless the requirement explicitly says so.
     """
     from ..geometry.assembly_scope import build_assembly_scope
     from ..geometry.cad_ingestion import ingest_cad_file
@@ -1773,12 +1807,18 @@ def _bind_step_assembly_scope(
     if not isinstance(model, GeometryModel) or model.solid_count <= 1:
         return geometry
 
-    scope = build_assembly_scope(model)
+    scope = build_assembly_scope(
+        model,
+        requirement=requirement,
+        screen=screen,
+        judgments=judgments,
+    )
     if not scope.is_complete:
         raise ValueError(
-            "Multi-solid STEP model cannot be reduced to one part. "
-            f"Assembly scope is incomplete: {list(scope.gaps)}. "
-            "Related parts, mating contact, and the installation fixture must all be grounded."
+            "Multi-solid STEP inventory cannot be solved until the analysis requirement "
+            f"screens it. Assembly scope is incomplete: {list(scope.gaps)}. "
+            "Retained parts, mating contact, and the installation fixture must be grounded; "
+            "do not fall back to every solid or to one solid."
         )
     return IntentGeometrySpec(
         shape="step_assembly",
@@ -1874,9 +1914,12 @@ def compile_engineering_intent(
             "Cannot compile engineering intent: missing geometry specification. "
             "Provide geometry via intent.metadata['geometry'] or explicit geometry parameter."
         )
+    screen_inputs = _screen_inputs_from_intent(intent)
     eff_geom = _bind_step_assembly_scope(
         eff_geom,
         allow_missing_step_file=allow_missing_step_file,
+        requirement=getattr(intent, "description", None),
+        **screen_inputs,
     )
 
     # 3. Material Resolution (Fail-closed on complete omission)

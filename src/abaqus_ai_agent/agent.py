@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple, Union
 
@@ -520,6 +520,28 @@ class AbaqusAIAgent:
         text, _source = read_job_inp_text(workdir=workdir, job_name=job_name)
         return text
 
+    def _attach_jev_part_screen(self, intent, geometry, router, requirement):
+        """Screen a multi-solid inventory before any assembly is compiled.
+
+        An explicit screen already on the intent is left untouched. Otherwise JEV
+        judges each solid against the requirement. Pending or empty screens do
+        not authorize solving the whole product.
+        """
+        from .geometry.model import GeometryModel
+        from .planning.compiler import _geometry_model_from_value, _screen_inputs_from_intent
+
+        if _screen_inputs_from_intent(intent):
+            return intent
+        model = _geometry_model_from_value(getattr(geometry, "assembly_scope", None))
+        model = model or _geometry_model_from_value(geometry)
+        if not isinstance(model, GeometryModel) or model.solid_count <= 1:
+            return intent
+        solids = [{"solid_id": solid.id, "label": solid.id, "volume": solid.volume} for solid in model.solids]
+        screen = router.screen_parts(str(requirement), solids)
+        metadata = dict(getattr(intent, "metadata", None) or {})
+        metadata["assembly_screen"] = screen
+        return replace(intent, metadata=metadata)
+
     def solve_requirement(
         self,
         requirement,
@@ -641,6 +663,24 @@ class AbaqusAIAgent:
                 "jev_mode": getattr(router, "mode", jev_mode) or "offline",
                 "requirement_kind": "natural_language",
             })
+            intent = self._attach_jev_part_screen(intent, geometry, router, requirement)
+            screen = (getattr(intent, "metadata", None) or {}).get("assembly_screen")
+            if screen is not None and not screen.is_resolved:
+                return EngineeringTaskResult(
+                    status=TaskStatus.NEEDS_CLARIFICATION,
+                    intent=intent,
+                    clarification_prompt=(
+                        "The analysis requirement does not uniquely identify which solids to retain. "
+                        f"Pending: {list(screen.pending_ids)}. Excluded: {list(screen.excluded_ids)}. "
+                        "Confirm the analysis object before solving; the whole product will not be analyzed by default."
+                    ),
+                    summary_card={
+                        "status": "ASSEMBLY_SCREEN_PENDING",
+                        "pending": list(screen.pending_ids),
+                        "excluded": list(screen.excluded_ids),
+                        "retained": list(screen.retained_ids),
+                    },
+                )
         elif isinstance(requirement, EngineeringIntent):
             if not getattr(requirement, "is_executable", True):
                 return EngineeringTaskResult(
@@ -742,7 +782,12 @@ class AbaqusAIAgent:
 
         if isinstance(geometry, _IntentGeometrySpec):
             try:
-                geometry = _bind_step_assembly_scope(geometry)
+                from .planning.compiler import _screen_inputs_from_intent
+                geometry = _bind_step_assembly_scope(
+                    geometry,
+                    requirement=getattr(intent, "description", None),
+                    **_screen_inputs_from_intent(intent),
+                )
             except (ValueError, TypeError) as exc:
                 return EngineeringTaskResult(
                     status=TaskStatus.BLOCKED,

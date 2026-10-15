@@ -492,9 +492,10 @@ def _parse_step_file(file_path: str, provenance: CadProvenance) -> GeometryModel
             )
 
     # Step 13: Extract MANIFOLD_SOLID_BREP and BREP_WITH_VOIDS entities.
-    # body index follows STEP file order, which is the order Abaqus openStep exposes.
+    # File order is not an Abaqus bodyNum. MS13L has 36 source solids and 36
+    # imported bodies, but body 2 has 1333 faces while source solid 2 has 1686.
+    # Leave the index unset until a unique imported-body fingerprint binds it.
     solids: List[CadSolid] = []
-    solid_order: List[Tuple[int, str, Tuple[str, ...]]] = []
     for match in entity_pattern.finditer(clean_content):
         ent_id = match.group(1)
         ent = raw_entities.get(ent_id)
@@ -504,13 +505,10 @@ def _parse_step_file(file_path: str, provenance: CadProvenance) -> GeometryModel
         if ent_type in ("MANIFOLD_SOLID_BREP", "BREP_WITH_VOIDS", "SOLID_MODEL"):
             shell_ref = _clean_ref(args[1]) if len(args) > 1 else None
             shell_ids = (f"SH_{shell_ref}",) if shell_ref else ()
-            solid_order.append((len(solid_order) + 1, ent_id, shell_ids))
-    for body_index, ent_id, shell_ids in solid_order:
-        solids.append(CadSolid(
-            id=f"S_{ent_id}",
-            shell_ids=shell_ids,
-            step_body_index=body_index,
-        ))
+            solids.append(CadSolid(
+                id=f"S_{ent_id}",
+                shell_ids=shell_ids,
+            ))
 
     # Compute bounding box from vertices
     bbox = None
@@ -845,6 +843,18 @@ def classify_cad_model(model: GeometryModel) -> CapabilityBoundary:
         from .assembly_scope import build_assembly_scope
 
         scope = build_assembly_scope(model)
+        inventory = len(model.solids)
+        if "analysis_requirement_missing" in scope.gaps or "screening_pending" in " ".join(scope.gaps):
+            return CapabilityBoundary(
+                status=CapabilityStatus.ASSISTED,
+                action_type="assembly_scope",
+                reason=(
+                    f"Multi-solid CAD inventory has {inventory} closed solids. "
+                    "No analysis requirement was supplied, so none are retained. "
+                    "Screen the requirement before solving; do not analyze the whole product by default."
+                ),
+                engineering_verified=True,
+            )
         solid_ids = ", ".join(part.solid_id for part in scope.parts[:8])
         extra = "" if scope.part_count <= 8 else f", ... (+{scope.part_count - 8} more)"
         if scope.is_complete and scope.fixture is not None:
@@ -852,9 +862,8 @@ def classify_cad_model(model: GeometryModel) -> CapabilityBoundary:
                 status=CapabilityStatus.SUPPORTED,
                 action_type="assembly_scope",
                 reason=(
-                    f"Multi-solid assembly scope grounded ({scope.part_count} solids: {solid_ids}{extra}; "
-                    f"{len(scope.contacts)} mating contact(s); fixture {scope.fixture.set_name}). "
-                    "All related solids stay in the analysis."
+                    f"Screened assembly scope grounded ({scope.part_count} retained of {inventory}: {solid_ids}{extra}; "
+                    f"{len(scope.contacts)} mating contact(s); fixture {scope.fixture.set_name})."
                 ),
                 engineering_verified=True,
             )
@@ -862,9 +871,10 @@ def classify_cad_model(model: GeometryModel) -> CapabilityBoundary:
             status=CapabilityStatus.ASSISTED,
             action_type="assembly_scope",
             reason=(
-                f"Multi-solid CAD model ({scope.part_count} closed solids: {solid_ids}{extra}) "
-                f"cannot be reduced to one part. Assembly scope is incomplete: {list(scope.gaps)}. "
-                "Related parts, mating contact, and the installation fixture must all be grounded."
+                f"Multi-solid CAD inventory has {inventory} closed solids"
+                + (f" ({solid_ids}{extra} retained)" if scope.parts else "")
+                + f". Assembly scope is incomplete: {list(scope.gaps)}. "
+                "Resolve the requirement screen, mating contact, and installation fixture before solving."
             ),
             engineering_verified=True,
         )

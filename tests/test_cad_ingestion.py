@@ -113,7 +113,7 @@ def test_step_solid_ingestion_and_provenance():
         assert model.provenance.preprocessor == "Abaqus 2025"
         assert model.unit == CadUnit.MM
         assert model.solid_count == 1
-        assert model.solids[0].step_body_index == 1
+        assert model.solids[0].step_body_index is None
         assert model.shell_count == 1
         assert model.face_count == 2
         assert model.edge_count == 2
@@ -170,15 +170,14 @@ def test_multi_solid_assembly_is_not_silently_reduced_to_one_part():
 
         model = ingest_cad_file(step_path)
         assert model.solid_count == 2
-        assert [solid.step_body_index for solid in model.solids] == [1, 2]
+        assert [solid.step_body_index for solid in model.solids] == [None, None]
         assert model.is_manifold_solid is True
 
         cap = classify_cad_model(model)
         assert cap.status == CapabilityStatus.ASSISTED
         assert cap.status != CapabilityStatus.SUPPORTED
-        assert "Multi-solid" in cap.reason
-        assert "contact" in cap.reason
-        assert "S_60" in cap.reason and "S_61" in cap.reason
+        assert "No analysis requirement" in cap.reason
+        assert "S_60" not in cap.reason
 
 
 def test_iges_ingestion():

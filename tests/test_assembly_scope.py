@@ -1,4 +1,4 @@
-"""Multi-part assembly scope must keep every solid, contact, and fixture."""
+"""Assembly scope screens by requirement, then grounds retained contact and fixture."""
 
 import os
 import tempfile
@@ -7,7 +7,7 @@ import pytest
 
 from abaqus_ai_agent.capability_boundary import CapabilityStatus
 from abaqus_ai_agent.contracts.material import ElasticProperties, MaterialDefinition
-from abaqus_ai_agent.geometry.assembly_scope import build_assembly_scope
+from abaqus_ai_agent.geometry.assembly_scope import build_assembly_scope, screen_assembly_requirement
 from abaqus_ai_agent.geometry.cad_ingestion import classify_cad_model, ingest_cad_file
 from abaqus_ai_agent.geometry.model import (
     CadBoundingBox,
@@ -83,7 +83,10 @@ def _mated_handle_model():
 
 
 def test_related_parts_receive_contact_and_installation_fixture():
-    scope = build_assembly_scope(_mated_handle_model())
+    scope = build_assembly_scope(
+        _mated_handle_model(),
+        requirement={"include_solid_ids": ["S_HANDLE", "S_PIN"]},
+    )
 
     assert [part.solid_id for part in scope.parts] == ["S_PIN", "S_HANDLE"]
     assert [part.step_body_index for part in scope.parts] == [1, 2]
@@ -97,10 +100,9 @@ def test_related_parts_receive_contact_and_installation_fixture():
     assert scope.gaps == ()
 
     cap = classify_cad_model(_mated_handle_model())
-    assert cap.status == CapabilityStatus.SUPPORTED
+    assert cap.status == CapabilityStatus.ASSISTED
     assert cap.action_type == "assembly_scope"
-    assert "2 mating" not in cap.reason
-    assert "1 mating contact" in cap.reason
+    assert "No analysis requirement" in cap.reason
 
 
 def test_separated_parts_are_not_declared_complete():
@@ -131,20 +133,46 @@ def test_separated_parts_are_not_declared_complete():
         vertices=far_vertices,
     )
 
-    scope = build_assembly_scope(separated)
+    scope = build_assembly_scope(
+        separated,
+        requirement={"include_solid_ids": ["S_HANDLE", "S_PIN"]},
+    )
     assert scope.part_count == 2
     assert scope.contacts == ()
     assert scope.is_complete is False
     assert any(gap.startswith("parts_without_mating_contact") for gap in scope.gaps)
 
+    unmapped = GeometryModel(
+        model_id=model.model_id,
+        provenance=model.provenance,
+        bounding_box=model.bounding_box,
+        solids=tuple(
+            CadSolid(solid.id, shell_ids=solid.shell_ids, step_body_index=None)
+            for solid in model.solids
+        ),
+        shells=model.shells,
+        faces=model.faces,
+        edges=model.edges,
+        vertices=model.vertices,
+    )
+    unmapped_scope = build_assembly_scope(
+        unmapped,
+        requirement={"include_solid_ids": ["S_HANDLE", "S_PIN"]},
+    )
+    assert unmapped_scope.is_complete is False
+    assert any(gap.startswith("step_body_index_missing") for gap in unmapped_scope.gaps)
+
     cap = classify_cad_model(separated)
     assert cap.status == CapabilityStatus.ASSISTED
-    assert "cannot be reduced to one part" in cap.reason
+    assert "No analysis requirement" in cap.reason
 
 
 def test_step_assembly_script_keeps_every_part_contact_and_fixture(tmp_path=None):
     model = _mated_handle_model()
-    scope = build_assembly_scope(model)
+    scope = build_assembly_scope(
+        model,
+        requirement={"include_solid_ids": ["S_HANDLE", "S_PIN"]},
+    )
     with tempfile.TemporaryDirectory() as tmp:
         step_path = os.path.join(tmp, "handle.stp")
         with open(step_path, "w", encoding="utf-8") as handle:
@@ -167,6 +195,13 @@ def test_step_assembly_script_keeps_every_part_contact_and_fixture(tmp_path=None
         )
 
     script = plan.cae_script
+    assert script.count("_step_file = mdb.openStep(") == 1
+    assert "import auxImportGeom" in script
+    assert "if not _step_source.isascii():" in script
+    assert "shutil.copy2(_step_source, _step_staged)" in script
+    assert "geometryFile=_step_file" in script
+    assert "geometryFile=mdb.acis" not in script
+    assert "from step import *" not in script
     assert "PartFromGeometryFile" in script
     assert "name='S_HANDLE'" in script
     assert "name='S_PIN'" in script
@@ -195,10 +230,13 @@ def test_compiler_binds_multi_solid_step_and_refuses_incomplete_scope():
         intent = EngineeringIntent(
             id="HANDLE_ASM",
             kind="linear_static",
-            description="Handle assembly with related parts",
+            description="Analyze the handle and pin",
             analysis_type="linear_static",
             unit_system="MM_N_MPA",
             material={"name": "PA66", "elastic_modulus": 3000.0, "poisson_ratio": 0.35},
+            metadata={"assembly_screen": screen_assembly_requirement(
+                model, {"include_solid_ids": ["S_HANDLE", "S_PIN"]},
+            )},
         )
         plan = compile_engineering_intent(
             intent,
@@ -232,7 +270,7 @@ def test_compiler_binds_multi_solid_step_and_refuses_incomplete_scope():
         edges=separated.edges,
         vertices=far_vertices,
     )
-    with pytest.raises(ValueError, match="cannot be reduced to one part"):
+    with pytest.raises(ValueError, match="cannot be solved until the analysis requirement"):
         compile_engineering_intent(
             intent,
             geometry=IntentGeometrySpec(
@@ -267,7 +305,10 @@ def test_product_entry_blocks_incomplete_multi_solid_scope():
     intent = EngineeringIntent(
         id="HANDLE_ENTRY",
         kind="linear_static",
-        description="Do not solve the handle alone",
+        description="Analyze the handle and pin",
+        metadata={"assembly_screen": screen_assembly_requirement(
+            separated, {"include_solid_ids": ["S_HANDLE", "S_PIN"]},
+        )},
         analysis_type="linear_static",
         unit_system="MM_N_MPA",
         material={"name": "PA66", "elastic_modulus": 3000.0, "poisson_ratio": 0.35},
@@ -279,7 +320,7 @@ def test_product_entry_blocks_incomplete_multi_solid_scope():
     )
     assert result.status == TaskStatus.BLOCKED
     assert result.summary_card["status"] == "ASSEMBLY_SCOPE_BLOCKED"
-    assert "cannot be reduced to one part" in result.errors[0]
+    assert "cannot be solved until the analysis requirement" in result.errors[0]
 
 
 def test_unverified_exterior_fixture_fails_closed_without_semantics():
@@ -319,15 +360,131 @@ def test_unverified_exterior_fixture_fails_closed_without_semantics():
     model = _model(solids, shells, faces, edges, vertices, bbox)
 
     # Without verified semantic tags or explicit fixture_face_id, must fail-closed:
-    scope = build_assembly_scope(model, allow_unverified_exterior_fixture=False)
+    scope = build_assembly_scope(
+        model,
+        allow_unverified_exterior_fixture=False,
+        requirement={"include_solid_ids": ["SOLID_ALPHA", "SOLID_BETA"]},
+    )
     assert scope.fixture is None
     assert "installation_fixture_not_grounded" in scope.gaps
     assert scope.is_complete is False
 
     # When explicit fixture_face_id is provided, grounds successfully:
-    scope_grounded = build_assembly_scope(model, fixture_face_id="F_p1_1")
+    scope_grounded = build_assembly_scope(
+        model,
+        fixture_face_id="F_p1_1",
+        requirement={"include_solid_ids": ["SOLID_ALPHA", "SOLID_BETA"]},
+    )
     assert scope_grounded.fixture is not None
     assert scope_grounded.fixture.face_id == "F_p1_1"
     assert scope_grounded.fixture.part_id == "SOLID_ALPHA"
     assert "installation_fixture_not_grounded" not in scope_grounded.gaps
     assert scope_grounded.is_complete is True
+
+
+def _three_part_product():
+    model = _mated_handle_model()
+    screw_vertex = CadVertex("V9", (100.0, 100.0, 0.0))
+    screw_edge = CadEdge("E_screw", start_vertex_id="V9", end_vertex_id="V9")
+    screw_face = CadFace(
+        "F_screw", surface_type="PLANE", edge_ids=("E_screw",),
+        normal=(0.0, 0.0, 1.0), is_planar=True, area=20.0,
+    )
+    screw_shell = CadShell("SH_screw", face_ids=("F_screw",), is_closed=True)
+    screw = CadSolid("S_SCREW", shell_ids=("SH_screw",), step_body_index=3)
+    return GeometryModel(
+        model_id=model.model_id,
+        provenance=model.provenance,
+        bounding_box=CadBoundingBox(0.0, 0.0, 0.0, 100.0, 100.0, 50.0),
+        solids=model.solids + (screw,),
+        shells=model.shells + (screw_shell,),
+        faces=model.faces + (screw_face,),
+        edges=model.edges + (screw_edge,),
+        vertices=model.vertices + (screw_vertex,),
+    )
+
+
+def test_natural_language_entry_uses_jev_screen_before_solving():
+    from abaqus_ai_agent.agent import AbaqusAIAgent
+    from abaqus_ai_agent.contracts.task import TaskStatus
+
+    model = _three_part_product()
+    agent = AbaqusAIAgent(executor=None)
+    pending = agent.solve_requirement(
+        "Check the strength of this product",
+        geometry=IntentGeometrySpec(shape="step_file", assembly_scope=model),
+        submit_job=False,
+        context={
+            "dimensions": {"length": 100.0, "unit": "mm"},
+            "material": {"name": "PA66", "elastic_modulus": 3000.0, "poisson_ratio": 0.35},
+            "boundary_conditions": [{"type": "encastre", "region": "Base"}],
+            "loads": [{"type": "concentrated_force", "magnitude": 100.0, "region": "Handle"}],
+        },
+    )
+    assert pending.status == TaskStatus.NEEDS_CLARIFICATION
+    assert pending.summary_card["status"] == "ASSEMBLY_SCREEN_PENDING"
+
+
+def test_requirement_screen_keeps_named_parts_and_drops_fastener():
+    model = _three_part_product()
+    screen = screen_assembly_requirement(model, "Analyze the handle and its pin")
+
+    assert screen.retained_ids == ("S_HANDLE", "S_PIN")
+    assert screen.excluded_ids == ("S_SCREW",)
+    assert screen.pending_ids == ()
+
+    scope = build_assembly_scope(model, screen=screen)
+    assert [part.solid_id for part in scope.parts] == ["S_PIN", "S_HANDLE"]
+    assert "S_SCREW" not in [part.solid_id for part in scope.parts]
+    assert scope.excluded_solid_ids == ("S_SCREW",)
+    assert scope.is_complete is True
+
+
+def test_missing_requirement_does_not_analyze_the_whole_product():
+    model = _three_part_product()
+    scope = build_assembly_scope(model)
+
+    assert scope.parts == ()
+    assert "analysis_requirement_missing" in scope.gaps
+    assert scope.is_complete is False
+
+
+def test_ambiguous_identity_stays_pending_instead_of_full_analysis():
+    model = _three_part_product()
+    screen = screen_assembly_requirement(model, "Check the strength of this product")
+
+    assert "S_SCREW" in screen.excluded_ids
+    assert "S_HANDLE" in screen.pending_ids
+    assert "S_PIN" in screen.pending_ids
+    scope = build_assembly_scope(model, screen=screen)
+    assert scope.parts == ()
+    assert any(gap.startswith("screening_pending") for gap in scope.gaps)
+    assert scope.is_complete is False
+
+
+def test_jev_probability_thresholds_do_not_force_a_middle_value():
+    model = _three_part_product()
+    scope = build_assembly_scope(
+        model,
+        requirement="Analyze the handle",
+        judgments={
+            "S_HANDLE": {"probability": 0.95, "role": "analysis_object"},
+            "S_PIN": {"probability": 0.91, "role": "load_path"},
+            "S_SCREW": {"probability": 0.05, "role": "fastener"},
+        },
+    )
+    assert [part.solid_id for part in scope.parts] == ["S_PIN", "S_HANDLE"]
+    assert scope.is_complete is True
+
+    uncertain = build_assembly_scope(
+        model,
+        requirement="Analyze the handle",
+        judgments={
+            "S_HANDLE": {"probability": 0.95},
+            "S_PIN": {"probability": 0.55},
+            "S_SCREW": {"probability": 0.05},
+        },
+    )
+    assert uncertain.parts == ()
+    assert any("S_PIN" in gap for gap in uncertain.gaps)
+    assert uncertain.is_complete is False

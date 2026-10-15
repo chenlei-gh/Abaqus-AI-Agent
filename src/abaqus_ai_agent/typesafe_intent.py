@@ -28,7 +28,7 @@ import time
 import urllib.error
 import urllib.request
 from dataclasses import asdict, dataclass, field
-from typing import Any, Callable, Dict, List, Optional, Protocol, Tuple, runtime_checkable
+from typing import Any, Callable, Dict, List, Mapping, Optional, Protocol, Sequence, Tuple, runtime_checkable
 
 from abaqus_ai_agent.contracts.intent import EngineeringIntent
 from abaqus_ai_agent.contracts.results import ResultRequirement
@@ -1433,6 +1433,42 @@ def build_typesafe_systemone_payload(
     }
 
 
+def build_part_screening_questions(solids: Sequence[Mapping[str, Any]]) -> Dict[str, Any]:
+    """One independent Noul per solid. Question ids stay in code.
+
+    JEV judges relevance to the requirement. It does not choose a body number,
+    invent a mating face, or decide that an unlabeled solid may be analyzed.
+    """
+    questions: Dict[str, Any] = {}
+    for index, solid in enumerate(solids):
+        solid_id = str(solid.get("solid_id") or "")
+        if not solid_id:
+            raise ValueError("each screening candidate needs a solid_id")
+        questions[f"part_{index}"] = {
+            "type": "noul",
+            "instructions": {
+                "question": (
+                    "Must `candidate` stay in this analysis because it is the named object, "
+                    "or because removing it would remove the load path or the installation support?"
+                ),
+                "candidate": {
+                    "solid_id": solid_id,
+                    "label": solid.get("label") or solid_id,
+                    "volume": solid.get("volume"),
+                },
+                "not_sufficient": [
+                    "The solid merely exists in the same STEP file.",
+                    "The solid is a fastener, cosmetic, or unrelated component and the requirement does not name it.",
+                ],
+            },
+            "criteria": {
+                "true": "The requirement names this solid, or the described load path or installation cannot be represented without it.",
+                "false": "The requirement does not need this solid; it is outside the named analysis object.",
+            },
+        }
+    return questions
+
+
 @runtime_checkable
 class ExternalIntentProviderProtocol(Protocol):
     """Protocol for optional external AI decision providers."""
@@ -1590,6 +1626,19 @@ class GenericHttpIntentProvider:
                 "prompt": prompt,
             }
 
+        return self._post_json(payload, timeout)
+
+    def judge_payload(self, payload: Mapping[str, Any], timeout: float = 5.0) -> Dict[str, Any]:
+        """POST a caller-built System One payload and return the raw JSON body."""
+        if not self.endpoint or not self.api_key:
+            raise ExternalIntentApiError("TypeSafe provider is not configured for part screening.")
+        return self._post_json(payload, timeout)
+
+    def _post_json(self, payload: Mapping[str, Any], timeout: float) -> Dict[str, Any]:
+        headers = {
+            "Authorization": f"Bearer {self.api_key}",
+            "Content-Type": "application/json",
+        }
         req = urllib.request.Request(
             self.endpoint,
             data=json.dumps(payload).encode("utf-8"),
@@ -2952,6 +3001,80 @@ class EngineeringIntentRouter:
             metadata=metadata,
             is_executable=False,
         )
+
+    def screen_parts(
+        self,
+        requirement: str,
+        solids: Sequence[Mapping[str, Any]],
+        *,
+        retain_threshold: float = 0.8,
+        exclude_threshold: float = 0.2,
+    ):
+        """Ask whether each supplied solid belongs to this analysis.
+
+        Live mode sends one Noul per solid and consumes only that solid's
+        probability. Offline mode does not pretend to know unlabeled geometry:
+        a solid whose id is not named by the requirement stays pending.
+        """
+        from .geometry.assembly_scope import screen_assembly_requirement
+
+        if not solids:
+            raise ValueError("part screening requires the CAD solid inventory")
+        prompt = requirement.strip()
+        if not prompt:
+            raise ValueError("part screening requires the analysis requirement")
+        if self.mode == "live":
+            if not self.external_provider or not hasattr(self.external_provider, "judge_payload"):
+                raise JevApiError(
+                    "Part screening in live mode requires a TypeSafe provider. "
+                    "Refusing to treat an unlabeled solid as retained."
+                )
+            payload = {
+                "model": getattr(self.external_provider, "model", TYPESAFE_DEFAULT_MODEL),
+                "state": {
+                    "requirement": prompt,
+                    "rule": "Judge each candidate independently. Do not retain a solid only because it shares the file.",
+                },
+                "questions": build_part_screening_questions(solids),
+            }
+            raw = self.external_provider.judge_payload(payload, timeout=self.timeout)
+            answers = raw.get("answers") if isinstance(raw, dict) else None
+            if not isinstance(answers, dict):
+                raise JevApiError("Part screening response did not contain answers.")
+            judgments = {}
+            for index, solid in enumerate(solids):
+                answer = answers.get(f"part_{index}")
+                probability = answer.get("noul", answer.get("probability")) if isinstance(answer, dict) else None
+                judgments[str(solid["solid_id"])] = {
+                    "probability": probability,
+                    "reason": "JEV relevance to the named analysis requirement",
+                }
+            return screen_assembly_requirement(
+                _screening_model(solids),
+                prompt,
+                judgments=judgments,
+                retain_threshold=retain_threshold,
+                exclude_threshold=exclude_threshold,
+            )
+        return screen_assembly_requirement(_screening_model(solids), prompt)
+
+
+def _screening_model(solids: Sequence[Mapping[str, Any]]):
+    """Minimal inventory so screening can check ids without reading geometry."""
+    from .geometry.model import CadFormat, CadProvenance, CadSolid, GeometryModel
+
+    return GeometryModel(
+        model_id="SCREEN_INVENTORY",
+        provenance=CadProvenance(
+            file_path="screen",
+            file_name="screen",
+            file_sha256="0" * 64,
+            file_size_bytes=0,
+            ingested_at="1970-01-01T00:00:00Z",
+            cad_format=CadFormat.STEP,
+        ),
+        solids=tuple(CadSolid(str(item["solid_id"])) for item in solids),
+    )
 
 
 # Backwards compatibility alias
