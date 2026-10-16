@@ -748,21 +748,22 @@ Broken continuation followed by a full new record
 
 
 def test_contact_pair_and_surfaces_inside_include_are_resolved(tmp_path):
-    """Interaction and Surface definitions in nested include content join the full parse context."""
-    include_file = tmp_path / "assembly_contact.inc"
-    include_file.write_text(
+    """Surface entities and interaction data in INCLUDE files join the full parse context."""
+    part_include = tmp_path / "base_part.inc"
+    part_include.write_text(
         """*PART, NAME=BASE
 *ELEMENT, TYPE=C3D8R
 2, 1, 2, 3, 4, 5, 6, 7, 8
 *SURFACE, NAME=BASE_SURF
 2, S1
 *END PART
-*ASSEMBLY, NAME=ASSEMBLY
-*INSTANCE, NAME=BASE_1, PART=BASE
-*END INSTANCE
-*CONTACT PAIR, INTERACTION=INT-1
+""",
+        encoding="utf-8",
+    )
+    contact_include = tmp_path / "contact_pair.inc"
+    contact_include.write_text(
+        """*CONTACT PAIR, INTERACTION=INT-1
 HANDLE_1.HANDLE_SURF, BASE_1.BASE_SURF
-*END ASSEMBLY
 """,
         encoding="utf-8",
     )
@@ -775,10 +776,13 @@ Top-level handle and included base/contact
 *SURFACE, NAME=HANDLE_SURF
 1, S1
 *END PART
-*INCLUDE, INPUT=assembly_contact.inc
+*INCLUDE, INPUT=base_part.inc
 *ASSEMBLY, NAME=ASSEMBLY
 *INSTANCE, NAME=HANDLE_1, PART=HANDLE
 *END INSTANCE
+*INSTANCE, NAME=BASE_1, PART=BASE
+*END INSTANCE
+*INCLUDE, INPUT=contact_pair.inc
 *END ASSEMBLY
 """
     scope = {
