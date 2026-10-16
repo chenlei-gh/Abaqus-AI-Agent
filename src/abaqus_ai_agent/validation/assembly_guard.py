@@ -154,11 +154,13 @@ def parse_inp_interactions(inp_text: str) -> List[Tuple[str, str]]:
     return pairs
 
 
-def parse_inp_surfaces(inp_text: str) -> Dict[str, Set[str]]:
-    """Parse surface definitions and map normalized surface name to associated instance names."""
+def parse_inp_surfaces(inp_text: str) -> Tuple[Dict[str, Set[str]], Dict[str, Set[str]]]:
+    """Parse surface definitions and map normalized surface name to associated instance names and part names."""
     lines = inp_text.splitlines()
     surf_to_insts: Dict[str, Set[str]] = {}
+    surf_to_parts: Dict[str, Set[str]] = {}
     current_instance: Optional[str] = None
+    current_part: Optional[str] = None
     current_surface: Optional[str] = None
 
     for line in lines:
@@ -167,10 +169,21 @@ def parse_inp_surfaces(inp_text: str) -> Dict[str, Set[str]]:
             continue
         upper = stripped.upper()
 
+        if upper.startswith("*PART"):
+            part_match = re.search(r"NAME\s*=\s*([^,\s]+)", stripped, re.IGNORECASE)
+            if part_match:
+                current_part = _normalize_name(part_match.group(1))
+            current_instance = None
+            continue
+        elif upper.startswith("*END PART"):
+            current_part = None
+            continue
+
         if upper.startswith("*INSTANCE"):
             inst_match = re.search(r"NAME\s*=\s*([^,\s]+)", stripped, re.IGNORECASE)
             if inst_match:
                 current_instance = _normalize_name(inst_match.group(1))
+            current_part = None
             continue
         elif upper.startswith("*END INSTANCE"):
             current_instance = None
@@ -182,26 +195,81 @@ def parse_inp_surfaces(inp_text: str) -> Dict[str, Set[str]]:
                 current_surface = _normalize_name(surf_match.group(1))
                 if current_surface not in surf_to_insts:
                     surf_to_insts[current_surface] = set()
+                if current_surface not in surf_to_parts:
+                    surf_to_parts[current_surface] = set()
                 if current_instance:
                     surf_to_insts[current_surface].add(current_instance)
+                elif current_part:
+                    surf_to_parts[current_surface].add(current_part)
             continue
         elif upper.startswith("*"):
             current_surface = None
             continue
 
-        if current_surface and current_instance:
-            surf_to_insts[current_surface].add(current_instance)
-        elif current_surface:
-            # Assembly level surface: check if data line references instance (e.g. InstName.Elset)
-            parts = stripped.split(",")
-            for p in parts:
-                p_clean = p.strip()
-                if "." in p_clean:
-                    inst_part = _normalize_name(p_clean.split(".")[0])
-                    if inst_part:
-                        surf_to_insts[current_surface].add(inst_part)
+        if current_surface:
+            if current_instance:
+                surf_to_insts[current_surface].add(current_instance)
+            elif current_part:
+                surf_to_parts[current_surface].add(current_part)
+            else:
+                # Assembly level surface: check if data line references instance (e.g. InstName.Elset)
+                parts = stripped.split(",")
+                for p in parts:
+                    p_clean = p.strip()
+                    if "." in p_clean:
+                        inst_part = _normalize_name(p_clean.split(".")[0])
+                        if inst_part:
+                            surf_to_insts[current_surface].add(inst_part)
 
-    return surf_to_insts
+    return surf_to_insts, surf_to_parts
+
+
+def _resolve_interaction_token(
+    token: str,
+    surf_to_insts: Dict[str, Set[str]],
+    surf_to_parts: Dict[str, Set[str]],
+    part_to_insts: Dict[str, Set[str]],
+) -> Tuple[Set[str], str]:
+    """Resolve an interaction token (e.g. 'INST.SURF' or 'SURF') to associated candidate instance names and surface name."""
+    token_norm = _normalize_name(token)
+    if "." in token_norm:
+        inst_or_part, surf_name = token_norm.split(".", 1)
+        insts = {inst_or_part}
+        if inst_or_part in part_to_insts:
+            insts.update(part_to_insts[inst_or_part])
+        return insts, surf_name
+
+    surf_name = token_norm
+    insts = set(surf_to_insts.get(surf_name, set()))
+    for p in surf_to_parts.get(surf_name, set()):
+        if p in part_to_insts:
+            insts.update(part_to_insts[p])
+        else:
+            insts.add(p)
+    return insts, surf_name
+
+
+def _matches_contact_side(
+    req_inst: str,
+    req_surf: str,
+    cand_insts: Set[str],
+    cand_surf: str,
+) -> bool:
+    """Strictly verify if candidate interaction side matches required instance and surface.
+    
+    Eliminates all loose substring matching and adheres strictly to canonical equivalence.
+    """
+    # 1. Instance match: strict exact or canonical mapping (NO loose substring matching)
+    inst_matched = any(_is_exact_or_canonical_instance_match(req_inst, cand) for cand in cand_insts)
+    if not inst_matched:
+        return False
+
+    # 2. Surface match: if required surface name is provided, verify strict match
+    if req_surf:
+        norm_req_surf = _normalize_name(req_surf)
+        return norm_req_surf == cand_surf or _is_exact_or_canonical_instance_match(norm_req_surf, cand_surf)
+
+    return True
 
 
 def _has_contact_or_interaction(inp_text: str) -> bool:
@@ -223,7 +291,11 @@ def _verify_contacts_covered(
     scope_contacts: Sequence[Dict[str, Any]],
     inst_to_part: Dict[str, str],
 ) -> Tuple[bool, Optional[str]]:
-    """Verify that required mating contacts in AssemblyScope have corresponding load transfer in INP."""
+    """Verify that required mating contacts in AssemblyScope have corresponding load transfer in INP.
+    
+    Adheres strictly to fail-closed principles: if interactions cannot be parsed or mapped,
+    verification fails rather than passing silently.
+    """
     if not scope_contacts:
         return True, None
 
@@ -237,74 +309,49 @@ def _verify_contacts_covered(
 
     pairs = parse_inp_interactions(inp_text)
     if not pairs:
-        # Fallback to general interaction keyword if specific pair lines couldn't be parsed
-        return True, None
+        # P0-1 FIX: Fail-closed when contact data lines cannot be parsed
+        return (
+            False,
+            "Assembly contract fidelity violation: multi-part contract requires load-transfer contact pairs, "
+            "but no parsable *CONTACT PAIR or *TIE interaction data lines were found in the deck.",
+        )
 
-    surf_to_insts = parse_inp_surfaces(inp_text)
+    surf_to_insts, surf_to_parts = parse_inp_surfaces(inp_text)
 
-    # Check if each required contact pair's instances/surfaces appear in the interaction definitions
+    # Invert inst_to_part: map Part name to all instances instantiating it
+    part_to_insts: Dict[str, Set[str]] = {}
+    for inst, part in inst_to_part.items():
+        part_to_insts.setdefault(part, set()).add(inst)
+
+    # Resolve all interaction pairs into structured candidate sides
+    resolved_pairs = []
+    for p1, p2 in pairs:
+        p1_insts, p1_surf = _resolve_interaction_token(p1, surf_to_insts, surf_to_parts, part_to_insts)
+        p2_insts, p2_surf = _resolve_interaction_token(p2, surf_to_insts, surf_to_parts, part_to_insts)
+        resolved_pairs.append((p1_insts, p1_surf, p2_insts, p2_surf))
+
+    # Check if each required contact pair is covered by a strictly matching interaction pair
     for sc in scope_contacts:
         m_inst = sc.get("master") or sc.get("master_instance") or sc.get("master_part") or ""
         s_inst = sc.get("slave") or sc.get("slave_instance") or sc.get("slave_part") or ""
-        m_norm = _normalize_name(m_inst)
-        s_norm = _normalize_name(s_inst)
-        m_surf = _normalize_name(sc.get("master_surface") or "")
-        s_surf = _normalize_name(sc.get("slave_surface") or "")
+        m_surf = sc.get("master_surface") or ""
+        s_surf = sc.get("slave_surface") or ""
 
         pair_matched = False
-        m_candidates = {m_norm, re.sub(r"\d+$", "", m_norm)}
-        s_candidates = {s_norm, re.sub(r"\d+$", "", s_norm)}
-        if m_norm in inst_to_part:
-            m_candidates.add(inst_to_part[m_norm])
-        if s_norm in inst_to_part:
-            s_candidates.add(inst_to_part[s_norm])
-
-        for p1, p2 in pairs:
-            # 1. Exact or canonical surface name match
-            if (m_surf and s_surf) and (
-                (_is_exact_or_canonical_instance_match(s_surf, p1) and _is_exact_or_canonical_instance_match(m_surf, p2))
-                or (_is_exact_or_canonical_instance_match(m_surf, p1) and _is_exact_or_canonical_instance_match(s_surf, p2))
+        for p1_insts, p1_surf, p2_insts, p2_surf in resolved_pairs:
+            # Check direct match (master on side 1, slave on side 2)
+            if (
+                _matches_contact_side(m_inst, m_surf, p1_insts, p1_surf)
+                and _matches_contact_side(s_inst, s_surf, p2_insts, p2_surf)
             ):
                 pair_matched = True
                 break
 
-            # 2. Match surface references containing instance prefixes or via surf_to_insts
-            p1_insts = set(surf_to_insts.get(p1, set()))
-            p2_insts = set(surf_to_insts.get(p2, set()))
-            if "." in p1:
-                p1_insts.add(p1.split(".")[0])
-            if "." in p2:
-                p2_insts.add(p2.split(".")[0])
-            for inst, parent_part in inst_to_part.items():
-                inst_root = re.sub(r"\d+$", "", inst)
-                if inst in p1 or parent_part in p1 or (inst_root and inst_root in p1):
-                    p1_insts.add(inst)
-                    p1_insts.add(parent_part)
-                if inst in p2 or parent_part in p2 or (inst_root and inst_root in p2):
-                    p2_insts.add(inst)
-                    p2_insts.add(parent_part)
-
-            m_match = any(
-                (cand and cand in p1) or any(_is_exact_or_canonical_instance_match(cand, p1_c) for p1_c in p1_insts)
-                for cand in m_candidates if cand
-            )
-            s_match = any(
-                (cand and cand in p2) or any(_is_exact_or_canonical_instance_match(cand, p2_c) for p2_c in p2_insts)
-                for cand in s_candidates if cand
-            )
-            if m_match and s_match:
-                pair_matched = True
-                break
-
-            m_match_rev = any(
-                (cand and cand in p2) or any(_is_exact_or_canonical_instance_match(cand, p2_c) for p2_c in p2_insts)
-                for cand in m_candidates if cand
-            )
-            s_match_rev = any(
-                (cand and cand in p1) or any(_is_exact_or_canonical_instance_match(cand, p1_c) for p1_c in p1_insts)
-                for cand in s_candidates if cand
-            )
-            if m_match_rev and s_match_rev:
+            # Check reversed match (master on side 2, slave on side 1)
+            if (
+                _matches_contact_side(m_inst, m_surf, p2_insts, p2_surf)
+                and _matches_contact_side(s_inst, s_surf, p1_insts, p1_surf)
+            ):
                 pair_matched = True
                 break
 
@@ -312,7 +359,7 @@ def _verify_contacts_covered(
             return (
                 False,
                 f"Assembly contract fidelity violation: required load transfer between '{m_inst}' "
-                f"and '{s_inst}' is not defined in any *CONTACT PAIR or *TIE interaction.",
+                f"and '{s_inst}' is not defined in any valid *CONTACT PAIR or *TIE interaction.",
             )
 
     return True, None
@@ -415,15 +462,8 @@ def audit_inp_assembly_contract(
         ]
 
     part_count = len(scope_parts)
-    
-    # Single-part contract: standard baseline
-    if part_count <= 1:
-        return AssemblyAuditResult(
-            passed=True,
-            diagnostics={"mode": "single_part", "part_count": part_count}
-        )
 
-    # Multi-part contract audit
+    # Multi-part and single-part instance & mesh fidelity audit
     missing_instances: List[str] = []
     empty_instances: List[str] = []
     found_instances: List[str] = []
@@ -472,6 +512,14 @@ def audit_inp_assembly_contract(
                 f"reference parts without valid *ELEMENT definitions."
             ),
             diagnostics=diagnostics,
+        )
+
+    # P0-2 FIX: Verify all declared instances and mesh existence BEFORE single-part early return.
+    # Single-part contract can safely pass without requiring multi-part contact pairs.
+    if part_count <= 1:
+        return AssemblyAuditResult(
+            passed=True,
+            diagnostics=dict(diagnostics, mode="single_part", part_count=part_count),
         )
 
     # Multi-part load transfer path check with reference verification

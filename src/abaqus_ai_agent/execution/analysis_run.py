@@ -1,6 +1,7 @@
 import os
 from pathlib import Path
 import uuid
+import hashlib
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Dict, Optional, Tuple
@@ -568,6 +569,29 @@ class AnalysisRunner:
                 if not audit_res.passed:
                     raise AssemblyContractViolation(
                         f"Pre-submission CAE model audit blocked solver launch: {audit_res.reason}"
+                    )
+
+                # 4. Cryptographic binding: bind audited solver deck hash to run provenance
+                audited_inp_sha256 = hashlib.sha256(generated_deck.encode("utf-8")).hexdigest()
+                run = run.with_state(
+                    run.state,
+                    provenance=run.provenance.replace(
+                        input_hash=audited_inp_sha256,
+                        metadata=dict(
+                            run.provenance.metadata,
+                            audited_inp_sha256=audited_inp_sha256,
+                            audited_inp_path=candidate_inp,
+                        ),
+                    ),
+                )
+
+                # 5. Pre-submit consistency check: verify solver deck has not been modified
+                with open(candidate_inp, "r", encoding="utf-8", errors="replace") as f_check:
+                    post_audit_deck = f_check.read()
+                current_inp_sha256 = hashlib.sha256(post_audit_deck.encode("utf-8")).hexdigest()
+                if current_inp_sha256 != audited_inp_sha256:
+                    raise AssemblyContractViolation(
+                        f"Pre-submission consistency mismatch: solver deck '{candidate_inp}' changed after audit."
                     )
 
             status = jobs.submit(job_name, wait=True, timeout=timeout)

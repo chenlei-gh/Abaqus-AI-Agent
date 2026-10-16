@@ -34,12 +34,16 @@ Door handle assembly
 1, 0.0, 0.0, 0.0
 *ELEMENT, TYPE=C3D10M, ELSET=HANDLE_ELEMS
 1, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10
+*SURFACE, NAME=HANDLE_SURF
+HANDLE_ELEMS, S1
 *END PART
 *PART, NAME=BASE
 *NODE
 100, 0.0, 0.0, 0.0
 *ELEMENT, TYPE=C3D10M, ELSET=BASE_ELEMS
 100, 101, 102, 103, 104, 105, 106, 107, 108, 109, 110
+*SURFACE, NAME=BASE_SURF
+BASE_ELEMS, S1
 *END PART
 *PART, NAME=PIN
 *NODE
@@ -301,3 +305,144 @@ BEAM_1.ALL_NODES, ENCASTRE
     assert res.passed is False
     assert "Assembly boundary condition violation" in res.reason
     assert "Actuator instance 'beam1' is completely locked with ENCASTRE" in res.reason
+
+
+def test_unparsed_contact_fails_closed():
+    """Verify that multi-part contract fails closed if contact lines cannot be parsed."""
+    inp_keyword_only = """
+*HEADING
+Model with keyword only and no parsable pairs
+*PART, NAME=HANDLE
+*ELEMENT, TYPE=C3D10M, ELSET=E1
+1, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10
+*END PART
+*PART, NAME=BASE
+*ELEMENT, TYPE=C3D10M, ELSET=E2
+100, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10
+*END PART
+*ASSEMBLY, NAME=ASSEMBLY
+*INSTANCE, NAME=HANDLE_1, PART=HANDLE
+*END INSTANCE
+*INSTANCE, NAME=BASE_1, PART=BASE
+*END INSTANCE
+*SURFACE INTERACTION, NAME=INT-1
+*END ASSEMBLY
+*STEP
+*STATIC
+*END STEP
+"""
+    scope = {
+        "parts": [
+            {"instance_name": "HANDLE_1"},
+            {"instance_name": "BASE_1"},
+        ],
+        "contacts": [{"master": "HANDLE_1", "slave": "BASE_1"}],
+    }
+    res = audit_inp_assembly_contract(inp_keyword_only, assembly_scope=scope)
+    assert res.passed is False
+    assert "no parsable *CONTACT PAIR or *TIE interaction data lines were found" in res.reason
+
+
+def test_contact_matching_rejects_substring_instance_in_surface_name():
+    """Verify that candidate 'HANDLE_BASE_SURF' does NOT match instance 'HANDLE_1' via substring."""
+    inp_loose_contact = """
+*HEADING
+Model with contact referencing another part's surface
+*PART, NAME=HANDLE
+*ELEMENT, TYPE=C3D10M, ELSET=E1
+1, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10
+*END PART
+*PART, NAME=BASE
+*ELEMENT, TYPE=C3D10M, ELSET=E2
+100, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10
+*END PART
+*PART, NAME=OTHER
+*ELEMENT, TYPE=C3D10M, ELSET=E3
+200, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10
+*SURFACE, NAME=HANDLE_BASE_SURF, TYPE=ELEMENT
+E3
+*END PART
+*ASSEMBLY, NAME=ASSEMBLY
+*INSTANCE, NAME=HANDLE_1, PART=HANDLE
+*END INSTANCE
+*INSTANCE, NAME=BASE_1, PART=BASE
+*END INSTANCE
+*INSTANCE, NAME=OTHER_1, PART=OTHER
+*END INSTANCE
+*CONTACT PAIR
+HANDLE_BASE_SURF, BASE_1.BASE_SURF
+*END ASSEMBLY
+*STEP
+*STATIC
+*END STEP
+"""
+    scope = {
+        "parts": [
+            {"instance_name": "HANDLE_1"},
+            {"instance_name": "BASE_1"},
+        ],
+        "contacts": [{"master": "HANDLE_1", "slave": "BASE_1"}],
+    }
+    res = audit_inp_assembly_contract(inp_loose_contact, assembly_scope=scope)
+    assert res.passed is False
+    assert "required load transfer between 'HANDLE_1' and 'BASE_1' is not defined" in res.reason
+
+
+def test_single_part_contract_missing_declared_instance_fails_audit():
+    """Verify single-part contract fails if the declared instance is missing from the INP deck."""
+    scope = {
+        "parts": [
+            {"instance_name": "HANDLE_1"},
+        ]
+    }
+    # LEGAL_SINGLE_PART_INP contains CANTILEVER-1, NOT HANDLE_1
+    res = audit_inp_assembly_contract(LEGAL_SINGLE_PART_INP, assembly_scope=scope)
+    assert res.passed is False
+    assert "HANDLE_1" in res.reason
+    assert "missing from the solver deck" in res.reason
+
+
+def test_single_part_contract_empty_mesh_fails_audit():
+    """Verify single-part contract fails if the declared instance has an empty mesh."""
+    inp_single_part_empty_mesh = """
+*HEADING
+Single part with empty mesh
+*PART, NAME=DUMMY
+*ELEMENT, TYPE=C3D8R, ELSET=ALLELEMS
+1, 1, 2, 3, 4, 5, 6, 7, 8
+*END PART
+*PART, NAME=HANDLE
+*NODE
+1, 0.0, 0.0, 0.0
+*END PART
+*ASSEMBLY, NAME=ASSEMBLY
+*INSTANCE, NAME=HANDLE_1, PART=HANDLE
+*END INSTANCE
+*END ASSEMBLY
+*STEP
+*STATIC
+*END STEP
+"""
+    scope = {
+        "parts": [
+            {"instance_name": "HANDLE_1"},
+        ]
+    }
+    res = audit_inp_assembly_contract(inp_single_part_empty_mesh, assembly_scope=scope)
+    assert res.passed is False
+    assert "HANDLE_1" in res.reason
+    assert "reference parts without valid *ELEMENT definitions" in res.reason
+
+
+def test_single_part_contract_valid_passes():
+    """Verify single-part contract passes when declared instance exists and has mesh elements."""
+    scope = {
+        "parts": [
+            {"instance_name": "CANTILEVER-1"},
+        ]
+    }
+    res = audit_inp_assembly_contract(LEGAL_SINGLE_PART_INP, assembly_scope=scope)
+    assert res.passed is True
+    assert res.diagnostics["mode"] == "single_part"
+    assert "cantilever-1" in res.diagnostics["found_instances"]
+
