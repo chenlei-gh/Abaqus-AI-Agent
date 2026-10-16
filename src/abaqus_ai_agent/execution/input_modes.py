@@ -361,6 +361,7 @@ def solve_user_inp(
             deck_text,
             assembly_scope=assembly_scope,
             loaded_instances=loaded_instances,
+            base_dir=inp_file.parent,
         )
         if not audit_res.passed:
             raise AssemblyContractViolation(

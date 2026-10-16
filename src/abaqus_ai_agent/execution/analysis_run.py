@@ -565,7 +565,11 @@ class AnalysisRunner:
                     generated_deck = f.read()
 
                 # 3. Perform fail-closed assembly contract audit
-                audit_res = audit_inp_assembly_contract(generated_deck, assembly_scope=active_scope)
+                audit_res = audit_inp_assembly_contract(
+                    generated_deck,
+                    assembly_scope=active_scope,
+                    base_dir=workdir,
+                )
                 if not audit_res.passed:
                     raise AssemblyContractViolation(
                         f"Pre-submission CAE model audit blocked solver launch: {audit_res.reason}"

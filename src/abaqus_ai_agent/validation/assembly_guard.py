@@ -12,11 +12,55 @@ AssemblyScope:
 
 from __future__ import annotations
 
+import os
 import re
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence, Set, Tuple, Union
 
 from ..geometry.assembly_scope import AssemblyScope
+
+
+# Abaqus element topologies: map canonical uppercase element type name to expected number of connected nodes.
+# Unknown element types will fail-closed and will not be silently deemed valid.
+SUPPORTED_ELEMENT_TOPOLOGIES: Dict[str, int] = {
+    # 3D Continuum Solid Elements
+    "C3D8": 8, "C3D8R": 8, "C3D8I": 8, "C3D8H": 8,
+    "C3D20": 20, "C3D20R": 20, "C3D20H": 20, "C3D20RH": 20,
+    "C3D4": 4, "C3D4H": 4,
+    "C3D10": 10, "C3D10M": 10, "C3D10MH": 10, "C3D10I": 10,
+    "C3D6": 6, "C3D6H": 6,
+    "C3D15": 15, "C3D15H": 15,
+    # Shell Elements
+    "S4": 4, "S4R": 4, "S4R5": 4,
+    "S3": 3, "S3R": 3,
+    "S8R": 8, "S8R5": 8,
+    "STRI3": 3, "STRI65": 6,
+    # Membrane Elements
+    "M3D3": 3, "M3D4": 4, "M3D4R": 4,
+    # 2D Continuum Plane Stress / Plane Strain / Axisymmetric Elements
+    "CPS4": 4, "CPS4R": 4, "CPE4": 4, "CPE4R": 4, "CAX4": 4, "CAX4R": 4,
+    "CPS3": 3, "CPE3": 3, "CAX3": 3,
+    "CPS8": 8, "CPS8R": 8, "CPE8": 8, "CPE8R": 8, "CAX8": 8, "CAX8R": 8,
+    "CPS6": 6, "CPE6": 6, "CAX6": 6,
+    # Beam and Truss Elements
+    "B31": 2, "B31H": 2, "B31OS": 2,
+    "B32": 3, "B32H": 3,
+    "T3D2": 2, "T3D2H": 2,
+    "T3D3": 3,
+    # Rigid, Point Mass and Discrete Elements
+    "R3D4": 4, "R3D3": 3,
+    "MASS": 1,
+    "SPRING1": 1, "SPRING2": 2, "SPRINGA": 2,
+    # Gasket Elements
+    "GK3D8": 8, "GK3D8N": 8,
+    "GK3D6": 6, "GK3D6N": 6,
+    "GK3D4L": 4, "GK3D4LN": 4,
+    "GK3D18N": 18,
+    "GK3D12M": 12, "GK3D12MN": 12,
+    # Connector Elements
+    "CONN3D2": 2,
+}
 
 
 class AssemblyContractViolation(RuntimeError):
@@ -36,14 +80,24 @@ def _normalize_name(name: str) -> str:
     return re.sub(r'[\s"\'_]+', '', str(name).strip().lower())
 
 
-def parse_inp_parts_and_instances(inp_text: str) -> Tuple[Dict[str, bool], Dict[str, str], bool]:
+def parse_inp_parts_and_instances(
+    inp_text: str,
+    base_dir: Optional[Union[str, Path]] = None,
+) -> Tuple[Dict[str, bool], Dict[str, str], bool]:
     """Parse *PART and *INSTANCE blocks to resolve Part-Instance mapping and element presence.
+
+    Fidelity & fail-closed rules:
+    - Precisely matches *ELEMENT definition keywords (rejects *ELEMENT OUTPUT, etc.).
+    - Extracts element TYPE and validates connected nodes against supported topologies.
+    - Accurately parses legal multiline continuation node lines.
+    - Unknown or unparsable element types fail-closed (not deemed valid).
+    - Unresolved external *INCLUDE decks cannot silently satisfy mesh presence.
 
     Returns:
         (parts_has_elements, instance_to_part, root_has_elements)
         - parts_has_elements: Dict[part_name_norm, bool]
         - instance_to_part: Dict[instance_name_norm, part_name_norm]
-        - root_has_elements: bool (True if elements are defined at root or directly in instance)
+        - root_has_elements: bool (True if valid elements are defined at root or directly in instance)
     """
     lines = inp_text.splitlines()
     
@@ -54,7 +108,28 @@ def parse_inp_parts_and_instances(inp_text: str) -> Tuple[Dict[str, bool], Dict[
 
     current_part: Optional[str] = None
     current_instance: Optional[str] = None
+
     in_element_block = False
+    current_expected_nodes = 0
+    pending_elem_id: Optional[str] = None
+    pending_elem_nodes: List[str] = []
+
+    def _record_valid_element() -> None:
+        nonlocal root_has_elements
+        if current_part is not None:
+            parts_has_elements[current_part] = True
+        elif current_instance is not None:
+            instance_direct_elements[current_instance] = True
+        else:
+            root_has_elements = True
+
+    def _flush_pending_element() -> None:
+        nonlocal pending_elem_id, pending_elem_nodes, current_expected_nodes
+        if pending_elem_id is not None and current_expected_nodes > 0:
+            if len(pending_elem_nodes) == current_expected_nodes:
+                _record_valid_element()
+        pending_elem_id = None
+        pending_elem_nodes = []
 
     for line in lines:
         stripped = line.strip()
@@ -65,10 +140,49 @@ def parse_inp_parts_and_instances(inp_text: str) -> Tuple[Dict[str, bool], Dict[
 
         # Keyword line
         if upper.startswith("*"):
-            if upper.startswith("*ELEMENT"):
-                in_element_block = True
+            _flush_pending_element()
+
+            elem_match = re.match(r"^\*ELEMENT(?:\s*,\s*|\s*$)(.*)", upper)
+            if elem_match:
+                param_str = elem_match.group(1)
+                type_match = re.search(r"TYPE\s*=\s*([A-Z0-9]+)", param_str)
+                if type_match:
+                    elem_type = type_match.group(1).upper()
+                    if elem_type in SUPPORTED_ELEMENT_TOPOLOGIES:
+                        in_element_block = True
+                        current_expected_nodes = SUPPORTED_ELEMENT_TOPOLOGIES[elem_type]
+                    else:
+                        # Unknown element type: fail-closed
+                        in_element_block = False
+                        current_expected_nodes = 0
+                else:
+                    in_element_block = False
+                    current_expected_nodes = 0
             else:
                 in_element_block = False
+                current_expected_nodes = 0
+
+            # Safe external *INCLUDE handling
+            if upper.startswith("*INCLUDE"):
+                inc_match = re.search(r"INPUT\s*=\s*([^,\s]+)", stripped, re.IGNORECASE)
+                if inc_match and base_dir is not None:
+                    inc_target = inc_match.group(1).strip("\"'")
+                    inc_path = Path(base_dir) / inc_target
+                    if inc_path.is_file():
+                        try:
+                            inc_text = inc_path.read_text(encoding="utf-8", errors="replace")
+                            sub_parts, _, sub_root = parse_inp_parts_and_instances(inc_text, base_dir=inc_path.parent)
+                            if current_part is not None:
+                                if sub_root or sub_parts.get(current_part, False):
+                                    parts_has_elements[current_part] = True
+                            elif current_instance is not None:
+                                if sub_root or sub_parts.get(current_instance, False):
+                                    instance_direct_elements[current_instance] = True
+                            elif sub_root:
+                                root_has_elements = True
+                        except Exception:
+                            pass
+                continue
 
             # Part start / end
             if upper.startswith("*PART"):
@@ -98,17 +212,36 @@ def parse_inp_parts_and_instances(inp_text: str) -> Tuple[Dict[str, bool], Dict[
 
             continue
 
-        # Data line within *ELEMENT block: verify presence of actual valid element data
-        if in_element_block:
+        # Data line within *ELEMENT block: verify presence of actual valid element data with topology check
+        if in_element_block and current_expected_nodes > 0:
             tokens = [t.strip() for t in stripped.split(",") if t.strip()]
-            # A valid element line begins with a numeric element ID and contains node connections
-            if tokens and tokens[0].isdigit():
-                if current_part is not None:
-                    parts_has_elements[current_part] = True
-                elif current_instance is not None:
-                    instance_direct_elements[current_instance] = True
-                else:
-                    root_has_elements = True
+            if not tokens or not all(t.isdigit() for t in tokens):
+                _flush_pending_element()
+                continue
+
+            if pending_elem_id is None:
+                # Start of element: tokens[0] is element ID, remaining are node connections
+                pending_elem_id = tokens[0]
+                pending_elem_nodes = list(tokens[1:])
+                if len(pending_elem_nodes) == current_expected_nodes:
+                    _record_valid_element()
+                    pending_elem_id = None
+                    pending_elem_nodes = []
+                elif len(pending_elem_nodes) > current_expected_nodes:
+                    pending_elem_id = None
+                    pending_elem_nodes = []
+            else:
+                # Continuation line: all tokens are additional node connections
+                pending_elem_nodes.extend(tokens)
+                if len(pending_elem_nodes) == current_expected_nodes:
+                    _record_valid_element()
+                    pending_elem_id = None
+                    pending_elem_nodes = []
+                elif len(pending_elem_nodes) > current_expected_nodes:
+                    pending_elem_id = None
+                    pending_elem_nodes = []
+
+    _flush_pending_element()
 
     # If instance defined elements directly, record it as a self-part
     for inst, has_elem in instance_direct_elements.items():
@@ -413,6 +546,7 @@ def audit_inp_assembly_contract(
     inp_text: str,
     assembly_scope: Optional[Union[AssemblyScope, Dict[str, Any]]] = None,
     loaded_instances: Optional[Sequence[str]] = None,
+    base_dir: Optional[Union[str, Path]] = None,
 ) -> AssemblyAuditResult:
     """Audit the solver input deck against an approved AssemblyScope contract.
 
@@ -426,12 +560,15 @@ def audit_inp_assembly_contract(
     if not inp_text or not inp_text.strip():
         return AssemblyAuditResult(passed=False, reason="INP text is empty or missing")
 
-    parts_elements, inst_to_part, root_elements = parse_inp_parts_and_instances(inp_text)
+    parts_elements, inst_to_part, root_elements = parse_inp_parts_and_instances(inp_text, base_dir=base_dir)
 
     # 1. Baseline element presence: deck must not be completely empty of elements
     has_any_elements = root_elements or any(parts_elements.values())
     if not has_any_elements:
-        return AssemblyAuditResult(passed=False, reason="INP contains no valid *ELEMENT definitions")
+        include_note = ""
+        if "*INCLUDE" in inp_text.upper():
+            include_note = " (external *INCLUDE file could not be resolved or contained no valid element topology)"
+        return AssemblyAuditResult(passed=False, reason=f"INP contains no valid *ELEMENT definitions{include_note}")
 
     # 2. Actuator boundary check MUST execute regardless of single-part or multi-part
     if loaded_instances:

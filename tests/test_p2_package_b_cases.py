@@ -218,8 +218,9 @@ def test_case_02_negative_probe_sealing_and_stress_failure():
         {"name": "min_metallic_seal_design_cpress", "value_key": "contact_pressure", "operator": ">=", "limit": 75.0, "unit": "MPa"},
         {"name": "max_asme_linearized_pl_pb_stress", "value_key": "step_2_flange_pl_pb", "operator": "<=", "limit": 276.0, "unit": "MPa"},
     ]
-    # Insufficient sealing pressure: 60.0 MPa < 75.0 MPa
+    # Insufficient sealing pressure: 60.0 MPa < 75.0 MPa, and stress exceeds 276.0 MPa
     failed_values = {
+        "max_stress": 290.0,
         "contact_pressure": 60.0,
         "step_2_flange_pl_pb": 290.0,  # Also exceeds 276.0 MPa
         "reaction_force": 219911485.75,
@@ -238,6 +239,37 @@ def test_case_02_negative_probe_sealing_and_stress_failure():
     assert res.status == "FAIL"
     assert any("criterion:min_metallic_seal_design_cpress" in f for f in res.failures)
     assert any("criterion:max_asme_linearized_pl_pb_stress" in f for f in res.failures)
+
+
+def test_case_02_negative_probe_missing_stress_blocks_acceptance():
+    """Negative Probe: If required stress metric is completely missing, Acceptance must be BLOCKED (fail-closed)."""
+    class MockContactDiag:
+        def __init__(self):
+            self.diagnostics = [type("Diag", (), {"status": "pass"})()]
+
+    criteria = [
+        {"name": "min_metallic_seal_design_cpress", "value_key": "contact_pressure", "operator": ">=", "limit": 75.0, "unit": "MPa"},
+        {"name": "max_asme_linearized_pl_pb_stress", "value_key": "step_2_flange_pl_pb", "operator": "<=", "limit": 276.0, "unit": "MPa"},
+    ]
+    # Missing governing stress metric ("max_stress" or any stress key in values)
+    incomplete_values = {
+        "contact_pressure": 60.0,
+        "step_2_flange_pl_pb": 290.0,
+        "reaction_force": 219911485.75,
+        "frictional_shear": 7.2,
+    }
+    res = evaluate_result_acceptance(
+        result_status="completed",
+        values=incomplete_values,
+        criteria=criteria,
+        contact_diagnostics=MockContactDiag(),
+        odb_fields=["S", "U", "RF", "CPRESS", "CSHEAR"],
+        physics_domain="contact",
+        require_evidence=False,
+    )
+    assert not res.passed
+    assert res.status == "BLOCKED"
+    assert any("stress_check:no_valid_stress_extracted" in b for b in res.blocked)
 
 
 def test_case_03_problem_statement_specification():

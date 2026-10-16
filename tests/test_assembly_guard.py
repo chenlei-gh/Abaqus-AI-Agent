@@ -506,3 +506,190 @@ Model with root elements and unmeshed declared part
     assert "HANDLE_1" in res.reason
     assert "reference parts without valid *ELEMENT definitions" in res.reason
 
+
+def test_element_with_id_only_no_nodes_fails():
+    """Boundary 2: Line with only an element ID and zero node connections must fail audit."""
+    inp = """
+*HEADING
+Single element ID without nodes
+*PART, NAME=BAR
+*ELEMENT, TYPE=C3D8R
+101
+*END PART
+*ASSEMBLY, NAME=ASSEMBLY
+*INSTANCE, NAME=BAR_1, PART=BAR
+*END INSTANCE
+*END ASSEMBLY
+"""
+    scope = {"parts": [{"instance_name": "BAR_1"}]}
+    res = audit_inp_assembly_contract(inp, assembly_scope=scope)
+    assert res.passed is False
+    assert "valid *ELEMENT definitions" in res.reason
+
+
+def test_element_with_insufficient_nodes_fails():
+    """Boundary 3: Element with fewer connected nodes than topology requires must fail."""
+    inp = """
+*HEADING
+C3D8R requires 8 nodes, but only 4 are provided
+*PART, NAME=BAR
+*ELEMENT, TYPE=C3D8R
+101, 1, 2, 3, 4
+*END PART
+*ASSEMBLY, NAME=ASSEMBLY
+*INSTANCE, NAME=BAR_1, PART=BAR
+*END INSTANCE
+*END ASSEMBLY
+"""
+    scope = {"parts": [{"instance_name": "BAR_1"}]}
+    res = audit_inp_assembly_contract(inp, assembly_scope=scope)
+    assert res.passed is False
+    assert "valid *ELEMENT definitions" in res.reason
+
+
+def test_valid_element_definition_passes():
+    """Boundary 4: Valid element definition strictly adhering to topology passes audit."""
+    inp = """
+*HEADING
+Valid C3D8R definition
+*PART, NAME=BAR
+*ELEMENT, TYPE=C3D8R
+101, 1, 2, 3, 4, 5, 6, 7, 8
+*END PART
+*ASSEMBLY, NAME=ASSEMBLY
+*INSTANCE, NAME=BAR_1, PART=BAR
+*END INSTANCE
+*END ASSEMBLY
+"""
+    scope = {"parts": [{"instance_name": "BAR_1"}]}
+    res = audit_inp_assembly_contract(inp, assembly_scope=scope)
+    assert res.passed is True
+
+
+def test_valid_multiline_continuation_passes():
+    """Boundary 5: Valid element definition spanning across multiline continuation passes audit."""
+    inp = """
+*HEADING
+C3D10M requires 10 nodes, given across two lines
+*PART, NAME=TETRA
+*ELEMENT, TYPE=C3D10M
+201, 1, 2, 3, 4, 5, 6, 7,
+8, 9, 10
+*END PART
+*ASSEMBLY, NAME=ASSEMBLY
+*INSTANCE, NAME=TETRA_1, PART=TETRA
+*END INSTANCE
+*END ASSEMBLY
+"""
+    scope = {"parts": [{"instance_name": "TETRA_1"}]}
+    res = audit_inp_assembly_contract(inp, assembly_scope=scope)
+    assert res.passed is True
+
+
+def test_element_output_keyword_not_misidentified_as_mesh():
+    """Boundary 6: *ELEMENT OUTPUT keyword must NOT be misidentified as mesh element definitions."""
+    inp = """
+*HEADING
+Deck with *ELEMENT OUTPUT but zero *ELEMENT definitions
+*PART, NAME=BAR
+*ELEMENT OUTPUT
+1, 2, 3, 4, 5, 6, 7, 8
+*END PART
+*ASSEMBLY, NAME=ASSEMBLY
+*INSTANCE, NAME=BAR_1, PART=BAR
+*END INSTANCE
+*END ASSEMBLY
+"""
+    scope = {"parts": [{"instance_name": "BAR_1"}]}
+    res = audit_inp_assembly_contract(inp, assembly_scope=scope)
+    assert res.passed is False
+    assert "no valid *ELEMENT definitions" in res.reason
+
+
+def test_unsupported_or_unknown_element_type_fails_closed():
+    """Boundary 7: Unsupported/unknown element type fails closed and cannot silently pass."""
+    inp = """
+*HEADING
+Unknown element type must fail-closed
+*PART, NAME=BAR
+*ELEMENT, TYPE=NONEXISTENT_MAGIC_ELEM
+1, 1, 2, 3, 4, 5, 6, 7, 8
+*END PART
+*ASSEMBLY, NAME=ASSEMBLY
+*INSTANCE, NAME=BAR_1, PART=BAR
+*END INSTANCE
+*END ASSEMBLY
+"""
+    scope = {"parts": [{"instance_name": "BAR_1"}]}
+    res = audit_inp_assembly_contract(inp, assembly_scope=scope)
+    assert res.passed is False
+    assert "no valid *ELEMENT definitions" in res.reason
+
+
+def test_supported_element_types_comprehensive_matrix():
+    """Boundary 9: Matrix of standard Abaqus element types supported by project pass topology audit."""
+    types_and_nodes = [
+        ("C3D8R", 8),
+        ("C3D4", 4),
+        ("C3D10M", 10),
+        ("S4R", 4),
+        ("S3", 3),
+        ("B31", 2),
+        ("CPE4", 4),
+        ("MASS", 1),
+        ("GK3D8", 8),
+    ]
+    for elem_type, node_count in types_and_nodes:
+        node_ids = ", ".join(str(i + 1) for i in range(node_count))
+        inp = f"""
+*HEADING
+Validation for {elem_type}
+*PART, NAME=P1
+*ELEMENT, TYPE={elem_type}
+1, {node_ids}
+*END PART
+*ASSEMBLY, NAME=ASSEMBLY
+*INSTANCE, NAME=P1_1, PART=P1
+*END INSTANCE
+*END ASSEMBLY
+"""
+        res = audit_inp_assembly_contract(inp, assembly_scope={"parts": [{"instance_name": "P1_1"}]})
+        assert res.passed is True, f"Failed for supported type {elem_type}"
+
+
+def test_external_include_element_fail_closed_and_resolution(tmp_path):
+    """External *INCLUDE: unresolved external include fails closed; resolved valid include passes."""
+    # 1. Missing / unresolvable include file fails closed
+    inp_unresolved = """
+*HEADING
+Deck referencing missing external file
+*PART, NAME=P1
+*INCLUDE, INPUT=missing_mesh.inp
+*END PART
+*ASSEMBLY, NAME=ASSEMBLY
+*INSTANCE, NAME=P1_1, PART=P1
+*END INSTANCE
+*END ASSEMBLY
+"""
+    res = audit_inp_assembly_contract(inp_unresolved, assembly_scope={"parts": [{"instance_name": "P1_1"}]}, base_dir=tmp_path)
+    assert res.passed is False
+    assert "no valid *ELEMENT definitions" in res.reason
+
+    # 2. Existing include file with valid topology passes
+    include_file = tmp_path / "valid_mesh.inp"
+    include_file.write_text("*ELEMENT, TYPE=C3D8R\n1, 1, 2, 3, 4, 5, 6, 7, 8\n", encoding="utf-8")
+    inp_resolved = f"""
+*HEADING
+Deck referencing existing valid external file
+*PART, NAME=P1
+*INCLUDE, INPUT=valid_mesh.inp
+*END PART
+*ASSEMBLY, NAME=ASSEMBLY
+*INSTANCE, NAME=P1_1, PART=P1
+*END INSTANCE
+*END ASSEMBLY
+"""
+    res2 = audit_inp_assembly_contract(inp_resolved, assembly_scope={"parts": [{"instance_name": "P1_1"}]}, base_dir=tmp_path)
+    assert res2.passed is True
+
+
