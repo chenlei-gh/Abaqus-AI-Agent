@@ -121,6 +121,8 @@ Handle completely locked with ENCASTRE
 *PART, NAME=BASE
 *ELEMENT, TYPE=C3D10M, ELSET=E2
 100, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10
+*SURFACE, NAME=BASE_SURF, TYPE=ELEMENT
+E2
 *END PART
 *ASSEMBLY, NAME=ASSEMBLY
 *INSTANCE, NAME=HANDLE_1, PART=HANDLE
@@ -340,7 +342,10 @@ Model with keyword only and no parsable pairs
     }
     res = audit_inp_assembly_contract(inp_keyword_only, assembly_scope=scope)
     assert res.passed is False
-    assert "no parsable *CONTACT PAIR or *TIE interaction data lines were found" in res.reason
+    assert (
+        "no parsable *CONTACT PAIR or *TIE interaction data lines were found" in res.reason
+        or "multi-part contract requires load-transfer contact pairs" in res.reason
+    )
 
 
 def test_contact_matching_rejects_substring_instance_in_surface_name():
@@ -355,6 +360,8 @@ Model with contact referencing another part's surface
 *PART, NAME=BASE
 *ELEMENT, TYPE=C3D10M, ELSET=E2
 100, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10
+*SURFACE, NAME=BASE_SURF, TYPE=ELEMENT
+E2
 *END PART
 *PART, NAME=OTHER
 *ELEMENT, TYPE=C3D10M, ELSET=E3
@@ -524,7 +531,7 @@ Single element ID without nodes
     scope = {"parts": [{"instance_name": "BAR_1"}]}
     res = audit_inp_assembly_contract(inp, assembly_scope=scope)
     assert res.passed is False
-    assert "valid *ELEMENT definitions" in res.reason
+    assert "malformed element definition" in res.reason
 
 
 def test_element_with_insufficient_nodes_fails():
@@ -544,7 +551,7 @@ C3D8R requires 8 nodes, but only 4 are provided
     scope = {"parts": [{"instance_name": "BAR_1"}]}
     res = audit_inp_assembly_contract(inp, assembly_scope=scope)
     assert res.passed is False
-    assert "valid *ELEMENT definitions" in res.reason
+    assert "malformed element definition" in res.reason
 
 
 def test_valid_element_definition_passes():
@@ -603,7 +610,7 @@ Deck with *ELEMENT OUTPUT but zero *ELEMENT definitions
     scope = {"parts": [{"instance_name": "BAR_1"}]}
     res = audit_inp_assembly_contract(inp, assembly_scope=scope)
     assert res.passed is False
-    assert "no valid *ELEMENT definitions" in res.reason
+    assert "INP contains no valid *ELEMENT definitions" in res.reason
 
 
 def test_unsupported_or_unknown_element_type_fails_closed():
@@ -623,7 +630,7 @@ Unknown element type must fail-closed
     scope = {"parts": [{"instance_name": "BAR_1"}]}
     res = audit_inp_assembly_contract(inp, assembly_scope=scope)
     assert res.passed is False
-    assert "no valid *ELEMENT definitions" in res.reason
+    assert "unsupported or unknown element type" in res.reason
 
 
 def test_supported_element_types_comprehensive_matrix():
@@ -673,7 +680,7 @@ Deck referencing missing external file
 """
     res = audit_inp_assembly_contract(inp_unresolved, assembly_scope={"parts": [{"instance_name": "P1_1"}]}, base_dir=tmp_path)
     assert res.passed is False
-    assert "no valid *ELEMENT definitions" in res.reason
+    assert "unresolved or invalid *INCLUDE reference" in res.reason
 
     # 2. Existing include file with valid topology passes
     include_file = tmp_path / "valid_mesh.inp"

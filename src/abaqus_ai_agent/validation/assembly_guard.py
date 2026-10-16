@@ -5,13 +5,16 @@ AssemblyScope:
 1. Resolves *PART definitions and their element blocks.
 2. Resolves *INSTANCE definitions and maps each instance to its parent Part.
 3. Verifies that all retained parts/instances from the contract exist and possess
-   non-empty element definitions.
+   non-empty, topographically valid element definitions.
 4. Verifies multi-part load transfer paths (contacts/ties) when required by contract.
 5. Verifies boundary conditions do not erroneously lock primary moving/loaded members.
+6. Enforces fail-closed handling for all external *INCLUDE dependencies.
+7. Guarantees deterministic input identity and raw byte hash binding.
 """
 
 from __future__ import annotations
 
+import hashlib
 import os
 import re
 from dataclasses import dataclass, field
@@ -75,61 +78,96 @@ class AssemblyAuditResult:
     diagnostics: Dict[str, Any] = field(default_factory=dict)
 
 
+@dataclass
+class InpParseContext:
+    """Detailed parsing context tracking entities, topology validity, and dependency resolution."""
+    parts_has_elements: Dict[str, bool] = field(default_factory=dict)
+    instance_to_part: Dict[str, str] = field(default_factory=dict)
+    instance_direct_elements: Dict[str, bool] = field(default_factory=dict)
+    root_has_elements: bool = False
+
+    part_definitions: Set[str] = field(default_factory=set)
+    instance_definitions: Set[str] = field(default_factory=set)
+    defined_surfaces: Dict[str, Set[str]] = field(default_factory=dict)  # surf_name_norm -> set of owner inst/part
+    
+    # Fidelity & fail-closed issue trackers
+    unresolved_includes: List[str] = field(default_factory=list)
+    resolved_include_files: Set[Path] = field(default_factory=set)
+    include_file_hashes: Dict[str, str] = field(default_factory=dict)
+    malformed_elements: List[str] = field(default_factory=list)
+    unknown_element_types: List[str] = field(default_factory=list)
+    duplicate_element_ids: List[str] = field(default_factory=list)
+    naming_collisions: List[str] = field(default_factory=list)
+    missing_part_references: List[str] = field(default_factory=list)
+
+
 def _normalize_name(name: str) -> str:
     """Normalize identifier for case-insensitive comparison, trimming whitespace and quotes."""
     return re.sub(r'[\s"\'_]+', '', str(name).strip().lower())
 
 
-def parse_inp_parts_and_instances(
+def parse_inp_full_model(
     inp_text: str,
     base_dir: Optional[Union[str, Path]] = None,
-) -> Tuple[Dict[str, bool], Dict[str, str], bool]:
-    """Parse *PART and *INSTANCE blocks to resolve Part-Instance mapping and element presence.
+    include_chain: Optional[List[Path]] = None,
+) -> InpParseContext:
+    """Parse complete INP structure, resolving INCLUDE dependencies, element topology, and entity mappings.
 
-    Fidelity & fail-closed rules:
-    - Precisely matches *ELEMENT definition keywords (rejects *ELEMENT OUTPUT, etc.).
-    - Extracts element TYPE and validates connected nodes against supported topologies.
-    - Accurately parses legal multiline continuation node lines.
-    - Unknown or unparsable element types fail-closed (not deemed valid).
-    - Unresolved external *INCLUDE decks cannot silently satisfy mesh presence.
-
-    Returns:
-        (parts_has_elements, instance_to_part, root_has_elements)
-        - parts_has_elements: Dict[part_name_norm, bool]
-        - instance_to_part: Dict[instance_name_norm, part_name_norm]
-        - root_has_elements: bool (True if valid elements are defined at root or directly in instance)
+    Enforces fail-closed parsing:
+    - Every *INCLUDE reference must resolve to a readable, valid file within allowable bounds.
+    - No circular references or recursion explosions.
+    - Element lines are verified against canonical topology; broken records cannot be spliced.
+    - Unknown element types or malformed records are explicitly tracked.
     """
+    ctx = InpParseContext()
+    if include_chain is None:
+        include_chain = []
+
     lines = inp_text.splitlines()
-    
-    parts_has_elements: Dict[str, bool] = {}
-    instance_to_part: Dict[str, str] = {}
-    instance_direct_elements: Dict[str, bool] = {}
-    root_has_elements = False
 
     current_part: Optional[str] = None
     current_instance: Optional[str] = None
+    current_surface: Optional[str] = None
 
     in_element_block = False
     current_expected_nodes = 0
+    current_element_type: Optional[str] = None
+
     pending_elem_id: Optional[str] = None
     pending_elem_nodes: List[str] = []
+    pending_line_had_trailing_comma = False
+
+    seen_element_ids_per_scope: Dict[str, Set[str]] = {}
+    raw_names_by_norm: Dict[str, str] = {}
+
+    def _get_scope_key() -> str:
+        if current_part is not None:
+            return f"part:{current_part}"
+        if current_instance is not None:
+            return f"instance:{current_instance}"
+        return "root"
 
     def _record_valid_element() -> None:
-        nonlocal root_has_elements
         if current_part is not None:
-            parts_has_elements[current_part] = True
+            ctx.parts_has_elements[current_part] = True
         elif current_instance is not None:
-            instance_direct_elements[current_instance] = True
+            ctx.instance_direct_elements[current_instance] = True
         else:
-            root_has_elements = True
+            ctx.root_has_elements = True
 
-    def _flush_pending_element() -> None:
-        nonlocal pending_elem_id, pending_elem_nodes, current_expected_nodes
-        if pending_elem_id is not None and current_expected_nodes > 0:
-            if len(pending_elem_nodes) == current_expected_nodes:
+    def _flush_pending_element(cause: str = "keyword") -> None:
+        nonlocal pending_elem_id, pending_elem_nodes, current_expected_nodes, pending_line_had_trailing_comma
+        if pending_elem_id is not None:
+            if current_expected_nodes > 0 and len(pending_elem_nodes) == current_expected_nodes:
                 _record_valid_element()
+            else:
+                ctx.malformed_elements.append(
+                    f"Incomplete element {pending_elem_id} (expected {current_expected_nodes} nodes, "
+                    f"got {len(pending_elem_nodes)}) before {cause}"
+                )
         pending_elem_id = None
         pending_elem_nodes = []
+        pending_line_had_trailing_comma = False
 
     for line in lines:
         stripped = line.strip()
@@ -140,8 +178,103 @@ def parse_inp_parts_and_instances(
 
         # Keyword line
         if upper.startswith("*"):
-            _flush_pending_element()
+            _flush_pending_element(f"keyword '{stripped}'")
+            current_surface = None
 
+            # 1. *INCLUDE handling
+            if upper.startswith("*INCLUDE"):
+                in_element_block = False
+                current_expected_nodes = 0
+                current_element_type = None
+
+                inc_match = re.search(r'INPUT\s*=\s*(?:"([^"]+)"|\'([^\']+)\'|([^,\s]+))', stripped, re.IGNORECASE)
+                if not inc_match:
+                    ctx.unresolved_includes.append(f"Malformed *INCLUDE statement without valid INPUT parameter: '{stripped}'")
+                    continue
+
+                raw_target = (inc_match.group(1) or inc_match.group(2) or inc_match.group(3) or "").strip()
+                if not raw_target:
+                    ctx.unresolved_includes.append(f"Empty INPUT parameter in *INCLUDE: '{stripped}'")
+                    continue
+
+                if base_dir is None:
+                    ctx.unresolved_includes.append(f"Cannot resolve *INCLUDE '{raw_target}': base_dir not provided")
+                    continue
+
+                target_p = Path(raw_target)
+                if target_p.is_absolute():
+                    inc_path = target_p.resolve()
+                else:
+                    inc_path = (Path(base_dir) / target_p).resolve()
+
+                if not inc_path.is_file():
+                    ctx.unresolved_includes.append(
+                        f"Referenced *INCLUDE file does not exist or is not a regular file: '{raw_target}' (resolved to '{inc_path}')"
+                    )
+                    continue
+
+                if inc_path in include_chain:
+                    chain_str = " -> ".join(str(p) for p in include_chain + [inc_path])
+                    ctx.unresolved_includes.append(f"Circular *INCLUDE reference detected: {chain_str}")
+                    continue
+
+                if len(include_chain) >= 10:
+                    ctx.unresolved_includes.append(f"Maximum *INCLUDE recursion depth (10) exceeded at: '{inc_path}'")
+                    continue
+
+                try:
+                    inc_bytes = inc_path.read_bytes()
+                    ctx.include_file_hashes[str(inc_path)] = hashlib.sha256(inc_bytes).hexdigest()
+                    inc_text = inc_bytes.decode("utf-8", errors="replace")
+                    ctx.resolved_include_files.add(inc_path)
+                    sub_ctx = parse_inp_full_model(
+                        inc_text,
+                        base_dir=inc_path.parent,
+                        include_chain=include_chain + [inc_path],
+                    )
+                except Exception as exc:
+                    ctx.unresolved_includes.append(f"Failed to read or parse *INCLUDE file '{inc_path}': {exc}")
+                    continue
+
+                # Merge include diagnostics fail-closed
+                ctx.unresolved_includes.extend(sub_ctx.unresolved_includes)
+                ctx.malformed_elements.extend(sub_ctx.malformed_elements)
+                ctx.unknown_element_types.extend(sub_ctx.unknown_element_types)
+                ctx.duplicate_element_ids.extend(sub_ctx.duplicate_element_ids)
+                ctx.naming_collisions.extend(sub_ctx.naming_collisions)
+                ctx.missing_part_references.extend(sub_ctx.missing_part_references)
+                ctx.resolved_include_files.update(sub_ctx.resolved_include_files)
+                ctx.include_file_hashes.update(sub_ctx.include_file_hashes)
+                ctx.part_definitions.update(sub_ctx.part_definitions)
+                ctx.instance_definitions.update(sub_ctx.instance_definitions)
+
+                # Merge surface definitions
+                for s_name, owners in sub_ctx.defined_surfaces.items():
+                    ctx.defined_surfaces.setdefault(s_name, set()).update(owners)
+
+                # Merge element definitions
+                if current_part is not None:
+                    if sub_ctx.root_has_elements or sub_ctx.parts_has_elements.get(current_part, False):
+                        ctx.parts_has_elements[current_part] = True
+                elif current_instance is not None:
+                    if sub_ctx.root_has_elements or sub_ctx.instance_direct_elements.get(current_instance, False):
+                        ctx.instance_direct_elements[current_instance] = True
+                else:
+                    if sub_ctx.root_has_elements:
+                        ctx.root_has_elements = True
+
+                for p, has_e in sub_ctx.parts_has_elements.items():
+                    if has_e:
+                        ctx.parts_has_elements[p] = True
+                    elif p not in ctx.parts_has_elements:
+                        ctx.parts_has_elements[p] = False
+
+                for inst, p in sub_ctx.instance_to_part.items():
+                    ctx.instance_to_part[inst] = p
+
+                continue
+
+            # 2. *ELEMENT keyword handling
             elem_match = re.match(r"^\*ELEMENT(?:\s*,\s*|\s*$)(.*)", upper)
             if elem_match:
                 param_str = elem_match.group(1)
@@ -151,105 +284,216 @@ def parse_inp_parts_and_instances(
                     if elem_type in SUPPORTED_ELEMENT_TOPOLOGIES:
                         in_element_block = True
                         current_expected_nodes = SUPPORTED_ELEMENT_TOPOLOGIES[elem_type]
+                        current_element_type = elem_type
                     else:
-                        # Unknown element type: fail-closed
                         in_element_block = False
                         current_expected_nodes = 0
+                        current_element_type = None
+                        ctx.unknown_element_types.append(f"Unsupported or unknown element TYPE={elem_type}")
                 else:
                     in_element_block = False
                     current_expected_nodes = 0
+                    current_element_type = None
+                    ctx.malformed_elements.append(f"Malformed *ELEMENT keyword line without TYPE: '{stripped}'")
+                continue
             else:
                 in_element_block = False
                 current_expected_nodes = 0
+                current_element_type = None
 
-            # Safe external *INCLUDE handling
-            if upper.startswith("*INCLUDE"):
-                inc_match = re.search(r"INPUT\s*=\s*([^,\s]+)", stripped, re.IGNORECASE)
-                if inc_match and base_dir is not None:
-                    inc_target = inc_match.group(1).strip("\"'")
-                    inc_path = Path(base_dir) / inc_target
-                    if inc_path.is_file():
-                        try:
-                            inc_text = inc_path.read_text(encoding="utf-8", errors="replace")
-                            sub_parts, _, sub_root = parse_inp_parts_and_instances(inc_text, base_dir=inc_path.parent)
-                            if current_part is not None:
-                                if sub_root or sub_parts.get(current_part, False):
-                                    parts_has_elements[current_part] = True
-                            elif current_instance is not None:
-                                if sub_root or sub_parts.get(current_instance, False):
-                                    instance_direct_elements[current_instance] = True
-                            elif sub_root:
-                                root_has_elements = True
-                        except Exception:
-                            pass
-                continue
-
-            # Part start / end
+            # 3. *PART / *END PART
             if upper.startswith("*PART"):
-                match = re.search(r"NAME\s*=\s*([^,\s]+)", stripped, re.IGNORECASE)
-                if match:
-                    current_part = _normalize_name(match.group(1))
-                    parts_has_elements[current_part] = False
+                part_match = re.search(r"NAME\s*=\s*([^,\s]+)", stripped, re.IGNORECASE)
+                if part_match:
+                    raw_part = part_match.group(1).strip("\"'")
+                    norm_part = _normalize_name(raw_part)
+                    if norm_part in raw_names_by_norm and raw_names_by_norm[norm_part] != raw_part:
+                        ctx.naming_collisions.append(
+                            f"Part naming collision: '{raw_part}' collides with '{raw_names_by_norm[norm_part]}' under normalization."
+                        )
+                    raw_names_by_norm[norm_part] = raw_part
+
+                    current_part = norm_part
+                    ctx.part_definitions.add(norm_part)
+                    if norm_part not in ctx.parts_has_elements:
+                        ctx.parts_has_elements[norm_part] = False
                 continue
             elif upper.startswith("*END PART"):
                 current_part = None
                 continue
 
-            # Instance start / end
+            # 4. *INSTANCE / *END INSTANCE
             if upper.startswith("*INSTANCE"):
                 inst_match = re.search(r"NAME\s*=\s*([^,\s]+)", stripped, re.IGNORECASE)
                 part_match = re.search(r"PART\s*=\s*([^,\s]+)", stripped, re.IGNORECASE)
                 if inst_match:
-                    inst_name = _normalize_name(inst_match.group(1))
-                    current_instance = inst_name
-                    instance_direct_elements[inst_name] = False
+                    raw_inst = inst_match.group(1).strip("\"'")
+                    norm_inst = _normalize_name(raw_inst)
+                    if norm_inst in raw_names_by_norm and raw_names_by_norm[norm_inst] != raw_inst:
+                        ctx.naming_collisions.append(
+                            f"Instance naming collision: '{raw_inst}' collides with '{raw_names_by_norm[norm_inst]}' under normalization."
+                        )
+                    raw_names_by_norm[norm_inst] = raw_inst
+
+                    current_instance = norm_inst
+                    ctx.instance_definitions.add(norm_inst)
+                    ctx.instance_direct_elements[norm_inst] = False
                     if part_match:
-                        instance_to_part[inst_name] = _normalize_name(part_match.group(1))
+                        raw_parent_part = part_match.group(1).strip("\"'")
+                        norm_parent_part = _normalize_name(raw_parent_part)
+                        ctx.instance_to_part[norm_inst] = norm_parent_part
+                    else:
+                        ctx.missing_part_references.append(f"Instance '{raw_inst}' is missing required PART= attribute.")
                 continue
             elif upper.startswith("*END INSTANCE"):
                 current_instance = None
                 continue
 
+            # 5. *SURFACE
+            if upper.startswith("*SURFACE"):
+                surf_match = re.search(r"NAME\s*=\s*([^,\s]+)", stripped, re.IGNORECASE)
+                if surf_match:
+                    raw_surf = surf_match.group(1).strip("\"'")
+                    current_surface = _normalize_name(raw_surf)
+                    owner = current_instance or current_part or "assembly"
+                    ctx.defined_surfaces.setdefault(current_surface, set()).add(owner)
+                continue
+
             continue
 
-        # Data line within *ELEMENT block: verify presence of actual valid element data with topology check
+        # Data line within *SURFACE definition
+        if current_surface:
+            # Check if line references instance or part specifically
+            parts = [p.strip() for p in stripped.split(",") if p.strip()]
+            for p in parts:
+                if "." in p:
+                    inst_token = _normalize_name(p.split(".")[0])
+                    ctx.defined_surfaces.setdefault(current_surface, set()).add(inst_token)
+
+        # Data line within *ELEMENT block
         if in_element_block and current_expected_nodes > 0:
             tokens = [t.strip() for t in stripped.split(",") if t.strip()]
             if not tokens or not all(t.isdigit() for t in tokens):
-                _flush_pending_element()
+                ctx.malformed_elements.append(f"Invalid non-integer tokens in *ELEMENT data: '{stripped}'")
+                _flush_pending_element("invalid non-integer data")
                 continue
 
+            line_ends_with_comma = stripped.endswith(",")
+            scope = _get_scope_key()
+            if scope not in seen_element_ids_per_scope:
+                seen_element_ids_per_scope[scope] = set()
+
             if pending_elem_id is None:
-                # Start of element: tokens[0] is element ID, remaining are node connections
-                pending_elem_id = tokens[0]
-                pending_elem_nodes = list(tokens[1:])
-                if len(pending_elem_nodes) == current_expected_nodes:
+                # Start of element record
+                elem_id = tokens[0]
+                if int(elem_id) <= 0:
+                    ctx.malformed_elements.append(f"Invalid non-positive element ID '{elem_id}' in {scope}")
+                    continue
+
+                if elem_id in seen_element_ids_per_scope[scope]:
+                    ctx.duplicate_element_ids.append(f"Duplicate element ID {elem_id} in {scope}")
+                seen_element_ids_per_scope[scope].add(elem_id)
+
+                nodes = tokens[1:]
+                if len(nodes) == 0:
+                    ctx.malformed_elements.append(f"Element {elem_id} in {scope} has no node connections on definition line")
+                    continue
+
+                if len(nodes) == current_expected_nodes:
                     _record_valid_element()
-                    pending_elem_id = None
-                    pending_elem_nodes = []
-                elif len(pending_elem_nodes) > current_expected_nodes:
-                    pending_elem_id = None
-                    pending_elem_nodes = []
+                elif len(nodes) < current_expected_nodes:
+                    pending_elem_id = elem_id
+                    pending_elem_nodes = list(nodes)
+                    pending_line_had_trailing_comma = line_ends_with_comma
+                else:
+                    ctx.malformed_elements.append(
+                        f"Element {elem_id} in {scope} has {len(nodes)} nodes, exceeding expected {current_expected_nodes} for {current_element_type}"
+                    )
             else:
-                # Continuation line: all tokens are additional node connections
-                pending_elem_nodes.extend(tokens)
-                if len(pending_elem_nodes) == current_expected_nodes:
+                # Potential continuation line
+                # Guard against broken element concatenation:
+                # If the previous line did not have a trailing comma, and current line tokens look like a new element record:
+                looks_like_new_elem = False
+                try:
+                    first_val = int(tokens[0])
+                    prev_id = int(pending_elem_id)
+                    # If first token is strictly next or greater ID, and line has multiple entries
+                    if (first_val == prev_id + 1 or first_val > prev_id) and len(tokens) >= 2:
+                        looks_like_new_elem = True
+                except ValueError:
+                    pass
+
+                # If current line cannot be a valid continuation line, flush incomplete previous element
+                if looks_like_new_elem and not pending_line_had_trailing_comma:
+                    ctx.malformed_elements.append(
+                        f"Incomplete element {pending_elem_id} (got {len(pending_elem_nodes)} nodes, expected {current_expected_nodes}) "
+                        f"followed by new element record '{stripped}' without continuation"
+                    )
+                    pending_elem_id = None
+                    pending_elem_nodes = []
+                    # Process current line as new element
+                    elem_id = tokens[0]
+                    seen_element_ids_per_scope[scope].add(elem_id)
+                    nodes = tokens[1:]
+                    if len(nodes) == current_expected_nodes:
+                        _record_valid_element()
+                    elif len(nodes) < current_expected_nodes:
+                        pending_elem_id = elem_id
+                        pending_elem_nodes = list(nodes)
+                        pending_line_had_trailing_comma = line_ends_with_comma
+                    else:
+                        ctx.malformed_elements.append(
+                            f"Element {elem_id} in {scope} has {len(nodes)} nodes, exceeding expected {current_expected_nodes} for {current_element_type}"
+                        )
+                    continue
+
+                # Add continuation nodes
+                combined_count = len(pending_elem_nodes) + len(tokens)
+                if combined_count == current_expected_nodes:
                     _record_valid_element()
                     pending_elem_id = None
                     pending_elem_nodes = []
-                elif len(pending_elem_nodes) > current_expected_nodes:
+                    pending_line_had_trailing_comma = False
+                elif combined_count < current_expected_nodes:
+                    pending_elem_nodes.extend(tokens)
+                    pending_line_had_trailing_comma = line_ends_with_comma
+                else:
+                    ctx.malformed_elements.append(
+                        f"Continuation line for element {pending_elem_id} resulted in {combined_count} nodes, "
+                        f"exceeding expected {current_expected_nodes} for {current_element_type}"
+                    )
                     pending_elem_id = None
                     pending_elem_nodes = []
+                    pending_line_had_trailing_comma = False
 
-    _flush_pending_element()
+    _flush_pending_element("end of deck")
 
-    # If instance defined elements directly, record it as a self-part
-    for inst, has_elem in instance_direct_elements.items():
-        if has_elem and inst not in instance_to_part:
-            instance_to_part[inst] = inst
-            parts_has_elements[inst] = True
+    # Finalize direct instance elements
+    for inst, has_elem in ctx.instance_direct_elements.items():
+        if has_elem and inst not in ctx.instance_to_part:
+            ctx.instance_to_part[inst] = inst
+            ctx.parts_has_elements[inst] = True
+            ctx.part_definitions.add(inst)
 
-    return parts_has_elements, instance_to_part, root_has_elements
+    # Check for instances referencing non-existent parts
+    for inst, part in ctx.instance_to_part.items():
+        if part not in ctx.part_definitions:
+            ctx.missing_part_references.append(f"Instance '{inst}' references undefined Part '{part}'")
+
+    return ctx
+
+
+def parse_inp_parts_and_instances(
+    inp_text: str,
+    base_dir: Optional[Union[str, Path]] = None,
+) -> Tuple[Dict[str, bool], Dict[str, str], bool]:
+    """Parse *PART and *INSTANCE blocks to resolve Part-Instance mapping and element presence.
+
+    Returns:
+        (parts_has_elements, instance_to_part, root_has_elements)
+    """
+    ctx = parse_inp_full_model(inp_text, base_dir=base_dir)
+    return ctx.parts_has_elements, ctx.instance_to_part, ctx.root_has_elements
 
 
 def _is_exact_or_canonical_instance_match(req_name: str, candidate_name: str) -> bool:
@@ -261,7 +505,6 @@ def _is_exact_or_canonical_instance_match(req_name: str, candidate_name: str) ->
     cand_norm = _normalize_name(candidate_name)
     if req_norm == cand_norm:
         return True
-    # If request is 'PartName' and candidate is 'PartName1' (Abaqus auto PartName-1 instance)
     if cand_norm == f"{req_norm}1":
         return True
     if req_norm == f"{cand_norm}1":
@@ -290,7 +533,7 @@ def parse_inp_interactions(inp_text: str) -> List[Tuple[str, str]]:
 
         if in_interaction:
             # Data line: slave_surface, master_surface
-            parts = [p.strip() for p in stripped.split(",")]
+            parts = [p.strip() for p in stripped.split(",") if p.strip()]
             if len(parts) >= 2:
                 s1 = _normalize_name(parts[0])
                 s2 = _normalize_name(parts[1])
@@ -405,12 +648,10 @@ def _matches_contact_side(
     
     Eliminates all loose substring matching and adheres strictly to canonical equivalence.
     """
-    # 1. Instance match: strict exact or canonical mapping (NO loose substring matching)
     inst_matched = any(_is_exact_or_canonical_instance_match(req_inst, cand) for cand in cand_insts)
     if not inst_matched:
         return False
 
-    # 2. Surface match: if required surface name is provided, verify strict match
     if req_surf:
         norm_req_surf = _normalize_name(req_surf)
         return norm_req_surf == cand_surf or _is_exact_or_canonical_instance_match(norm_req_surf, cand_surf)
@@ -424,7 +665,6 @@ def _has_contact_or_interaction(inp_text: str) -> bool:
     keywords = [
         "*CONTACT PAIR",
         "*TIE",
-        "*SURFACE INTERACTION",
         "*CONNECTOR SECTION",
         "*COUPLING",
         "*COHESIVE SECTION",
@@ -436,26 +676,21 @@ def _verify_contacts_covered(
     inp_text: str,
     scope_contacts: Sequence[Dict[str, Any]],
     inst_to_part: Dict[str, str],
+    defined_surfaces: Optional[Dict[str, Set[str]]] = None,
 ) -> Tuple[bool, Optional[str]]:
-    """Verify that required mating contacts in AssemblyScope have corresponding load transfer in INP.
-    
-    Adheres strictly to fail-closed principles: if interactions cannot be parsed or mapped,
-    verification fails rather than passing silently.
-    """
+    """Verify that required mating contacts in AssemblyScope have corresponding load transfer in INP."""
     if not scope_contacts:
         return True, None
 
-    # Check keyword existence first
     if not _has_contact_or_interaction(inp_text):
         return (
             False,
             "Assembly contract fidelity violation: multi-part contract requires load-transfer contact pairs, "
-            "but no *CONTACT PAIR, *TIE, or *SURFACE INTERACTION was found in the deck.",
+            "but no *CONTACT PAIR, *TIE, *CONNECTOR SECTION, or *COUPLING was found in the deck.",
         )
 
     pairs = parse_inp_interactions(inp_text)
     if not pairs:
-        # P0-1 FIX: Fail-closed when contact data lines cannot be parsed
         return (
             False,
             "Assembly contract fidelity violation: multi-part contract requires load-transfer contact pairs, "
@@ -469,14 +704,23 @@ def _verify_contacts_covered(
     for inst, part in inst_to_part.items():
         part_to_insts.setdefault(part, set()).add(inst)
 
-    # Resolve all interaction pairs into structured candidate sides
+    # Verify that surfaces referenced in interactions actually exist
+    if defined_surfaces is not None and defined_surfaces:
+        for p1, p2 in pairs:
+            for s_token in (p1, p2):
+                s_name = s_token.split(".", 1)[-1] if "." in s_token else s_token
+                if s_name not in defined_surfaces and s_name not in surf_to_insts and s_name not in surf_to_parts:
+                    return (
+                        False,
+                        f"Assembly contract fidelity violation: interaction references undefined surface '{s_token}'.",
+                    )
+
     resolved_pairs = []
     for p1, p2 in pairs:
         p1_insts, p1_surf = _resolve_interaction_token(p1, surf_to_insts, surf_to_parts, part_to_insts)
         p2_insts, p2_surf = _resolve_interaction_token(p2, surf_to_insts, surf_to_parts, part_to_insts)
         resolved_pairs.append((p1_insts, p1_surf, p2_insts, p2_surf))
 
-    # Check if each required contact pair is covered by a strictly matching interaction pair
     for sc in scope_contacts:
         m_inst = sc.get("master") or sc.get("master_instance") or sc.get("master_part") or ""
         s_inst = sc.get("slave") or sc.get("slave_instance") or sc.get("slave_part") or ""
@@ -485,7 +729,6 @@ def _verify_contacts_covered(
 
         pair_matched = False
         for p1_insts, p1_surf, p2_insts, p2_surf in resolved_pairs:
-            # Check direct match (master on side 1, slave on side 2)
             if (
                 _matches_contact_side(m_inst, m_surf, p1_insts, p1_surf)
                 and _matches_contact_side(s_inst, s_surf, p2_insts, p2_surf)
@@ -493,7 +736,6 @@ def _verify_contacts_covered(
                 pair_matched = True
                 break
 
-            # Check reversed match (master on side 2, slave on side 1)
             if (
                 _matches_contact_side(m_inst, m_surf, p2_insts, p2_surf)
                 and _matches_contact_side(s_inst, s_surf, p1_insts, p1_surf)
@@ -533,7 +775,6 @@ def _detect_overconstrained_actuator(inp_text: str, loaded_instances: Sequence[s
             in_boundary = False
 
         if in_boundary:
-            # Check for ENCASTRE or all-DOFs fixed on actuator instance
             if "ENCASTRE" in upper:
                 for inst in normalized_loaded:
                     norm_line = _normalize_name(stripped)
@@ -551,26 +792,78 @@ def audit_inp_assembly_contract(
     """Audit the solver input deck against an approved AssemblyScope contract.
 
     Fail-closed:
-    - If assembly_scope requires multiple parts, all retained parts must exist
-      with verified element definitions.
-    - If contact interactions are specified in the scope, load-transfer pairs
-      must exist in the INP and reference valid mating objects.
+    - All *INCLUDE external references must resolve successfully.
+    - All element blocks must define valid topologies matching supported types.
+    - Malformed element lines, duplicate IDs, or broken continuations trigger rejection.
+    - Missing parts, instance-part mapping inconsistencies, or naming collisions trigger rejection.
+    - If assembly_scope requires multiple parts, all retained parts must exist with verified mesh.
+    - If contact interactions are specified in the scope, load-transfer pairs must match verified surfaces.
     - If primary loaded members are specified, they must not be completely locked.
     """
     if not inp_text or not inp_text.strip():
         return AssemblyAuditResult(passed=False, reason="INP text is empty or missing")
 
-    parts_elements, inst_to_part, root_elements = parse_inp_parts_and_instances(inp_text, base_dir=base_dir)
+    ctx = parse_inp_full_model(inp_text, base_dir=base_dir)
 
-    # 1. Baseline element presence: deck must not be completely empty of elements
-    has_any_elements = root_elements or any(parts_elements.values())
+    # 1. External *INCLUDE fail-closed verification
+    if ctx.unresolved_includes:
+        reasons = "; ".join(ctx.unresolved_includes)
+        return AssemblyAuditResult(
+            passed=False,
+            reason=f"Assembly contract fidelity violation: unresolved or invalid *INCLUDE reference(s): {reasons}",
+            diagnostics={"unresolved_includes": ctx.unresolved_includes},
+        )
+
+    # 2. Element definition & topology fail-closed verification
+    if ctx.unknown_element_types:
+        reasons = "; ".join(ctx.unknown_element_types)
+        return AssemblyAuditResult(
+            passed=False,
+            reason=f"Assembly contract fidelity violation: unsupported or unknown element type(s): {reasons}",
+            diagnostics={"unknown_element_types": ctx.unknown_element_types},
+        )
+
+    if ctx.malformed_elements:
+        reasons = "; ".join(ctx.malformed_elements[:5])
+        if len(ctx.malformed_elements) > 5:
+            reasons += f" (and {len(ctx.malformed_elements) - 5} more)"
+        return AssemblyAuditResult(
+            passed=False,
+            reason=f"Assembly contract fidelity violation: malformed element definition(s): {reasons}",
+            diagnostics={"malformed_elements": ctx.malformed_elements},
+        )
+
+    if ctx.duplicate_element_ids:
+        reasons = "; ".join(ctx.duplicate_element_ids[:5])
+        return AssemblyAuditResult(
+            passed=False,
+            reason=f"Assembly contract fidelity violation: duplicate element ID(s): {reasons}",
+            diagnostics={"duplicate_element_ids": ctx.duplicate_element_ids},
+        )
+
+    # 3. Entity consistency & naming conflict verification
+    if ctx.naming_collisions:
+        reasons = "; ".join(ctx.naming_collisions)
+        return AssemblyAuditResult(
+            passed=False,
+            reason=f"Assembly contract fidelity violation: entity naming collision(s): {reasons}",
+            diagnostics={"naming_collisions": ctx.naming_collisions},
+        )
+
+    if ctx.missing_part_references:
+        reasons = "; ".join(ctx.missing_part_references)
+        return AssemblyAuditResult(
+            passed=False,
+            reason=f"Assembly contract fidelity violation: missing part reference(s): {reasons}",
+            diagnostics={"missing_part_references": ctx.missing_part_references},
+        )
+
+    # 4. Baseline element presence: deck must not be completely empty of elements
+    has_any_elements = ctx.root_has_elements or any(ctx.parts_has_elements.values())
     if not has_any_elements:
-        include_note = ""
-        if "*INCLUDE" in inp_text.upper():
-            include_note = " (external *INCLUDE file could not be resolved or contained no valid element topology)"
-        return AssemblyAuditResult(passed=False, reason=f"INP contains no valid *ELEMENT definitions{include_note}")
+        return AssemblyAuditResult(passed=False, reason="INP contains no valid *ELEMENT definitions")
 
-    # 2. Actuator boundary check MUST execute regardless of single-part or multi-part
+    # 5. Actuator boundary check MUST execute regardless of single-part or multi-part
     if loaded_instances:
         overconstrained_err = _detect_overconstrained_actuator(inp_text, loaded_instances)
         if overconstrained_err:
@@ -582,7 +875,13 @@ def audit_inp_assembly_contract(
 
     # If no assembly scope is provided, ensure at least one valid part/mesh exists
     if assembly_scope is None:
-        return AssemblyAuditResult(passed=True, diagnostics={"mode": "unscoped_single_part"})
+        return AssemblyAuditResult(
+            passed=True,
+            diagnostics={
+                "mode": "unscoped_single_part",
+                "resolved_include_files": [str(p) for p in ctx.resolved_include_files],
+            },
+        )
 
     # Extract contract requirements from AssemblyScope (or its dict representation)
     scope_parts: List[Dict[str, Any]] = []
@@ -592,7 +891,6 @@ def audit_inp_assembly_contract(
         scope_parts = assembly_scope.get("parts") or []
         scope_contacts = assembly_scope.get("contacts") or []
     else:
-        # AssemblyScope object
         scope_parts = [
             {"name": p.name, "instance_name": p.instance_name, "step_body_index": p.step_body_index}
             for p in getattr(assembly_scope, "parts", ())
@@ -613,7 +911,6 @@ def audit_inp_assembly_contract(
 
     part_count = len(scope_parts)
 
-    # Multi-part and single-part instance & mesh fidelity audit
     missing_instances: List[str] = []
     empty_instances: List[str] = []
     found_instances: List[str] = []
@@ -621,9 +918,8 @@ def audit_inp_assembly_contract(
     for sp in scope_parts:
         req_inst = sp.get("instance_name") or sp.get("name") or ""
         
-        # Look for strictly matching instance in INP (no arbitrary substring match, no fallback to Part)
         matched_inst = None
-        for inp_inst in inst_to_part:
+        for inp_inst in ctx.instance_to_part:
             if _is_exact_or_canonical_instance_match(req_inst, inp_inst):
                 matched_inst = inp_inst
                 break
@@ -632,9 +928,8 @@ def audit_inp_assembly_contract(
             missing_instances.append(req_inst)
         else:
             found_instances.append(matched_inst)
-            # Check if parent part has elements. Root elements MUST NOT mask an unmeshed part.
-            parent_part = inst_to_part.get(matched_inst, matched_inst)
-            if not parts_elements.get(parent_part, False):
+            parent_part = ctx.instance_to_part.get(matched_inst, matched_inst)
+            if not ctx.parts_has_elements.get(parent_part, False):
                 empty_instances.append(req_inst)
 
     diagnostics = {
@@ -642,6 +937,8 @@ def audit_inp_assembly_contract(
         "found_instances": found_instances,
         "missing_instances": missing_instances,
         "empty_instances": empty_instances,
+        "resolved_include_files": [str(p) for p in ctx.resolved_include_files],
+        "audited_include_hashes": dict(ctx.include_file_hashes),
     }
 
     if missing_instances:
@@ -664,8 +961,7 @@ def audit_inp_assembly_contract(
             diagnostics=diagnostics,
         )
 
-    # P0-2 FIX: Verify all declared instances and mesh existence BEFORE single-part early return.
-    # Single-part contract can safely pass without requiring multi-part contact pairs.
+    # Single-part contract early return
     if part_count <= 1:
         return AssemblyAuditResult(
             passed=True,
@@ -673,7 +969,12 @@ def audit_inp_assembly_contract(
         )
 
     # Multi-part load transfer path check with reference verification
-    contact_ok, contact_err = _verify_contacts_covered(inp_text, scope_contacts, inst_to_part)
+    contact_ok, contact_err = _verify_contacts_covered(
+        inp_text,
+        scope_contacts,
+        ctx.instance_to_part,
+        defined_surfaces=ctx.defined_surfaces,
+    )
     if not contact_ok:
         return AssemblyAuditResult(
             passed=False,

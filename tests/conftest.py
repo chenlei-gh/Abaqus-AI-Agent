@@ -2,6 +2,7 @@
 
 import os
 import shutil
+import tempfile
 from pathlib import Path
 import pytest
 
@@ -9,6 +10,10 @@ import pytest
 os.environ.setdefault("ABAQUS_AGENT_TEST_MODE", "1")
 # Tests may read committed evidence. They must not rewrite it.
 os.environ.setdefault("ABAQUS_AGENT_EVIDENCE_READONLY", "1")
+# Isolated ephemeral runs directory for test sessions to avoid sandbox AppData conflicts
+_test_runs_base = Path(tempfile.gettempdir()) / "abaqus_agent_pytest_runs"
+_test_runs_base.mkdir(parents=True, exist_ok=True)
+os.environ.setdefault("ABAQUS_AGENT_RUNS_DIR", str(_test_runs_base))
 
 
 @pytest.fixture(scope="session", autouse=True)

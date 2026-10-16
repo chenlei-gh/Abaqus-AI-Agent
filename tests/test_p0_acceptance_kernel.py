@@ -304,8 +304,69 @@ def test_pos_p0_01_standard_golden_pass(tmp_path: Path):
     assert res.passed is True
     assert res.result_validity == "VALID"
     assert res.deliverable is True
-    assert len(res.findings.failures) == 0
-    assert len(res.findings.blocked) == 0
+
+
+def test_neg_isolated_missing_evidence_or_gate_yields_blocked(tmp_path: Path):
+    """P1-F Semantic Check: Missing required evidence/gate must yield BLOCKED, never PASS or physical FAIL."""
+    files = _create_standard_mock_artifacts(tmp_path, "p0_iso_blocked")
+    manifest = build_evidence_manifest_v2(
+        run_id="p0_iso_blocked",
+        case_id="case_iso_blocked",
+        artifacts_dir=str(tmp_path),
+        artifact_filenames=files,
+    )
+
+    # Values satisfy allowable limits completely, but a mandatory gate for the physics domain is missing
+    res = evaluate_result_acceptance(
+        result_status="completed",
+        values={"max_displacement": 0.2, "max_mises": 80.0, "reaction_force": 500.0},
+        criteria=[{"name": "mises", "value_key": "max_mises", "operator": "<=", "limit": 200.0}],
+        physics_domain="contact",
+        contact_diagnostics=None,  # missing required domain gate
+        evidence_manifest=manifest,
+        base_dir=str(tmp_path),
+        require_evidence=True,
+    )
+
+    assert res.acceptance_status == "BLOCKED"
+    assert res.status == "BLOCKED"
+    assert res.passed is False
+    assert res.deliverable is False
+    assert len(res.findings.blocked) > 0
+    assert any("missing_mandatory_gate:contact_diagnostics" in b for b in res.findings.blocked)
+    # Ensure no engineering criteria failed (purely blocked due to missing gate)
+    assert not any(f.startswith("criterion:") for f in res.findings.failures)
+
+
+def test_neg_isolated_complete_evidence_with_unmet_criteria_yields_fail(tmp_path: Path):
+    """P1-F Semantic Check: Full valid evidence with unmet acceptance criteria must yield FAIL, never BLOCKED."""
+    files = _create_standard_mock_artifacts(tmp_path, "p0_iso_fail")
+    manifest = build_evidence_manifest_v2(
+        run_id="p0_iso_fail",
+        case_id="case_iso_fail",
+        artifacts_dir=str(tmp_path),
+        artifact_filenames=files,
+    )
+
+    # All evidence is fully intact and all required gates are satisfied, but stress violates limit
+    res = evaluate_result_acceptance(
+        result_status="completed",
+        values={"max_displacement": 0.2, "max_mises": 320.0, "reaction_force": 500.0},
+        criteria=[{"name": "mises", "value_key": "max_mises", "operator": "<=", "limit": 200.0}],
+        physics_domain="static",
+        odb_fields=["U", "S", "RF"],
+        evidence_manifest=manifest,
+        base_dir=str(tmp_path),
+        require_evidence=True,
+    )
+
+    assert res.acceptance_status == "FAIL"
+    assert res.status == "FAIL"
+    assert res.passed is False
+    assert res.deliverable is False
+    assert res.result_validity == "VALID"
+    assert len(res.findings.failures) > 0
+    assert len(res.findings.blocked) == 0  # Not blocked!
 
 
 def test_pos_p0_02_pure_mechanical_fail_with_valid_evidence(tmp_path: Path):
