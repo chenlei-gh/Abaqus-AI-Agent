@@ -700,3 +700,88 @@ Deck referencing existing valid external file
     assert res2.passed is True
 
 
+def test_include_path_escape_outside_allowed_root_fails_closed(tmp_path):
+    """An INCLUDE resolved outside the initial deck directory is rejected."""
+    sandbox = tmp_path / "sandbox"
+    sandbox.mkdir()
+    outside = tmp_path / "outside_mesh.inp"
+    outside.write_text("*ELEMENT, TYPE=C3D8R\n1, 1, 2, 3, 4, 5, 6, 7, 8\n", encoding="utf-8")
+    inp = """
+*HEADING
+Path escape probe
+*PART, NAME=P1
+*INCLUDE, INPUT=../outside_mesh.inp
+*END PART
+*ASSEMBLY, NAME=ASSEMBLY
+*INSTANCE, NAME=P1_1, PART=P1
+*END INSTANCE
+*END ASSEMBLY
+"""
+    result = audit_inp_assembly_contract(
+        inp, assembly_scope={"parts": [{"instance_name": "P1_1"}]}, base_dir=sandbox
+    )
+    assert result.passed is False
+    assert "escapes allowed roots" in result.reason
+
+
+def test_malformed_element_cannot_be_completed_by_overlong_next_record():
+    """A next line shaped like a new element must not be concatenated past topology size."""
+    inp = """
+*HEADING
+Broken continuation followed by a full new record
+*PART, NAME=BAR
+*ELEMENT, TYPE=C3D8R
+101, 1, 2, 3, 4,
+102, 5, 6, 7, 8, 9, 10, 11, 12
+*END PART
+*ASSEMBLY, NAME=ASSEMBLY
+*INSTANCE, NAME=BAR_1, PART=BAR
+*END INSTANCE
+*END ASSEMBLY
+"""
+    result = audit_inp_assembly_contract(inp, assembly_scope={"parts": [{"instance_name": "BAR_1"}]})
+    assert result.passed is False
+    assert "malformed element definition" in result.reason
+
+
+def test_contact_pair_and_surfaces_inside_include_are_resolved(tmp_path):
+    """Interaction and Surface definitions in nested include content join the full parse context."""
+    include_file = tmp_path / "assembly_contact.inc"
+    include_file.write_text(
+        """*PART, NAME=BASE
+*ELEMENT, TYPE=C3D8R
+2, 1, 2, 3, 4, 5, 6, 7, 8
+*SURFACE, NAME=BASE_SURF
+2, S1
+*END PART
+*ASSEMBLY, NAME=ASSEMBLY
+*INSTANCE, NAME=BASE_1, PART=BASE
+*END INSTANCE
+*CONTACT PAIR, INTERACTION=INT-1
+HANDLE_1.HANDLE_SURF, BASE_1.BASE_SURF
+*END ASSEMBLY
+""",
+        encoding="utf-8",
+    )
+    inp = """
+*HEADING
+Top-level handle and included base/contact
+*PART, NAME=HANDLE
+*ELEMENT, TYPE=C3D8R
+1, 1, 2, 3, 4, 5, 6, 7, 8
+*SURFACE, NAME=HANDLE_SURF
+1, S1
+*END PART
+*INCLUDE, INPUT=assembly_contact.inc
+*ASSEMBLY, NAME=ASSEMBLY
+*INSTANCE, NAME=HANDLE_1, PART=HANDLE
+*END INSTANCE
+*END ASSEMBLY
+"""
+    scope = {
+        "parts": [{"instance_name": "HANDLE_1"}, {"instance_name": "BASE_1"}],
+        "contacts": [{"master": "HANDLE_1", "slave": "BASE_1",
+                      "master_surface": "HANDLE_SURF", "slave_surface": "BASE_SURF"}],
+    }
+    result = audit_inp_assembly_contract(inp, assembly_scope=scope, base_dir=tmp_path)
+    assert result.passed is True, result.reason
