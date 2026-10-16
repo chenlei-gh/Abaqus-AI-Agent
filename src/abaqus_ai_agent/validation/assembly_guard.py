@@ -254,7 +254,9 @@ def parse_inp_full_model(
                 try:
                     inc_bytes = inc_path.read_bytes()
                     ctx.include_file_hashes[str(inc_path)] = hashlib.sha256(inc_bytes).hexdigest()
-                    inc_text = inc_bytes.decode("utf-8", errors="replace")
+                    # Never replace undecodable bytes: doing so would audit text that is
+                    # different from the exact dependency recorded by its raw-byte hash.
+                    inc_text = inc_bytes.decode("utf-8")
                     ctx.resolved_include_files.add(inc_path)
                     sub_ctx = parse_inp_full_model(
                         inc_text,
