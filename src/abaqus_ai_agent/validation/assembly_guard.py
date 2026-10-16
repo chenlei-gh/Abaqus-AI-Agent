@@ -99,6 +99,7 @@ class InpParseContext:
     duplicate_element_ids: List[str] = field(default_factory=list)
     naming_collisions: List[str] = field(default_factory=list)
     missing_part_references: List[str] = field(default_factory=list)
+    interaction_pairs: List[Tuple[str, str]] = field(default_factory=list)
 
 
 def _normalize_name(name: str) -> str:
@@ -110,6 +111,7 @@ def parse_inp_full_model(
     inp_text: str,
     base_dir: Optional[Union[str, Path]] = None,
     include_chain: Optional[List[Path]] = None,
+    allowed_roots: Optional[Sequence[Union[str, Path]]] = None,
 ) -> InpParseContext:
     """Parse complete INP structure, resolving INCLUDE dependencies, element topology, and entity mappings.
 
@@ -122,6 +124,12 @@ def parse_inp_full_model(
     ctx = InpParseContext()
     if include_chain is None:
         include_chain = []
+    if allowed_roots is None:
+        # The initial deck directory is the default trust boundary. Recursive INCLUDE
+        # calls retain this root instead of silently broadening trust to parent dirs.
+        allowed_roots_resolved = [Path(base_dir).resolve()] if base_dir is not None else []
+    else:
+        allowed_roots_resolved = [Path(root).resolve() for root in allowed_roots]
 
     lines = inp_text.splitlines()
 
@@ -136,6 +144,7 @@ def parse_inp_full_model(
     pending_elem_id: Optional[str] = None
     pending_elem_nodes: List[str] = []
     pending_line_had_trailing_comma = False
+    in_interaction_block = False
 
     seen_element_ids_per_scope: Dict[str, Set[str]] = {}
     raw_names_by_norm: Dict[str, str] = {}
@@ -180,6 +189,10 @@ def parse_inp_full_model(
         if upper.startswith("*"):
             _flush_pending_element(f"keyword '{stripped}'")
             current_surface = None
+            in_interaction_block = False
+            if re.match(r"^\*(?:CONTACT\s+PAIR|TIE)(?:\s*,|\s*$)", upper):
+                in_interaction_block = True
+                continue
 
             # 1. *INCLUDE handling
             if upper.startswith("*INCLUDE"):
@@ -201,11 +214,27 @@ def parse_inp_full_model(
                     ctx.unresolved_includes.append(f"Cannot resolve *INCLUDE '{raw_target}': base_dir not provided")
                     continue
 
-                target_p = Path(raw_target)
-                if target_p.is_absolute():
-                    inc_path = target_p.resolve()
-                else:
-                    inc_path = (Path(base_dir) / target_p).resolve()
+                try:
+                    target_p = Path(raw_target)
+                    if target_p.is_absolute():
+                        inc_path = target_p.resolve()
+                    else:
+                        inc_path = (Path(base_dir) / target_p).resolve()
+                except (OSError, RuntimeError, ValueError) as exc:
+                    ctx.unresolved_includes.append(
+                        f"Cannot normalize *INCLUDE target '{raw_target}': {exc}"
+                    )
+                    continue
+
+                # Resolve symlinks before checking containment. Only the explicitly
+                # approved roots are trusted; ../ and external absolute paths fail closed.
+                if not allowed_roots_resolved or not any(
+                    inc_path == root or root in inc_path.parents for root in allowed_roots_resolved
+                ):
+                    ctx.unresolved_includes.append(
+                        f"*INCLUDE path escapes allowed roots: '{raw_target}' resolved to '{inc_path}'"
+                    )
+                    continue
 
                 if not inc_path.is_file():
                     ctx.unresolved_includes.append(
@@ -231,6 +260,7 @@ def parse_inp_full_model(
                         inc_text,
                         base_dir=inc_path.parent,
                         include_chain=include_chain + [inc_path],
+                        allowed_roots=allowed_roots_resolved,
                     )
                 except Exception as exc:
                     ctx.unresolved_includes.append(f"Failed to read or parse *INCLUDE file '{inc_path}': {exc}")
@@ -243,6 +273,7 @@ def parse_inp_full_model(
                 ctx.duplicate_element_ids.extend(sub_ctx.duplicate_element_ids)
                 ctx.naming_collisions.extend(sub_ctx.naming_collisions)
                 ctx.missing_part_references.extend(sub_ctx.missing_part_references)
+                ctx.interaction_pairs.extend(sub_ctx.interaction_pairs)
                 ctx.resolved_include_files.update(sub_ctx.resolved_include_files)
                 ctx.include_file_hashes.update(sub_ctx.include_file_hashes)
                 ctx.part_definitions.update(sub_ctx.part_definitions)
@@ -361,6 +392,16 @@ def parse_inp_full_model(
 
             continue
 
+        # Data lines for *CONTACT PAIR / *TIE are collected in this parse context,
+        # including when the keyword and its data reside in a nested INCLUDE file.
+        if in_interaction_block:
+            parts = [p.strip() for p in stripped.split(",") if p.strip()]
+            if len(parts) >= 2:
+                first, second = _normalize_name(parts[0]), _normalize_name(parts[1])
+                if first and second:
+                    ctx.interaction_pairs.append((first, second))
+            continue
+
         # Data line within *SURFACE definition
         if current_surface:
             # Check if line references instance or part specifically
@@ -411,8 +452,11 @@ def parse_inp_full_model(
                     )
             else:
                 # Potential continuation line
-                # Guard against broken element concatenation:
-                # If the previous line did not have a trailing comma, and current line tokens look like a new element record:
+                # A trailing comma is the explicit Abaqus continuation marker. Element IDs
+                # are not required to be sequential, so ID ordering alone cannot distinguish
+                # a node list from a new record. Treat the line as continuation only when
+                # the resulting topology count is exact; under/over-counts remain malformed.
+                # This avoids unsafe guesses based on element-ID ordering.
                 looks_like_new_elem = False
                 try:
                     first_val = int(tokens[0])
@@ -677,35 +721,48 @@ def _verify_contacts_covered(
     scope_contacts: Sequence[Dict[str, Any]],
     inst_to_part: Dict[str, str],
     defined_surfaces: Optional[Dict[str, Set[str]]] = None,
+    interaction_pairs: Optional[Sequence[Tuple[str, str]]] = None,
 ) -> Tuple[bool, Optional[str]]:
     """Verify that required mating contacts in AssemblyScope have corresponding load transfer in INP."""
     if not scope_contacts:
         return True, None
 
-    if not _has_contact_or_interaction(inp_text):
-        return (
-            False,
-            "Assembly contract fidelity violation: multi-part contract requires load-transfer contact pairs, "
-            "but no *CONTACT PAIR, *TIE, *CONNECTOR SECTION, or *COUPLING was found in the deck.",
-        )
-
-    pairs = parse_inp_interactions(inp_text)
+    # Prefer interactions collected by the recursive full-model parser. The fallback
+    # preserves compatibility for direct callers that do not supply parse context.
+    pairs = list(interaction_pairs) if interaction_pairs is not None else parse_inp_interactions(inp_text)
     if not pairs:
         return (
             False,
             "Assembly contract fidelity violation: multi-part contract requires load-transfer contact pairs, "
-            "but no parsable *CONTACT PAIR or *TIE interaction data lines were found in the deck.",
+            "but no parsable *CONTACT PAIR or *TIE interaction data lines were found in the deck or its INCLUDE dependencies.",
         )
-
-    surf_to_insts, surf_to_parts = parse_inp_surfaces(inp_text)
 
     # Invert inst_to_part: map Part name to all instances instantiating it
     part_to_insts: Dict[str, Set[str]] = {}
     for inst, part in inst_to_part.items():
         part_to_insts.setdefault(part, set()).add(inst)
 
+    if defined_surfaces is not None:
+        # Build surface ownership from the recursively merged context rather than
+        # reparsing only the top-level text (which loses INCLUDE-local definitions).
+        surf_to_insts: Dict[str, Set[str]] = {}
+        surf_to_parts: Dict[str, Set[str]] = {}
+        known_parts = set(inst_to_part.values())
+        for surface_name, owners in defined_surfaces.items():
+            for owner in owners:
+                if owner in inst_to_part:
+                    surf_to_insts.setdefault(surface_name, set()).add(owner)
+                elif owner in known_parts:
+                    surf_to_parts.setdefault(surface_name, set()).add(owner)
+                elif owner != "assembly":
+                    # Preserve unknown ownership so the later exact matching fails
+                    # closed rather than silently dropping a surface definition.
+                    surf_to_parts.setdefault(surface_name, set()).add(owner)
+    else:
+        surf_to_insts, surf_to_parts = parse_inp_surfaces(inp_text)
+
     # Verify that surfaces referenced in interactions actually exist
-    if defined_surfaces is not None and defined_surfaces:
+    if defined_surfaces is not None:
         for p1, p2 in pairs:
             for s_token in (p1, p2):
                 s_name = s_token.split(".", 1)[-1] if "." in s_token else s_token
@@ -974,6 +1031,7 @@ def audit_inp_assembly_contract(
         scope_contacts,
         ctx.instance_to_part,
         defined_surfaces=ctx.defined_surfaces,
+        interaction_pairs=ctx.interaction_pairs,
     )
     if not contact_ok:
         return AssemblyAuditResult(
