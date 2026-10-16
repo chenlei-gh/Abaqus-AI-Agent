@@ -792,3 +792,26 @@ Top-level handle and included base/contact
     }
     result = audit_inp_assembly_contract(inp, assembly_scope=scope, base_dir=tmp_path)
     assert result.passed is True, result.reason
+
+
+def test_include_with_undecodable_bytes_fails_closed(tmp_path):
+    """A dependency must not be silently replacement-decoded before its syntax audit."""
+    include_file = tmp_path / "invalid_encoding.inc"
+    include_file.write_bytes(b"*ELEMENT, TYPE=C3D8R\n1, 1, 2, 3, 4, 5, 6, 7, 8\n\xff")
+    inp = """
+*HEADING
+Invalid include encoding
+*PART, NAME=P1
+*INCLUDE, INPUT=invalid_encoding.inc
+*END PART
+*ASSEMBLY, NAME=ASSEMBLY
+*INSTANCE, NAME=P1_1, PART=P1
+*END INSTANCE
+*END ASSEMBLY
+"""
+    result = audit_inp_assembly_contract(
+        inp, assembly_scope={"parts": [{"instance_name": "P1_1"}]}, base_dir=tmp_path
+    )
+    assert result.passed is False
+    assert "unresolved or invalid *INCLUDE reference" in result.reason
+    assert "utf-8" in result.reason.lower() or "decode" in result.reason.lower()
