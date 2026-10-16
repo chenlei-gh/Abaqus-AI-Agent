@@ -54,6 +54,7 @@ def parse_inp_parts_and_instances(inp_text: str) -> Tuple[Dict[str, bool], Dict[
 
     current_part: Optional[str] = None
     current_instance: Optional[str] = None
+    in_element_block = False
 
     for line in lines:
         stripped = line.strip()
@@ -62,40 +63,52 @@ def parse_inp_parts_and_instances(inp_text: str) -> Tuple[Dict[str, bool], Dict[
 
         upper = stripped.upper()
 
-        # Part start / end
-        if upper.startswith("*PART"):
-            match = re.search(r"NAME\s*=\s*([^,\s]+)", stripped, re.IGNORECASE)
-            if match:
-                current_part = _normalize_name(match.group(1))
-                parts_has_elements[current_part] = False
-            continue
-        elif upper.startswith("*END PART"):
-            current_part = None
-            continue
-
-        # Instance start / end
-        if upper.startswith("*INSTANCE"):
-            inst_match = re.search(r"NAME\s*=\s*([^,\s]+)", stripped, re.IGNORECASE)
-            part_match = re.search(r"PART\s*=\s*([^,\s]+)", stripped, re.IGNORECASE)
-            if inst_match:
-                inst_name = _normalize_name(inst_match.group(1))
-                current_instance = inst_name
-                instance_direct_elements[inst_name] = False
-                if part_match:
-                    instance_to_part[inst_name] = _normalize_name(part_match.group(1))
-            continue
-        elif upper.startswith("*END INSTANCE"):
-            current_instance = None
-            continue
-
-        # Element declaration
-        if upper.startswith("*ELEMENT"):
-            if current_part is not None:
-                parts_has_elements[current_part] = True
-            elif current_instance is not None:
-                instance_direct_elements[current_instance] = True
+        # Keyword line
+        if upper.startswith("*"):
+            if upper.startswith("*ELEMENT"):
+                in_element_block = True
             else:
-                root_has_elements = True
+                in_element_block = False
+
+            # Part start / end
+            if upper.startswith("*PART"):
+                match = re.search(r"NAME\s*=\s*([^,\s]+)", stripped, re.IGNORECASE)
+                if match:
+                    current_part = _normalize_name(match.group(1))
+                    parts_has_elements[current_part] = False
+                continue
+            elif upper.startswith("*END PART"):
+                current_part = None
+                continue
+
+            # Instance start / end
+            if upper.startswith("*INSTANCE"):
+                inst_match = re.search(r"NAME\s*=\s*([^,\s]+)", stripped, re.IGNORECASE)
+                part_match = re.search(r"PART\s*=\s*([^,\s]+)", stripped, re.IGNORECASE)
+                if inst_match:
+                    inst_name = _normalize_name(inst_match.group(1))
+                    current_instance = inst_name
+                    instance_direct_elements[inst_name] = False
+                    if part_match:
+                        instance_to_part[inst_name] = _normalize_name(part_match.group(1))
+                continue
+            elif upper.startswith("*END INSTANCE"):
+                current_instance = None
+                continue
+
+            continue
+
+        # Data line within *ELEMENT block: verify presence of actual valid element data
+        if in_element_block:
+            tokens = [t.strip() for t in stripped.split(",") if t.strip()]
+            # A valid element line begins with a numeric element ID and contains node connections
+            if tokens and tokens[0].isdigit():
+                if current_part is not None:
+                    parts_has_elements[current_part] = True
+                elif current_instance is not None:
+                    instance_direct_elements[current_instance] = True
+                else:
+                    root_has_elements = True
 
     # If instance defined elements directly, record it as a self-part
     for inst, has_elem in instance_direct_elements.items():
@@ -482,9 +495,9 @@ def audit_inp_assembly_contract(
             missing_instances.append(req_inst)
         else:
             found_instances.append(matched_inst)
-            # Check if parent part has elements
+            # Check if parent part has elements. Root elements MUST NOT mask an unmeshed part.
             parent_part = inst_to_part.get(matched_inst, matched_inst)
-            if not parts_elements.get(parent_part, False) and not root_elements:
+            if not parts_elements.get(parent_part, False):
                 empty_instances.append(req_inst)
 
     diagnostics = {

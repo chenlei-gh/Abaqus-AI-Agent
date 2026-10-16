@@ -446,3 +446,63 @@ def test_single_part_contract_valid_passes():
     assert res.diagnostics["mode"] == "single_part"
     assert "cantilever-1" in res.diagnostics["found_instances"]
 
+
+def test_element_keyword_without_data_lines_fails_audit():
+    """Verify that *ELEMENT keyword without valid data lines fails audit closed."""
+    inp_kw_no_data = """
+*HEADING
+Model with empty ELEMENT keyword
+*PART, NAME=HANDLE
+*NODE
+1, 0.0, 0.0, 0.0
+*ELEMENT, TYPE=C3D10M, ELSET=ALLELEMS
+*SURFACE, NAME=HANDLE_SURF
+ALLELEMS, S1
+*END PART
+*ASSEMBLY, NAME=ASSEMBLY
+*INSTANCE, NAME=HANDLE_1, PART=HANDLE
+*END INSTANCE
+*END ASSEMBLY
+*STEP
+*STATIC
+*END STEP
+"""
+    scope = {
+        "parts": [
+            {"instance_name": "HANDLE_1"},
+        ]
+    }
+    res = audit_inp_assembly_contract(inp_kw_no_data, assembly_scope=scope)
+    assert res.passed is False
+    assert "no valid *ELEMENT definitions" in res.reason
+
+
+def test_root_elements_cannot_mask_unmeshed_part():
+    """Verify that root-level elements do not mask a declared part that lacks its own mesh."""
+    inp_root_masking = """
+*HEADING
+Model with root elements and unmeshed declared part
+*ELEMENT, TYPE=C3D8R, ELSET=ROOTELEMS
+999, 1, 2, 3, 4, 5, 6, 7, 8
+*PART, NAME=HANDLE
+*NODE
+1, 0.0, 0.0, 0.0
+*END PART
+*ASSEMBLY, NAME=ASSEMBLY
+*INSTANCE, NAME=HANDLE_1, PART=HANDLE
+*END INSTANCE
+*END ASSEMBLY
+*STEP
+*STATIC
+*END STEP
+"""
+    scope = {
+        "parts": [
+            {"instance_name": "HANDLE_1"},
+        ]
+    }
+    res = audit_inp_assembly_contract(inp_root_masking, assembly_scope=scope)
+    assert res.passed is False
+    assert "HANDLE_1" in res.reason
+    assert "reference parts without valid *ELEMENT definitions" in res.reason
+
