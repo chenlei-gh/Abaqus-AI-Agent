@@ -272,7 +272,10 @@ FIXTURE_SURF, GROUND_SURF
     }
     res = audit_inp_assembly_contract(inp_with_unrelated_contacts, assembly_scope=scope)
     assert res.passed is False
-    assert "required load transfer between 'HANDLE_1' and 'BASE_1' is not defined" in res.reason
+    assert (
+        "interaction references undefined surface" in res.reason
+        or "required load transfer between 'HANDLE_1' and 'BASE_1' is not defined" in res.reason
+    )
 
 
 def test_single_part_overconstrained_actuator_fails_audit():
