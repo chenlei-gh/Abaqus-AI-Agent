@@ -30,7 +30,10 @@ def profile_for_solver_selection(selection):
         return PostProcessingProfile(
             "explicit_quasi_static",
             ("max_mises", "max_displacement"),
-            ("ALLIE", "ALLKE", "ETOTAL"),
+            # ALLWK is required by the dynamic energy balance contract, which
+            # cross-checks ETOTAL = ALLIE + ALLKE - ALLWK on real output. Omitting
+            # it here would plan a deck whose gate can only ever BLOCK.
+            ("ALLIE", "ALLKE", "ALLWK", "ETOTAL"),
             ("energy_ratio", "reaction_balance"),
             ("stress_contour", "displacement_contour", "energy_history"),
             ("Kinetic energy should remain small relative to internal energy for a quasi-static interpretation.",),
@@ -40,7 +43,9 @@ def profile_for_solver_selection(selection):
         return PostProcessingProfile(
             "dynamic_explicit",
             ("max_mises", "max_displacement"),
-            ("ALLIE", "ALLKE", "ETOTAL"),
+            # Same requirement as above: the explicit branch of the dynamic energy
+            # contract needs ALLWK present in the ODB, not inferred from components.
+            ("ALLIE", "ALLKE", "ALLWK", "ETOTAL"),
             ("energy_balance",),
             ("stress_contour", "displacement_contour", "energy_history"),
             (),

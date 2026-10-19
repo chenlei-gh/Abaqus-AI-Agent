@@ -401,11 +401,31 @@ def test_supported_action_types_exact_match_script_dispatcher():
             target="Assembly",
             parameters=params,
         )
+    from abaqus_ai_agent.contracts.geometry_cleanup import GeometryCleanupPolicy
+
+    for at in sorted(SUPPORTED_ACTION_TYPES):
+        params = minimal_valid_params[at]
+        valid_action = AbaqusAction(
+            action_type=at,
+            model_name="Model-Test",
+            target="Assembly",
+            parameters=params,
+        )
         # 1. Validation must succeed without raising
         validate_action(valid_action)
 
-        # 2. Script generation must produce a non-empty string without swallowing exceptions
-        script = action_to_script(valid_action)
+        # 2. Script generation must produce a non-empty string without swallowing exceptions.
+        # Geometry-mutating actions need an explicit opt-in policy, because the
+        # default policy deliberately denies repair and virtual topology.
+        policies = None
+        if at in ("ignore_entity", "restore_entity"):
+            policies = GeometryCleanupPolicy(
+                part="Part-1", allow_virtual_topology=True
+            )
+        elif at in ("repair_geometry", "remove_redundant_entities"):
+            policies = GeometryCleanupPolicy(part="Part-1", allow_repair=True)
+
+        script = action_to_script(valid_action, cleanup_policies=policies)
         assert isinstance(script, str) and len(script.strip()) > 0, (
             f"action_to_script produced empty output for {at!r}"
         )

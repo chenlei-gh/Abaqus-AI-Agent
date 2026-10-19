@@ -1,0 +1,120 @@
+{
+  "schema_version": "explicit_dynamic_energy_balance_v1",
+  "case": "cantilever_transient_explicit_dynamic",
+  "machine": "Abaqus/Explicit 2025 (local install, explicit.exe)",
+  "solver_completion": "explicit solver completed; .sta/.log written; ODB opened read-only",
+  "job": "ExplicitProbeJob",
+  "model": {
+    "part": "Beam",
+    "dimensions_mm": [8.0, 8.0, 80.0],
+    "element": "C3D8R (EXPLICIT library)",
+    "seed_mm": 4.0,
+    "material": {"E_MPa": 210000.0, "nu": 0.3, "density_tonne_mm3": 7.85e-09},
+    "boundary": "Encastre on x=0 face",
+    "load": "Fy = -400 N on tip node set, ramped over 0.001 s and held",
+    "step": "ExplicitDynamicsStep, timePeriod 0.002 s, nlgeom=ON"
+  },
+  "odb_step": "Step-1",
+  "history_region": "Assembly ASSEMBLY",
+  "requested_variables": [
+    "ALLIE", "ALLKE", "ALLWK", "ALLSE", "ALLAE", "ALLVD",
+    "ALLFD", "ALLCD", "ALLPD", "ETOTAL"
+  ],
+  "present_variables": [
+    "ALLAE", "ALLCD", "ALLFD", "ALLIE", "ALLKE", "ALLPD",
+    "ALLSE", "ALLWK", "ETOTAL"
+  ],
+  "key_finding": "Abaqus/Explicit 2025 writes ETOTAL and ALLWK to the assembly-level history output, so the dynamic energy contract's required evidence exists for the explicit solver product as well.",
+  "metric": {
+    "definition": "max_over_frames(|ETOTAL| / E_ref)",
+    "reference": "max_over_frames(max(|ALLIE|, |ALLKE|, |ALLWK|))",
+    "identity": "ETOTAL = ALLIE + ALLKE - ALLWK",
+    "identity_tolerance": 0.001
+  },
+  "measured": {
+    "frame_count": 201,
+    "informative_frame_count": 200,
+    "empty_frame_indices": [0],
+    "reference_energy": 22520.279296875,
+    "max_abs_etotal": 0.20022998750209808,
+    "max_identity_relative_deviation": 0.0002510561360497024,
+    "max_identity_absolute_deviation": 0.34489642083644867,
+    "ratio": 8.891096991407329e-06
+  },
+  "identity_validation": {
+    "verdict": "holds",
+    "evidence": "Per-frame relative deviation of ETOTAL from ALLIE + ALLKE - ALLWK peaks at 2.51e-04, which is below the contract's 1e-03 relative tolerance on every one of the 201 frames. The two competing Jev hypotheses (same identity valid vs. different explicit terms required) were therefore decided by real solver output rather than by argument.",
+    "jev_confidence_before_measurement": 0.21
+  },
+  "declared_policy": {
+    "implicit_reference_threshold": 0.01,
+    "explicit_threshold": 0.01,
+    "note": "The explicit threshold is declared independently for this configuration. It happens to share the numeric value of the earlier implicit policy; the module still ships no universal default and Jev required separate declaration per solver product (confidence 1.0)."
+  },
+  "verdicts": {
+    "within_declared_policy": {
+      "status": "PASS",
+      "ratio": 8.891096991407329e-06,
+      "threshold": 0.01,
+      "threshold_source": "engineering_policy.explicit_transient_1pct",
+      "solver_product": "explicit",
+      "reference_energy": 22520.279296875,
+      "frame_count": 201,
+      "informative_frame_count": 200,
+      "max_identity_deviation": 0.34489642083644867,
+      "reason": "dynamic_energy_balance_within_threshold"
+    },
+    "stricter_policy_negative_control": {
+      "status": "FAIL",
+      "ratio": 8.891096991407329e-06,
+      "threshold": 1e-06,
+      "threshold_source": "negative_control.explicit_stricter",
+      "solver_product": "explicit",
+      "reason": "dynamic_energy_drift_exceeded"
+    },
+    "missing_etotal_negative_control": {
+      "status": "BLOCKED",
+      "ratio": null,
+      "solver_product": "explicit",
+      "reason": "missing_total_energy_history"
+    },
+    "single_informative_frame_negative_control": {
+      "status": "INCOMPLETE",
+      "ratio": null,
+      "solver_product": "explicit",
+      "reason": "insufficient_informative_frames"
+    },
+    "missing_threshold_negative_control": {
+      "status": "BLOCKED",
+      "reason": "dynamic_energy_threshold_not_configured"
+    },
+    "missing_solver_product_negative_control": {
+      "status": "BLOCKED",
+      "reason": "dynamic_energy_solver_product_not_declared"
+    }
+  },
+  "acceptance_wiring": {
+    "within_declared_policy": {"status": "PASS", "gate": "PASS", "deliverable": true},
+    "stricter_policy": {"status": "FAIL", "gate": "FAIL", "deliverable": false},
+    "missing_etotal": {"status": "BLOCKED", "gate": "BLOCKED", "deliverable": false},
+    "single_frame": {"status": "BLOCKED", "gate": "INCOMPLETE", "deliverable": false}
+  },
+  "code_gap_closed": {
+    "defect": "contracts/postprocess.py planned ALLIE, ALLKE and ETOTAL for DYNAMIC_EXPLICIT and QUASI_STATIC_EXPLICIT but not ALLWK.",
+    "consequence": "A planner-generated explicit deck produced ODB evidence the contract must block on, so the explicit branch could never reach PASS.",
+    "fix": "Both explicit profiles now request ALLIE, ALLKE, ALLWK and ETOTAL.",
+    "jev_judgement": {"choice": "fix_profile_to_request_allwk", "confidence": 0.94}
+  },
+  "scope_notes": [
+    "This validates the evidence path and verdict semantics of the explicit branch on one real explicit job.",
+    "It does not establish a universal explicit drift threshold, and it does not validate quasi-static explicit acceptability, where kinetic/internal energy monitoring is a separate requirement.",
+    "The hourglass/artificial-energy checks for reduced integration remain a separate engineering gate and are not part of this contract."
+  ],
+  "jev_judgement": {
+    "explicit_profile_missing_allwk": {"choice": "fix_profile_to_request_allwk", "confidence": 0.94},
+    "allwk_semantics_in_explicit": {"choice": "same_identity_is_valid_for_explicit", "confidence": 0.21},
+    "threshold_policy_explicit": {"choice": "separate_threshold_required", "confidence": 1.0},
+    "explicit_round_scope": {"choice": "validate_and_close_explicit_evidence_gap", "confidence": 0.97},
+    "explicit_closure_sufficiency": {"noul": 0.15}
+  }
+}

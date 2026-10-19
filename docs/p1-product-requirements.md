@@ -474,6 +474,23 @@ P1.0 产品主入口已彻底消除高层自然语言需求与底层 20 个 L4 �
 > - **真实数据暴露并修复的两个缺陷**：① 恒等式容差曾锚定 `max(reference, 1.0)`，在焦耳量级模型里等于默许 `1e3` 绝对误差，已改为逐帧相对尺度；② 零残差帧曾被计入「信息帧」，使只有一次真实测量的历史也能满足两帧门槛，现单独计数且不计入趋势判定。
 > - **未验证项（不得宣称闭合）**：显式产品阈值未做真机验证；多步动态步归属仅有离线测试；仅一种悬臂构型，不能外推。Jev 终审 `may_declare_dynamic_contract_closed = 0.52`，`residual_risk = medium`，`next_action = explicit_dynamic_case`。
 > - 证据：`machine_validation/dynamic_energy_balance.json`。
+> - **显式产品真机验证（Abaqus/Explicit 2025，本机，2026-10-19）**：现场新建并求解悬臂实体显式动力学算例（C3D8R/EXPLICIT，`ExplicitDynamicsStep`，0.002 s，201 帧历史）。**关键事实**：显式求解器同样写出 `ETOTAL` 与 `ALLWK`（`ALLAE/ALLCD/ALLFD/ALLIE/ALLKE/ALLPD/ALLSE` 亦在），此前「显式 ODB 可能没有 `ETOTAL`」的不确定点由实测排除。`E_ref = 22520.28`、`max|ETOTAL| = 0.2002`、`r = 8.8911e-6`；逐帧恒等式相对偏差峰值 `2.51e-4 < 1e-3`，201 帧全部成立——Jev 在测量前对该恒等式适用性置信度仅 `0.21`（`0.47` vs `0.46` 分裂），此处以真实求解器输出裁决，而非按概率择一。同一数据：1% 显式策略 → `PASS` 且 `deliverable=true`；`1e-6` 策略 → `FAIL` 且不可交付；缺 `ETOTAL` → `BLOCKED`（**不得**用 `ALLIE+ALLKE−ALLWK` 自行合成冒充）；单信息帧 → `INCOMPLETE` 且阻断；缺阈值 / 缺 `solver_product` → 各自 `BLOCKED`。
+> - **本轮修复的真实缺陷**：`contracts/postprocess.py` 的 `DYNAMIC_EXPLICIT` 与 `QUASI_STATIC_EXPLICIT` 后处理 profile 只请求 `ALLIE/ALLKE/ETOTAL`，**遗漏 `ALLWK`**。后果是规划器生成的显式 deck 必然缺少契约强制要求的证据，显式分支永远只能 `BLOCKED`，不可能 `PASS`。两处均已补齐为 `ALLIE/ALLKE/ALLWK/ETOTAL`（Jev `fix_profile_to_request_allwk`，置信度 `0.94`）。
+> - **显式阈值独立性**：显式策略阈值单独声明（Jev `separate_threshold_required`，置信度 `1.0`）。本次取值与隐式策略数值相同，但这是本构型的工程选择，契约模块仍无任何内置默认值。
+> - 证据：`machine_validation/explicit_dynamic_energy_balance.json`；回归：`tests/test_explicit_dynamic_energy.py`。
+> - **仍未验证（不得外推）**：准静态显式（`QUASI_STATIC_EXPLICIT`）的动能/内能比属于独立工程门禁，本次未验证；显式漂移阈值的通用性未建立；单一构型，不能外推为全局结论。Jev `explicit_closure_sufficiency = 0.15`，即「单次真机 + 同源负向控制」不足以宣告整个显式分支工程闭合。
+
+#### REQ-P1-055: 几何清理策略全入口强制（fail-closed）
+- **背景（本轮发现的真实缺陷）**：`contracts/geometry_cleanup.py` 声明了 `GeometryCleanupPolicy(allow_repair=False, allow_virtual_topology=False)`，但全仓库**没有任何地方读取该策略**——`grep` 仅命中定义本身。默认拒绝声明形同虚设，`part.repairGeometry()`、`part.removeRedundantEntities()`、`part.ignoreEntity()` 均可经由 Action 或 `python` 逃生通道直接执行。
+- **单一 choke point（Jev `single_choke_point_before_script_generation`，置信度 `1.0`）**：策略在 `actions/script.action_to_script()` 入口处强制执行。`actions/runner`、`agent.py`、`execution/analysis_run.py`、`planning/compiler.py`、`capability_boundary.classify_action()` 全部经由该函数，因此由构造保证覆盖，而不是逐入口补丁（逐入口必然遗漏）。
+- **默认拒绝且可审计（Jev `explicit_policy_defaults_to_deny`，置信度 `0.97`）**：调用方未提供策略时，合成 `GeometryCleanupPolicySet.default()`（`part='*'`、拒绝修复与虚拓扑），并在违规载荷中以 `policy_is_default=true` 记录「这是默认值」，不做静默放行。
+- **最严原则**：同一 part 命中多条策略时取最严（`allow_*` 取 `and`），新增策略不可能意外放宽权限。未知 part 不落入开放态。
+- **逃生通道不可洗白修复（Jev `python_action_cannot_discharge_repair_policy`，置信度 `0.92`）**：`python` Action 按 API 记号文本筛查（`repairGeometry` / `removeRedundantEntities` / `healGeometry` / `ignoreEntity` / `restoreIgnoredEntity`）。该筛查**能证明违规，不能证明合规**——通过筛查不等于策略已满足，不得被记录为修复证据。
+- **虚拓扑仅候选（Jev `block_ignore_entity_and_report_candidates_only`，置信度 `1.0`）**：`ignore_entity` / `restore_entity` 在策略拒绝时阻断；`mesh_strategy` 的小特征虚拓扑仅产出 `virtual_topology_review` 候选，绝不自动执行，也不落成 `ignore_entity` 动作。
+- **no-op 不算成功（Jev 0.75）**：`verify_cleanup_transition()` 对「无可观测变化」返回 `verified=False` 与 `no_observable_change`，不得把「命令返回了」当作「修复生效」。
+- 回归：`tests/test_geometry_cleanup_policy.py`（22 项，含默认拒绝、跨 part 不越权、逃生通道负向、共享入口一致性、no-op 语义、虚拓扑仅候选）。
+- 实现状态（2026-10-19）：`GeometryCleanupPolicySet` / `enforce_cleanup_policy()` / `GeometryCleanupPolicyViolation` 已落地并接入 `action_to_script`。全量回归 1730 项通过。
+- **已知残余风险（不得宣称闭合）**：`python` 逃生通道只能做文本筛查。`getattr(part, "repair" + "Geometry")()`、`eval`/`exec` 拼接、或经由封装函数间接调用，均可绕过该文本匹配。Jev 终审 `geometry_policy_enforcement_shape = 0.83`（形制正确）但 `python_escape_hatch_residual = 0.29`（残余风险不可接受于闭合），因此本条保持 `IN_REVIEW`。真正闭合需要：将 `python` 动作默认禁用或在受控沙箱中执行、或改为对 Abaqus API 调用做 AST 级静态分析、或让逃生通道只能访问只读命名空间。这些属于后续独立议题，不在本轮范围。
 
 ### 7.2 JEV 意图识别与可审计工程决策层闭环 (TypeSafe JEV Decision Layer)
 
@@ -609,7 +626,8 @@ P1.0 产品主入口已彻底消除高层自然语言需求与底层 20 个 L4 �
 | **REQ-P1-048** | 专有服务接入隔离与零专有泄露 | P1.4 | 公开核心代码库 | 供应商中立抽象与纯净核心 | Tier A | 严禁硬编码专有端点与私有协议 | 🟢 **QUALIFIED (Code Tree Clean)** |
 | **REQ-P1-049** | 安全凭据保护与密钥零泄露红线 | P1.4 | 环境变量与配置工件 | 深度脱敏审计追踪与零泄露 | Tier A | 杜绝 URL/Token/Prompt 泄露 | 🟢 **QUALIFIED (Credentials Deep Sanitized)** |
 | **REQ-P1-053** | 核心与外部服务资格分离验证 | P1.4 | 测试矩阵与真实机证据 | 分立的资格认定状态 | Tier A | 严禁以离线测试冒充外部/真机通过 | 🟢 **QUALIFIED (Tiered Rules Active - Solver Unverified)** |
-| **REQ-P1-054** | 瞬态动态能量平衡契约 | P1.4 | ODB 能量历史 (`ALLIE/ALLKE/ALLWK/ETOTAL`) | 动态能量漂移判定与门禁 | Tier A | 阈值与求解器产品必须显式声明，未声明即阻断；不得与静力 `ALLSD/ALLSE` 共用阈值 | 🟡 **IN_REVIEW (Contract + gate + real implicit-machine run verified; `may_declare_dynamic_contract_closed=0.52`; explicit path and multi-step binding still unverified on machine)** |
+| **REQ-P1-054** | 瞬态动态能量平衡契约 | P1.4 | ODB 能量历史 (`ALLIE/ALLKE/ALLWK/ETOTAL`) | 动态能量漂移判定与门禁 | Tier A | 阈值与求解器产品必须显式声明，未声明即阻断；不得与静力 `ALLSD/ALLSE` 共用阈值 | 🟡 **IN_REVIEW (Implicit and explicit both verified on real Abaqus 2025 runs; explicit `ALLWK` evidence-path defect fixed; multi-step binding still unverified on machine; `explicit_closure_sufficiency=0.15`)** |
+| **REQ-P1-055** | 几何清理策略全入口强制 | P1.4 | 几何清理策略与全部脚本生成路径 | 单一 choke point fail-closed 阻断 | Tier A | 默认拒绝不得被绕过；逃生通道不得洗白修复；虚拓扑仅候选 | 🟡 **IN_REVIEW (Typed-action paths now fail closed by default with 22 negative tests; the generic `python` escape hatch is only text-screened, and Jev `python_escape_hatch_residual=0.29` says that residual is NOT acceptable to declare the requirement qualified)** |
 | **REQ-P1-050** | 3D 轻量级视口与面/边拾取 | P1.5 | 3D 几何模型 | 拾取事件与几何面候选 | Tier C | 拾取越界或歧义安全校验 | 📋 **PLANNED** |
 | **REQ-P1-051** | HITL 交互决策卡片界面 | P1.5 | 确认请求对象 | 工程师点击决策与签名 | Tier C | 未确认操作严禁下发后端 | 📋 **PLANNED** |
 | **REQ-P1-052** | 企业级调度与案例资产管理 | P1.5 | 批量工程计算任务 | 许可令牌与计算节点分配 | Tier C | 许可抢占与排队超时处理 | 📋 **PLANNED** |

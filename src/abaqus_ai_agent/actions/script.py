@@ -13,7 +13,14 @@ def _step_amplitude(value, default):
         raise ValueError("step amplitude must be RAMP or STEP")
     return value
 
-def action_to_script(action):
+def action_to_script(action, cleanup_policies=None):
+    # Geometry cleanup policy is enforced here, at the single point every action
+    # passes through before it becomes Abaqus script. Callers that never pass a
+    # policy still get the fail-closed default; the policy is never inferred to
+    # be satisfied because an Action merely ran.
+    from ..contracts.geometry_cleanup import enforce_cleanup_policy
+
+    enforce_cleanup_policy(action, cleanup_policies)
     p, m, k = action.parameters, action.model_name, action.action_type
     if k == "python":
         return p["code"]
