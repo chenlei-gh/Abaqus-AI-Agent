@@ -1,0 +1,80 @@
+{
+  "schema_version": "p0b_contact_gate_hardening_v1",
+  "verified_at": "2026-10-19",
+  "abaqus_version": "2025 (C:/SIMULIA/Commands/abaqus.bat)",
+  "change": "CONTACT_OPENING contact-model evidence broadened from deck-only to layered deck -> .msg banner -> .dat keyword echo, with fail-closed suppression when no layer applies; .dat and .msg extraction windows fixed to head+tail so the evidence is reachable through the orchestrator.",
+  "extraction_windows": {
+    "problem": "Both extractors kept only the last 100 lines. The .dat keyword echo and model summary are at the head, and the real M_U_T001 .msg banner is at line 74 of 11673, so both solver-artifact evidence layers were unreachable through the product path.",
+    "fix": "msg and dat now read the first 100 and last 100 lines; sta and log are unchanged. Reads stay bounded.",
+    "measured": {
+      "M_U_T001_msg_total_lines": 11673,
+      "banner_in_last_100_lines": 0,
+      "banner_in_first_500_lines": 1
+    }
+  },
+  "evidence_layers": {
+    "deck": "Solved .inp declares *Contact Pair / *Contact Interaction / *Contact.",
+    "msg": "Header line 'CONTACT CONTROLS APPLIED TO ALL CONTACT PAIRS:' or 'CONTACT CONTROLS APPLIED TO CONTACT PAIR (...)'.",
+    "dat": "Echoed *contactpair keyword, or 'NUMBER OF INTERNAL ELEMENTS GENERATED FOR CONTACT' greater than zero."
+  },
+  "deliberately_excluded": {
+    "*contactcontrols": "The remediation writes this exact card, so accepting it as evidence would be circular.",
+    "bare 'contact' keyword in .msg": "Abaqus/Standard 2025 prints generic contact tolerances for every model, including no-contact models.",
+    "node-level surface attribution": "Singular-node names cannot be reliably mapped to a contact surface from the captured artifacts."
+  },
+  "positive_evidence": {
+    "M_U_T001": {"deck_withheld": {"fired": true, "source": "msg"}, "truncated_deck": {"fired": true, "source": "msg"}, "real_deck": {"fired": true, "source": "deck"}, "sta": "THE ANALYSIS HAS NOT BEEN COMPLETED", "numerical_singularity_lines": "many"},
+    "M_U_T02": {"deck_withheld": {"fired": true, "source": "msg"}, "real_deck": {"fired": true, "source": "deck"}, "sta": "THE ANALYSIS HAS NOT BEEN COMPLETED"},
+    "M_U_T05": {"deck_withheld": {"fired": true, "source": "msg"}, "real_deck": {"fired": true, "source": "deck"}, "sta": "THE ANALYSIS HAS NOT BEEN COMPLETED"}
+  },
+  "negative_controls": {
+    "Job_NoContact": {
+      "description": "Single C3D8R element with only node 1 restrained and an off-axis load; no contact anywhere in the model.",
+      "measured_this_round": true,
+      "sta": "THE ANALYSIS HAS NOT BEEN COMPLETED",
+      "numerical_singularity_lines": 90,
+      "msg_contact_controls_banner": 0,
+      "dat_contactpair_or_contact_elements": 0,
+      "generic_contact_tolerance_lines_still_present": 3,
+      "contact_opening": false
+    },
+    "Job_TieFail2": {
+      "description": "Two blocks connected only by *Tie, with an under-constrained upper block; fails with numerical singularities.",
+      "measured_this_round": true,
+      "sta": "THE ANALYSIS HAS NOT BEEN COMPLETED",
+      "numerical_singularity_lines": 75,
+      "msg_contact_controls_banner": 0,
+      "dat_contactpair_or_contact_elements": 0,
+      "contact_opening": false
+    },
+    "Job_TieOnly": {
+      "description": "Same tie model, well constrained; converges.",
+      "measured_this_round": true,
+      "sta": "THE ANALYSIS HAS COMPLETED SUCCESSFULLY",
+      "contact_opening": false
+    },
+    "M_T02_d1e3_and_M_T05_d1e4": {
+      "description": "Stabilized runs that completed successfully; the failure gate must veto the diagnosis.",
+      "sta": "THE ANALYSIS HAS COMPLETED SUCCESSFULLY",
+      "contact_opening": false
+    }
+  },
+  "artifact_locations": {
+    "positive": "C:/Users/DELL/AppData/Local/Temp/p0b_gap3 (failures), p0b_gap2 (stabilized)",
+    "negative_controls": "C:/Users/DELL/AppData/Local/Temp/p0b_nocontact, C:/Users/DELL/AppData/Local/Temp/p0b_tieprobe"
+  },
+  "verification": {
+    "targeted_tests": "tests/test_contact_opening_diagnosis.py, tests/test_p1_4_self_healing.py: 33 passed",
+    "full_suite": "1635 passed",
+    "abqus_rerun_required": false,
+    "note": "Positive artifacts were produced earlier in this session and are unchanged on disk; the two negative controls were solved fresh for this change."
+  },
+  "residual_risk": {
+    "level": "medium",
+    "reasons": [
+      "The closed loop and the broadened gate are demonstrated on one gap-closure geometry plus controls, not on a customer assembly.",
+      "The .msg banner is validated on Abaqus/Standard 2025 only; other releases or solver products may word it differently and would then fall through to the .dat/deck layers.",
+      "Contact evidence proves a contact pair exists, not that the singular nodes belong to it."
+    ]
+  }
+}

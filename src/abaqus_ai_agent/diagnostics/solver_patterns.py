@@ -132,8 +132,10 @@ PATTERNS = [
         ),
         "severity": "WARNING",
         # A singular contact is only a *cause* when the job actually failed, and
-        # only when the deck has a contact pair to stabilize. Both conditions are
-        # checked in diagnose_solver_artifacts before the issue is emitted.
+        # only when the model carries contact evidence from one of the supported
+        # layers (deck, .msg banner, .dat echo). Both conditions are checked in
+        # diagnose_solver_artifacts before the issue is emitted, and the layer that
+        # proved contact is recorded so the audit trail can show what fired.
         "requires_failure_evidence": True,
         "requires_contact_model": True,
         "likely_cause": (
@@ -236,11 +238,14 @@ def diagnose_solver_artifacts(
 ) -> Tuple[DiagnosticIssue, ...]:
     """Diagnose real Abaqus solver text artifacts against deterministic patterns.
 
-    ``inp_text`` is optional. When supplied it lets patterns that only make sense
-    for a contact model (``CONTACT_OPENING``) be gated on the deck actually
-    defining a contact pair, instead of firing on any model that happens to be
-    singular. When it is omitted those patterns stay suppressed, because a
-    singularity without contact evidence is a different engineering problem.
+    Patterns that only make sense for a contact model (``CONTACT_OPENING``) are
+    gated on evidence that the model actually defines a contact pair, instead of
+    firing on any model that happens to be singular. The evidence is resolved in
+    layers -- deck, then ``.msg`` banner, then ``.dat`` keyword echo -- so an
+    unreadable deck does not silently disable the diagnosis. When no layer proves
+    contact the pattern stays suppressed, because a singularity in a model whose
+    contact status is unknown is a different engineering problem. The layer that
+    proved it is recorded in the issue metadata.
     """
     issues: List[DiagnosticIssue] = []
 
@@ -253,6 +258,7 @@ def diagnose_solver_artifacts(
 
     failure_evidence: Optional[str] = None
     contact_model: Optional[bool] = None
+    contact_source: Optional[str] = None
 
     for p in PATTERNS:
         pattern_re = re.compile(p["regex"])
@@ -282,10 +288,13 @@ def diagnose_solver_artifacts(
 
         if p.get("requires_contact_model"):
             if contact_model is None:
-                contact_model = _deck_defines_contact(inp_text)
+                contact_model, contact_source = _resolve_contact_model(
+                    inp_text=inp_text, msg_text=msg_text, dat_text=dat_text
+                )
             if not contact_model:
                 continue
             metadata["contact_model_gated"] = True
+            metadata["contact_model_source"] = contact_source
 
         issues.append(
             DiagnosticIssue(
@@ -320,6 +329,79 @@ def _deck_defines_contact(inp_text: Optional[str]) -> bool:
         if keyword in ("contactpair", "contactinteraction", "contact"):
             return True
     return False
+
+
+# Solver-artifact evidence of a contact model, used when the deck is unreadable.
+# Abaqus/Standard 2025 prints contact tolerance settings for *every* model, so a
+# bare "contact" keyword match is not evidence. Measured on a no-contact model
+# that genuinely failed with 90 numerical singularities, the .msg still contains
+#   "SOFT CONTACT CONSTRAINT COMPATIBILITY TOLERANCE FOR P>P0 ..."
+#   "CONTACT FORCE ERROR TOLERANCE FOR CONVERT SDI=YES ..."
+#   "MAXIMUM CONTACT AUGMENTATIONS FOR *SURFACE BEHAVIOR,AUGMENTED LAGRANGE ..."
+# Only the pair-specific banner below distinguished it: the no-contact run had
+# zero occurrences, while every contact run (failed, stabilized, and healthy)
+# had at least one.
+_CONTACT_MSG_BANNER = re.compile(
+    r"(?i)contact\s+controls\s+applied\s+to\s+"
+    r"(?:all\s+contact\s+pairs|contact\s+pair\b)"
+)
+
+# The .dat "OPTIONS BEING PROCESSED" echo lists "*contactpair" for contact
+# models and nothing for the no-contact control. "*contactcontrols" is excluded
+# on purpose: a remediation writes that card itself, so accepting it would let the
+# proposed fix masquerade as evidence that contact already existed.
+_CONTACT_DAT_INTERNAL_ELEMENTS = re.compile(
+    r"(?i)number\s+of\s+internal\s+elements\s+generated\s+for\s+contact\s+(\d+)"
+)
+
+
+def _msg_proves_contact(msg_text: Optional[str]) -> bool:
+    """True when the .msg header declares applied contact controls for a pair."""
+    if not msg_text:
+        return False
+    return bool(_CONTACT_MSG_BANNER.search(msg_text))
+
+
+def _dat_proves_contact(dat_text: Optional[str]) -> bool:
+    """True when the .dat echoes a contact pair or generates contact elements.
+
+    ``*Contact Controls`` is never sufficient: it is exactly the card a
+    stabilization remediation adds, so treating it as evidence would be circular.
+    """
+    if not dat_text:
+        return False
+    for raw in dat_text.splitlines():
+        body = raw.split("**", 1)[0].strip()
+        if body.startswith("*"):
+            keyword = body[1:].split(",", 1)[0].strip().lower().replace(" ", "")
+            if keyword in ("contactpair", "contactinteraction", "contact"):
+                return True
+            continue
+        match = _CONTACT_DAT_INTERNAL_ELEMENTS.search(body)
+        if match and int(match.group(1)) > 0:
+            return True
+    return False
+
+
+def _resolve_contact_model(
+    inp_text: Optional[str] = None,
+    msg_text: Optional[str] = None,
+    dat_text: Optional[str] = None,
+) -> Tuple[bool, Optional[str]]:
+    """Resolve whether the model defines contact, and which layer proved it.
+
+    Layers are tried in order of authority: the solved deck, then the .msg banner,
+    then the .dat echo. Returns ``(True, source)`` or ``(False, None)``. Absence of
+    evidence is deliberately not evidence of absence *or* presence; callers treat
+    ``False`` as "unknown -> suppress".
+    """
+    if _deck_defines_contact(inp_text):
+        return True, "deck"
+    if _msg_proves_contact(msg_text):
+        return True, "msg"
+    if _dat_proves_contact(dat_text):
+        return True, "dat"
+    return False, None
 
 
 def _nset_sizes(inp_text: str) -> Dict[str, Optional[int]]:

@@ -281,6 +281,96 @@ def test_orchestrator_max_attempts_cutoff():
     assert final_run.state == AnalysisRunState.FAILED
 
 
+def test_extract_solver_texts_keeps_the_dat_head_where_contact_is_echoed(tmp_path):
+    """The .dat contact echo and model summary live near the top of the file.
+
+    Keeping only the tail made solver-artifact contact evidence unreachable even
+    when the .dat was present, so the broadened CONTACT_OPENING gate could never
+    fire through the orchestrator.
+    """
+    job = "Job_DatHead"
+    head = ["          NUMBER OF ELEMENTS IS                                     576\n"]
+    head.append("  *contactpair, interaction=CP, type=SURFACETOSURFACE\n")
+    middle = [" filler %d\n" % i for i in range(400)]
+    tail = ["       WALLCLOCK TIME (SEC) =            3\n"]
+    (tmp_path / (job + ".dat")).write_text(
+        "".join(head + middle + tail), encoding="utf-8", newline="\n"
+    )
+
+    run = AnalysisRun(
+        id="run_dat",
+        model_name="M",
+        job_name=job,
+        metadata={"workdir": str(tmp_path)},
+    )
+    texts = SelfHealingOrchestrator.extract_solver_texts(run)
+
+    assert "*contactpair" in texts["dat"]
+    assert "WALLCLOCK TIME" in texts["dat"]
+    # Still bounded: the middle is not carried.
+    assert "filler 200" not in texts["dat"]
+
+
+def test_extract_solver_texts_keeps_the_msg_contact_banner(tmp_path):
+    """The .msg banner sits at line ~74 of an 11k-line real failure log."""
+    job = "Job_MsgHead"
+    head = [
+        "     SOFT CONTACT CONSTRAINT COMPATIBILITY TOLERANCE FOR P>P0   5.000E-03\n",
+        " CONTACT CONTROLS APPLIED TO ALL CONTACT PAIRS:\n",
+        "     GLOBAL STABILIZATION CONTROL IS NOT USED\n",
+    ]
+    middle = [" singularity filler %d\n" % i for i in range(3000)]
+    tail = ["***ERROR: TOO MANY ATTEMPTS MADE FOR THIS INCREMENT\n"]
+    (tmp_path / (job + ".msg")).write_text(
+        "".join(head + middle + tail), encoding="utf-8", newline="\n"
+    )
+
+    run = AnalysisRun(
+        id="run_msg",
+        model_name="M",
+        job_name=job,
+        metadata={"workdir": str(tmp_path)},
+    )
+    texts = SelfHealingOrchestrator.extract_solver_texts(run)
+
+    assert "CONTACT CONTROLS APPLIED TO ALL CONTACT PAIRS" in texts["msg"]
+    assert "TOO MANY ATTEMPTS" in texts["msg"]
+    assert "filler 1500" not in texts["msg"]
+
+
+def test_orchestrator_diagnoses_contact_opening_without_a_readable_deck(tmp_path):
+    """Deck absent, .msg carries the contact banner: the diagnosis must survive."""
+    job = "Job_NoDeck"
+    (tmp_path / (job + ".msg")).write_text(
+        " ***WARNING: SOLVER PROBLEM. NUMERICAL SINGULARITY WHEN PROCESSING NODE\n"
+        "             SLIDER-1.74 D.O.F. 1 RATIO = 10.E+12     .\n"
+        " CONTACT CONTROLS APPLIED TO ALL CONTACT PAIRS:\n"
+        " ***ERROR: TOO MANY ATTEMPTS MADE FOR THIS INCREMENT\n",
+        encoding="utf-8", newline="\n",
+    )
+    (tmp_path / (job + ".sta")).write_text(
+        "\n THE ANALYSIS HAS NOT BEEN COMPLETED\n", encoding="utf-8", newline="\n"
+    )
+
+    run = AnalysisRun(
+        id="run_nodeck",
+        model_name="M",
+        job_name=job,
+        metadata={"workdir": str(tmp_path)},
+        engineering_status="FAILED",
+    )
+    texts = SelfHealingOrchestrator.extract_solver_texts(run)
+    issues = diagnose_solver_artifacts(
+        msg_text=texts["msg"],
+        sta_text=texts["sta"],
+        dat_text=texts["dat"],
+        log_text=texts["log"],
+        job_status="FAILED",
+        inp_text=SelfHealingOrchestrator.extract_deck_text(run) or None,
+    )
+    assert "CONTACT_OPENING" in {i.diagnosis_id for i in issues}
+
+
 def test_orchestrator_success_on_first_remediation():
     agent = AbaqusAIAgent(executor=MockExecutor())
     capability = resolve_capability("linear_static")

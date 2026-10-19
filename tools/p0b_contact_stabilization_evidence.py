@@ -275,9 +275,13 @@ def main() -> int:
         "tangential restraint and a 4e6 N load on a 20x20 mm patch, so no control "
         "card can make it well-posed. It is no longer used as evidence about "
         "stabilization.",
-        "The diagnostic gate requires deck text. When the deck is unreadable, "
-        "CONTACT_OPENING stays suppressed and the failure falls back to the older "
-        "diagnoses, which may propose a boundary condition instead.",
+        "Contact evidence is resolved in layers: the solved deck, then the .msg "
+        "'CONTACT CONTROLS APPLIED TO ...' banner, then the .dat '*contactpair' echo. "
+        "If none of the three is available the diagnosis stays suppressed and the "
+        "failure falls back to the older diagnoses, which may propose a boundary "
+        "condition instead. The layer that fired is recorded as "
+        "contact_model_source so the audit trail shows what justified the contact "
+        "attribution.",
         "The product compiler still requires an explicit target_step for a "
         "contact created in the Initial step; a remediation applied to that shape "
         "of model needs the caller to supply one.",

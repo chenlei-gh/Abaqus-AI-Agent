@@ -53,11 +53,29 @@ class SelfHealingOrchestrator:
                         try:
                             with open(p, "r", encoding="utf-8", errors="ignore") as f:
                                 lines = f.readlines()
-                                texts[key] = "".join(lines[-100:])
+                                # Both files put the evidence that identifies the
+                                # model near the top: the .dat "OPTIONS BEING
+                                # PROCESSED" echo and model summary, and the .msg
+                                # contact-controls banner (line 74 of a 11k-line
+                                # failure log). The tail holds the solve outcome.
+                                # Keeping only the tail made the .msg and .dat
+                                # contact evidence unreachable, and reading the
+                                # whole file can be very large, so keep both ends.
+                                if key in ("msg", "dat") and len(lines) > 2 * cls._ARTIFACT_TAIL_LINES:
+                                    texts[key] = (
+                                        "".join(lines[: cls._ARTIFACT_TAIL_LINES])
+                                        + "\n...\n"
+                                        + "".join(lines[-cls._ARTIFACT_TAIL_LINES :])
+                                    )
+                                else:
+                                    texts[key] = "".join(lines[-cls._ARTIFACT_TAIL_LINES :])
                         except Exception:
                             pass
 
         return texts
+
+    # Bounded reads per solver artifact. Also the .dat head+tail window size.
+    _ARTIFACT_TAIL_LINES = 100
 
     @classmethod
     def extract_deck_text(
