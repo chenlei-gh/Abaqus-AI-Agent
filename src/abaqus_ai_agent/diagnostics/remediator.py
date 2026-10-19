@@ -46,6 +46,11 @@ class SolverRemediator:
         # zero pivots or numerical singularities often arise from internal kinematic degrees of freedom or contact release.
         # Enforcing a blanket 6-DOF ENCASTRE boundary condition would falsely "lock" degrees of freedom that are intended
         # to move, altering the physical problem (False-Healing). This must be blocked and classified as UNRESOLVED / PROHIBITED.
+        #
+        # Structural signals (fmbd, connectors) are authoritative. The text fallback must stay
+        # narrow: a contact model is routinely described with a "slider" block, and a sliding
+        # block under friction is not a kinematic mechanism. Only words that name a mechanism
+        # as such are accepted.
         is_mechanism = False
         if intent:
             if getattr(intent, "fmbd", None) is not None:
@@ -58,7 +63,10 @@ class SolverRemediator:
                     f"{getattr(intent, 'analysis_type', '')} "
                     f"{getattr(intent, 'description', '')}"
                 ).lower()
-                if any(k in text_corpus for k in ("mechanism", "kinematic", "linkage", "fmbd", "hinge", "slider")):
+                if any(
+                    k in text_corpus
+                    for k in ("mechanism", "kinematic", "linkage", "fmbd", "hinge")
+                ):
                     is_mechanism = True
 
         if "ZERO_PIVOT" in issue_ids or "NUMERICAL_SINGULARITY" in issue_ids:

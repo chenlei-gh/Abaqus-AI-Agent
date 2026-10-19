@@ -806,8 +806,10 @@ class AnalysisRunner:
                     diagnostics=({"reason": "odb_missing"},),
                     artifacts=artifacts)
 
-            raw_odb = self.executor.inspect_odb(path) if hasattr(
-                self.executor, "inspect_odb") else None
+            raw_odb = None
+            if hasattr(self.executor, "inspect_odb"):
+                from .odb import inspect_odb
+                raw_odb = inspect_odb(self.executor, path)
             odb = summarize_odb(raw_odb) if raw_odb is not None else {"status": "unavailable"}
             if odb.get("status") != "available" or not odb.get("steps"):
                 return run.with_state(

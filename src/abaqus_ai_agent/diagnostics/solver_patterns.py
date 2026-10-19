@@ -118,8 +118,23 @@ PATTERNS = [
     },
     {
         "id": "CONTACT_CHATTER",
-        "regex": r"(?i)severe contact overclosure|contact status changes",
+        # Abaqus/Standard 2025 reports a chattering contact as status transitions
+        # between iterations, e.g.
+        #   "           45 POINTS CHANGED FROM CLOSED TO OPEN"
+        #   "           22 POINTS CHANGED FROM STICKING TO SLIPPING"
+        # The legacy phrases are kept because older/other releases and prior
+        # captured artifacts may use them; they are not what this release emits.
+        "regex": (
+            r"(?i)points changed from "
+            r"(?:closed to open|open to closed|sticking to slipping|slipping to sticking)"
+            r"|severe contact overclosure|contact status changes"
+        ),
         "severity": "WARNING",
+        # Status transitions also occur a few times per run in jobs that converge.
+        # Diagnosing chatter from the wording alone would make contact stabilization
+        # fire on healthy models, so this pattern only applies once the job is known
+        # to have failed.
+        "requires_failure_evidence": True,
         "likely_cause": (
             "Chattering contact status between iterations (open/close oscillation)."
         ),
@@ -128,6 +143,56 @@ PATTERNS = [
         ),
     },
 ]
+
+
+# Job states that are not a successful solve. Kept explicit so an unknown status is
+# never silently treated as failure.
+_FAILED_JOB_STATUSES = frozenset({
+    "FAILED",
+    "ERROR",
+    "ABORTED",
+    "TERMINATED",
+    "EXECUTION_FAILED",
+    "SOLVER_FAILED",
+    "ODB_MISSING",
+    "RESULT_INVALID",
+})
+
+# Terminal solver errors. Presence of any of these means the analysis did not
+# complete, independent of what the caller reported as job status.
+_TERMINAL_SOLVER_ERROR = re.compile(
+    r"(?i)too many attempts made for this increment"
+    r"|time increment required is less than the minimum specified"
+    r"|the analysis has not been completed"
+    r"|analysis cannot proceed"
+)
+
+
+def _failure_evidence_reason(msg_text: str, sta_text: str, job_status: Optional[str]) -> Optional[str]:
+    """Return why the artifacts prove failure, or None when they do not.
+
+    Three independent signals are accepted, because no single one is available in
+    every call path: an explicit non-success ``job_status``, a ``.sta`` file that
+    never reached successful completion, or a terminal solver error in ``.msg``.
+    The message names the signal actually used so the audit trail cannot claim a
+    status that was not what triggered the gate.
+
+    A ``.sta`` that reached "COMPLETED SUCCESSFULLY" is the strongest evidence and
+    vetoes the gate: real converged runs also emit a handful of status transitions,
+    and a caller-supplied status must not turn a healthy run into a contact fix.
+    """
+    sta_upper = (sta_text or "").upper()
+    if "THE ANALYSIS HAS COMPLETED SUCCESSFULLY" in sta_upper:
+        return None
+
+    status = (job_status or "").strip().upper()
+    if status in _FAILED_JOB_STATUSES:
+        return "job_status=%s" % status
+    if sta_upper:
+        return "sta: analysis not completed"
+    if msg_text and _TERMINAL_SOLVER_ERROR.search(msg_text):
+        return "msg: terminal solver error"
+    return None
 
 
 def diagnose_solver_artifacts(
@@ -147,6 +212,8 @@ def diagnose_solver_artifacts(
         ("log", log_text),
     ]
 
+    failure_evidence: Optional[str] = None
+
     for p in PATTERNS:
         pattern_re = re.compile(p["regex"])
         matched_lines = []
@@ -161,17 +228,29 @@ def diagnose_solver_artifacts(
                     if not matched_source:
                         matched_source = src_name
 
-        if matched_lines:
-            issues.append(
-                DiagnosticIssue(
-                    diagnosis_id=p["id"],
-                    severity=p["severity"],
-                    supporting_evidence=tuple(matched_lines[:10]),  # bounded evidence
-                    likely_cause=p["likely_cause"],
-                    suggested_remediation=p["remediation"],
-                    file_source=matched_source,
-                )
+        if not matched_lines:
+            continue
+
+        metadata: Dict[str, Any] = {}
+        if p.get("requires_failure_evidence"):
+            if failure_evidence is None:
+                failure_evidence = _failure_evidence_reason(msg_text, sta_text, job_status)
+            if not failure_evidence:
+                continue
+            metadata["failure_gated"] = True
+            metadata["failure_evidence"] = failure_evidence
+
+        issues.append(
+            DiagnosticIssue(
+                diagnosis_id=p["id"],
+                severity=p["severity"],
+                supporting_evidence=tuple(matched_lines[:10]),  # bounded evidence
+                likely_cause=p["likely_cause"],
+                suggested_remediation=p["remediation"],
+                file_source=matched_source,
+                metadata=metadata,
             )
+        )
 
     return tuple(issues)
 

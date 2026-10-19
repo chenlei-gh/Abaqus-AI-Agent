@@ -636,6 +636,7 @@ def compile_intent_to_actions(
         default_step_name = active_step.name
 
     # 6b. Contact Interactions
+    stabilized_target_steps: List[str] = []
     if geometry.shape == "step_assembly" and active_scope is not None:
         derived = [
             IntentInteractionSpec(
@@ -732,6 +733,8 @@ def compile_intent_to_actions(
                     spec=spec,
                     requires_step_override=(inter.step != target),
                 )
+            if binding is not None and binding.target_step not in stabilized_target_steps:
+                stabilized_target_steps.append(binding.target_step)
             extra = ""
             if binding is not None and not binding.requires_step_override:
                 extra = f", contactControls='{binding.control_name}'"
@@ -1591,6 +1594,21 @@ def compile_intent_to_actions(
         actions.append(builders.python_action(model_name, mesh_elem_code))
 
     # 12. Output Requests & Job Creation
+    # Contact stabilization is only auditable if the dissipation it introduces is
+    # written to the ODB. Abaqus does not include ALLSD in the default PRESELECT
+    # history output, so a dedicated request is added on the stabilized step.
+    # Without it the acceptance gate would be permanently BLOCKED for lack of
+    # evidence, which is indistinguishable from a failed repair.
+    for _stab_step in stabilized_target_steps:
+        stab_energy_out = (
+            f"import step\n"
+            f"if 'H-Energy-Stabilization' not in mdb.models['{model_name}'].historyOutputRequests:\n"
+            f"    mdb.models['{model_name}'].HistoryOutputRequest(\n"
+            f"        name='H-Energy-Stabilization', createStepName='{_stab_step}',\n"
+            f"        variables=('ALLSD', 'ALLSE', 'ALLIE', 'ETOTAL'))\n"
+        )
+        actions.append(builders.python_action(model_name, stab_energy_out))
+
     if fatigue is not None:
         fatigue_out_req = (
             f"import step\n"

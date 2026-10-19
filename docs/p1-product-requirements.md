@@ -438,11 +438,18 @@ P1.0 产品主入口已彻底消除高层自然语言需求与底层 20 个 L4 �
 - 针对时间步过小：自动调整初始增量步长、放宽迭代控制参数（`*CONTROLS, PARAMETERS=TIME INCREMENTATION`）；
 - 针对网格畸变：定位畸变单元并对其局部区域执行自适应网格加密或细化。
 
-> 实现状态（P0 闭环）：接触稳定化已接入 `StdContactControl` + `*CONTACT CONTROLS`，不再混入 `step_controls`；稳定化能量契约见 `contracts/stabilization_energy.py`。阈值为工程策略，必须由调用方显式给出并记录来源。能量门禁按 deck 关键词解析出**唯一**启用稳定化的分析步并在该步上取证：多步均启用、关键词落在 `*STEP` 块之外、或该步在 ODB 中不存在，一律 `BLOCKED`，不得借用其他步的能量数据；`ALLSD`/`ALLSE` 时间序列无法逐帧对齐同样阻断。
+> 实现状态（P0-b 真机闭环，2026-10-19）：接触稳定化已接入 `StdContactControl` + `*CONTACT CONTROLS`，不再混入 `step_controls`；稳定化能量契约见 `contracts/stabilization_energy.py`。阈值为工程策略，必须由调用方显式给出并记录来源。能量门禁按 deck 关键词解析出**唯一**启用稳定化的分析步并在该步上取证：多步均启用、关键词落在 `*STEP` 块之外、或该步在 ODB 中不存在，一律 `BLOCKED`，不得借用其他步的能量数据；`ALLSD`/`ALLSE` 时间序列无法逐帧对齐同样阻断。
+>
+> **真机结论（Abaqus/Standard 2025，本机实测，未通过验收）**：
+> - 编译器现会在稳定化步显式请求 `ALLSD/ALLSE`（`H-Energy-Stabilization`），否则该门禁永远缺少证据。
+> - 接触振荡修复路径已可从未收敛作业触达：`CONTACT_CHATTER` 现按 Abaqus 2025 实际措辞（`POINTS CHANGED FROM ...`）匹配，并**以失败证据为前置条件**（收敛作业同样会打印少量该行，纯文本匹配必然误报；`.sta` 显示成功完成时否决该诊断）。
+> - 实测两例：不收敛的门手柄类滑动接触算例加入 `stabilize` 后 `.sta` 报 `COMPLETED SUCCESSFULLY`，但解场退化——`U` 仅 1/2250、`S` 0/2688、`RF` 450/2250 为有限值，`t>0` 的能量样本全为 `NaN`。另一例编译器生成的接触模型在 `1e-4~0.5` 各阻尼档下均不收敛。
+> - 因此**没有任何一例**同时满足「收敛」与「有限能量证据」，P0-b 仍未闭环；该修复在已测算例上应报告为无效，而非已验证。
 
 #### REQ-P1-042: 自愈审计追踪与防伪红线
 - **完整呈现修复前后 Diff**：工程报告中必须清晰保留 `Run 1 (Initial Failure)` 与 `Run 2 (Healed)` 的对比清单，严禁静默掩盖发散历史；
 - **物理守恒门禁检验**：自愈引入的数值稳定项必须经验收门禁确认未扭曲主物理响应。静力自动稳定化以 `ALLSD/ALLSE` 逐帧最大比值对照显式阈值判定；动态能量平衡属于另一类契约，不得混用同一阈值。
+- **退化解红线（本轮修复）**：Abaqus 可能对数值发散的作业仍报 `COMPLETED SUCCESSFULLY` 并写出 `NaN` 场。ODB 校验现增加退化解判据——核心场（`U/UT/UR/S/RF/RM`）有限值占比低于 50%，或某帧所有含数据的场均非有限，即判 `verified=False` 并阻断交付；此前仅校验二进制结构与网格，`NaN` 结果可被判为 `PASS/VALID`。
 
 ### 7.2 JEV 意图识别与可审计工程决策层闭环 (TypeSafe JEV Decision Layer)
 
@@ -568,8 +575,8 @@ P1.0 产品主入口已彻底消除高层自然语言需求与底层 20 个 L4 �
 | **REQ-P1-038** | 用户已有模型 (CAE/INP/ODB) 输入规范 | P1.4 | 用户外部模型与任务类型 | 原生执行/只读后处理/工作副本 | Tier A | 原始模型只读保护，禁止无谓重建 | 🟢 **QUALIFIED** |
 | **REQ-P1-039** | 受控 INP 结构化参数编辑与版本审计 | P1.4 | 用户 INP 与参数编辑指令 | 独立工作副本、Diff 审计、求解闭环 | Tier A | 严禁原地修改，目标歧义或缺失 fail-closed | 🟢 **QUALIFIED** |
 | **REQ-P1-040** | 求解器发散特征深度诊断 | P1.4 | `.msg`, `.sta` 日志 | 发散根因诊断报告 | Tier A | 无法识别的发散安全退出 | 📋 **PLANNED** |
-| **REQ-P1-041** | 受控自愈策略库与自动重算 | P1.4 | 发散诊断结果 | 修复配置与自愈重算 | Tier A | 稳定能量超限即判定自愈无效 | 🟡 **IN_REVIEW (Contact stabilization wired; geometric P1 items pending)** |
-| **REQ-P1-042** | 自愈审计追踪与防伪红线 | P1.4 | 修复前后两次 Run | 完整 Diff 对比明细 | Tier B | 严禁静默覆盖首次失败记录 | 🟡 **IN_REVIEW (Stabilization-energy gate closed; full live rerun pending)** |
+| **REQ-P1-041** | 受控自愈策略库与自动重算 | P1.4 | 发散诊断结果 | 修复配置与自愈重算 | Tier A | 稳定能量超限即判定自愈无效 | 🟡 **IN_REVIEW (Repair verified to execute; ineffective on tested cases — no convergent case with finite energy evidence)** |
+| **REQ-P1-042** | 自愈审计追踪与防伪红线 | P1.4 | 修复前后两次 Run | 完整 Diff 对比明细 | Tier B | 严禁静默覆盖首次失败记录 | 🟡 **IN_REVIEW (Degenerate-solution guard added; full live rerun pending)** |
 | **REQ-P1-043** | JEV 模式隔离与防静默降级 | P1.4 | 运行模式配置与提示词 | 强类型决策与状态 | Tier B | Live 模式异常坚决 Fail-Closed | 🟢 **QUALIFIED** |
 | **REQ-P1-044** | 严格数值校验、载荷对齐与全链路审计 | P1.4 | 意图提问与响应载荷 | 完整审计束与来源标记 | Tier B | 概率分布归一化 sum=1.0、深度脱敏 | 🟢 **QUALIFIED** |
 | **REQ-P1-045** | 独立工程评测系统与 Context Merge 审计 | P1.4 | 8大工程维度基准评测 | 评测指标、严格分母、精确率与实体防呆 | Tier B | 8维度全指标分母分立、1-to-1拓扑Grounding、子句载荷隔离、物性分级闭环 | 🟡 **IN_REVIEW (Deep Topological & Evidence Hardening in Progress)** |

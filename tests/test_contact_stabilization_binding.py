@@ -233,6 +233,27 @@ def test_compiler_emits_contact_controls_for_single_static_step():
     assert "contactControls='CC-Stabilization'" in plan.cae_script
 
 
+def test_compiler_requests_allsd_only_for_stabilized_steps():
+    """The ALLSD/ALLSE gate needs dissipation history that Abaqus does not preselect."""
+    plan = _compile(
+        [_interaction("C1", step="Step-1")],
+        step=IntentStepSpec(name="Step-1", step_type="static_general"),
+        contract={"stabilize_choice": "AUTOMATIC", "damp_factor": 1e-4},
+    )
+    script = plan.cae_script
+    assert "H-Energy-Stabilization" in script
+    assert "ALLSD" in script
+    assert "createStepName='Step-1'" in script
+
+
+def test_compiler_does_not_request_allsd_without_stabilization():
+    plan = _compile(
+        [_interaction("C1", step="Step-1")],
+        step=IntentStepSpec(name="Step-1", step_type="static_general"),
+    )
+    assert "ALLSD" not in plan.cae_script
+
+
 def test_compiler_refuses_contact_stabilization_in_explicit_dynamic():
     with pytest.raises(ContactStabilizationError) as excinfo:
         _compile(

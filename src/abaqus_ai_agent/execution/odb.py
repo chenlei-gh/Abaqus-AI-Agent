@@ -1,6 +1,73 @@
+def _decode_payload(raw):
+    """Decode a subprocess payload into a dict.
+
+    Executors are not required to return structured data: the headless Abaqus
+    Python executor forwards stdout, which for these probes is a Python repr
+    (single quotes, ``nan`` for missing energies). Treating that string as the
+    evidence itself silently made every energy history look absent, so callers
+    must decode before inspecting keys.
+    """
+    if isinstance(raw, dict):
+        return raw
+    if raw is None:
+        return None
+    if not isinstance(raw, str):
+        # In-process executors can hand back a live ODB-like object. Only textual
+        # payloads need decoding; anything else is passed through untouched.
+        return raw
+    text = raw.strip()
+    if not text:
+        return None
+    last = text.splitlines()[-1].strip()
+    try:
+        import json
+        decoded = json.loads(last)
+        if isinstance(decoded, dict):
+            return decoded
+    except Exception:
+        pass
+    try:
+        import ast
+        import re
+
+        # ast.literal_eval rejects bare ``nan``/``inf`` tokens. Replace each with a
+        # string sentinel and convert it back afterwards: mapping them to 0.0 would
+        # turn missing evidence into a finite value the gate could pass.
+        sentinels = {"__NAN__": float("nan"), "__INF__": float("inf"),
+                     "__NEG_INF__": float("-inf")}
+
+        def _sentinel(match):
+            token = match.group(1).lower()
+            if token == "nan":
+                return "'__NAN__'"
+            if token.startswith("-"):
+                return "'__NEG_INF__'"
+            return "'__INF__'"
+
+        normalized = re.sub(
+            r"(?<![\w'\"])(-?nan|-?inf)(?![\w'\"])", _sentinel, last
+        )
+        decoded = ast.literal_eval(normalized)
+
+        def _restore(value):
+            if isinstance(value, str):
+                return sentinels.get(value, value)
+            if isinstance(value, (list, tuple)):
+                return type(value)(_restore(item) for item in value)
+            if isinstance(value, dict):
+                return {key: _restore(item) for key, item in value.items()}
+            return value
+
+        if isinstance(decoded, dict):
+            return _restore(decoded)
+    except Exception:
+        return None
+    return None
+
+
 def inspect_odb(executor, path):
     if hasattr(executor, "inspect_odb"):
-        return executor.inspect_odb(path)
+        return _decode_payload(executor.inspect_odb(path))
     code = ("from odbAccess import openOdb\n"
             "from abaqusConstants import *\n"
             "odb=openOdb(path=%r, readOnly=True)\n"
@@ -8,7 +75,7 @@ def inspect_odb(executor, path):
             "'instances':list(odb.rootAssembly.instances.keys())}\n"
             "result['step_frames']={k:len(v.frames) for k,v in odb.steps.items()}\n"
             "odb.close()\nprint(result)") % path
-    return executor.execute(code)
+    return _decode_payload(executor.execute(code))
 
 
 def _extract_code(path, step, field, component=None, invariant=None,
@@ -118,6 +185,7 @@ def extract_history(executor, path, step, region, variables):
     """Extract ODB history-output data as bounded, machine-readable evidence."""
     code = (
         "from odbAccess import openOdb\n"
+        "import json\n"
         "odb=openOdb(path=%r, readOnly=True)\n"
         "st=odb.steps[%r]\n"
         "hr=st.historyRegions[%r]\n"
@@ -128,9 +196,9 @@ def extract_history(executor, path, step, region, variables):
         "    _vars[name]=list(out.data) if out is not None else None\n"
         "odb.close()\n"
         "result={'status':'available','step':%r,'region':%r,'variables':_vars}\n"
-        "print(result)"
+        "print(json.dumps(result))"
     ) % (path, step, region, tuple(variables), step, region)
-    return executor.execute(code)
+    return _decode_payload(executor.execute(code))
 
 
 def summarize_history(data):

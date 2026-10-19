@@ -10,6 +10,7 @@ Zero Tolerance for Fake Logs:
 from __future__ import annotations
 
 import json
+import math
 import os
 import shutil
 import subprocess
@@ -231,7 +232,18 @@ def _verify_odb_in_process(
             "instances": instance_details,
         }
 
-        return {"verified": True, "steps": step_info, "mesh_metrics": mesh_metrics}
+        degenerate_error, nonfinite_fields = _degenerate_solution_error(
+            odb, req_step if req_step else steps[-1]
+        )
+        if degenerate_error:
+            return {"verified": False, "error": degenerate_error}
+
+        return {
+            "verified": True,
+            "steps": step_info,
+            "mesh_metrics": mesh_metrics,
+            "nonfinite_fields": nonfinite_fields,
+        }
     except Exception as exc:
         return {"verified": False, "error": str(exc)}
     finally:
@@ -240,6 +252,93 @@ def _verify_odb_in_process(
                 odb.close()
             except Exception:
                 pass
+
+
+def _finite_counts(values) -> tuple:
+    """Return ``(numeric_count, finite_count)`` for one field-output array.
+
+    Abaqus returns numpy scalars, which are not always ``float`` subclasses, so
+    each component is converted rather than type-checked.
+    """
+    total = 0
+    finite = 0
+    for value in values:
+        data = value.data
+        if not hasattr(data, "__iter__"):
+            data = (data,)
+        for component in data:
+            if isinstance(component, bool):
+                continue
+            try:
+                number = float(component)
+            except (TypeError, ValueError):
+                continue
+            total += 1
+            if math.isfinite(number):
+                finite += 1
+    return total, finite
+
+
+# Fields whose loss of finiteness means there is no solution at all.
+# Contact-only fields are excluded: they can remain finite (mostly zero) while
+# the displacement field is already NaN.
+_CORE_RESULT_FIELDS = ("U", "UT", "UR", "S", "RF", "RM")
+
+# A core field is treated as degenerate when fewer than this fraction of its
+# values are finite. A healthy solution is fully finite; the observed failure
+# produced 1 finite value out of 2250 for U and none for S.
+_MIN_FINITE_FRACTION = 0.5
+
+
+def _degenerate_solution_error(odb, step_name):
+    """Return an error string when a completed step holds a degenerate solution.
+
+    Abaqus/Standard can report COMPLETED SUCCESSFULLY for a run whose solution
+    has diverged numerically, writing NaN into the field outputs. Such an ODB
+    passes every structural check yet carries no usable result, so it must not
+    reach acceptance as VALID.
+
+    Two conditions are rejected:
+      * a core mechanical field (U/UR/S/RF/RM) is mostly non-finite;
+      * every field carrying numeric values is entirely non-finite.
+    A field with no values at all is not evidence either way and is ignored.
+
+    Returns ``(error_or_None, nonfinite_field_names)``.
+    """
+    try:
+        step_obj = odb.steps[step_name]
+        if len(step_obj.frames) == 0:
+            return None, []
+        last = step_obj.frames[-1]
+        core_degenerate = []
+        nonfinite_fields = []
+        data_bearing = 0
+        for fname in last.fieldOutputs.keys():
+            total, finite = _finite_counts(last.fieldOutputs[fname].values)
+            if not total:
+                continue
+            data_bearing += 1
+            if not finite:
+                nonfinite_fields.append(str(fname))
+            base = str(fname).split()[0].upper()
+            if base in _CORE_RESULT_FIELDS and (finite / float(total)) < _MIN_FINITE_FRACTION:
+                core_degenerate.append("%s (%d/%d finite)" % (str(fname), finite, total))
+    except Exception as exc:
+        return "degenerate-result check failed: %s" % exc, []
+
+    if core_degenerate:
+        return (
+            "ODB step %r last frame has a mostly non-finite core result field: %s; "
+            "the solver reported completion but the solution is numerically degenerate"
+            % (step_name, ", ".join(sorted(core_degenerate)))
+        ), nonfinite_fields
+    if data_bearing and len(nonfinite_fields) == data_bearing:
+        return (
+            "ODB step %r last frame contains no finite field values; the solver "
+            "reported completion but the solution is numerically degenerate "
+            "(fields: %s)" % (step_name, ", ".join(sorted(nonfinite_fields)))
+        ), nonfinite_fields
+    return None, nonfinite_fields
 
 
 def verify_authentic_odb_structure(
@@ -378,8 +477,52 @@ try:
         'instances': instance_details,
     }}
 
+    # Degenerate-result guard. Abaqus reports COMPLETED SUCCESSFULLY for some
+    # contact runs whose solution has diverged numerically, writing NaN into the
+    # field outputs. A structurally valid ODB full of NaN is not a result, so it
+    # must not reach acceptance as VALID.
+    import math as _math
+    _target_step = req_step if req_step else steps[-1]
+    _last = odb.steps[_target_step].frames[-1]
+    _core = ('U', 'UT', 'UR', 'S', 'RF', 'RM')
+    _core_degenerate = []
+    _nonfinite = []
+    _data_bearing = 0
+    for _fname in _last.fieldOutputs.keys():
+        _tot = 0
+        _fin = 0
+        for _v in _last.fieldOutputs[_fname].values:
+            _data = _v.data
+            if not hasattr(_data, '__iter__'):
+                _data = (_data,)
+            for _x in _data:
+                if isinstance(_x, bool):
+                    continue
+                try:
+                    _n = float(_x)
+                except (TypeError, ValueError):
+                    continue
+                _tot += 1
+                if _math.isfinite(_n):
+                    _fin += 1
+        if not _tot:
+            continue
+        _data_bearing += 1
+        if not _fin:
+            _nonfinite.append(str(_fname))
+        if str(_fname).split()[0].upper() in _core and (_fin / float(_tot)) < 0.5:
+            _core_degenerate.append(f"{{_fname}} ({{_fin}}/{{_tot}} finite)")
+    if _core_degenerate:
+        print("__ODB_VERIFIED__" + json.dumps({{'valid': False, 'error': f"ODB step '{{_target_step}}' last frame has a mostly non-finite core result field: {{sorted(_core_degenerate)}}; the solver reported completion but the solution is numerically degenerate"}}))
+        odb.close()
+        sys.exit(1)
+    if _data_bearing and len(_nonfinite) == _data_bearing:
+        print("__ODB_VERIFIED__" + json.dumps({{'valid': False, 'error': f"ODB step '{{_target_step}}' last frame contains no finite field values; the solver reported completion but the solution is numerically degenerate (fields: {{sorted(_nonfinite)}})"}}))
+        odb.close()
+        sys.exit(1)
+
     odb.close()
-    print("__ODB_VERIFIED__" + json.dumps({{'valid': True, 'steps': step_info, 'mesh_metrics': mesh_metrics}}))
+    print("__ODB_VERIFIED__" + json.dumps({{'valid': True, 'steps': step_info, 'mesh_metrics': mesh_metrics, 'nonfinite_fields': _nonfinite}}))
 except Exception as exc:
     print("__ODB_VERIFIED__" + json.dumps({{'valid': False, 'error': str(exc)}}))
     sys.exit(1)
