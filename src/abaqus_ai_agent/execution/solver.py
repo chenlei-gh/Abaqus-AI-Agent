@@ -32,6 +32,7 @@ class AbaqusBatchJob:
     double_precision: bool = False
     interactive: bool = True
     timeout_seconds: int = 1800
+    stall_timeout_seconds: int = 120
     submodel: bool = False
 
 
@@ -626,13 +627,29 @@ def execute_abaqus_batch_job(
         cmd.append(f"globalmodel={job.global_odb.name}")
 
     try:
-        proc = subprocess.run(
+        from .watchdog import run_with_watchdog, SolverProcessStalledError
+        proc = run_with_watchdog(
             cmd,
             cwd=job.workdir,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
             timeout=job.timeout_seconds,
+            stall_timeout=getattr(job, "stall_timeout_seconds", 120),
+        )
+    except SolverProcessStalledError as exc:
+        diags = parse_solver_diagnostics(job.workdir, job.job_name)
+        diags.append(
+            f"SOLVER_STALLED: Process stalled for {exc.stall_duration:.1f}s exceeding threshold {exc.stall_timeout:.1f}s"
+        )
+        if exc.last_stdout_line:
+            diags.append(f"STALL_LAST_STDOUT: {exc.last_stdout_line}")
+        if exc.last_stderr_line:
+            diags.append(f"STALL_LAST_STDERR: {exc.last_stderr_line}")
+        return AbaqusJobResult(
+            job_name=job.job_name,
+            state="ABORTED",
+            returncode=-1,
+            workdir=job.workdir,
+            is_live=True,
+            diagnostics=diags,
         )
     except subprocess.TimeoutExpired:
         return AbaqusJobResult(

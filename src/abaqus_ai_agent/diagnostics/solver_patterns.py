@@ -18,6 +18,10 @@ class DiagnosticIssue:
     file_source: Optional[str] = None
     metadata: Dict[str, Any] = field(default_factory=dict)
 
+    @property
+    def id(self) -> str:
+        return self.diagnosis_id
+
     def to_dict(self) -> Dict[str, Any]:
         return {
             "diagnosis_id": self.diagnosis_id,
@@ -175,6 +179,17 @@ PATTERNS = [
             "Use smoothed penalty contact, adjust contact damping/stabilization, or reduce initial increment."
         ),
     },
+    {
+        "id": "SOLVER_STALLED",
+        "regex": r"(?i)SOLVER_STALLED",
+        "severity": "ERROR",
+        "likely_cause": (
+            "Solver process stalled without stream or file activity exceeding the stall timeout."
+        ),
+        "remediation": (
+            "Inspect contact chatter, micro-geometry deadlock, or excessive cutbacks; consider enabling contact stabilization or refining step controls."
+        ),
+    },
 ]
 
 
@@ -198,6 +213,7 @@ _TERMINAL_SOLVER_ERROR = re.compile(
     r"|time increment required is less than the minimum specified"
     r"|the analysis has not been completed"
     r"|analysis cannot proceed"
+    r"|solver_stalled"
 )
 
 

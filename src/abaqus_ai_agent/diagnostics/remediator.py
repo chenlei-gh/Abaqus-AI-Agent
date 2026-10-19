@@ -200,6 +200,36 @@ class SolverRemediator:
                 )
             )
 
+        # 6. Solver Stalled / Watchdog Tripped
+        if "SOLVER_STALLED" in issue_ids and not any(
+            r.category in (RemediationCategory.STEP_CONTROLS, RemediationCategory.CONTACT_STABILIZATION)
+            for r in remediations
+        ):
+            remediations.append(
+                RemediationAction(
+                    action_id=f"rem_stall_{uuid.uuid4().hex[:6]}",
+                    category=RemediationCategory.STEP_CONTROLS,
+                    diagnosis_id="SOLVER_STALLED",
+                    description=(
+                        "Solver stalled without activity. Refine step controls with smaller initial increment "
+                        "and enable stabilization damping to resolve stagnation."
+                    ),
+                    parameters={
+                        "initial_inc": 0.01,
+                        "min_inc": 1e-8,
+                        "max_num_inc": 500,
+                        "stabilization_method": "DAMPING_FACTOR",
+                        "stabilization_magnitude": 2e-4,
+                        "max_dissipation_ratio": 0.05,
+                    },
+                    rationale=(
+                        "Process stall typically indicates severe convergence cutback deadlock or contact chattering. "
+                        "Application requires explicit confirmation."
+                    ),
+                    risk_level=RemediationRisk.HIGH,
+                )
+            )
+
         return tuple(remediations)
 
     @classmethod

@@ -382,7 +382,8 @@ class AnalysisRunner:
         return None
 
     def _evaluate_stabilization_gate(self, deck_text, odb_summary, raw_odb,
-                                     odb_path, engineering_intent):
+                                     odb_path, engineering_intent,
+                                     cached_energy=None):
         """Return ``(stabilization_enabled, verdict_or_None)`` for the P0-a gate.
 
         The gate is demanded only when the deck actually enables stabilization.
@@ -432,22 +433,28 @@ class AnalysisRunner:
             )
 
         history_region = self._resolve_energy_history_region(raw_odb) or "Assembly ASSEMBLY"
-        try:
-            from .odb import extract_energy_evidence
-            energy = extract_energy_evidence(
-                self.executor, odb_path, selection.step_name, history_region
-            )
-        except Exception as exc:
-            return enabled, StabilizationEnergyVerdict(
-                status=STATUS_BLOCKED,
-                threshold=threshold,
-                threshold_source=threshold_source,
-                reason="stabilization_energy_extraction_failed",
-                details={
-                    "error": "stabilization_energy_extraction_failed:%s" % exc,
-                    "target_step": selection.step_name,
-                },
-            )
+        energy = None
+        if isinstance(cached_energy, dict) and cached_energy.get("status") == "available":
+            if cached_energy.get("step") == selection.step_name:
+                energy = cached_energy
+
+        if energy is None:
+            try:
+                from .odb import extract_energy_evidence
+                energy = extract_energy_evidence(
+                    self.executor, odb_path, selection.step_name, history_region
+                )
+            except Exception as exc:
+                return enabled, StabilizationEnergyVerdict(
+                    status=STATUS_BLOCKED,
+                    threshold=threshold,
+                    threshold_source=threshold_source,
+                    reason="stabilization_energy_extraction_failed",
+                    details={
+                        "error": "stabilization_energy_extraction_failed:%s" % exc,
+                        "target_step": selection.step_name,
+                    },
+                )
 
         return enabled, evaluate_static_stabilization_energy(
             energy,
@@ -529,7 +536,8 @@ class AnalysisRunner:
         return None, "dynamic_step_ambiguous"
 
     def _evaluate_dynamic_energy_gate(self, deck_text, odb_summary, raw_odb,
-                                      odb_path, engineering_intent, selection=None):
+                                      odb_path, engineering_intent, selection=None,
+                                      cached_energy=None):
         """Return ``(gate_enabled, verdict_or_None)`` for the dynamic gate.
 
         Only an explicitly requested gate is evaluated. When it is requested, the
@@ -583,23 +591,29 @@ class AnalysisRunner:
             )
 
         history_region = self._resolve_energy_history_region(raw_odb) or "Assembly ASSEMBLY"
-        try:
-            from .odb import extract_energy_evidence
-            energy = extract_energy_evidence(
-                self.executor, odb_path, target_step, history_region
-            )
-        except Exception as exc:
-            return True, DynamicEnergyVerdict(
-                status=STATUS_BLOCKED,
-                threshold=threshold,
-                threshold_source=threshold_source,
-                solver_product=product,
-                reason="dynamic_energy_extraction_failed",
-                details={
-                    "error": "dynamic_energy_extraction_failed:%s" % exc,
-                    "target_step": target_step,
-                },
-            )
+        energy = None
+        if isinstance(cached_energy, dict) and cached_energy.get("status") == "available":
+            if cached_energy.get("step") == target_step:
+                energy = cached_energy
+
+        if energy is None:
+            try:
+                from .odb import extract_energy_evidence
+                energy = extract_energy_evidence(
+                    self.executor, odb_path, target_step, history_region
+                )
+            except Exception as exc:
+                return True, DynamicEnergyVerdict(
+                    status=STATUS_BLOCKED,
+                    threshold=threshold,
+                    threshold_source=threshold_source,
+                    solver_product=product,
+                    reason="dynamic_energy_extraction_failed",
+                    details={
+                        "error": "dynamic_energy_extraction_failed:%s" % exc,
+                        "target_step": target_step,
+                    },
+                )
 
         return True, evaluate_dynamic_energy_balance(
             energy,
@@ -1004,6 +1018,7 @@ class AnalysisRunner:
             extractions = ()
             art_dir = workdir or (os.path.dirname(os.path.abspath(path)) if path else ".")
             run_metrics = ()
+            extracted_energy_evidence = None
 
             if result_values is None:
                 from .solver import (
@@ -1083,6 +1098,7 @@ class AnalysisRunner:
                     extractions = report.extractions
                     result_evidence = report.evidence
                     result_values = report.metrics
+                    extracted_energy_evidence = getattr(report, "energy_evidence", None)
                     from ..contracts.metrics import metrics_from_extractions
                     run_metrics = metrics_from_extractions(extractions)
                     result_source = "odb"
@@ -1254,7 +1270,8 @@ class AnalysisRunner:
             if result_source == "odb" and path:
                 auto_stabilization_enabled, stabilization_verdict_for_evidence = (
                     self._evaluate_stabilization_gate(
-                        deck_for_gate, odb, raw_odb, path, engineering_intent
+                        deck_for_gate, odb, raw_odb, path, engineering_intent,
+                        cached_energy=extracted_energy_evidence,
                     )
                 )
                 if stabilization_verdict_for_evidence is not None:
@@ -1282,6 +1299,7 @@ class AnalysisRunner:
                 ) = self._evaluate_dynamic_energy_gate(
                     deck_for_gate, odb, raw_odb, path, engineering_intent,
                     selection=locals().get("selection"),
+                    cached_energy=extracted_energy_evidence,
                 )
                 if dynamic_energy_verdict_for_evidence is not None:
                     dynamic_energy_threshold = (

@@ -60,6 +60,7 @@ class AbaqusConnectionError(AbaqusExecutionError):
 def classify_execution_error(message, payload=None):
     low = str(message or "").lower()
     markers = (("syntax", "syntax"), ("license", "license"), ("timeout", "timeout"),
+               ("stalled", "solver_stalled"), ("stall", "solver_stalled"),
                ("attributeerror", "abaqus_api"), ("typeerror", "abaqus_api"),
                ("keyerror", "object_missing"), ("indexerror", "object_missing"),
                ("region", "region_invalid"), ("set not found", "region_invalid"),
@@ -84,6 +85,7 @@ def get_recovery_hint(category):
         "solver": "Inspect the job/solver diagnostics and ODB/log state before retrying.",
         "odb": "Verify ODB path, job completion and ODB readability.",
         "timeout": "Inspect job state before retrying; a timeout does not prove solver failure.",
+        "solver_stalled": "Process stalled without stream or file activity; inspect contact chatter, overclosure, or micro-geometry deadlock.",
         "connection": "Check the local bridge process and connection before retrying.",
         "execution": "Inspect the structured error payload and current model state before retrying.",
     }.get(category, "Inspect the structured error payload and current model state before retrying.")

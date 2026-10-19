@@ -3,6 +3,12 @@ from .errors import AbaqusExecutionError, AbaqusConnectionError, classify_execut
 from .analysis_run import AnalysisRun, AnalysisRunState, AnalysisRunner
 from .artifacts import JobArtifact, JobArtifacts, inspect_job_artifacts
 from .batch import BatchExecutor, BatchResult
+from .watchdog import (
+    SolverProcessStalledError,
+    WatchedProcessResult,
+    run_with_watchdog,
+    kill_process_tree,
+)
 from .session_health import session_health
 from .license import (
     LicenseProvider,

@@ -499,6 +499,23 @@ P1.0 产品主入口已彻底消除高层自然语言需求与底层 20 个 L4 �
 - **仍不得宣称闭合的部分（Jev `qualified_but_actions_unproven`，`0.57`）**：「策略无法被 `python` 绕过」已由真机证明；但「类型化修复路径在真实无效几何上产出正确修复」**尚未验证**——需要故意损坏的 STEP 做前后对比。守卫与用户代码同进程，脚本理论上可调 `methodCallback.removeCallback` 注销它；守卫会记录自身注册与违规，使注销可被发现，但**不宣称进程内抗篡改**（Jev `guard_tamper_resistance = 0.6`）。因此本条维持 `IN_REVIEW`，残余风险已从「未知且无保护」降为「已知且可检测」。
 - 证据：`machine_validation/geometry_cleanup_guard.json`。
 
+#### REQ-P1-056: 求解进程活跃度看门狗与停滞熔断 (Solver Process Stall Watchdog & Heartbeat Monitor)
+- **背景与痛点**：在 MS13L 门手柄实测与复杂多接触非线性求解中，Abaqus 底层进程可能因几何微边修复、接触迭代反复震荡切步或 C++ 底层死循环而陷入“假死”。现有系统仅依赖全局 `timeout=3600` 硬超时，若发生静默停滞，Agent 和用户会被迫挂起干等长达 1 小时。
+- **Jev 裁决结论 (2026-10-20)**：Jev 裁决 `fix_watchdog_and_coldstart_first = 0.96`，确认停滞监控是消除用户侧恶劣假死体验的核心 P0 级基础设施；主从面法向与几何预检属于建模层增强，可后置。
+- **心跳与停滞判据 (Stall Threshold)**：
+  - 监控目标：求解器进程工作目录下的日志与输出工件（stdout/stderr 流、`.sta`、`.msg`、`.log`）。
+  - 判定规则：若子进程处于运行状态，但在可配置的停滞窗口（默认 `stall_timeout_seconds=120`，或根据分析步类型调整）内，所有监控目标均**零字节更新且零输出**，即判定为 `SOLVER_STALLED`。
+  - 熔断行为：立即执行受控终止（优先发送 SIGTERM/Process.terminate，超时后 SIGKILL/kill），回收系统资源与许可证令牌。
+  - 错误与自愈闭环：抛出强类型 `SolverProcessStalledError`，并在 `AnalysisRun` 状态中标记 `EngineeringStatus.SOLVER_FAILED`，诊断记录详细停滞持续时长与最后输出行，传递给 `remediator` 作为时间步或接触发散特征。
+
+#### REQ-P1-057: Headless ODB 数据提取单进程管线合并 (Single-Invocation Headless ODB Extraction Pipeline)
+- **背景与痛点**：单次仿真计算完成后，后处理与验收流程需要提取 ODB 拓扑与场变量摘要（`inspect_odb`）以及动力学/稳定化能量时程（`extract_energy_history`）。在没有进程内 `odbAccess` 的环境下，Agent 目前分别启动两次独立的 `abaqus python <script>` 子进程。每次子进程冷启动固定消耗 5~15 秒 FlexNet 许可证验证和 Python 初始化时间，累积造成 20~30 秒无谓延迟。
+- **Jev 裁决结论 (2026-10-20)**：Jev 裁决 `fix_watchdog_and_coldstart_first = 0.96`，要求将离散的提取步骤重构为一体化数据采集管线。
+- **单进程批量提取契约 (Batched Extraction Contract)**：
+  - 构建单次下发的 Python 批处理脚本，在一次 `abaqus python` 会话内打开一次 ODB，顺序提取：① ODB 结构元数据（步骤、帧数、场变量列表）；② 极值指标与节点位移/应力峰值；③ 关键历史能量时程（`ALLIE`、`ALLKE`、`ALLWK`、`ALLSE`、`ALLSD`、`ETOTAL` 等）。
+  - 结构化输出：以单一原子 JSON 载荷返回提取结果，通过 stdout JSON 信封返回给宿主 Python，规避多次文件 I/O 与反复启动开销。
+  - 兼容与降级：若单项提取失败（如特定变量未在 ODB 中请求），必须进行局部错误隔离并返回有效证据，不得因单一可选字段缺失导致整批数据提取崩溃。
+
 ### 7.2 JEV 意图识别与可审计工程决策层闭环 (TypeSafe JEV Decision Layer)
 
 **架构分权契约 (Architectural Authority Separation)**：
@@ -635,6 +652,8 @@ P1.0 产品主入口已彻底消除高层自然语言需求与底层 20 个 L4 �
 | **REQ-P1-053** | 核心与外部服务资格分离验证 | P1.4 | 测试矩阵与真实机证据 | 分立的资格认定状态 | Tier A | 严禁以离线测试冒充外部/真机通过 | 🟢 **QUALIFIED (Tiered Rules Active - Solver Unverified)** |
 | **REQ-P1-054** | 瞬态动态能量平衡契约 | P1.4 | ODB 能量历史 (`ALLIE/ALLKE/ALLWK/ETOTAL`) | 动态能量漂移判定与门禁 | Tier A | 阈值与求解器产品必须显式声明，未声明即阻断；不得与静力 `ALLSD/ALLSE` 共用阈值 | 🟡 **IN_REVIEW (Implicit and explicit both verified on real Abaqus 2025 runs; explicit `ALLWK` evidence-path defect fixed; multi-step binding still unverified on machine; `explicit_closure_sufficiency=0.15`)** |
 | **REQ-P1-055** | 几何清理策略全入口强制 | P1.4 | 几何清理策略与全部脚本生成路径 | 单一 choke point fail-closed 阻断 + 同进程运行时守卫 | Tier A | 默认拒绝不得被绕过；逃生通道不得洗白修复；虚拓扑仅候选 | 🟡 **IN_REVIEW (43 tests. The `python` escape hatch is now blocked at the call site by an official `methodCallback` runtime guard: direct call, `getattr` concatenation, `eval`, alias binding and indirect wrappers are all blocked on real Abaqus 2025, and a bare `except: pass` still leaves geometry unchanged. Real-API defect fixed (`repairGeometry`/`removeRedundantEntities` do not exist in 2025) and the always-True `valid_geometry` evidence gate corrected. Remaining gap per Jev `qualified_but_actions_unproven=0.57`: the typed repair path has not been proven to correct genuinely invalid geometry, and in-process tamper resistance is not claimed (`guard_tamper_resistance=0.6`))** |
+| **REQ-P1-056** | 求解进程活跃度看门狗与停滞熔断 | P1.4 | Abaqus 批处理/求解子进程 | 实时心跳监控、120s 停滞熔断、强类型 Stalled 诊断 | Tier A | 进程假死超过 120s 立即强杀并阻断交付 | 🟢 **QUALIFIED (8 tests. Real-time stdout/stderr daemon thread consumption, file heartbeat monitor, 120s stall circuit breaker with taskkill /F /T process tree termination, and SOLVER_STALLED diagnostic remediation)** |
+| **REQ-P1-057** | Headless ODB 数据提取单进程管线 | P1.4 | 求解生成的 ODB 文件 | 单次 `abaqus python` 会话提取全部场/历程变量与元数据 | Tier A | 提取脚本异常安全退出，缺失变量明确标记 | 🟢 **QUALIFIED (3 tests. Batched single-invocation pipeline for ODB metadata, field extrema, and energy history under atomic JSON envelope; eliminates redundant cold starts)** |
 | **REQ-P1-050** | 3D 轻量级视口与面/边拾取 | P1.5 | 3D 几何模型 | 拾取事件与几何面候选 | Tier C | 拾取越界或歧义安全校验 | 📋 **PLANNED** |
 | **REQ-P1-051** | HITL 交互决策卡片界面 | P1.5 | 确认请求对象 | 工程师点击决策与签名 | Tier C | 未确认操作严禁下发后端 | 📋 **PLANNED** |
 | **REQ-P1-052** | 企业级调度与案例资产管理 | P1.5 | 批量工程计算任务 | 许可令牌与计算节点分配 | Tier C | 许可抢占与排队超时处理 | 📋 **PLANNED** |

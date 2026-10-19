@@ -67,10 +67,11 @@ class BatchExecutor:
     live executor for model mutations that require a persistent CAE session.
     """
 
-    def __init__(self, launcher="abaqus", workdir=None, timeout=3600):
+    def __init__(self, launcher="abaqus", workdir=None, timeout=3600, stall_timeout=120):
         self.launcher = launcher
         self.workdir = workdir
         self.timeout = timeout
+        self.stall_timeout = stall_timeout
 
     @property
     def resolved_launcher(self) -> str:
@@ -102,9 +103,14 @@ class BatchExecutor:
         else:
             effective_workdir = os.path.abspath(effective_workdir)
             os.makedirs(effective_workdir, exist_ok=True)
-        proc = subprocess.run(
-            command, cwd=effective_workdir, capture_output=True, text=True,
-            timeout=timeout or self.timeout)
+        from .watchdog import run_with_watchdog
+        eff_stall = getattr(self, "stall_timeout", 120)
+        proc = run_with_watchdog(
+            command,
+            cwd=effective_workdir,
+            timeout=timeout or self.timeout,
+            stall_timeout=eff_stall,
+        )
         return BatchResult(command, proc.returncode, proc.stdout, proc.stderr,
                            effective_workdir)
 
