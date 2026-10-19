@@ -686,11 +686,15 @@ def compile_intent_to_actions(
                 raise ContactStabilizationError(
                     "contact stabilization was requested but no binding target was resolved"
                 )
+            # resolve_contact_stabilization either finds exactly one supported step
+            # or raises; carrying its decision forward keeps the deck consistent and
+            # avoids a second, independent guess in the script-emission block below.
+            _resolved = replace(_spec, target_step=_binding.target_step)
             for inter in interactions or ():
                 if inter.name != _binding.interaction_name:
                     continue
                 interactions = tuple(
-                    replace(b, stabilization=_spec.to_dict()) if b.name == _binding.interaction_name else b
+                    replace(b, stabilization=_resolved.to_dict()) if b.name == _binding.interaction_name else b
                     for b in interactions
                 )
 
