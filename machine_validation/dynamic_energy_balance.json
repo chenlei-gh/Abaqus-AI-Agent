@@ -1,0 +1,391 @@
+{
+  "schema_version": "dynamic_energy_balance_v1",
+  "case": "cantilever_transient_implicit_dynamic",
+  "machine": "Abaqus/Standard 2025 (local install)",
+  "solver_completion": "THE ANALYSIS HAS COMPLETED SUCCESSFULLY",
+  "odb_step": "Step-1",
+  "history_region": "Assembly ASSEMBLY",
+  "requested_variables": [
+    "ALLIE",
+    "ALLKE",
+    "ALLWK",
+    "ALLAE",
+    "ALLPD",
+    "ALLCD",
+    "ALLFD",
+    "ALLSD",
+    "ALLSE",
+    "ETOTAL"
+  ],
+  "present_variables": [
+    "ALLAE",
+    "ALLCD",
+    "ALLFD",
+    "ALLIE",
+    "ALLKE",
+    "ALLPD",
+    "ALLSD",
+    "ALLSE",
+    "ALLWK",
+    "ETOTAL"
+  ],
+  "history_summary": {
+    "ALLIE": {
+      "count": 4,
+      "first": [
+        0.0,
+        0.0
+      ],
+      "last": [
+        0.019999999552965164,
+        95601.3671875
+      ]
+    },
+    "ALLKE": {
+      "count": 4,
+      "first": [
+        0.0,
+        0.0
+      ],
+      "last": [
+        0.019999999552965164,
+        0.010935872793197632
+      ]
+    },
+    "ALLWK": {
+      "count": 4,
+      "first": [
+        0.0,
+        0.0
+      ],
+      "last": [
+        0.019999999552965164,
+        95867.2109375
+      ]
+    },
+    "ALLAE": {
+      "count": 4,
+      "first": [
+        0.0,
+        0.0
+      ],
+      "last": [
+        0.019999999552965164,
+        505.2413330078125
+      ]
+    },
+    "ALLPD": {
+      "count": 4,
+      "first": [
+        0.0,
+        0.0
+      ],
+      "last": [
+        0.019999999552965164,
+        0.0
+      ]
+    },
+    "ALLCD": {
+      "count": 4,
+      "first": [
+        0.0,
+        0.0
+      ],
+      "last": [
+        0.019999999552965164,
+        0.0
+      ]
+    },
+    "ALLFD": {
+      "count": 4,
+      "first": [
+        0.0,
+        0.0
+      ],
+      "last": [
+        0.019999999552965164,
+        0.0
+      ]
+    },
+    "ALLSD": {
+      "count": 4,
+      "first": [
+        0.0,
+        0.0
+      ],
+      "last": [
+        0.019999999552965164,
+        0.0
+      ]
+    },
+    "ALLSE": {
+      "count": 4,
+      "first": [
+        0.0,
+        0.0
+      ],
+      "last": [
+        0.019999999552965164,
+        95096.125
+      ]
+    },
+    "ETOTAL": {
+      "count": 4,
+      "first": [
+        0.0,
+        0.0
+      ],
+      "last": [
+        0.019999999552965164,
+        -265.83233642578125
+      ]
+    }
+  },
+  "metric": {
+    "definition": "max_over_frames(|ETOTAL| / E_ref)",
+    "reference": "max_over_frames(max(|ALLIE|, |ALLKE|, |ALLWK|))",
+    "identity": "ETOTAL = ALLIE + ALLKE - ALLWK",
+    "identity_tolerance": 0.001
+  },
+  "declared_policy": {
+    "threshold": 0.01,
+    "source": "engineering_policy.implicit_transient_1pct",
+    "note": "Policy of the tested configuration. The module ships no universal threshold and requires the caller to declare one per solver product."
+  },
+  "verdicts": {
+    "within_declared_policy": {
+      "status": "PASS",
+      "ratio": 0.002744799118227288,
+      "threshold": 0.01,
+      "threshold_source": "engineering_policy.implicit_transient_1pct",
+      "solver_product": "standard",
+      "reference_energy": 96849.46875,
+      "frame_count": 4,
+      "informative_frame_count": 3,
+      "max_identity_deviation": 0.006237030029296875,
+      "reason": "dynamic_energy_balance_within_threshold",
+      "details": {
+        "metric": "max_over_frames(|ETOTAL| / E_ref)",
+        "reference": "max_over_frames(max(|ALLIE|, |ALLKE|, |ALLWK|))",
+        "identity": "ETOTAL = ALLIE + ALLKE - ALLWK",
+        "contract": "dynamic_energy_balance",
+        "reference_energy": 96849.46875,
+        "neglectable_threshold": 9.684946875e-08,
+        "max_identity_limit": 96.84946875,
+        "identity_tolerance": 0.001,
+        "time_tolerance": 1e-09,
+        "frame_count": 4,
+        "informative_frame_count": 3,
+        "empty_frame_count": 1,
+        "empty_frame_indices": [
+          0
+        ],
+        "governing_frame_index": 3,
+        "governing_time": 0.019999999552965164,
+        "governing_residual": 265.83233642578125
+      }
+    },
+    "stricter_policy": {
+      "status": "FAIL",
+      "ratio": 0.002744799118227288,
+      "threshold": 0.0001,
+      "threshold_source": "engineering_policy_negative_control.implicit_transient_0p01pct",
+      "solver_product": "standard",
+      "reference_energy": 96849.46875,
+      "frame_count": 4,
+      "informative_frame_count": 3,
+      "max_identity_deviation": 0.006237030029296875,
+      "reason": "dynamic_energy_drift_exceeded",
+      "details": {
+        "metric": "max_over_frames(|ETOTAL| / E_ref)",
+        "reference": "max_over_frames(max(|ALLIE|, |ALLKE|, |ALLWK|))",
+        "identity": "ETOTAL = ALLIE + ALLKE - ALLWK",
+        "contract": "dynamic_energy_balance",
+        "reference_energy": 96849.46875,
+        "neglectable_threshold": 9.684946875e-08,
+        "max_identity_limit": 96.84946875,
+        "identity_tolerance": 0.001,
+        "time_tolerance": 1e-09,
+        "frame_count": 4,
+        "informative_frame_count": 3,
+        "empty_frame_count": 1,
+        "empty_frame_indices": [
+          0
+        ],
+        "governing_frame_index": 3,
+        "governing_time": 0.019999999552965164,
+        "governing_residual": 265.83233642578125
+      }
+    },
+    "no_threshold": {
+      "status": "BLOCKED",
+      "ratio": null,
+      "threshold": null,
+      "threshold_source": null,
+      "solver_product": "standard",
+      "reference_energy": null,
+      "frame_count": 0,
+      "informative_frame_count": 0,
+      "max_identity_deviation": null,
+      "reason": "dynamic_energy_threshold_not_configured",
+      "details": {
+        "metric": "max_over_frames(|ETOTAL| / E_ref)",
+        "reference": "max_over_frames(max(|ALLIE|, |ALLKE|, |ALLWK|))",
+        "identity": "ETOTAL = ALLIE + ALLKE - ALLWK",
+        "contract": "dynamic_energy_balance"
+      }
+    },
+    "no_solver_product": {
+      "status": "BLOCKED",
+      "ratio": null,
+      "threshold": null,
+      "threshold_source": null,
+      "solver_product": null,
+      "reference_energy": null,
+      "frame_count": 0,
+      "informative_frame_count": 0,
+      "max_identity_deviation": null,
+      "reason": "dynamic_energy_solver_product_not_declared",
+      "details": {
+        "metric": "max_over_frames(|ETOTAL| / E_ref)",
+        "reference": "max_over_frames(max(|ALLIE|, |ALLKE|, |ALLWK|))",
+        "identity": "ETOTAL = ALLIE + ALLKE - ALLWK",
+        "contract": "dynamic_energy_balance"
+      }
+    },
+    "missing_etotal": {
+      "status": "BLOCKED",
+      "ratio": null,
+      "threshold": 0.01,
+      "threshold_source": null,
+      "solver_product": "standard",
+      "reference_energy": null,
+      "frame_count": 0,
+      "informative_frame_count": 0,
+      "max_identity_deviation": null,
+      "reason": "missing_total_energy_history",
+      "details": {
+        "metric": "max_over_frames(|ETOTAL| / E_ref)",
+        "reference": "max_over_frames(max(|ALLIE|, |ALLKE|, |ALLWK|))",
+        "identity": "ETOTAL = ALLIE + ALLKE - ALLWK",
+        "contract": "dynamic_energy_balance"
+      }
+    },
+    "misaligned_history": {
+      "status": "BLOCKED",
+      "ratio": null,
+      "threshold": 0.01,
+      "threshold_source": null,
+      "solver_product": "standard",
+      "reference_energy": 96849.46875,
+      "frame_count": 4,
+      "informative_frame_count": 2,
+      "max_identity_deviation": 0.006237030029296875,
+      "reason": "unaligned_total_energy_history",
+      "details": {
+        "metric": "max_over_frames(|ETOTAL| / E_ref)",
+        "reference": "max_over_frames(max(|ALLIE|, |ALLKE|, |ALLWK|))",
+        "identity": "ETOTAL = ALLIE + ALLKE - ALLWK",
+        "contract": "dynamic_energy_balance",
+        "reference_energy": 96849.46875,
+        "neglectable_threshold": 9.684946875e-08,
+        "max_identity_limit": 96.84946875,
+        "identity_tolerance": 0.001,
+        "time_tolerance": 1e-09,
+        "frame_count": 4,
+        "informative_frame_count": 2,
+        "empty_frame_count": 1,
+        "empty_frame_indices": [
+          0
+        ],
+        "blocked_frame_index": 3
+      }
+    },
+    "single_frame": {
+      "status": "INCOMPLETE",
+      "ratio": null,
+      "threshold": 0.01,
+      "threshold_source": null,
+      "solver_product": "standard",
+      "reference_energy": 95867.2109375,
+      "frame_count": 1,
+      "informative_frame_count": 1,
+      "max_identity_deviation": 0.00047770142555236816,
+      "reason": "insufficient_informative_frames",
+      "details": {
+        "metric": "max_over_frames(|ETOTAL| / E_ref)",
+        "reference": "max_over_frames(max(|ALLIE|, |ALLKE|, |ALLWK|))",
+        "identity": "ETOTAL = ALLIE + ALLKE - ALLWK",
+        "contract": "dynamic_energy_balance",
+        "reference_energy": 95867.2109375,
+        "neglectable_threshold": 9.58672109375e-08,
+        "max_identity_limit": 95.8672109375,
+        "identity_tolerance": 0.001,
+        "time_tolerance": 1e-09,
+        "frame_count": 1,
+        "informative_frame_count": 1,
+        "empty_frame_count": 0,
+        "empty_frame_indices": [],
+        "minimum_informative_frames": 2
+      }
+    }
+  },
+  "acceptance_gates": {
+    "within_policy": {
+      "gate": "PASS",
+      "acceptance_status": "PASS",
+      "deliverable": true
+    },
+    "stricter_policy": {
+      "gate": "FAIL",
+      "acceptance_status": "FAIL",
+      "deliverable": false,
+      "failures": [
+        "dynamic_energy_exceeded:0.0027448"
+      ]
+    },
+    "missing_etotal": {
+      "gate": "BLOCKED",
+      "acceptance_status": "BLOCKED",
+      "deliverable": false,
+      "failures": [
+        "dynamic_energy_unverifiable:missing_total_energy_history"
+      ]
+    },
+    "single_frame": {
+      "gate": "INCOMPLETE",
+      "acceptance_status": "BLOCKED",
+      "deliverable": false,
+      "failures": [
+        "dynamic_energy_incomplete:insufficient_informative_frames"
+      ]
+    },
+    "not_requested": {
+      "gate": "SKIPPED",
+      "acceptance_status": "PASS",
+      "deliverable": true
+    }
+  },
+  "verified_this_round": [
+    "A real Abaqus/Standard 2025 transient implicit solve completed successfully.",
+    "ALLIE, ALLKE, ALLWK, ALLSE and ETOTAL were produced by the solver and read back through the product extractor.",
+    "The ETOTAL identity held on every informative frame within the relative tolerance.",
+    "The verdict is PASS only under the declared policy and FAIL under a stricter one on the same data.",
+    "Absent ETOTAL, an undeclared solver product and an undeclared threshold all block rather than pass.",
+    "A single-frame history is INCOMPLETE and blocks delivery.",
+    "An unrequested gate is SKIPPED and does not change acceptance."
+  ],
+  "not_verified": [
+    "Explicit-product thresholds: no explicit run was made in this round.",
+    "Multi-step dynamic models: step binding is covered by offline tests, not by a second real solve.",
+    "Generalisation beyond this cantilever configuration."
+  ],
+  "residual_risk": {
+    "level": "medium",
+    "reasons": [
+      "Only one implicit dynamic configuration was solved on the machine.",
+      "The identity tolerance of 1e-3 is calibrated for single-precision output, not for all output precisions.",
+      "The gate is opt-in, so a dynamic run that never declares a policy is not covered by it."
+    ]
+  }
+}

@@ -50,9 +50,12 @@ def profile_for_solver_selection(selection):
         return PostProcessingProfile(
             "dynamic_implicit",
             ("max_mises", "max_displacement"),
-            (),
-            ("reaction_balance",),
-            ("stress_contour", "displacement_contour"),
+            # Requested so the dynamic energy balance gate can have evidence at all.
+            # Requesting output is not a claim that the balance is acceptable; the
+            # contract still blocks until the caller declares a threshold.
+            ("ALLIE", "ALLKE", "ALLWK", "ETOTAL"),
+            ("reaction_balance", "energy_balance"),
+            ("stress_contour", "displacement_contour", "energy_history"),
             (),
             "Step-1",
         )

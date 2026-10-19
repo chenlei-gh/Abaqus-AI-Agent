@@ -74,6 +74,9 @@ def test_extract_energy_evidence_requests_standard_energy_history():
     assert "ALLKE" in result["variables"]
     assert "ALLWK" in result["variables"]
     assert "ALLAE" in result["variables"]
+    # The dynamic energy balance contract needs the solver's own residual, so it
+    # must be requested here rather than reconstructed from the components.
+    assert "ETOTAL" in result["variables"]
     assert "historyRegions" in executor.code
     assert "historyOutputs" in executor.code
 

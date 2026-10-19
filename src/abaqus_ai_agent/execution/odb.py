@@ -349,9 +349,17 @@ def extract_energy_history(executor, path, step, region, variables=(
 def extract_energy_evidence(executor, path, step, history_region,
                             variables=(
                                 "ALLIE", "ALLKE", "ALLWK", "ALLAE",
-                                "ALLPD", "ALLCD", "ALLFD", "ALLSD", "ALLSE"
+                                "ALLPD", "ALLCD", "ALLFD", "ALLSD", "ALLSE",
+                                "ETOTAL",
                             )):
-    """Collect energy history evidence without applying engineering thresholds."""
+    """Collect energy history evidence without applying engineering thresholds.
+
+    ``ETOTAL`` is requested alongside its components because the dynamic energy
+    balance contract evaluates the solver's own residual and cross-checks the
+    identity ``ETOTAL = ALLIE + ALLKE - ALLWK``. Requesting it here does not make
+    the variable exist: the deck must still ask for it, and the contract blocks
+    when it is absent rather than substituting a component.
+    """
     history = extract_energy_history(
         executor, path, step, history_region, variables
     )

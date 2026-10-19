@@ -18,6 +18,7 @@ CANONICAL_GATE_ORDER = (
     "procedure",              # Gate 10
     "thermal_balance",        # Gate 11
     "stabilization_energy",   # Gate 11b (static stabilization contract)
+    "dynamic_energy",         # Gate 11c (transient energy balance contract)
     "criteria",               # Gate 12
     "connector_kinematics",   # Gate 13
     "fmbd_dynamics",          # Gate 14
@@ -446,6 +447,7 @@ class AcceptanceResult:
     deliverable: bool = False  # Strictly True iff acceptance_status == "PASS" and result_validity == "VALID"
     findings: AcceptanceFindings = field(default_factory=AcceptanceFindings)
     stabilization_energy: Optional[Dict[str, Any]] = None
+    dynamic_energy: Optional[Dict[str, Any]] = None
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -466,6 +468,7 @@ class AcceptanceResult:
             "gates": dict(self.gates),
             "gate_justifications": dict(self.gate_justifications),
             "stabilization_energy": dict(self.stabilization_energy) if self.stabilization_energy else None,
+            "dynamic_energy": dict(self.dynamic_energy) if self.dynamic_energy else None,
             "findings": {
                 "failures": list(self.findings.failures),
                 "blocked": list(self.findings.blocked),
@@ -641,7 +644,12 @@ def evaluate_result_acceptance(result_status, numerical=None, engineering=None,
                                explicit_material_mapping_complete=None, explicit_missing_regions=None,
                                stabilization_energy=None, stabilization_threshold=None,
                                stabilization_threshold_source=None,
-                               stabilization_enabled=None):
+                               stabilization_enabled=None,
+                               dynamic_energy=None, dynamic_energy_threshold=None,
+                               dynamic_energy_threshold_source=None,
+                               dynamic_energy_solver_product=None,
+                               dynamic_energy_enabled=None,
+                               analysis_is_dynamic=None):
     """Combine execution/result evidence with deterministic acceptance criteria.
 
     - ResultRequirement & Physics Domain profile drive mandatory gates & required metrics.
@@ -980,6 +988,66 @@ def evaluate_result_acceptance(result_status, numerical=None, engineering=None,
     else:
         gates["stabilization_energy"] = "SKIPPED"
 
+    # Gate 11c: Transient Dynamic Energy Balance Gate
+    #
+    # A transient integration that drifts is not made valid by the step having
+    # converged. This gate is opt-in: the caller declares the analysis dynamic
+    # *and* turns the gate on, because the contract depends on a solver-specific
+    # threshold the module deliberately does not invent. A FAIL here is a physical
+    # violation; BLOCKED and INCOMPLETE both mean no delivery, but they are
+    # recorded distinctly because INCOMPLETE did measure something.
+    dynamic_verdict = None
+    effective_dynamic_enabled = bool(dynamic_energy_enabled)
+    if effective_dynamic_enabled or dynamic_energy is not None:
+        from .contracts.dynamic_energy import (
+            DynamicEnergyVerdict,
+            STATUS_BLOCKED,
+            STATUS_FAIL,
+            STATUS_INCOMPLETE,
+            STATUS_PASS,
+            STATUS_SKIPPED,
+            evaluate_dynamic_energy_balance,
+        )
+
+        if isinstance(dynamic_energy, DynamicEnergyVerdict):
+            dynamic_verdict = dynamic_energy
+        else:
+            dynamic_verdict = evaluate_dynamic_energy_balance(
+                dynamic_energy,
+                dynamic_energy_threshold,
+                solver_product=dynamic_energy_solver_product,
+                analysis_is_dynamic=(
+                    True if analysis_is_dynamic is None else bool(analysis_is_dynamic)
+                ),
+                threshold_source=dynamic_energy_threshold_source,
+            )
+
+        gates["dynamic_energy"] = dynamic_verdict.status
+        if dynamic_verdict.status == STATUS_FAIL:
+            failures.append(
+                "dynamic_energy_exceeded:%s" % _format_ratio(dynamic_verdict.ratio)
+            )
+        elif dynamic_verdict.status == STATUS_INCOMPLETE:
+            err = "dynamic_energy_incomplete:%s" % (
+                dynamic_verdict.reason or "unknown"
+            )
+            failures.append(err)
+            blocked.append(err)
+        elif dynamic_verdict.status == STATUS_BLOCKED:
+            err = "dynamic_energy_unverifiable:%s" % (
+                dynamic_verdict.reason or "unknown"
+            )
+            failures.append(err)
+            blocked.append(err)
+        elif dynamic_verdict.status == STATUS_SKIPPED:
+            gates["dynamic_energy"] = STATUS_SKIPPED
+        elif dynamic_verdict.status != STATUS_PASS:
+            err = "dynamic_energy_unverifiable:%s" % dynamic_verdict.status
+            failures.append(err)
+            blocked.append(err)
+    else:
+        gates["dynamic_energy"] = "SKIPPED"
+
     # Required Metrics Evaluation against Values Map
     values_map = values or {}
     for rm in effective_required_metrics:
@@ -1169,6 +1237,8 @@ def evaluate_result_acceptance(result_status, numerical=None, engineering=None,
         and not f.startswith("material_mapping:")
         and not f.startswith("elastic_range_exceeded")
         and not f.startswith("stabilization_energy_unverifiable:")
+        and not f.startswith("dynamic_energy_unverifiable:")
+        and not f.startswith("dynamic_energy_incomplete:")
         for f in failures
     )
 
@@ -1322,6 +1392,9 @@ def evaluate_result_acceptance(result_status, numerical=None, engineering=None,
         stabilization_energy=(
             stabilization_verdict.to_dict() if stabilization_verdict is not None else None
         ),
+        dynamic_energy=(
+            dynamic_verdict.to_dict() if dynamic_verdict is not None else None
+        ),
     )
 
 
@@ -1360,6 +1433,12 @@ def evaluate_production_acceptance(
     stabilization_threshold: Optional[float] = None,
     stabilization_threshold_source: Optional[str] = None,
     stabilization_enabled: Optional[bool] = None,
+    dynamic_energy: Optional[Any] = None,
+    dynamic_energy_threshold: Optional[float] = None,
+    dynamic_energy_threshold_source: Optional[str] = None,
+    dynamic_energy_solver_product: Optional[str] = None,
+    dynamic_energy_enabled: Optional[bool] = None,
+    analysis_is_dynamic: Optional[bool] = None,
     **kwargs,
 ) -> AcceptanceResult:
     """Strict Production Acceptance Gate with Full Causal & Grounding Binding.
@@ -1616,6 +1695,12 @@ def evaluate_production_acceptance(
         stabilization_threshold=stabilization_threshold,
         stabilization_threshold_source=stabilization_threshold_source,
         stabilization_enabled=stabilization_enabled,
+        dynamic_energy=dynamic_energy,
+        dynamic_energy_threshold=dynamic_energy_threshold,
+        dynamic_energy_threshold_source=dynamic_energy_threshold_source,
+        dynamic_energy_solver_product=dynamic_energy_solver_product,
+        dynamic_energy_enabled=dynamic_energy_enabled,
+        analysis_is_dynamic=analysis_is_dynamic,
     )
 
     if causal_failures or causal_blocked or causal_evidence_errors:

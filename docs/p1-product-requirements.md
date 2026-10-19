@@ -455,6 +455,26 @@ P1.0 产品主入口已彻底消除高层自然语言需求与底层 20 个 L4 �
 - **物理守恒门禁检验**：自愈引入的数值稳定项必须经验收门禁确认未扭曲主物理响应。静力自动稳定化以 `ALLSD/ALLSE` 逐帧最大比值对照显式阈值判定；动态能量平衡属于另一类契约，不得混用同一阈值。
 - **退化解红线（本轮修复）**：Abaqus 可能对数值发散的作业仍报 `COMPLETED SUCCESSFULLY` 并写出 `NaN` 场。ODB 校验现增加退化解判据——核心场（`U/UT/UR/S/RF/RM`）有限值占比低于 50%，或某帧所有含数据的场均非有限，即判 `verified=False` 并阻断交付；此前仅校验二进制结构与网格，`NaN` 结果可被判为 `PASS/VALID`。
 
+#### REQ-P1-054: 瞬态动态能量平衡契约（独立于静力稳定化）
+- **指标定义（显式裁定，不在运行时推断）**：
+  - `E_ref = max over frames of max(|ALLIE|, |ALLKE|, |ALLWK|)`
+  - `r = max over frames of (|ETOTAL| / E_ref)`
+  - 使用 `ETOTAL` 的**绝对值**作为残差：区间指标（`max−min`）在大残差近乎恒定时会误报为守恒。`E_ref` 取三者最大值而非单一分量，避免某个动能安静的帧压缩分母并制造失败。`ETOTAL` 自身**不计入** `E_ref`，否则大失衡会抬高测量它的分母。
+- **恒等式校验**：逐帧验证 `ETOTAL = ALLIE + ALLKE − ALLWK`，容差**相对该帧自身能量尺度**（`1e-3`）。使用绝对下限会让容差在不同单位制下含义漂移：对焦耳量级模型，`1e-3` 下限等于默许 `1e3` 的绝对误差。违反即 `BLOCKED`，不得只采信单一残差数字。
+- **求解器产品与阈值均由调用方声明**：`solver_product ∈ {standard, explicit}`；阈值无内置默认值。隐式与显式积分的耗散/累积机制不同，**不得默认共用同一阈值**（Jev 0.45，故按产品分别声明）。
+- **状态语义**：`PASS` / `FAIL`（物理违反）/ `BLOCKED`（证据缺失、非有限、时间序列无法对齐、恒等式违反、全零参考）/ `INCOMPLETE`（确实测到了东西但可测残差帧不足两帧）/ `SKIPPED`（非动态分析）。`INCOMPLETE` 与 `BLOCKED` 同属阻断交付，但分开记录。
+- **可测帧口径**：残差低于 `1e-12 × E_ref` 的帧（实践中即 `t = 0`）不参与漂移趋势判定——两帧全空互相吻合不构成守恒测量。
+- **多步归属**：只有一个非 Initial 分析步时视为唯一目标步；多步时**必须**由调用方指定 `dynamic_energy_step`，缺失或歧义一律 `BLOCKED`。**不得**假定最后一个分析步就是关注事件。
+- **门禁接入**：`acceptance.py` 新增 Gate 11c `dynamic_energy`。`FAIL` → 物理失败；`BLOCKED`/`INCOMPLETE` → 阻断且不可交付；`SKIPPED` → 不影响其余门禁。
+- **范围（opt-in，Jev 0.74）**：门禁由调用方显式开启并给出阈值。未请求时 `SKIPPED`，不得对未声明策略的动态工作流施加未声明的约束。
+
+> 实现状态（2026-10-19，真实机验证完成，契约未宣告闭合）：
+> - 契约：`contracts/dynamic_energy.py`；门禁：`acceptance.py` Gate 11c；编排：`AnalysisRunner._evaluate_dynamic_energy_gate`；取证：`execution/odb.extract_energy_evidence` 现请求 `ETOTAL`；`DYNAMIC_IMPLICIT` 后处理 profile 现请求 `ALLIE/ALLKE/ALLWK/ETOTAL`（否则该门禁永远缺少证据）。
+> - **真实机实测（Abaqus/Standard 2025，本机）**：现场新建并求解悬臂梁瞬态隐式动力学算例，`.sta` 报 `THE ANALYSIS HAS COMPLETED SUCCESSFULLY`；经产品自身提取器读回 `ALLIE/ALLKE/ALLWK/ALLSE/ETOTAL` 全部存在。`E_ref = 96849.47`、`max|ETOTAL| = 265.83`、`r = 2.7448e-3`、恒等式偏差 `6.24e-3` 绝对（相对 `6.4e-8`）。同一数据：1% 策略 → `PASS` 且可交付；`1e-4` 策略 → `FAIL`；缺 `ETOTAL` → `BLOCKED`；单帧 → `INCOMPLETE` 且阻断；未请求门禁 → `SKIPPED` 且不影响验收。
+> - **真实数据暴露并修复的两个缺陷**：① 恒等式容差曾锚定 `max(reference, 1.0)`，在焦耳量级模型里等于默许 `1e3` 绝对误差，已改为逐帧相对尺度；② 零残差帧曾被计入「信息帧」，使只有一次真实测量的历史也能满足两帧门槛，现单独计数且不计入趋势判定。
+> - **未验证项（不得宣称闭合）**：显式产品阈值未做真机验证；多步动态步归属仅有离线测试；仅一种悬臂构型，不能外推。Jev 终审 `may_declare_dynamic_contract_closed = 0.52`，`residual_risk = medium`，`next_action = explicit_dynamic_case`。
+> - 证据：`machine_validation/dynamic_energy_balance.json`。
+
 ### 7.2 JEV 意图识别与可审计工程决策层闭环 (TypeSafe JEV Decision Layer)
 
 **架构分权契约 (Architectural Authority Separation)**：
@@ -589,6 +609,7 @@ P1.0 产品主入口已彻底消除高层自然语言需求与底层 20 个 L4 �
 | **REQ-P1-048** | 专有服务接入隔离与零专有泄露 | P1.4 | 公开核心代码库 | 供应商中立抽象与纯净核心 | Tier A | 严禁硬编码专有端点与私有协议 | 🟢 **QUALIFIED (Code Tree Clean)** |
 | **REQ-P1-049** | 安全凭据保护与密钥零泄露红线 | P1.4 | 环境变量与配置工件 | 深度脱敏审计追踪与零泄露 | Tier A | 杜绝 URL/Token/Prompt 泄露 | 🟢 **QUALIFIED (Credentials Deep Sanitized)** |
 | **REQ-P1-053** | 核心与外部服务资格分离验证 | P1.4 | 测试矩阵与真实机证据 | 分立的资格认定状态 | Tier A | 严禁以离线测试冒充外部/真机通过 | 🟢 **QUALIFIED (Tiered Rules Active - Solver Unverified)** |
+| **REQ-P1-054** | 瞬态动态能量平衡契约 | P1.4 | ODB 能量历史 (`ALLIE/ALLKE/ALLWK/ETOTAL`) | 动态能量漂移判定与门禁 | Tier A | 阈值与求解器产品必须显式声明，未声明即阻断；不得与静力 `ALLSD/ALLSE` 共用阈值 | 🟡 **IN_REVIEW (Contract + gate + real implicit-machine run verified; `may_declare_dynamic_contract_closed=0.52`; explicit path and multi-step binding still unverified on machine)** |
 | **REQ-P1-050** | 3D 轻量级视口与面/边拾取 | P1.5 | 3D 几何模型 | 拾取事件与几何面候选 | Tier C | 拾取越界或歧义安全校验 | 📋 **PLANNED** |
 | **REQ-P1-051** | HITL 交互决策卡片界面 | P1.5 | 确认请求对象 | 工程师点击决策与签名 | Tier C | 未确认操作严禁下发后端 | 📋 **PLANNED** |
 | **REQ-P1-052** | 企业级调度与案例资产管理 | P1.5 | 批量工程计算任务 | 许可令牌与计算节点分配 | Tier C | 许可抢占与排队超时处理 | 📋 **PLANNED** |

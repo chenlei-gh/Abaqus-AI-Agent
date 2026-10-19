@@ -456,6 +456,159 @@ class AnalysisRunner:
             threshold_source=threshold_source,
         )
 
+    _DYNAMIC_STRATEGIES = (
+        "DYNAMIC_IMPLICIT",
+        "DYNAMIC_EXPLICIT",
+        "QUASI_STATIC_EXPLICIT",
+    )
+
+    @staticmethod
+    def _solver_product_for_strategy(strategy):
+        """Map a solver strategy to the contract's declared solver product."""
+        if str(strategy or "").upper().startswith("DYNAMIC_EXPLICIT") or str(
+            strategy or ""
+        ).upper() == "QUASI_STATIC_EXPLICIT":
+            return "explicit"
+        return "standard"
+
+    def _resolve_dynamic_energy_settings(self, engineering_intent):
+        """Caller-declared dynamic energy policy, or Nones.
+
+        The contract ships no universal drift threshold because implicit and
+        explicit integration do not dissipate energy the same way. An undeclared
+        threshold therefore blocks the gate; it is never filled with a default.
+        Turning the gate on is likewise an explicit caller decision, so a dynamic
+        run that has not asked for it is not blocked by a rule it never opted into.
+        """
+        if engineering_intent is None:
+            return None, None, False
+        metadata = getattr(engineering_intent, "metadata", None) or {}
+        if not isinstance(metadata, dict):
+            return None, None, False
+
+        threshold = None
+        threshold_source = None
+        for key in (
+            "dynamic_energy_threshold",
+            "max_dynamic_energy_drift",
+            "dynamic_energy_balance_threshold",
+        ):
+            raw = metadata.get(key)
+            if isinstance(raw, bool) or raw is None:
+                continue
+            try:
+                value = float(raw)
+            except (TypeError, ValueError):
+                continue
+            if value == value and value not in (float("inf"), float("-inf")) and value >= 0.0:
+                threshold = value
+                threshold_source = "intent.metadata.%s" % key
+                break
+
+        enabled_raw = metadata.get("dynamic_energy_gate")
+        if enabled_raw is None:
+            enabled_raw = metadata.get("dynamic_energy_balance_gate")
+        enabled = enabled_raw is True
+        return threshold, threshold_source, enabled
+
+    def _resolve_dynamic_target_step(self, odb_summary, deck_text):
+        """Return ``(target_step_or_None, reason)`` for the dynamic gate.
+
+        A dynamic model may hold several steps and only one of them is the event
+        of interest. The last step is not assumed to be that event: the caller may
+        name it in the intent, otherwise a single non-initial step is unambiguous.
+        """
+        steps = [
+            str(name) for name in ((odb_summary or {}).get("steps") or ())
+            if str(name).strip().lower() != "initial"
+        ]
+        if not steps:
+            return None, "dynamic_step_missing_in_odb"
+        if len(steps) == 1:
+            return steps[0], ""
+        return None, "dynamic_step_ambiguous"
+
+    def _evaluate_dynamic_energy_gate(self, deck_text, odb_summary, raw_odb,
+                                      odb_path, engineering_intent, selection=None):
+        """Return ``(gate_enabled, verdict_or_None)`` for the dynamic gate.
+
+        Only an explicitly requested gate is evaluated. When it is requested, the
+        evidence must come from one identifiable dynamic step: borrowing the last
+        step of a multi-step model would attribute one event's balance to another.
+        """
+        from ..contracts.dynamic_energy import (
+            STATUS_BLOCKED,
+            DynamicEnergyVerdict,
+            evaluate_dynamic_energy_balance,
+        )
+
+        threshold, threshold_source, enabled = self._resolve_dynamic_energy_settings(
+            engineering_intent
+        )
+        if not enabled:
+            return False, None
+
+        metadata = getattr(engineering_intent, "metadata", None) or {}
+        declared_step = None
+        if isinstance(metadata, dict):
+            declared_step = metadata.get("dynamic_energy_step") or metadata.get(
+                "dynamic_step"
+            )
+
+        target_step, reason = self._resolve_dynamic_target_step(odb_summary, deck_text)
+        if isinstance(declared_step, str) and declared_step.strip():
+            available = [
+                str(name) for name in ((odb_summary or {}).get("steps") or ())
+                if str(name).strip().lower() != "initial"
+            ]
+            exact = [name for name in available if name == declared_step]
+            folded = [name for name in available if name.lower() == declared_step.lower()]
+            if len(exact) == 1:
+                target_step, reason = exact[0], ""
+            elif len(folded) == 1:
+                target_step, reason = folded[0], ""
+            else:
+                target_step, reason = None, "dynamic_step_missing_in_odb"
+
+        product = self._solver_product_for_strategy(getattr(selection, "strategy", None))
+
+        if target_step is None:
+            return True, DynamicEnergyVerdict(
+                status=STATUS_BLOCKED,
+                threshold=threshold,
+                threshold_source=threshold_source,
+                solver_product=product,
+                reason=reason or "dynamic_step_unresolved",
+                details={"declared_step": declared_step},
+            )
+
+        history_region = self._resolve_energy_history_region(raw_odb) or "Assembly ASSEMBLY"
+        try:
+            from .odb import extract_energy_evidence
+            energy = extract_energy_evidence(
+                self.executor, odb_path, target_step, history_region
+            )
+        except Exception as exc:
+            return True, DynamicEnergyVerdict(
+                status=STATUS_BLOCKED,
+                threshold=threshold,
+                threshold_source=threshold_source,
+                solver_product=product,
+                reason="dynamic_energy_extraction_failed",
+                details={
+                    "error": "dynamic_energy_extraction_failed:%s" % exc,
+                    "target_step": target_step,
+                },
+            )
+
+        return True, evaluate_dynamic_energy_balance(
+            energy,
+            threshold,
+            solver_product=product,
+            analysis_is_dynamic=True,
+            threshold_source=threshold_source,
+        )
+
     def run(self, model_name, job_name, odb_path=None, criteria=(),
             result_values=None, numerical_verification=None, engineering_checks=None,
             mesh_quality=None, mesh_convergence=None, fatigue=None, contact_diagnostics=None,
@@ -1114,6 +1267,33 @@ class AnalysisRunner:
                         engineering_intent
                     )
 
+            # Dynamic energy balance (Gate 11c). Opt-in by contract design: the
+            # caller must declare the gate and the solver-specific threshold, so an
+            # unrequested gate is SKIPPED rather than an unstated enforcement.
+            auto_dynamic_energy_enabled = False
+            dynamic_energy_verdict_for_evidence = None
+            dynamic_energy_threshold = None
+            dynamic_energy_threshold_source = None
+            dynamic_energy_solver_product = None
+            if result_source == "odb" and path:
+                (
+                    auto_dynamic_energy_enabled,
+                    dynamic_energy_verdict_for_evidence,
+                ) = self._evaluate_dynamic_energy_gate(
+                    deck_for_gate, odb, raw_odb, path, engineering_intent,
+                    selection=locals().get("selection"),
+                )
+                if dynamic_energy_verdict_for_evidence is not None:
+                    dynamic_energy_threshold = (
+                        dynamic_energy_verdict_for_evidence.threshold
+                    )
+                    dynamic_energy_threshold_source = (
+                        dynamic_energy_verdict_for_evidence.threshold_source
+                    )
+                    dynamic_energy_solver_product = (
+                        dynamic_energy_verdict_for_evidence.solver_product
+                    )
+
             if require_production:
                 run_snapshot_for_acc = run.with_state(
                     run.state,
@@ -1145,6 +1325,11 @@ class AnalysisRunner:
                     stabilization_threshold=threshold,
                     stabilization_threshold_source=threshold_source,
                     stabilization_enabled=auto_stabilization_enabled,
+                    dynamic_energy=dynamic_energy_verdict_for_evidence,
+                    dynamic_energy_threshold=dynamic_energy_threshold,
+                    dynamic_energy_threshold_source=dynamic_energy_threshold_source,
+                    dynamic_energy_solver_product=dynamic_energy_solver_product,
+                    dynamic_energy_enabled=auto_dynamic_energy_enabled,
                 )
             else:
                 accepted = evaluate_result_acceptance(
@@ -1170,6 +1355,11 @@ class AnalysisRunner:
                     stabilization_threshold=threshold,
                     stabilization_threshold_source=threshold_source,
                     stabilization_enabled=auto_stabilization_enabled,
+                    dynamic_energy=dynamic_energy_verdict_for_evidence,
+                    dynamic_energy_threshold=dynamic_energy_threshold,
+                    dynamic_energy_threshold_source=dynamic_energy_threshold_source,
+                    dynamic_energy_solver_product=dynamic_energy_solver_product,
+                    dynamic_energy_enabled=auto_dynamic_energy_enabled,
                 )
             verification_evidence = []
             if numerical_verification is not None:
@@ -1216,6 +1406,11 @@ class AnalysisRunner:
                 verification_evidence.append(Evidence(
                     kind="stabilization_energy", source="odb",
                     locator=job_name, value=stabilization_verdict_for_evidence.to_dict(),
+                ))
+            if dynamic_energy_verdict_for_evidence is not None:
+                verification_evidence.append(Evidence(
+                    kind="dynamic_energy", source="odb",
+                    locator=job_name, value=dynamic_energy_verdict_for_evidence.to_dict(),
                 ))
             if sensitivity is not None:
                 verification_evidence.append(Evidence(

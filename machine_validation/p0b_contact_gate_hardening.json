@@ -60,8 +60,8 @@
     }
   },
   "artifact_locations": {
-    "positive": "C:/Users/DELL/AppData/Local/Temp/p0b_gap3 (failures), p0b_gap2 (stabilized)",
-    "negative_controls": "C:/Users/DELL/AppData/Local/Temp/p0b_nocontact, C:/Users/DELL/AppData/Local/Temp/p0b_tieprobe"
+    "positive": "%TEMP%/p0b_gap3 (failures), %TEMP%/p0b_gap2 (stabilized)",
+    "negative_controls": "%TEMP%/p0b_nocontact, %TEMP%/p0b_tieprobe"
   },
   "verification": {
     "targeted_tests": "tests/test_contact_opening_diagnosis.py, tests/test_p1_4_self_healing.py: 33 passed",
