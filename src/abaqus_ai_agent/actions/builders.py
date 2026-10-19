@@ -215,7 +215,11 @@ def remove_redundant_entities(model, part): return _action("remove_redundant_ent
 def inspect_mesh(model, part): return _action("inspect_mesh", model, part=part)
 def mesh_quality(model, part, **params): return _action("mesh_quality", model, part=part, **params)
 def contact_property(model, name, normal_behavior=True, pressure_overclosure="HARD", tangential_behavior=None): return _action("contact_property", model, name=name, normal_behavior=normal_behavior, pressure_overclosure=pressure_overclosure, tangential_behavior=tangential_behavior)
-def contact(model, name, master_expression, slave_expression, property, sliding="FINITE", step="Initial"): return _action("contact", model, name=name, master_expression=master_expression, slave_expression=slave_expression, property=property, sliding=sliding, step=step)
+def contact(model, name, master_expression, slave_expression, property, sliding="FINITE", step="Initial", stabilization=None):
+    if stabilization is not None:
+        from ..contracts.contact_stabilization import coerce_contact_stabilization
+        coerce_contact_stabilization(stabilization)
+    return _action("contact", model, name=name, master_expression=master_expression, slave_expression=slave_expression, property=property, sliding=sliding, step=step, stabilization=stabilization)
 
 def reference_point(model, name, coordinates, part=None):
     return _action("reference_point", model, name=name, coordinates=tuple(coordinates), part=part)

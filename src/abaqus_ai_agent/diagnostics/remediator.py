@@ -124,7 +124,7 @@ class SolverRemediator:
                     description=(
                         "Refine non-linear step incrementation: reduce initial_inc to 0.01, "
                         "lower min_inc to 1e-8, increase max_num_inc to 500, and activate artificial damping stabilization. "
-                        "Energy dissipation ratio ALLSD/ALLIE must remain <= 5%."
+                        "Static stabilization dissipation ALLSD/ALLSE must be checked against an explicit threshold."
                     ),
                     parameters={
                         "initial_inc": 0.01,
@@ -136,7 +136,8 @@ class SolverRemediator:
                     },
                     rationale=(
                         "Smaller increments and artificial damping can change the solved problem. "
-                        "A 5% dissipation cap is a guard, not proof the physics is unchanged. "
+                        "The 5% static dissipation ratio is a proposed policy for this remediation, "
+                        "not proof the physics is unchanged; the acceptance gate requires it to be explicit. "
                         "Application requires explicit confirmation."
                     ),
                     risk_level=RemediationRisk.HIGH,
@@ -150,7 +151,7 @@ class SolverRemediator:
                     action_id=f"rem_contact_{uuid.uuid4().hex[:6]}",
                     category=RemediationCategory.CONTACT_STABILIZATION,
                     diagnosis_id="CONTACT_CHATTER",
-                    description="Enable contact stabilization damping to eliminate opening/closing oscillation (dissipation ratio <= 5%).",
+                    description="Enable contact stabilization damping to eliminate opening/closing oscillation (static dissipation ratio against ALLSE is policy-checked).",
                     parameters={
                         "stabilization_method": "DAMPING_FACTOR",
                         "stabilization_magnitude": 1e-4,
@@ -172,7 +173,7 @@ class SolverRemediator:
                     action_id=f"rem_eigen_{uuid.uuid4().hex[:6]}",
                     category=RemediationCategory.DAMPING,
                     diagnosis_id="NEGATIVE_EIGENVALUE",
-                    description="Activate automatic stabilization damping to assist non-positive-definite stiffness phases (dissipation ratio <= 5%).",
+                    description="Activate automatic stabilization damping to assist non-positive-definite stiffness phases (static dissipation ratio against ALLSE is policy-checked).",
                     parameters={
                         "stabilization_method": "DAMPING_FACTOR",
                         "stabilization_magnitude": 1e-4,
@@ -194,11 +195,28 @@ class SolverRemediator:
         intent: EngineeringIntent,
         remediations: Sequence[RemediationAction],
     ) -> EngineeringIntent:
-        """Derive an enriched EngineeringIntent incorporating the proposed remediations."""
+        """Derive an enriched EngineeringIntent incorporating the proposed remediations.
+
+        Remediation categories are kept disjoint on purpose: step-level controls,
+        contact-level stabilization and the stabilization-energy acceptance
+        threshold are three different Abaqus control paths. Merging them into a
+        single ``step_controls`` bag made ``contact_damping`` look applied while
+        no contact control object ever received it.
+        """
         updated_bcs: list[Any] = list(intent.boundary_conditions or ())
         updated_metadata = dict(intent.metadata or {})
         step_controls = dict(updated_metadata.get("step_controls", {}))
+        contact_stabilization = dict(updated_metadata.get("contact_stabilization", {}))
         applied_records = list(updated_metadata.get("applied_remediations", []))
+
+        def absorb_threshold(parameters: Dict[str, Any], action_id: str) -> None:
+            ratio = parameters.pop("max_dissipation_ratio", None)
+            if ratio is None:
+                return
+            updated_metadata["stabilization_energy_threshold"] = float(ratio)
+            updated_metadata.setdefault(
+                "stabilization_energy_threshold_source", "remediation:%s" % action_id
+            )
 
         for rem in remediations:
             if rem.category == RemediationCategory.BOUNDARY_CONDITION:
@@ -213,11 +231,31 @@ class SolverRemediator:
                 })
                 applied_records.append(rem.to_dict())
 
-            elif rem.category in (RemediationCategory.STEP_CONTROLS, RemediationCategory.DAMPING, RemediationCategory.CONTACT_STABILIZATION):
-                step_controls.update(rem.parameters)
+            elif rem.category == RemediationCategory.CONTACT_STABILIZATION:
+                params = dict(rem.parameters)
+                absorb_threshold(params, rem.action_id)
+                # ``stabilization_method`` is a StaticStep symbol; contact
+                # stabilization is driven by stabilizeChoice instead.
+                params.pop("stabilization_method", None)
+                if params.pop("contact_damping", False):
+                    contact_stabilization["stabilize_choice"] = "AUTOMATIC"
+                magnitude = params.pop("stabilization_magnitude", None)
+                if magnitude is not None:
+                    contact_stabilization["damp_factor"] = float(magnitude)
+                for key in ("stabilize_choice", "damp_coef", "damp_factor", "target_step"):
+                    if params.get(key) is not None:
+                        contact_stabilization[key] = params[key]
+                applied_records.append(rem.to_dict())
+
+            elif rem.category in (RemediationCategory.STEP_CONTROLS, RemediationCategory.DAMPING):
+                params = dict(rem.parameters)
+                absorb_threshold(params, rem.action_id)
+                step_controls.update(params)
                 applied_records.append(rem.to_dict())
 
         updated_metadata["step_controls"] = step_controls
+        if contact_stabilization:
+            updated_metadata["contact_stabilization"] = contact_stabilization
         updated_metadata["applied_remediations"] = applied_records
 
         from dataclasses import replace

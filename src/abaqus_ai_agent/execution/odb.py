@@ -263,12 +263,17 @@ def extract_contact_evidence(executor, path, step, fields=("CPRESS", "COPEN", "C
     }
 
 def extract_energy_history(executor, path, step, region, variables=(
-    "ALLIE", "ALLKE", "ALLWK", "ALLAE", "ALLPD", "ALLCD", "ALLFD", "ALLSD"
+    "ALLIE", "ALLKE", "ALLWK", "ALLAE", "ALLPD", "ALLCD", "ALLFD", "ALLSD", "ALLSE"
 )):
     """Extract Abaqus energy history outputs without interpreting balance or quality.
 
     Missing variables are represented by None so unavailable outputs are not
     confused with zero-valued histories.
+
+    ALLSE (recoverable strain energy) is requested alongside ALLSD (automatic
+    stabilization dissipation) because the static stabilization contract is
+    evaluated as ALLSD/ALLSE. ALLIE is total internal energy and already
+    contains ALLSD, so it cannot serve as that denominator.
     """
     return extract_history(executor, path, step, region, variables)
 
@@ -276,7 +281,7 @@ def extract_energy_history(executor, path, step, region, variables=(
 def extract_energy_evidence(executor, path, step, history_region,
                             variables=(
                                 "ALLIE", "ALLKE", "ALLWK", "ALLAE",
-                                "ALLPD", "ALLCD", "ALLFD", "ALLSD"
+                                "ALLPD", "ALLCD", "ALLFD", "ALLSD", "ALLSE"
                             )):
     """Collect energy history evidence without applying engineering thresholds."""
     history = extract_energy_history(

@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import math
 import os
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
 
 from ..contracts.mesh import LocalSeed, MeshSpecification
@@ -144,6 +144,7 @@ class IntentInteractionSpec:
     friction_coefficient: float = 0.0
     normal_behavior: str = "HARD"
     step: str = "Initial"
+    stabilization: Optional[Dict[str, Any]] = None
 
 
 @dataclass(frozen=True)
@@ -193,6 +194,7 @@ def compile_intent_to_actions(
     connectors: Optional[Sequence[IntentConnectorSpec]] = None,
     fmbd: Optional[IntentFMBDSpec] = None,
     fatigue: Optional[IntentFatigueSpec] = None,
+    contact_stabilization: Optional[Any] = None,
     submit_job: bool = False,
 ) -> CompiledAgentPlan:
     """Compile declarative engineering specifications into canonical AbaqusActions and CAE script."""
@@ -508,6 +510,7 @@ def compile_intent_to_actions(
         for s in procedure.steps:
             proc_type = s.procedure.lower() if s.procedure else "static"
             nlgeom_val = s.nlgeom if s.nlgeom is not None else False
+            proc_controls = dict(getattr(s, "metadata", {}) or {}).get("step_controls") or {}
             if proc_type in ("static", "static_general"):
                 actions.append(builders.static_step(
                     model=model_name,
@@ -515,10 +518,12 @@ def compile_intent_to_actions(
                     previous=s.previous,
                     nlgeom=nlgeom_val,
                     time_period=s.time_period,
-                    initial_inc=s.initial_inc,
-                    min_inc=s.min_inc,
-                    max_inc=s.max_inc,
-                    max_num_inc=s.max_num_inc,
+                    stabilization_method=proc_controls.get("stabilization_method", "NONE"),
+                    stabilization_magnitude=proc_controls.get("stabilization_magnitude"),
+                    initial_inc=proc_controls.get("initial_inc", s.initial_inc),
+                    min_inc=proc_controls.get("min_inc", s.min_inc),
+                    max_inc=proc_controls.get("max_inc", s.max_inc),
+                    max_num_inc=proc_controls.get("max_num_inc", s.max_num_inc),
                 ))
             elif proc_type == "frequency":
                 actions.append(builders.frequency_step(
@@ -577,6 +582,12 @@ def compile_intent_to_actions(
                     previous=prev,
                     nlgeom=s.nlgeom,
                     time_period=s.time_period,
+                    stabilization_method=s.stabilization_method or "NONE",
+                    stabilization_magnitude=s.stabilization_magnitude,
+                    max_num_inc=s.max_num_inc or 100,
+                    initial_inc=s.initial_inc,
+                    min_inc=s.min_inc,
+                    max_inc=s.max_inc,
                 ))
             elif s.step_type == "frequency":
                 actions.append(builders.frequency_step(
@@ -636,7 +647,58 @@ def compile_intent_to_actions(
             for contact in active_scope.contacts
         ]
         interactions = tuple(derived) + tuple(interactions or ())
+
+    if contact_stabilization is not None:
+        from ..contracts.contact_stabilization import (
+            ContactStabilizationError,
+            SUPPORTED_TARGET_PROCEDURES,
+            coerce_contact_stabilization,
+            resolve_contact_stabilization,
+        )
+
+        _spec = coerce_contact_stabilization(contact_stabilization)
+        if _spec is not None:
+            _step_order: List[str] = []
+            _supported: List[str] = []
+            if procedure is not None:
+                for s in procedure.steps:
+                    _step_order.append(s.name)
+                    if (s.procedure or "static").lower() in SUPPORTED_TARGET_PROCEDURES:
+                        _supported.append(s.name)
+            elif steps:
+                for s in steps:
+                    _step_order.append(s.name)
+                    if s.step_type in SUPPORTED_TARGET_PROCEDURES:
+                        _supported.append(s.name)
+            elif step is not None and step.name in defined_steps:
+                _step_order.append(step.name)
+                if step.step_type in SUPPORTED_TARGET_PROCEDURES:
+                    _supported.append(step.name)
+            _spec, _bindings = resolve_contact_stabilization(
+                interactions or (),
+                _spec,
+                step_order=tuple(_step_order),
+                enablement_steps=tuple(_supported),
+            )
+            _binding = _bindings[0] if _bindings else None
+            if _binding is None:
+                raise ContactStabilizationError(
+                    "contact stabilization was requested but no binding target was resolved"
+                )
+            for inter in interactions or ():
+                if inter.name != _binding.interaction_name:
+                    continue
+                interactions = tuple(
+                    replace(b, stabilization=_spec.to_dict()) if b.name == _binding.interaction_name else b
+                    for b in interactions
+                )
+
     if interactions:
+        from ..contracts.contact_stabilization import (
+            ContactStabilizationBinding,
+            coerce_contact_stabilization,
+            contact_control_script,
+        )
         for inter in interactions:
             prop_name = f"{inter.name}_Prop"
             inter_code = f"mdb.models['{model_name}'].ContactProperty('{prop_name}')\n"
@@ -653,6 +715,26 @@ def compile_intent_to_actions(
                     f"mdb.models['{model_name}'].interactionProperties['{prop_name}'].NormalBehavior("
                     f"pressureOverclosure=HARD, allowSeparation=ON, constraintEnforcementMethod=DEFAULT)\n"
                 )
+            binding = None
+            spec = coerce_contact_stabilization(inter.stabilization)
+            if spec is not None:
+                target = spec.target_step or (inter.step if inter.step != "Initial" else None)
+                if target is None:
+                    raise ValueError(
+                        f"Contact '{inter.name}' is created in the Initial step, so contact "
+                        "stabilization needs an explicit target_step"
+                    )
+                binding = ContactStabilizationBinding(
+                    interaction_name=inter.name,
+                    interaction_step=inter.step,
+                    target_step=target,
+                    control_name=spec.control_name,
+                    spec=spec,
+                    requires_step_override=(inter.step != target),
+                )
+            extra = ""
+            if binding is not None and not binding.requires_step_override:
+                extra = f", contactControls='{binding.control_name}'"
             inter_code += (
                 f"a = mdb.models['{model_name}'].rootAssembly\n"
                 f"m_surf = a.surfaces['{inter.master_region}']\n"
@@ -660,12 +742,24 @@ def compile_intent_to_actions(
                 f"try:\n"
                 f"    mdb.models['{model_name}'].SurfaceToSurfaceContactStd(name='{inter.name}', "
                 f"createStepName='{inter.step}', main=m_surf, secondary=s_surf, sliding=FINITE, "
-                f"interactionProperty='{prop_name}')\n"
+                f"interactionProperty='{prop_name}'{extra})\n"
                 f"except (TypeError, NameError):\n"
                 f"    mdb.models['{model_name}'].SurfaceToSurfaceContactStd(name='{inter.name}', "
                 f"createStepName='{inter.step}', master=m_surf, slave=s_surf, sliding=FINITE, "
-                f"interactionProperty='{prop_name}')\n"
+                f"interactionProperty='{prop_name}'{extra})\n"
             )
+            if binding is not None:
+                from ..contracts.contact_stabilization import (
+                    contact_control_binding_script,
+                    contact_control_creation_script,
+                )
+                # The control object must exist before the interaction uses it.
+                inter_code = (
+                    contact_control_creation_script(binding, model_name) + "\n" + inter_code
+                )
+                inter_code += contact_control_binding_script(binding, model_name)
+                if inter_code and not inter_code.endswith("\n"):
+                    inter_code += "\n"
             actions.append(builders.python_action(model_name, inter_code))
 
     # 6c. Predefined Fields (Initial Temperature, Imported Temperature Field)
@@ -1991,6 +2085,52 @@ def compile_engineering_intent(
                 max_inc=sc.get("max_inc", eff_step.max_inc),
             )
 
+    # 4b. Step controls must reach every step path, not just the single-step
+    # branch. Self-healing writes initial_inc/min_inc/max_inc and stabilization
+    # into metadata["step_controls"]; a procedure or a steps list used to drop
+    # them silently.
+    _raw_step_controls = intent.metadata.get("step_controls") or {}
+    if _raw_step_controls:
+        _sc = dict(_raw_step_controls)
+        if eff_step is not None:
+            eff_step = IntentStepSpec(
+                name=eff_step.name,
+                step_type=eff_step.step_type,
+                nlgeom=eff_step.nlgeom,
+                time_period=eff_step.time_period,
+                previous=eff_step.previous,
+                stabilization_method=_sc.get("stabilization_method", eff_step.stabilization_method),
+                stabilization_magnitude=_sc.get("stabilization_magnitude", eff_step.stabilization_magnitude),
+                max_num_inc=_sc.get("max_num_inc", eff_step.max_num_inc),
+                initial_inc=_sc.get("initial_inc", eff_step.initial_inc),
+                min_inc=_sc.get("min_inc", eff_step.min_inc),
+                max_inc=_sc.get("max_inc", eff_step.max_inc),
+            )
+        if eff_steps is not None:
+            eff_steps = tuple(
+                IntentStepSpec(
+                    name=s.name,
+                    step_type=s.step_type,
+                    nlgeom=s.nlgeom,
+                    time_period=s.time_period,
+                    previous=s.previous,
+                    stabilization_method=_sc.get("stabilization_method", s.stabilization_method),
+                    stabilization_magnitude=_sc.get("stabilization_magnitude", s.stabilization_magnitude),
+                    max_num_inc=_sc.get("max_num_inc", s.max_num_inc),
+                    initial_inc=_sc.get("initial_inc", s.initial_inc),
+                    min_inc=_sc.get("min_inc", s.min_inc),
+                    max_inc=_sc.get("max_inc", s.max_inc),
+                )
+                for s in eff_steps
+            )
+        if eff_procedure is not None:
+            eff_procedure = MultiStepProcedureSpec(
+                steps=tuple(
+                    replace(s, metadata=dict(s.metadata, step_controls=dict(_sc)))
+                    for s in eff_procedure.steps
+                )
+            )
+
     # 5. Boundary Conditions Mapping
     compiled_bcs: List[IntentBoundarySpec] = []
     for idx, bc in enumerate(intent.boundary_conditions):
@@ -2183,6 +2323,7 @@ def compile_engineering_intent(
     eff_fatigue = intent.fatigue
     eff_connectors = intent.connectors or None
     eff_fmbd = intent.fmbd
+    eff_contact_stabilization = intent.metadata.get("contact_stabilization")
 
     return compile_intent_to_actions(
         model_name=eff_model,
@@ -2206,5 +2347,6 @@ def compile_engineering_intent(
         fatigue=eff_fatigue,
         connectors=eff_connectors,
         fmbd=eff_fmbd,
+        contact_stabilization=eff_contact_stabilization,
         submit_job=submit_job,
     )

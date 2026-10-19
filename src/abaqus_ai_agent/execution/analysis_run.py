@@ -333,6 +333,54 @@ class AnalysisRunner:
                     return number
         return None
 
+    def _resolve_stabilization_threshold(self, engineering_intent):
+        """Explicit static stabilization-energy threshold, or (None, source).
+
+        The 5% figure that appears in the remediation text is a candidate policy
+        for one configuration, not a universal rule, so this method never invents
+        a default. Without an explicit value the acceptance gate stays BLOCKED
+        instead of quietly enforcing an unstated engineering assumption.
+        """
+        if engineering_intent is None:
+            return None, None
+        metadata = getattr(engineering_intent, "metadata", None) or {}
+        if not isinstance(metadata, dict):
+            return None, None
+        for key, source in (
+            ("stabilization_energy_threshold", "intent.metadata"),
+            ("max_stabilization_energy_ratio", "intent.metadata"),
+        ):
+            raw = metadata.get(key)
+            if isinstance(raw, bool) or raw is None:
+                continue
+            try:
+                value = float(raw)
+            except (TypeError, ValueError):
+                continue
+            if value == value and value not in (float("inf"), float("-inf")) and value >= 0.0:
+                return value, "%s.%s" % (source, key)
+        return None, None
+
+    def _resolve_energy_history_region(self, raw_odb):
+        """History region carrying the global energy outputs, or None.
+
+        Abaqus writes total-model energies to the assembly-level history region.
+        The name is taken from the ODB inspection rather than assumed.
+        """
+        if not isinstance(raw_odb, dict):
+            return None
+        regions = raw_odb.get("history_regions") or raw_odb.get("historyRegions")
+        if isinstance(regions, dict):
+            candidates = list(regions.keys())
+        elif isinstance(regions, (list, tuple)):
+            candidates = [str(name) for name in regions]
+        else:
+            candidates = []
+        for name in candidates:
+            if "ASSEMBLY" in str(name).upper():
+                return str(name)
+        return None
+
     def run(self, model_name, job_name, odb_path=None, criteria=(),
             result_values=None, numerical_verification=None, engineering_checks=None,
             mesh_quality=None, mesh_convergence=None, fatigue=None, contact_diagnostics=None,
@@ -965,6 +1013,62 @@ class AnalysisRunner:
             )
             effective_elastic = elastic_validity if elastic_validity is not None else auto_elastic
 
+            # Static stabilization acceptance (P0-a). The gate is only demanded
+            # when the deck actually enables stabilization; otherwise it stays
+            # SKIPPED so its absence is auditable. Evidence is extracted from the
+            # live ODB history, never inferred from the deck keywords alone.
+            auto_stabilization_enabled = False
+            auto_stabilization_energy = None
+            auto_stabilization_block = None
+            stabilization_verdict_for_evidence = None
+            threshold = None
+            threshold_source = None
+            if result_source == "odb" and path:
+                from ..contracts.stabilization_energy import (
+                    detect_stabilization_in_deck,
+                    evaluate_static_stabilization_energy,
+                )
+                deck_marks = detect_stabilization_in_deck(deck_for_gate or "")
+                auto_stabilization_enabled = bool(
+                    deck_marks.get("step_stabilization")
+                    or deck_marks.get("contact_stabilization")
+                )
+                if auto_stabilization_enabled:
+                    threshold, threshold_source = self._resolve_stabilization_threshold(
+                        engineering_intent
+                    )
+                    history_region = self._resolve_energy_history_region(raw_odb) or "Assembly ASSEMBLY"
+                    step_names = list((odb or {}).get("steps") or ())
+                    stabilized_step_name = step_names[-1] if step_names else "Step-1"
+                    try:
+                        from .odb import extract_energy_evidence
+                        auto_stabilization_energy = extract_energy_evidence(
+                            self.executor, path, stabilized_step_name, history_region
+                        )
+                    except Exception as exc:
+                        auto_stabilization_block = (
+                            "stabilization_energy_extraction_failed:%s" % exc
+                        )
+                    if auto_stabilization_block is not None:
+                        from ..contracts.stabilization_energy import (
+                            STATUS_BLOCKED,
+                            StabilizationEnergyVerdict,
+                        )
+                        stabilization_verdict_for_evidence = StabilizationEnergyVerdict(
+                            status=STATUS_BLOCKED,
+                            threshold=threshold,
+                            threshold_source=threshold_source,
+                            reason="stabilization_energy_extraction_failed",
+                            details={"error": auto_stabilization_block},
+                        )
+                    elif auto_stabilization_energy is not None:
+                        stabilization_verdict_for_evidence = evaluate_static_stabilization_energy(
+                            auto_stabilization_energy,
+                            threshold,
+                            stabilization_enabled=True,
+                            threshold_source=threshold_source,
+                        )
+
             if require_production:
                 run_snapshot_for_acc = run.with_state(
                     run.state,
@@ -992,6 +1096,14 @@ class AnalysisRunner:
                     physics_domain=domain_to_eval,
                     result_extractions=extractions if result_source == "odb" else None,
                     elastic_validity=effective_elastic,
+                    stabilization_energy=(
+                        stabilization_verdict_for_evidence
+                        if stabilization_verdict_for_evidence is not None
+                        else auto_stabilization_energy
+                    ),
+                    stabilization_threshold=threshold,
+                    stabilization_threshold_source=threshold_source,
+                    stabilization_enabled=auto_stabilization_enabled,
                 )
             else:
                 accepted = evaluate_result_acceptance(
@@ -1013,6 +1125,14 @@ class AnalysisRunner:
                     require_evidence=effective_require_evidence,
                     physics_domain=domain_to_eval,
                     elastic_validity=effective_elastic,
+                    stabilization_energy=(
+                        stabilization_verdict_for_evidence
+                        if stabilization_verdict_for_evidence is not None
+                        else auto_stabilization_energy
+                    ),
+                    stabilization_threshold=threshold,
+                    stabilization_threshold_source=threshold_source,
+                    stabilization_enabled=auto_stabilization_enabled,
                 )
             verification_evidence = []
             if numerical_verification is not None:
@@ -1054,6 +1174,11 @@ class AnalysisRunner:
                 verification_evidence.append(Evidence(
                     kind="fmbd_dynamics", source="verification",
                     locator=job_name, value=fmbd_dynamics,
+                ))
+            if stabilization_verdict_for_evidence is not None:
+                verification_evidence.append(Evidence(
+                    kind="stabilization_energy", source="odb",
+                    locator=job_name, value=stabilization_verdict_for_evidence.to_dict(),
                 ))
             if sensitivity is not None:
                 verification_evidence.append(Evidence(

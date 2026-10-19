@@ -620,9 +620,23 @@ def test_remediator_contact_chatter_stabilization():
     assert any(a.category == RemediationCategory.CONTACT_STABILIZATION for a in actions)
 
     remediated = remediator.apply_remediations(intent, actions)
+    # Contact stabilization is a distinct Abaqus control path (StdContactControl +
+    # *Contact Controls). It must never be smuggled into step_controls, which is
+    # consumed by StaticStep.
     step_controls = remediated.metadata.get("step_controls", {})
-    assert step_controls.get("contact_damping") is True
-    assert step_controls.get("stabilization_magnitude", 0.0) > 0.0
+    assert "contact_damping" not in step_controls
+    assert "stabilization_magnitude" not in step_controls
+
+    contact_stabilization = remediated.metadata.get("contact_stabilization", {})
+    assert contact_stabilization.get("stabilize_choice") == "AUTOMATIC"
+    assert contact_stabilization.get("damp_factor", 0.0) > 0.0
+    assert "stabilization_method" not in contact_stabilization
+
+    # The dissipation ratio becomes an explicit acceptance policy, not a default.
+    assert remediated.metadata.get("stabilization_energy_threshold") == 0.05
+    assert remediated.metadata.get("stabilization_energy_threshold_source", "").startswith(
+        "remediation:rem_contact_"
+    )
 
 
 def test_remediator_negative_eigenvalue():

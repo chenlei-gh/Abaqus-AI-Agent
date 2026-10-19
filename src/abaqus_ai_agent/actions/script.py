@@ -569,18 +569,68 @@ def _contact_property_script(model, p):
 def _contact_script(model, p):
     sliding = str(p.get("sliding", "FINITE")).upper()
     sliding_const = "SMALL_SLIDING" if sliding in ("SMALL", "SMALL_SLIDING") else "FINITE"
-    return ("from abaqusConstants import *\nimport interaction\nmodel=mdb.models[%s]\n"
-            "try:\n"
-            "    model.SurfaceToSurfaceContactStd(name=%s, createStepName=%s, main=%s, secondary=%s, sliding=%s, interactionProperty=%s)\n"
-            "except TypeError:\n"
-            "    model.SurfaceToSurfaceContactStd(name=%s, createStepName=%s, master=%s, slave=%s, sliding=%s, interactionProperty=%s)" %
-            (_q(model),
-             _q(p["name"]), _q(p.get("step", "Initial")),
-             p["master_expression"], p["slave_expression"],
-             sliding_const, _q(p["property"]),
-             _q(p["name"]), _q(p.get("step", "Initial")),
-             p["master_expression"], p["slave_expression"],
-             sliding_const, _q(p["property"])))
+    step = p.get("step", "Initial")
+    stabilization = p.get("stabilization")
+    binding = None
+    if stabilization is not None:
+        from ..contracts.contact_stabilization import (
+            ContactStabilizationBinding,
+            coerce_contact_stabilization,
+        )
+        spec = coerce_contact_stabilization(stabilization)
+        if spec is not None:
+            target = spec.target_step or (step if step != "Initial" else None)
+            if target is None:
+                raise ValueError(
+                    "contact %r is created in the Initial step, so contact stabilization "
+                    "needs an explicit target_step" % (p["name"],)
+                )
+            binding = ContactStabilizationBinding(
+                interaction_name=p["name"],
+                interaction_step=step,
+                target_step=target,
+                control_name=spec.control_name,
+                spec=spec,
+                requires_step_override=(step != target),
+            )
+
+    create_args = "name=%s, createStepName=%s, main=%s, secondary=%s, sliding=%s, interactionProperty=%s"
+    create_legacy_args = "name=%s, createStepName=%s, master=%s, slave=%s, sliding=%s, interactionProperty=%s"
+
+    create_values = [
+        _q(p["name"]), _q(step),
+        p["master_expression"], p["slave_expression"],
+        sliding_const, _q(p["property"]),
+    ]
+    legacy_values = list(create_values)
+    if binding is not None and not binding.requires_step_override:
+        create_args += ", contactControls=%s"
+        create_legacy_args += ", contactControls=%s"
+        create_values.append(_q(binding.control_name))
+        legacy_values.append(_q(binding.control_name))
+
+    script = ("from abaqusConstants import *\nimport interaction\nmodel=mdb.models[%s]\n"
+              "try:\n"
+              "    model.SurfaceToSurfaceContactStd(" + create_args + ")\n"
+              "except TypeError:\n"
+              "    model.SurfaceToSurfaceContactStd(" + create_legacy_args + ")")
+    script = script % tuple([_q(model)] + create_values + legacy_values)
+
+    if binding is not None:
+        from ..contracts.contact_stabilization import (
+            contact_control_binding_script,
+            contact_control_creation_script,
+        )
+        prefix = (
+            "from abaqusConstants import *\n"
+            + contact_control_creation_script(binding, model)
+            + "\n"
+        )
+        script = prefix + script
+        binding_line = contact_control_binding_script(binding, model)
+        if binding_line:
+            script = script + "\n" + binding_line
+    return script
 
 
 def _mesh_quality_script(model, p):

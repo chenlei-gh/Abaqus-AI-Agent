@@ -434,13 +434,15 @@ P1.0 产品主入口已彻底消除高层自然语言需求与底层 20 个 L4 �
   - `PLASTICITY_DRIFT`：定位应变增量过大导致本构无法收敛的单元。
 
 #### REQ-P1-041: 受控自愈策略库与自动修复重算
-- 针对接触振荡：自动引入可衰减的接触初始阻尼（Contact Stabilization），并在收敛后严格核查稳定耗能比（$< 2\%$）；
+- 针对接触振荡：自动引入可衰减的接触初始阻尼（Contact Stabilization），并在收敛后按显式配置的稳定耗能比阈值核查（`ALLSD/ALLSE`，**不设内置默认值**，未配置即阻断）；
 - 针对时间步过小：自动调整初始增量步长、放宽迭代控制参数（`*CONTROLS, PARAMETERS=TIME INCREMENTATION`）；
 - 针对网格畸变：定位畸变单元并对其局部区域执行自适应网格加密或细化。
 
+> 实现状态（P0 闭环）：接触稳定化已接入 `StdContactControl` + `*CONTACT CONTROLS`，不再混入 `step_controls`；稳定化能量契约见 `contracts/stabilization_energy.py`。阈值为工程策略，必须由调用方显式给出并记录来源。
+
 #### REQ-P1-042: 自愈审计追踪与防伪红线
 - **完整呈现修复前后 Diff**：工程报告中必须清晰保留 `Run 1 (Initial Failure)` 与 `Run 2 (Healed)` 的对比清单，严禁静默掩盖发散历史；
-- **物理守恒门禁检验**：自愈引入的数值稳定项必须经验收门禁确认未扭曲主物理响应（如附加稳定力占总外力比值 $< 1\%$）。
+- **物理守恒门禁检验**：自愈引入的数值稳定项必须经验收门禁确认未扭曲主物理响应。静力自动稳定化以 `ALLSD/ALLSE` 逐帧最大比值对照显式阈值判定；动态能量平衡属于另一类契约，不得混用同一阈值。
 
 ### 7.2 JEV 意图识别与可审计工程决策层闭环 (TypeSafe JEV Decision Layer)
 
@@ -566,8 +568,8 @@ P1.0 产品主入口已彻底消除高层自然语言需求与底层 20 个 L4 �
 | **REQ-P1-038** | 用户已有模型 (CAE/INP/ODB) 输入规范 | P1.4 | 用户外部模型与任务类型 | 原生执行/只读后处理/工作副本 | Tier A | 原始模型只读保护，禁止无谓重建 | 🟢 **QUALIFIED** |
 | **REQ-P1-039** | 受控 INP 结构化参数编辑与版本审计 | P1.4 | 用户 INP 与参数编辑指令 | 独立工作副本、Diff 审计、求解闭环 | Tier A | 严禁原地修改，目标歧义或缺失 fail-closed | 🟢 **QUALIFIED** |
 | **REQ-P1-040** | 求解器发散特征深度诊断 | P1.4 | `.msg`, `.sta` 日志 | 发散根因诊断报告 | Tier A | 无法识别的发散安全退出 | 📋 **PLANNED** |
-| **REQ-P1-041** | 受控自愈策略库与自动重算 | P1.4 | 发散诊断结果 | 修复配置与自愈重算 | Tier A | 稳定能量超限即判定自愈无效 | 📋 **PLANNED** |
-| **REQ-P1-042** | 自愈审计追踪与防伪红线 | P1.4 | 修复前后两次 Run | 完整 Diff 对比明细 | Tier B | 严禁静默覆盖首次失败记录 | 📋 **PLANNED** |
+| **REQ-P1-041** | 受控自愈策略库与自动重算 | P1.4 | 发散诊断结果 | 修复配置与自愈重算 | Tier A | 稳定能量超限即判定自愈无效 | 🟡 **IN_REVIEW (Contact stabilization wired; geometric P1 items pending)** |
+| **REQ-P1-042** | 自愈审计追踪与防伪红线 | P1.4 | 修复前后两次 Run | 完整 Diff 对比明细 | Tier B | 严禁静默覆盖首次失败记录 | 🟡 **IN_REVIEW (Stabilization-energy gate closed; full live rerun pending)** |
 | **REQ-P1-043** | JEV 模式隔离与防静默降级 | P1.4 | 运行模式配置与提示词 | 强类型决策与状态 | Tier B | Live 模式异常坚决 Fail-Closed | 🟢 **QUALIFIED** |
 | **REQ-P1-044** | 严格数值校验、载荷对齐与全链路审计 | P1.4 | 意图提问与响应载荷 | 完整审计束与来源标记 | Tier B | 概率分布归一化 sum=1.0、深度脱敏 | 🟢 **QUALIFIED** |
 | **REQ-P1-045** | 独立工程评测系统与 Context Merge 审计 | P1.4 | 8大工程维度基准评测 | 评测指标、严格分母、精确率与实体防呆 | Tier B | 8维度全指标分母分立、1-to-1拓扑Grounding、子句载荷隔离、物性分级闭环 | 🟡 **IN_REVIEW (Deep Topological & Evidence Hardening in Progress)** |

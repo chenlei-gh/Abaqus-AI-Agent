@@ -17,6 +17,7 @@ CANONICAL_GATE_ORDER = (
     "contact",                # Gate 9
     "procedure",              # Gate 10
     "thermal_balance",        # Gate 11
+    "stabilization_energy",   # Gate 11b (static stabilization contract)
     "criteria",               # Gate 12
     "connector_kinematics",   # Gate 13
     "fmbd_dynamics",          # Gate 14
@@ -444,6 +445,7 @@ class AcceptanceResult:
     acceptance_status: str = "PASS"  # Decoupled acceptance status: PASS | FAIL | BLOCKED | RESULT_INVALID
     deliverable: bool = False  # Strictly True iff acceptance_status == "PASS" and result_validity == "VALID"
     findings: AcceptanceFindings = field(default_factory=AcceptanceFindings)
+    stabilization_energy: Optional[Dict[str, Any]] = None
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -463,6 +465,7 @@ class AcceptanceResult:
             "missing_required_fields": list(self.missing_required_fields),
             "gates": dict(self.gates),
             "gate_justifications": dict(self.gate_justifications),
+            "stabilization_energy": dict(self.stabilization_energy) if self.stabilization_energy else None,
             "findings": {
                 "failures": list(self.findings.failures),
                 "blocked": list(self.findings.blocked),
@@ -615,6 +618,16 @@ def evaluate_criteria(values, criteria, required_keys: Optional[Sequence[str]] =
     )
 
 
+def _format_ratio(value) -> str:
+    """Format a computed ratio for a deterministic failure identifier."""
+    if value is None:
+        return "undefined"
+    try:
+        return "%.6g" % float(value)
+    except (TypeError, ValueError):
+        return "undefined"
+
+
 def evaluate_result_acceptance(result_status, numerical=None, engineering=None,
                                mesh_quality=None, convergence=None, fatigue=None, contact_diagnostics=None,
                                values=None, criteria=None, required_metrics=None, evidence=None,
@@ -625,7 +638,10 @@ def evaluate_result_acceptance(result_status, numerical=None, engineering=None,
                                evidence_manifest=None, expected_run_id=None, base_dir=None,
                                max_age_seconds=None, mandatory_roles=None, elastic_validity=None,
                                explicit_requires_stress=None, explicit_requires_yield=None,
-                               explicit_material_mapping_complete=None, explicit_missing_regions=None):
+                               explicit_material_mapping_complete=None, explicit_missing_regions=None,
+                               stabilization_energy=None, stabilization_threshold=None,
+                               stabilization_threshold_source=None,
+                               stabilization_enabled=None):
     """Combine execution/result evidence with deterministic acceptance criteria.
 
     - ResultRequirement & Physics Domain profile drive mandatory gates & required metrics.
@@ -914,6 +930,56 @@ def evaluate_result_acceptance(result_status, numerical=None, engineering=None,
     else:
         gates["thermal_balance"] = "SKIPPED"
 
+    # Gate 11b: Static Stabilization Energy Gate
+    #
+    # Artificial damping can make an otherwise divergent static step converge
+    # while distorting the physics. The verdict is only requested when the
+    # caller states that stabilization is actually enabled; otherwise the gate
+    # is recorded as SKIPPED so its absence stays auditable. A FAIL here is a
+    # physical violation (ratio above the configured policy), a BLOCKED here
+    # means the evidence cannot support any claim either way.
+    stabilization_verdict = None
+    effective_stabilization_enabled = bool(stabilization_enabled)
+    if effective_stabilization_enabled or stabilization_energy is not None:
+        from .contracts.stabilization_energy import (
+            StabilizationEnergyVerdict,
+            STATUS_BLOCKED,
+            STATUS_FAIL,
+            STATUS_PASS,
+            STATUS_SKIPPED,
+            evaluate_static_stabilization_energy,
+        )
+
+        if isinstance(stabilization_energy, StabilizationEnergyVerdict):
+            stabilization_verdict = stabilization_energy
+        else:
+            stabilization_verdict = evaluate_static_stabilization_energy(
+                stabilization_energy,
+                stabilization_threshold,
+                stabilization_enabled=True,
+                threshold_source=stabilization_threshold_source,
+            )
+
+        gates["stabilization_energy"] = stabilization_verdict.status
+        if stabilization_verdict.status == STATUS_FAIL:
+            failures.append(
+                "stabilization_energy_exceeded:%s" % _format_ratio(stabilization_verdict.ratio)
+            )
+        elif stabilization_verdict.status == STATUS_BLOCKED:
+            err = "stabilization_energy_unverifiable:%s" % (
+                stabilization_verdict.reason or "unknown"
+            )
+            failures.append(err)
+            blocked.append(err)
+        elif stabilization_verdict.status == STATUS_SKIPPED:
+            gates["stabilization_energy"] = STATUS_SKIPPED
+        elif stabilization_verdict.status != STATUS_PASS:
+            err = "stabilization_energy_unverifiable:%s" % stabilization_verdict.status
+            failures.append(err)
+            blocked.append(err)
+    else:
+        gates["stabilization_energy"] = "SKIPPED"
+
     # Required Metrics Evaluation against Values Map
     values_map = values or {}
     for rm in effective_required_metrics:
@@ -1102,6 +1168,7 @@ def evaluate_result_acceptance(result_status, numerical=None, engineering=None,
         and not f.startswith("yield_check:")
         and not f.startswith("material_mapping:")
         and not f.startswith("elastic_range_exceeded")
+        and not f.startswith("stabilization_energy_unverifiable:")
         for f in failures
     )
 
@@ -1252,6 +1319,9 @@ def evaluate_result_acceptance(result_status, numerical=None, engineering=None,
         acceptance_status=acceptance_status,
         deliverable=deliverable,
         findings=findings,
+        stabilization_energy=(
+            stabilization_verdict.to_dict() if stabilization_verdict is not None else None
+        ),
     )
 
 
@@ -1286,6 +1356,10 @@ def evaluate_production_acceptance(
     explicit_requires_yield: Optional[bool] = None,
     explicit_material_mapping_complete: Optional[bool] = None,
     explicit_missing_regions: Optional[Sequence[str]] = None,
+    stabilization_energy: Optional[Any] = None,
+    stabilization_threshold: Optional[float] = None,
+    stabilization_threshold_source: Optional[str] = None,
+    stabilization_enabled: Optional[bool] = None,
     **kwargs,
 ) -> AcceptanceResult:
     """Strict Production Acceptance Gate with Full Causal & Grounding Binding.
@@ -1538,6 +1612,10 @@ def evaluate_production_acceptance(
         explicit_requires_yield=explicit_requires_yield,
         explicit_material_mapping_complete=explicit_material_mapping_complete,
         explicit_missing_regions=explicit_missing_regions,
+        stabilization_energy=stabilization_energy,
+        stabilization_threshold=stabilization_threshold,
+        stabilization_threshold_source=stabilization_threshold_source,
+        stabilization_enabled=stabilization_enabled,
     )
 
     if causal_failures or causal_blocked or causal_evidence_errors:

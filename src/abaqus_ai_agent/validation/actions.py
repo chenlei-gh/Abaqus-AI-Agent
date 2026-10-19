@@ -172,6 +172,15 @@ def validate_action(action):
         sliding = str(action.parameters.get("sliding", "FINITE")).upper()
         if sliding not in ("FINITE", "SMALL", "SMALL_SLIDING"):
             raise ValueError("sliding must be FINITE, SMALL, or SMALL_SLIDING")
+        if action.parameters.get("stabilization") is not None:
+            from ..contracts.contact_stabilization import (
+                ContactStabilizationError,
+                coerce_contact_stabilization,
+            )
+            try:
+                coerce_contact_stabilization(action.parameters["stabilization"])
+            except ContactStabilizationError as exc:
+                raise ValueError(str(exc))
     if action.action_type == "contact_property":
         formulation = str(action.parameters.get("tangential_behavior", {}).get("formulation", "PENALTY")).upper()
         if formulation not in ("FRICTIONLESS", "PENALTY", "LAGRANGE", "ROUGH", "EXPONENTIAL_DECAY", "USER_DEFINED"):
