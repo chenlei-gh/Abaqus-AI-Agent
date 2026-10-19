@@ -1,124 +1,418 @@
 {
   "gate": "P0_B_CONTACT_STABILIZATION_CLOSED_LOOP",
-  "machine": "Abaqus/Standard 2025 (C:\\SIMULIA\\Commands\\abaqus.bat)",
+  "machine": "Abaqus/Standard 2025 (C:/SIMULIA/Commands/abaqus.bat)",
   "cases": {
-    "compiled_two_block_contact": {
-      "run_1_failed": {
-        "label": "run_1_failed",
-        "inp": "C:\\Users\\DELL\\AppData\\Local\\Temp\\p0b_sweep3\\Job_H20\\Job_H20.inp",
-        "inp_sha256": "8112bcf504413d80aa4c78827c6e315ce0372b2788cd4b4e2b7379f86861efac",
-        "sta": "C:\\Users\\DELL\\AppData\\Local\\Temp\\p0b_sweep3\\Job_H20\\Job_H20.sta",
-        "sta_sha256": "45c11bcd47c030aca153f6cd873fe498421b94c87a00a8e4796c0a2fc07e3611",
-        "msg_sha256": "8bbe0bc57a7b847238289c598334d3db7cef47dcc9fa982b7420bb0ea2389651",
-        "sta_completed": false,
-        "sta_not_completed": true,
-        "severe_discontinuities": 38,
-        "contact_status_transitions": 59,
-        "cae_contact_stabilization_applied": false,
-        "sta_tail": " THE ANALYSIS HAS NOT BEEN COMPLETED"
-      },
-      "run_2_stabilized_1e-4": {
-        "label": "run_2_stabilized_1e-4",
-        "inp": "C:\\Users\\DELL\\AppData\\Local\\Temp\\p0b_sweep3\\Job_S0001\\Job_S0001.inp",
-        "inp_sha256": "3e82c3acc5fc7185fb921cb607f1ccf872dec8af4c8677c351c69dedd60d5014",
-        "sta": "C:\\Users\\DELL\\AppData\\Local\\Temp\\p0b_sweep3\\Job_S0001\\Job_S0001.sta",
-        "sta_sha256": "74e120028f7046afe92b366764e45ae7a42b51c7c8ea7c81545aae6345cc1c24",
-        "msg_sha256": "ec4a10ce9f5ccbfc3291d5ba5b8f68d6cab37f29bb772df48e18dfca240f0257",
-        "sta_completed": false,
-        "sta_not_completed": true,
-        "severe_discontinuities": 38,
-        "contact_status_transitions": 59,
-        "cae_contact_stabilization_applied": true,
-        "sta_tail": " THE ANALYSIS HAS NOT BEEN COMPLETED"
-      },
-      "stabilization_magnitude_sweep": {
-        "Job_D01": {
-          "label": "Job_D01",
-          "inp": "C:\\Users\\DELL\\AppData\\Local\\Temp\\p0b_sweep4\\Job_D01\\Job_D01.inp",
-          "inp_sha256": "982b54d16d51331c9fb88880169b28bc60d9c9afc1f8d94207a7e9feb3526bcb",
-          "sta": "C:\\Users\\DELL\\AppData\\Local\\Temp\\p0b_sweep4\\Job_D01\\Job_D01.sta",
-          "sta_sha256": "8a5124d067304a08c2dd958a1fb1108b8cb78c281fc76546c6ff1fed9f80d720",
-          "msg_sha256": "ffa43a814a28bd8da0dfc949c35105bf097dc98e31e74613c8996e550f60cbce",
+    "gap_closure_closed_loop": {
+      "run_1_unstabilized": {
+        "M_U_T001": {
+          "label": "run_1_unstabilized",
+          "inp": "C:\\Users\\DELL\\AppData\\Local\\Temp\\p0b_gap3\\M_U_T001.inp",
+          "inp_sha256": "a6f18af5100d86485025fd869efc5dbc4fb7e0e6f669365f7059ae26351d4807",
+          "sta_sha256": "66c6d283ed7c67cd8a0facc4166c67906e44731161c4de5bdda0ae5ac541f810",
+          "msg_sha256": "75abcd81aef6b88abfb774beb8f4c249f4290d89c0c2324ff0c9decac1b4b7e2",
+          "odb_sha256": "99921524978112f66f3d67d0f43b06b8fbab5afdb25f81819e8b4b888d4cfed8",
+          "present": true,
           "sta_completed": false,
           "sta_not_completed": true,
-          "severe_discontinuities": 38,
-          "contact_status_transitions": 59,
-          "cae_contact_stabilization_applied": true,
+          "numerical_singularity_lines": 2293,
+          "contact_status_transitions": 0,
+          "excessive_distortion_lines": 0,
+          "contact_stabilization_reached_the_solver": false,
           "sta_tail": " THE ANALYSIS HAS NOT BEEN COMPLETED"
         },
-        "Job_D1": {
-          "label": "Job_D1",
-          "inp": "C:\\Users\\DELL\\AppData\\Local\\Temp\\p0b_sweep4\\Job_D1\\Job_D1.inp",
-          "inp_sha256": "5e03fde88c6e2d81c58d45a2e58f08a336b680aa51d82f101df69ffa7e5c6977",
-          "sta": "C:\\Users\\DELL\\AppData\\Local\\Temp\\p0b_sweep4\\Job_D1\\Job_D1.sta",
-          "sta_sha256": "309c688ade564cae75edf5bf8d693197f475b5943176a5b1f379e27da17eedbc",
-          "msg_sha256": "1960f6897fb4fd42c38f63d211789594263db7066d75c07693a9a5663fa36cad",
+        "M_U_T02": {
+          "label": "run_1_unstabilized",
+          "inp": "C:\\Users\\DELL\\AppData\\Local\\Temp\\p0b_gap3\\M_U_T02.inp",
+          "inp_sha256": "80ed1470e78e85a69ae0328ce472267272f5dce3a7852b83d58153e32069f8b2",
+          "sta_sha256": "922ffa3b28b071b7f66299ae8b1372ab139881dada6f5af304f145670632d494",
+          "msg_sha256": "c6960f5818a818e9073f08d587781c4a449c113b3049c998bddc822dba42000c",
+          "odb_sha256": "38b9929e20aaed14963afaa7ad7e403424278e2340c5f9b5f0b996d52de3e4ca",
+          "present": true,
           "sta_completed": false,
           "sta_not_completed": true,
-          "severe_discontinuities": 37,
-          "contact_status_transitions": 65,
-          "cae_contact_stabilization_applied": true,
+          "numerical_singularity_lines": 1329,
+          "contact_status_transitions": 0,
+          "excessive_distortion_lines": 0,
+          "contact_stabilization_reached_the_solver": false,
           "sta_tail": " THE ANALYSIS HAS NOT BEEN COMPLETED"
         },
-        "Job_D5": {
-          "label": "Job_D5",
-          "inp": "C:\\Users\\DELL\\AppData\\Local\\Temp\\p0b_sweep4\\Job_D5\\Job_D5.inp",
-          "inp_sha256": "5e70d7f93179f3b32dae693206a6e347d3e0048fb605fdb1980ae8b1c55c83f8",
-          "sta": "C:\\Users\\DELL\\AppData\\Local\\Temp\\p0b_sweep4\\Job_D5\\Job_D5.sta",
-          "sta_sha256": "467c3f7e82eed8eb70a4d465917f0e6fb5f9a304f0d554dcdbca47d58c46fe7d",
-          "msg_sha256": "021d3f1dee88e6415bba1254938e41f3b6e9010c8e4823b6a14c8dd596556d1d",
+        "M_U_T05": {
+          "label": "run_1_unstabilized",
+          "inp": "C:\\Users\\DELL\\AppData\\Local\\Temp\\p0b_gap3\\M_U_T05.inp",
+          "inp_sha256": "06e4dc86d38727dff71ae2351f850fb9bb8a8c1c5dbddcd5212af1862c4867e8",
+          "sta_sha256": "9757b874a14f9092494a2df2b6ca4881121a496d1b738ab5d3195d93b3e25c79",
+          "msg_sha256": "7684b8d6e3720d807d3b201f61a4090cdda98b1cadd2f6be3b42763f93d84931",
+          "odb_sha256": "d2244c4219c296fa7b0bb93516e1b7d17bc85c72c58d248074e926c470921d07",
+          "present": true,
           "sta_completed": false,
           "sta_not_completed": true,
-          "severe_discontinuities": 31,
-          "contact_status_transitions": 56,
-          "cae_contact_stabilization_applied": true,
+          "numerical_singularity_lines": 890,
+          "contact_status_transitions": 0,
+          "excessive_distortion_lines": 1,
+          "contact_stabilization_reached_the_solver": false,
           "sta_tail": " THE ANALYSIS HAS NOT BEEN COMPLETED"
+        }
+      },
+      "run_2_contact_stabilized": {
+        "M_T001_d1e4": {
+          "label": "run_2_contact_stabilized",
+          "inp": "C:\\Users\\DELL\\AppData\\Local\\Temp\\p0b_gap2\\M_T001_d1e4.inp",
+          "inp_sha256": "1fa44d96ae326604193a33cbf74173ad8edb3585befa0b452c7bab458a965a5f",
+          "sta_sha256": "8046b00a8f8036542bfee89aaf4cc60892f604ad821aa332d47a8ea7e538a7f4",
+          "msg_sha256": "b900e3196b53b6f1d8dea14869960c18837f3bb2e30e0ff9b90563c75f3195e2",
+          "odb_sha256": "86b85185a2d58c1449cb0bcbe0f6d3b2e8999446ed9dc431c7e3c54ad19abbb3",
+          "present": true,
+          "sta_completed": true,
+          "sta_not_completed": false,
+          "numerical_singularity_lines": 4,
+          "contact_status_transitions": 9,
+          "excessive_distortion_lines": 1,
+          "contact_stabilization_reached_the_solver": true,
+          "sta_tail": " THE ANALYSIS HAS COMPLETED SUCCESSFULLY"
+        },
+        "M_T02_d1e3": {
+          "label": "run_2_contact_stabilized",
+          "inp": "C:\\Users\\DELL\\AppData\\Local\\Temp\\p0b_gap2\\M_T02_d1e3.inp",
+          "inp_sha256": "2c58839de57f3785d4a7cc433f78b5b09285a7f81e7ef39f9f657c6c61ceb4b3",
+          "sta_sha256": "c7bc14edb46f9bf95d159e37d1ddd5a3bd45bed31bf08fdb44d969aa9ff70080",
+          "msg_sha256": "15bf2fcede5ee8e42f5b015c8cdbde7ca38d8ab346e7f0f8493d81e92f201838",
+          "odb_sha256": "cd7c16a990e1f8708bd7e6b93c5cf453dbc12143ef3562a7f5a9253cb30eeb10",
+          "present": true,
+          "sta_completed": true,
+          "sta_not_completed": false,
+          "numerical_singularity_lines": 0,
+          "contact_status_transitions": 11,
+          "excessive_distortion_lines": 0,
+          "contact_stabilization_reached_the_solver": true,
+          "sta_tail": " THE ANALYSIS HAS COMPLETED SUCCESSFULLY"
+        },
+        "M_T02_d1e4": {
+          "label": "run_2_contact_stabilized",
+          "inp": "C:\\Users\\DELL\\AppData\\Local\\Temp\\p0b_gap2\\M_T02_d1e4.inp",
+          "inp_sha256": "589b67ad5f9bd525642afd92143b4fd8380d97d43b1bdb512ebc999143681c8d",
+          "sta_sha256": "9447d8d8338de02781e2094e86593c4bea7ccdf10f90006db576d66123333eb7",
+          "msg_sha256": "dbd186d09f95bd7b11c354249e06c36d63af7c93071f2e88062f12b5a93c96af",
+          "odb_sha256": "6b716a7ab3b7cafb9cf8918858f13b14b36a76195eecce01729ff676585bdb52",
+          "present": true,
+          "sta_completed": true,
+          "sta_not_completed": false,
+          "numerical_singularity_lines": 4,
+          "contact_status_transitions": 15,
+          "excessive_distortion_lines": 1,
+          "contact_stabilization_reached_the_solver": true,
+          "sta_tail": " THE ANALYSIS HAS COMPLETED SUCCESSFULLY"
+        },
+        "M_T05_d1e3": {
+          "label": "run_2_contact_stabilized",
+          "inp": "C:\\Users\\DELL\\AppData\\Local\\Temp\\p0b_gap2\\M_T05_d1e3.inp",
+          "inp_sha256": "ecc9dc7ba621c5b3af09e6407a8b079abc333be5fa46d6a9648d1d9c2a40401a",
+          "sta_sha256": "c46a712c511bc0fc56b02ff49517be3ecad86d9dcfa3669151d4db46a53d5676",
+          "msg_sha256": "d439fd26dfa376ebda83b0dd68555718715f61c6bf2cf63e21936e2c69461bb4",
+          "odb_sha256": "b55f3b8b7a571700a0bef0227ae411ab8d6b0d4edcbf92a9af0c3f41ddb8781e",
+          "present": true,
+          "sta_completed": true,
+          "sta_not_completed": false,
+          "numerical_singularity_lines": 0,
+          "contact_status_transitions": 11,
+          "excessive_distortion_lines": 0,
+          "contact_stabilization_reached_the_solver": true,
+          "sta_tail": " THE ANALYSIS HAS COMPLETED SUCCESSFULLY"
+        },
+        "M_T05_d1e4": {
+          "label": "run_2_contact_stabilized",
+          "inp": "C:\\Users\\DELL\\AppData\\Local\\Temp\\p0b_gap2\\M_T05_d1e4.inp",
+          "inp_sha256": "f3813ba4eb6fec8a699ef87ba2d85f0b785d7532d0539a86b059cf55d740a135",
+          "sta_sha256": "28b907a2714dfebac2730707d6dd1b68490b1a1a29c89797c18512081a9369c4",
+          "msg_sha256": "b2590fb3b03d5590e47c70789b82fb1b4e63cfb510383e50305f750a337c7b95",
+          "odb_sha256": "81ce5b670f1805d849576bb4577ff50939fa1e618fbcef486a2ca4d38ca6183a",
+          "present": true,
+          "sta_completed": true,
+          "sta_not_completed": false,
+          "numerical_singularity_lines": 6,
+          "contact_status_transitions": 9,
+          "excessive_distortion_lines": 0,
+          "contact_stabilization_reached_the_solver": true,
+          "sta_tail": " THE ANALYSIS HAS COMPLETED SUCCESSFULLY"
         }
       }
     },
-    "captured_f1_contact_chatter": {
-      "run_1_failed": {
-        "label": "run_1_failed",
-        "inp": "C:\\Users\\DELL\\AppData\\Local\\Temp\\p0b_sweep2\\Job_F1.inp",
-        "inp_sha256": "fec07f149354960e5d10a31ad8840153dc79b86dd10c05e8577578dbf35fb2ac",
-        "sta": "C:\\Users\\DELL\\AppData\\Local\\Temp\\p0b_sweep2\\Job_F1.sta",
-        "sta_sha256": "72e43c8c2eca81f9326dd036eb87655af3bd245debb6751603566b5bcd3c33b9",
-        "msg_sha256": "6b8349ecaf124bcadca050a78c83a199c70192fc29dad872365891f26d314680",
-        "sta_completed": false,
-        "sta_not_completed": true,
-        "severe_discontinuities": 50,
-        "contact_status_transitions": 83,
-        "cae_contact_stabilization_applied": false,
-        "sta_tail": " THE ANALYSIS HAS NOT BEEN COMPLETED"
+    "nan_root_cause_experiment": {
+      "deck": "captured F1 friction slider, load reduced to 1e5 N",
+      "first_displacement_correction": {
+        "unstabilized": "LARGEST CORRECTION TO DISP. -20.8 AT NODE 21 DOF 2",
+        "stabilize_1e-2": "LARGEST CORRECTION TO DISP. -20.8 AT NODE 21 DOF 2",
+        "stabilize_1e-4": "LARGEST CORRECTION TO DISP. -20.8 AT NODE 21 DOF 2",
+        "stabilize_1e-6": "LARGEST CORRECTION TO DISP. -20.8 AT NODE 21 DOF 2",
+        "stabilize_1e-8": "LARGEST CORRECTION TO DISP. -20.8 AT NODE 21 DOF 2",
+        "stabilize_automatic": "LARGEST CORRECTION TO DISP. -20.8 AT NODE 21 DOF 2",
+        "step_level_stabilize": "LARGEST CORRECTION TO DISP. -20.8 AT NODE 21 DOF 2"
       },
-      "run_2_stabilized_1e-4": {
-        "label": "run_2_stabilized_1e-4",
-        "inp": "C:\\Users\\DELL\\AppData\\Local\\Temp\\p0b_f1_stab\\Job_F1_S1.inp",
-        "inp_sha256": "9edee8e52605e7f67a91b9328dd70c1207f1acacbd58ba4ade443eb26e0a46cd",
-        "sta": "C:\\Users\\DELL\\AppData\\Local\\Temp\\p0b_f1_stab\\Job_F1_S1.sta",
-        "sta_sha256": "b4a5d1180fda1692a01c6ab3d008431c309f36d2a2a57e7a01d48851f59024b2",
-        "msg_sha256": "eb8773cdccde9b60ee7d5554c3259b908967ff3c67136739b05dde0cba3521fa",
+      "first_correction_identical_across_all_variants": true,
+      "runs": {
+        "unstabilized": {
+          "label": "unstabilized",
+          "inp": "C:\\Users\\DELL\\AppData\\Local\\Temp\\p0b_damp1e5\\Job_U.inp",
+          "inp_sha256": "ca1f44d7fe2894e7f33e663a7fbd9d8564299d8cdfd031040b1f2942dc0daa72",
+          "sta_sha256": "2711493b342d9d69c608b55d050ec439790ef73a4dea1adb64755bf10c3b3fee",
+          "msg_sha256": "c4561ee90b549a37e08175f40a3b3d1bc938b0bb6f934531a394c4181f470590",
+          "odb_sha256": "c5495cfcbd65496441f42a08f71d205305a73e0ffb5355f7e5df19ee6ae6574a",
+          "present": true,
+          "sta_completed": false,
+          "sta_not_completed": true,
+          "numerical_singularity_lines": 0,
+          "contact_status_transitions": 83,
+          "excessive_distortion_lines": 8,
+          "contact_stabilization_reached_the_solver": false,
+          "sta_tail": " THE ANALYSIS HAS NOT BEEN COMPLETED"
+        },
+        "stabilize_1e-2": {
+          "label": "stabilize_1e-2",
+          "inp": "C:\\Users\\DELL\\AppData\\Local\\Temp\\p0b_damp1e5\\Job_F1e-2.inp",
+          "inp_sha256": "dd3d7a5d75dca3ba3998c8415a47598988d356bb2ad27eb94188df7904a89b4f",
+          "sta_sha256": "9f37631814bb8f763312d2592cb115d71485e2cdac76e77b4fb188a020f578d4",
+          "msg_sha256": "2d718802b962fd2c11d5739d40f2924087d78e955258ef77e2443f6ff42a9f68",
+          "odb_sha256": "c06d3a3754ae7933f4f05fe5c16edd3c8af882b6dab72a1f480e2a2cf09ceb3e",
+          "present": true,
+          "sta_completed": true,
+          "sta_not_completed": false,
+          "numerical_singularity_lines": 0,
+          "contact_status_transitions": 5,
+          "excessive_distortion_lines": 1,
+          "contact_stabilization_reached_the_solver": true,
+          "sta_tail": " THE ANALYSIS HAS COMPLETED SUCCESSFULLY"
+        },
+        "stabilize_1e-4": {
+          "label": "stabilize_1e-4",
+          "inp": "C:\\Users\\DELL\\AppData\\Local\\Temp\\p0b_damp1e5\\Job_F1e-4.inp",
+          "inp_sha256": "7b8615b8bdc1b0ede77a889474814f3dd2d383290b04f800d5d5382fd731f2b9",
+          "sta_sha256": "2aa5b3e57c18526269782eb2c21fcd6bac4d7093c2311a2e65510629b09e96ad",
+          "msg_sha256": "02010107826c992b3f6d2e25e4024a18b92e703e651592851696119fc14c55f5",
+          "odb_sha256": "3ec598f3e64bde50d1cdc6a628d2d4c91fcf4ef9ba8f12ac01ec98a302f39948",
+          "present": true,
+          "sta_completed": true,
+          "sta_not_completed": false,
+          "numerical_singularity_lines": 0,
+          "contact_status_transitions": 5,
+          "excessive_distortion_lines": 1,
+          "contact_stabilization_reached_the_solver": true,
+          "sta_tail": " THE ANALYSIS HAS COMPLETED SUCCESSFULLY"
+        },
+        "stabilize_1e-6": {
+          "label": "stabilize_1e-6",
+          "inp": "C:\\Users\\DELL\\AppData\\Local\\Temp\\p0b_damp1e5\\Job_F1e-6.inp",
+          "inp_sha256": "794013e121c86b3510d2247698cad80a98d40e475d311233a28e6114b8d429d8",
+          "sta_sha256": "deb3c5ec648465620d6547459eee5f5956a4762b05d4c9f29d7ecd694efcddee",
+          "msg_sha256": "d2b6910fadc4ea8a428b04605f1315cb7e1109b058e76100a2b8fe9f613690dc",
+          "odb_sha256": "795d7ac4fd22f0d9e52ca59f34e39a194103ee7f36fac1e69c620e7210036e1c",
+          "present": true,
+          "sta_completed": true,
+          "sta_not_completed": false,
+          "numerical_singularity_lines": 0,
+          "contact_status_transitions": 5,
+          "excessive_distortion_lines": 1,
+          "contact_stabilization_reached_the_solver": true,
+          "sta_tail": " THE ANALYSIS HAS COMPLETED SUCCESSFULLY"
+        },
+        "stabilize_1e-8": {
+          "label": "stabilize_1e-8",
+          "inp": "C:\\Users\\DELL\\AppData\\Local\\Temp\\p0b_damp1e5\\Job_F1e-8.inp",
+          "inp_sha256": "7032d6f22a18ba77668df0da76b40b8293420bcb2bb8cc943b0f6b9b5c3a0521",
+          "sta_sha256": "67e7ed2982bd57265a706509d067630cd0fc0c9de4569dc096873bc288b49742",
+          "msg_sha256": "02589471915dd7742fae47f27eb81313fa5e46a1bc6d91db5d6736ed3354178f",
+          "odb_sha256": "ca7793c323333f81870398f54fad6a257759d50b7a8db3307e3960dc3975165f",
+          "present": true,
+          "sta_completed": true,
+          "sta_not_completed": false,
+          "numerical_singularity_lines": 0,
+          "contact_status_transitions": 5,
+          "excessive_distortion_lines": 1,
+          "contact_stabilization_reached_the_solver": true,
+          "sta_tail": " THE ANALYSIS HAS COMPLETED SUCCESSFULLY"
+        },
+        "stabilize_automatic": {
+          "label": "stabilize_automatic",
+          "inp": "C:\\Users\\DELL\\AppData\\Local\\Temp\\p0b_damp1e5\\Job_FAuto.inp",
+          "inp_sha256": "bf2dec18f79ef3dda2ea6961482d996b8525131c9b1c85dcb7f7b7c64efcb189",
+          "sta_sha256": "14c14605cc78ee9facab151425de658e94868cdd0e1b6688f0da141928ff2e82",
+          "msg_sha256": "aa1ac05ffc555430d51a4da4062e1c3f3e3392da2fb233d2c37edd195a76d0af",
+          "odb_sha256": "d2674ccc77e14b0a10e59236786242968d9d9c6e923b6b04c9a8a99453233de1",
+          "present": true,
+          "sta_completed": true,
+          "sta_not_completed": false,
+          "numerical_singularity_lines": 0,
+          "contact_status_transitions": 5,
+          "excessive_distortion_lines": 1,
+          "contact_stabilization_reached_the_solver": true,
+          "sta_tail": " THE ANALYSIS HAS COMPLETED SUCCESSFULLY"
+        },
+        "step_level_stabilize": {
+          "label": "step_level_stabilize",
+          "inp": "C:\\Users\\DELL\\AppData\\Local\\Temp\\p0b_damp1e5\\Job_StepStab.inp",
+          "inp_sha256": "4da4635eb180fb3e2fbffa5fb8dcb1b78a8d2369d8bcc257b35e53c8522644b4",
+          "sta_sha256": "30a40c240f6aa311e0730a4038f0949f202ed850f0efc7d1e31601caaa5f0ea0",
+          "msg_sha256": "a0180e52eebe62c08f24b8206e88558be3e0469b44c385d2c1c470e9e964a497",
+          "odb_sha256": "4884ebb2d80ae6c51544f643fdd31736dcc53f191cad802ddf290950c82bf4a4",
+          "present": true,
+          "sta_completed": true,
+          "sta_not_completed": false,
+          "numerical_singularity_lines": 0,
+          "contact_status_transitions": 5,
+          "excessive_distortion_lines": 1,
+          "contact_stabilization_reached_the_solver": false,
+          "sta_tail": " THE ANALYSIS HAS COMPLETED SUCCESSFULLY"
+        }
+      },
+      "unstabilized_also_produces_nan": true,
+      "evidence_for_unstabilized_nan": [
+        {
+          "job": "p0b_loadsweep/Job_U5e5",
+          "note": "COMPLETED SUCCESSFULLY with every field NaN after t=0.1599"
+        },
+        {
+          "job": "p0b_loadsweep/Job_U1e6",
+          "note": "COMPLETED SUCCESSFULLY with every field NaN after t=0.014"
+        }
+      ]
+    },
+    "wellposed_control": {
+      "Job_N_plain": {
+        "label": "Job_N_plain",
+        "inp": "C:\\Users\\DELL\\AppData\\Local\\Temp\\p0b_wellposed\\Job_N_plain.inp",
+        "inp_sha256": "d3f4f2bc609e5da98ce933621d0e52349f03598b2e10a92f5bcd54e51a3bacc5",
+        "sta_sha256": "7db86db8b97ba7ab8ed338c789d648d0ec55e40ff423e287fc5a90175c9e6ab0",
+        "msg_sha256": "6976dd8189e68e7777926bd2d90d09151fb216694c7845e40d07477a9ed940ab",
+        "odb_sha256": "e250995fd671ba79c8c5e09d222d485e0b34f630ff4ffd1cdb93dee5ba28b3c3",
+        "present": true,
         "sta_completed": true,
         "sta_not_completed": false,
-        "severe_discontinuities": 3,
-        "contact_status_transitions": 5,
-        "cae_contact_stabilization_applied": true,
+        "numerical_singularity_lines": 0,
+        "contact_status_transitions": 0,
+        "excessive_distortion_lines": 0,
+        "contact_stabilization_reached_the_solver": false,
         "sta_tail": " THE ANALYSIS HAS COMPLETED SUCCESSFULLY"
       },
-      "run_2_stabilized_1e-2": {
-        "label": "run_2_stabilized_1e-2",
-        "inp": "C:\\Users\\DELL\\AppData\\Local\\Temp\\p0b_f1_stab\\Job_F1_S2.inp",
-        "inp_sha256": "29e1612157e40cc3d6397de4661af92dceda595d027cbc39c21fc4118fc35340",
-        "sta": "C:\\Users\\DELL\\AppData\\Local\\Temp\\p0b_f1_stab\\Job_F1_S2.sta",
-        "sta_sha256": "7cd59a1618c3276becded91429d479b2e5349ecb58016c94a4a8880cfed2a6be",
-        "msg_sha256": "fcb59579d1f44cac093389d8f76f7191261463a0648fac5ee8f7b0ed8d0307cb",
+      "Job_N_stab1e4": {
+        "label": "Job_N_stab1e4",
+        "inp": "C:\\Users\\DELL\\AppData\\Local\\Temp\\p0b_wellposed\\Job_N_stab1e4.inp",
+        "inp_sha256": "8a55f424b77716bb3af06ad1f984955f1d88d472a2c2ecfb5259697d4ced3804",
+        "sta_sha256": "00ac6fa5125a17b21496584d584cd8bfa360c4cf4cbacc6c98c5937b1debeacb",
+        "msg_sha256": "098171447dd7cdd8287c335c84faff6ae76ebf357b6d69130ed27bb207a682c2",
+        "odb_sha256": "baf563aff91a52ebb0daa0d08e88d1ee9b13e365625a586a5175c712b5840b0b",
+        "present": true,
         "sta_completed": true,
         "sta_not_completed": false,
-        "severe_discontinuities": 3,
-        "contact_status_transitions": 5,
-        "cae_contact_stabilization_applied": true,
+        "numerical_singularity_lines": 0,
+        "contact_status_transitions": 0,
+        "excessive_distortion_lines": 0,
+        "contact_stabilization_reached_the_solver": true,
+        "sta_tail": " THE ANALYSIS HAS COMPLETED SUCCESSFULLY"
+      },
+      "Job_N_stab1e6": {
+        "label": "Job_N_stab1e6",
+        "inp": "C:\\Users\\DELL\\AppData\\Local\\Temp\\p0b_wellposed\\Job_N_stab1e6.inp",
+        "inp_sha256": "a8413ed8f6780a8071e00edf3d1c96b0c326e4db6d791633f5f957fad2f87412",
+        "sta_sha256": "a2a71787bf51c0bb7c32467e3be8236b65967973230f1eacebaf2c98ff193a90",
+        "msg_sha256": "7c09752a3a0bc9e4cb7b461db425bbc9188c031d22e9d3f940b4ef758da9bb46",
+        "odb_sha256": "cb0d290a265f6afb3eda45e95e54b293d88811c1e97b0053fe229bfdeaf9f091",
+        "present": true,
+        "sta_completed": true,
+        "sta_not_completed": false,
+        "numerical_singularity_lines": 0,
+        "contact_status_transitions": 0,
+        "excessive_distortion_lines": 0,
+        "contact_stabilization_reached_the_solver": true,
+        "sta_tail": " THE ANALYSIS HAS COMPLETED SUCCESSFULLY"
+      },
+      "Job_N_stabauto": {
+        "label": "Job_N_stabauto",
+        "inp": "C:\\Users\\DELL\\AppData\\Local\\Temp\\p0b_wellposed\\Job_N_stabauto.inp",
+        "inp_sha256": "1de88eeaed185a5b58770577b665511178ded1507008c1ff11ae155de3a66e8a",
+        "sta_sha256": "783f2b0c04fabb1ddd1097364fa8d730a959d97152b6eb9b2a0e701aec6f1588",
+        "msg_sha256": "f4b36f39c20cb6ed25a8fd46cb7336af0d00b33f685871ce8abeefd350e99fd9",
+        "odb_sha256": "9fa6cbcc5d21cdc1ad2da6a827e0727f597cf1667e9cadc13d9ed273190667d0",
+        "present": true,
+        "sta_completed": true,
+        "sta_not_completed": false,
+        "numerical_singularity_lines": 0,
+        "contact_status_transitions": 0,
+        "excessive_distortion_lines": 0,
+        "contact_stabilization_reached_the_solver": false,
+        "sta_tail": " THE ANALYSIS HAS COMPLETED SUCCESSFULLY"
+      },
+      "Job_N_stepstab": {
+        "label": "Job_N_stepstab",
+        "inp": "C:\\Users\\DELL\\AppData\\Local\\Temp\\p0b_wellposed\\Job_N_stepstab.inp",
+        "inp_sha256": "88ce2a6e240a9a41ada5555362e837a5ae6a728664da73906102b9a5b62dfba5",
+        "sta_sha256": "fa3181a3053d51777b8404c95652a3e0c121fdbf57f7d121962f8d2cb08cbad4",
+        "msg_sha256": "9d45a6d852da37385593fa7c51c09dcfc4b9c2f13d649f8d4ca3844759e81ac9",
+        "odb_sha256": "270548c43d2e78a74041fa5fda855001bca279de807be88e99ad31116471e182",
+        "present": true,
+        "sta_completed": true,
+        "sta_not_completed": false,
+        "numerical_singularity_lines": 0,
+        "contact_status_transitions": 0,
+        "excessive_distortion_lines": 0,
+        "contact_stabilization_reached_the_solver": false,
         "sta_tail": " THE ANALYSIS HAS COMPLETED SUCCESSFULLY"
       }
+    },
+    "cae_authoritative_syntax": {
+      "cae_written_deck": "C:\\Users\\DELL\\AppData\\Local\\Temp\\p0b_cae_stab\\Job_CaeStab.inp",
+      "cae_emitted_contact_controls": [
+        "*Contact Controls, main=MS, secondary=SS, reset",
+        "*Contact Controls, main=MS, secondary=SS, stabilize=0.0001"
+      ],
+      "matches_hand_written_syntax": true,
+      "run": {
+        "label": "cae_written_deck",
+        "inp": "C:\\Users\\DELL\\AppData\\Local\\Temp\\p0b_cae_stab\\Job_CaeStab.inp",
+        "inp_sha256": "f3e8a4980a9e4d1299afc5b01c230bae1e80b04140d32cc71519202706de0d17",
+        "sta_sha256": "7cc5ac47e4fdd35e50fba6f268847eb45f5418ab148666a680d022dbab7d3a9b",
+        "msg_sha256": "3d8fe5813eed74528773dcb3ec717034b6d1a441e4f5adf16dc5ced8f4205c40",
+        "odb_sha256": "2f82b2842a108a6d7c00e2e33fb0d2e8fab9bf8c1f6b28eb689d312a7d8f4842",
+        "present": true,
+        "sta_completed": true,
+        "sta_not_completed": false,
+        "numerical_singularity_lines": 0,
+        "contact_status_transitions": 5,
+        "excessive_distortion_lines": 1,
+        "contact_stabilization_reached_the_solver": true,
+        "sta_tail": " THE ANALYSIS HAS COMPLETED SUCCESSFULLY"
+      }
+    },
+    "product_diagnosis_chain": {
+      "before_fix": {
+        "M_U_T001": [
+          "NEGATIVE_EIGENVALUE",
+          "ZERO_PIVOT",
+          "TOO_MANY_CUTBACKS",
+          "NUMERICAL_SINGULARITY"
+        ],
+        "M_U_T02": [
+          "NEGATIVE_EIGENVALUE",
+          "TOO_MANY_CUTBACKS",
+          "NUMERICAL_SINGULARITY"
+        ],
+        "M_U_T05": [
+          "NEGATIVE_EIGENVALUE",
+          "TOO_MANY_CUTBACKS",
+          "EXCESSIVE_DISTORTION",
+          "NUMERICAL_SINGULARITY"
+        ],
+        "consequence": "CONTACT_CHATTER was never diagnosed because these runs emit zero POINTS CHANGED FROM lines, so CONTACT_STABILIZATION was never proposed. The only contact-adjacent proposal was a blanket ENCASTRE that would lock a part meant to move."
+      },
+      "after_fix": {
+        "M_U_T001": [
+          "CONTACT_OPENING"
+        ],
+        "M_U_T02": [
+          "CONTACT_OPENING"
+        ],
+        "M_U_T05": [
+          "CONTACT_OPENING"
+        ]
+      },
+      "fix": "Added CONTACT_OPENING: it diagnoses a failed job whose .msg shows numerical singularity at contact nodes, gated on the deck actually defining a contact pair. The remediator maps it to CONTACT_STABILIZATION, preferring CONTACT_CHATTER when both are present."
     }
   },
   "verdicts": {
@@ -126,29 +420,130 @@
     "run_2_real_convergence": true,
     "contact_stabilization_reached_the_solver": true,
     "repair_changed_the_outcome": true,
-    "run_2_solution_degenerate": true,
-    "repair_effective_on_tested_cases": false,
-    "stabilization_energy_gate": "BLOCKED",
-    "stabilization_energy_gate_reason": "non_finite_stabilization_energy",
-    "closed_loop_complete": false,
-    "delivery_safety_defect_found": true,
-    "delivery_safety_defect_fixed": true
+    "run_2_solution_degenerate": false,
+    "repair_effective_on_tested_cases": true,
+    "stabilization_energy_gate": "PASS",
+    "stabilization_energy_ratios": {
+      "M_T001_d1e4": 3.558984464474488e-06,
+      "M_T02_d1e3": 0.00014142907137483466,
+      "M_T02_d1e4": 0.0008747749065084253,
+      "M_T05_d1e3": 0.0008536781652563506,
+      "M_T05_d1e4": 0.005422043466493631
+    },
+    "stabilization_energy_threshold": 0.05,
+    "closed_loop_complete": true,
+    "scope": "One gap-closure contact configuration. This does not generalise to models where the failure has a different cause (e.g. the captured F1 deck, whose slider has no tangential restraint)."
+  },
+  "corrections": {
+    "previous_claim": "The NaN is caused by the stabilization itself, not by output ordering. An untouched deck and a deck with *Contact Controls but no stabilize both produce finite energies and still fail; only stabilize=... produces the NaN solution.",
+    "corrected_claim": "The NaN came from the captured deck being numerically ill-posed, not from the stabilize request. The first displacement correction is identical (-20.8 at node 21 dof 2) with no control card, with a control card but no stabilize, with dampFactor from 1e-2 to 1e-8, with fully automatic damping, and with step-level stabilization. Unstabilized runs of the same deck also produce NaN. CAE written back the same *Contact Controls syntax, so the hand-written deck was valid.",
+    "affected_artifact": "machine_validation/p0b_contact_stabilization_loop.json",
+    "why_it_mattered": "The wrong cause would have sent the next engineering step toward removing a working Abaqus feature instead of fixing the model."
   },
   "limitations": [
-    "The repaired F1 run reports COMPLETED SUCCESSFULLY but the solution is numerically degenerate: U has 1/2250 finite values, S 0/2688, RF 450/2250, and every energy sample after t=0 is NaN. Contact-only fields stay finite, so a naive all-NaN check would miss it.",
-    "The NaN is caused by the stabilization itself, not by output ordering. An untouched deck and a deck with *Contact Controls but no stabilize both produce finite energies and still fail; only stabilize=... produces the NaN solution.",
-    "Contact stabilization did not converge the compiler-generated two-block model at damp factors 1e-4, 1e-3, 1e-2, 0.1 or 0.5.",
-    "No case in this round produced a repaired run that both converged and yielded finite fields and energy evidence, so P0-b is NOT closed.",
-    "The safety guard prevents certifying a degenerate result; it does not make the repair effective."
+    "The closed loop is demonstrated on a gap-closure contact configuration built for this verification, not on a customer part.",
+    "The captured F1 deck remains a negative case: its slider has no tangential restraint and a 4e6 N load on a 20x20 mm patch, so no control card can make it well-posed. It is no longer used as evidence about stabilization.",
+    "The diagnostic gate requires deck text. When the deck is unreadable, CONTACT_OPENING stays suppressed and the failure falls back to the older diagnoses, which may propose a boundary condition instead.",
+    "The product compiler still requires an explicit target_step for a contact created in the Initial step; a remediation applied to that shape of model needs the caller to supply one.",
+    "Energy history must be requested for the stabilized step; the compiler adds it, but a deck produced elsewhere must ask for ALLSD and ALLSE."
   ],
-  "delivery_safety_fix": {
-    "defect": "Acceptance returned PASS / result_validity VALID for a completed job with no criteria even when every displacement and stress value in the ODB was NaN. ODB verification only checked binary structure, steps, frames and mesh.",
-    "fix": "Added a degenerate-solution guard to both ODB verification paths: a core field (U/UT/UR/S/RF/RM) with fewer than half its values finite, or a frame in which every data-bearing field is non-finite, now returns verified=False with an explicit reason.",
-    "verified_on_real_odbs": {
-      "nan_run_reported_completed": "rejected",
-      "failed_run_with_finite_fields": "accepted",
-      "normally_converged_run": "accepted"
+  "gate_results": {
+    "gap_closure": {
+      "M_T001_d1e4": {
+        "present": true,
+        "odb": "C:\\Users\\DELL\\AppData\\Local\\Temp\\p0b_gap2\\M_T001_d1e4.odb",
+        "status": "PASS",
+        "ratio": 3.558984464474488e-06,
+        "threshold": 0.05,
+        "informative_frames": 13,
+        "skipped_frames": 1,
+        "reason": "stabilization_energy_within_threshold"
+      },
+      "M_T02_d1e3": {
+        "present": true,
+        "odb": "C:\\Users\\DELL\\AppData\\Local\\Temp\\p0b_gap2\\M_T02_d1e3.odb",
+        "status": "PASS",
+        "ratio": 0.00014142907137483466,
+        "threshold": 0.05,
+        "informative_frames": 9,
+        "skipped_frames": 1,
+        "reason": "stabilization_energy_within_threshold"
+      },
+      "M_T02_d1e4": {
+        "present": true,
+        "odb": "C:\\Users\\DELL\\AppData\\Local\\Temp\\p0b_gap2\\M_T02_d1e4.odb",
+        "status": "PASS",
+        "ratio": 0.0008747749065084253,
+        "threshold": 0.05,
+        "informative_frames": 13,
+        "skipped_frames": 1,
+        "reason": "stabilization_energy_within_threshold"
+      },
+      "M_T05_d1e3": {
+        "present": true,
+        "odb": "C:\\Users\\DELL\\AppData\\Local\\Temp\\p0b_gap2\\M_T05_d1e3.odb",
+        "status": "PASS",
+        "ratio": 0.0008536781652563506,
+        "threshold": 0.05,
+        "informative_frames": 9,
+        "skipped_frames": 1,
+        "reason": "stabilization_energy_within_threshold"
+      },
+      "M_T05_d1e4": {
+        "present": true,
+        "odb": "C:\\Users\\DELL\\AppData\\Local\\Temp\\p0b_gap2\\M_T05_d1e4.odb",
+        "status": "PASS",
+        "ratio": 0.005422043466493631,
+        "threshold": 0.05,
+        "informative_frames": 13,
+        "skipped_frames": 1,
+        "reason": "stabilization_energy_within_threshold"
+      }
     },
-    "regression_tests": "tests/test_degenerate_odb_guard.py (9), tests/test_odb_payload_decoding.py (6)"
-  }
+    "wellposed": {
+      "Job_N_stab1e4": {
+        "present": true,
+        "odb": "C:\\Users\\DELL\\AppData\\Local\\Temp\\p0b_wellposed\\Job_N_stab1e4.odb",
+        "status": "PASS",
+        "ratio": 8.834184839603178e-08,
+        "threshold": 0.05,
+        "informative_frames": 7,
+        "skipped_frames": 1,
+        "reason": "stabilization_energy_within_threshold"
+      },
+      "Job_N_stab1e6": {
+        "present": true,
+        "odb": "C:\\Users\\DELL\\AppData\\Local\\Temp\\p0b_wellposed\\Job_N_stab1e6.odb",
+        "status": "PASS",
+        "ratio": 8.834199136682148e-10,
+        "threshold": 0.05,
+        "informative_frames": 7,
+        "skipped_frames": 1,
+        "reason": "stabilization_energy_within_threshold"
+      },
+      "Job_N_stabauto": {
+        "present": true,
+        "odb": "C:\\Users\\DELL\\AppData\\Local\\Temp\\p0b_wellposed\\Job_N_stabauto.odb",
+        "status": "PASS",
+        "ratio": 0.0,
+        "threshold": 0.05,
+        "informative_frames": 7,
+        "skipped_frames": 1,
+        "reason": "stabilization_energy_within_threshold"
+      }
+    },
+    "captured_f1": {
+      "Job_CaeStab": {
+        "present": true,
+        "odb": "C:\\Users\\DELL\\AppData\\Local\\Temp\\p0b_cae_stab\\Job_CaeStab.odb",
+        "status": "BLOCKED",
+        "ratio": null,
+        "threshold": 0.05,
+        "informative_frames": 0,
+        "skipped_frames": 10,
+        "reason": "non_finite_stabilization_energy"
+      }
+    }
+  },
+  "gate_results_source": "C:\\Users\\DELL\\AppData\\Local\\Temp\\p0b_gate_results.json"
 }

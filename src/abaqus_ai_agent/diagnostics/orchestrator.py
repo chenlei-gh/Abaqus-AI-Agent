@@ -60,6 +60,33 @@ class SelfHealingOrchestrator:
         return texts
 
     @classmethod
+    def extract_deck_text(
+        cls,
+        run: AnalysisRun,
+        workdir: Optional[str] = None,
+    ) -> str:
+        """Read the solved input deck, or return an empty string.
+
+        The deck is needed to decide whether a solver symptom can even be caused
+        by contact: a numerical singularity in a model with no contact pair is a
+        different engineering problem than one in a model that has one. Failure to
+        read it is not fatal, but callers must treat the empty result as "unknown"
+        and suppress contact-only diagnoses rather than assume contact exists.
+        """
+        job = getattr(run, "job_name", "")
+        wd = workdir or getattr(run, "work_dir", None)
+        if not job or not wd:
+            return ""
+        path = os.path.join(str(wd), job + ".inp")
+        if not os.path.exists(path):
+            return ""
+        try:
+            with open(path, "r", encoding="utf-8", errors="ignore") as handle:
+                return handle.read()
+        except Exception:
+            return ""
+
+    @classmethod
     def attempt_healing(
         cls,
         agent: Any,
@@ -111,6 +138,7 @@ class SelfHealingOrchestrator:
                 dat_text=texts["dat"],
                 log_text=texts["log"],
                 job_status=str(getattr(current_run, "engineering_status", "FAILED")),
+                inp_text=cls.extract_deck_text(current_run, workdir=workdir),
             )
 
             if not issues:

@@ -152,13 +152,18 @@ class SolverRemediator:
                 )
             )
 
-        # 4. Contact Chatter -> Contact stabilization / damping
-        if "CONTACT_CHATTER" in issue_ids:
+        # 4. Contact chatter OR a singular contact that never engaged -> contact
+        # stabilization/damping. Both mean "the pair is not transmitting stiffness".
+        # CONTACT_CHATTER is preferred when present because it names the oscillating
+        # mechanism explicitly; CONTACT_OPENING covers the gap-closure failures that
+        # emit no status transitions at all.
+        if "CONTACT_CHATTER" in issue_ids or "CONTACT_OPENING" in issue_ids:
+            source_id = "CONTACT_CHATTER" if "CONTACT_CHATTER" in issue_ids else "CONTACT_OPENING"
             remediations.append(
                 RemediationAction(
                     action_id=f"rem_contact_{uuid.uuid4().hex[:6]}",
                     category=RemediationCategory.CONTACT_STABILIZATION,
-                    diagnosis_id="CONTACT_CHATTER",
+                    diagnosis_id=source_id,
                     description="Enable contact stabilization damping to eliminate opening/closing oscillation (static dissipation ratio against ALLSE is policy-checked).",
                     parameters={
                         "stabilization_method": "DAMPING_FACTOR",

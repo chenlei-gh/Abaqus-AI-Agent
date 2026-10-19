@@ -117,6 +117,37 @@ PATTERNS = [
         ),
     },
     {
+        "id": "CONTACT_OPENING",
+        # A contact pair that has not yet engaged has no stiffness across it. Abaqus
+        # reports that as a numerical singularity on the nodes of the contacting
+        # face, not as a chatter transition:
+        #   "***WARNING: SOLVER PROBLEM. NUMERICAL SINGULARITY WHEN PROCESSING NODE
+        #    SLIDER-1.74 D.O.F. 1 RATIO = 10.E+12"
+        # Real 2025 captures of gap-closure failures contain thousands of these
+        # lines and ZERO "POINTS CHANGED FROM" transitions, which is why
+        # CONTACT_CHATTER alone never selects contact stabilization for them.
+        "regex": (
+            r"(?i)numerical singularity when processing node"
+            r"|points changed from"
+        ),
+        "severity": "WARNING",
+        # A singular contact is only a *cause* when the job actually failed, and
+        # only when the deck has a contact pair to stabilize. Both conditions are
+        # checked in diagnose_solver_artifacts before the issue is emitted.
+        "requires_failure_evidence": True,
+        "requires_contact_model": True,
+        "likely_cause": (
+            "A contact pair is not transmitting stiffness, typically because the "
+            "secondary surface has not closed onto the main surface yet, leaving the "
+            "contact nodes with no restraint in the normal or tangential direction."
+        ),
+        "remediation": (
+            "Enable contact stabilization so the pair carries stiffness while the "
+            "gap closes, then verify that artificial damping stays small against "
+            "ALLSE and is ramped out."
+        ),
+    },
+    {
         "id": "CONTACT_CHATTER",
         # Abaqus/Standard 2025 reports a chattering contact as status transitions
         # between iterations, e.g.
@@ -201,8 +232,16 @@ def diagnose_solver_artifacts(
     dat_text: str = "",
     log_text: str = "",
     job_status: Optional[str] = None,
+    inp_text: Optional[str] = None,
 ) -> Tuple[DiagnosticIssue, ...]:
-    """Diagnose real Abaqus solver text artifacts against deterministic patterns."""
+    """Diagnose real Abaqus solver text artifacts against deterministic patterns.
+
+    ``inp_text`` is optional. When supplied it lets patterns that only make sense
+    for a contact model (``CONTACT_OPENING``) be gated on the deck actually
+    defining a contact pair, instead of firing on any model that happens to be
+    singular. When it is omitted those patterns stay suppressed, because a
+    singularity without contact evidence is a different engineering problem.
+    """
     issues: List[DiagnosticIssue] = []
 
     text_sources = [
@@ -213,6 +252,7 @@ def diagnose_solver_artifacts(
     ]
 
     failure_evidence: Optional[str] = None
+    contact_model: Optional[bool] = None
 
     for p in PATTERNS:
         pattern_re = re.compile(p["regex"])
@@ -240,6 +280,13 @@ def diagnose_solver_artifacts(
             metadata["failure_gated"] = True
             metadata["failure_evidence"] = failure_evidence
 
+        if p.get("requires_contact_model"):
+            if contact_model is None:
+                contact_model = _deck_defines_contact(inp_text)
+            if not contact_model:
+                continue
+            metadata["contact_model_gated"] = True
+
         issues.append(
             DiagnosticIssue(
                 diagnosis_id=p["id"],
@@ -253,6 +300,26 @@ def diagnose_solver_artifacts(
         )
 
     return tuple(issues)
+
+
+def _deck_defines_contact(inp_text: Optional[str]) -> bool:
+    """True when the deck declares a contact pair/interaction to stabilize.
+
+    Contact stabilization mutates a specific interaction, so it is only a sound
+    remediation when such an interaction exists. ``*Contact Inclusions`` and
+    ``*Contact Controls`` alone are deliberately not enough: the former defines no
+    pair here, and the latter may already be the thing being added.
+    """
+    if not inp_text:
+        return False
+    for raw in inp_text.splitlines():
+        body = raw.split("**", 1)[0].strip()
+        if not body.startswith("*"):
+            continue
+        keyword = body[1:].split(",", 1)[0].strip().lower().replace(" ", "")
+        if keyword in ("contactpair", "contactinteraction", "contact"):
+            return True
+    return False
 
 
 def _nset_sizes(inp_text: str) -> Dict[str, Optional[int]]:

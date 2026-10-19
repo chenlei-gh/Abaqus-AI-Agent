@@ -618,12 +618,6 @@ def handle_diagnose(args: argparse.Namespace) -> int:
             elif s == ".log":
                 log_text = text
 
-    issues = list(diagnose_solver_artifacts(
-        msg_text=msg_text,
-        sta_text=sta_text,
-        dat_text=dat_text,
-        log_text=log_text,
-    ))
     inp_path = Path(args.inp) if getattr(args, "inp", None) else None
     if inp_path is None:
         if p.is_file() and p.suffix.lower() == ".inp":
@@ -637,8 +631,18 @@ def handle_diagnose(args: argparse.Namespace) -> int:
             ]
             if len(candidates) == 1:
                 inp_path = candidates[0]
+    inp_text = None
     if inp_path is not None and inp_path.is_file():
         inp_text = inp_path.read_text(encoding="utf-8", errors="ignore")
+
+    issues = list(diagnose_solver_artifacts(
+        msg_text=msg_text,
+        sta_text=sta_text,
+        dat_text=dat_text,
+        log_text=log_text,
+        inp_text=inp_text,
+    ))
+    if inp_path is not None and inp_text is not None:
         issues.extend(diagnose_inp_contract(inp_text, source=str(inp_path)))
 
     if args.json:

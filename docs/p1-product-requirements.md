@@ -440,11 +440,13 @@ P1.0 产品主入口已彻底消除高层自然语言需求与底层 20 个 L4 �
 
 > 实现状态（P0-b 真机闭环，2026-10-19）：接触稳定化已接入 `StdContactControl` + `*CONTACT CONTROLS`，不再混入 `step_controls`；稳定化能量契约见 `contracts/stabilization_energy.py`。阈值为工程策略，必须由调用方显式给出并记录来源。能量门禁按 deck 关键词解析出**唯一**启用稳定化的分析步并在该步上取证：多步均启用、关键词落在 `*STEP` 块之外、或该步在 ODB 中不存在，一律 `BLOCKED`，不得借用其他步的能量数据；`ALLSD`/`ALLSE` 时间序列无法逐帧对齐同样阻断。
 >
-> **真机结论（Abaqus/Standard 2025，本机实测，未通过验收）**：
+> **真机结论（Abaqus/Standard 2025，本机实测）**：
 > - 编译器现会在稳定化步显式请求 `ALLSD/ALLSE`（`H-Energy-Stabilization`），否则该门禁永远缺少证据。
 > - 接触振荡修复路径已可从未收敛作业触达：`CONTACT_CHATTER` 现按 Abaqus 2025 实际措辞（`POINTS CHANGED FROM ...`）匹配，并**以失败证据为前置条件**（收敛作业同样会打印少量该行，纯文本匹配必然误报；`.sta` 显示成功完成时否决该诊断）。
-> - 实测两例：不收敛的门手柄类滑动接触算例加入 `stabilize` 后 `.sta` 报 `COMPLETED SUCCESSFULLY`，但解场退化——`U` 仅 1/2250、`S` 0/2688、`RF` 450/2250 为有限值，`t>0` 的能量样本全为 `NaN`。另一例编译器生成的接触模型在 `1e-4~0.5` 各阻尼档下均不收敛。
-> - 因此**没有任何一例**同时满足「收敛」与「有限能量证据」，P0-b 仍未闭环；该修复在已测算例上应报告为无效，而非已验证。
+> - **新增 `CONTACT_OPENING`（本轮修复）**：真实的接触闭合失败（配合面尚未贴合）在 `.msg` 中表现为成百上千条 `NUMERICAL SINGULARITY WHEN PROCESSING NODE ...`，而 `POINTS CHANGED FROM` 计数为 **0**。仅靠 `CONTACT_CHATTER` 时，此类失败只会被诊断为 `ZERO_PIVOT`/`NUMERICAL_SINGULARITY`，修复建议因此落到 `ENCASTRE`（会锁死本应运动的零件），接触稳定化**从不被选中**。现该诊断以「作业确实失败」+「deck 确实定义了接触对」为双重前置，命中后映射到 `CONTACT_STABILIZATION`；两者同时命中时以更具体的 `CONTACT_CHATTER` 命名动作，且只产出一条接触修复。
+> - **闭环实测（通过）**：滑块与基块之间存在初始间隙、贴合前切向与法向均无刚度。无稳定化的三个算例全部 `THE ANALYSIS HAS NOT BEEN COMPLETED`（`NUMERICAL SINGULARITY`、`TOO MANY ATTEMPTS`）；加入接触稳定化后全部 `COMPLETED SUCCESSFULLY`，能量全程有限，门禁在 5% 策略下全部 `PASS`（实测逐帧最大 `ALLSD/ALLSE`：3.6e-6、1.4e-4、8.7e-4、8.5e-4、5.4e-3）。
+> - **门禁语义确认**：`ALLSD` 为累积量而 `ALLSE` 为瞬时量，逐帧最大值由最早的有效帧主导。0.4 mm 间隙算例首帧 34.5%、末帧 8.4e-6，门禁按契约判 `FAIL`——这是刻意保守，不是缺陷；其含义是「早期人工阻尼已不可忽略」，不得据此宣称修复在物理上无损。
+> - **前一轮结论更正**：此前记录的「NaN 由 `stabilize` 本身引起」不成立。单变量对照显示首个位移修正量在**无控制卡、仅 `*CONTACT CONTROLS` 不加 `stabilize`、`dampFactor` 从 1e-2 到 1e-8、全自动阻尼、分析步级稳定化**各变体下完全相同（`-20.8 @ node 21 dof 2`），且**不加稳定化的同款 deck 同样产出 NaN**；CAE 写回的 `*Contact Controls` 语法与手写一致。根因是捕获的 F1 模型数值病态（滑块无切向约束、4e6 N 压在 20×20 mm 上），该 deck 不再用作关于稳定化的证据。
 
 #### REQ-P1-042: 自愈审计追踪与防伪红线
 - **完整呈现修复前后 Diff**：工程报告中必须清晰保留 `Run 1 (Initial Failure)` 与 `Run 2 (Healed)` 的对比清单，严禁静默掩盖发散历史；
@@ -575,8 +577,8 @@ P1.0 产品主入口已彻底消除高层自然语言需求与底层 20 个 L4 �
 | **REQ-P1-038** | 用户已有模型 (CAE/INP/ODB) 输入规范 | P1.4 | 用户外部模型与任务类型 | 原生执行/只读后处理/工作副本 | Tier A | 原始模型只读保护，禁止无谓重建 | 🟢 **QUALIFIED** |
 | **REQ-P1-039** | 受控 INP 结构化参数编辑与版本审计 | P1.4 | 用户 INP 与参数编辑指令 | 独立工作副本、Diff 审计、求解闭环 | Tier A | 严禁原地修改，目标歧义或缺失 fail-closed | 🟢 **QUALIFIED** |
 | **REQ-P1-040** | 求解器发散特征深度诊断 | P1.4 | `.msg`, `.sta` 日志 | 发散根因诊断报告 | Tier A | 无法识别的发散安全退出 | 📋 **PLANNED** |
-| **REQ-P1-041** | 受控自愈策略库与自动重算 | P1.4 | 发散诊断结果 | 修复配置与自愈重算 | Tier A | 稳定能量超限即判定自愈无效 | 🟡 **IN_REVIEW (Repair verified to execute; ineffective on tested cases — no convergent case with finite energy evidence)** |
-| **REQ-P1-042** | 自愈审计追踪与防伪红线 | P1.4 | 修复前后两次 Run | 完整 Diff 对比明细 | Tier B | 严禁静默覆盖首次失败记录 | 🟡 **IN_REVIEW (Degenerate-solution guard added; full live rerun pending)** |
+| **REQ-P1-041** | 受控自愈策略库与自动重算 | P1.4 | 发散诊断结果 | 修复配置与自愈重算 | Tier A | 稳定能量超限即判定自愈无效 | 🟡 **IN_REVIEW (Closed loop verified on gap-closure contact; `CONTACT_OPENING` added. Still open: explicit `target_step` required for Initial-step contact, and the closed loop is one configuration, not a general claim)** |
+| **REQ-P1-042** | 自愈审计追踪与防伪红线 | P1.4 | 修复前后两次 Run | 完整 Diff 对比明细 | Tier B | 严禁静默覆盖首次失败记录 | 🟡 **IN_REVIEW (Degenerate guard added and real reruns recorded in `machine_validation/p0b_contact_stabilization_loop.json`; prior NaN root-cause claim corrected)** |
 | **REQ-P1-043** | JEV 模式隔离与防静默降级 | P1.4 | 运行模式配置与提示词 | 强类型决策与状态 | Tier B | Live 模式异常坚决 Fail-Closed | 🟢 **QUALIFIED** |
 | **REQ-P1-044** | 严格数值校验、载荷对齐与全链路审计 | P1.4 | 意图提问与响应载荷 | 完整审计束与来源标记 | Tier B | 概率分布归一化 sum=1.0、深度脱敏 | 🟢 **QUALIFIED** |
 | **REQ-P1-045** | 独立工程评测系统与 Context Merge 审计 | P1.4 | 8大工程维度基准评测 | 评测指标、严格分母、精确率与实体防呆 | Tier B | 8维度全指标分母分立、1-to-1拓扑Grounding、子句载荷隔离、物性分级闭环 | 🟡 **IN_REVIEW (Deep Topological & Evidence Hardening in Progress)** |
