@@ -26,7 +26,11 @@ def test_pressure_script():
 
 def test_raw_python_is_unbounded_escape_hatch():
     action = python_action("Model-1", "print(list(mdb.models.keys()))")
-    assert preview(action) == "print(list(mdb.models.keys()))"
+    script = preview(action)
+    # The user's code is preserved verbatim, but preview() now prepends the
+    # runtime geometry guard, so a free-form snippet is no longer unbounded.
+    assert script.endswith("print(list(mdb.models.keys()))")
+    assert "__ABQAI_GEOMETRY_GUARD__" in script
 
 
 def test_material_and_step_builders():

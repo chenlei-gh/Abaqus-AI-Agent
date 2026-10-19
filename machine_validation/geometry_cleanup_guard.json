@@ -1,0 +1,132 @@
+{
+  "schema_version": "geometry_cleanup_guard_evidence_v1",
+  "case": "runtime_geometry_cleanup_policy_guard",
+  "machine": "Abaqus/CAE 2025 (local install, noGUI)",
+  "problem": "The generic `python` Action could reach geometry-mutating Part APIs even when GeometryCleanupPolicy denied repair and virtual topology. Static substring screening can prove a violation but can never prove the absence of one, so getattr concatenation, eval, alias binding and indirect wrappers all escaped it.",
+  "patching_approaches_rejected_by_real_behaviour": [
+    {
+      "approach": "patch the Part class",
+      "result": "impossible",
+      "evidence": "TypeError: cannot set 'repairGeometry' attribute of immutable type 'abaqus.Part'"
+    },
+    {
+      "approach": "patch the Part instance",
+      "result": "impossible",
+      "evidence": "instance attribute assignment raises TypeError; the instance __dict__ is a real dict of AbaqusMethod entries but writing into it does not change attribute lookup"
+    },
+    {
+      "approach": "sys.setprofile c_call interception",
+      "result": "impossible",
+      "evidence": "Abaqus methods are not Python builtins; no c_call event was emitted for Part.checkGeometry or Part.ignoreEntity"
+    },
+    {
+      "approach": "sys.settrace on the internal _methodCallHandler frame",
+      "result": "blocks but fail-open afterwards",
+      "evidence": "Raising from the trace hook did block the call and left the part unchanged, but sys.gettrace() returned None immediately afterwards, so every later call would run unguarded"
+    }
+  ],
+  "chosen_mechanism": {
+    "name": "official methodCallback extension point",
+    "api": "methodCallback.addCallback(methodCallback.ALL_TYPES, methodName, callback)",
+    "callback_signature": "callback(method, args, kargs, userData)",
+    "attribution": "The AbaqusMethod exposes no public name attribute, so the part name and method name are parsed from repr(method), e.g. \"<AbaqusMethod  mdb.models['M'].parts['PartA'].ignoreEntity>\".",
+    "blocking": "The callback raises RuntimeError before the native call executes.",
+    "policy_source": "The callback reads the newest policy from a session-scoped state object, so a later script in the same CAE session hands the policy over instead of stacking a second registration."
+  },
+  "registration_observations": {
+    "duplicate_add": "addCallback twice registers twice; the callback then runs twice per call.",
+    "remove": "removeCallback removes one registration at a time.",
+    "callback_exists": "callbackExists reported True after one removal while a duplicate was still registered, so re-registration is guarded by callbackExists rather than assumed idempotent.",
+    "consequence": "The guard registers once per session and swaps the policy payload instead of remove/re-add, because remove-after-block proved unreliable."
+  },
+  "bypass_matrix": {
+    "direct_call": {"outcome": "BLOCKED", "entities_ignored_after": 0},
+    "getattr_concatenation": {"outcome": "BLOCKED", "entities_ignored_after": 0},
+    "eval": {"outcome": "BLOCKED", "entities_ignored_after": 0},
+    "alias_binding": {"outcome": "BLOCKED", "entities_ignored_after": 0},
+    "indirect_wrapper": {"outcome": "BLOCKED", "entities_ignored_after": 0},
+    "bare_except_around_blocked_call": {
+      "outcome": "blocked_before_mutation",
+      "entities_ignored_after": 0,
+      "note": "A bare `except Exception: pass` swallowed the RuntimeError, but the geometry was still unchanged, so the exception type is not what protects the model."
+    },
+    "repair_on_native_solid": {"outcome": "BLOCKED"},
+    "removeInvalidGeometry_on_native_solid": {"outcome": "BLOCKED"},
+    "unattributed_createVirtualTopology": {"outcome": "BLOCKED_by_name"}
+  },
+  "policy_handover": {
+    "script_1_deny_all": {
+      "registered_mutators": 11,
+      "PartA_ignoreEntity": "BLOCKED",
+      "PartA_repair": "BLOCKED",
+      "ignored_edges_after": 0
+    },
+    "script_2_mixed_policy_same_session": {
+      "PartA": {"repair": true, "virtual_topology": false},
+      "PartB": {"repair": false, "virtual_topology": true},
+      "PartA_repair": "permitted_by_policy_then_failed_in_Abaqus_with_repair_failed",
+      "PartA_ignoreEntity": "BLOCKED",
+      "PartB_ignoreEntity": "permitted",
+      "PartB_repair": "BLOCKED",
+      "ignored_edges_A": 0,
+      "ignored_edges_B": 1
+    },
+    "script_3_allow_all": {
+      "PartA_ignoreEntity": "permitted",
+      "ignored_edges_A": 1,
+      "tolerance_changes": ["geometryRefinement"]
+    },
+    "non_geometry_work_under_guard": "seedPart + generateMesh completed normally"
+  },
+  "real_api_corrections": {
+    "defect": "The policy screened and the typed actions emitted APIs that do not exist in Abaqus 2025.",
+    "screened_but_absent": ["repairGeometry", "removeRedundantEntities", "healGeometry"],
+    "actual_2025_apis": [
+      "repair()",
+      "removeInvalidGeometry()",
+      "CreateHealedPart()",
+      "writeHealedPart()",
+      "createVirtualTopology(regions=...)",
+      "ignoreEntity(entities=<tuple>)",
+      "restoreIgnoredEntity(entities=<tuple>)"
+    ],
+    "typed_action_fixes": {
+      "repair_geometry": "now emits part.repair()",
+      "remove_redundant_entities": "now emits part.removeInvalidGeometry(), the documented API that removes invalid/redundant entities and leaves a valid part",
+      "ignore_entity / restore_entity": "now coerce the region expression to a tuple, because Abaqus rejects a bare entity and a GeomSequence with 'entities; found Edge, expecting tuple'"
+    },
+    "jev_judgement": {
+      "remove_redundant_entities_mapping": {"choice": "map_to_remove_invalid_geometry", "confidence": 0.99},
+      "geometry_tolerance_knobs_scope": {"choice": "allow_but_record", "confidence": 0.76}
+    }
+  },
+  "evidence_gate_corrections": {
+    "defect": "The geometry inspection computed valid_geometry as `check = part.checkGeometry(detailed=True); if check is False: valid = False`. checkGeometry returns None on success and raises on failure, so valid_geometry was always True, and verify_cleanup_transition required it.",
+    "measured": {
+      "checkGeometry_return_on_healthy_part": "None",
+      "geometryValidity_type": "int",
+      "geometryValidity_value_unrepaired": 1
+    },
+    "fix": "valid_geometry now derives from the geometryValidity attribute and stays None when inconclusive; check_geometry_error and validity_source are recorded so the gate can tell a real result from a missing one.",
+    "gate_fix": "verify_cleanup_transition no longer counts a None -> True transition as a change, and marks the result validity_conclusive=False when either endpoint is unknown."
+  },
+  "end_to_end": {
+    "what_ran": "compile_intent_to_actions() for a cantilever box, executed in Abaqus/CAE 2025 noGUI",
+    "guard_injections_in_compiled_script": 1,
+    "guard_precedes_first_action": true,
+    "result": "GuardE2EJob.inp written with *Boundary, *Static and *Cload sections; zero tracebacks; the guard did not disturb normal model building, meshing or job export."
+  },
+  "scope_notes": [
+    "This establishes that the policy denial cannot be bypassed by the python escape hatch on Abaqus 2025, including when the snippet swallows the exception.",
+    "It does not establish that the typed repair path produces a correct engineering repair on genuinely invalid imported geometry: that requires a deliberately corrupted STEP and a before/after inspection, and remains unproven.",
+    "The guard lives in the same interpreter as the snippet, so a snippet that calls methodCallback.removeCallback could unregister it. The guard records its registrations and violations in a session state object so that removal is detectable, but in-process tamper resistance is not claimed.",
+    "Tolerance knobs (geometryRefinement, geometryPrecision) are recorded, not blocked, because they do not delete or merge topological entities."
+  ],
+  "jev_judgement": {
+    "guard_mechanism_choice": {"choice": "official_methodcallback_runtime_guard", "confidence": 1.0},
+    "scope_of_this_remediation": {"choice": "all_including_evidence_gate", "confidence": 0.28, "probabilities": {"all_including_evidence_gate": 0.46, "escape_hatch_plus_real_api_names": 0.38, "split_guard_then_evidence": 0.16}},
+    "qualification_after_guard_and_ab_fix": {"choice": "qualified_but_actions_unproven", "confidence": 0.43, "probabilities": {"qualified_but_actions_unproven": 0.57, "remain_in_review": 0.34, "qualified_within_scope": 0.09}},
+    "guard_tamper_resistance": {"noul": 0.6},
+    "next_action": {"choice": "implement_guard_and_all_defects", "confidence": 1.0}
+  }
+}

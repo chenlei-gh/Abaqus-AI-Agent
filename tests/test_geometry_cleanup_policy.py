@@ -21,10 +21,12 @@ from abaqus_ai_agent.actions.runner import preview
 from abaqus_ai_agent.actions.script import action_to_script
 from abaqus_ai_agent.contracts.geometry_cleanup import (
     DEFAULT_PART,
+    GEOMETRY_GUARD_SENTINEL,
     GeometryCleanupPolicy,
     GeometryCleanupPolicySet,
     GeometryCleanupPolicyViolation,
     enforce_cleanup_policy,
+    render_geometry_guard,
     verify_cleanup_transition,
 )
 
@@ -35,7 +37,7 @@ from abaqus_ai_agent.contracts.geometry_cleanup import (
 def test_default_policy_denies_repair_without_any_caller_configuration():
     with pytest.raises(GeometryCleanupPolicyViolation) as excinfo:
         action_to_script(repair_geometry("Model-1", "Part-1"))
-    assert "repairGeometry" in str(excinfo.value) or "repair_geometry" in str(excinfo.value)
+    assert "repair" in str(excinfo.value)
     assert excinfo.value.policy.allow_repair is False
 
 
@@ -76,7 +78,8 @@ def test_explicit_policy_can_authorise_repair_for_its_own_part():
     script = action_to_script(
         repair_geometry("Model-1", "Part-1"), cleanup_policies=policy
     )
-    assert "repairGeometry" in script
+    # ``repairGeometry`` does not exist in Abaqus 2025; ``repair`` does.
+    assert ".repair()" in script
 
 
 def test_authorising_one_part_does_not_authorise_another():
@@ -105,7 +108,7 @@ def test_wildcard_policy_applies_to_any_part():
     script = action_to_script(
         repair_geometry("Model-1", "AnyPart"), cleanup_policies=policy
     )
-    assert "repairGeometry" in script
+    assert ".repair()" in script
 
 
 def test_multiple_matching_policies_take_the_most_restrictive():
@@ -123,6 +126,8 @@ def test_multiple_matching_policies_take_the_most_restrictive():
 @pytest.mark.parametrize("snippet", [
     "mdb.models['M'].parts['P'].repairGeometry()",
     "mdb.models['M'].parts['P'].removeRedundantEntities()",
+    "mdb.models['M'].parts['P'].repair()",
+    "mdb.models['M'].parts['P'].removeInvalidGeometry()",
 ])
 def test_raw_python_repair_is_blocked_under_the_default_policy(snippet):
     with pytest.raises(GeometryCleanupPolicyViolation):
@@ -132,6 +137,7 @@ def test_raw_python_repair_is_blocked_under_the_default_policy(snippet):
 @pytest.mark.parametrize("snippet", [
     "mdb.models['M'].parts['P'].ignoreEntity(entities=e)",
     "mdb.models['M'].parts['P'].restoreIgnoredEntity(entities=e)",
+    "mdb.models['M'].parts['P'].createVirtualTopology(regions=r)",
 ])
 def test_raw_python_virtual_topology_is_blocked_under_the_default_policy(snippet):
     with pytest.raises(GeometryCleanupPolicyViolation):
@@ -140,13 +146,27 @@ def test_raw_python_virtual_topology_is_blocked_under_the_default_policy(snippet
 
 def test_raw_python_repair_passes_only_under_an_explicit_allow_repair_policy():
     policy = GeometryCleanupPolicy(part=DEFAULT_PART, allow_repair=True)
-    code = "mdb.models['M'].parts['P'].repairGeometry()"
-    assert action_to_script(python_action("Model-1", code), cleanup_policies=policy) == code
+    code = "mdb.models['M'].parts['P'].repair()"
+    script = action_to_script(python_action("Model-1", code), cleanup_policies=policy)
+    # The user's code is kept verbatim, but it now runs behind the runtime guard
+    # that records (and, for other parts, still blocks) the call.
+    assert script.endswith(code)
+    assert GEOMETRY_GUARD_SENTINEL in script
 
 
-def test_benign_python_is_unaffected_by_the_cleanup_policy():
+def test_benign_python_keeps_its_code_but_runs_behind_the_guard():
     code = "print(list(mdb.models.keys()))"
-    assert action_to_script(python_action("Model-1", code)) == code
+    script = action_to_script(python_action("Model-1", code))
+    assert script.endswith(code)
+    assert GEOMETRY_GUARD_SENTINEL in script
+
+
+def test_guard_can_be_suppressed_for_script_composition():
+    """The compiler emits one guard for the whole deck, not one per action."""
+    code = "print(1)"
+    action = python_action("Model-1", code)
+    assert action_to_script(action, include_guard=False) == code
+    assert GEOMETRY_GUARD_SENTINEL in action_to_script(action)
 
 
 def test_policy_does_not_interfere_with_unrelated_actions():
@@ -194,6 +214,117 @@ def test_missing_post_inspection_blocks_verification():
     result = verify_cleanup_transition(before, {"part": "Part-1"}, "repair_geometry")
     assert result["verified"] is False
     assert result["reason"].startswith("missing_post_inspection:")
+
+
+def test_inconclusive_validity_cannot_be_the_only_change():
+    """``checkGeometry`` raises on failure, so a constant True is not evidence."""
+    before = {"part": "P", "issues": [], "entity_counts": {"Edge": 4}, "valid_geometry": None}
+    after = {"part": "P", "issues": [], "entity_counts": {"Edge": 4}, "valid_geometry": True}
+    result = verify_cleanup_transition(before, after, "repair_geometry")
+    assert result["verified"] is False
+    assert result["validity_conclusive"] is False
+
+
+def test_validity_flip_with_decided_endpoints_still_counts():
+    before = {"part": "P", "issues": [], "entity_counts": {"Edge": 4}, "valid_geometry": False}
+    after = {"part": "P", "issues": [], "entity_counts": {"Edge": 4}, "valid_geometry": True}
+    result = verify_cleanup_transition(before, after, "repair_geometry")
+    assert result["verified"] is True
+    assert "validity_conclusive" not in result
+
+
+# --- The runtime guard matches the real Abaqus 2025 API surface ------------
+
+
+@pytest.mark.parametrize("mutator", [
+    "repair",
+    "removeInvalidGeometry",
+    "CreateHealedPart",
+    "ignoreEntity",
+    "restoreIgnoredEntity",
+    "createVirtualTopology",
+])
+def test_guard_registers_every_real_part_mutator(mutator):
+    guard = render_geometry_guard()
+    assert mutator in guard
+
+
+def test_guard_compiles_as_python_and_is_idempotent_by_construction():
+    guard = render_geometry_guard()
+    compile(guard, "<guard>", "exec")
+    # The sentinel is stored on ``sys`` so a second script in the same CAE
+    # session reuses the live callback instead of stacking a second one.
+    assert 'setattr(_abqai_sys, "__ABQAI_GEOMETRY_GUARD__", _state)' in guard
+    assert "callbackExists" in guard
+
+
+def test_guard_denies_by_default_in_the_generated_policy_payload():
+    guard = render_geometry_guard()
+    assert "{'*': {'repair': False, 'virtual_topology': False}}" in guard
+
+
+def test_guard_payload_carries_per_part_permissions():
+    guard = render_geometry_guard((
+        GeometryCleanupPolicy(part="Part-1", allow_repair=True),
+        GeometryCleanupPolicy(part="Part-2", allow_virtual_topology=True),
+    ))
+    assert "'Part-1': {'repair': True, 'virtual_topology': False}" in guard
+    assert "'Part-2': {'repair': False, 'virtual_topology': True}" in guard
+
+
+def test_guard_refuses_to_claim_enforcement_when_registration_fails():
+    """If methodCallback cannot be registered the guard must fail, not downgrade."""
+    guard = render_geometry_guard()
+    assert "cannot enforce the geometry cleanup policy for" in guard
+    assert "raise RuntimeError" in guard
+
+
+def test_guard_records_tolerance_changes_without_blocking_them():
+    guard = render_geometry_guard(None, "p.setValues(geometryRefinement=FINE)")
+    assert "for _abqai_record in ('geometryRefinement',):" in guard
+    # Recorded, not denied: the tolerance is not an entity mutation.
+    assert "geometryRefinement" not in render_geometry_guard().split("_repair_names =")[1]
+
+
+# --- Typed actions must emit APIs that exist in Abaqus 2025 ---------------
+
+
+def test_repair_action_emits_the_real_2025_api():
+    policy = GeometryCleanupPolicy(part="Part-1", allow_repair=True)
+    script = action_to_script(
+        repair_geometry("Model-1", "Part-1"), cleanup_policies=policy
+    )
+    assert ".repair()" in script
+    assert "repairGeometry" not in script
+
+
+def test_remove_redundant_entities_maps_to_the_documented_api():
+    policy = GeometryCleanupPolicy(part="Part-1", allow_repair=True)
+    script = action_to_script(
+        remove_redundant_entities("Model-1", "Part-1"), cleanup_policies=policy
+    )
+    assert "removeInvalidGeometry()" in script
+    assert "removeRedundantEntities" not in script
+
+
+def test_entity_actions_pass_a_tuple_not_a_bare_entity():
+    policy = GeometryCleanupPolicy(part="Part-1", allow_virtual_topology=True)
+    script = action_to_script(
+        ignore_entity("Model-1", "Part-1", "e[0]"), cleanup_policies=policy
+    )
+    assert "isinstance(_abqai_entities, tuple)" in script
+    assert "entities=_abqai_entities" in script
+
+
+def test_geometry_inspection_does_not_report_a_constant_validity():
+    """``checkGeometry`` returns None on success, so the old check was always True."""
+    from abaqus_ai_agent.actions.script import _geometry_inspection_script
+
+    script = _geometry_inspection_script("Model-1", {"part": "Part-1"})
+    assert "if check is False" not in script
+    assert "geometryValidity" in script
+    assert "check_geometry_error" in script
+    assert "'validity_source'" in script
 
 
 # --- Virtual topology stays a candidate, never an action -------------------

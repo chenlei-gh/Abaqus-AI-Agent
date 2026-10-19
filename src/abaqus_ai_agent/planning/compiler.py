@@ -1661,6 +1661,8 @@ def compile_intent_to_actions(
     actions.append(builders.python_action(model_name, job_code))
 
     # Render entire action list to executable script
+    from ..contracts.geometry_cleanup import render_geometry_guard
+
     script_lines = [
         "from abaqus import *",
         "from abaqusConstants import *",
@@ -1669,9 +1671,29 @@ def compile_intent_to_actions(
         f"    mdb.Model(name='{model_name}')",
         "",
     ]
+    # The runtime geometry guard is emitted once, ahead of every action, so it is
+    # in force before any geometry mutation can run. Per-action emission would
+    # repeat the prelude dozens of times for no added protection.
+    render_bodies = []
+    needs_guard = False
     for act in actions:
-        code_str = action_to_script(act)
-        script_lines.append(f"# Action: {act.action_type}")
+        body = action_to_script(act, include_guard=False)
+        if act.action_type == "python":
+            needs_guard = True
+        render_bodies.append((act.action_type, body))
+    if any(
+        act.action_type in (
+            "repair_geometry", "remove_redundant_entities",
+            "ignore_entity", "restore_entity", "inspect_geometry",
+        )
+        for act in actions
+    ):
+        needs_guard = True
+    if needs_guard:
+        script_lines.append(render_geometry_guard(None, ""))
+        script_lines.append("")
+    for action_type, code_str in render_bodies:
+        script_lines.append(f"# Action: {action_type}")
         script_lines.append(code_str)
         script_lines.append("")
 

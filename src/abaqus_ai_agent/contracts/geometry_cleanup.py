@@ -1,24 +1,207 @@
-"""Contracts for conservative geometry preparation before meshing."""
+"""Contracts for conservative geometry preparation before meshing.
+
+Two layers enforce the same policy:
+
+1. A static screen at script-generation time. It can prove a violation, but it
+   can never prove the absence of one, so it is a pre-check and not evidence.
+2. A runtime guard emitted into the generated script. It registers an Abaqus
+   ``methodCallback`` on ``ALL_TYPES`` and raises *before* a denied call mutates
+   geometry. This is the layer that actually holds: it also catches calls built
+   with ``getattr`` concatenation, ``eval``, alias binding or an indirect
+   wrapper, because attribution happens at the call site inside Abaqus.
+
+The method names below come from the Abaqus 2025 ``Part`` API surface. Older
+spellings are retained so screens still recognise decks written against them.
+"""
 
 from dataclasses import dataclass, field
 from typing import Optional, Tuple
 
 
-# Abaqus APIs that mutate geometry beyond a read-only inspection. They are
-# matched as substrings because the same operations are reachable both through
-# typed Actions and through the generic ``python`` escape hatch, and the escape
-# hatch has no structured parameters to inspect.
+# Abaqus Part APIs that mutate geometry beyond a read-only inspection. Text
+# screening matches these as substrings because a ``python`` Action has no
+# structured intent to inspect.
 REPAIR_API_TOKENS = (
+    # Abaqus 2025 API surface (verified on a real installation).
+    ".repair",
+    "removeInvalidGeometry",
+    "CreateHealedPart",
+    "writeHealedPart",
+    # Legacy spellings: absent in 2025 but still worth screening.
     "repairGeometry",
     "removeRedundantEntities",
     "healGeometry",
-    "setValues(geometryRefinement",
 )
 VIRTUAL_TOPOLOGY_API_TOKENS = (
     "ignoreEntity",
-    "restoreIgnoredEntity",
     "ignoreEntities",
+    "restoreIgnoredEntity",
+    "createVirtualTopology",
 )
+
+# Geometry-preparation tolerances do not delete or merge topological entities,
+# so they are not repair-class denials. They do change how the mesh is built, so
+# a script that sets them is recorded rather than silently ignored.
+TOLERANCE_API_TOKENS = (
+    "geometryRefinement",
+    "geometryPrecision",
+)
+
+GEOMETRY_GUARD_SENTINEL = "__ABQAI_GEOMETRY_GUARD__"
+
+REPAIR_MUTATORS = (
+    "repair",
+    "removeInvalidGeometry",
+    "CreateHealedPart",
+    "writeHealedPart",
+    "repairGeometry",
+    "removeRedundantEntities",
+    "healGeometry",
+)
+VIRTUAL_TOPOLOGY_MUTATORS = (
+    "ignoreEntity",
+    "ignoreEntities",
+    "restoreIgnoredEntity",
+    "createVirtualTopology",
+)
+# Mutators whose names exist only on ``Part``. When the guard cannot attribute a
+# call to a part it still blocks these, because there is no other object they can
+# legitimately belong to. ``repair`` is left out: it is a generic name and could
+# belong to unrelated Abaqus types.
+UNATTRIBUTED_BLOCKED_MUTATORS = VIRTUAL_TOPOLOGY_MUTATORS + (
+    "removeInvalidGeometry",
+    "CreateHealedPart",
+    "writeHealedPart",
+    "repairGeometry",
+    "removeRedundantEntities",
+    "healGeometry",
+)
+
+
+_GUARD_TEMPLATE = '''# --- abaqus-ai-agent geometry cleanup guard (generated; idempotent) ---
+def _abqai_install_geometry_guard():
+    import sys as _abqai_sys
+    _policies = @@POLICIES@@
+    _state = getattr(_abqai_sys, "@@SENTINEL@@", None)
+    if _state is None:
+        _state = {
+            "installed": False,
+            "policies": {},
+            "violations": [],
+            "tolerance_changes": [],
+            "registration_errors": [],
+            "registered": [],
+            "callback": None,
+            "module": None,
+            "tamper_events": [],
+        }
+        setattr(_abqai_sys, "@@SENTINEL@@", _state)
+    # One callback stays registered for the life of the CAE session and always
+    # consults the newest policy. Re-registering per script would mean removing
+    # the previous callback first, and Abaqus removal proved unreliable when the
+    # callback had already blocked a call.
+    _state["policies"] = _policies
+    _repair_names = @@REPAIR@@
+    _vt_names = @@VT@@
+    _unique_names = @@UNIQUE@@
+    _mutators = {}
+    for _n in _repair_names:
+        _mutators[_n] = "repair"
+    for _n in _vt_names:
+        _mutators[_n] = "virtual_topology"
+
+    def _part_name(_text):
+        if ".parts[" not in _text:
+            return None
+        _tail = _text.split(".parts[", 1)[1]
+        if "]" not in _tail:
+            return None
+        return _tail.split("]", 1)[0].strip().strip("'\\"")
+
+    def _spec_for(_part):
+        _now = _state["policies"]
+        _found = _now.get(_part)
+        if _found is None:
+            _found = _now.get("*")
+        return _found
+
+    def _guard(_method, _args, _kargs, _userData):
+        _text = repr(_method)
+        _name = _text.rsplit(".", 1)[-1].split(">")[0].strip() if "." in _text else ""
+        _kind = _mutators.get(_name)
+        if _kind is None:
+            return None
+        _part = _part_name(_text)
+        if _part is None:
+            if _name not in _unique_names:
+                return None
+            _state["violations"].append({"part": None, "method": _name, "kind": _kind})
+            raise RuntimeError(
+                "abaqus-ai-agent geometry cleanup policy could not attribute %s to a part "
+                "and refused to run it" % _name
+            )
+        _entry = _spec_for(_part)
+        _allowed = bool(_entry.get(_kind, False)) if _entry is not None else False
+        if _allowed:
+            return None
+        _state["violations"].append({"part": _part, "method": _name, "kind": _kind})
+        raise RuntimeError(
+            "abaqus-ai-agent geometry cleanup policy forbids %s on part %r (kind=%s); "
+            "the call was blocked before it could change geometry"
+            % (_name, _part, _kind)
+        )
+
+    _enforcement_needed = True
+    if _policies:
+        _enforcement_needed = any(
+            (not bool(_entry.get("repair", False)))
+            or (not bool(_entry.get("virtual_topology", False)))
+            for _entry in _policies.values()
+        )
+
+    _mc = None
+    try:
+        import methodCallback as _mc_module
+        _mc = _mc_module
+    except Exception as _exc:
+        _state["registration_errors"].append(["import:methodCallback", repr(_exc)])
+    if _mc is not None:
+        _state["module"] = _mc
+        if _state["callback"] is None:
+            _state["callback"] = _guard
+        _cb = _state["callback"]
+        _state["registered"] = []
+        for _name in list(_mutators):
+            _present = False
+            try:
+                _present = bool(_mc.callbackExists(_mc.ALL_TYPES, _name, _cb))
+            except Exception as _exc:
+                _state["registration_errors"].append(["exists:%s" % _name, repr(_exc)])
+            if _present:
+                _state["registered"].append(_name)
+                continue
+            try:
+                _mc.addCallback(_mc.ALL_TYPES, _name, _cb)
+                _state["registered"].append(_name)
+            except Exception as _exc:
+                _state["registration_errors"].append([_name, repr(_exc)])
+    if _enforcement_needed:
+        for _kind in ("repair", "virtual_topology"):
+            if any(_mutators.get(_n) == _kind for _n in _state["registered"]):
+                continue
+            raise RuntimeError(
+                "abaqus-ai-agent cannot enforce the geometry cleanup policy for %s: no "
+                "methodCallback registration succeeded (%r)"
+                % (_kind, _state["registration_errors"])
+            )
+    _state["installed"] = True
+    return _state
+
+_abqai_geometry_guard = _abqai_install_geometry_guard()
+for _abqai_record in @@TOLERANCE@@:
+    if _abqai_record not in _abqai_geometry_guard["tolerance_changes"]:
+        _abqai_geometry_guard["tolerance_changes"].append(_abqai_record)
+'''
 
 
 def _action_requires_repair(action_type):
@@ -51,6 +234,51 @@ def _action_denying_tokens(action_type, parameters, policy):
                 token for token in VIRTUAL_TOPOLOGY_API_TOKENS if token in code
             )
     return denied
+
+
+def _policy_payload(policies):
+    """Serialise resolved policies for the runtime guard.
+
+    Every policy in the set is emitted by part name plus the wildcard entry, so
+    the guard can resolve the effective policy for a part it only learns about
+    at call time. A part with no matching entry falls back to the wildcard, and
+    a missing wildcard denies, matching :meth:`GeometryCleanupPolicySet.policy_for`.
+    """
+    payload = {}
+    for policy in policies.policies:
+        payload[policy.part] = {
+            "repair": bool(policy.allow_repair),
+            "virtual_topology": bool(policy.allow_virtual_topology),
+        }
+    return payload
+
+
+def render_geometry_guard(policies=None, code=""):
+    """Return the guard prelude that must precede generated Abaqus script.
+
+    ``policies`` is the same value accepted by :func:`enforce_cleanup_policy`.
+    The prelude is idempotent: including it twice leaves one registration set.
+
+    ``code`` is only used to record geometry-preparation tolerance changes, which
+    are allowed but must stay visible in the evidence trail.
+    """
+    resolved = GeometryCleanupPolicySet.coerce(policies)
+    payload = _policy_payload(resolved)
+    tolerance = sorted(
+        {token for token in TOLERANCE_API_TOKENS if token in str(code or "")}
+    )
+    # ``repair`` is itself a ``Part`` method name that generic objects also use,
+    # so it is only blocked when the call can be attributed to a known part.
+    unique = tuple(
+        name
+        for name in UNATTRIBUTED_BLOCKED_MUTATORS
+        if name != "repair"
+    )
+    return _GUARD_TEMPLATE.replace("@@SENTINEL@@", GEOMETRY_GUARD_SENTINEL).replace(
+        "@@POLICIES@@", repr(payload)
+    ).replace("@@REPAIR@@", repr(tuple(REPAIR_MUTATORS))).replace(
+        "@@VT@@", repr(tuple(VIRTUAL_TOPOLOGY_MUTATORS))
+    ).replace("@@UNIQUE@@", repr(unique)).replace("@@TOLERANCE@@", repr(tuple(tolerance)))
 
 
 @dataclass(frozen=True)
@@ -243,8 +471,10 @@ def enforce_cleanup_policy(action, policies=None):
     :class:`GeometryCleanupPolicyViolation` is raised and no script is produced.
 
     The ``python`` escape hatch is text-screened for the mutating APIs. That
-    screen can prove a violation but cannot prove its absence, so a passing
-    snippet is never recorded as evidence that a repair policy was satisfied.
+    screen can prove a violation but cannot prove its absence, so it is only a
+    pre-check. The layer that actually constrains a free-form snippet is the
+    runtime guard from :func:`render_geometry_guard`, which must be emitted
+    ahead of any script that carries a ``python`` Action or a geometry mutation.
     """
     resolved = GeometryCleanupPolicySet.coerce(policies)
     if not isinstance(action, object) or not getattr(action, "action_type", None):
@@ -287,6 +517,12 @@ def verify_cleanup_transition(before, after, operation):
 
     Returns a deterministic dictionary suitable for Evidence/ExecutionJournal.
     It never assumes that a repair succeeded merely because the Abaqus command returned.
+
+    ``valid_geometry`` may legitimately be ``None`` when the inspection could not
+    decide. A value that is unknown before *and* after is not evidence that
+    anything changed, and a value that only moves from ``None`` to ``True`` is
+    not evidence either: ``checkGeometry`` reports failures by raising, so a
+    constant ``True`` must not be treated as a positive result.
     """
     if not isinstance(before, dict) or not isinstance(after, dict):
         raise ValueError("before and after inspections must be dictionaries")
@@ -301,8 +537,15 @@ def verify_cleanup_transition(before, after, operation):
     after_issues = len(after.get("issues") or ())
     before_counts = before.get("entity_counts") or {}
     after_counts = after.get("entity_counts") or {}
-    changed = before_issues != after_issues or before_counts != after_counts or before.get("valid_geometry") != after.get("valid_geometry")
-    return {
+    validity_before = before.get("valid_geometry")
+    validity_after = after.get("valid_geometry")
+    validity_supported = validity_before is not None and validity_after is not None
+    changed = (
+        before_issues != after_issues
+        or before_counts != after_counts
+        or (validity_supported and validity_before != validity_after)
+    )
+    result = {
         "verified": bool(changed),
         "changed": bool(changed),
         "operation": operation,
@@ -311,7 +554,10 @@ def verify_cleanup_transition(before, after, operation):
         "issues_after": after_issues,
         "entity_counts_before": before_counts,
         "entity_counts_after": after_counts,
-        "valid_geometry_before": before.get("valid_geometry"),
-        "valid_geometry_after": after.get("valid_geometry"),
+        "valid_geometry_before": validity_before,
+        "valid_geometry_after": validity_after,
         "reason": "post_inspection_diff_detected" if changed else "no_observable_change",
     }
+    if not validity_supported:
+        result["validity_conclusive"] = False
+    return result

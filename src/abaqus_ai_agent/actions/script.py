@@ -13,17 +13,28 @@ def _step_amplitude(value, default):
         raise ValueError("step amplitude must be RAMP or STEP")
     return value
 
-def action_to_script(action, cleanup_policies=None):
+def action_to_script(action, cleanup_policies=None, include_guard=True):
     # Geometry cleanup policy is enforced here, at the single point every action
     # passes through before it becomes Abaqus script. Callers that never pass a
     # policy still get the fail-closed default; the policy is never inferred to
     # be satisfied because an Action merely ran.
-    from ..contracts.geometry_cleanup import enforce_cleanup_policy
+    from ..contracts.geometry_cleanup import (
+        enforce_cleanup_policy,
+        render_geometry_guard,
+    )
 
     enforce_cleanup_policy(action, cleanup_policies)
     p, m, k = action.parameters, action.model_name, action.action_type
     if k == "python":
-        return p["code"]
+        # The text screen above can prove a violation but never the absence of
+        # one. The runtime guard is what actually constrains a free-form
+        # snippet: it blocks the denied API at the call site inside Abaqus, so
+        # getattr concatenation, eval, alias binding and wrappers cannot slip
+        # past it.
+        code = p["code"]
+        if not include_guard:
+            return code
+        return render_geometry_guard(cleanup_policies, code) + "\n" + code
     if k == "material_elastic":
         return "model=mdb.models[%s]; mat=model.materials[%s] if %s in model.materials else model.Material(%s); mat.Elastic(table=((%r,%r),))" % (_q(m), _q(p["name"]), _q(p["name"]), _q(p["name"]), p["youngs_modulus"], p["poisson"])
     if k == "material_density":
@@ -196,13 +207,17 @@ def action_to_script(action, cleanup_policies=None):
     if k == "inspect_geometry":
         return _geometry_inspection_script(m, p)
     if k == "ignore_entity":
-        return "mdb.models[%s].parts[%s].ignoreEntity(entities=%s)" % (_q(m), _q(p["part"]), p["region_expression"])
+        return _entity_tuple_script(m, p["part"], p["region_expression"], "ignoreEntity")
     if k == "restore_entity":
-        return "mdb.models[%s].parts[%s].restoreIgnoredEntity(entities=%s)" % (_q(m), _q(p["part"]), p["region_expression"])
+        return _entity_tuple_script(m, p["part"], p["region_expression"], "restoreIgnoredEntity")
     if k == "repair_geometry":
-        return "mdb.models[%s].parts[%s].repairGeometry()" % (_q(m), _q(p["part"]))
+        # Abaqus 2025 exposes ``repair``; ``repairGeometry`` does not exist.
+        return "mdb.models[%s].parts[%s].repair()" % (_q(m), _q(p["part"]))
     if k == "remove_redundant_entities":
-        return "mdb.models[%s].parts[%s].removeRedundantEntities()" % (_q(m), _q(p["part"]))
+        # ``removeRedundantEntities`` does not exist in 2025. The documented
+        # equivalent that removes redundant/invalid entities and leaves a valid
+        # part is ``removeInvalidGeometry`` (Jev map_to_remove_invalid_geometry).
+        return "mdb.models[%s].parts[%s].removeInvalidGeometry()" % (_q(m), _q(p["part"]))
     if k == "inspect_mesh":
         return _mesh_inspection_script(m, p)
     if k == "mesh_quality":
@@ -500,10 +515,30 @@ def _load_script(action):
     return "mdb.models[%s].SurfaceHeatFlux(name=%s, createStepName=%s, region=%s, magnitude=%r)" % (_q(m), _q(name), _q(step), region, p["magnitude"])
 
 
+def _entity_tuple_script(model, part, region_expression, method):
+    """Call a virtual-topology method with the tuple Abaqus actually requires.
+
+    ``ignoreEntity`` and ``restoreIgnoredEntity`` reject a bare entity and a
+    ``GeomSequence``; they require a tuple of entities. Passing ``e[0]`` raises
+    ``TypeError: entities; found Edge, expecting tuple`` on Abaqus 2025.
+    """
+    return (
+        "_abqai_entities=%s\n"
+        "_abqai_entities=_abqai_entities if isinstance(_abqai_entities, tuple) else tuple(_abqai_entities)\n"
+        "mdb.models[%s].parts[%s].%s(entities=_abqai_entities)"
+        % (region_expression, _q(model), _q(part), method)
+    )
+
+
 def _geometry_inspection_script(model, p):
     part = p["part"]
     edge_limit = p.get("min_edge_length")
     face_limit = p.get("min_face_size")
+    # ``checkGeometry`` returns None on success and raises on failure, so "did it
+    # raise" is the only usable signal. ``geometryValidity`` is an int attribute
+    # (1 valid, 0 invalid) that can be read without running a repair. The result
+    # stays None when neither source is conclusive, so a downstream gate cannot
+    # mistake a constant for evidence.
     return """from math import sqrt
 model=mdb.models[%r]
 part=model.parts[%r]
@@ -522,13 +557,21 @@ for i,f in enumerate(part.faces):
             issues.append({'entity_type':'Face','index':i,'issue_type':'small_face','metric':s,'threshold':%r,'point':getattr(f,'pointOn',None)})
     except Exception:
         pass
-valid=True
+check_error=None
 try:
-    check=part.checkGeometry(detailed=True)
-    if check is False: valid=False
+    part.checkGeometry(detailed=True)
+except Exception as _exc:
+    check_error=repr(_exc)
+valid=None
+_check_ok=check_error is None
+try:
+    _raw_validity=part.geometryValidity
+    _validity_int=int(_raw_validity)
 except Exception:
-    pass
-print({'part':%r,'valid_geometry':valid,'entity_counts':{'faces':len(part.faces),'edges':len(part.edges),'vertices':len(part.vertices)},'issues':issues})
+    _validity_int=None
+if _validity_int is not None:
+    valid=bool(_validity_int)
+print({'part':%r,'valid_geometry':valid,'validity_source':('geometryValidity' if _validity_int is not None else None),'check_geometry_passed':_check_ok,'check_geometry_error':check_error,'entity_counts':{'faces':len(part.faces),'edges':len(part.edges),'vertices':len(part.vertices)},'ignored_edges':len(list(part.ignoredEdges)),'ignored_vertices':len(list(part.ignoredVertices)),'issues':issues})
 """ % (model,part,edge_limit,edge_limit,edge_limit,face_limit,face_limit,face_limit,part)
 
 def _mesh_inspection_script(model, p):
