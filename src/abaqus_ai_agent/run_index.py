@@ -105,9 +105,15 @@ class RunIndex:
             ],
         }
         if manifest_path:
+            from .evidence_guard import evidence_writes_locked, is_protected_evidence_path
+
             p = Path(manifest_path)
+            if evidence_writes_locked() and is_protected_evidence_path(p):
+                # Committed evidence stays authoritative during tests; callers get
+                # the payload and must not refresh the tracked manifest.
+                return manifest
             p.parent.mkdir(parents=True, exist_ok=True)
-            with open(p, "w", encoding="utf-8") as f:
+            with open(p, "w", encoding="utf-8", newline="\n") as f:
                 json.dump(manifest, f, indent=2, ensure_ascii=False)
         return manifest
 

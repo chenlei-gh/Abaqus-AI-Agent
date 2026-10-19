@@ -134,8 +134,15 @@ def run_h5_solver_failure_diagnostics():
     }
 
     out_evidence_path = validation_dir / "h5_solver_failure_diagnostics_evidence.json"
-    with open(out_evidence_path, "w", encoding="utf-8") as f:
-        json.dump(evidence_payload, f, indent=2)
+    # Persist official evidence only outside the pytest read-only lock. Tests assert
+    # the returned payload and must not refresh the tracked evidence JSON.
+    from abaqus_ai_agent.evidence_guard import evidence_writes_locked
+
+    if not evidence_writes_locked():
+        with open(out_evidence_path, "w", encoding="utf-8", newline="\n") as f:
+            json.dump(evidence_payload, f, indent=2)
+    else:
+        print("Evidence write skipped: machine_validation is read-only in this process.")
 
     print("H.5 Controlled Solver Failure Diagnostics & Remediation E2E: PASS")
     print("  Diagnosed IDs: %s" % issue_ids)

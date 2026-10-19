@@ -1,7 +1,7 @@
 {
   "case_id": "CASE_09_RESERVED",
-  "name": "Case 09 Industrial Benchmark (Reserved)",
-  "category": "P3_EXTENSION",
+  "name": "Engine Cylinder Head Thermo-Mechanical Low-Cycle Fatigue",
+  "category": "P2_PACKAGE_B",
   "status": "PRE_RESERVED",
-  "domain": "structural_mechanics"
+  "domain": "engine_thermo_mechanical_fatigue"
 }

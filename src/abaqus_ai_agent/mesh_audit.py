@@ -283,7 +283,7 @@ def parse_and_audit_inp_deck(inp_path: Union[Path, str]) -> Dict[str, Any]:
     if not p.is_file():
         raise FileNotFoundError(f"Input deck not found: {p}")
 
-    lines = p.read_text(encoding="utf-8", errors="replace").splitlines()
+    lines = p.read_text(encoding="utf-8").splitlines()
 
     nodes: Dict[int, Tuple[float, float, float]] = {}
     quad_elements: Dict[int, Tuple[int, int, int, int]] = {}
@@ -377,7 +377,24 @@ def audit_inp_mesh_quality(
         )
         return gate_eval, {"passed": False, "violations": [f"inp_file_not_found:{p}"]}
 
-    parsed = parse_and_audit_inp_deck(p)
+    try:
+        parsed = parse_and_audit_inp_deck(p)
+    except UnicodeDecodeError as exc:
+        violation = f"inp_not_valid_utf8:{exc.reason}@{exc.start}"
+        gate_eval = MeshGateEvaluation(
+            passed=False,
+            status="BLOCKED",
+            metrics={},
+            violations=(violation,),
+        )
+        return gate_eval, {
+            "gate_status": "BLOCKED",
+            "passed": False,
+            "violations": [violation],
+            "governing_metrics": {},
+            "nodes_count": 0,
+            "total_elements_audited": 0,
+        }
     violations: List[str] = []
 
     if parsed["missing_node_elements_count"] > 0:

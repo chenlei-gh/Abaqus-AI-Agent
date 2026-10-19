@@ -1,0 +1,94 @@
+{
+  "case_id": "CASE_07_AUTOMOTIVE_JOUNCE_BUMPER",
+  "title": "汽车悬架超弹性缓冲块大变形自接触分析 / Automotive Suspension Hyperelastic Jounce Bumper Large-Deformation Self-Contact Analysis",
+  "domain": "automotive_suspension_hyperelastic_contact",
+  "source": "Abaqus 2025 Example Problems (rubber jounce bumper axial compression with self-contact). Exact section locator is not yet confirmed against the installed manual and is intentionally left unrecorded.",
+  "parameter_provenance": "engineering_estimate_pending_official_verification",
+  "problem_description": "评估汽车悬架聚氨酯/天然橡胶缓冲块在极限压缩工况下的力学响应：多波纹环形筋在位移控制压缩过程中发生环面折叠与强非线性面-面自接触，材料呈现近乎不可压缩的超弹性大变形与渐进刚度硬化。分析需同时给出压缩反力-行程曲线、自接触区接触压力分布、体积不可压缩性偏离量，并以显式准静态能量比判据确认加载过程不引入惯性伪影。",
+  "geometry": {
+    "bumper_type": "ribbed_annular_elastomeric_jounce_bumper",
+    "free_height_mm": 85.0,
+    "outer_diameter_mm": 70.0,
+    "inner_bore_diameter_mm": 16.0,
+    "rib_count": 3,
+    "rib_root_thickness_mm": 9.0,
+    "rib_tip_thickness_mm": 4.5,
+    "rib_wall_angle_deg": 18.0,
+    "bonded_top_plate": {
+      "plate_diameter_mm": 76.0,
+      "plate_thickness_mm": 6.0,
+      "material": "Steel"
+    },
+    "contact_surfaces": {
+      "self_contact_pair": "rib_inner_flank_to_rib_outer_flank",
+      "counterface": "rigid_upper_striker_plate",
+      "friction_coefficient": 0.15
+    },
+    "initial_interference_mm": 0.50
+  },
+  "materials": {
+    "elastomer": {
+      "material_name": "Natural Rubber 65 Shore A (near-incompressible hyperelastic)",
+      "density_tonne_mm3": 1.10e-9,
+      "constitutive_model": "Mooney-Rivlin (2nd order)",
+      "mooney_rivlin": {
+        "c10_mpa": 0.55,
+        "c01_mpa": 0.14,
+        "d1_mpa_inverse": 0.02
+      },
+      "derived_properties": {
+        "initial_shear_modulus_mu_mpa": 1.38,
+        "initial_bulk_modulus_k_mpa": 100.0,
+        "mu_over_k_ratio": 0.0138
+      },
+      "admissibility_rules": {
+        "c10_must_be_positive": true,
+        "c01_must_be_non_negative": true,
+        "d1_must_be_positive": true,
+        "bulk_modulus_must_exceed_10x_shear_modulus": true
+      }
+    },
+    "steel_plate": {
+      "material_name": "Cold-Rolled Steel DC04",
+      "density_tonne_mm3": 7.85e-9,
+      "elastic_modulus_mpa": 210000.0,
+      "poisson_ratio": 0.30,
+      "yield_strength_mpa": 210.0
+    }
+  },
+  "loading_procedure": [
+    {
+      "step_number": 1,
+      "step_name": "Step-1-Initial-Interference-Seating",
+      "analysis_type": "nonlinear_static_nlgeom",
+      "solver": "Abaqus/Standard",
+      "geometric_nonlinearity": "NLGEOM=ON",
+      "description": "以接触过盈方式消除缓冲块与刚性冲击板之间的 0.50 mm 初始间隙，建立初始接触状态与轴向预载"
+    },
+    {
+      "step_number": 2,
+      "step_name": "Step-2-Displacement-Controlled-Compression",
+      "analysis_type": "quasi_static_explicit_with_self_contact",
+      "solver": "Abaqus/Explicit",
+      "geometric_nonlinearity": "NLGEOM=ON",
+      "compression_stroke_mm": 51.0,
+      "stroke_fraction_of_free_height": 0.60,
+      "mass_scaling": "target_kinetic_to_internal_energy_ratio <= 0.05",
+      "contact_formulation": "Surface_To_Surface_Penalty_Self_Contact",
+      "description": "位移控制压缩至自由高度的 40%，环形筋相互折叠并进入自接触；显式求解以保证强接触非线性收敛"
+    }
+  ],
+  "required_outputs": ["U", "V", "S", "CPRESS", "COPEN", "CSTATUS", "ALLKE", "ALLIE"],
+  "acceptance_criteria": {
+    "max_self_contact_penetration_mm": 0.05,
+    "max_reaction_force_kn": 25.0,
+    "max_volumetric_strain": 0.02,
+    "min_effective_bulk_modulus_mpa": 50.0,
+    "max_kinetic_to_internal_energy_ratio": 0.05,
+    "max_reaction_equilibrium_error_percent": 0.50
+  },
+  "reference_benchmarks": {
+    "status": "PENDING",
+    "note": "No official reference values are recorded because the Abaqus 2025 manual section has not been verified. Populate only after a real solver run and a confirmed official locator exist."
+  }
+}

@@ -226,6 +226,22 @@ def test_cad_ingestion_errors_and_blocked_states():
             ingest_cad_file(corrupt_path)
 
 
+def test_cad_ingestion_rejects_invalid_utf8_bytes():
+    """A corrupt CAD file must not be silently repaired by replacement decoding."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        bad_step = os.path.join(tmpdir, "bad.stp")
+        with open(bad_step, "wb") as f:
+            f.write(MINIMAL_STEP_SOLID.encode("utf-8") + b"\xff\xfe")
+        with pytest.raises(CadIngestionError, match="not valid UTF-8"):
+            ingest_cad_file(bad_step)
+
+        bad_iges = os.path.join(tmpdir, "bad.igs")
+        with open(bad_iges, "wb") as f:
+            f.write(MINIMAL_IGES_FILE.encode("utf-8") + b"\xff\xfe")
+        with pytest.raises(CadIngestionError, match="not valid UTF-8"):
+            ingest_cad_file(bad_iges)
+
+
 def test_cad_bounding_box_validation_and_methods():
     """Verify CadBoundingBox invariants and geometric calculations."""
     bbox = CadBoundingBox(0.0, 0.0, 0.0, 10.0, 20.0, 30.0)

@@ -116,7 +116,7 @@ Phase 4 才开始正式产品化：MCP / Agent Tool、UI / HITL 工作台、部�
 
 **版本:** 2026-10-04  
 **基线状态:** 20 L4 / 0 L3 物理工程领域已全部通过真实机全链路合格认证 (Agent Full-Chain Qualified)  
-**最新进展:** 全仓 1129 项自动化回归测试 100% 通过（0 失败）；Phase 2 Package B 工业级实战案例已达成 6/10 QUALIFIED（Case 01~06 内容摘要与断言验证闭环。无密钥 SHA-256 不是身份签名）  
+**最新进展:** 全仓 1516 项自动化回归测试 100% 通过（0 失败，`pytest -W error`，exit 0，基线 commit `55a3c9e`）；Phase 2 Package B 工业级实战案例已达成 6/10 QUALIFIED（Case 01~06 内容摘要与断言验证闭环。无密钥 SHA-256 不是身份签名），Case 07 的输入资产与负向探针已落地、求解证据待真机  
 **战略阶段:** Phase 2 — 工程能力深度与真实复杂工程实战 (Package B 案例攻坚)
 
 ---
@@ -701,7 +701,7 @@ PHASE 2 架构
 | 4 | **Automotive Front Subframe Multi-Axis Durability** 汽车副车架多轴耐久疲劳 | 多轴时域载荷谱、衬套刚柔连接(CONN3D2)、ASTM E1049 雨流计数与 Goodman 疲劳 | Multi-step/Connector/Fatigue/Assembly | SAE / Abaqus Engineering Benchmarks (🟢 **QUALIFIED**) |
 | 5 | **Laminated Composite Cylindrical Panel Buckling** 开孔层合复合材料圆柱板屈曲 | 多层铺层、各向异性、初始缺陷、特征屈曲、Riks 后屈曲 | Composite/Buckling/Nonlinear/Riks | Abaqus 2025 Example Problems (🟢 **QUALIFIED**) |
 | 6 | **Stacked Sheet Metal Assembly Submodeling** 多层钣金紧固总成子模型 | 多层薄板、紧固件、全局→局部子模型、局部应力梯度 | Assembly/Submodel/Mesh Strategy | Abaqus 2025 Example Problems (🟢 **QUALIFIED**) |
-| 7 | **Automotive Jounce Bumper** 汽车悬架缓冲块 | 高可压缩橡胶/泡沫、大变形、初始过盈、自接触、接触压缩 | Nonlinear Rubber/Self-Contact/Explicit | Abaqus 2025 Example Problems (🟡 **PENDING - 下一攻坚优先级**) |
+| 7 | **Automotive Jounce Bumper** 汽车悬架缓冲块 | 高可压缩橡胶/泡沫、大变形、初始过盈、自接触、接触压缩 | Nonlinear Rubber/Self-Contact/Explicit | Abaqus 2025 Example Problems (🟡 **PENDING - 输入资产已落地，求解证据待真机**) |
 | 8 | **Axisymmetric Threaded Connection** 轴对称螺纹连接 | 螺纹接触、过盈/缩径、压力渗透、轴向/弯曲/内压工况 | Contact/Connector/Pressure Penetration | Abaqus 2025 Example Problems (⚪ **PRE_RESERVED**) |
 | 9 | **Cylinder Head Thermomechanical Direct Cyclic Analysis** 气缸盖热机械循环 | 周期热载荷、结构约束、循环响应、热机械疲劳相关结果 | Thermal-Structural/Direct Cyclic/Fatigue Context | Abaqus 2025 Example Problems (⚪ **PRE_RESERVED**) |
 | 10 | **Thin-Walled Elbow Elastic-Plastic Collapse** 薄壁弯头弹塑性失稳 | 内压 + 面内弯曲、几何非线性、材料塑性、极限承载能力 | Nonlinear/Plasticity/Structural Collapse | Abaqus 2025 Example Problems (⚪ **PRE_RESERVED**) |
@@ -728,7 +728,7 @@ PHASE 2 架构
 | **04** | **汽车副车架多轴耐久与疲劳分析** (替换项) | 汽车底盘结构 | ★★★★★ | ★★★★★ | ★★★★★ | ★★★★★ | **低** | 🟢 **入选并闭环 (Case 04, QUALIFIED, 替换气囊)** |
 | **05** | **开孔层合复合材料圆柱壳屈曲分析** | 航空航天结构 | ★★★★☆ | ★★★★★ | ★★★★☆ | ★★★★★ | **低** | 🟢 **入选并闭环 (Case 05, QUALIFIED)** |
 | **06** | **多层钣金装配体子模型精细化分析** | 车身/通用机械 | ★★★★☆ | ★★★★★ | ★★★★☆ | ★★★★★ | **低** | 🟢 **入选并闭环 (Case 06, QUALIFIED)** |
-| **07** | **悬架超弹性缓冲块大变形自接触** | 汽车底盘工程 | ★★★★☆ | ★★★★★ | ★★★★☆ | ★★★★★ | **低** | 🟡 **入选 (Case 07, PENDING - 下一攻坚优先级)** |
+| **07** | **悬架超弹性缓冲块大变形自接触** | 汽车底盘工程 | ★★★★☆ | ★★★★★ | ★★★★☆ | ★★★★★ | **低** | 🟡 **入选 (Case 07, 输入资产已落地；PENDING 待真机证据)** |
 | **08** | **石油套管特殊螺纹接头弹塑性接触** | 油气能源工程 | ★★★★★ | ★★★★★ | ★★★★★ | ★★★★★ | **低** | ⚪ **入选 (Case 08, PRE_RESERVED)** |
 | **09** | **内燃机气缸盖热机械低周疲劳评定** | 发动机工程 | ★★★★★ | ★★★★★ | ★★★★★ | ★★★★★ | **低** | ⚪ **入选 (Case 09, PRE_RESERVED)** |
 | **10** | **薄壁管道弯头弹塑性失稳极限承载** | 化工/核电管道 | ★★★★☆ | ★★★★★ | ★★★★☆ | ★★★★★ | **低** | ⚪ **入选 (Case 10, PRE_RESERVED)** |
@@ -745,7 +745,7 @@ PHASE 2 架构
 
 每个正式实战案例必须产生以下标准受控文件：
 1. **问题定义与标准参数**：`test_assets/engineering_cases/case_XX_.../problem_statement.json`。
-2. **端到端执行驱动与物理提取**：`tools/p2_case_XX_..._e2e.py`。
+2. **端到端执行驱动与物理提取**：`tools/p2_case_XX_<案例名>_e2e.py`（每个案例的真实求解与 ODB 提取入口）。⚠️ **事实核查：仓库中目前仅存在 `tools/generate_case_01_report.py`（Case 01 的报告渲染与交付环节），Case 02~06 的求解驱动脚本均未提交，Case 01 的求解驱动同样不在仓库内。在补齐这些驱动之前，各案例的可复现性依赖 manifest 内部摘要与已提交报告，而非可重跑脚本。**
 3. **密码学验签清单**：`machine_validation/p2_cases/case_XX_..._manifest.json`（含工件 SHA-256、Abaqus 2025 运行标记与 Acceptance 状态）。
 4. **独立工程交付报告**：单文件 HTML 与 Markdown 格式（含 Base64 嵌入矢量 SVG 与应力/接触/变形云图）。
 5. **自动化回归断言**：全量测试纳入 `tests/test_p2_package_b_cases.py`。

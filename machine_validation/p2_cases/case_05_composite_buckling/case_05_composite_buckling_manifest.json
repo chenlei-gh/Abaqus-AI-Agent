@@ -14,11 +14,11 @@
     "acceptance_passed": true,
     "report": {
       "format": "html",
-      "path": "case_05_composite_buckling_report.html",
-      "bytes": 980892,
+      "path": "Case_05_Composite_Buckling_Report.html",
+      "bytes": 979526,
       "self_contained": true
     },
-    "report_html_bytes": 980892
+    "report_html_bytes": 979526
   },
   "physical_results": {
     "mode_1_eigenvalue_buckling_load_kn": 118.6,
@@ -63,5 +63,5 @@
       "required_results": "PASS"
     }
   },
-  "audit_signature": "eb9e39cf721f145b153031ed7649c87170d129261cd1401e92220be341734894"
+  "audit_signature": "4ae91bc6822f051e504715555837e1e19bb9c1e6b799b1b9909b990ab507741c"
 }

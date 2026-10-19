@@ -85,6 +85,26 @@ def test_solve_user_inp_direct_solver_preserves_source(tmp_path):
     assert inp_file.read_bytes() == inp_content
 
 
+def test_solve_user_inp_rejects_undecodable_deck_before_assembly_audit(tmp_path):
+    """An undecodable deck must fail closed, not be replacement-decoded and then audited."""
+    from abaqus_ai_agent.validation.assembly_guard import AssemblyContractViolation
+
+    inp_file = tmp_path / "bad_bytes.inp"
+    inp_file.write_bytes(b"*HEADING\nBad\xff\xfe\n*STEP\n*STATIC\n*END STEP\n")
+
+    executor = DummyInpExecutor()
+    with pytest.raises(AssemblyContractViolation, match="not valid UTF-8"):
+        solve_user_inp(
+            executor=executor,
+            inp_path=inp_file,
+            job_name="BadBytesJob",
+            assembly_scope={"parts": []},
+        )
+
+    # The solver must never be invoked when the pre-submission audit cannot read the deck.
+    assert executor.invocations == []
+
+
 def test_solve_user_inp_with_external_project_context(tmp_path):
     """Verify solve_user_inp establishes isolated solver workspace under project_context."""
     ctx = _make_dummy_project(tmp_path)

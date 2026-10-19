@@ -131,6 +131,158 @@ def test_cross_registry_references_provenance():
         )
 
 
+def test_registry_declares_no_dangling_runner_entrypoint():
+    """Any runner declared by the registry must resolve to an existing script in the repo."""
+    repo = get_repo_root()
+    with open(repo / "validation_assets" / "registry.json", "r", encoding="utf-8") as fh:
+        assets_data = json.load(fh)
+
+    for case in assets_data["cases"]:
+        runner = case.get("runner")
+        if runner in (None, "", "TBD"):
+            continue
+        script_rel = runner.split()[0]
+        assert (repo / script_rel).is_file(), (
+            f"Case {case['case_id']} advertises runner '{runner}' but '{script_rel}' does not exist; "
+            "reproducibility is tracked via evidence_manifest and case_dir/case_manifest.json"
+        )
+
+
+def test_registry_case_identity_matches_case_manifest_for_all_cases():
+    """Every registered case must agree with its own case_manifest.json on identity and status."""
+    repo = get_repo_root()
+    with open(repo / "validation_assets" / "registry.json", "r", encoding="utf-8") as fh:
+        assets_data = json.load(fh)
+
+    assert len(assets_data["cases"]) == 10
+    for case in assets_data["cases"]:
+        manifest_file = repo / case["case_dir"] / "case_manifest.json"
+        assert manifest_file.is_file(), f"Missing case manifest for {case['case_id']}"
+        with open(manifest_file, "r", encoding="utf-8") as fh:
+            m_data = json.load(fh)
+
+        assert m_data["case_id"] == case["case_id"]
+        assert m_data["name"] == case["case_name"], f"Name divergence for {case['case_id']}"
+        assert m_data["domain"] == case["physics_domain"], f"Domain divergence for {case['case_id']}"
+        assert m_data["status"] == case["qualification_status"], (
+            f"Status divergence for {case['case_id']}: "
+            f"registry={case['qualification_status']} manifest={m_data['status']}"
+        )
+
+
+def test_registry_evidence_paths_exist_with_exact_case():
+    """Every evidence path a QUALIFIED case advertises must resolve on a case-sensitive filesystem.
+
+    Windows resolves 'Report.html' and 'report.html' identically, so an existence check alone
+    cannot catch a casing drift that breaks Linux CI. Match against the exact directory listing.
+    """
+    repo = get_repo_root()
+    with open(repo / "validation_assets" / "registry.json", "r", encoding="utf-8") as fh:
+        assets_data = json.load(fh)
+
+    def exact_exists(rel: str) -> bool:
+        current = repo
+        for part in rel.replace("\\", "/").split("/"):
+            if part in ("", "."):
+                continue
+            try:
+                names = {p.name for p in current.iterdir()}
+            except (FileNotFoundError, NotADirectoryError):
+                return False
+            if part not in names:
+                return False
+            current = current / part
+        return True
+
+    for case in assets_data["cases"]:
+        if case.get("qualification_status") != "QUALIFIED":
+            continue
+        referenced = list(case.get("input_assets") or [])
+        if case.get("evidence_manifest"):
+            referenced.append(case["evidence_manifest"])
+        referenced.extend(case.get("report_assets") or [])
+        if case.get("report_figures_dir"):
+            referenced.append(case["report_figures_dir"])
+
+        for rel in referenced:
+            assert exact_exists(rel), (
+                f"Case {case['case_id']} references '{rel}' which does not exist with that exact casing"
+            )
+
+
+def test_registry_report_assets_are_files_only():
+    """report_assets must be a list of files; figure directories live in report_figures_dir."""
+    repo = get_repo_root()
+    with open(repo / "validation_assets" / "registry.json", "r", encoding="utf-8") as fh:
+        assets_data = json.load(fh)
+
+    for case in assets_data["cases"]:
+        for rel in case.get("report_assets") or []:
+            assert (repo / rel).is_file(), (
+                f"Case {case['case_id']} report_assets entry '{rel}' is not a file; "
+                "directories belong in report_figures_dir"
+            )
+
+
+def test_package_b_manifests_report_bytes_match_committed_file():
+    """Every Package B manifest must not assert a report byte count that disagrees with the file.
+
+    Manifests record byte counts for self-contained HTML reports. Because evidence files are
+    pinned to LF via .gitattributes, a recorded count is verifiable on any platform.
+    """
+    repo = get_repo_root()
+    manifests = sorted((repo / "machine_validation" / "p2_cases").glob("*/*_manifest.json"))
+    assert manifests, "No Package B evidence manifests found"
+
+    for manifest_file in manifests:
+        with open(manifest_file, "r", encoding="utf-8") as fh:
+            manifest = json.load(fh)
+
+        report = manifest.get("summary", {}).get("report", {})
+        rel = report.get("path")
+        if not rel:
+            continue
+
+        report_file = manifest_file.parent / rel
+        assert report_file.is_file(), (
+            f"{manifest_file.parent.name} manifest points at '{rel}' which does not exist"
+        )
+
+        actual = len(report_file.read_bytes().replace(b"\r\n", b"\n"))
+        claimed = report.get("bytes")
+        if claimed is not None:
+            assert claimed == actual, (
+                f"{manifest_file.parent.name}: manifest claims {claimed} bytes for '{rel}' "
+                f"but the LF-normalized file is {actual} bytes"
+            )
+
+        claimed_html = manifest.get("summary", {}).get("report_html_bytes")
+        if claimed_html is not None:
+            assert claimed_html == actual, (
+                f"{manifest_file.parent.name}: report_html_bytes={claimed_html} disagrees with "
+                f"the LF-normalized '{rel}' ({actual} bytes)"
+            )
+
+
+def test_package_b_manifests_do_not_claim_unavailable_artifacts():
+    """A manifest must not list solver artifacts that cannot be retrieved from the repository."""
+    repo = get_repo_root()
+    manifests = sorted((repo / "machine_validation" / "p2_cases").glob("*/*_manifest.json"))
+
+    for manifest_file in manifests:
+        with open(manifest_file, "r", encoding="utf-8") as fh:
+            manifest = json.load(fh)
+
+        for artifact in manifest.get("artifacts", []):
+            path = artifact.get("path")
+            name = artifact.get("name", "<unnamed>")
+            assert path, f"{manifest_file.parent.name}: artifact '{name}' has no path"
+            resolved = Path(path) if Path(path).is_absolute() else repo / path
+            assert resolved.is_file(), (
+                f"{manifest_file.parent.name}: artifact '{name}' is claimed at '{path}' but does not exist"
+            )
+
+
 def test_case_manifests_single_source_of_truth():
     """Ensure individual case_manifest.json metrics and registry.json criteria keys are identical."""
     repo = get_repo_root()

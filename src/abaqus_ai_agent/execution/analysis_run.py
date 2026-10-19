@@ -581,7 +581,13 @@ class AnalysisRunner:
                 with open(candidate_inp, "rb") as f_raw:
                     raw_bytes = f_raw.read()
                 audited_inp_sha256 = hashlib.sha256(raw_bytes).hexdigest()
-                generated_deck = raw_bytes.decode("utf-8", errors="replace")
+                try:
+                    generated_deck = raw_bytes.decode("utf-8")
+                except UnicodeDecodeError as exc:
+                    raise AssemblyContractViolation(
+                        f"Pre-submission audit blocked: generated solver deck '{candidate_inp}' "
+                        f"is not valid UTF-8 ({exc}); refusing to audit replacement-decoded content."
+                    ) from exc
 
                 # 4. Perform fail-closed assembly contract audit
                 audit_res = audit_inp_assembly_contract(

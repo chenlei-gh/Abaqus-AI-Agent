@@ -40,22 +40,43 @@ def clean_ephemeral_test_runs():
         shutil.rmtree(mock_dir, ignore_errors=True)
 
 
-def pytest_sessionfinish(session, exitstatus):
-    """Fail the session if a test rewrote tracked evidence despite the read-only guard."""
-    from abaqus_ai_agent.evidence_guard import (
-        EvidenceRewriteError,
-        tracked_evidence_dirty,
-    )
+def _evidence_snapshot() -> tuple[str, ...] | None:
+    """Capture tracked evidence state relative to HEAD.
+
+    The comparison in ``pytest_sessionfinish`` is between session start and end, not
+    against a clean HEAD: a developer may legitimately start a run with intentional
+    evidence edits, and those must not be reported as test-time rewrites.
+    """
+    from abaqus_ai_agent.evidence_guard import EvidenceRewriteError, tracked_evidence_dirty
 
     try:
-        dirty = tracked_evidence_dirty()
+        return tuple(sorted(tracked_evidence_dirty()))
     except EvidenceRewriteError:
+        return None
+
+
+@pytest.fixture(scope="session", autouse=True)
+def evidence_baseline_snapshot():
+    """Record the pre-existing evidence state before any test runs."""
+    pytest._evidence_baseline = _evidence_snapshot()
+    yield
+
+
+def pytest_sessionfinish(session, exitstatus):
+    """Fail the session if a test rewrote tracked evidence despite the read-only guard."""
+    baseline = getattr(pytest, "_evidence_baseline", None)
+    after = _evidence_snapshot()
+    if baseline is None or after is None:
         return
-    if dirty:
-        session.exitstatus = 1
-        reporter = session.config.pluginmanager.getplugin("terminalreporter")
-        message = "Tracked evidence was rewritten during tests:\n" + "\n".join(dirty)
-        if reporter is not None:
-            reporter.write_line(message, red=True)
-        else:
-            print(message)
+
+    newly_dirty = tuple(sorted(set(after) - set(baseline)))
+    if not newly_dirty:
+        return
+
+    session.exitstatus = 1
+    reporter = session.config.pluginmanager.getplugin("terminalreporter")
+    message = "Tracked evidence was rewritten during tests:\n" + "\n".join(newly_dirty)
+    if reporter is not None:
+        reporter.write_line(message, red=True)
+    else:
+        print(message)

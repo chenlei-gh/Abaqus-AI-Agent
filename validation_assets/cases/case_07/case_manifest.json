@@ -1,7 +1,7 @@
 {
-  "case_id": "CASE_07_RESERVED",
-  "name": "Case 07 Industrial Benchmark (Reserved)",
-  "category": "P3_EXTENSION",
-  "status": "PRE_RESERVED",
-  "domain": "structural_mechanics"
+  "case_id": "CASE_07_AUTOMOTIVE_JOUNCE_BUMPER",
+  "name": "Automotive Suspension Hyperelastic Jounce Bumper Self-Contact",
+  "category": "P2_PACKAGE_B",
+  "status": "PENDING",
+  "domain": "automotive_suspension_hyperelastic_contact"
 }

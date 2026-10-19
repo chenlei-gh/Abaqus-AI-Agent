@@ -190,8 +190,15 @@ with open('%s', 'w') as f:
     }
 
     evidence_file = validation_dir / "h6_image_intent_grounding_evidence.json"
-    with open(evidence_file, "w", encoding="utf-8") as f:
-        json.dump(evidence_payload, f, indent=2)
+    # Persist official evidence only outside the pytest read-only lock. Tests assert
+    # the returned payload and must not refresh the tracked evidence JSON.
+    from abaqus_ai_agent.evidence_guard import evidence_writes_locked
+
+    if not evidence_writes_locked():
+        with open(evidence_file, "w", encoding="utf-8", newline="\n") as f:
+            json.dump(evidence_payload, f, indent=2)
+    else:
+        print("Evidence write skipped: machine_validation is read-only in this process.")
 
     print("H.6 Image/Intent to Region Grounding E2E: PASS")
     print("  Fixed face expression: %s -> %d face(s)" % (fixed_expr, cae_results["fixed_face_count"]))

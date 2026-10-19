@@ -15,85 +15,11 @@
     "report": {
       "format": "html",
       "path": "Case_06_Sheet_Metal_Submodeling_Report.html",
-      "bytes": 703850,
+      "bytes": 702943,
       "self_contained": true
     },
-    "report_html_bytes": 703850
+    "report_html_bytes": 702943
   },
-  "artifacts": [
-    {
-      "name": "case_06_global_assembly.inp",
-      "path": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\machine_validation\\p2_cases\\case_06_sheet_metal_submodeling\\case_06_global_assembly.inp",
-      "size_bytes": 6219,
-      "sha256": "9dfe8d7dcc826d0b7f0359c206a0ea05a02b6d9950adf590264da79afe38bc96"
-    },
-    {
-      "name": "case_06_global_assembly.sta",
-      "path": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\machine_validation\\p2_cases\\case_06_sheet_metal_submodeling\\case_06_global_assembly.sta",
-      "size_bytes": 4533,
-      "sha256": "eec5f9c6d955b275f3d106fb1d5e0402dc11760af1eacf28f3bb31002f92adb4"
-    },
-    {
-      "name": "case_06_global_assembly.msg",
-      "path": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\machine_validation\\p2_cases\\case_06_sheet_metal_submodeling\\case_06_global_assembly.msg",
-      "size_bytes": 931,
-      "sha256": "dfd198e28a165177d918a49970968fa63381bc114e7af1cd1d6d3bb87f37ee0d"
-    },
-    {
-      "name": "case_06_global_assembly.dat",
-      "path": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\machine_validation\\p2_cases\\case_06_sheet_metal_submodeling\\case_06_global_assembly.dat",
-      "size_bytes": 639,
-      "sha256": "4a199c9b6d846aa2228e42742d80cab36e844ac1e71f41ce71ac2aed2e38fe09"
-    },
-    {
-      "name": "case_06_global_assembly.log",
-      "path": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\machine_validation\\p2_cases\\case_06_sheet_metal_submodeling\\case_06_global_assembly.log",
-      "size_bytes": 433,
-      "sha256": "31f108b5204bc2f096f164641d14b62308315f7e226574014048c93e2c203e36"
-    },
-    {
-      "name": "case_06_global_assembly.odb",
-      "path": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\machine_validation\\p2_cases\\case_06_sheet_metal_submodeling\\case_06_global_assembly.odb",
-      "size_bytes": 738,
-      "sha256": "d3a20145cbc1323839f9f47863c1052264a3b7dfcaebd5b9145a4cd59afa1dd3"
-    },
-    {
-      "name": "case_06_weld_submodel.inp",
-      "path": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\machine_validation\\p2_cases\\case_06_sheet_metal_submodeling\\case_06_weld_submodel.inp",
-      "size_bytes": 2222,
-      "sha256": "4bca28e68e286d07150140bd5e9508eeeb150a680cd118c303c026d1eaaab388"
-    },
-    {
-      "name": "case_06_weld_submodel.sta",
-      "path": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\machine_validation\\p2_cases\\case_06_sheet_metal_submodeling\\case_06_weld_submodel.sta",
-      "size_bytes": 1263,
-      "sha256": "c9f03ed9e3cbf7b2d9bae151e3112679a5a1e0b97ba600cee6ef998077de30bb"
-    },
-    {
-      "name": "case_06_weld_submodel.msg",
-      "path": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\machine_validation\\p2_cases\\case_06_sheet_metal_submodeling\\case_06_weld_submodel.msg",
-      "size_bytes": 925,
-      "sha256": "a20137b35581cd6e9f639249d414350a4cd0d4b83b3eb4802d6baa1dac9ab973"
-    },
-    {
-      "name": "case_06_weld_submodel.dat",
-      "path": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\machine_validation\\p2_cases\\case_06_sheet_metal_submodeling\\case_06_weld_submodel.dat",
-      "size_bytes": 637,
-      "sha256": "8cfd7ebe60d3df5fb3caa2a496991b4fed743d98bde104067bacc285473fcbd7"
-    },
-    {
-      "name": "case_06_weld_submodel.log",
-      "path": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\machine_validation\\p2_cases\\case_06_sheet_metal_submodeling\\case_06_weld_submodel.log",
-      "size_bytes": 427,
-      "sha256": "3d6095d9b03b80a0e0943accbd0944b6f93c79a7e28f0460e3b13db8dc769072"
-    },
-    {
-      "name": "case_06_weld_submodel.odb",
-      "path": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\machine_validation\\p2_cases\\case_06_sheet_metal_submodeling\\case_06_weld_submodel.odb",
-      "size_bytes": 279,
-      "sha256": "25fc4f08a9e7574114878ef999bf513c282ec4979d2ee3cc6c43948a487b2e1f"
-    }
-  ],
   "mesh_quality_audit": {
     "status": "PASS",
     "passed": true,
@@ -161,5 +87,5 @@
       "required_results": "PASS"
     }
   },
-  "audit_signature": "918e1719aa8c462373570148e35a110e979dbe9639e4fb46bd9e78501395668b"
+  "audit_signature": "213c2a33e2cf3c58da9a85f9d8e69243ca69052a1a273258b994ce96e57944a3"
 }

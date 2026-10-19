@@ -766,20 +766,16 @@ def test_case_06_sheet_metal_submodeling_manifest_integrity():
     assert acc.get("passed") is True
     assert acc.get("criteria_count") == 5
 
-    # 7. Machine solver artifacts check
+    # 7. Solver artifacts: manifests may only list artifacts that are retrievable.
+    #    Solver binaries (.odb/.sta/.msg/.dat/.log/.inp) are gitignored repo-wide, so this
+    #    case records no artifact inventory rather than asserting evidence that is absent.
     artifacts = manifest.get("artifacts", [])
-    assert len(artifacts) >= 12, "Solver artifacts (.inp, .sta, .msg, .dat, .log, .odb) must be tracked in manifest"
-    artifact_names = [a.get("name") for a in artifacts]
-    assert "case_06_global_assembly.inp" in artifact_names
-    assert "case_06_weld_submodel.inp" in artifact_names
-    assert "case_06_global_assembly.sta" in artifact_names
-    assert "case_06_weld_submodel.sta" in artifact_names
-    assert "case_06_global_assembly.msg" in artifact_names
-    assert "case_06_weld_submodel.msg" in artifact_names
-    assert "case_06_global_assembly.log" in artifact_names
-    assert "case_06_weld_submodel.log" in artifact_names
-    assert "case_06_global_assembly.odb" in artifact_names
-    assert "case_06_weld_submodel.odb" in artifact_names
+    for artifact in artifacts:
+        name = artifact.get("name")
+        path = artifact.get("path")
+        assert path, f"Artifact '{name}' must declare a resolvable path"
+        resolved = Path(path) if Path(path).is_absolute() else ROOT / path
+        assert resolved.is_file(), f"Artifact '{name}' is claimed at '{path}' but does not exist"
 
     # 8. True Mesh Quality Audit check
     mesh_audit = manifest.get("mesh_quality_audit", {})
@@ -1043,3 +1039,257 @@ def test_package_b_cases_folder_organization_and_standalone_html():
         # Enforce pure HTML delivery - strictly zero legacy .md files in the subfolder
         md_files = list(sub_dir.glob("*.md"))
         assert len(md_files) == 0, f"Legacy Markdown files found in {sub_dir}: {[f.name for f in md_files]}"
+
+# ---------------------------------------------------------------------------
+# Case 07: Automotive Suspension Hyperelastic Jounce Bumper Self-Contact
+#
+# Case 07 has no committed solver evidence yet. These tests deliberately assert
+# only what exists: the problem statement, its declared admissibility rules, and
+# that acceptance stays fail-closed when the physical evidence is wrong or absent.
+# No manifest, report, or solver artifact is fabricated here.
+# ---------------------------------------------------------------------------
+
+CASE_07_PROBLEM = (
+    ROOT
+    / "test_assets"
+    / "engineering_cases"
+    / "case_07_jounce_bumper_self_contact"
+    / "problem_statement.json"
+)
+
+CASE_07_CRITERIA = [
+    {
+        "name": "max_self_contact_penetration",
+        "value_key": "contact_penetration",
+        "operator": "<=",
+        "limit": 0.05,
+        "unit": "mm",
+    },
+    {
+        "name": "max_reaction_force",
+        "value_key": "reaction_force_kn",
+        "operator": "<=",
+        "limit": 25.0,
+        "unit": "kN",
+    },
+    {
+        "name": "max_volumetric_strain",
+        "value_key": "volumetric_strain",
+        "operator": "<=",
+        "limit": 0.02,
+        "unit": "-",
+    },
+    {
+        "name": "min_effective_bulk_modulus",
+        "value_key": "effective_bulk_modulus",
+        "operator": ">=",
+        "limit": 50.0,
+        "unit": "MPa",
+    },
+    {
+        "name": "max_kinetic_internal_energy_ratio",
+        "value_key": "kinetic_internal_energy_ratio",
+        "operator": "<=",
+        "limit": 0.05,
+        "unit": "-",
+    },
+]
+
+
+def _case_07_problem():
+    assert CASE_07_PROBLEM.is_file(), f"Problem statement missing at {CASE_07_PROBLEM}"
+    with open(CASE_07_PROBLEM, "r", encoding="utf-8") as f:
+        return json.load(f)
+
+
+def test_case_07_problem_statement_specification():
+    problem = _case_07_problem()
+
+    assert problem.get("case_id") == "CASE_07_AUTOMOTIVE_JOUNCE_BUMPER"
+    assert "Jounce Bumper" in problem.get("title", "")
+    assert problem.get("domain") == "automotive_suspension_hyperelastic_contact"
+
+    geometry = problem["geometry"]
+    assert geometry["free_height_mm"] == 85.0
+    assert geometry["rib_count"] == 3
+    assert geometry["initial_interference_mm"] == 0.50
+    assert geometry["contact_surfaces"]["self_contact_pair"]
+
+    elastomer = problem["materials"]["elastomer"]
+    assert elastomer["constitutive_model"].startswith("Mooney-Rivlin")
+    assert elastomer["mooney_rivlin"]["c10_mpa"] > 0.0
+    assert elastomer["mooney_rivlin"]["d1_mpa_inverse"] > 0.0
+    # Near-incompressibility: bulk modulus must dominate the shear modulus.
+    derived = elastomer["derived_properties"]
+    assert derived["initial_bulk_modulus_k_mpa"] >= 10.0 * derived["initial_shear_modulus_mu_mpa"]
+
+    steps = problem["loading_procedure"]
+    assert [s["step_number"] for s in steps] == [1, 2]
+    assert steps[1]["solver"] == "Abaqus/Explicit"
+    assert steps[1]["stroke_fraction_of_free_height"] == 0.60
+    assert steps[1]["contact_formulation"] == "Surface_To_Surface_Penalty_Self_Contact"
+
+    # Criteria declared by the problem statement must be exactly what the tests enforce.
+    assert set(problem["acceptance_criteria"]) == {
+        "max_self_contact_penetration_mm",
+        "max_reaction_force_kn",
+        "max_volumetric_strain",
+        "min_effective_bulk_modulus_mpa",
+        "max_kinetic_to_internal_energy_ratio",
+        "max_reaction_equilibrium_error_percent",
+    }
+
+
+def test_case_07_evidence_is_honestly_absent():
+    """Case 07 must not advertise evidence that no real solver run produced."""
+    registry_file = ROOT / "validation_assets" / "registry.json"
+    with open(registry_file, "r", encoding="utf-8") as f:
+        registry = json.load(f)
+
+    case = next(
+        c for c in registry["cases"] if c["case_id"] == "CASE_07_AUTOMOTIVE_JOUNCE_BUMPER"
+    )
+    assert case["qualification_status"] == "PENDING"
+    assert case["evidence_manifest"] == ""
+    assert case["report_assets"] == []
+    assert case["input_assets"] == [
+        "test_assets/engineering_cases/case_07_jounce_bumper_self_contact/problem_statement.json"
+    ]
+
+    # No stale manifest or report may exist on disk for a case with no solver run.
+    evidence_dir = ROOT / "machine_validation" / "p2_cases"
+    assert not list(evidence_dir.glob("case_07*")), (
+        "Case 07 has no real solver run, so no manifest or report may be committed"
+    )
+
+    problem = _case_07_problem()
+    assert problem["reference_benchmarks"]["status"] == "PENDING"
+
+
+def test_case_07_negative_probe_self_contact_penetration():
+    """Self-penetration beyond the declared allowance must fail acceptance."""
+    class ConvergenceCheck:
+        converged = True
+
+    values = {
+        "contact_penetration": 0.18,  # 0.18 mm > 0.05 mm allowance: self-contact is not enforced
+        "reaction_force_kn": 18.4,
+        "volumetric_strain": 0.008,
+        "effective_bulk_modulus": 96.0,
+        "kinetic_internal_energy_ratio": 0.021,
+    }
+    res = evaluate_result_acceptance(
+        result_status="completed",
+        values=values,
+        criteria=CASE_07_CRITERIA,
+        convergence=ConvergenceCheck(),
+        require_evidence=False,
+    )
+    assert not res.passed
+    assert res.status == "FAIL"
+    assert any("criterion:max_self_contact_penetration" in f for f in res.failures)
+
+
+def test_case_07_negative_probe_volumetric_locking():
+    """An elastomer with the wrong bulk response must not be accepted as near-incompressible."""
+    class ConvergenceCheck:
+        converged = True
+
+    values = {
+        "contact_penetration": 0.01,
+        "reaction_force_kn": 22.0,
+        "volumetric_strain": 0.064,  # > 0.02: bulk response is wrong, not near-incompressible
+        "effective_bulk_modulus": 21.0,  # < 50 MPa: D1 is too large for this elastomer
+        "kinetic_internal_energy_ratio": 0.018,
+    }
+    res = evaluate_result_acceptance(
+        result_status="completed",
+        values=values,
+        criteria=CASE_07_CRITERIA,
+        convergence=ConvergenceCheck(),
+        require_evidence=False,
+    )
+    assert not res.passed
+    assert res.status == "FAIL"
+    assert any("criterion:max_volumetric_strain" in f for f in res.failures)
+    assert any("criterion:min_effective_bulk_modulus" in f for f in res.failures)
+
+
+def test_case_07_negative_probe_invalid_hyperelastic_parameters():
+    """Hyperelastic parameters violating admissibility must be rejected before solving."""
+    problem = _case_07_problem()
+    rules = problem["materials"]["elastomer"]["admissibility_rules"]
+    assert rules["c10_must_be_positive"] is True
+    assert rules["bulk_modulus_must_exceed_10x_shear_modulus"] is True
+
+    def admissible(params):
+        c10 = params["c10_mpa"]
+        c01 = params["c01_mpa"]
+        d1 = params["d1_mpa_inverse"]
+        mu = 2.0 * (c10 + c01)
+        k = 2.0 / d1 if d1 else float("inf")
+        return c10 > 0.0 and c01 >= 0.0 and d1 > 0.0 and k >= 10.0 * mu
+
+    baseline = problem["materials"]["elastomer"]["mooney_rivlin"]
+    assert admissible(baseline) is True
+
+    # Negative C10 collapses the shear modulus: not a physical elastomer.
+    assert admissible({"c10_mpa": -0.55, "c01_mpa": 0.14, "d1_mpa_inverse": 0.02}) is False
+    # C01 below zero is outside the Mooney-Rivlin stability domain.
+    assert admissible({"c10_mpa": 0.55, "c01_mpa": -0.14, "d1_mpa_inverse": 0.02}) is False
+    # D1 must be positive (K = 2/D1 must be finite and positive).
+    assert admissible({"c10_mpa": 0.55, "c01_mpa": 0.14, "d1_mpa_inverse": 0.0}) is False
+    # A compressible response (K below 10x mu) contradicts near-incompressibility.
+    assert admissible({"c10_mpa": 0.55, "c01_mpa": 0.14, "d1_mpa_inverse": 5.0}) is False
+
+
+def test_case_07_negative_probe_missing_contact_evidence_blocks():
+    """Without a complete contact report the self-contact claim cannot be verified."""
+    from abaqus_ai_agent.contact_diagnostics import diagnose_contact
+    from abaqus_ai_agent.contracts.contact import ExpectedContactBehavior
+
+    expected = ExpectedContactBehavior(
+        expected_state="contact",
+        expected_separation=0.05,
+        allowed_initial_interference=0.50,
+        required_outputs=("CSTATUS", "CPRESS", "COPEN"),
+    )
+
+    # Only CPRESS is present: CSTATUS and COPEN are missing, so the contract is unanswerable.
+    partial = {
+        "region": "rib_self_contact",
+        "fields": {
+            "CPRESS": {"status": "available", "values": [{"data": 4.2}]},
+        },
+        "history": {"status": "available"},
+    }
+    report = diagnose_contact(partial, expected)
+    assert not report.passed
+    assert report.diagnostics[0].status == "insufficient_evidence"
+    assert "CSTATUS" in report.diagnostics[0].message or "COPEN" in report.diagnostics[0].message
+
+    # Full evidence with contact maintained and no overclosure beyond allowance passes.
+    complete = {
+        "region": "rib_self_contact",
+        "fields": {
+            "CSTATUS": {"status": "available", "values": [{"data": "closed"}]},
+            "CPRESS": {"status": "available", "values": [{"data": 4.2}]},
+            "COPEN": {"status": "available", "values": [{"data": -0.20}]},
+        },
+        "history": {"status": "available"},
+    }
+    assert diagnose_contact(complete, expected).passed
+
+    # Overclosure beyond the declared initial interference must fail.
+    overclosed = {
+        "region": "rib_self_contact",
+        "fields": {
+            "CSTATUS": {"status": "available", "values": [{"data": "closed"}]},
+            "CPRESS": {"status": "available", "values": [{"data": 9.9}]},
+            "COPEN": {"status": "available", "values": [{"data": -0.85}]},
+        },
+        "history": {"status": "available"},
+    }
+    report_over = diagnose_contact(overclosed, expected)
+    assert not report_over.passed
+    assert any(d.name == "unexpected_overclosure" for d in report_over.failed)

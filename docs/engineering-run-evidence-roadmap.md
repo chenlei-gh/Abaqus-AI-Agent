@@ -2637,7 +2637,7 @@ Abaqus-AI-Agent/
 ## 31. Phase 2 Package B 剩余实战案例 (Case 07 ~ Case 10) 实施规划与最新基线状态 (Remaining Engineering Cases & Next Phased Implementation Plan)
 
 **项目：** `chenlei-gh/Abaqus-AI-Agent`  
-**基线状态：** 全仓 1129 项自动化测试 100% PASS，Git 工作区完全干净（同步至 commit `3216375`）  
+**基线状态：** 全仓 **1516 项**自动化测试 100% PASS（`pytest -W error`，exit 0），基线 commit `55a3c9e`；本地工作区另含本轮未提交改动（P0 严格解码修复 + P1 注册表与证据一致性治理 + 证据写入守卫 + Case 07 输入资产）  
 **当前核心主线：** Phase 2 Package B 工业级实战案例（目标：10/10 QUALIFIED 达成 Engineering Kernel Freeze）  
 **单一权威源 (SSOT) 说明：** 本路线图负责记录工程执行演进、测试流水与交付证据；有关 Package B 的核心需求规格、五维评分准则、候选案例池评估以及交付物格式规范，统一以 [`docs/p1-product-requirements.md` 第 11.2 节](p1-product-requirements.md#112-package-b10-个真实复杂工程项目正式实战) 为准。
 
@@ -2651,7 +2651,7 @@ Abaqus-AI-Agent/
 | **Case 04** | 汽车副车架多轴耐久与疲劳 | 多轴时域时程谱、CONN3D2 衬套、雨流计数/Goodman | SAE Technical Papers & ASTM E1049 | 🟢 **QUALIFIED** | `case_04_subframe_manifest.json`<br>`tests/test_p2_package_b_cases.py` |
 | **Case 05** | 开孔复合材料圆柱壳屈曲 | 各向异性多层铺层、特征值屈曲、Riks 后屈曲 | NASA SP-8007 & Abaqus 2025 Example | 🟢 **QUALIFIED** | `case_05_composite_buckling_manifest.json`<br>`tests/test_p2_package_b_cases.py` |
 | **Case 06** | 多工序钣金装配与子模型 | 冲压回弹、焊点装配、局部子模型缺口应力 | Numisheet Benchmark & Abaqus 2025 Example | 🟢 **QUALIFIED** | `case_06_sheet_metal_manifest.json`<br>`tests/test_p2_package_b_cases.py` |
-| **Case 07** | **汽车悬架超弹性缓冲块大变形自接触** | Mooney-Rivlin/Ogden 超弹性本构、大变形折叠自接触、非线性刚度硬化曲线 | Abaqus 2025 Example Problems 1.1.X / Benchmarks | 🟡 **PENDING (下一攻坚优先级)** | `test_assets/engineering_cases/case_07_...`<br>待开发 |
+| **Case 07** | **汽车悬架超弹性缓冲块大变形自接触** | Mooney-Rivlin/Ogden 超弹性本构、大变形折叠自接触、非线性刚度硬化曲线 | Abaqus 2025 Example Problems 1.1.X / Benchmarks | 🟡 **PENDING (输入资产已落地，求解证据待真机)** | `test_assets/engineering_cases/case_07_jounce_bumper_self_contact/problem_statement.json`<br>`tests/test_p2_package_b_cases.py`（6 项规格与负向探针） |
 | **Case 08** | **石油套管特殊螺纹接头弹塑性接触** | 螺纹高阶多牙微滑移接触、弹塑性过盈连接、高压密封压力渗透判据 | Abaqus 2025 Example Problems & ISO 13679 | ⚪ **PRE_RESERVED** | 待开发 |
 | **Case 09** | **内燃机气缸盖热机械低周疲劳评定** | 瞬态热传导、弹塑性蠕变循环、Coffin-Manson / Morrow 低周疲劳评定 | Abaqus 2025 Example Problems | ⚪ **PRE_RESERVED** | 待开发 |
 | **Case 10** | **薄壁管道弯头弹塑性失稳极限承载** | 几何与材料双重非线性、面内弯曲截面卵形化 (Brazier 效应)、弧长法 (Riks) 极限垮塌荷载 | Abaqus 2025 Example Problems | ⚪ **PRE_RESERVED** | 待开发 |
@@ -2664,12 +2664,14 @@ Abaqus-AI-Agent/
 - 几何特征具备多波纹外形，受压折叠时发生强非线性面-面自接触 (Self-Contact)。
 
 **2. 交付与验证准则 (Exit Criteria)**：
-- 产出 `test_assets/engineering_cases/case_07_jounce_bumper_self_contact/problem_statement.json`。
-- 实现 E2E 执行驱动及无头 ODB 提取脚本。
-- 生成 SHA-256 内容摘要防意外篡改凭证 `case_07_jounce_bumper_manifest.json` 与 Evidence V2 审计摘要。摘要不能单独证明签署者身份。
-- 产出独立单文件 HTML 交付报告（嵌入矢量 SVG 与应力/接触云图）。
-- 在 `validation_assets/registry.json` 中更新资格状态为 `QUALIFIED`，并登记 official reference。
-- 在 `tests/test_p2_package_b_cases.py` 补充物理验收断言与负向探针（接触自穿透、材料参数失效应阻断）。
+- [x] 产出 `test_assets/engineering_cases/case_07_jounce_bumper_self_contact/problem_statement.json`（几何、Mooney-Rivlin 参数、两步加载与验收阈值；`parameter_provenance` 明确标注为待官方核对的工程估计）。
+- [ ] 实现 E2E 执行驱动及无头 ODB 提取脚本。
+- [ ] 生成 SHA-256 内容摘要防意外篡改凭证 `case_07_jounce_bumper_manifest.json` 与 Evidence V2 审计摘要。摘要不能单独证明签署者身份。
+- [ ] 产出独立单文件 HTML 交付报告（嵌入矢量 SVG 与应力/接触云图）。
+- [ ] 在 `validation_assets/registry.json` 中更新资格状态为 `QUALIFIED`，并登记 official reference（当前 `reference_source` 仍为 `TBD`，`reference_benchmarks` 标注 `PENDING`）。
+- [x] 在 `tests/test_p2_package_b_cases.py` 补充问题定义规格断言与负向探针（自穿透超限、体积锁定/bulk 模量失配、超弹性参数不可容许、接触证据缺失与过度过盈）。
+
+> **当前诚实边界**：Registry 中 Case 07 的 `evidence_manifest` 为空、`report_assets` 为空，且 `machine_validation/p2_cases/` 下不得存在 `case_07*` 任何文件。守护测试 `test_case_07_evidence_is_honestly_absent` 会失败于任何伪造尝试。真实证据只能在拥有许可的 Abaqus 机器上完成 Step 1~2 后填入。
 
 ### 31.3 后续未完成事项全景看板 (Pending Roadmap Matrix)
 

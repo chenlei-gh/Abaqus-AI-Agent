@@ -15,7 +15,7 @@
     "report_html_bytes": 673343,
     "report": {
       "format": "html",
-      "path": "Case_04_Subframe_Fatigue_Report.html",
+      "path": "Case_04_Subframe_Durability_Report.html",
       "bytes": 673343,
       "self_contained": true
     }
@@ -63,5 +63,5 @@
       "required_results": "PASS"
     }
   },
-  "audit_signature": "148871df63096ffaaf29921c110f25bd822367a471af387254b454555e8d09a8"
+  "audit_signature": "beeeefa99c6ea0bf5462994a8fc4e61b3aebbd598481656181c9e792a5e99852"
 }

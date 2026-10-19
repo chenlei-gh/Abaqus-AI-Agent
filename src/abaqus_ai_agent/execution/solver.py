@@ -55,34 +55,47 @@ class AbaqusJobResult:
         return self.state == "COMPLETED" and self.is_live and self.odb_path is not None and self.odb_path.is_file()
 
 
+def _read_solver_log(log_file: Path, label: str, diags: List[str]) -> Optional[str]:
+    """Decode a solver log strictly, recording any substitution before falling back.
+
+    The ABORTED decision keys on plain-ASCII markers, so a replacement decode still
+    finds them. Recording the degradation keeps a corrupted log from being reported
+    as if it had been decoded cleanly.
+    """
+    try:
+        return log_file.read_text(encoding="utf-8")
+    except UnicodeDecodeError:
+        diags.append(f"{label}_DECODE_ERR: log is not valid UTF-8; markers parsed with replacement substitution")
+        return log_file.read_text(encoding="utf-8", errors="replace")
+    except Exception as e:
+        diags.append(f"{label}_READ_ERR: {e}")
+        return None
+
+
 def parse_solver_diagnostics(workdir: Path, job_name: str) -> List[str]:
     """Parse authentic .msg, .sta, and .dat logs for solver error messages and convergence issues."""
     diags: List[str] = []
-    
+
     msg_file = workdir / f"{job_name}.msg"
     if msg_file.is_file():
-        try:
-            content = msg_file.read_text(encoding="utf-8", errors="replace")
+        content = _read_solver_log(msg_file, "MSG", diags)
+        if content is not None:
             for line in content.splitlines():
                 line_upper = line.upper()
                 if "***ERROR" in line_upper or "***FATAL" in line_upper:
                     diags.append(f"MSG_ERROR: {line.strip()}")
                 elif "THE ANALYSIS HAS NOT BEEN COMPLETED" in line_upper:
                     diags.append("MSG: Analysis not completed")
-        except Exception as e:
-            diags.append(f"MSG_READ_ERR: {e}")
 
     sta_file = workdir / f"{job_name}.sta"
     if sta_file.is_file():
-        try:
-            content = sta_file.read_text(encoding="utf-8", errors="replace")
+        content = _read_solver_log(sta_file, "STA", diags)
+        if content is not None:
             for line in content.splitlines():
                 if "THE ANALYSIS HAS NOT BEEN COMPLETED" in line.upper():
                     diags.append("STA: Analysis not completed")
                 elif "THE ANALYSIS HAS COMPLETED SUCCESSFULLY" in line.upper():
                     diags.append("STA: Analysis completed successfully")
-        except Exception as e:
-            diags.append(f"STA_READ_ERR: {e}")
 
     return diags
 

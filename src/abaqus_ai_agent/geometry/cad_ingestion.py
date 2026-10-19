@@ -8,8 +8,10 @@ kernel dependencies, ensuring 100% offline predictability across Linux/Windows.
 
 from datetime import datetime, timezone
 import hashlib
+import io
 import os
 import re
+from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 from ..capability_boundary import CapabilityBoundary, CapabilityStatus
@@ -157,6 +159,24 @@ def _parse_step_args(s: str) -> List[Any]:
     return result
 
 
+def _read_cad_text(file_path: str, fmt: str) -> str:
+    """Decode a CAD exchange file strictly; a corrupt file must not be silently repaired.
+
+    STEP and IGES carry non-ASCII through documented escape sequences, so raw invalid
+    UTF-8 bytes indicate corruption or a wrong encoding. Falling back to replacement
+    would hand a partially-parsed geometry to the analysis as if it were authentic.
+    """
+    try:
+        return Path(file_path).read_text(encoding="utf-8")
+    except UnicodeDecodeError as exc:
+        raise CadIngestionError(
+            f"{fmt} file {file_path} is not valid UTF-8 (byte offset {exc.start}); "
+            "refusing to parse a partially decoded geometry"
+        ) from exc
+    except OSError as exc:
+        raise CadIngestionError(f"Failed to read {fmt} file {file_path}: {exc}") from exc
+
+
 def _parse_step_file(file_path: str, provenance: CadProvenance) -> GeometryModel:
     """Deterministic, pure-python STEP ISO-10303-21 B-Rep entity extractor.
 
@@ -168,11 +188,7 @@ def _parse_step_file(file_path: str, provenance: CadProvenance) -> GeometryModel
     """
     import math
 
-    try:
-        with open(file_path, "r", encoding="utf-8", errors="replace") as f:
-            content = f.read()
-    except Exception as exc:
-        raise CadIngestionError(f"Failed to read STEP file {file_path}: {exc}") from exc
+    content = _read_cad_text(file_path, "STEP")
 
     if "ISO-10303-21;" not in content:
         raise CadIngestionError(f"File {file_path} is not a valid ISO-10303-21 STEP exchange file")
@@ -576,11 +592,10 @@ def _parse_step_file(file_path: str, provenance: CadProvenance) -> GeometryModel
 
 def _parse_iges_file(file_path: str, provenance: CadProvenance) -> GeometryModel:
     """Lightweight deterministic IGES (ANSI Y14.26M) 80-column section extractor."""
-    try:
-        with open(file_path, "r", encoding="utf-8", errors="replace") as f:
-            lines = f.readlines()
-    except Exception as exc:
-        raise CadIngestionError(f"Failed to read IGES file {file_path}: {exc}") from exc
+    content = _read_cad_text(file_path, "IGES")
+    # StringIO keeps readlines() semantics identical to the previous text-mode read:
+    # IGES records are positional, so splitting boundaries must not change.
+    lines = io.StringIO(content).readlines()
 
     if not lines or len(lines[0]) < 73:
         raise CadIngestionError(f"File {file_path} is too short or malformed for IGES format")

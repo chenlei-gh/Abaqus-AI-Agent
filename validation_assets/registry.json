@@ -1,7 +1,8 @@
 {
   "registry_version": "1.0.0",
-  "generated_at": "2026-10-12T07:30:00Z",
+  "generated_at": "2026-10-19T00:00:00Z",
   "canonical_root": "validation_assets",
+  "evidence_entrypoint": "Reproducibility evidence is recorded per case in `evidence_manifest` and `case_dir/case_manifest.json`; this registry intentionally defines no shared runner script.",
   "cases": [
     {
       "case_id": "CASE_01_BOLTED_PIPE_FLANGE",
@@ -9,13 +10,11 @@
       "physics_domain": "pressure_vessel_piping",
       "reference_source": "REF_ABQ_BOLTED_FLANGE",
       "qualification_status": "QUALIFIED",
-      "runner": "tools/run_p2_package_b_validation.py --case case_01",
       "input_assets": [
         "test_assets/engineering_cases/case_01_bolted_pipe_flange/problem_statement.json"
       ],
       "evidence_manifest": "machine_validation/p2_cases/case_01_bolted_pipe_flange/case_01_flange_manifest.json",
       "report_assets": [
-        "machine_validation/p2_cases/case_01_bolted_pipe_flange/case_01_flange_report.html",
         "machine_validation/p2_cases/case_01_bolted_pipe_flange/Case_01_Bolted_Flange_Report.html"
       ],
       "case_dir": "validation_assets/cases/case_01",
@@ -31,13 +30,11 @@
       "physics_domain": "nuclear_pressure_vessel_closure",
       "reference_source": "REF_ABQ_RPV_CLOSURE",
       "qualification_status": "QUALIFIED",
-      "runner": "tools/run_p2_package_b_validation.py --case case_02",
       "input_assets": [
         "test_assets/engineering_cases/case_02_reactor_pressure_vessel_closure/problem_statement.json"
       ],
       "evidence_manifest": "machine_validation/p2_cases/case_02_reactor_pressure_vessel_closure/case_02_rpv_manifest.json",
       "report_assets": [
-        "machine_validation/p2_cases/case_02_reactor_pressure_vessel_closure/case_02_rpv_report.html",
         "machine_validation/p2_cases/case_02_reactor_pressure_vessel_closure/Case_02_RPV_Closure_Report.html"
       ],
       "case_dir": "validation_assets/cases/case_02",
@@ -53,22 +50,20 @@
       "physics_domain": "engine_thermo_mechanical_contact",
       "reference_source": "REF_ABQ_EXHAUST_MANIFOLD",
       "qualification_status": "QUALIFIED",
-      "runner": "tools/run_p2_package_b_validation.py --case case_03",
       "input_assets": [
         "test_assets/engineering_cases/case_03_exhaust_manifold_thermo_mechanical/problem_statement.json"
       ],
       "evidence_manifest": "machine_validation/p2_cases/case_03_exhaust_manifold/case_03_manifold_manifest.json",
       "report_assets": [
-        "machine_validation/p2_cases/case_03_exhaust_manifold/case_03_manifold_report.html",
-        "machine_validation/p2_cases/case_03_exhaust_manifold/Case_03_Exhaust_Manifold_Report.html",
-        "machine_validation/p2_cases/case_03_exhaust_manifold/assets"
+        "machine_validation/p2_cases/case_03_exhaust_manifold/Case_03_Exhaust_Manifold_Report.html"
       ],
       "case_dir": "validation_assets/cases/case_03",
       "acceptance_criteria": {
         "peak_temperature_c": "<= 650.0",
         "fillet_thermal_mises_stress_mpa": "<= 450.0",
         "flange_slip_clearance_mm": "<= 0.8"
-      }
+      },
+      "report_figures_dir": "machine_validation/p2_cases/case_03_exhaust_manifold/assets"
     },
     {
       "case_id": "CASE_04_AUTOMOTIVE_SUBFRAME_FATIGUE",
@@ -76,22 +71,20 @@
       "physics_domain": "chassis_durability_fatigue",
       "reference_source": "REF_SAE_SUBFRAME_DURABILITY",
       "qualification_status": "QUALIFIED",
-      "runner": "tools/run_p2_package_b_validation.py --case case_04",
       "input_assets": [
         "test_assets/engineering_cases/case_04_subframe_fatigue/problem_statement.json"
       ],
       "evidence_manifest": "machine_validation/p2_cases/case_04_subframe_durability/case_04_subframe_manifest.json",
       "report_assets": [
-        "machine_validation/p2_cases/case_04_subframe_durability/case_04_subframe_report.html",
-        "machine_validation/p2_cases/case_04_subframe_durability/Case_04_Subframe_Durability_Report.html",
-        "machine_validation/p2_cases/case_04_subframe_durability/assets"
+        "machine_validation/p2_cases/case_04_subframe_durability/Case_04_Subframe_Durability_Report.html"
       ],
       "case_dir": "validation_assets/cases/case_04",
       "acceptance_criteria": {
         "palmgren_miner_cumulative_damage": "<= 0.85",
         "goodman_safety_factor": ">= 1.20",
         "target_durability_km": ">= 300000"
-      }
+      },
+      "report_figures_dir": "machine_validation/p2_cases/case_04_subframe_durability/assets"
     },
     {
       "case_id": "CASE_05_COMPOSITE_CYLINDER_BUCKLING",
@@ -99,22 +92,20 @@
       "physics_domain": "aerospace_composite_structures",
       "reference_source": "REF_NASA_SP8007_COMPOSITE_BUCKLING",
       "qualification_status": "QUALIFIED",
-      "runner": "tools/run_p2_package_b_validation.py --case case_05",
       "input_assets": [
         "test_assets/engineering_cases/case_05_composite_buckling/problem_statement.json"
       ],
       "evidence_manifest": "machine_validation/p2_cases/case_05_composite_buckling/case_05_composite_buckling_manifest.json",
       "report_assets": [
-        "machine_validation/p2_cases/case_05_composite_buckling/case_05_composite_buckling_report.html",
-        "machine_validation/p2_cases/case_05_composite_buckling/Case_05_Composite_Buckling_Report.html",
-        "machine_validation/p2_cases/case_05_composite_buckling/assets"
+        "machine_validation/p2_cases/case_05_composite_buckling/Case_05_Composite_Buckling_Report.html"
       ],
       "case_dir": "validation_assets/cases/case_05",
       "acceptance_criteria": {
         "eigenvalue_bifurcation_factor": ">= 1.05",
         "riks_limit_load_ratio": ">= 0.80",
         "tsai_wu_failure_index": "< 1.0"
-      }
+      },
+      "report_figures_dir": "machine_validation/p2_cases/case_05_composite_buckling/assets"
     },
     {
       "case_id": "CASE_06_SHEET_METAL_SUBMODELING",
@@ -122,43 +113,48 @@
       "physics_domain": "automotive_body_structures",
       "reference_source": "REF_NUMISHEET_SUBMODELING",
       "qualification_status": "QUALIFIED",
-      "runner": "tools/run_p2_package_b_validation.py --case case_06",
       "input_assets": [
         "test_assets/engineering_cases/case_06_sheet_metal_submodeling/problem_statement.json"
       ],
       "evidence_manifest": "machine_validation/p2_cases/case_06_sheet_metal_submodeling/case_06_sheet_metal_manifest.json",
       "report_assets": [
-        "machine_validation/p2_cases/case_06_sheet_metal_submodeling/case_06_sheet_metal_submodeling_report.html",
-        "machine_validation/p2_cases/case_06_sheet_metal_submodeling/Case_06_Sheet_Metal_Submodeling_Report.html",
-        "machine_validation/p2_cases/case_06_sheet_metal_submodeling/assets"
+        "machine_validation/p2_cases/case_06_sheet_metal_submodeling/Case_06_Sheet_Metal_Submodeling_Report.html"
       ],
       "case_dir": "validation_assets/cases/case_06",
       "acceptance_criteria": {
         "springback_deflection_mm": "<= 2.5",
         "submodel_boundary_driven_displacement_error": "<= 0.02",
         "weld_notch_fatigue_safety_margin": ">= 1.25"
-      }
+      },
+      "report_figures_dir": "machine_validation/p2_cases/case_06_sheet_metal_submodeling/assets"
     },
     {
-      "case_id": "CASE_07_RESERVED",
-      "case_name": "Case 07 Industrial Benchmark (Reserved)",
-      "physics_domain": "structural_mechanics",
+      "case_id": "CASE_07_AUTOMOTIVE_JOUNCE_BUMPER",
+      "case_name": "Automotive Suspension Hyperelastic Jounce Bumper Self-Contact",
+      "physics_domain": "automotive_suspension_hyperelastic_contact",
       "reference_source": "TBD",
-      "qualification_status": "PRE_RESERVED",
-      "runner": "TBD",
-      "input_assets": [],
+      "qualification_status": "PENDING",
+      "input_assets": [
+        "test_assets/engineering_cases/case_07_jounce_bumper_self_contact/problem_statement.json"
+      ],
       "evidence_manifest": "",
       "report_assets": [],
       "case_dir": "validation_assets/cases/case_07",
-      "acceptance_criteria": {}
+      "acceptance_criteria": {
+        "max_self_contact_penetration_mm": "<= 0.05",
+        "max_reaction_force_kn": "<= 25.0",
+        "max_volumetric_strain": "<= 0.02",
+        "min_effective_bulk_modulus_mpa": ">= 50.0",
+        "max_kinetic_to_internal_energy_ratio": "<= 0.05",
+        "max_reaction_equilibrium_error_percent": "<= 0.50"
+      }
     },
     {
       "case_id": "CASE_08_RESERVED",
-      "case_name": "Case 08 Industrial Benchmark (Reserved)",
-      "physics_domain": "structural_mechanics",
+      "case_name": "Axisymmetric Premium Threaded Casing Connection Elasto-Plastic Contact",
+      "physics_domain": "oil_gas_threaded_connection",
       "reference_source": "TBD",
       "qualification_status": "PRE_RESERVED",
-      "runner": "TBD",
       "input_assets": [],
       "evidence_manifest": "",
       "report_assets": [],
@@ -167,11 +163,10 @@
     },
     {
       "case_id": "CASE_09_RESERVED",
-      "case_name": "Case 09 Industrial Benchmark (Reserved)",
-      "physics_domain": "structural_mechanics",
+      "case_name": "Engine Cylinder Head Thermo-Mechanical Low-Cycle Fatigue",
+      "physics_domain": "engine_thermo_mechanical_fatigue",
       "reference_source": "TBD",
       "qualification_status": "PRE_RESERVED",
-      "runner": "TBD",
       "input_assets": [],
       "evidence_manifest": "",
       "report_assets": [],
@@ -180,11 +175,10 @@
     },
     {
       "case_id": "CASE_10_RESERVED",
-      "case_name": "Case 10 Industrial Benchmark (Reserved)",
-      "physics_domain": "structural_mechanics",
+      "case_name": "Thin-Walled Pipe Elbow Elasto-Plastic In-Plane Bending Collapse",
+      "physics_domain": "piping_elasto_plastic_collapse",
       "reference_source": "TBD",
       "qualification_status": "PRE_RESERVED",
-      "runner": "TBD",
       "input_assets": [],
       "evidence_manifest": "",
       "report_assets": [],

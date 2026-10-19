@@ -355,8 +355,13 @@ def solve_user_inp(
     # Pre-submission Assembly Contract Audit (P0.2 Fail-Closed)
     if assembly_scope is not None:
         from ..validation.assembly_guard import audit_inp_assembly_contract, AssemblyContractViolation
-        with open(inp_file, "r", encoding="utf-8", errors="replace") as f:
-            deck_text = f.read()
+        try:
+            deck_text = inp_file.read_bytes().decode("utf-8")
+        except UnicodeDecodeError as exc:
+            raise AssemblyContractViolation(
+                f"Direct INP solve blocked prior to solver invocation: '{inp_file}' is not valid UTF-8 "
+                f"({exc}); refusing to audit replacement-decoded content."
+            ) from exc
         audit_res = audit_inp_assembly_contract(
             deck_text,
             assembly_scope=assembly_scope,

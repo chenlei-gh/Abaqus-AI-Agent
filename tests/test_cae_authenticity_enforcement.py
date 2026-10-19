@@ -184,6 +184,27 @@ def test_audit_inp_mesh_quality_fails_closed_on_inverted_quad(tmp_path: Path):
     assert any("Inverted element detected" in v for v in gate_eval.violations)
 
 
+def test_audit_inp_mesh_quality_fails_closed_on_undecodable_deck(tmp_path: Path):
+    """A non-UTF-8 deck must be BLOCKED, not silently replacement-decoded before auditing."""
+    bad_deck = tmp_path / "undecodable.inp"
+    bad_deck.write_bytes(b"*NODE\n1, 0.0, 0.0, 0.0\n** caf\xe9\n2, 1.0, 0.0, 0.0\n")
+
+    gate_eval, report = audit_inp_mesh_quality(bad_deck)
+    assert gate_eval.passed is False
+    assert gate_eval.status == "BLOCKED"
+    assert any(v.startswith("inp_not_valid_utf8") for v in gate_eval.violations)
+    assert report["total_elements_audited"] == 0
+
+
+def test_parse_and_audit_inp_deck_rejects_undecodable_bytes(tmp_path: Path):
+    """The raw deck parser must not audit replacement-decoded text."""
+    bad_deck = tmp_path / "undecodable_direct.inp"
+    bad_deck.write_bytes(b"*NODE\n1, 0.0, 0.0, 0.0\n\xff\xfe\n")
+
+    with pytest.raises(UnicodeDecodeError):
+        parse_and_audit_inp_deck(bad_deck)
+
+
 def test_no_json_dumps_to_odb_across_entire_repo():
     """Anti-Cheat scan: No Python file in the codebase may serialize JSON directly into an .odb file."""
     root = Path(__file__).resolve().parent.parent
@@ -296,3 +317,34 @@ def test_odb_required_fields_exact_match_not_substring():
     )
     assert res_empty.passed is False
     assert set(res_empty.missing_required_fields) == {"S", "U"}
+
+
+def test_solver_diagnostics_strict_decode_records_degraded_log(tmp_path: Path):
+    """An invalid-UTF-8 solver log must be reported, not silently repaired."""
+    from abaqus_ai_agent.execution.solver import parse_solver_diagnostics
+
+    (tmp_path / "job.msg").write_bytes(
+        b"THE ANALYSIS HAS NOT BEEN COMPLETED\n" + b"\xff\xfe\n"
+    )
+    (tmp_path / "job.sta").write_bytes(b"THE ANALYSIS HAS NOT BEEN COMPLETED\n")
+
+    diags = parse_solver_diagnostics(tmp_path, "job")
+
+    assert any(d.startswith("MSG_DECODE_ERR") for d in diags)
+    # Replacement decoding still surfaces the ASCII markers that drive ABORTED.
+    assert "MSG: Analysis not completed" in diags
+    assert "STA: Analysis not completed" in diags
+
+
+def test_solver_diagnostics_clean_utf8_log_has_no_decode_warning(tmp_path: Path):
+    """A well-formed log must not gain a spurious decode diagnostic."""
+    from abaqus_ai_agent.execution.solver import parse_solver_diagnostics
+
+    (tmp_path / "job.msg").write_text("***ERROR: element 12 is distorted\n", encoding="utf-8")
+    (tmp_path / "job.sta").write_text("THE ANALYSIS HAS COMPLETED SUCCESSFULLY\n", encoding="utf-8")
+
+    diags = parse_solver_diagnostics(tmp_path, "job")
+
+    assert not any("DECODE_ERR" in d for d in diags)
+    assert any(d.startswith("MSG_ERROR:") for d in diags)
+    assert "STA: Analysis completed successfully" in diags

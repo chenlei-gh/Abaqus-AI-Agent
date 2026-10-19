@@ -2,8 +2,8 @@
 
 **文档版本**: 1.0.0  
 **基准案例**: `test_assets/engineering_cases/case_02_reactor_pressure_vessel_closure`  
-**执行驱动**: `tools/p2_case_02_rpv_closure_e2e.py`  
-**证据清单**: `machine_validation/p2_cases/case_02_rpv_manifest.json`  
+**执行驱动**: 本案例原始求解驱动从未纳入版本库，已无法从仓库获取，因此不作为可复现入口。当前可复现入口为下方已提交的证据清单，以及逐项校验该清单的回归测试 `tests/test_p2_package_b_cases.py`。
+**证据清单**: `machine_validation/p2_cases/case_02_reactor_pressure_vessel_closure/case_02_rpv_manifest.json`  
 **审计结论**: 🟢 **QUALIFIED (已完成全部 6 项工程真实性与规范语义纠偏)**
 
 ---

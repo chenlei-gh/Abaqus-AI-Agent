@@ -700,3 +700,391 @@ Deck referencing existing valid external file
     assert res2.passed is True
 
 
+def test_include_sandbox_path_traversal_rejection(tmp_path):
+    """P0 Sandbox: Parent directory escape and outside roots must be rejected with outside_sandbox status."""
+    job_dir = tmp_path / "job_run"
+    job_dir.mkdir()
+    outside_dir = tmp_path / "outside"
+    outside_dir.mkdir()
+
+    # Create secret/outside mesh
+    outside_mesh = outside_dir / "secret_mesh.inp"
+    outside_mesh.write_text("*ELEMENT, TYPE=C3D8R\n1, 1, 2, 3, 4, 5, 6, 7, 8\n", encoding="utf-8")
+
+    # 1. Relative path escape using '..'
+    inp_escape = """*HEADING
+Escape sandbox
+*PART, NAME=P1
+*INCLUDE, INPUT=../outside/secret_mesh.inp
+*END PART
+*ASSEMBLY, NAME=ASSEMBLY
+*INSTANCE, NAME=P1_1, PART=P1
+*END INSTANCE
+*END ASSEMBLY
+"""
+    res1 = audit_inp_assembly_contract(
+        inp_escape,
+        assembly_scope={"parts": [{"instance_name": "P1_1"}]},
+        base_dir=job_dir,
+        allowed_roots=[job_dir],
+    )
+    assert res1.passed is False
+    assert "outside approved sandbox roots" in res1.reason
+    records1 = res1.diagnostics.get("include_records", [])
+    assert len(records1) == 1
+    assert records1[0]["status"] == "outside_sandbox"
+
+    # 2. Absolute path pointing outside sandbox
+    inp_abs = f"""*HEADING
+Absolute path outside sandbox
+*PART, NAME=P1
+*INCLUDE, INPUT={outside_mesh.resolve()}
+*END PART
+*ASSEMBLY, NAME=ASSEMBLY
+*INSTANCE, NAME=P1_1, PART=P1
+*END INSTANCE
+*END ASSEMBLY
+"""
+    res2 = audit_inp_assembly_contract(
+        inp_abs,
+        assembly_scope={"parts": [{"instance_name": "P1_1"}]},
+        base_dir=job_dir,
+        allowed_roots=[job_dir],
+    )
+    assert res2.passed is False
+    assert "outside approved sandbox roots" in res2.reason
+    records2 = res2.diagnostics.get("include_records", [])
+    assert len(records2) == 1
+    assert records2[0]["status"] == "outside_sandbox"
+
+
+def test_include_circular_and_depth_limits(tmp_path):
+    """P0 Sandbox: Circular include and recursion depth >= 10 must fail-closed."""
+    job_dir = tmp_path / "job_circ"
+    job_dir.mkdir()
+
+    # 1. Circular include: A includes B, B includes A
+    file_a = job_dir / "a.inp"
+    file_b = job_dir / "b.inp"
+    file_a.write_text("*INCLUDE, INPUT=b.inp\n", encoding="utf-8")
+    file_b.write_text("*INCLUDE, INPUT=a.inp\n", encoding="utf-8")
+
+    inp_circ = """*HEADING
+Circular include
+*PART, NAME=P1
+*INCLUDE, INPUT=a.inp
+*END PART
+*ASSEMBLY, NAME=ASSEMBLY
+*INSTANCE, NAME=P1_1, PART=P1
+*END INSTANCE
+*END ASSEMBLY
+"""
+    res = audit_inp_assembly_contract(
+        inp_circ,
+        assembly_scope={"parts": [{"instance_name": "P1_1"}]},
+        base_dir=job_dir,
+    )
+    assert res.passed is False
+    assert "unresolved or invalid *INCLUDE reference" in res.reason
+    rec_statuses = [r["status"] for r in res.diagnostics.get("include_records", [])]
+    assert "circular" in rec_statuses
+
+
+def test_element_continuation_broken_record_with_trailing_comma():
+    """P1 Continuation state machine: Incomplete element with trailing comma followed by new element fails closed."""
+    # Element 1 has only 4 nodes (expected 8) and ends with a comma.
+    # Line 2 starts a new element (2, 10, 11, ...).
+    # Parser must NOT concatenate line 2 into element 1.
+    inp_broken = """*HEADING
+Continuation mismatch
+*PART, NAME=BAR
+*ELEMENT, TYPE=C3D8R
+1, 1, 2, 3, 4,
+2, 10, 11, 12, 13, 14, 15, 16, 17
+*END PART
+*ASSEMBLY, NAME=ASSEMBLY
+*INSTANCE, NAME=BAR_1, PART=BAR
+*END INSTANCE
+*END ASSEMBLY
+"""
+    scope = {"parts": [{"instance_name": "BAR_1"}]}
+    res = audit_inp_assembly_contract(inp_broken, assembly_scope=scope)
+    assert res.passed is False
+    assert "malformed element definition" in res.reason
+
+
+def test_element_continuation_valid_multiline_c3d20():
+    """P1 Continuation state machine: Valid multiline continuation for C3D20 passes cleanly."""
+    inp_valid_c3d20 = """*HEADING
+Valid C3D20 3-line continuation
+*PART, NAME=SOLID
+*ELEMENT, TYPE=C3D20
+100, 1, 2, 3, 4, 5, 6, 7, 8,
+9, 10, 11, 12, 13, 14, 15, 16,
+17, 18, 19, 20
+*END PART
+*ASSEMBLY, NAME=ASSEMBLY
+*INSTANCE, NAME=SOLID_1, PART=SOLID
+*END INSTANCE
+*END ASSEMBLY
+"""
+    scope = {"parts": [{"instance_name": "SOLID_1"}]}
+    res = audit_inp_assembly_contract(inp_valid_c3d20, assembly_scope=scope)
+    assert res.passed is True
+
+
+def test_cross_include_surface_and_contact_resolution(tmp_path):
+    """P1 Unified Context: Surfaces and Contact/Tie across INCLUDE files resolve properly; missing/empty fails."""
+    job_dir = tmp_path / "contact_model"
+    job_dir.mkdir()
+
+    part1_file = job_dir / "part1.inp"
+    part1_file.write_text("""*PART, NAME=PART_A
+*NODE
+1, 0., 0., 0.
+*ELEMENT, TYPE=C3D8R, ELSET=EALL
+1, 1, 2, 3, 4, 5, 6, 7, 8
+*SURFACE, NAME=SURF_A
+EALL, S1
+*END PART
+""", encoding="utf-8")
+
+    part2_file = job_dir / "part2.inp"
+    part2_file.write_text("""*PART, NAME=PART_B
+*NODE
+10, 0., 0., 0.
+*ELEMENT, TYPE=C3D8R, ELSET=EALL
+10, 10, 11, 12, 13, 14, 15, 16, 17
+*SURFACE, NAME=SURF_B
+EALL, S2
+*END PART
+""", encoding="utf-8")
+
+    # 1. Valid cross-include contact pair
+    main_inp_valid = """*HEADING
+Cross-include contact valid
+*INCLUDE, INPUT=part1.inp
+*INCLUDE, INPUT=part2.inp
+*ASSEMBLY, NAME=ASSEMBLY
+*INSTANCE, NAME=INST_A, PART=PART_A
+*END INSTANCE
+*INSTANCE, NAME=INST_B, PART=PART_B
+*END INSTANCE
+*CONTACT PAIR, INTERACTION=INTPROP
+SURF_A, SURF_B
+*END ASSEMBLY
+"""
+    res_valid = audit_inp_assembly_contract(
+        main_inp_valid,
+        assembly_scope={"parts": [{"instance_name": "INST_A"}, {"instance_name": "INST_B"}]},
+        base_dir=job_dir,
+    )
+    assert res_valid.passed is True
+
+    # 2. Missing surface in cross-include contact pair
+    main_inp_missing_surf = """*HEADING
+Cross-include contact missing surf
+*INCLUDE, INPUT=part1.inp
+*INCLUDE, INPUT=part2.inp
+*ASSEMBLY, NAME=ASSEMBLY
+*INSTANCE, NAME=INST_A, PART=PART_A
+*END INSTANCE
+*INSTANCE, NAME=INST_B, PART=PART_B
+*END INSTANCE
+*CONTACT PAIR, INTERACTION=INTPROP
+SURF_A, NONEXISTENT_SURF
+*END ASSEMBLY
+"""
+    res_missing = audit_inp_assembly_contract(
+        main_inp_missing_surf,
+        assembly_scope={"parts": [{"instance_name": "INST_A"}, {"instance_name": "INST_B"}]},
+        base_dir=job_dir,
+    )
+    assert res_missing.passed is False
+    assert "NONEXISTENT_SURF" in res_missing.reason
+    assert "undefined surface" in res_missing.reason
+
+    # 3. Empty contact pair interaction
+    main_inp_empty_contact = """*HEADING
+Cross-include empty contact
+*INCLUDE, INPUT=part1.inp
+*INCLUDE, INPUT=part2.inp
+*ASSEMBLY, NAME=ASSEMBLY
+*INSTANCE, NAME=INST_A, PART=PART_A
+*END INSTANCE
+*INSTANCE, NAME=INST_B, PART=PART_B
+*END INSTANCE
+*CONTACT PAIR, INTERACTION=INTPROP
+*END ASSEMBLY
+"""
+    res_empty = audit_inp_assembly_contract(
+        main_inp_empty_contact,
+        assembly_scope={"parts": [{"instance_name": "INST_A"}, {"instance_name": "INST_B"}]},
+        base_dir=job_dir,
+    )
+    assert res_empty.passed is False
+    assert "Empty interaction block" in res_empty.reason or "unsupported or malformed interaction" in res_empty.reason
+
+
+def test_element_continuation_node_id_adjacent_to_element_id():
+    """P1 Refined: Element ID=1 and legitimate continuation first node ID=2 passes without false positive."""
+    # Element 1 has 4 nodes on line 1 with trailing comma, and next line has nodes 2, 3, 4, 5 (C3D8R 8 nodes).
+    # First token of continuation line is 2 (which is 1 + 1), must NOT be misjudged as new element 2.
+    inp_text = """*HEADING
+Continuation adjacent node ID
+*PART, NAME=BAR
+*ELEMENT, TYPE=C3D8R
+1, 10, 11, 12, 13,
+2, 3, 4, 5
+*END PART
+*ASSEMBLY, NAME=ASSEMBLY
+*INSTANCE, NAME=BAR_1, PART=BAR
+*END INSTANCE
+*END ASSEMBLY
+"""
+    scope = {"parts": [{"instance_name": "BAR_1"}]}
+    res = audit_inp_assembly_contract(inp_text, assembly_scope=scope)
+    assert res.passed is True
+
+
+def test_element_ids_non_monotonic_and_reverse_order():
+    """P1 Refined: Non-monotonic, arbitrary, or reverse order element IDs pass without false positive."""
+    inp_text = """*HEADING
+Reverse and arbitrary element IDs
+*PART, NAME=BAR
+*ELEMENT, TYPE=C3D8R
+100, 1, 2, 3, 4, 5, 6, 7, 8
+50, 10, 11, 12, 13, 14, 15, 16, 17
+1, 20, 21, 22, 23, 24, 25, 26, 27
+888, 30, 31, 32, 33, 34, 35, 36, 37
+*END PART
+*ASSEMBLY, NAME=ASSEMBLY
+*INSTANCE, NAME=BAR_1, PART=BAR
+*END INSTANCE
+*END ASSEMBLY
+"""
+    scope = {"parts": [{"instance_name": "BAR_1"}]}
+    res = audit_inp_assembly_contract(inp_text, assembly_scope=scope)
+    assert res.passed is True
+
+
+def test_element_continuation_exceeding_capacity_rejected():
+    """P1 Refined: Continuation tokens exceeding remaining topology capacity must be rejected."""
+    # C3D8R requires 8 nodes. First line has 4 nodes, remaining needed is 4.
+    # Continuation line provides 5 nodes (total 9 > 8).
+    inp_text = """*HEADING
+Continuation capacity exceeded
+*PART, NAME=BAR
+*ELEMENT, TYPE=C3D8R
+1, 1, 2, 3, 4,
+5, 6, 7, 8, 9
+*END PART
+*ASSEMBLY, NAME=ASSEMBLY
+*INSTANCE, NAME=BAR_1, PART=BAR
+*END INSTANCE
+*END ASSEMBLY
+"""
+    scope = {"parts": [{"instance_name": "BAR_1"}]}
+    res = audit_inp_assembly_contract(inp_text, assembly_scope=scope)
+    assert res.passed is False
+    assert "malformed element definition" in res.reason
+
+
+def test_element_continuation_ambiguous_boundaries_rejected():
+    """P1 Refined: Ambiguous boundaries (trailing comma at full capacity or missing comma mid-stream) must fail closed."""
+    # Case A: Full capacity reached but line still has trailing comma
+    inp_full_with_comma = """*HEADING
+Full capacity with trailing comma
+*PART, NAME=BAR
+*ELEMENT, TYPE=C3D8R
+1, 1, 2, 3, 4,
+5, 6, 7, 8,
+*END PART
+*ASSEMBLY, NAME=ASSEMBLY
+*INSTANCE, NAME=BAR_1, PART=BAR
+*END INSTANCE
+*END ASSEMBLY
+"""
+    res_a = audit_inp_assembly_contract(inp_full_with_comma, assembly_scope={"parts": [{"instance_name": "BAR_1"}]})
+    assert res_a.passed is False
+    assert "malformed element definition" in res_a.reason
+
+    # Case B: Insufficient nodes in intermediate continuation without trailing comma
+    inp_mid_without_comma = """*HEADING
+Intermediate continuation without trailing comma
+*PART, NAME=SOLID
+*ELEMENT, TYPE=C3D20
+100, 1, 2, 3, 4, 5, 6, 7, 8,
+9, 10, 11, 12
+*END PART
+*ASSEMBLY, NAME=ASSEMBLY
+*INSTANCE, NAME=SOLID_1, PART=SOLID
+*END INSTANCE
+*END ASSEMBLY
+"""
+    res_b = audit_inp_assembly_contract(inp_mid_without_comma, assembly_scope={"parts": [{"instance_name": "SOLID_1"}]})
+    assert res_b.passed is False
+    assert "malformed element definition" in res_b.reason
+
+
+def test_include_with_undecodable_bytes_fails_closed(tmp_path):
+    """A dependency must not be silently replacement-decoded before its syntax audit."""
+    include_file = tmp_path / "invalid_encoding.inc"
+    include_file.write_bytes(b"*ELEMENT, TYPE=C3D8R\n1, 1, 2, 3, 4, 5, 6, 7, 8\n\xff")
+    inp = """
+*HEADING
+Invalid include encoding
+*PART, NAME=P1
+*INCLUDE, INPUT=invalid_encoding.inc
+*END PART
+*ASSEMBLY, NAME=ASSEMBLY
+*INSTANCE, NAME=P1_1, PART=P1
+*END INSTANCE
+*END ASSEMBLY
+"""
+    result = audit_inp_assembly_contract(
+        inp, assembly_scope={"parts": [{"instance_name": "P1_1"}]}, base_dir=tmp_path
+    )
+    assert result.passed is False
+    assert "unresolved or invalid *INCLUDE reference" in result.reason
+    assert "utf-8" in result.reason.lower() or "decode" in result.reason.lower()
+    records = result.diagnostics.get("include_records", [])
+    assert records and all(r["status"] == "read_error" for r in records)
+    assert all(r["status"] != "ok" for r in records)
+
+
+def test_include_undecodable_byte_inside_comment_still_fails_closed(tmp_path):
+    """An undecodable byte in a comment line must not yield an 'ok' record bound to raw bytes.
+
+    Replacement decoding leaves the syntax intact here, so a syntax-only audit would
+    report success while claiming a SHA-256 of bytes it never actually parsed.
+    """
+    include_file = tmp_path / "comment_only_note.inc"
+    include_file.write_bytes(
+        b"** hand note \xff\n*ELEMENT, TYPE=C3D8R\n1, 1, 2, 3, 4, 5, 6, 7, 8\n"
+    )
+    inp = """
+*HEADING
+Undecodable bytes confined to a comment
+*PART, NAME=P1
+*INCLUDE, INPUT=comment_only_note.inc
+*END PART
+*ASSEMBLY, NAME=ASSEMBLY
+*INSTANCE, NAME=P1_1, PART=P1
+*END INSTANCE
+*END ASSEMBLY
+"""
+    result = audit_inp_assembly_contract(
+        inp, assembly_scope={"parts": [{"instance_name": "P1_1"}]}, base_dir=tmp_path
+    )
+    assert result.passed is False
+    assert "unresolved or invalid *INCLUDE reference" in result.reason
+    records = result.diagnostics.get("include_records", [])
+    assert len(records) == 1
+    assert records[0]["status"] == "read_error"
+    assert records[0]["sha256"] is None
+    assert "not valid UTF-8" in (records[0]["error_message"] or "")
+
+
+
+

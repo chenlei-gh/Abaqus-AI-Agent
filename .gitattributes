@@ -1,0 +1,9 @@
+# Evidence files must be byte-stable across platforms.
+# The repository records exact byte counts and SHA-256 digests for these files,
+# so CRLF translation on Windows checkouts would break every recorded digest.
+*.html text eol=lf
+*.htm  text eol=lf
+*.svg  text eol=lf
+*.json text eol=lf
+*.md   text eol=lf
+*.csv  text eol=lf
