@@ -1,7 +1,8 @@
 """P0-a: static stabilization-energy acceptance contract.
 
-The contract must never manufacture a PASS from absent evidence, and must not
-reuse the self-referential ALLSD/ALLIE ratio.
+The contract must never manufacture a PASS from absent evidence, must not reuse
+the self-referential ALLSD/ALLIE ratio, and must bind the gate to the step that
+actually requested stabilization.
 """
 
 import pytest
@@ -10,7 +11,9 @@ from abaqus_ai_agent.acceptance import evaluate_result_acceptance
 from abaqus_ai_agent.contracts.stabilization_energy import (
     detect_stabilization_in_deck,
     evaluate_static_stabilization_energy,
+    resolve_stabilized_step,
 )
+from abaqus_ai_agent.execution.analysis_run import AnalysisRunner
 from abaqus_ai_agent.execution.odb import extract_energy_evidence
 
 
@@ -147,14 +150,39 @@ def test_empty_energy_frame_is_skipped_and_recorded():
     assert reasons == {"zero_energy_frame"}
 
 
-def test_unaligned_strain_history_is_skipped_and_recorded():
+def test_unaligned_strain_history_blocks_instead_of_passing():
+    """Histories that disagree on the timeline cannot decide the ratio."""
     verdict = evaluate_static_stabilization_energy(
         _evidence([(0.0, 1.0), (1.0, 2.0)], [(0.7, 100.0)]), threshold=0.05
     )
-    assert verdict.status == "PASS"
+    assert verdict.status == "BLOCKED"
+    assert verdict.ratio is None
+    assert verdict.reason == "unaligned_strain_energy_history"
     assert verdict.skipped_frame_count == 2
     reasons = {frame["reason"] for frame in verdict.skipped_frames}
     assert reasons == {"unaligned_strain_energy_history"}
+
+
+def test_partially_aligned_history_still_blocks():
+    """One aligned frame must not outvote a misaligned one.
+
+    Frames 0-1 are usable and would pass at 2%. Frame 2 has no ALLSE sample at
+    its time, so the paired evidence is incomplete and the gate must block
+    rather than report a clean ratio computed from a partial timeline.
+    """
+    verdict = evaluate_static_stabilization_energy(
+        _evidence(
+            [(0.0, 0.0), (0.5, 2.0), (1.0, 4.0)],
+            [(0.0, 100.0), (0.5, 100.0)],
+        ),
+        threshold=0.05,
+    )
+    assert verdict.status == "BLOCKED"
+    assert verdict.ratio is None
+    assert verdict.reason == "unaligned_strain_energy_history"
+    assert verdict.informative_frame_count == 2
+    assert verdict.details["blocked_frame_index"] == 2
+    assert "governing_frame_index" not in verdict.details
 
 
 def test_rigid_body_step_without_dissipation_passes_with_audit_trail():
@@ -179,7 +207,10 @@ def test_deck_detection_ignores_plain_static_steps():
     marks = detect_stabilization_in_deck(
         "*STEP, NAME=Step-1\n*STATIC\n0.01, 1.0\n*END STEP\n"
     )
-    assert marks == {"step_stabilization": False, "contact_stabilization": False}
+    assert marks["step_stabilization"] is False
+    assert marks["contact_stabilization"] is False
+    assert marks["steps"] == [{"name": "Step-1", "step_stabilization": False,
+                               "contact_stabilization": False}]
 
 
 def test_deck_detection_finds_step_and_contact_stabilization():
@@ -187,6 +218,7 @@ def test_deck_detection_finds_step_and_contact_stabilization():
         "*STEP, NAME=Step-1\n*STATIC, STABILIZE\n0.01, 1.0\n*END STEP\n"
     )
     assert step_marks["step_stabilization"] is True
+    assert step_marks["steps"][0]["step_stabilization"] is True
 
     contact_marks = detect_stabilization_in_deck(
         "*CONTACT CONTROLS, STABILIZE\n*STEP, NAME=Step-1\n*STATIC\n"
@@ -197,6 +229,85 @@ def test_deck_detection_finds_step_and_contact_stabilization():
 def test_deck_detection_ignores_comment_mentions():
     marks = detect_stabilization_in_deck("** this model does not *STATIC, STABILIZE\n")
     assert marks["step_stabilization"] is False
+
+
+def test_deck_detection_ignores_data_lines_and_comments_inside_steps():
+    marks = detect_stabilization_in_deck(
+        "*STEP, NAME=Step-1\n** *STATIC, STABILIZE\n*STATIC\n0.01, 1.0\n*END STEP\n"
+    )
+    assert marks["step_stabilization"] is False
+
+
+def test_deck_detection_attributes_stabilization_per_step():
+    deck = (
+        "*STEP, NAME=Step-1\n*STATIC\n0.01, 1.0\n*END STEP\n"
+        "*STEP, NAME=Step-2\n*STATIC, STABILIZE=1e-4\n0.01, 1.0\n*END STEP\n"
+    )
+    marks = detect_stabilization_in_deck(deck)
+    assert [entry["name"] for entry in marks["steps"]] == ["Step-1", "Step-2"]
+    assert [entry["step_stabilization"] for entry in marks["steps"]] == [False, True]
+
+
+def test_deck_detection_flags_keywords_outside_a_step_block():
+    marks = detect_stabilization_in_deck("*CONTACT CONTROLS, STABILIZE\n")
+    assert marks["unattributed_contact_stabilization"] is True
+    assert marks["contact_stabilization"] is True
+
+
+def test_resolution_picks_the_only_stabilized_step_not_the_last_one():
+    deck = (
+        "*STEP, NAME=Step-1\n*STATIC, STABILIZE\n*END STEP\n"
+        "*STEP, NAME=Step-2\n*STATIC\n*END STEP\n"
+    )
+    selection = resolve_stabilized_step(
+        detect_stabilization_in_deck(deck), ["Step-1", "Step-2"]
+    )
+    assert selection.resolved is True
+    assert selection.step_name == "Step-1"
+
+
+def test_resolution_reports_not_enabled_without_stabilization():
+    deck = "*STEP, NAME=Step-1\n*STATIC\n*END STEP\n"
+    selection = resolve_stabilized_step(detect_stabilization_in_deck(deck), ["Step-1"])
+    assert selection.resolved is False
+    assert selection.status == "NOT_ENABLED"
+    assert selection.step_name is None
+
+
+def test_resolution_blocks_when_several_steps_are_stabilized():
+    deck = (
+        "*STEP, NAME=Step-1\n*STATIC, STABILIZE\n*END STEP\n"
+        "*STEP, NAME=Step-2\n*CONTACT CONTROLS, STABILIZE\n*END STEP\n"
+    )
+    selection = resolve_stabilized_step(
+        detect_stabilization_in_deck(deck), ["Step-1", "Step-2"]
+    )
+    assert selection.resolved is False
+    assert selection.status == "UNRESOLVED"
+    assert selection.reason == "stabilization_step_ambiguous"
+    assert selection.candidates == ("Step-1", "Step-2")
+
+
+def test_resolution_blocks_when_stabilized_step_is_missing_from_odb():
+    deck = "*STEP, NAME=Step-2\n*STATIC, STABILIZE\n*END STEP\n"
+    selection = resolve_stabilized_step(detect_stabilization_in_deck(deck), ["Step-1"])
+    assert selection.resolved is False
+    assert selection.reason == "stabilized_step_missing_in_odb"
+
+
+def test_resolution_blocks_when_keyword_is_outside_any_step():
+    selection = resolve_stabilized_step(
+        detect_stabilization_in_deck("*CONTACT CONTROLS, STABILIZE\n"), ["Step-1"]
+    )
+    assert selection.resolved is False
+    assert selection.reason == "stabilization_step_unattributed"
+
+
+def test_resolution_blocks_when_step_block_has_no_name():
+    deck = "*STEP\n*STATIC, STABILIZE\n*END STEP\n"
+    selection = resolve_stabilized_step(detect_stabilization_in_deck(deck), ["Step-1"])
+    assert selection.resolved is False
+    assert selection.reason == "stabilization_step_unattributed"
 
 
 def test_extraction_requests_allse_for_the_static_contract():
@@ -313,3 +424,154 @@ def test_stabilization_gate_runs_even_when_other_gates_pass():
     assert res.gates["stabilization_energy"] == "BLOCKED"
     assert res.status == "BLOCKED"
     assert res.deliverable is False
+
+
+# --- runner-level step binding -------------------------------------------
+
+
+def _runner_gate(monkeypatch, deck, odb_steps, extracted_steps, energy=None,
+                 threshold=0.05):
+    """Exercise AnalysisRunner._evaluate_stabilization_gate in isolation.
+
+    ``extracted_steps`` records which ODB step the energy extractor was asked
+    for, so a wrong-step read is visible rather than inferred from a verdict.
+    The threshold is supplied explicitly because the contract never invents one.
+    """
+
+    class _Intent:
+        metadata = (
+            {"stabilization_energy_threshold": threshold}
+            if threshold is not None else {}
+        )
+
+    class _Executor:
+        def execute(self, code, timeout=120):
+            return code
+
+    def _fake_extract(_executor, _path, step, _region):
+        extracted_steps.append(step)
+        if energy is not None:
+            return energy
+        return {
+            "step": step,
+            "region": "Assembly ASSEMBLY",
+            "variables": {
+                "ALLSD": {"status": "available", "data": [(0.0, 0.0), (1.0, 1.0)]},
+                "ALLSE": {"status": "available", "data": [(0.0, 100.0), (1.0, 100.0)]},
+            },
+        }
+
+    import abaqus_ai_agent.execution.odb as odb_module
+
+    monkeypatch.setattr(odb_module, "extract_energy_evidence", _fake_extract)
+    runner = AnalysisRunner(_Executor())
+    return runner._evaluate_stabilization_gate(
+        deck,
+        {"steps": list(odb_steps)},
+        {"history_regions": ["Assembly ASSEMBLY"]},
+        "job.odb",
+        _Intent(),
+    )
+
+
+_STABILIZED_TWO_STEP_DECK = (
+    "*STEP, NAME=Step-1\n*STATIC, STABILIZE\n0.01, 1.0\n*END STEP\n"
+    "*STEP, NAME=Step-2\n*STATIC\n0.01, 1.0\n*END STEP\n"
+)
+
+
+def test_runner_reads_the_stabilized_step_not_the_last_step(monkeypatch):
+    extracted = []
+    enabled, verdict = _runner_gate(
+        monkeypatch, _STABILIZED_TWO_STEP_DECK,
+        ["Initial", "Step-1", "Step-2"], extracted,
+    )
+    assert enabled is True
+    assert extracted == ["Step-1"]
+    assert verdict.status == "PASS"
+
+
+def test_runner_blocks_when_stabilized_step_is_absent_from_the_odb(monkeypatch):
+    extracted = []
+    enabled, verdict = _runner_gate(
+        monkeypatch, _STABILIZED_TWO_STEP_DECK, ["Initial", "Step-2"], extracted
+    )
+    assert enabled is True
+    assert extracted == []
+    assert verdict.status == "BLOCKED"
+    assert verdict.reason == "stabilized_step_missing_in_odb"
+    assert verdict.ratio is None
+
+
+def test_runner_blocks_when_two_steps_enable_stabilization(monkeypatch):
+    deck = (
+        "*STEP, NAME=Step-1\n*STATIC, STABILIZE\n*END STEP\n"
+        "*STEP, NAME=Step-2\n*CONTACT CONTROLS, STABILIZE\n*END STEP\n"
+    )
+    extracted = []
+    enabled, verdict = _runner_gate(
+        monkeypatch, deck, ["Initial", "Step-1", "Step-2"], extracted
+    )
+    assert enabled is True
+    assert extracted == []
+    assert verdict.status == "BLOCKED"
+    assert verdict.reason == "stabilization_step_ambiguous"
+
+
+def test_runner_leaves_plain_deck_skipped_without_extraction(monkeypatch):
+    extracted = []
+    enabled, verdict = _runner_gate(
+        monkeypatch,
+        "*STEP, NAME=Step-1\n*STATIC\n*END STEP\n",
+        ["Initial", "Step-1"],
+        extracted,
+    )
+    assert enabled is False
+    assert verdict is None
+    assert extracted == []
+
+
+def test_runner_blocks_on_extraction_failure_instead_of_optional_gate(monkeypatch):
+    class _Executor:
+        def execute(self, code, timeout=120):
+            return code
+
+    def _boom(*_args, **_kwargs):
+        raise RuntimeError("odb step missing")
+
+    import abaqus_ai_agent.execution.odb as odb_module
+
+    monkeypatch.setattr(odb_module, "extract_energy_evidence", _boom)
+    runner = AnalysisRunner(_Executor())
+
+    class _Intent:
+        metadata = {"stabilization_energy_threshold": 0.05}
+
+    enabled, verdict = runner._evaluate_stabilization_gate(
+        _STABILIZED_TWO_STEP_DECK,
+        {"steps": ["Initial", "Step-1", "Step-2"]},
+        {"history_regions": ["Assembly ASSEMBLY"]},
+        "job.odb",
+        _Intent(),
+    )
+    assert enabled is True
+    assert verdict.status == "BLOCKED"
+    assert verdict.reason == "stabilization_energy_extraction_failed"
+
+
+def test_runner_blocks_when_energy_histories_are_misaligned(monkeypatch):
+    energy = {
+        "step": "Step-1",
+        "region": "Assembly ASSEMBLY",
+        "variables": {
+            "ALLSD": {"status": "available", "data": [(0.0, 0.0), (1.0, 2.0)]},
+            "ALLSE": {"status": "available", "data": [(0.0, 100.0)]},
+        },
+    }
+    extracted = []
+    _, verdict = _runner_gate(
+        monkeypatch, _STABILIZED_TWO_STEP_DECK,
+        ["Initial", "Step-1", "Step-2"], extracted, energy=energy,
+    )
+    assert verdict.status == "BLOCKED"
+    assert verdict.reason == "unaligned_strain_energy_history"

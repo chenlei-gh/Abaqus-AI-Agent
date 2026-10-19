@@ -21,6 +21,11 @@ finite, ``ALLSE`` is not negligible, ``ALLSD`` is non-negative and ``ALLSE`` is
 positive. Frames that cannot inform the ratio are *skipped and recorded*, never
 silently dropped and never treated as zero dissipation.
 
+A frame whose ``ALLSD`` time has no aligned ``ALLSE`` sample is not merely
+skipped: the histories disagree about the step's timeline, so the remaining
+frames cannot be trusted to bound the ratio on their own. Misalignment therefore
+blocks the verdict instead of letting the aligned subset decide it.
+
 Verdicts:
 
 * ``PASS``     - computed ratio is at or below the configured threshold.
@@ -32,6 +37,16 @@ Verdicts:
 The threshold is an engineering policy for a specific configuration. It must be
 supplied explicitly by the caller and is echoed in the verdict together with its
 declared source; this module ships no universal physical constant.
+
+Step binding
+------------
+A multi-step deck may enable stabilization in one step only. Energies from a
+different step are not evidence for that repair, so :func:`resolve_stabilized_step`
+maps the deck keywords onto the ODB step list and returns ``UNRESOLVED`` whenever
+the mapping is not unique (several stabilized steps, keywords outside any step
+block, or a stabilized step absent from the ODB). ``INCLUDE`` files are not
+expanded here; the deck handed to this module is expected to be the flattened
+deck that was actually solved.
 """
 
 from __future__ import annotations
@@ -61,6 +76,16 @@ REASON_NON_FINITE = "non_finite_stabilization_energy"
 REASON_NEGATIVE = "invalid_stabilization_energy_sign"
 REASON_UNDEFINED_DENOMINATOR = "stabilization_energy_undefined_denominator"
 REASON_RATIO_EXCEEDED = "stabilization_energy_exceeded"
+REASON_UNALIGNED_HISTORY = "unaligned_strain_energy_history"
+
+# Stabilized-step resolution outcomes.
+SELECTION_RESOLVED = "RESOLVED"
+SELECTION_NOT_ENABLED = "NOT_ENABLED"
+SELECTION_UNRESOLVED = "UNRESOLVED"
+
+REASON_STABILIZATION_STEP_UNATTRIBUTED = "stabilization_step_unattributed"
+REASON_STABILIZATION_STEP_AMBIGUOUS = "stabilization_step_ambiguous"
+REASON_STABILIZED_STEP_MISSING_IN_ODB = "stabilized_step_missing_in_odb"
 
 
 @dataclass(frozen=True)
@@ -263,8 +288,14 @@ def evaluate_static_stabilization_energy(
     for index, (time_value, all_sd) in enumerate(dissipation):
         all_se = _match_value(time_value, strain, time_tolerance)
         if all_se is None:
+            # The two histories disagree about the step timeline. Skipping the
+            # frame and letting the aligned subset decide would turn a broken
+            # evidence pair into a PASS, so this blocks the verdict.
             skipped.append({"frame_index": index, "time": time_value,
-                            "reason": "unaligned_strain_energy_history"})
+                            "reason": REASON_UNALIGNED_HISTORY})
+            if blocked_reason is None:
+                blocked_reason = REASON_UNALIGNED_HISTORY
+                blocked_frame = index
             continue
         if not (math.isfinite(all_sd) and math.isfinite(all_se)):
             skipped.append({"frame_index": index, "time": time_value,
@@ -372,27 +403,250 @@ def evaluate_static_stabilization_energy(
     )
 
 
-def detect_stabilization_in_deck(inp_text: str) -> Dict[str, bool]:
-    """Detect whether a solver deck enables step-level or contact stabilization.
+def _iter_deck_keywords(inp_text: str):
+    """Yield keyword lines, dropping comments, data lines and blank lines."""
+    for raw_line in (inp_text or "").splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("**") or not line.startswith("*"):
+            continue
+        yield line
+
+
+def _normalize_token(value: str) -> str:
+    return " ".join(str(value).upper().split())
+
+
+def _parse_deck_keyword(line: str) -> Tuple[str, Dict[str, str], frozenset]:
+    """Split ``*Keyword, p=1, FLAG`` into (name, parameters, flags)."""
+    tokens = [token.strip() for token in line[1:].split(",")]
+    name = _normalize_token(tokens[0]) if tokens else ""
+    parameters: Dict[str, str] = {}
+    flags = set()
+    for token in tokens[1:]:
+        if not token:
+            continue
+        if "=" in token:
+            key, _, value = token.partition("=")
+            parameters[_normalize_token(key)] = value.strip().strip('"').strip("'")
+        else:
+            flags.add(_normalize_token(token))
+    return name, parameters, frozenset(flags)
+
+
+def _classify_stabilization(name: str, parameters: Mapping[str, str],
+                            flags: Iterable[str]) -> Tuple[bool, bool]:
+    """Return (step_level, contact_level) for one keyword card."""
+    has_stabilize = "STABILIZE" in flags or "STABILIZE" in parameters
+    is_step_procedure = name == "STATIC" or name.startswith("DYNAMIC")
+    is_contact_control = name in ("CONTACT CONTROLS", "CONTACT STABILIZATION")
+    if name == "CONTACT STABILIZATION":
+        # The keyword itself *is* the stabilization request.
+        return False, True
+    return (has_stabilize and is_step_procedure), (has_stabilize and is_contact_control)
+
+
+def detect_stabilization_in_deck(inp_text: str) -> Dict[str, Any]:
+    """Detect stabilization keywords and the analysis step each one belongs to.
 
     Only explicit Abaqus keywords count. A deck that merely mentions the word in
     a comment does not enable anything.
+
+    Returns a mapping with:
+
+    * ``step_stabilization`` / ``contact_stabilization``: whether either control
+      path is enabled anywhere in the deck.
+    * ``steps``: ``[{"name", "step_stabilization", "contact_stabilization"}]``
+      in deck order, one entry per ``*STEP`` ... ``*END STEP`` block.
+    * ``unattributed_step_stabilization`` / ``unattributed_contact_stabilization``:
+      keywords found outside every step block. Abaqus treats these keywords as
+      step-scoped, so such a deck cannot be attributed to one ODB step.
     """
+    marks: Dict[str, Any] = {
+        "step_stabilization": False,
+        "contact_stabilization": False,
+        "steps": [],
+        "unattributed_step_stabilization": False,
+        "unattributed_contact_stabilization": False,
+    }
     if not inp_text:
-        return {"step_stabilization": False, "contact_stabilization": False}
-    step = False
-    contact = False
-    for raw_line in inp_text.splitlines():
-        line = raw_line.strip()
-        if not line.startswith("*"):
+        return marks
+
+    current: Optional[Dict[str, Any]] = None
+    for line in _iter_deck_keywords(inp_text):
+        name, parameters, flags = _parse_deck_keyword(line)
+        if name == "STEP":
+            if current is not None:
+                # A step block that was never closed: keep its evidence rather
+                # than dropping it silently.
+                marks["steps"].append(current)
+            current = {
+                "name": parameters.get("NAME"),
+                "step_stabilization": False,
+                "contact_stabilization": False,
+            }
             continue
-        upper = line.upper()
-        if upper.startswith("*STATIC") and "STABILIZE" in upper:
-            step = True
-        elif upper.startswith("*DYNAMIC") and "STABILIZE" in upper:
-            step = True
-        elif upper.startswith("*CONTACT CONTROLS") and "STABILIZE" in upper:
-            contact = True
-        elif upper.startswith("*CONTACT STABILIZATION"):
-            contact = True
-    return {"step_stabilization": step, "contact_stabilization": contact}
+        if name in ("END STEP", "ENDSTEP"):
+            if current is not None:
+                marks["steps"].append(current)
+            current = None
+            continue
+
+        step_level, contact_level = _classify_stabilization(name, parameters, flags)
+        if not (step_level or contact_level):
+            continue
+        if current is None:
+            if step_level:
+                marks["unattributed_step_stabilization"] = True
+            if contact_level:
+                marks["unattributed_contact_stabilization"] = True
+            continue
+        if step_level:
+            current["step_stabilization"] = True
+        if contact_level:
+            current["contact_stabilization"] = True
+
+    if current is not None:
+        marks["steps"].append(current)
+
+    marks["step_stabilization"] = bool(
+        marks["unattributed_step_stabilization"]
+        or any(entry["step_stabilization"] for entry in marks["steps"])
+    )
+    marks["contact_stabilization"] = bool(
+        marks["unattributed_contact_stabilization"]
+        or any(entry["contact_stabilization"] for entry in marks["steps"])
+    )
+    return marks
+
+
+@dataclass(frozen=True)
+class StabilizedStepSelection:
+    """The single ODB step whose energy history the gate is allowed to use."""
+
+    status: str
+    step_name: Optional[str] = None
+    reason: str = ""
+    candidates: Tuple[str, ...] = ()
+    details: Dict[str, Any] = field(default_factory=dict)
+
+    @property
+    def resolved(self) -> bool:
+        return self.status == SELECTION_RESOLVED
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "status": self.status,
+            "step_name": self.step_name,
+            "reason": self.reason,
+            "candidates": list(self.candidates),
+            "details": dict(self.details),
+        }
+
+
+def resolve_stabilized_step(deck_marks: Any,
+                            odb_step_names: Any) -> StabilizedStepSelection:
+    """Bind deck stabilization keywords to exactly one ODB step.
+
+    The gate verifies artificial damping for the step that requested it. If the
+    deck enables stabilization in several steps, or the keyword lives outside a
+    step block, or the named step is missing from the ODB, no single step is
+    authoritative and the caller must block instead of borrowing another step's
+    energy history.
+    """
+    if not isinstance(deck_marks, Mapping):
+        return StabilizedStepSelection(
+            status=SELECTION_UNRESOLVED,
+            reason=REASON_STABILIZATION_STEP_UNATTRIBUTED,
+            details={"deck_marks": "missing"},
+        )
+
+    candidates: list[str] = []
+    unnamed: list[Dict[str, Any]] = []
+    for entry in deck_marks.get("steps") or ():
+        if not isinstance(entry, Mapping):
+            continue
+        if not (entry.get("step_stabilization") or entry.get("contact_stabilization")):
+            continue
+        name = entry.get("name")
+        if not name:
+            unnamed.append(dict(entry))
+            continue
+        candidates.append(str(name))
+
+    unattributed = bool(
+        deck_marks.get("unattributed_step_stabilization")
+        or deck_marks.get("unattributed_contact_stabilization")
+    )
+    declared = list(deck_marks.get("steps") or ())
+    details = {
+        "declared_steps": [entry.get("name") for entry in declared
+                           if isinstance(entry, Mapping)],
+        "odb_steps": [str(name) for name in (odb_step_names or ())],
+    }
+
+    if unattributed or unnamed:
+        return StabilizedStepSelection(
+            status=SELECTION_UNRESOLVED,
+            reason=REASON_STABILIZATION_STEP_UNATTRIBUTED,
+            candidates=tuple(candidates),
+            details=dict(details, unattributed_keywords=unattributed,
+                         unnamed_stabilized_steps=len(unnamed)),
+        )
+
+    enabled = bool(
+        deck_marks.get("step_stabilization")
+        or deck_marks.get("contact_stabilization")
+        or candidates
+    )
+    if not enabled:
+        return StabilizedStepSelection(
+            status=SELECTION_NOT_ENABLED,
+            reason=REASON_NOT_ENABLED,
+            details=details,
+        )
+
+    if not candidates:
+        return StabilizedStepSelection(
+            status=SELECTION_UNRESOLVED,
+            reason=REASON_STABILIZATION_STEP_UNATTRIBUTED,
+            details=dict(details, unnamed_stabilized_steps=0),
+        )
+
+    if len(candidates) > 1:
+        return StabilizedStepSelection(
+            status=SELECTION_UNRESOLVED,
+            reason=REASON_STABILIZATION_STEP_AMBIGUOUS,
+            candidates=tuple(candidates),
+            details=details,
+        )
+
+    step_name = candidates[0]
+    available = [str(name) for name in (odb_step_names or ())]
+    if not available:
+        return StabilizedStepSelection(
+            status=SELECTION_UNRESOLVED,
+            reason=REASON_STABILIZED_STEP_MISSING_IN_ODB,
+            candidates=tuple(candidates),
+            details=details,
+        )
+    if step_name in available:
+        return StabilizedStepSelection(
+            status=SELECTION_RESOLVED,
+            step_name=step_name,
+            candidates=tuple(candidates),
+            details=details,
+        )
+    matches = [name for name in available if name.lower() == step_name.lower()]
+    if len(matches) == 1:
+        return StabilizedStepSelection(
+            status=SELECTION_RESOLVED,
+            step_name=matches[0],
+            candidates=tuple(candidates),
+            details=details,
+        )
+    return StabilizedStepSelection(
+        status=SELECTION_UNRESOLVED,
+        reason=REASON_STABILIZED_STEP_MISSING_IN_ODB,
+        candidates=tuple(candidates),
+        details=details,
+    )

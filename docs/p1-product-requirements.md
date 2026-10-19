@@ -438,7 +438,7 @@ P1.0 产品主入口已彻底消除高层自然语言需求与底层 20 个 L4 �
 - 针对时间步过小：自动调整初始增量步长、放宽迭代控制参数（`*CONTROLS, PARAMETERS=TIME INCREMENTATION`）；
 - 针对网格畸变：定位畸变单元并对其局部区域执行自适应网格加密或细化。
 
-> 实现状态（P0 闭环）：接触稳定化已接入 `StdContactControl` + `*CONTACT CONTROLS`，不再混入 `step_controls`；稳定化能量契约见 `contracts/stabilization_energy.py`。阈值为工程策略，必须由调用方显式给出并记录来源。
+> 实现状态（P0 闭环）：接触稳定化已接入 `StdContactControl` + `*CONTACT CONTROLS`，不再混入 `step_controls`；稳定化能量契约见 `contracts/stabilization_energy.py`。阈值为工程策略，必须由调用方显式给出并记录来源。能量门禁按 deck 关键词解析出**唯一**启用稳定化的分析步并在该步上取证：多步均启用、关键词落在 `*STEP` 块之外、或该步在 ODB 中不存在，一律 `BLOCKED`，不得借用其他步的能量数据；`ALLSD`/`ALLSE` 时间序列无法逐帧对齐同样阻断。
 
 #### REQ-P1-042: 自愈审计追踪与防伪红线
 - **完整呈现修复前后 Diff**：工程报告中必须清晰保留 `Run 1 (Initial Failure)` 与 `Run 2 (Healed)` 的对比清单，严禁静默掩盖发散历史；

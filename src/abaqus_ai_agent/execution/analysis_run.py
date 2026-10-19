@@ -381,6 +381,81 @@ class AnalysisRunner:
                 return str(name)
         return None
 
+    def _evaluate_stabilization_gate(self, deck_text, odb_summary, raw_odb,
+                                     odb_path, engineering_intent):
+        """Return ``(stabilization_enabled, verdict_or_None)`` for the P0-a gate.
+
+        The gate is demanded only when the deck actually enables stabilization.
+        It is evaluated on the ODB history of the step that requested it -- not on
+        whichever step happens to be last -- because energy from an unrelated step
+        says nothing about the artificial damping that was introduced. When the
+        target step cannot be identified uniquely the verdict is BLOCKED instead
+        of silently borrowing another step's energies.
+        """
+        from ..contracts.stabilization_energy import (
+            SELECTION_NOT_ENABLED,
+            SELECTION_RESOLVED,
+            STATUS_BLOCKED,
+            StabilizationEnergyVerdict,
+            detect_stabilization_in_deck,
+            evaluate_static_stabilization_energy,
+            resolve_stabilized_step,
+        )
+
+        deck_marks = detect_stabilization_in_deck(deck_text or "")
+        enabled = bool(
+            deck_marks.get("step_stabilization")
+            or deck_marks.get("contact_stabilization")
+        )
+        odb_step_names = [
+            str(name) for name in ((odb_summary or {}).get("steps") or ())
+            if str(name).strip().lower() != "initial"
+        ]
+        selection = resolve_stabilized_step(deck_marks, odb_step_names)
+        if selection.status == SELECTION_NOT_ENABLED:
+            return False, None
+
+        threshold, threshold_source = self._resolve_stabilization_threshold(
+            engineering_intent
+        )
+
+        if selection.status != SELECTION_RESOLVED:
+            # Ambiguous (several stabilized steps), unattributed (keyword outside
+            # any step block) or missing from the ODB. All three mean no single
+            # step is authoritative for this repair.
+            return enabled, StabilizationEnergyVerdict(
+                status=STATUS_BLOCKED,
+                threshold=threshold,
+                threshold_source=threshold_source,
+                reason=selection.reason or "stabilization_step_unresolved",
+                details=dict(selection.to_dict()),
+            )
+
+        history_region = self._resolve_energy_history_region(raw_odb) or "Assembly ASSEMBLY"
+        try:
+            from .odb import extract_energy_evidence
+            energy = extract_energy_evidence(
+                self.executor, odb_path, selection.step_name, history_region
+            )
+        except Exception as exc:
+            return enabled, StabilizationEnergyVerdict(
+                status=STATUS_BLOCKED,
+                threshold=threshold,
+                threshold_source=threshold_source,
+                reason="stabilization_energy_extraction_failed",
+                details={
+                    "error": "stabilization_energy_extraction_failed:%s" % exc,
+                    "target_step": selection.step_name,
+                },
+            )
+
+        return enabled, evaluate_static_stabilization_energy(
+            energy,
+            threshold,
+            stabilization_enabled=True,
+            threshold_source=threshold_source,
+        )
+
     def run(self, model_name, job_name, odb_path=None, criteria=(),
             result_values=None, numerical_verification=None, engineering_checks=None,
             mesh_quality=None, mesh_convergence=None, fatigue=None, contact_diagnostics=None,
@@ -1018,56 +1093,24 @@ class AnalysisRunner:
             # SKIPPED so its absence is auditable. Evidence is extracted from the
             # live ODB history, never inferred from the deck keywords alone.
             auto_stabilization_enabled = False
-            auto_stabilization_energy = None
-            auto_stabilization_block = None
             stabilization_verdict_for_evidence = None
             threshold = None
             threshold_source = None
             if result_source == "odb" and path:
-                from ..contracts.stabilization_energy import (
-                    detect_stabilization_in_deck,
-                    evaluate_static_stabilization_energy,
+                auto_stabilization_enabled, stabilization_verdict_for_evidence = (
+                    self._evaluate_stabilization_gate(
+                        deck_for_gate, odb, raw_odb, path, engineering_intent
+                    )
                 )
-                deck_marks = detect_stabilization_in_deck(deck_for_gate or "")
-                auto_stabilization_enabled = bool(
-                    deck_marks.get("step_stabilization")
-                    or deck_marks.get("contact_stabilization")
-                )
-                if auto_stabilization_enabled:
+                if stabilization_verdict_for_evidence is not None:
+                    threshold = stabilization_verdict_for_evidence.threshold
+                    threshold_source = (
+                        stabilization_verdict_for_evidence.threshold_source
+                    )
+                elif auto_stabilization_enabled:
                     threshold, threshold_source = self._resolve_stabilization_threshold(
                         engineering_intent
                     )
-                    history_region = self._resolve_energy_history_region(raw_odb) or "Assembly ASSEMBLY"
-                    step_names = list((odb or {}).get("steps") or ())
-                    stabilized_step_name = step_names[-1] if step_names else "Step-1"
-                    try:
-                        from .odb import extract_energy_evidence
-                        auto_stabilization_energy = extract_energy_evidence(
-                            self.executor, path, stabilized_step_name, history_region
-                        )
-                    except Exception as exc:
-                        auto_stabilization_block = (
-                            "stabilization_energy_extraction_failed:%s" % exc
-                        )
-                    if auto_stabilization_block is not None:
-                        from ..contracts.stabilization_energy import (
-                            STATUS_BLOCKED,
-                            StabilizationEnergyVerdict,
-                        )
-                        stabilization_verdict_for_evidence = StabilizationEnergyVerdict(
-                            status=STATUS_BLOCKED,
-                            threshold=threshold,
-                            threshold_source=threshold_source,
-                            reason="stabilization_energy_extraction_failed",
-                            details={"error": auto_stabilization_block},
-                        )
-                    elif auto_stabilization_energy is not None:
-                        stabilization_verdict_for_evidence = evaluate_static_stabilization_energy(
-                            auto_stabilization_energy,
-                            threshold,
-                            stabilization_enabled=True,
-                            threshold_source=threshold_source,
-                        )
 
             if require_production:
                 run_snapshot_for_acc = run.with_state(
@@ -1096,11 +1139,7 @@ class AnalysisRunner:
                     physics_domain=domain_to_eval,
                     result_extractions=extractions if result_source == "odb" else None,
                     elastic_validity=effective_elastic,
-                    stabilization_energy=(
-                        stabilization_verdict_for_evidence
-                        if stabilization_verdict_for_evidence is not None
-                        else auto_stabilization_energy
-                    ),
+                    stabilization_energy=stabilization_verdict_for_evidence,
                     stabilization_threshold=threshold,
                     stabilization_threshold_source=threshold_source,
                     stabilization_enabled=auto_stabilization_enabled,
@@ -1125,11 +1164,7 @@ class AnalysisRunner:
                     require_evidence=effective_require_evidence,
                     physics_domain=domain_to_eval,
                     elastic_validity=effective_elastic,
-                    stabilization_energy=(
-                        stabilization_verdict_for_evidence
-                        if stabilization_verdict_for_evidence is not None
-                        else auto_stabilization_energy
-                    ),
+                    stabilization_energy=stabilization_verdict_for_evidence,
                     stabilization_threshold=threshold,
                     stabilization_threshold_source=threshold_source,
                     stabilization_enabled=auto_stabilization_enabled,
