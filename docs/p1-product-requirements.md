@@ -67,6 +67,11 @@ MCP / UI / 部署 / Benchmark / Release
 - Connector：L4 QUALIFIED
 - FMBD：L4 QUALIFIED
 - P1.4 求解器失败诊断与受控自愈：已完成实现与真实机 Golden E2E，作为 Phase 3「诊断 / 迭代」能力推进
+- MS13L 门手柄实测四大痛点结构性闭环（2026-10-20）：
+  - REQ-P1-056 求解进程活跃度看门狗与停滞熔断（QUALIFIED）：双管道异步流消费 + 心跳监控 + 120s 停滞熔断与 `taskkill /F /T` 强杀整树
+  - REQ-P1-057 Headless ODB 数据提取单进程管线（QUALIFIED）：单次 `abaqus python` 会话提取全部元数据、场变量极值与能量时程，消灭重复冷启动
+  - REQ-P1-041/042 接触稳定化受控自愈与审计闭环（QUALIFIED）：`*CONTACT CONTROLS, STABILIZE` 接入与静力能量门禁，真实机自愈重算验证通过
+  - REQ-P1-055 几何清理策略全入口强制（IN_REVIEW）：同进程运行时守卫拦截全量修复与无约束几何修改，虚拓扑保持仅候选推荐
 - 全项目继续遵守 Evidence V2、Single-Exit Acceptance、Fail-Closed、Zero Fabrication 与 Stated Scope Precision。
 
 ### 0.3 Phase 2 的边界与双工作包架构
@@ -116,7 +121,7 @@ Phase 4 才开始正式产品化：MCP / Agent Tool、UI / HITL 工作台、部�
 
 **版本:** 2026-10-04  
 **基线状态:** 20 L4 / 0 L3 物理工程领域已全部通过真实机全链路合格认证 (Agent Full-Chain Qualified)  
-**最新进展:** 全仓 1516 项自动化回归测试 100% 通过（0 失败，`pytest -W error`，exit 0，基线 commit `55a3c9e`）；Phase 2 Package B 工业级实战案例已达成 6/10 QUALIFIED（Case 01~06 内容摘要与断言验证闭环。无密钥 SHA-256 不是身份签名），Case 07 的输入资产与负向探针已落地、求解证据待真机  
+**最新进展:** 全仓 1762 项自动化回归测试 100% 通过（0 失败，`pytest -W error`，exit 0，基线 commit `47af456`）；MS13L 门手柄实测四大痛点（看门狗熔断 REQ-P1-056、单进程 ODB 批处理提取 REQ-P1-057、接触稳定化自愈 REQ-P1-041/042、几何清理同进程守卫 REQ-P1-055）已架构闭环；Phase 2 Package B 工业级实战案例已达成 6/10 QUALIFIED，Case 07 输入资产与负向探针已就绪、求解证据待真机  
 **战略阶段:** Phase 2 — 工程能力深度与真实复杂工程实战 (Package B 案例攻坚)
 
 ---
