@@ -1018,8 +1018,20 @@ def render_odb_contours_headless(
                 "Headless viewer rendering requires authentic Abaqus installation."
             )
 
-    from ..paths import resolve_production_scratch
-    scratch_dir = resolve_production_scratch(source_path=odb, project_root=out_dir, prefix="viewer")
+    from ..paths import infer_customer_project_root, resolve_production_scratch
+    # Scratch belongs to the project that owns the ODB, not to the directory the
+    # figures are written into. Passing the output directory as the project root
+    # made a report/delivery folder look like a customer project and littered it
+    # with an input/working/solver/evidence/delivery skeleton.
+    scratch_root = None
+    try:
+        scratch_root = infer_customer_project_root(source_path=odb)
+    except Exception:
+        scratch_root = None
+    if scratch_root is None:
+        scratch_root = out_dir
+    scratch_dir = resolve_production_scratch(
+        source_path=odb, project_root=scratch_root, prefix="viewer")
     try:
         script_path = scratch_dir / "_headless_viewer_post.py"
         script_content = generate_headless_viewer_script(

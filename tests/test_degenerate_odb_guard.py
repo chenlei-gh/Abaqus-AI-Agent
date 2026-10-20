@@ -24,6 +24,20 @@ class Values:
         self.data = data
 
 
+class DoubleValues:
+    """Mirrors odbAccess on a double-precision ODB: .data raises, .dataDouble works."""
+
+    def __init__(self, data):
+        self._data = data
+
+    @property
+    def data(self):
+        raise RuntimeError("Data is double precision.  Use dataDouble()")
+
+    def dataDouble(self):
+        return self._data
+
+
 class FieldOutput:
     """Mirrors odbAccess: a FieldOutput exposes .values, not a bare list."""
 
@@ -57,6 +71,26 @@ def test_counts_skip_non_numeric_components():
 def test_counts_accept_scalar_data():
     total, finite = _finite_counts([Values(1.0), Values(NAN)])
     assert (total, finite) == (2, 1)
+
+
+def test_counts_read_double_precision_results():
+    """A double-precision ODB must be counted, not reported as a failed check.
+
+    Abaqus/Explicit runs with DOUBLE_PLUS_PACK, and Standard jobs written in
+    double precision, raise on ``.data``. Reading it unguarded made the guard
+    throw, and the caller returned a healthy ODB as degenerate.
+    """
+    total, finite = _finite_counts(
+        [DoubleValues((1.0, 2.0, NAN)), DoubleValues(3.0)])
+    assert (total, finite) == (4, 3)
+
+
+def test_double_precision_nan_still_caught():
+    """The fallback must not turn a dead solution into a pass."""
+    step = Step(Frame({"U": [DoubleValues((NAN, NAN, NAN))]}))
+    error, nonfinite = _degenerate_solution_error(Odb(step), "Step-1")
+    assert error is not None
+    assert "U" in nonfinite
 
 
 def test_all_nan_core_field_is_degenerate():
@@ -351,3 +385,22 @@ def test_probe_script_dual_path_consistency(tmp_path):
     res5 = _run_probe(script5)
     assert res5["valid"] is True
     assert "steps" in res5
+
+    # 6. Double-precision ODB -> the probe must read it, not refuse a healthy result
+    active_odb[0] = MockMultiOdb({
+        "Initial": Step(),
+        "Step-1": Step(Frame({"U": [DoubleValues((1.0, 2.0, 3.0))]})),
+    })
+    script6 = _build_odb_probe_script(Path("dummy.odb"), required_fields=["U"])
+    res6 = _run_probe(script6)
+    assert res6["valid"] is True, res6.get("error")
+
+    # 7. Double-precision ODB whose core field is NaN -> still caught
+    active_odb[0] = MockMultiOdb({
+        "Initial": Step(),
+        "Step-1": Step(Frame({"U": [DoubleValues((NAN, NAN, NAN))]})),
+    })
+    script7 = _build_odb_probe_script(Path("dummy.odb"))
+    res7 = _run_probe(script7)
+    assert res7["valid"] is False
+    assert "degenerate" in res7["error"]

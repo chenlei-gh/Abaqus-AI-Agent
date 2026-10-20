@@ -64,7 +64,13 @@ STEEL_E = 210000.0
 STEEL_NU = 0.30
 SEAT_STROKE = 0.50
 COMPRESSION_STROKE = 51.0
-QUASI_STATIC_TIME = 1.0
+# The 51 mm stroke is a quasi-static specification. At 1.0 s the measured
+# kinetic/internal energy ratio was 0.062, above the 0.05 limit, and the fixture
+# reaction oscillated by roughly a third of its magnitude: the stroke was being
+# driven faster than the inertia could relax. A 2.0 s ramp brings the measured
+# ratio to 0.0156 and the reaction imbalance to 0.20 %, both inside the declared
+# limits, without changing the stroke, the mesh, or the material model.
+QUASI_STATIC_TIME = 2.0
 MESH_SEED = 0.9
 
 # The quasi-static energy ratio must be judged while the part is actually loaded.
@@ -750,13 +756,24 @@ if bumper_step in odb.steps:
 
         if "S" in fields:
             pressures = []
+            mises_values = []
             for value in fields["S"].values:
                 seq = as_sequence(read_data(value))
                 if len(seq) >= 3:
-                    pressures.append(-(seq[0] + seq[1] + seq[2]) / 3.0)
+                    s11, s22, s33 = seq[0], seq[1], seq[2]
+                    s12 = seq[3] if len(seq) > 3 else 0.0
+                    pressures.append(-(s11 + s22 + s33) / 3.0)
+                    # Von Mises from the stored tensor components. odbAccess on
+                    # this installation does not expose FieldOutput.mises, so it
+                    # is computed here rather than left as a missing metric.
+                    mises_values.append(math.sqrt(
+                        0.5 * ((s11 - s22) ** 2 + (s22 - s33) ** 2
+                               + (s33 - s11) ** 2) + 3.0 * s12 * s12))
             if pressures:
                 entry["mean_hydrostatic_pressure"] = sum(pressures) / len(pressures)
                 entry["max_hydrostatic_pressure"] = max(pressures)
+            if mises_values:
+                entry["mises_max"] = max(mises_values)
 
         if "U" in fields:
             mags = [math.sqrt(sum(c * c for c in v)) for v in vector_subset(fields["U"])]
@@ -1065,6 +1082,7 @@ def derive_metrics(post: dict) -> dict:
     metrics["internal_energy_peak_mj"] = round(ie_max, 4)
 
     metrics["max_contact_pressure_mpa"] = max_over_frames(frames, "cpress_max")
+    metrics["max_mises_mpa"] = max_over_frames(frames, "mises_max")
     metrics["max_displacement_mm"] = max_over_frames(frames, "u_max")
     metrics["frame_count"] = len(frames)
 
@@ -1080,6 +1098,11 @@ def main() -> int:
     parser.add_argument("--skip-seat", action="store_true")
     parser.add_argument("--skip-compress", action="store_true")
     parser.add_argument("--skip-viewer", action="store_true")
+    parser.add_argument(
+        "--skip-report",
+        action="store_true",
+        help="Skip automatic HTML report and manifest generation on deliverable pass.",
+    )
     args = parser.parse_args()
 
     from abaqus_ai_agent.execution.batch import BatchExecutor, resolve_default_launcher
@@ -1338,6 +1361,26 @@ def main() -> int:
     print(json.dumps({"status": acceptance.status, "passed": acceptance.passed,
                       "metrics": metrics, "figures": len(figures)}, indent=2, ensure_ascii=False))
     print("C07_EVIDENCE=%s" % summary_path)
+
+    if acceptance.passed and acceptance.deliverable and not args.skip_report:
+        try:
+            try:
+                from tools.generate_case_07_report import generate_case_07_report
+            except ImportError:
+                from generate_case_07_report import generate_case_07_report
+            report_manifest = generate_case_07_report(
+                project=ctx.project_root,
+                run_id=run_id,
+                launcher=launcher,
+                archive_root=None,
+            )
+            summary["report_generated"] = True
+            summary["report_path"] = (report_manifest.get("report") or {}).get("path")
+            summary_path.write_text(json.dumps(summary, indent=2, ensure_ascii=False), encoding="utf-8")
+            print("C07_REPORT=%s" % summary["report_path"])
+        except Exception as rep_err:
+            print("[WARNING] Automatic report generation failed: %s" % rep_err)
+
     return 0 if acceptance.passed else 2
 
 

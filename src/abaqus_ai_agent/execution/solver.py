@@ -288,6 +288,22 @@ def _verify_odb_in_process(
                 pass
 
 
+def _value_data(value):
+    """Return one field-output value's components, single or double precision.
+
+    A double-precision ODB (Abaqus/Explicit ``DOUBLE_PLUS_PACK``, and Standard
+    jobs written with double precision) rejects ``.data`` and raises instead of
+    returning the tuple. Reading ``.data`` unguarded therefore failed the whole
+    guard on a perfectly healthy result, and the caller reported a healthy ODB
+    as degenerate.
+    """
+    try:
+        return value.data
+    except Exception:
+        double = value.dataDouble
+        return double() if callable(double) else double
+
+
 def _finite_counts(values) -> tuple:
     """Return ``(numeric_count, finite_count)`` for one field-output array.
 
@@ -297,7 +313,7 @@ def _finite_counts(values) -> tuple:
     total = 0
     finite = 0
     for value in values:
-        data = value.data
+        data = _value_data(value)
         if not hasattr(data, "__iter__"):
             data = (data,)
         for component in data:
@@ -523,7 +539,13 @@ try:
                 _tot = 0
                 _fin = 0
                 for _v in _frame.fieldOutputs[_fname].values:
-                    _data = _v.data
+                    # A double-precision ODB rejects .data and raises; the guard
+                    # must read either precision or it fails a healthy result.
+                    try:
+                        _data = _v.data
+                    except Exception:
+                        _double = _v.dataDouble
+                        _data = _double() if callable(_double) else _double
                     if not hasattr(_data, '__iter__'):
                         _data = (_data,)
                     for _x in _data:
