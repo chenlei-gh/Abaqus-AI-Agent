@@ -641,12 +641,20 @@ def generate_headless_viewer_script(
         "    vp.odbDisplay.commonOptions.setValues(renderStyle=SHADED)",
         "except Exception as _vp_err:",
         "    print('[HeadlessViewer] WARNING: Viewport cosmetic annotations degraded: %s' % _vp_err)",
-        # The model tree is a GUI panel, not engineering evidence. A failed hide
-        # must stop the figure; a warning would still deliver a covered screenshot.
+        # The model tree is a GUI panel, not engineering evidence. In a GUI-attached
+        # session a failed hide must stop the figure; a warning would still deliver a
+        # covered screenshot. Under ``viewer -noGUI`` there is no tree to hide and the
+        # ``hideTree`` API does not exist at all (session.attachedToGui is False), so
+        # the guard must not fire on an absent panel.
         "try:",
-        "    session.hideTree()",
-        "except Exception as _tree_err:",
-        "    raise RuntimeError('Abaqus session.hideTree failed; refusing a figure covered by the model tree: %s' % _tree_err)",
+        "    _gui_attached = bool(session.attachedToGui)",
+        "except Exception:",
+        "    _gui_attached = False",
+        "if _gui_attached:",
+        "    try:",
+        "        session.hideTree()",
+        "    except Exception as _tree_err:",
+        "        raise RuntimeError('Abaqus session.hideTree failed; refusing a figure covered by the model tree: %s' % _tree_err)",
         "",
     ]
 
@@ -706,6 +714,28 @@ def generate_headless_viewer_script(
             code_lines.append("    last_step_key = list(odb.steps.keys())[-1]")
             code_lines.append("    target_step = odb.steps[last_step_key]")
             code_lines.append(f"    vp.odbDisplay.setFrame(step=last_step_key, frame={int(req.frame_index)})")
+
+        # General contact results are stored under a domain-suffixed label
+        # ('CPRESS     General_Contact_Domain'); the bare name is not a valid
+        # primary variable. Resolve against the labels actually present in the
+        # requested frame. A prefix with more than one match is an error, not a
+        # silent first-pick.
+        if not is_mesh_plot:
+            code_lines += [
+                "    # 1b. Resolve the field label actually stored in this frame",
+                f"    _wanted_label = {req.variable_label!r}",
+                "    _frame_labels = list(target_frame.fieldOutputs.keys())",
+                "    if _wanted_label in _frame_labels:",
+                "        _resolved_label = _wanted_label",
+                "    else:",
+                "        _label_matches = [lab for lab in _frame_labels if str(lab).split()[0].upper() == _wanted_label.upper()]",
+                "        if len(_label_matches) > 1:",
+                "            raise ValueError('Field label \"%s\" is ambiguous in the target frame: %s' % (_wanted_label, _label_matches))",
+                "        if not _label_matches:",
+                "            raise KeyError('Field \"%s\" not present in the target frame. Available: %s' % (_wanted_label, _frame_labels))",
+                "        _resolved_label = _label_matches[0]",
+                "",
+            ]
 
         if is_mesh_plot:
             code_lines += [
@@ -817,42 +847,42 @@ def generate_headless_viewer_script(
                 code_lines += [
                     "    try:",
                     f"        vp.odbDisplay.setPrimaryVariable(",
-                    f"            variableLabel={v_label!r},",
+                    f"            variableLabel=_resolved_label,",
                     f"            outputPosition={pos},",
                     f"            refinement=(INVARIANT, {inv_title!r})",
                     "        )",
                     "    except Exception:",
                     "        try:",
                     f"            vp.odbDisplay.setPrimaryVariable(",
-                    f"                variableLabel={v_label!r},",
+                    f"                variableLabel=_resolved_label,",
                     f"                outputPosition={pos},",
                     f"                refinement=(INVARIANT, {inv_upper!r})",
                     "            )",
                     "        except Exception:",
                     "            try:",
                     f"                vp.odbDisplay.setPrimaryVariable(",
-                    f"                    variableLabel={v_label!r},",
+                    f"                    variableLabel=_resolved_label,",
                     f"                    outputPosition={pos},",
                     f"                    refinement=(INVARIANT, {inv!r})",
                     "                )",
                     "            except Exception:",
                     "                try:",
                     f"                    vp.odbDisplay.setPrimaryVariable(",
-                    f"                        variableLabel={v_label!r},",
+                    f"                        variableLabel=_resolved_label,",
                     f"                        outputPosition={pos},",
                     f"                        refinement=(COMPONENT, {inv!r})",
                     "                    )",
                     "                except Exception:",
                     "                    try:",
                     f"                        vp.odbDisplay.setPrimaryVariable(",
-                    f"                            variableLabel={v_label!r},",
+                    f"                            variableLabel=_resolved_label,",
                     f"                            outputPosition={pos},",
                     f"                            refinement=(COMPONENT, {inv_upper!r})",
                     "                        )",
                     "                    except Exception:",
                     "                        try:",
                     f"                            vp.odbDisplay.setPrimaryVariable(",
-                    f"                                variableLabel={v_label!r},",
+                    f"                                variableLabel=_resolved_label,",
                     f"                                outputPosition={pos},",
                     f"                                refinement=(COMPONENT, {inv_title!r})",
                     "                            )",
@@ -862,7 +892,7 @@ def generate_headless_viewer_script(
             else:
                 code_lines += [
                     "    try:",
-                    f"        vp.odbDisplay.setPrimaryVariable(variableLabel={v_label!r}, outputPosition={pos})",
+                    f"        vp.odbDisplay.setPrimaryVariable(variableLabel=_resolved_label, outputPosition={pos})",
                     "    except Exception as _pos_err:",
                     f"        raise ValueError('Failed to set primary variable \"{v_label}\" at outputPosition {pos}: ' + str(_pos_err))",
                 ]

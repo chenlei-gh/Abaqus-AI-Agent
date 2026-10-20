@@ -917,6 +917,62 @@ def sha256_file(path: Path) -> str:
     return digest.hexdigest()
 
 
+STATUS_COMPLETE_MARKER = "THE ANALYSIS HAS COMPLETED SUCCESSFULLY"
+
+
+def sta_completion_evidence(sta_path: Path) -> dict:
+    """Read the solver's own completion statement out of the .sta file.
+
+    A zero process exit code is not a completion claim; only the .sta marker is.
+    """
+    if not sta_path.is_file():
+        return {"path": str(sta_path), "exists": False, "completed": False}
+    text = sta_path.read_text(encoding="utf-8", errors="ignore")
+    return {
+        "path": str(sta_path),
+        "exists": True,
+        "sha256": sha256_file(sta_path),
+        "completed": STATUS_COMPLETE_MARKER in text.upper(),
+        "last_line": text.strip().splitlines()[-1].strip() if text.strip() else "",
+    }
+
+
+def derive_job_state(run: dict | None, odb_path: Path) -> dict:
+    """Derive a job's completion state from its real artifacts, never from assumption.
+
+    A job counts as completed only when the launcher returned 0, the solver wrote
+    its own success marker, and the ODB is a genuine binary result file.
+
+    A job that was not re-executed in this invocation still has to pass the artifact
+    checks; the difference is recorded explicitly in ``executed_this_run`` so a
+    reused result is never presented as a fresh solve.
+    """
+    from abaqus_ai_agent.execution.solver import is_authentic_binary_odb
+
+    sta = sta_completion_evidence(odb_path.with_suffix(".sta"))
+    odb_exists = odb_path.is_file()
+    odb_authentic = bool(odb_exists and is_authentic_binary_odb(odb_path))
+    return_code = None if run is None else run.get("return_code")
+    executed_this_run = run is not None
+    artifacts_complete = (
+        sta.get("completed") is True
+        and odb_authentic
+    )
+    completed = artifacts_complete and (return_code == 0 if executed_this_run else True)
+    return {
+        "return_code": return_code,
+        "executed_this_run": executed_this_run,
+        "odb_path": str(odb_path),
+        "odb_exists": odb_exists,
+        "odb_authentic": odb_authentic,
+        "odb_sha256": sha256_file(odb_path) if odb_exists else None,
+        "odb_bytes": odb_path.stat().st_size if odb_exists else None,
+        "sta": sta,
+        "artifacts_complete": artifacts_complete,
+        "completed": completed,
+    }
+
+
 def max_over_frames(frames, key):
     values = [f[key] for f in frames if isinstance(f.get(key), (int, float))]
     return max(values) if values else None
@@ -1147,15 +1203,58 @@ def main() -> int:
 
     from abaqus_ai_agent.acceptance import evaluate_result_acceptance
 
-    class _Convergence:
-        converged = True
+    # A job is complete only when its own artifacts say so: launcher exit code 0,
+    # the solver's success marker in the .sta, and a genuine binary ODB. This is
+    # derived per job instead of asserted once for the whole run.
+    job_states = {
+        "seat": derive_job_state(runs.get("seat"), seat_odb),
+        "compress": derive_job_state(runs.get("compress"), odb_path),
+    }
+    # Both declared solver products are prerequisites of this case. A job that was
+    # not re-executed in this invocation may only count on artifacts that already
+    # carry the solver's own success marker; it is flagged as reused, not as a
+    # fresh solve.
+    required_states = ["seat", "compress"]
+    incomplete = [name for name in required_states if not job_states[name]["completed"]]
+    reused = [name for name in required_states if not job_states[name]["executed_this_run"]]
+    result_status = "completed" if not incomplete else "solver_failed"
+
+    # Case 07 is displacement-controlled quasi-static compression on an
+    # Abaqus/Explicit step. There is no iterative convergence residual to judge,
+    # so no convergence object is invented; the gate is recorded as a justified
+    # skip instead of a fabricated PASS.
+    gate_justifications = {
+        "convergence": (
+            "Abaqus/Explicit Step-2 is displacement-controlled and advances by a "
+            "stable time increment, so no iterative convergence residual exists. "
+            "Solver completion is judged from the .sta success marker per job, and "
+            "quasi-static quality is judged by the kinetic/internal energy criterion."
+        ),
+    }
+
+    # ODB structural verification (degenerate solutions are blocked, not reported).
+    from abaqus_ai_agent.execution.solver import verify_authentic_odb_structure
+
+    odb_verification = {}
+    for name, job_odb in (("compress", odb_path), ("seat", seat_odb)):
+        if not job_odb.is_file():
+            continue
+        odb_verification[name] = verify_authentic_odb_structure(
+            job_odb, launcher_cmd=launcher,
+            required_step="Step2Compression" if name == "compress" else "Step1Seating",
+        )
+    degenerate = [
+        name for name, res in odb_verification.items() if not res.get("verified", False)
+    ]
 
     acceptance = evaluate_result_acceptance(
-        result_status="completed",
+        result_status=result_status,
         values={k: v for k, v in metrics.items() if isinstance(v, (int, float))},
         criteria=CASE_07_CRITERIA,
-        convergence=_Convergence(),
+        convergence=None,
         require_evidence=False,
+        odb_status="valid" if not degenerate else "degenerate",
+        gate_justifications=gate_justifications,
     )
 
     # Headless figure rendering from the authentic ODB.
@@ -1182,6 +1281,12 @@ def main() -> int:
         "launcher": launcher,
         "project_root": str(ctx.project_root),
         "solver_runs": runs,
+        "job_states": job_states,
+        "odb_verification": odb_verification,
+        "result_status": result_status,
+        "incomplete_jobs": incomplete,
+        "reused_job_artifacts": reused,
+        "degenerate_odbs": degenerate,
         "metrics": metrics,
         "seat_metrics": seat_metrics.get("seat_summary") or {},
         "geometry_fidelity": geometry_fidelity,
@@ -1201,6 +1306,7 @@ def main() -> int:
                 for c in acceptance.criteria
             ],
             "gates": dict(acceptance.gates),
+            "gate_justifications": dict(acceptance.gate_justifications),
             "failures": list(acceptance.failures),
         },
         "figures": figures,
@@ -1208,8 +1314,16 @@ def main() -> int:
         "odb_sha256": sha256_file(odb_path),
         "odb_bytes": odb_path.stat().st_size,
         "seat_odb_path": str(seat_odb) if seat_odb.is_file() else None,
+        "seat_odb_sha256": sha256_file(seat_odb) if seat_odb.is_file() else None,
         "odb_fields": post.get("available_fields", []),
         "odb_steps": post.get("steps", []),
+        "report_generated": False,
+        "report_note": (
+            "This driver solves and extracts metrics only. Authoritative HTML "
+            "generation lives in tools/generate_case_07_report.py so that report "
+            "rendering never requires a re-solve and never inherits a solver "
+            "status this run did not verify."
+        ),
         "note": (
             "Step-1 (Standard seating) and Step-2 (Explicit compression) are two "
             "independent jobs on identical geometry. No solver state is imported, so "

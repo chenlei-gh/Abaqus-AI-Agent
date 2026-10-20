@@ -110,23 +110,23 @@ def test_generate_headless_viewer_script_syntax_and_api():
 
     # 4. Request 1: S (Mises)
     assert "case_03_manifold_mises_stress.png" in script
-    assert "variableLabel='S'" in script
+    assert "_wanted_label = 'S'" in script
     assert "refinement=(INVARIANT, 'MISES')" in script
     assert "plotState=(CONTOURS_ON_DEF,)" in script
 
     # 5. Request 2: U (Magnitude) with 5.0x deformation scale
     assert "case_03_manifold_displacement.png" in script
-    assert "variableLabel='U'" in script
+    assert "_wanted_label = 'U'" in script
     assert "uniformScaleFactor=5.0" in script
     assert "outputPosition=NODAL" in script
 
     # 6. Request 3: NT11 temperature field
     assert "case_03_manifold_temperature.png" in script
-    assert "variableLabel='NT'" in script
+    assert "_wanted_label = 'NT'" in script
 
     # 7. Request 4: CPRESS scalar and Top camera view
     assert "case_03_manifold_contact_pressure.png" in script
-    assert "variableLabel='CPRESS'" in script
+    assert "_wanted_label = 'CPRESS'" in script
     assert "session.views['Top']" in script
 
     # 8. Printing and cleanup
@@ -901,6 +901,11 @@ def test_headless_script_hides_tree_and_draws_accepted_boundary_arrows():
     )
 
     compile(script, "<headless-viewer>", "exec")
+    # The model tree only exists in a GUI-attached session. Under ``viewer -noGUI``
+    # there is no tree to cover the figure and hideTree is not even an attribute,
+    # so the guard must be conditional rather than an unconditional hide.
+    assert "_gui_attached = bool(session.attachedToGui)" in script
+    assert "if _gui_attached:" in script
     assert "session.hideTree()" in script
     assert "refusing a figure covered by the model tree" in script
     assert "'Pin-1'" in script
