@@ -247,19 +247,32 @@ def test_watchdog_terminates_entire_process_tree_on_stall(tmp_path):
     # 2. Operating system API verification: No dangling active process
     if os.name == "nt":
         import ctypes
+        from ctypes import wintypes
+
+        k32 = ctypes.WinDLL("kernel32", use_last_error=True)
         PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
-        handle = ctypes.windll.kernel32.OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, False, gc_pid)
+
+        k32.OpenProcess.argtypes = [wintypes.DWORD, wintypes.BOOL, wintypes.HANDLE]
+        k32.OpenProcess.restype = wintypes.HANDLE
+
+        k32.GetExitCodeProcess.argtypes = [wintypes.HANDLE, ctypes.POINTER(wintypes.DWORD)]
+        k32.GetExitCodeProcess.restype = wintypes.BOOL
+
+        k32.CloseHandle.argtypes = [wintypes.HANDLE]
+        k32.CloseHandle.restype = wintypes.BOOL
+
+        handle = k32.OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, False, gc_pid)
         if handle:
             try:
-                exit_code = ctypes.c_ulong()
-                ret = ctypes.windll.kernel32.GetExitCodeProcess(handle, ctypes.byref(exit_code))
-                assert ret != 0, f"GetExitCodeProcess failed with error: {ctypes.GetLastError()}"
+                exit_code = wintypes.DWORD()
+                ret = k32.GetExitCodeProcess(handle, ctypes.byref(exit_code))
+                assert ret != 0, f"GetExitCodeProcess failed with error: {ctypes.get_last_error()}"
                 # STILL_ACTIVE = 259
                 assert exit_code.value != 259, f"Grandchild process {gc_pid} is STILL_ACTIVE (259)"
             finally:
-                ctypes.windll.kernel32.CloseHandle(handle)
+                k32.CloseHandle(handle)
         else:
-            err = ctypes.GetLastError()
+            err = ctypes.get_last_error()
             # 87: ERROR_INVALID_PARAMETER (PID does not exist / fully reaped)
             # Fail closed: Any other error (e.g. 5 Access Denied meaning process still exists) is a failure
             assert err == 87, f"OpenProcess failed with unexpected error code: {err} (cannot verify termination)"
@@ -279,8 +292,12 @@ def test_watchdog_terminates_entire_process_tree_on_stall(tmp_path):
 
 
 class _MockControlledProc:
-    """Mock process allowing deterministic sequencing of poll() returns and stdout/stderr streams."""
-    def __init__(self, poll_sequence, pid=88888, out_lines=("mock output\n",)):
+    """Mock process allowing deterministic sequencing of poll() returns and stdout/stderr streams.
+
+    The default PID is 0 so a missed kill patch cannot invoke ``taskkill`` on a real process.
+    ``kill_process_tree`` returns immediately for non-positive PIDs.
+    """
+    def __init__(self, poll_sequence, pid=0, out_lines=("mock output\n",)):
         import io
         self.poll_sequence = list(poll_sequence)
         self.pid = pid
@@ -291,7 +308,7 @@ class _MockControlledProc:
     def poll(self):
         if self.poll_sequence:
             return self.poll_sequence.pop(0)
-        return 0
+        return None
 
     def kill(self):
         self.killed = True
@@ -301,13 +318,21 @@ class _MockControlledProc:
 
 
 @pytest.mark.parametrize("exit_code,expected_succeeded", [(0, True), (2, False)])
-def test_watchdog_hard_timeout_boundary_exit_captured_by_secondary_poll(monkeypatch, exit_code, expected_succeeded):
+def test_watchdog_hard_timeout_boundary_exit_captured_by_secondary_poll(monkeypatch, tmp_path, exit_code, expected_succeeded):
     """If process is running at loop start but finishes with exit_code before hard timeout trips, secondary poll captures it."""
-    # Sequence: first poll is None (running), second poll (at timeout check) returns exit_code
     mock_proc = _MockControlledProc([None, exit_code])
     monkeypatch.setattr("subprocess.Popen", lambda *args, **kwargs: mock_proc)
 
-    res = run_with_watchdog(["dummy_cmd"], timeout=0.001, poll_interval=0.01)
+    base = time.monotonic()
+    clock_calls = [0]
+    def mock_monotonic():
+        clock_calls[0] += 1
+        return base if clock_calls[0] <= 1 else base + 100.0
+    monkeypatch.setattr("abaqus_ai_agent.execution.watchdog.time.monotonic", mock_monotonic)
+
+    res = run_with_watchdog(
+        ["dummy_cmd"], cwd=tmp_path, timeout=1.0, stall_timeout=500.0, poll_interval=0.01
+    )
     assert res.returncode == exit_code
     assert res.succeeded is expected_succeeded
     assert res.timed_out is False
@@ -315,42 +340,93 @@ def test_watchdog_hard_timeout_boundary_exit_captured_by_secondary_poll(monkeypa
 
 
 @pytest.mark.parametrize("exit_code,expected_succeeded", [(0, True), (1, False)])
-def test_watchdog_stall_boundary_exit_captured_by_secondary_poll(monkeypatch, exit_code, expected_succeeded):
+def test_watchdog_stall_boundary_exit_captured_by_secondary_poll(monkeypatch, tmp_path, exit_code, expected_succeeded):
     """If process is running at loop start but finishes with exit_code before stall breaker trips, secondary poll captures it."""
-    # Sequence: first poll is None (running), second poll (at stall check) returns exit_code
     mock_proc = _MockControlledProc([None, exit_code])
     monkeypatch.setattr("subprocess.Popen", lambda *args, **kwargs: mock_proc)
 
-    res = run_with_watchdog(["dummy_cmd"], timeout=10.0, stall_timeout=0.001, poll_interval=0.01)
+    base = time.monotonic()
+    clock_calls = [0]
+    def mock_monotonic():
+        clock_calls[0] += 1
+        return base if clock_calls[0] <= 1 else base + 100.0
+    monkeypatch.setattr("abaqus_ai_agent.execution.watchdog.time.monotonic", mock_monotonic)
+
+    res = run_with_watchdog(
+        ["dummy_cmd"], cwd=tmp_path, timeout=500.0, stall_timeout=1.0, poll_interval=0.01
+    )
     assert res.returncode == exit_code
     assert res.succeeded is expected_succeeded
     assert res.stalled is False
     assert res.timed_out is False
 
 
-def test_watchdog_secondary_poll_still_running_trips_timeout_and_stall(monkeypatch):
+def _install_advancing_clock(monkeypatch, step_seconds):
+    """Return a strictly increasing clock so one activity refresh cannot freeze the idle timer."""
+    calls = [0]
+
+    def controlled_monotonic():
+        calls[0] += 1
+        if calls[0] > 20:
+            raise AssertionError("watchdog loop did not terminate under the scripted clock")
+        return float(calls[0]) * step_seconds
+
+    monkeypatch.setattr("abaqus_ai_agent.execution.watchdog.time.monotonic", controlled_monotonic)
+    monkeypatch.setattr("abaqus_ai_agent.execution.watchdog.time.sleep", lambda *_args, **_kwargs: None)
+
+
+def test_watchdog_secondary_poll_still_running_trips_timeout_and_stall(monkeypatch, tmp_path):
     """If secondary poll confirms process is genuinely still running, TimeoutExpired and SolverProcessStalledError are raised."""
+    killed_pids = []
+    monkeypatch.setattr(
+        "abaqus_ai_agent.execution.watchdog.kill_process_tree",
+        lambda pid: killed_pids.append(pid),
+    )
+
     # 1. Total timeout path
-    mock_proc_to = _MockControlledProc([None, None, None])
+    mock_proc_to = _MockControlledProc([None, None, None, None], out_lines=())
     monkeypatch.setattr("subprocess.Popen", lambda *args, **kwargs: mock_proc_to)
+    _install_advancing_clock(monkeypatch, step_seconds=10.0)
     with pytest.raises(subprocess.TimeoutExpired):
-        run_with_watchdog(["dummy_cmd"], timeout=0.001, poll_interval=0.01)
+        run_with_watchdog(
+            ["dummy_cmd"], cwd=tmp_path, timeout=1.0, stall_timeout=500.0, poll_interval=0.01
+        )
+    assert mock_proc_to.killed
+    assert mock_proc_to.pid in killed_pids
 
     # 2. Stall timeout path
-    mock_proc_stall = _MockControlledProc([None, None, None])
+    killed_pids.clear()
+    mock_proc_stall = _MockControlledProc([None, None, None, None], out_lines=())
     monkeypatch.setattr("subprocess.Popen", lambda *args, **kwargs: mock_proc_stall)
+    _install_advancing_clock(monkeypatch, step_seconds=10.0)
     with pytest.raises(SolverProcessStalledError) as exc_info:
-        run_with_watchdog(["dummy_cmd"], timeout=10.0, stall_timeout=0.001, poll_interval=0.01)
+        run_with_watchdog(
+            ["dummy_cmd"], cwd=tmp_path, timeout=500.0, stall_timeout=1.0, poll_interval=0.01
+        )
     assert exc_info.value.diagnostic()["category"] == "solver_stalled"
+    assert mock_proc_stall.killed
+    assert mock_proc_stall.pid in killed_pids
 
 
-def test_watchdog_hard_timeout_takes_precedence_over_stall_when_simultaneous(monkeypatch):
-    """When both hard timeout and stall timeout expire at the same check, hard timeout takes precedence."""
-    mock_proc = _MockControlledProc([None, None, None])
+def test_watchdog_hard_timeout_takes_precedence_over_stall_when_simultaneous(monkeypatch, tmp_path):
+    """When both hard timeout and stall timeout expire at the same check, hard timeout takes precedence deterministically."""
+    killed_pids = []
+    monkeypatch.setattr(
+        "abaqus_ai_agent.execution.watchdog.kill_process_tree",
+        lambda pid: killed_pids.append(pid),
+    )
+    mock_proc = _MockControlledProc([None, None, None, None], out_lines=())
     monkeypatch.setattr("subprocess.Popen", lambda *args, **kwargs: mock_proc)
 
+    # The first loop check is already past both thresholds; hard timeout is checked first.
+    _install_advancing_clock(monkeypatch, step_seconds=100.0)
+
     with pytest.raises(subprocess.TimeoutExpired):
-        run_with_watchdog(["dummy_cmd"], timeout=0.001, stall_timeout=0.001, poll_interval=0.01)
+        run_with_watchdog(
+            ["dummy_cmd"], cwd=tmp_path, timeout=10.0, stall_timeout=5.0, poll_interval=0.01
+        )
+    assert mock_proc.killed
+    assert mock_proc.pid in killed_pids
 
 
 def test_watchdog_boundary_exit_prioritized_over_timeout_and_stall(tmp_path):

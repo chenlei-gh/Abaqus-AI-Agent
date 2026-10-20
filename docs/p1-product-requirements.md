@@ -122,7 +122,7 @@ Phase 4 才开始正式产品化：MCP / Agent Tool、UI / HITL 工作台、部�
 
 **版本:** 2026-10-20  
 **基线状态:** 20 L4 物理工程领域已建立端到端模型意图编译与基准测试闭环，与外部真实求解器在离线测试时的资格分离（REQ-P1-053 Solver Unverified）及高阶工业案例（Case 07 汽车悬架超弹性缓冲块真机待验证）分立区分  
-**最新进展:** 全仓 1789 项自动化回归测试 100% 通过（0 失败，标准模式 `.venv/Scripts/python.exe -m pytest -q` 与严格警告模式 `.venv/Scripts/python.exe -m pytest -q -W error` 均 exit 0，无任何 warning 泄漏）；MS13L 门手柄实测四大痛点已建立代码级防御（看门狗熔断 REQ-P1-056 落实临界复查缩小误判窗口，补充确定性覆盖硬超时边界、停滞边界正常/非零码退出、同时满足时硬超时优先级以及子孙进程整树杀灭 `kill_process_tree` 的心跳停更与句柄错误码双重闭环校验，覆盖突发流安全排空；单进程 ODB 批处理提取与严格分析步绑定 REQ-P1-057；接触稳定化自愈 REQ-P1-041/042；几何清理同进程守卫与意图契约 REQ-P1-055 修复 sentinel 属性存在且为 None 时的还原隔离性；多步动态能量提取与门禁 REQ-P1-054）；退化解守卫全面升级为全分析步全帧独立扫描（彻底消除 `required_step` 掩盖其他分析步退化、中间帧退化但末帧正常漏检的缺陷，零非 Initial 步与零帧步统一 fail-closed 阻断，外部 probe_script 与进程内双路径完成 AST/exec Mock 一致性回归，真实 Abaqus 2025 真机 ODB 探针列为待验证专项）；Phase 2 Package B 工业级实战案例已达成 6/10 QUALIFIED，Case 07 输入资产与负向探针已就绪、求解证据待真机受控启动  
+**最新进展:** 全仓 1789 项自动化回归测试 100% 通过（0 失败，标准模式 `.venv/Scripts/python.exe -m pytest -q` 与严格警告模式 `.venv/Scripts/python.exe -m pytest -q -W error` 均 exit 0，无任何 warning 泄漏）；MS13L 门手柄实测四大痛点已建立代码级防御（看门狗熔断 REQ-P1-056 落实临界复查缩小误判窗口，补充确定性覆盖硬超时边界、停滞边界正常/非零码退出、同一检查轮硬超时优先于停滞，以及子孙进程整树杀灭 `kill_process_tree` 的心跳停更与 64 位句柄错误码双重闭环校验，覆盖突发流安全排空；单进程 ODB 批处理提取与严格分析步绑定 REQ-P1-057；接触稳定化自愈 REQ-P1-041/042；几何清理同进程守卫与意图契约 REQ-P1-055 修复 sentinel 属性存在且为 None 时的还原隔离性；多步动态能量提取与门禁 REQ-P1-054）；退化解守卫全面升级为全分析步全帧独立扫描（彻底消除 `required_step` 掩盖其他分析步退化、中间帧退化但末帧正常漏检的缺陷，零非 Initial 步与零帧步统一 fail-closed 阻断，外部 probe_script 与进程内双路径完成 AST/exec Mock 一致性回归，真实 Abaqus 2025 真机 ODB 探针列为待验证专项）；Phase 2 Package B 工业级实战案例已达成 6/10 QUALIFIED，Case 07 输入资产与负向探针已就绪、求解证据待真机受控启动  
 **战略阶段:** Phase 2 — 工程能力深度与真实复杂工程实战 (Package B 案例攻坚)
 
 ---
