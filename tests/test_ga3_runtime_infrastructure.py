@@ -696,6 +696,46 @@ def test_process_aware_stale_lock_protection(tmp_path):
     sandbox.cleanup()
 
 
+@pytest.mark.skipif(os.name != "nt", reason="exclusive share-mode probe is Windows-specific")
+def test_lock_probe_detects_real_open_handle_without_pid(tmp_path):
+    """A lock held open by another process must read as active with no PID hint.
+
+    The earlier probe opened the ``.lck`` with Python's ``open()``, which shares
+    read/write access, so it succeeded against a lock another process was
+    holding and reported a busy workspace as free. No monkeypatching here: a
+    real child process holds a real handle.
+    """
+    import subprocess
+    import sys
+
+    lck_path = str(tmp_path / "Job-Real-Held.lck")
+    with open(lck_path, "w") as f:
+        f.write("LOCK")
+
+    holder = (
+        "import sys, time\n"
+        "f = open(sys.argv[1], 'r+b')\n"
+        "f.write(b'held'); f.flush()\n"
+        "print('READY', flush=True)\n"
+        "time.sleep(5)\n"
+    )
+    proc = subprocess.Popen(
+        [sys.executable, "-c", holder, lck_path],
+        stdout=subprocess.PIPE,
+        text=True,
+    )
+    try:
+        assert proc.stdout.readline().strip() == "READY"
+        assert is_lock_active(lck_path) is True
+    finally:
+        proc.wait(timeout=30)
+        if proc.stdout is not None:
+            proc.stdout.close()
+
+    # Once the handle is gone the lock is genuinely stale again.
+    assert is_lock_active(lck_path) is False
+
+
 def test_worker_executes_registered_task_after_recovery(tmp_path):
     persist_file = os.path.join(tmp_path, "recovered_task_queue.json")
     sandbox_base = os.path.join(tmp_path, "sandboxes")

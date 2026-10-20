@@ -156,7 +156,11 @@ def is_authentic_binary_odb(path: Union[str, Path]) -> bool:
     if size < 1024:
         return False
     try:
-        header = path.read_bytes()[:32].strip()
+        # Bounded read: a real ODB is routinely hundreds of megabytes, so slurping
+        # the whole file just to look at its first 32 bytes is unacceptable in a
+        # probe that every recovery attempt runs.
+        with open(path, "rb") as f:
+            header = f.read(32).strip()
         # Plaintext JSON / XML / YAML mocks start with {, [, <, or comment
         if header.startswith((b"{", b"[", b"<", b"#", b"--")):
             return False

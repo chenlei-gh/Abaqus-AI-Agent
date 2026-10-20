@@ -44,10 +44,21 @@ def is_pid_alive(pid: int) -> bool:
 
 def is_lock_active(lock_path: str, associated_pid: Optional[int] = None) -> bool:
     """Probe if a .lck lock file is actively held by a live solver process.
-    
+
     Returns True if:
       - associated_pid is specified and that process is alive
-      - or the file is actively locked/opened by an OS process (probe via exclusive read/write open)
+      - or the file is actively held open by an OS process
+
+    On Windows the probe must use an exclusive share mode. Python's ``open()``
+    requests ``FILE_SHARE_READ|WRITE|DELETE``, so it happily opens a ``.lck``
+    that another process is holding, which made the earlier probe report a live
+    lock as free. ``CreateFileW`` with ``dwShareMode=0`` fails with
+    ``ERROR_SHARING_VIOLATION`` while a handle is open, which is the signal this
+    function needs.
+
+    POSIX has no mandatory locking, so this remains an advisory check there and
+    is not claimed as proof: with no PID hint a held lock can read as free. The
+    Windows path is the verified one.
     """
     if not os.path.exists(lock_path):
         return False
@@ -56,13 +67,55 @@ def is_lock_active(lock_path: str, associated_pid: Optional[int] = None) -> bool
         if is_pid_alive(associated_pid):
             return True
 
-    # Try lock probing via exclusive append/write check
+    if os.name == "nt":
+        return _is_held_by_open_handle_windows(lock_path)
+
+    # POSIX: best-effort only. ``open()`` cannot detect a foreign holder here.
     try:
         with open(lock_path, "r+b"):
             pass
         return False
     except (PermissionError, OSError):
         return True
+
+
+def _is_held_by_open_handle_windows(lock_path: str) -> bool:
+    """Return True when another process holds ``lock_path`` open on Windows."""
+    import ctypes
+    from ctypes import wintypes
+
+    GENERIC_READ = 0x80000000
+    OPEN_EXISTING = 3
+    ERROR_SHARING_VIOLATION = 32
+
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    create_file = kernel32.CreateFileW
+    # Default restype is a 32-bit int, which truncates a 64-bit HANDLE. Declaring
+    # the real types is what makes the INVALID_HANDLE_VALUE comparison meaningful.
+    create_file.restype = wintypes.HANDLE
+    create_file.argtypes = [
+        wintypes.LPCWSTR,
+        wintypes.DWORD,
+        wintypes.DWORD,
+        wintypes.LPVOID,
+        wintypes.DWORD,
+        wintypes.DWORD,
+        wintypes.HANDLE,
+    ]
+    close_handle = kernel32.CloseHandle
+    close_handle.restype = wintypes.BOOL
+    close_handle.argtypes = [wintypes.HANDLE]
+
+    handle = create_file(
+        lock_path, GENERIC_READ, 0, None, OPEN_EXISTING, 0, None
+    )
+    if handle == wintypes.HANDLE(-1).value or handle is None:
+        # A sharing violation proves a live holder. Any other failure (deleted
+        # between the exists() check and here, access denied) is not proof, so it
+        # is reported as not held rather than guessed.
+        return ctypes.get_last_error() == ERROR_SHARING_VIOLATION
+    close_handle(handle)
+    return False
 
 
 def wait_for_lock_release(

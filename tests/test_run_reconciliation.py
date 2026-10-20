@@ -354,6 +354,46 @@ def test_ledger_path_lives_under_state_directory(tmp_path):
     assert default_ledger_path(tmp_path) == tmp_path.resolve() / ".state" / "run_lifecycle.json"
 
 
+def test_odb_prefilter_does_not_read_whole_file(tmp_path, monkeypatch):
+    """Probe 5 must stay O(1) in file size.
+
+    A real ODB is hundreds of megabytes. Reading the whole artifact just to
+    inspect its first 32 bytes turns every recovery attempt into a full disk
+    scan, which is exactly the kind of cost the probe is supposed to avoid.
+    """
+    from abaqus_ai_agent.execution.solver import is_authentic_binary_odb
+
+    big = tmp_path / "Big.odb"
+    with open(big, "wb") as f:
+        f.write(_STRUCTURED_ODB_HEAD)
+        f.seek(8 * 1024 * 1024 - 1)
+        f.write(b"\x01")
+
+    reads = []
+    orig_open = open
+
+    def spying_open(path, mode="r", *args, **kwargs):
+        handle = orig_open(path, mode, *args, **kwargs)
+        if "b" in mode and "r" in mode:
+            orig_read = handle.read
+
+            def spy_read(size=-1, _o=orig_read):
+                data = _o(size)
+                reads.append(len(data))
+                return data
+
+            handle.read = spy_read
+        return handle
+
+    monkeypatch.setattr("builtins.open", spying_open)
+    assert is_authentic_binary_odb(big) is True
+
+    # Head probe asks for 32 bytes; the tail probe asks for one window (512).
+    assert reads, "pre-filter performed no reads"
+    assert max(reads) <= 4096, f"pre-filter read {max(reads)} bytes in one call"
+    assert sum(reads) < big.stat().st_size
+
+
 def test_write_and_load_snapshot_roundtrip(tmp_path):
     """write_snapshot persists atomically and load_snapshot reads it back identically."""
     sdir = tmp_path / "sandbox"
