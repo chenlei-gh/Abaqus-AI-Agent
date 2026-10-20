@@ -163,3 +163,103 @@ def test_batched_extraction_field_missing_fails_closed(tmp_path):
         )
 
     assert "NONEXISTENT" in str(exc_info.value)
+
+
+def test_batched_extraction_multi_step_without_step_spec_fails_closed(tmp_path):
+    """When an ODB has multiple non-initial steps and energy_spec omits 'step', extraction must fail closed with energy_step_ambiguous."""
+    odb_file = _create_mock_binary_odb(tmp_path / "multi_step.odb")
+
+    req = ResultRequirement(
+        name="TipDisp",
+        value_key="tip_disp",
+        output_kind="frame_value",
+        step="Step-1",
+        frame=-1,
+    )
+
+    def mock_custom_runner(code: str):
+        # Verify generated script contains the ambiguity guard
+        assert "energy_step_ambiguous" in code
+        return {
+            "status": "success",
+            "metadata": {"status": "available", "steps": ["Initial", "Step-1", "Step-2"]},
+            "requirements": {
+                "tip_disp": {
+                    "success": True,
+                    "value": 1.25,
+                    "locator": {"step": "Step-1", "frame": -1},
+                }
+            },
+            "energy": {
+                "status": "unavailable",
+                "reason": "energy_step_ambiguous",
+                "available_steps": ["Step-1", "Step-2"],
+            },
+        }
+
+    report = extract_odb_results(
+        odb_path=odb_file,
+        requirements_or_criteria=[req],
+        run_id="run-batch-multi-ambig",
+        input_hash="hash-1234",
+        workdir=tmp_path,
+        custom_runner=mock_custom_runner,
+        energy_spec={},  # omitted step on multi-step ODB
+    )
+
+    assert report.energy_evidence is not None
+    assert report.energy_evidence["status"] == "unavailable"
+    assert report.energy_evidence["reason"] == "energy_step_ambiguous"
+    assert report.energy_evidence["available_steps"] == ["Step-1", "Step-2"]
+
+
+def test_batched_extraction_multi_step_with_declared_step_extracts_correct_step(tmp_path):
+    """When an ODB has multiple steps and 'step' is explicitly declared, that exact step's energy is extracted."""
+    odb_file = _create_mock_binary_odb(tmp_path / "multi_step_declared.odb")
+
+    req = ResultRequirement(
+        name="TipDisp",
+        value_key="tip_disp",
+        output_kind="frame_value",
+        step="Step-1",
+        frame=-1,
+    )
+
+    def mock_custom_runner(code: str):
+        return {
+            "status": "success",
+            "metadata": {"status": "available", "steps": ["Initial", "Step-1", "Step-2"]},
+            "requirements": {
+                "tip_disp": {
+                    "success": True,
+                    "value": 1.25,
+                    "locator": {"step": "Step-1", "frame": -1},
+                }
+            },
+            "energy": {
+                "status": "available",
+                "step": "Step-2",
+                "region": "Assembly ASSEMBLY",
+                "variables": {
+                    "ALLIE": [[0.0, 0.0], [1.0, 50.0]],
+                    "ALLKE": [[0.0, 0.0], [1.0, 2.0]],
+                    "ALLWK": [[0.0, 0.0], [1.0, 52.0]],
+                    "ETOTAL": [[0.0, 0.0], [1.0, 0.0]],
+                },
+            },
+        }
+
+    report = extract_odb_results(
+        odb_path=odb_file,
+        requirements_or_criteria=[req],
+        run_id="run-batch-multi-declared",
+        input_hash="hash-1234",
+        workdir=tmp_path,
+        custom_runner=mock_custom_runner,
+        energy_spec={"step": "Step-2"},
+    )
+
+    assert report.energy_evidence is not None
+    assert report.energy_evidence["status"] == "available"
+    assert report.energy_evidence["step"] == "Step-2"
+    assert "ALLIE" in report.energy_evidence["variables"]

@@ -343,3 +343,111 @@ def test_small_feature_virtual_topology_remains_review_only():
     assert "small_geometry_requires_feature_classification_before_mutation" in plan.warnings
     # Review candidates must never become an executed ignore_entity action.
     assert local_seeds_from_geometry_plan(plan) == ()
+
+
+# --- Intent evaluation fail-closed contract --------------------------------
+
+
+def test_evaluate_geometry_cleanup_intent_clean():
+    from abaqus_ai_agent.contracts.geometry_cleanup import (
+        GeometryInspection,
+        GeometryIssue,
+        STATUS_CLEAN,
+        evaluate_geometry_cleanup_intent,
+    )
+    insp = GeometryInspection(part="Part-1", issues=(), valid_geometry=True)
+    res = evaluate_geometry_cleanup_intent(insp)
+    assert res["status"] == STATUS_CLEAN
+    assert res["action_permitted"] is False
+    assert res["error_count"] == 0
+    assert res["warning_count"] == 0
+
+
+def test_evaluate_geometry_cleanup_intent_warning_only():
+    from abaqus_ai_agent.contracts.geometry_cleanup import (
+        GeometryInspection,
+        GeometryIssue,
+        STATUS_WARNING,
+        evaluate_geometry_cleanup_intent,
+    )
+    issue = GeometryIssue(
+        entity_type="Edge",
+        index=5,
+        issue_type="short_edge",
+        severity="warning",
+        metric=0.05,
+        threshold=0.1,
+        locator=(10.0, 20.0, 30.0),
+        recommendation="Consider virtual topology or local seed refinement.",
+    )
+    insp = GeometryInspection(part="Part-1", issues=(issue,), valid_geometry=True)
+    res = evaluate_geometry_cleanup_intent(insp)
+    assert res["status"] == STATUS_WARNING
+    assert res["action_permitted"] is False
+    assert res["warning_count"] == 1
+    assert len(res["diagnostics"]) == 1
+    assert res["diagnostics"][0]["locator"] == (10.0, 20.0, 30.0)
+
+
+def test_evaluate_geometry_cleanup_intent_error_denied_default_policy():
+    from abaqus_ai_agent.contracts.geometry_cleanup import (
+        GeometryInspection,
+        GeometryIssue,
+        STATUS_REPAIR_FORBIDDEN_FAIL_CLOSED,
+        evaluate_geometry_cleanup_intent,
+    )
+    issue = GeometryIssue(
+        entity_type="Face",
+        index=2,
+        issue_type="self_intersecting_face",
+        severity="error",
+        locator=(1.0, 2.0, 3.0),
+        recommendation="Fix upstream CAD surface topology.",
+    )
+    insp = GeometryInspection(part="Part-1", issues=(issue,), valid_geometry=False)
+    res = evaluate_geometry_cleanup_intent(insp)
+    assert res["status"] == STATUS_REPAIR_FORBIDDEN_FAIL_CLOSED
+    assert res["action_permitted"] is False
+    assert res["allow_repair"] is False
+    assert res["error_count"] >= 1
+    assert len(res["diagnostics"]) >= 1
+    assert res["diagnostics"][0]["locator"] == (1.0, 2.0, 3.0)
+    assert "Fix upstream CAD" in res["recommendations"][0]
+
+
+def test_evaluate_geometry_cleanup_intent_error_authorized():
+    from abaqus_ai_agent.contracts.geometry_cleanup import (
+        GeometryCleanupPolicy,
+        GeometryInspection,
+        GeometryIssue,
+        STATUS_REPAIR_AUTHORIZED,
+        evaluate_geometry_cleanup_intent,
+    )
+    issue = GeometryIssue(
+        entity_type="Face",
+        index=2,
+        issue_type="invalid_face",
+        severity="error",
+        locator=(1.0, 2.0, 3.0),
+        recommendation="Repair geometry with valid CAD tolerances.",
+    )
+    insp = GeometryInspection(part="Part-1", issues=(issue,), valid_geometry=False)
+    policy = GeometryCleanupPolicy(part="Part-1", allow_repair=True)
+    res = evaluate_geometry_cleanup_intent(insp, policy)
+    assert res["status"] == STATUS_REPAIR_AUTHORIZED
+    assert res["action_permitted"] is True
+    assert res["allow_repair"] is True
+
+
+def test_evaluate_geometry_cleanup_intent_invalid_geometry_flag():
+    from abaqus_ai_agent.contracts.geometry_cleanup import (
+        GeometryInspection,
+        STATUS_REPAIR_FORBIDDEN_FAIL_CLOSED,
+        evaluate_geometry_cleanup_intent,
+    )
+    insp = GeometryInspection(part="Part-1", issues=(), valid_geometry=False)
+    res = evaluate_geometry_cleanup_intent(insp)
+    assert res["status"] == STATUS_REPAIR_FORBIDDEN_FAIL_CLOSED
+    assert res["action_permitted"] is False
+    assert res["error_count"] == 1
+    assert res["diagnostics"][0]["issue_type"] == "invalid_geometry"

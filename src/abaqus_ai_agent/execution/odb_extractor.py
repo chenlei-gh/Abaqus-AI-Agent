@@ -539,21 +539,36 @@ def _extract_odb_in_process(
             }
         energy = None
         if energy_spec:
-            steps = list(odb.steps.keys())
-            e_step = energy_spec.get("step") or (steps[-1] if steps else None)
+            non_initial_steps = [s for s in odb.steps.keys() if str(s).strip().lower() != "initial"]
+            e_step = energy_spec.get("step")
+            if not e_step:
+                if len(non_initial_steps) == 1:
+                    e_step = non_initial_steps[0]
+                elif len(non_initial_steps) > 1:
+                    energy = {
+                        "status": "unavailable",
+                        "reason": "energy_step_ambiguous",
+                        "available_steps": non_initial_steps,
+                    }
+                    e_step = None
             e_reg = energy_spec.get("region") or "Assembly ASSEMBLY"
             e_vars = energy_spec.get("variables") or [
                 "ALLIE", "ALLKE", "ALLWK", "ALLAE", "ALLPD", "ALLCD", "ALLFD", "ALLSD", "ALLSE", "ETOTAL"
             ]
-            if e_step in odb.steps:
-                st = odb.steps[e_step]
-                hr = getattr(st, "historyRegions", {}).get(e_reg)
-                if hr:
-                    v_dict = {}
-                    for vn in e_vars:
-                        out = getattr(hr, "historyOutputs", {}).get(vn)
-                        v_dict[vn] = [list(pt) for pt in out.data] if (out and hasattr(out, "data")) else None
-                    energy = {"status": "available", "step": e_step, "region": e_reg, "variables": v_dict}
+            if e_step is not None:
+                if e_step in odb.steps:
+                    st = odb.steps[e_step]
+                    hr = getattr(st, "historyRegions", {}).get(e_reg)
+                    if hr:
+                        v_dict = {}
+                        for vn in e_vars:
+                            out = getattr(hr, "historyOutputs", {}).get(vn)
+                            v_dict[vn] = [list(pt) for pt in out.data] if (out and hasattr(out, "data")) else None
+                        energy = {"status": "available", "step": e_step, "region": e_reg, "variables": v_dict}
+                    else:
+                        energy = {"status": "unavailable", "reason": "history_region_missing", "region": e_reg}
+                else:
+                    energy = {"status": "unavailable", "reason": "step_missing", "step": e_step}
         return results, meta, energy
     except OdbExtractionError:
         raise
@@ -793,33 +808,44 @@ for r in reqs:
 energy_spec_in = json.loads({energy_json!r})
 if energy_spec_in:
     try:
-        steps = list(odb.steps.keys())
-        e_step = energy_spec_in.get("step") or (steps[-1] if steps else None)
+        non_init_steps = [s for s in odb.steps.keys() if str(s).strip().lower() != "initial"]
+        e_step = energy_spec_in.get("step")
+        if not e_step:
+            if len(non_init_steps) == 1:
+                e_step = non_init_steps[0]
+            elif len(non_init_steps) > 1:
+                payload["energy"] = {{
+                    "status": "unavailable",
+                    "reason": "energy_step_ambiguous",
+                    "available_steps": non_init_steps,
+                }}
+                e_step = None
         e_region = energy_spec_in.get("region") or "Assembly ASSEMBLY"
         e_vars = energy_spec_in.get("variables") or [
             "ALLIE", "ALLKE", "ALLWK", "ALLAE", "ALLPD", "ALLCD", "ALLFD", "ALLSD", "ALLSE", "ETOTAL"
         ]
-        if e_step in odb.steps:
-            st = odb.steps[e_step]
-            hr = getattr(st, "historyRegions", {{}}).get(e_region)
-            if hr is not None:
-                vars_dict = {{}}
-                for vn in e_vars:
-                    out = getattr(hr, "historyOutputs", {{}}).get(vn)
-                    if out is not None and hasattr(out, "data"):
-                        vars_dict[vn] = [list(pt) for pt in out.data]
-                    else:
-                        vars_dict[vn] = None
-                payload["energy"] = {{
-                    "status": "available",
-                    "step": e_step,
-                    "region": e_region,
-                    "variables": vars_dict,
-                }}
+        if e_step is not None:
+            if e_step in odb.steps:
+                st = odb.steps[e_step]
+                hr = getattr(st, "historyRegions", {{}}).get(e_region)
+                if hr is not None:
+                    vars_dict = {{}}
+                    for vn in e_vars:
+                        out = getattr(hr, "historyOutputs", {{}}).get(vn)
+                        if out is not None and hasattr(out, "data"):
+                            vars_dict[vn] = [list(pt) for pt in out.data]
+                        else:
+                            vars_dict[vn] = None
+                    payload["energy"] = {{
+                        "status": "available",
+                        "step": e_step,
+                        "region": e_region,
+                        "variables": vars_dict,
+                    }}
+                else:
+                    payload["energy"] = {{"status": "unavailable", "reason": "history_region_missing", "region": e_region}}
             else:
-                payload["energy"] = {{"status": "unavailable", "reason": "history_region_missing", "region": e_region}}
-        else:
-            payload["energy"] = {{"status": "unavailable", "reason": "step_missing", "step": e_step}}
+                payload["energy"] = {{"status": "unavailable", "reason": "step_missing", "step": e_step}}
     except Exception as exc:
         payload["errors"]["energy"] = str(exc)
 

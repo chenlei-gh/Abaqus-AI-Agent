@@ -1077,6 +1077,19 @@ class AnalysisRunner:
 
                     from .odb_extractor import extract_odb_results
                     eff_inp_hash = (run.provenance.input_hash if run.provenance else None) or ""
+
+                    # 2A pre-injection: If dynamic energy gate is enabled and a target step is declared,
+                    # pass energy_spec to extract_odb_results so energy history is extracted in the
+                    # batched run, eliminating redundant cold-start runs.
+                    pre_energy_spec = None
+                    _, _, dyn_enabled = self._resolve_dynamic_energy_settings(engineering_intent)
+                    if dyn_enabled and engineering_intent is not None:
+                        meta = getattr(engineering_intent, "metadata", None) or {}
+                        if isinstance(meta, dict):
+                            dec_step = meta.get("dynamic_energy_step") or meta.get("dynamic_step")
+                            if dec_step:
+                                pre_energy_spec = {"step": str(dec_step).strip()}
+
                     try:
                         report = extract_odb_results(
                             odb_path=path,
@@ -1086,6 +1099,7 @@ class AnalysisRunner:
                             workdir=workdir,
                             launcher_cmd=eff_launcher,
                             custom_runner=getattr(self.executor, "execute", None) if eff_launcher else None,
+                            energy_spec=pre_energy_spec,
                         )
                     except Exception as exc:
                         return run.with_state(

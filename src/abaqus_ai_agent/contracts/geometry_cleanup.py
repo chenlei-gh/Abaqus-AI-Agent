@@ -561,3 +561,106 @@ def verify_cleanup_transition(before, after, operation):
     if not validity_supported:
         result["validity_conclusive"] = False
     return result
+
+
+STATUS_REPAIR_FORBIDDEN_FAIL_CLOSED = "REPAIR_FORBIDDEN_FAIL_CLOSED"
+STATUS_REPAIR_AUTHORIZED = "REPAIR_AUTHORIZED"
+STATUS_CLEAN = "CLEAN"
+STATUS_WARNING = "WARNING"
+
+
+def evaluate_geometry_cleanup_intent(
+    inspection: GeometryInspection,
+    policy: Optional[GeometryCleanupPolicy] = None,
+) -> dict:
+    """Evaluate inspection findings against cleanup policy in a fail-closed manner.
+
+    When geometric flaws (severity == 'error' or valid_geometry is False) are
+    detected and the policy has not explicitly set allow_repair=True, this function
+    returns status='REPAIR_FORBIDDEN_FAIL_CLOSED'. Destructive geometry modifications
+    are strictly barred, and structured diagnostics with exact locators and actionable
+    engineering recommendations are provided. Virtual topology candidates are kept
+    strictly review-only.
+    """
+    if not isinstance(inspection, GeometryInspection):
+        raise TypeError(f"expected GeometryInspection, got {type(inspection).__name__}")
+
+    effective_policy = policy
+    if effective_policy is None:
+        effective_policy = GeometryCleanupPolicy(
+            part=inspection.part or DEFAULT_PART,
+            allow_repair=False,
+            allow_virtual_topology=False,
+        )
+
+    issues = inspection.issues or ()
+    error_issues = [iss for iss in issues if iss.severity == "error"]
+    warning_issues = [iss for iss in issues if iss.severity == "warning"]
+    info_issues = [iss for iss in issues if iss.severity == "info"]
+
+    has_error = bool(error_issues) or (inspection.valid_geometry is False)
+
+    diagnostics = []
+    recommendations = []
+    for iss in issues:
+        item = {
+            "entity_type": iss.entity_type,
+            "index": iss.index,
+            "issue_type": iss.issue_type,
+            "severity": iss.severity,
+            "metric": iss.metric,
+            "threshold": iss.threshold,
+            "locator": iss.locator,
+            "recommendation": iss.recommendation,
+        }
+        diagnostics.append(item)
+        if iss.recommendation and iss.recommendation not in recommendations:
+            recommendations.append(iss.recommendation)
+
+    if inspection.valid_geometry is False and not any(iss.issue_type == "invalid_geometry" for iss in error_issues):
+        rec = "Invalid geometry detected by Abaqus kernel; manual CAD inspection required."
+        diagnostics.append({
+            "entity_type": "Part",
+            "index": None,
+            "issue_type": "invalid_geometry",
+            "severity": "error",
+            "metric": None,
+            "threshold": None,
+            "locator": None,
+            "recommendation": rec,
+        })
+        if rec not in recommendations:
+            recommendations.append(rec)
+
+    if has_error:
+        if not effective_policy.allow_repair:
+            status = STATUS_REPAIR_FORBIDDEN_FAIL_CLOSED
+            action_permitted = False
+            summary = "Destructive geometry repair is barred (allow_repair=False); fail-closed diagnosis emitted."
+        else:
+            status = STATUS_REPAIR_AUTHORIZED
+            action_permitted = True
+            summary = "Geometry repair is explicitly authorized by policy."
+    elif warning_issues:
+        status = STATUS_WARNING
+        action_permitted = False
+        summary = "Geometric warnings found; review recommended before meshing."
+    else:
+        status = STATUS_CLEAN
+        action_permitted = False
+        summary = "Geometry inspection passed with no detected errors or warnings."
+
+    return {
+        "status": status,
+        "part": inspection.part,
+        "action_permitted": action_permitted,
+        "allow_repair": effective_policy.allow_repair,
+        "allow_virtual_topology": effective_policy.allow_virtual_topology,
+        "valid_geometry": inspection.valid_geometry,
+        "error_count": len(error_issues) + (1 if inspection.valid_geometry is False and not any(iss.issue_type == "invalid_geometry" for iss in error_issues) else 0),
+        "warning_count": len(warning_issues),
+        "info_count": len(info_issues),
+        "diagnostics": diagnostics,
+        "recommendations": recommendations,
+        "summary": summary,
+    }

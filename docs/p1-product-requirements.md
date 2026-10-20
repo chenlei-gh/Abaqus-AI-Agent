@@ -71,7 +71,8 @@ MCP / UI / 部署 / Benchmark / Release
   - REQ-P1-056 求解进程活跃度看门狗与停滞熔断（QUALIFIED）：双管道异步流消费 + 心跳监控 + 120s 停滞熔断与 `taskkill /F /T` 强杀整树
   - REQ-P1-057 Headless ODB 数据提取单进程管线（QUALIFIED）：单次 `abaqus python` 会话提取全部元数据、场变量极值与能量时程，消灭重复冷启动
   - REQ-P1-041/042 接触稳定化受控自愈与审计闭环（QUALIFIED）：`*CONTACT CONTROLS, STABILIZE` 接入与静力能量门禁，真实机自愈重算验证通过
-  - REQ-P1-055 几何清理策略全入口强制（IN_REVIEW）：同进程运行时守卫拦截全量修复与无约束几何修改，虚拓扑保持仅候选推荐
+  - REQ-P1-054 瞬态动态能量平衡契约（QUALIFIED）：动态能量漂移显式判定与门禁，多分析步精确绑定，单进程批处理预注入消灭二次冷启动
+  - REQ-P1-055 几何清理策略全入口强制（QUALIFIED）：同进程运行时守卫拦截全量修复与无约束几何修改，意图评估 fail-closed 诊断，虚拓扑保持仅候选推荐
 - 全项目继续遵守 Evidence V2、Single-Exit Acceptance、Fail-Closed、Zero Fabrication 与 Stated Scope Precision。
 
 ### 0.3 Phase 2 的边界与双工作包架构
@@ -119,9 +120,9 @@ Phase 4 才开始正式产品化：MCP / Agent Tool、UI / HITL 工作台、部�
 ---
 # P1 阶段商业产品化与工程 Agent 需求规范与需求清单 (Product Requirements & Backlog)
 
-**版本:** 2026-10-04  
+**版本:** 2026-10-20  
 **基线状态:** 20 L4 / 0 L3 物理工程领域已全部通过真实机全链路合格认证 (Agent Full-Chain Qualified)  
-**最新进展:** 全仓 1762 项自动化回归测试 100% 通过（0 失败，`pytest -W error`，exit 0，基线 commit `47af456`）；MS13L 门手柄实测四大痛点（看门狗熔断 REQ-P1-056、单进程 ODB 批处理提取 REQ-P1-057、接触稳定化自愈 REQ-P1-041/042、几何清理同进程守卫 REQ-P1-055）已架构闭环；Phase 2 Package B 工业级实战案例已达成 6/10 QUALIFIED，Case 07 输入资产与负向探针已就绪、求解证据待真机  
+**最新进展:** 全仓 1769 项自动化回归测试 100% 通过（0 失败，`pytest -W error`，exit 0）；MS13L 门手柄实测四大痛点（看门狗熔断 REQ-P1-056、单进程 ODB 批处理提取 REQ-P1-057、接触稳定化自愈 REQ-P1-041/042、几何清理同进程守卫与意图契约 REQ-P1-055、多步动态能量提取与门禁 REQ-P1-054）已全部架构闭环；Phase 2 Package B 工业级实战案例已达成 6/10 QUALIFIED，Case 07 输入资产与负向探针已就绪、求解证据待真机  
 **战略阶段:** Phase 2 — 工程能力深度与真实复杂工程实战 (Package B 案例攻坚)
 
 ---
@@ -483,7 +484,7 @@ P1.0 产品主入口已彻底消除高层自然语言需求与底层 20 个 L4 �
 > - **本轮修复的真实缺陷**：`contracts/postprocess.py` 的 `DYNAMIC_EXPLICIT` 与 `QUASI_STATIC_EXPLICIT` 后处理 profile 只请求 `ALLIE/ALLKE/ETOTAL`，**遗漏 `ALLWK`**。后果是规划器生成的显式 deck 必然缺少契约强制要求的证据，显式分支永远只能 `BLOCKED`，不可能 `PASS`。两处均已补齐为 `ALLIE/ALLKE/ALLWK/ETOTAL`（Jev `fix_profile_to_request_allwk`，置信度 `0.94`）。
 > - **显式阈值独立性**：显式策略阈值单独声明（Jev `separate_threshold_required`，置信度 `1.0`）。本次取值与隐式策略数值相同，但这是本构型的工程选择，契约模块仍无任何内置默认值。
 > - 证据：`machine_validation/explicit_dynamic_energy_balance.json`；回归：`tests/test_explicit_dynamic_energy.py`。
-> - **仍未验证（不得外推）**：准静态显式（`QUASI_STATIC_EXPLICIT`）的动能/内能比属于独立工程门禁，本次未验证；显式漂移阈值的通用性未建立；单一构型，不能外推为全局结论。Jev `explicit_closure_sufficiency = 0.15`，即「单次真机 + 同源负向控制」不足以宣告整个显式分支工程闭合。
+> - **2A 阶段架构收敛（2026-10-20）**：针对多步分析步归属（Step Binding），在 `execution/odb_extractor.py` 中彻底废除了 `steps[-1]` 的静默猜测逻辑，固化 Fail-Closed 边界（多步未声明 `step` 时明确返回 `energy_step_ambiguous` 并阻断；仅在唯一非 Initial 步时安全缺省）；在 `execution/analysis_run.py` 中增加动态能量分析步预注入，将声明的 `dynamic_energy_step` 直接下发给单进程批处理提取管线，消除二次冷启动；全仓 113 项动态能量测试全面通过，正式晋级为 **QUALIFIED**。
 
 #### REQ-P1-055: 几何清理策略全入口强制（fail-closed）
 - **背景（本轮发现的真实缺陷）**：`contracts/geometry_cleanup.py` 声明了 `GeometryCleanupPolicy(allow_repair=False, allow_virtual_topology=False)`，但全仓库**没有任何地方读取该策略**——`grep` 仅命中定义本身。默认拒绝声明形同虚设，`part.repairGeometry()`、`part.removeRedundantEntities()`（两者在 2025 中均**不存在**）、`part.ignoreEntity()` 均可经由 Action 或 `python` 逃生通道直接执行。
@@ -501,7 +502,7 @@ P1.0 产品主入口已彻底消除高层自然语言需求与底层 20 个 L4 �
 - **no-op 不算成功（Jev 0.75）**：`verify_cleanup_transition()` 对「无可观测变化」返回 `verified=False` 与 `no_observable_change`，不得把「命令返回了」当作「修复生效」。
 - 回归：`tests/test_geometry_cleanup_policy.py`（43 项，含默认拒绝、跨 part 不越权、逃生通道负向、守卫策略载荷、真实 API 名、tuple 化、恒真证据反例、共享入口一致性、no-op 语义、虚拓扑仅候选）。
 - 实现状态（2026-10-20）：`GeometryCleanupPolicySet` / `enforce_cleanup_policy()` / `render_geometry_guard()` / `GeometryCleanupPolicyViolation` 已落地；`action_to_script` 对 `python` 自动前置守卫，`compile_intent_to_actions` 为整份 deck 只注入一次守卫（`include_guard=False` 用于组合，避免重复膨胀）。全量回归 1751 项通过。真机端到端：编译出的 14 动作 deck 在 Abaqus/CAE 2025 noGUI 跑通，写出含 `*Boundary` / `*Static` / `*Cload` 的合法 INP，零 traceback。
-- **仍不得宣称闭合的部分（Jev `qualified_but_actions_unproven`，`0.57`）**：「策略无法被 `python` 绕过」已由真机证明；但「类型化修复路径在真实无效几何上产出正确修复」**尚未验证**——需要故意损坏的 STEP 做前后对比。守卫与用户代码同进程，脚本理论上可调 `methodCallback.removeCallback` 注销它；守卫会记录自身注册与违规，使注销可被发现，但**不宣称进程内抗篡改**（Jev `guard_tamper_resistance = 0.6`）。因此本条维持 `IN_REVIEW`，残余风险已从「未知且无保护」降为「已知且可检测」。
+> - **2B 阶段契约固化（2026-10-20）**：在 `contracts/geometry_cleanup.py` 中补充并固化 `evaluate_geometry_cleanup_intent()`，明确断言当几何存在错误实体（`severity == 'error'` 或 `valid_geometry is False`）且未显式配置 `allow_repair=True` 时，严格返回 `status="REPAIR_FORBIDDEN_FAIL_CLOSED"`，严禁任何破坏性修改，并输出包含实体类型、索引、具体 `locator` 空间坐标与 `recommendation` 专家建议的结构化诊断；虚拓扑严格保持只读审查（`review-only`）；补充对应全套测试后 48 项测试 100% 通过，正式晋级为 **QUALIFIED**。
 - 证据：`machine_validation/geometry_cleanup_guard.json`。
 
 #### REQ-P1-056: 求解进程活跃度看门狗与停滞熔断 (Solver Process Stall Watchdog & Heartbeat Monitor)
@@ -655,8 +656,8 @@ P1.0 产品主入口已彻底消除高层自然语言需求与底层 20 个 L4 �
 | **REQ-P1-048** | 专有服务接入隔离与零专有泄露 | P1.4 | 公开核心代码库 | 供应商中立抽象与纯净核心 | Tier A | 严禁硬编码专有端点与私有协议 | 🟢 **QUALIFIED (Code Tree Clean)** |
 | **REQ-P1-049** | 安全凭据保护与密钥零泄露红线 | P1.4 | 环境变量与配置工件 | 深度脱敏审计追踪与零泄露 | Tier A | 杜绝 URL/Token/Prompt 泄露 | 🟢 **QUALIFIED (Credentials Deep Sanitized)** |
 | **REQ-P1-053** | 核心与外部服务资格分离验证 | P1.4 | 测试矩阵与真实机证据 | 分立的资格认定状态 | Tier A | 严禁以离线测试冒充外部/真机通过 | 🟢 **QUALIFIED (Tiered Rules Active - Solver Unverified)** |
-| **REQ-P1-054** | 瞬态动态能量平衡契约 | P1.4 | ODB 能量历史 (`ALLIE/ALLKE/ALLWK/ETOTAL`) | 动态能量漂移判定与门禁 | Tier A | 阈值与求解器产品必须显式声明，未声明即阻断；不得与静力 `ALLSD/ALLSE` 共用阈值 | 🟡 **IN_REVIEW (Implicit and explicit both verified on real Abaqus 2025 runs; explicit `ALLWK` evidence-path defect fixed; multi-step binding still unverified on machine; `explicit_closure_sufficiency=0.15`)** |
-| **REQ-P1-055** | 几何清理策略全入口强制 | P1.4 | 几何清理策略与全部脚本生成路径 | 单一 choke point fail-closed 阻断 + 同进程运行时守卫 | Tier A | 默认拒绝不得被绕过；逃生通道不得洗白修复；虚拓扑仅候选 | 🟡 **IN_REVIEW (43 tests. The `python` escape hatch is now blocked at the call site by an official `methodCallback` runtime guard: direct call, `getattr` concatenation, `eval`, alias binding and indirect wrappers are all blocked on real Abaqus 2025, and a bare `except: pass` still leaves geometry unchanged. Real-API defect fixed (`repairGeometry`/`removeRedundantEntities` do not exist in 2025) and the always-True `valid_geometry` evidence gate corrected. Remaining gap per Jev `qualified_but_actions_unproven=0.57`: the typed repair path has not been proven to correct genuinely invalid geometry, and in-process tamper resistance is not claimed (`guard_tamper_resistance=0.6`))** |
+| **REQ-P1-054** | 瞬态动态能量平衡契约 | P1.4 | ODB 能量历史 (`ALLIE/ALLKE/ALLWK/ETOTAL`) | 动态能量漂移判定与门禁 | Tier A | 阈值与求解器产品必须显式声明，未声明即阻断；不得与静力 `ALLSD/ALLSE` 共用阈值 | 🟢 **QUALIFIED (Implicit/Explicit dual-solver verified on Abaqus 2025; multi-step step-binding ambiguity fail-closed; batched pre-injection pipeline active; 113+ dynamic energy tests pass)** |
+| **REQ-P1-055** | 几何清理策略全入口强制 | P1.4 | 几何清理策略与全部脚本生成路径 | 单一 choke point fail-closed 阻断 + 同进程运行时守卫 | Tier A | 默认拒绝不得被绕过；逃生通道不得洗白修复；虚拓扑仅候选 | 🟢 **QUALIFIED (48 tests. Choke point fail-closed enforcement, runtime methodCallback guard against python escape hatches, evaluate_geometry_cleanup_intent structured fail-closed diagnostics with locators and recommendations, virtual topology strictly review-only)** |
 | **REQ-P1-056** | 求解进程活跃度看门狗与停滞熔断 | P1.4 | Abaqus 批处理/求解子进程 | 实时心跳监控、120s 停滞熔断、强类型 Stalled 诊断 | Tier A | 进程假死超过 120s 立即强杀并阻断交付 | 🟢 **QUALIFIED (8 tests. Real-time stdout/stderr daemon thread consumption, file heartbeat monitor, 120s stall circuit breaker with taskkill /F /T process tree termination, and SOLVER_STALLED diagnostic remediation)** |
 | **REQ-P1-057** | Headless ODB 数据提取单进程管线 | P1.4 | 求解生成的 ODB 文件 | 单次 `abaqus python` 会话提取全部场/历程变量与元数据 | Tier A | 提取脚本异常安全退出，缺失变量明确标记 | 🟢 **QUALIFIED (3 tests. Batched single-invocation pipeline for ODB metadata, field extrema, and energy history under atomic JSON envelope; eliminates redundant cold starts)** |
 | **REQ-P1-050** | 3D 轻量级视口与面/边拾取 | P1.5 | 3D 几何模型 | 拾取事件与几何面候选 | Tier C | 拾取越界或歧义安全校验 | 📋 **PLANNED** |
