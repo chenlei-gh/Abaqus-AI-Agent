@@ -74,3 +74,7 @@ tools/_probe_*.py
 # It is machine-local resume state, never tracked evidence.
 .state/
 **/.state/run_lifecycle.json
+
+# ODB extraction result cache (machine-local derived state, see 契约 B.2)
+.cache/
+.cache/results/

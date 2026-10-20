@@ -21,7 +21,7 @@ import hashlib
 import json
 import math
 import os
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 import subprocess
 import sys
@@ -83,6 +83,12 @@ class OdbExtractionReport:
     metadata: Dict[str, Any] = field(default_factory=dict)
     energy_evidence: Optional[Dict[str, Any]] = None
     timestamp: float = field(default_factory=time.time)
+    # Contract B.2 pointer. ``result_ref`` is the lightweight handle the model sees;
+    # the full payload stays on disk. It is None only when caching was disabled or failed.
+    result_ref: Optional[Any] = None
+    cache_hit: bool = False
+    cache_status: str = "not_used"   # not_used | miss | hit | disabled | write_failed
+    cache_detail: Dict[str, Any] = field(default_factory=dict)
 
     def get_extraction(self, value_key: str) -> Optional[ResultExtraction]:
         for ext in self.extractions:
@@ -90,6 +96,34 @@ class OdbExtractionReport:
             if req.value_key == value_key or req.name == value_key:
                 return ext
         return None
+
+    def to_llm_summary(self, max_chars: int = 1500) -> str:
+        """Serialized scalar summary for the model; always bounded by ``max_chars``."""
+        if self.result_ref is not None:
+            return self.result_ref.to_llm_json(max_chars=max_chars)
+        payload = {
+            "run_id": self.run_id,
+            "odb_sha256": self.odb_sha256,
+            "counts": {"extractions": len(self.extractions), "evidence": len(self.evidence)},
+            "metrics": dict(self.metrics),
+            "cache_status": self.cache_status,
+            "note": "no result_ref available; full payload is in memory only",
+        }
+        text = json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
+        ordered = sorted(self.metrics.items(), key=lambda kv: (-abs(kv[1]), kv[0]))
+        keep = len(ordered)
+        while keep > 0 and len(text) > max_chars:
+            keep -= 1
+            trimmed = dict(payload)
+            trimmed["metrics"] = {k: v for k, v in ordered[:keep]}
+            trimmed["metrics_truncated"] = True
+            text = json.dumps(trimmed, ensure_ascii=False, separators=(",", ":"))
+        return text
+
+
+#: Version of the extraction semantics. Bumped whenever the produced numbers or their
+#: locator/evidence shape change, so a stale cache can never masquerade as fresh.
+EXTRACTOR_VERSION = "odb_extractor_v1"
 
 
 def _resolve_safe_odb_region(odb: Any, expr: Any) -> Any:
@@ -225,11 +259,23 @@ class HeadlessAbaqusPythonExecutor(AbaqusExecutor):
             )
 
             if proc.returncode != 0:
-                err_msg = (
-                    f"Abaqus Python extraction failed with returncode {proc.returncode}.\n"
-                    f"STDOUT:\n{proc.stdout.strip()}\n"
-                    f"STDERR:\n{proc.stderr.strip()}"
+                # Structured slice: the model gets the deepest frame and the assertion
+                # line; the complete stdout/stderr stays on disk as an artifact.
+                from .output_slicing import build_failure_slice, persist_full_output
+
+                log_path = persist_full_output(
+                    proc.stdout,
+                    proc.stderr,
+                    self.workdir / f"_odb_extract_{script_id}_failure.log",
                 )
+                failure = build_failure_slice(
+                    returncode=proc.returncode,
+                    stdout=proc.stdout,
+                    stderr=proc.stderr,
+                    operation="Abaqus Python extraction",
+                    evidence_path=log_path,
+                )
+                err_msg = failure.to_message()
                 if "KeyError" in proc.stderr or "KeyError" in proc.stdout:
                     raise ExtractionFieldNotFoundError(err_msg)
                 raise ExtractionExecutionError(err_msg)
@@ -237,7 +283,12 @@ class HeadlessAbaqusPythonExecutor(AbaqusExecutor):
             raw_out = proc.stdout.strip()
             if not raw_out:
                 if proc.stderr:
-                    raise ExtractionExecutionError(f"Abaqus Python returned empty output. STDERR:\n{proc.stderr}")
+                    from .output_slicing import slice_traceback_text
+
+                    raise ExtractionExecutionError(
+                        "Abaqus Python returned empty output. "
+                        f"stderr: {slice_traceback_text(proc.stderr)}"
+                    )
                 raise ExtractionExecutionError("Abaqus Python extraction produced no output.")
 
             # Decode JSON payload from stdout lines
@@ -985,6 +1036,8 @@ def extract_odb_results(
     timeout_seconds: int = 120,
     include_metadata: bool = True,
     energy_spec: Optional[Dict[str, Any]] = None,
+    cache_root: Optional[Union[str, Path]] = None,
+    enable_result_cache: bool = True,
 ) -> OdbExtractionReport:
     """Authentically extract finite element results from an ODB with full causal binding.
 
@@ -999,9 +1052,12 @@ def extract_odb_results(
     - timeout_seconds: Maximum time allowed per extraction operation.
     - include_metadata: Whether to simultaneously extract structural ODB metadata (steps, instances).
     - energy_spec: Optional dictionary specifying step, region, and variables for simultaneous energy history extraction.
+    - cache_root: Override for the result cache root (``.cache/results`` by default).
+    - enable_result_cache: Set False to always extract and never touch the cache.
 
     Returns:
     - OdbExtractionReport with validated metrics, extractions, evidence, metadata, and energy.
+      When caching is enabled, ``result_ref`` points at the persisted payload.
 
     Raises:
     - OdbFileNotFoundError: If the ODB file does not exist.
@@ -1046,6 +1102,54 @@ def extract_odb_results(
             metrics={},
             evidence=(),
         )
+
+    # --- Contract B.2: five-condition cache binding -------------------------
+    from .result_cache import (
+        CacheBinding,
+        build_result_ref,
+        cache_entry_path,
+        check_cache_binding,
+        extraction_spec_digest,
+        normalized_units,
+        read_result_cache_payload,
+        report_from_payload,
+        ResultCacheError,
+        write_result_cache,
+    )
+
+    binding = CacheBinding(
+        input_hash=input_hash,
+        odb_sha256=odb_sha256,
+        extraction_spec=extraction_spec_digest(normalized_reqs),
+        extractor_version=EXTRACTOR_VERSION,
+        units=tuple(normalized_units(normalized_reqs)),
+    )
+
+    cache_path: Optional[Path] = None
+    if enable_result_cache:
+        cache_path = cache_entry_path(run_id, odb_sha256, cache_root)
+        if cache_path.is_file():
+            try:
+                cached = read_result_cache_payload(cache_path)
+                hit, mismatched = check_cache_binding(cached, binding)
+            except ResultCacheError as exc:
+                hit, mismatched = False, ("unreadable_cache",)
+            if hit:
+                cached_report = report_from_payload(cached)
+                ref = build_result_ref(cached_report, cache_path, EXTRACTOR_VERSION, binding)
+                return replace(
+                    cached_report,
+                    result_ref=ref,
+                    cache_hit=True,
+                    cache_status="hit",
+                    cache_detail={"cache_path": str(cache_path)},
+                )
+            # Never reuse on partial agreement; record which conditions failed.
+            cache_mismatch_reasons: Tuple[str, ...] = mismatched
+        else:
+            cache_mismatch_reasons = ("no_entry",)
+    else:
+        cache_mismatch_reasons = ("disabled",)
 
     if workdir:
         eff_workdir = Path(workdir).resolve()
@@ -1160,7 +1264,7 @@ def extract_odb_results(
         extractions.append(bound_extraction)
         metrics[req.value_key] = float(val)
 
-    return OdbExtractionReport(
+    report = OdbExtractionReport(
         run_id=run_id,
         input_hash=input_hash,
         odb_path=odb,
@@ -1170,4 +1274,36 @@ def extract_odb_results(
         evidence=tuple(evidence_list),
         metadata=extracted_metadata,
         energy_evidence=extracted_energy,
+    )
+
+    # --- Contract B.2: persist payload + emit lightweight result_ref --------
+    if cache_path is None:
+        return replace(report, cache_status="disabled", cache_detail={"reason": "disabled"})
+
+    ref = build_result_ref(report, cache_path, EXTRACTOR_VERSION, binding)
+    try:
+        write_result_cache(report, binding, cache_path, ref)
+    except (OSError, ValueError, ResultCacheError) as exc:
+        # A cache write failure must never discard a freshly extracted authentic result.
+        return replace(
+            report,
+            result_ref=ref,
+            cache_hit=False,
+            cache_status="write_failed",
+            cache_detail={
+                "cache_path": str(cache_path),
+                "error": str(exc),
+                "cache_mismatch": list(cache_mismatch_reasons),
+            },
+        )
+
+    return replace(
+        report,
+        result_ref=ref,
+        cache_hit=False,
+        cache_status="miss",
+        cache_detail={
+            "cache_path": str(cache_path),
+            "cache_mismatch": list(cache_mismatch_reasons),
+        },
     )

@@ -14,6 +14,22 @@ os.environ.setdefault("ABAQUS_AGENT_EVIDENCE_READONLY", "1")
 _test_runs_base = Path(tempfile.gettempdir()) / "abaqus_agent_pytest" / "runs"
 _test_runs_base.mkdir(parents=True, exist_ok=True)
 os.environ.setdefault("ABAQUS_AGENT_RUNS_DIR", str(_test_runs_base))
+# Extraction result cache is machine-local derived state. Tests must not read or
+# write the cache a real user run would use, otherwise a leftover entry from a
+# previous session silently satisfies a later extraction.
+_result_cache_base = Path(tempfile.gettempdir()) / "abaqus_agent_pytest" / "result_cache"
+_owns_result_cache_env = "ABAQUS_AGENT_RESULT_CACHE_DIR" not in os.environ
+if _owns_result_cache_env:
+    os.environ["ABAQUS_AGENT_RESULT_CACHE_DIR"] = str(_result_cache_base)
+
+
+@pytest.fixture(scope="session", autouse=True)
+def isolated_result_cache():
+    """Start every test session with an empty extraction cache."""
+    if _owns_result_cache_env:
+        shutil.rmtree(_result_cache_base, ignore_errors=True)
+    _result_cache_base.mkdir(parents=True, exist_ok=True)
+    yield _result_cache_base
 
 
 @pytest.fixture(scope="session", autouse=True)
