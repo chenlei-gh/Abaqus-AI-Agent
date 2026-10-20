@@ -1,0 +1,27 @@
+# Ripgrep ignore rules to prevent context overflow in AI tools
+
+# Temporary files and dumps
+_tmp*
+*.tmp
+*.bak
+*.dump
+
+# Large generated reports containing embedded Base64 images
+deliverables/
+machine_validation/**/*.html
+*.html
+
+# Abaqus simulation binary and text output dumps
+*.odb
+*.msg
+*.dat
+*.sta
+*.rpy*
+*.sim
+*.prt
+
+# Large database and environment artifacts
+*.db
+*.sqlite*
+.venv/
+node_modules/
