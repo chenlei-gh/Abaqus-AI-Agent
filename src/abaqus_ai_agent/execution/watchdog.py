@@ -19,13 +19,13 @@ import threading
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Sequence, Set, Tuple, Union
+from typing import Any, Callable, Dict, List, Optional, Sequence, Set, Tuple, Union
 
 
 DEFAULT_STALL_TIMEOUT: float = 120.0
 DEFAULT_TOTAL_TIMEOUT: float = 3600.0
 DEFAULT_MONITORED_EXTENSIONS: Tuple[str, ...] = (
-    ".sta", ".msg", ".log", ".odb", ".dat", ".sim", ".fil", ".prt", ".mdl"
+    ".sta", ".msg", ".log", ".odb", ".dat", ".sim", ".fil", ".prt", ".mdl", ".ipm", ".pac", ".abq"
 )
 
 
@@ -155,6 +155,7 @@ def run_with_watchdog(
     monitored_extensions: Sequence[str] = DEFAULT_MONITORED_EXTENSIONS,
     env: Optional[Dict[str, str]] = None,
     shell: bool = False,
+    heartbeat_callback: Optional[Callable[[int, Path], bool]] = None,
 ) -> WatchedProcessResult:
     """Execute a subprocess under activity and stall watchdog surveillance.
 
@@ -167,6 +168,9 @@ def run_with_watchdog(
         monitored_extensions: File extensions to watch for heartbeat in cwd.
         env: Environment variables.
         shell: Whether to invoke via system shell.
+        heartbeat_callback: Optional callable `(pid, workdir) -> bool` returning True
+            if external/process heartbeat is verified (e.g., active CPU utilization
+            or solver scratch progress during large matrix factorization).
 
     Returns:
         WatchedProcessResult on completion.
@@ -265,6 +269,13 @@ def run_with_watchdog(
                 current_artifacts = new_artifacts
                 with lock:
                     last_activity_time[0] = now
+            elif heartbeat_callback is not None:
+                try:
+                    if heartbeat_callback(proc.pid, workdir_path):
+                        with lock:
+                            last_activity_time[0] = now
+                except Exception:
+                    pass
 
             # 4. Check stall inactivity
             with lock:

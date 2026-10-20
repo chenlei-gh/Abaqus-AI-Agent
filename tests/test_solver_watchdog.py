@@ -467,3 +467,47 @@ def test_watchdog_burst_output_rapid_exit_drains_cleanly(tmp_path):
     assert "err line 999" in res.stderr
     assert len(res.stdout.splitlines()) == 1000
     assert len(res.stderr.splitlines()) == 1000
+
+
+def test_watchdog_adaptive_heartbeat_callback_prevents_false_stall(tmp_path):
+    """An external adaptive heartbeat callback (e.g. CPU/scratch monitor) prevents false stall for silent tasks."""
+    # Process sleeps silently for 1.2s
+    cmd = [sys.executable, "-c", "import time; time.sleep(1.2)"]
+
+    heartbeat_invocations = []
+
+    def active_heartbeat(pid: int, workdir: Path) -> bool:
+        heartbeat_invocations.append(pid)
+        return True
+
+    res = run_with_watchdog(
+        cmd,
+        cwd=tmp_path,
+        timeout=10.0,
+        stall_timeout=0.5,
+        poll_interval=0.1,
+        heartbeat_callback=active_heartbeat,
+    )
+
+    assert res.succeeded
+    assert res.returncode == 0
+    assert len(heartbeat_invocations) > 0
+
+
+def test_watchdog_adaptive_heartbeat_callback_trips_when_returning_false(tmp_path):
+    """When adaptive heartbeat returns False, watchdog stall breaker still trips normally."""
+    cmd = [sys.executable, "-c", "import time; time.sleep(10)"]
+
+    def dead_heartbeat(pid: int, workdir: Path) -> bool:
+        return False
+
+    with pytest.raises(SolverProcessStalledError):
+        run_with_watchdog(
+            cmd,
+            cwd=tmp_path,
+            timeout=10.0,
+            stall_timeout=0.5,
+            poll_interval=0.1,
+            heartbeat_callback=dead_heartbeat,
+        )
+

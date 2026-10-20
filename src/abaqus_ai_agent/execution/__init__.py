@@ -37,4 +37,10 @@ from .recovery import (
     inspect_run_state,
     recover_and_resume,
 )
+from .reconciliation import (
+    ReconciliationAction,
+    ReconciliationReport,
+    RunSnapshot,
+    reconcile_run_state,
+)
 from .worker import RunWorker, RunWorkerPool
