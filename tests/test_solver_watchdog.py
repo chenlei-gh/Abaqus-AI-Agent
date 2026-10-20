@@ -206,10 +206,17 @@ def test_watchdog_terminates_entire_process_tree_on_stall(tmp_path):
     """When a process stalls, watchdog terminates the parent and all spawned descendants."""
     parent_script = tmp_path / "parent.py"
     pid_file = tmp_path / "grandchild.pid"
+    hb_file = tmp_path / "grandchild_hb.txt"
 
+    # Grandchild continuously pulses heartbeat every 0.05s while alive
     py_code = (
         "import subprocess, sys, time, pathlib\n"
-        "gc = subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(60)'])\n"
+        "gc_code = 'import time, pathlib, sys\\n' \\\n"
+        "          'hb = pathlib.Path(sys.argv[1])\\n' \\\n"
+        "          'for i in range(1200):\\n' \\\n"
+        "          '    hb.write_text(str(i), encoding=\"utf-8\")\\n' \\\n"
+        "          '    time.sleep(0.05)\\n'\n"
+        f"gc = subprocess.Popen([sys.executable, '-c', gc_code, r'{hb_file}'])\n"
         f"pathlib.Path(r'{pid_file}').write_text(str(gc.pid), encoding='utf-8')\n"
         "time.sleep(60)\n"
     )
@@ -229,19 +236,121 @@ def test_watchdog_terminates_entire_process_tree_on_stall(tmp_path):
     assert gc_pid > 0
 
     time.sleep(0.5)
+
+    # 1. Functional evidence: Heartbeat file stops updating
+    assert hb_file.is_file()
+    hb_val_1 = hb_file.read_text(encoding="utf-8").strip()
+    time.sleep(0.2)
+    hb_val_2 = hb_file.read_text(encoding="utf-8").strip()
+    assert hb_val_1 == hb_val_2, f"Grandchild code still running: hb progressed from {hb_val_1} to {hb_val_2}"
+
+    # 2. Operating system API verification: No dangling active process
     if os.name == "nt":
         import ctypes
         PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
         handle = ctypes.windll.kernel32.OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, False, gc_pid)
         if handle:
-            exit_code = ctypes.c_ulong()
-            ctypes.windll.kernel32.GetExitCodeProcess(handle, ctypes.byref(exit_code))
-            ctypes.windll.kernel32.CloseHandle(handle)
-            # STILL_ACTIVE = 259
-            assert exit_code.value != 259
+            try:
+                exit_code = ctypes.c_ulong()
+                ret = ctypes.windll.kernel32.GetExitCodeProcess(handle, ctypes.byref(exit_code))
+                assert ret != 0, f"GetExitCodeProcess failed with error: {ctypes.GetLastError()}"
+                # STILL_ACTIVE = 259
+                assert exit_code.value != 259, f"Grandchild process {gc_pid} is STILL_ACTIVE (259)"
+            finally:
+                ctypes.windll.kernel32.CloseHandle(handle)
+        else:
+            err = ctypes.GetLastError()
+            # 87: ERROR_INVALID_PARAMETER (PID does not exist / fully reaped)
+            # Fail closed: Any other error (e.g. 5 Access Denied meaning process still exists) is a failure
+            assert err == 87, f"OpenProcess failed with unexpected error code: {err} (cannot verify termination)"
     else:
-        with pytest.raises(ProcessLookupError):
+        try:
             os.kill(gc_pid, 0)
+            status_path = Path(f"/proc/{gc_pid}/status")
+            if status_path.is_file():
+                text = status_path.read_text(encoding="utf-8")
+                assert "State:\tZ" in text or "State:\tX" in text
+            else:
+                time.sleep(0.5)
+                with pytest.raises(ProcessLookupError):
+                    os.kill(gc_pid, 0)
+        except ProcessLookupError:
+            pass
+
+
+class _MockControlledProc:
+    """Mock process allowing deterministic sequencing of poll() returns and stdout/stderr streams."""
+    def __init__(self, poll_sequence, pid=88888, out_lines=("mock output\n",)):
+        import io
+        self.poll_sequence = list(poll_sequence)
+        self.pid = pid
+        self.stdout = io.StringIO("".join(out_lines))
+        self.stderr = io.StringIO("")
+        self.killed = False
+
+    def poll(self):
+        if self.poll_sequence:
+            return self.poll_sequence.pop(0)
+        return 0
+
+    def kill(self):
+        self.killed = True
+
+    def wait(self, timeout=None):
+        return 0
+
+
+@pytest.mark.parametrize("exit_code,expected_succeeded", [(0, True), (2, False)])
+def test_watchdog_hard_timeout_boundary_exit_captured_by_secondary_poll(monkeypatch, exit_code, expected_succeeded):
+    """If process is running at loop start but finishes with exit_code before hard timeout trips, secondary poll captures it."""
+    # Sequence: first poll is None (running), second poll (at timeout check) returns exit_code
+    mock_proc = _MockControlledProc([None, exit_code])
+    monkeypatch.setattr("subprocess.Popen", lambda *args, **kwargs: mock_proc)
+
+    res = run_with_watchdog(["dummy_cmd"], timeout=0.001, poll_interval=0.01)
+    assert res.returncode == exit_code
+    assert res.succeeded is expected_succeeded
+    assert res.timed_out is False
+    assert res.stalled is False
+
+
+@pytest.mark.parametrize("exit_code,expected_succeeded", [(0, True), (1, False)])
+def test_watchdog_stall_boundary_exit_captured_by_secondary_poll(monkeypatch, exit_code, expected_succeeded):
+    """If process is running at loop start but finishes with exit_code before stall breaker trips, secondary poll captures it."""
+    # Sequence: first poll is None (running), second poll (at stall check) returns exit_code
+    mock_proc = _MockControlledProc([None, exit_code])
+    monkeypatch.setattr("subprocess.Popen", lambda *args, **kwargs: mock_proc)
+
+    res = run_with_watchdog(["dummy_cmd"], timeout=10.0, stall_timeout=0.001, poll_interval=0.01)
+    assert res.returncode == exit_code
+    assert res.succeeded is expected_succeeded
+    assert res.stalled is False
+    assert res.timed_out is False
+
+
+def test_watchdog_secondary_poll_still_running_trips_timeout_and_stall(monkeypatch):
+    """If secondary poll confirms process is genuinely still running, TimeoutExpired and SolverProcessStalledError are raised."""
+    # 1. Total timeout path
+    mock_proc_to = _MockControlledProc([None, None, None])
+    monkeypatch.setattr("subprocess.Popen", lambda *args, **kwargs: mock_proc_to)
+    with pytest.raises(subprocess.TimeoutExpired):
+        run_with_watchdog(["dummy_cmd"], timeout=0.001, poll_interval=0.01)
+
+    # 2. Stall timeout path
+    mock_proc_stall = _MockControlledProc([None, None, None])
+    monkeypatch.setattr("subprocess.Popen", lambda *args, **kwargs: mock_proc_stall)
+    with pytest.raises(SolverProcessStalledError) as exc_info:
+        run_with_watchdog(["dummy_cmd"], timeout=10.0, stall_timeout=0.001, poll_interval=0.01)
+    assert exc_info.value.diagnostic()["category"] == "solver_stalled"
+
+
+def test_watchdog_hard_timeout_takes_precedence_over_stall_when_simultaneous(monkeypatch):
+    """When both hard timeout and stall timeout expire at the same check, hard timeout takes precedence."""
+    mock_proc = _MockControlledProc([None, None, None])
+    monkeypatch.setattr("subprocess.Popen", lambda *args, **kwargs: mock_proc)
+
+    with pytest.raises(subprocess.TimeoutExpired):
+        run_with_watchdog(["dummy_cmd"], timeout=0.001, stall_timeout=0.001, poll_interval=0.01)
 
 
 def test_watchdog_boundary_exit_prioritized_over_timeout_and_stall(tmp_path):
