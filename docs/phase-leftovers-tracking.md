@@ -82,7 +82,8 @@
 | 缺口 | 测试 | 行为 |
 | :--- | :--- | :--- |
 | 合法 JSON、报告结构损坏 | `test_structurally_invalid_but_parseable_cache_is_not_reused`（6 例） | 归一为 `unusable_cache` 并按未命中重新提取，不抛给提取流程 |
-| 报告体被掏空但绑定仍匹配 | 同上 `extractions_missing` | `result_ref.counts` 与实际条数不一致即拒绝复用 |
+| 报告体被掏空但绑定仍匹配 | `test_structurally_invalid_but_parseable_cache_is_not_reused`（`extractions_missing`） | `result_ref.counts` 与实际条数不一致即拒绝复用 |
+| 计数元数据本身损坏 | `test_damaged_count_metadata_is_treated_as_unusable_cache`（6 例）、`test_damaged_evidence_count_is_also_refused`、`test_damaged_count_is_refused_by_result_ref_reader` | 非整数/`bool`/负数/缺失/非数字一律 `unusable_cache`；不做 `int()` 截断 |
 | 结构错误异常类型不统一 | `test_report_from_payload_normalizes_structural_errors`、`test_result_ref_from_payload_normalizes_structural_errors` | 一律 `ResultCacheError` |
 | 摘要边界 ≥ 1500 | `test_summary_is_strictly_below_the_bound` | 严格 `<`，不可满足时抛错而非超长返回 |
 | Provider 来源但组件为估算 | `test_heuristic_components_downgrade_a_verified_source` | 降级为 `estimated` 并记录 `requested_source` |
@@ -112,9 +113,9 @@
 
 | 项 | 结果 |
 | :--- | :--- |
-| 定向测试（7 个文件） | 89 passed |
-| 全量 `pytest -q` | 1889 passed（118 s） |
-| 全量 `pytest -W error -q` | 1889 passed（118 s） |
+| 定向测试（7 个文件） | 89 passed → 后续加固为 62 passed（4 个文件）+ 缓存定向 33 passed |
+| 全量 `pytest -q` | 1889 passed → 1897 passed（117 s） |
+| 全量 `pytest -W error -q` | 1889 passed → 1897 passed（118 s） |
 | `tools/check_workspace_pollution.py` | passed |
 
 ---
@@ -126,3 +127,4 @@
 | 2026-10-20 | 建立本文件；结转阶段 1 的 4 项遗留（3 项未验证、1 项契约偏差），作为带条件进入阶段 2 的前提记录 |
 | 2026-10-21 | 登记阶段 2 验收记录：TC-TOK-01/02/03 单元级通过，新增 5 项遗留（真实 Provider 日志、真实 ODB 往返、真实规模计时、图像链路接入、JPEG 头部校验边界） |
 | 2026-10-21 | 契约加固：缓存结构损坏归一为未命中、计数自洽校验、摘要严格 `<1500`、遥测来源降级、Provider usage 有效性校验、基准证据分层。全量 1889 passed（含 `-W error`） |
+| 2026-10-21 | 补齐计数校验边界：`_coerce_count` 拒绝 `bool`/浮点/负数/缺失（不再依赖会截断的 `int()`），计数校验进入同一归一化块， `result_ref_from_payload` 同口径。全量 1897 passed（含 `-W error`） |

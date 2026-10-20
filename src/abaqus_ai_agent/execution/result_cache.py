@@ -407,6 +407,9 @@ def report_from_payload(payload: Dict[str, Any]) -> Any:
 
     try:
         report = _report_from_body(body, OdbExtractionReport)
+        # Count validation must live inside the same normalization boundary: an
+        # invalid count is an unusable cache entry, not an extraction failure.
+        _assert_counts_agree(payload, report)
     except ResultCacheError:
         raise
     except (KeyError, TypeError, ValueError, AttributeError) as exc:
@@ -414,8 +417,29 @@ def report_from_payload(payload: Dict[str, Any]) -> Any:
             f"result_ref cache entry has a malformed report body: {exc!r}"
         ) from exc
 
-    _assert_counts_agree(payload, report)
     return report
+
+
+def _coerce_count(value: Any, field_name: str) -> int:
+    """Read a cached count as a non-negative ``int``, or refuse the entry.
+
+    ``int()`` is not usable here: it truncates ``1.5`` to ``1`` and accepts ``True``
+    as ``1`` (``bool`` is an ``int`` subclass), either of which would let a damaged
+    count pass the consistency check silently.
+    """
+    if value is None:
+        raise ResultCacheError(
+            f"result_ref cache entry has no {field_name} count; cannot verify it."
+        )
+    if isinstance(value, bool) or not isinstance(value, int):
+        raise ResultCacheError(
+            f"result_ref cache entry has a non-integer {field_name} count: {value!r}."
+        )
+    if value < 0:
+        raise ResultCacheError(
+            f"result_ref cache entry has a negative {field_name} count: {value!r}."
+        )
+    return value
 
 
 def _assert_counts_agree(payload: Dict[str, Any], report: Any) -> None:
@@ -432,14 +456,15 @@ def _assert_counts_agree(payload: Dict[str, Any], report: Any) -> None:
     if not isinstance(counts, dict):
         raise ResultCacheError("result_ref cache entry has a non-object counts field.")
 
-    expected_extractions = counts.get("extractions")
-    expected_evidence = counts.get("evidence")
-    if expected_extractions is not None and int(expected_extractions) != len(report.extractions):
+    expected_extractions = _coerce_count(counts.get("extractions"), "extractions")
+    expected_evidence = _coerce_count(counts.get("evidence"), "evidence")
+
+    if expected_extractions != len(report.extractions):
         raise ResultCacheError(
             "result_ref cache entry is inconsistent: reported "
             f"{expected_extractions} extractions but body has {len(report.extractions)}."
         )
-    if expected_evidence is not None and int(expected_evidence) != len(report.evidence):
+    if expected_evidence != len(report.evidence):
         raise ResultCacheError(
             "result_ref cache entry is inconsistent: reported "
             f"{expected_evidence} evidence items but body has {len(report.evidence)}."
@@ -509,8 +534,8 @@ def result_ref_from_payload(payload: Dict[str, Any], cache_path: Union[str, Path
             extraction_spec=str(d.get("extraction_spec", "")),
             units=tuple(str(u) for u in (d.get("units") or ())),
             metrics=metrics,
-            extraction_count=int(counts.get("extractions", 0)),
-            evidence_count=int(counts.get("evidence", 0)),
+            extraction_count=_coerce_count(counts.get("extractions"), "extractions"),
+            evidence_count=_coerce_count(counts.get("evidence"), "evidence"),
             energy_status=d.get("energy_status"),
             created_at=float(d.get("created_at", 0.0)),
             schema=str(d.get("schema", CACHE_SCHEMA_VERSION)),

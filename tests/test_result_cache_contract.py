@@ -356,6 +356,64 @@ def test_result_ref_from_payload_normalizes_structural_errors(tmp_path: Path):
         result_ref_from_payload(payload, report.result_ref.cache_path)
 
 
+@pytest.mark.parametrize(
+    "bad_value",
+    [
+        pytest.param("invalid", id="non_numeric_string"),
+        pytest.param(1.5, id="float_truncation_trap"),
+        pytest.param(True, id="bool_is_int_subclass"),
+        pytest.param(-1, id="negative"),
+        pytest.param(None, id="missing"),
+        pytest.param([1], id="list"),
+    ],
+)
+def test_damaged_count_metadata_is_treated_as_unusable_cache(tmp_path: Path, bad_value):
+    """A damaged count must fail closed as an unusable entry, not abort extraction.
+
+    ``int()`` would truncate ``1.5`` and accept ``True`` as ``1``, letting a corrupt
+    count slip past the consistency check.
+    """
+    odb = _binary_odb(tmp_path / "job.odb")
+    cache = tmp_path / "cache"
+    first = _extract(odb, cache, value=185.5)
+
+    path = Path(first.result_ref.cache_path)
+    payload = read_result_cache_payload(path)
+    payload["result_ref"]["counts"]["extractions"] = bad_value
+    path.write_text(json.dumps(payload), encoding="utf-8")
+
+    with pytest.raises(ResultCacheError, match="count"):
+        report_from_payload(read_result_cache_payload(path))
+
+    refreshed = _extract(odb, cache, value=201.0)
+    assert refreshed.cache_hit is False
+    assert refreshed.cache_status == "miss"
+    assert refreshed.metrics["max_mises"] == 201.0
+    assert "unusable_cache" in refreshed.cache_detail.get("cache_mismatch", [])
+
+
+def test_damaged_evidence_count_is_also_refused(tmp_path: Path):
+    odb = _binary_odb(tmp_path / "job.odb")
+    cache = tmp_path / "cache"
+    first = _extract(odb, cache, value=185.5)
+
+    payload = read_result_cache_payload(first.result_ref.cache_path)
+    payload["result_ref"]["counts"]["evidence"] = "invalid"
+
+    with pytest.raises(ResultCacheError, match="evidence count"):
+        report_from_payload(payload)
+
+
+def test_damaged_count_is_refused_by_result_ref_reader(tmp_path: Path):
+    odb = _binary_odb(tmp_path / "job.odb")
+    report = _extract(odb, tmp_path / "cache")
+    payload = read_result_cache_payload(report.result_ref.cache_path)
+
+    payload["result_ref"]["counts"]["extractions"] = 1.5
+    with pytest.raises(ResultCacheError, match="non-integer extractions count"):
+        result_ref_from_payload(payload, report.result_ref.cache_path)
+
+
 def test_summary_is_strictly_below_the_bound(tmp_path: Path):
     """TC-TOK-03 says < 1500, so a summary of exactly 1500 characters is a violation."""
     odb = _binary_odb(tmp_path / "job.odb")
