@@ -117,13 +117,33 @@ class ContextTelemetryTracker:
 
         effective_source = source or self.default_source
 
-        # Compute counts: prioritize explicit token counts, then text tokenization
-        s_tokens = system_tokens if system_tokens is not None else _heuristic_count_tokens(system_text or "")
-        ts_tokens = tool_schema_tokens if tool_schema_tokens is not None else _heuristic_count_tokens(tool_schema_text or "")
-        c_tokens = conversation_tokens if conversation_tokens is not None else _heuristic_count_tokens(conversation_text or "")
-        to_tokens = tool_output_tokens if tool_output_tokens is not None else _heuristic_count_tokens(tool_output_text or "")
-        u_tokens = user_input_tokens if user_input_tokens is not None else _heuristic_count_tokens(user_input_text or "")
-        out_tokens = output_tokens if output_tokens is not None else _heuristic_count_tokens(output_text or "")
+        # Compute counts: prioritize explicit token counts, then text tokenization.
+        # ``component_estimated`` tracks whether any count was derived from text by the
+        # heuristic counter. Provider APIs report one total per request, not this
+        # internal component split, so a heuristic split must never ride under a
+        # ``provider_usage`` label (契约 B.1: 估算与实测绝不混为同一来源).
+        def _component(explicit: Optional[int], text: Optional[str]) -> Tuple[int, bool]:
+            if explicit is not None:
+                return explicit, False
+            if text:
+                return _heuristic_count_tokens(text), True
+            return 0, False
+
+        s_tokens, s_est = _component(system_tokens, system_text)
+        ts_tokens, ts_est = _component(tool_schema_tokens, tool_schema_text)
+        c_tokens, c_est = _component(conversation_tokens, conversation_text)
+        to_tokens, to_est = _component(tool_output_tokens, tool_output_text)
+        u_tokens, u_est = _component(user_input_tokens, user_input_text)
+        out_tokens, out_est = _component(output_tokens, output_text)
+
+        component_estimated = any((s_est, ts_est, c_est, to_est, u_est, out_est))
+        metadata = dict(metadata or {})
+        if component_estimated and effective_source in VERIFIED_TOKEN_SOURCES:
+            # Downgrade, never upgrade: a verified per-call total cannot legitimize a
+            # heuristic component distribution.
+            metadata["requested_source"] = effective_source.value
+            metadata["source_downgrade_reason"] = "component_counts_heuristic"
+            effective_source = TokenCountSource.ESTIMATED
 
         breakdown = TokenBreakdown(
             system_tokens=s_tokens,
@@ -151,7 +171,7 @@ class ContextTelemetryTracker:
             timestamp=datetime.datetime.now(datetime.timezone.utc).isoformat(),
             breakdown=breakdown,
             artifacts=artifacts,
-            metadata=metadata or {},
+            metadata=metadata,
         )
 
         # Persist individual call record to disk (Zero context pollution)

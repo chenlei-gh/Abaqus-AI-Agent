@@ -188,3 +188,64 @@ def test_tc_tok_02_external_session_is_labeled_unmeasured(tmp_path: Path):
         saved = json.load(f)
     assert saved["breakdown"]["source"] == "unmeasured"
     assert saved["breakdown"]["is_unmeasured"] is True
+
+
+# ---------------------------------------------------------------------------
+# Source downgrade: a heuristic component split never rides under a measurement
+# ---------------------------------------------------------------------------
+
+def test_heuristic_components_downgrade_a_verified_source(tmp_path: Path):
+    """Provider usage is a per-request total, not a component split.
+
+    When any component is derived from text, the record must not be filed as a
+    provider measurement: that would promote an estimate into measured evidence.
+    """
+    tracker = ContextTelemetryTracker(
+        case_id="TC_TOK_01_DOWNGRADE",
+        run_id="RUN-TOK-DOWNGRADE",
+        output_dir=tmp_path,
+    )
+    call = tracker.record_call(
+        phase=EngineeringPhase.EXECUTION,
+        system_tokens=500,
+        tool_output_text="solver log line\n" * 40,
+        output_tokens=60,
+        source=TokenCountSource.PROVIDER_USAGE,
+    )
+
+    assert call.breakdown.source is TokenCountSource.ESTIMATED
+    assert call.breakdown.is_claimable is False
+    assert call.metadata["requested_source"] == "provider_usage"
+    assert call.metadata["source_downgrade_reason"] == "component_counts_heuristic"
+    # Explicit counts are preserved verbatim; nothing is discarded on downgrade.
+    assert call.breakdown.system_tokens == 500
+    assert call.breakdown.output_tokens == 60
+    assert call.breakdown.tool_output_tokens > 0
+
+    summary = tracker.finalize()
+    assert summary.kpi_eligible is False
+    assert summary.token_source_buckets["estimated"]["claimable"] is False
+    assert "provider_usage" not in summary.token_source_buckets
+
+
+def test_fully_explicit_components_keep_a_verified_source(tmp_path: Path):
+    """No downgrade when every component was supplied explicitly."""
+    tracker = ContextTelemetryTracker(
+        case_id="TC_TOK_01_EXPLICIT",
+        run_id="RUN-TOK-EXPLICIT",
+        output_dir=tmp_path,
+    )
+    call = tracker.record_call(
+        phase=EngineeringPhase.INTENT,
+        system_tokens=500,
+        tool_schema_tokens=0,
+        conversation_tokens=0,
+        tool_output_tokens=0,
+        user_input_tokens=120,
+        output_tokens=60,
+        source=TokenCountSource.PROVIDER_USAGE,
+    )
+
+    assert call.breakdown.source is TokenCountSource.PROVIDER_USAGE
+    assert "source_downgrade_reason" not in call.metadata
+    assert tracker.finalize().kpi_eligible is True

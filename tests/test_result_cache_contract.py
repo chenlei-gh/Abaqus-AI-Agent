@@ -35,6 +35,7 @@ from abaqus_ai_agent.execution.result_cache import (
     normalized_units,
     read_result_cache_payload,
     report_from_payload,
+    result_ref_from_payload,
 )
 
 
@@ -288,6 +289,92 @@ def test_corrupt_cache_entry_forces_re_extraction(tmp_path: Path):
     assert refreshed.cache_hit is False
     assert refreshed.metrics["max_mises"] == 201.0
     assert "unreadable_cache" in refreshed.cache_detail.get("cache_mismatch", [])
+
+
+@pytest.mark.parametrize(
+    "mutate",
+    [
+        pytest.param(lambda p: p.pop("report"), id="report_block_missing"),
+        pytest.param(lambda p: p["report"].pop("extractions"), id="extractions_missing"),
+        pytest.param(
+            lambda p: p["report"].__setitem__("extractions", "not-a-list"),
+            id="extractions_wrong_type",
+        ),
+        pytest.param(
+            lambda p: p["report"]["extractions"][0].pop("requirement"),
+            id="requirement_missing",
+        ),
+        pytest.param(
+            lambda p: p["report"]["extractions"][0].__setitem__("value", "NaN-ish"),
+            id="value_not_numeric",
+        ),
+        pytest.param(
+            lambda p: p["report"].__setitem__("metrics", [1, 2, 3]),
+            id="metrics_wrong_type",
+        ),
+    ],
+)
+def test_structurally_invalid_but_parseable_cache_is_not_reused(tmp_path: Path, mutate):
+    """Valid JSON with a broken report body must fall back, not abort extraction."""
+    odb = _binary_odb(tmp_path / "job.odb")
+    cache = tmp_path / "cache"
+    first = _extract(odb, cache, value=185.5)
+
+    path = Path(first.result_ref.cache_path)
+    payload = read_result_cache_payload(path)
+    mutate(payload)
+    path.write_text(json.dumps(payload), encoding="utf-8")
+
+    refreshed = _extract(odb, cache, value=201.0)
+
+    assert refreshed.cache_hit is False
+    assert refreshed.cache_status == "miss"
+    assert refreshed.metrics["max_mises"] == 201.0
+    assert "unusable_cache" in refreshed.cache_detail.get("cache_mismatch", [])
+    # The damaged entry is replaced by a well-formed one.
+    assert report_from_payload(read_result_cache_payload(path)).metrics["max_mises"] == 201.0
+
+
+def test_report_from_payload_normalizes_structural_errors(tmp_path: Path):
+    """Every structural defect surfaces as one exception type, never KeyError/TypeError."""
+    odb = _binary_odb(tmp_path / "job.odb")
+    report = _extract(odb, tmp_path / "cache")
+    payload = read_result_cache_payload(report.result_ref.cache_path)
+
+    payload["report"]["extractions"][0]["value"] = None
+    with pytest.raises(ResultCacheError, match="malformed report body"):
+        report_from_payload(payload)
+
+
+def test_result_ref_from_payload_normalizes_structural_errors(tmp_path: Path):
+    odb = _binary_odb(tmp_path / "job.odb")
+    report = _extract(odb, tmp_path / "cache")
+    payload = read_result_cache_payload(report.result_ref.cache_path)
+
+    payload["result_ref"]["counts"] = ["not", "a", "mapping"]
+    with pytest.raises(ResultCacheError, match="non-object counts field"):
+        result_ref_from_payload(payload, report.result_ref.cache_path)
+
+
+def test_summary_is_strictly_below_the_bound(tmp_path: Path):
+    """TC-TOK-03 says < 1500, so a summary of exactly 1500 characters is a violation."""
+    odb = _binary_odb(tmp_path / "job.odb")
+    report = _extract(
+        odb,
+        tmp_path / "cache",
+        requirements=[_field_req(f"m{i:03d}") for i in range(60)],
+    )
+    ref = report.result_ref
+
+    assert len(ref.to_llm_json()) < MAX_RESULT_REF_CHARS
+    # The trim loop must honour the strict bound, not stop one character late.
+    assert len(ref.to_llm_json(max_chars=MAX_RESULT_REF_CHARS + 1)) <= MAX_RESULT_REF_CHARS
+
+    # A bound the payload cannot satisfy must raise rather than return an over-long card.
+    with pytest.raises(ResultCacheError, match="cannot fit below"):
+        ref.to_llm_json(max_chars=100)
+
+    assert len(report.to_llm_summary()) < MAX_RESULT_REF_CHARS
 
 
 def test_unknown_cache_schema_is_not_reused(tmp_path: Path):

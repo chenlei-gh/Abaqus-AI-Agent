@@ -56,10 +56,14 @@
 | :--- | :--- | :--- |
 | `TokenCountSource` 四级分类含 `UNMEASURED` | `telemetry/contracts.py` | 已实现 |
 | 汇总报表按来源分桶、禁止混算 KPI | `telemetry/tracker.py::finalize` | 已实现 |
+| 估算组件不得冒充实测来源 | `telemetry/tracker.py::record_call`（来源降级 + `source_downgrade_reason`） | 已实现 |
 | Provider 未返回 usage 时不得填 0 | `llm/client.py::chat_completion`（`usage_measured` 门控） | 已实现 |
+| Provider usage 字段有效性校验 | `llm/client.py::_is_valid_token_count`（拒绝 `bool`/负数/非整数/总量不一致） | 已实现 |
 | 离线/未配置基准标 `UNMEASURED` | `tools/live_token_benchmark.py::run_benchmark` | 已实现 |
+| 基准证据分层（响应用量 ≠ 计费对账） | `tools/live_token_benchmark.py`（`evidence_scope`、`billing_reconciled`） | 已实现 |
 | `result_ref` + 5 条件强校验缓存 | `execution/result_cache.py`、`odb_extractor.extract_odb_results` | 已实现 |
-| 模型侧摘要 < 1500 字符 | `OdbExtractionReport.to_llm_summary` / `ResultRef.to_llm_json` | 已实现 |
+| 不可信缓存不得复用 | `result_cache.py::report_from_payload`（结构错误归一为 `ResultCacheError` + 计数自洽校验） | 已实现 |
+| 模型侧摘要 < 1500 字符 | `OdbExtractionReport.to_llm_summary` / `ResultRef.to_llm_json`（严格 `<`） | 已实现 |
 | 测试/工具返回结构化切片 | `execution/output_slicing.py` + `HeadlessAbaqusPythonExecutor.execute` | 已实现 |
 | 图像分层核验（校验→对齐→切片） | `perception/image_context.py` | 已实现 |
 
@@ -73,11 +77,22 @@
 
 5 条件绑定的负例覆盖：`input_hash`、`odb_sha256` 对应缓存键变化、`extraction_spec`、`units`、`extractor_version` 任一不符即重新提取（`test_any_binding_mismatch_forces_fresh_extraction`、`test_extractor_version_mismatch_rejects_cache`）。
 
+契约加固负例（本轮补充）：
+
+| 缺口 | 测试 | 行为 |
+| :--- | :--- | :--- |
+| 合法 JSON、报告结构损坏 | `test_structurally_invalid_but_parseable_cache_is_not_reused`（6 例） | 归一为 `unusable_cache` 并按未命中重新提取，不抛给提取流程 |
+| 报告体被掏空但绑定仍匹配 | 同上 `extractions_missing` | `result_ref.counts` 与实际条数不一致即拒绝复用 |
+| 结构错误异常类型不统一 | `test_report_from_payload_normalizes_structural_errors`、`test_result_ref_from_payload_normalizes_structural_errors` | 一律 `ResultCacheError` |
+| 摘要边界 ≥ 1500 | `test_summary_is_strictly_below_the_bound` | 严格 `<`，不可满足时抛错而非超长返回 |
+| Provider 来源但组件为估算 | `test_heuristic_components_downgrade_a_verified_source` | 降级为 `estimated` 并记录 `requested_source` |
+| usage 字段非法 | `test_malformed_provider_usage_is_rejected_not_claimed`（8 例） | `bool`/负数/非整数/总量不一致 → `UNMEASURED`，字段保持 `None` |
+
 ### 2.3 本阶段遗留项
 
 | ID | 缺口 | 当前状态 | 为何未闭合 | 关闭条件 |
 | :--- | :--- | :--- | :--- | :--- |
-| P2-LEFTOVER-01 | 真实 Provider 计费日志采集 | **未验证** | 本机无 Provider 凭据，`live_api=True` 路径从未对真实端点执行；TC-TOK-01/02 全部为单元级，`provider_usage` 仅来自 mock 响应体 | 用真实 API Key 跑一次 `run_benchmark(live_api=True)`，留下 `machine_validation/live_token_benchmark_evidence.json` 且 `status=QUALIFIED_LIVE`、`claimable=true` |
+| P2-LEFTOVER-01 | 真实 Provider 计费日志采集 | **未验证** | 本机无 Provider 凭据，`live_api=True` 路径从未对真实端点执行；TC-TOK-01/02 全部为单元级，`provider_usage` 仅来自 mock 响应体。基准脚本的 `QUALIFIED_LIVE` 仅表示**响应体 usage 已解析**（`evidence_scope=response_usage_verified`），与账单对账（`billing_reconciled=false`）是两项独立证据 | 用真实 API Key 跑一次 `run_benchmark(live_api=True)`，留下 `machine_validation/live_token_benchmark_evidence.json` 且 `status=QUALIFIED_LIVE`、`claimable=true`；**再**以 Provider 账单/用量记录对账后才可关闭本项 |
 | P2-LEFTOVER-02 | 真实 ODB 上的 `result_ref` 往返 | **未验证** | 仓库无真实 `.odb` 样本；缓存往返测试使用合成二进制头 + mock extraction runner，未经过 `odbAccess.openOdb()` | 用真实求解产出的 ODB 执行一次提取，确认缓存命中/失配与磁盘还原在真实数据上成立 |
 | P2-LEFTOVER-03 | TC-TOK-03 的 < 10 ms 还原仅在合成负载上实测 | **未验证（规模）** | 测试负载为单需求、200 个浮点；真实工程 ODB 的提取产物更大，10 ms 预算在真实规模下未实测 | 在真实提取产物上重复计时（含证据链完整还原） |
 | P2-LEFTOVER-04 | 图像分层核验未接入真实视口捕获链路 | **未接入（按范围决定）** | 本阶段实现的是三层核验能力本身；`render_headless_contour_images` / `capture_viewport` 的产出路径未改造为强制走切片，避免改变既有报告出图语义 | 若决定在交付链路强制切片，需单独评估对 `reporting/pipeline.py` 与图像校验契约的影响 |
@@ -97,9 +112,9 @@
 
 | 项 | 结果 |
 | :--- | :--- |
-| 定向测试（8 个文件） | 99 passed |
-| 全量 `pytest -q` | 1869 passed |
-| 全量 `pytest -W error -q` | 1869 passed |
+| 定向测试（7 个文件） | 89 passed |
+| 全量 `pytest -q` | 1889 passed（118 s） |
+| 全量 `pytest -W error -q` | 1889 passed（118 s） |
 | `tools/check_workspace_pollution.py` | passed |
 
 ---
@@ -110,3 +125,4 @@
 | :--- | :--- |
 | 2026-10-20 | 建立本文件；结转阶段 1 的 4 项遗留（3 项未验证、1 项契约偏差），作为带条件进入阶段 2 的前提记录 |
 | 2026-10-21 | 登记阶段 2 验收记录：TC-TOK-01/02/03 单元级通过，新增 5 项遗留（真实 Provider 日志、真实 ODB 往返、真实规模计时、图像链路接入、JPEG 头部校验边界） |
+| 2026-10-21 | 契约加固：缓存结构损坏归一为未命中、计数自洽校验、摘要严格 `<1500`、遥测来源降级、Provider usage 有效性校验、基准证据分层。全量 1889 passed（含 `-W error`） |

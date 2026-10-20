@@ -275,6 +275,9 @@ class ResultRef:
     def to_llm_json(self, max_chars: int = MAX_RESULT_REF_CHARS) -> str:
         """Serialize the pointer, deterministically trimming metrics to stay bounded.
 
+        TC-TOK-03 requires **strictly fewer than** ``max_chars`` characters, so the
+        bound is compared with ``>=`` on both the loop and the final check.
+
         The trim is recorded (``metrics_truncated``) so a reader can tell that the
         summary is partial; the full set is always available behind ``cache_path``.
         """
@@ -282,16 +285,16 @@ class ResultRef:
         ordered = sorted(self.metrics.items(), key=lambda kv: (-abs(kv[1]), kv[0]))
         keep = len(ordered)
         text = json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
-        while keep > 0 and len(text) > max_chars:
+        while keep > 0 and len(text) >= max_chars:
             keep -= 1
             trimmed = dict(payload)
             trimmed["metrics"] = {k: v for k, v in ordered[:keep]}
             trimmed["metrics_truncated"] = True
             trimmed["metrics_total"] = len(ordered)
             text = json.dumps(trimmed, ensure_ascii=False, separators=(",", ":"))
-        if len(text) > max_chars:
+        if len(text) >= max_chars:
             raise ResultCacheError(
-                f"result_ref summary cannot fit in {max_chars} characters "
+                f"result_ref summary cannot fit below {max_chars} characters "
                 f"({len(text)} chars after trimming metrics)."
             )
         return text
@@ -388,16 +391,78 @@ def check_cache_binding(
 
 
 def report_from_payload(payload: Dict[str, Any]) -> Any:
-    """Rebuild an ``OdbExtractionReport`` from a cache payload."""
+    """Rebuild an ``OdbExtractionReport`` from a cache payload.
+
+    A cache entry that is syntactically valid JSON but structurally wrong (missing
+    requirement keys, non-numeric values, wrong container types) must fail as an
+    *unusable cache entry*, not as an extraction failure. Every structural error is
+    therefore normalized to ``ResultCacheError`` so callers have exactly one
+    exception type to catch before falling back to a fresh extraction.
+    """
     from .odb_extractor import OdbExtractionReport
 
     body = payload.get("report")
     if not isinstance(body, dict):
         raise ResultCacheError("result_ref cache entry has no report body.")
 
+    try:
+        report = _report_from_body(body, OdbExtractionReport)
+    except ResultCacheError:
+        raise
+    except (KeyError, TypeError, ValueError, AttributeError) as exc:
+        raise ResultCacheError(
+            f"result_ref cache entry has a malformed report body: {exc!r}"
+        ) from exc
+
+    _assert_counts_agree(payload, report)
+    return report
+
+
+def _assert_counts_agree(payload: Dict[str, Any], report: Any) -> None:
+    """The pointer's own counts must describe the body it points at.
+
+    This is self-consistency inside one cache file, not an external format rule:
+    a truncated body that still parses (e.g. ``extractions`` emptied) would
+    otherwise be served as a cache hit with silently missing evidence.
+    """
+    pointer = payload.get("result_ref")
+    if not isinstance(pointer, dict):
+        raise ResultCacheError("result_ref cache entry has no result_ref block.")
+    counts = pointer.get("counts") or {}
+    if not isinstance(counts, dict):
+        raise ResultCacheError("result_ref cache entry has a non-object counts field.")
+
+    expected_extractions = counts.get("extractions")
+    expected_evidence = counts.get("evidence")
+    if expected_extractions is not None and int(expected_extractions) != len(report.extractions):
+        raise ResultCacheError(
+            "result_ref cache entry is inconsistent: reported "
+            f"{expected_extractions} extractions but body has {len(report.extractions)}."
+        )
+    if expected_evidence is not None and int(expected_evidence) != len(report.evidence):
+        raise ResultCacheError(
+            "result_ref cache entry is inconsistent: reported "
+            f"{expected_evidence} evidence items but body has {len(report.evidence)}."
+        )
+
+
+def _report_from_body(body: Dict[str, Any], report_cls: Any) -> Any:
+    raw_extractions = body.get("extractions") or ()
+    if not isinstance(raw_extractions, (list, tuple)):
+        raise ResultCacheError("result_ref cache entry has a non-list extractions field.")
+
     extractions: List[ResultExtraction] = []
-    for item in body.get("extractions") or ():
-        req = _requirement_from_dict(item["requirement"])
+    for index, item in enumerate(raw_extractions):
+        if not isinstance(item, dict):
+            raise ResultCacheError(
+                f"result_ref cache entry extraction #{index} is not an object."
+            )
+        requirement = item.get("requirement")
+        if not isinstance(requirement, dict):
+            raise ResultCacheError(
+                f"result_ref cache entry extraction #{index} has no requirement object."
+            )
+        req = _requirement_from_dict(requirement)
         extractions.append(
             ResultExtraction(
                 requirement=req,
@@ -407,13 +472,17 @@ def report_from_payload(payload: Dict[str, Any]) -> Any:
             )
         )
 
-    return OdbExtractionReport(
+    raw_metrics = body.get("metrics") or {}
+    if not isinstance(raw_metrics, dict):
+        raise ResultCacheError("result_ref cache entry has a non-object metrics field.")
+
+    return report_cls(
         run_id=str(body.get("run_id", "")),
         input_hash=str(body.get("input_hash", "")),
         odb_path=Path(body.get("odb_path", "")),
         odb_sha256=str(body.get("odb_sha256", "")),
         extractions=tuple(extractions),
-        metrics={str(k): float(v) for k, v in (body.get("metrics") or {}).items()},
+        metrics={str(k): float(v) for k, v in raw_metrics.items()},
         evidence=tuple(_evidence_from_dict(e) for e in (body.get("evidence") or ())),
         metadata=dict(body.get("metadata") or {}),
         energy_evidence=body.get("energy_evidence"),
@@ -427,21 +496,29 @@ def result_ref_from_payload(payload: Dict[str, Any], cache_path: Union[str, Path
     if not isinstance(d, dict):
         raise ResultCacheError("result_ref cache entry has no result_ref block.")
     counts = d.get("counts") or {}
-    return ResultRef(
-        cache_path=str(cache_path),
-        run_id=str(d.get("run_id", "")),
-        input_hash=str(d.get("input_hash", "")),
-        odb_sha256=str(d.get("odb_sha256", "")),
-        extractor_version=str(d.get("extractor_version", "")),
-        extraction_spec=str(d.get("extraction_spec", "")),
-        units=tuple(str(u) for u in (d.get("units") or ())),
-        metrics={str(k): float(v) for k, v in (d.get("metrics") or {}).items()},
-        extraction_count=int(counts.get("extractions", 0)),
-        evidence_count=int(counts.get("evidence", 0)),
-        energy_status=d.get("energy_status"),
-        created_at=float(d.get("created_at", 0.0)),
-        schema=str(d.get("schema", CACHE_SCHEMA_VERSION)),
-    )
+    if not isinstance(counts, dict):
+        raise ResultCacheError("result_ref cache entry has a non-object counts field.")
+    try:
+        metrics = {str(k): float(v) for k, v in (d.get("metrics") or {}).items()}
+        return ResultRef(
+            cache_path=str(cache_path),
+            run_id=str(d.get("run_id", "")),
+            input_hash=str(d.get("input_hash", "")),
+            odb_sha256=str(d.get("odb_sha256", "")),
+            extractor_version=str(d.get("extractor_version", "")),
+            extraction_spec=str(d.get("extraction_spec", "")),
+            units=tuple(str(u) for u in (d.get("units") or ())),
+            metrics=metrics,
+            extraction_count=int(counts.get("extractions", 0)),
+            evidence_count=int(counts.get("evidence", 0)),
+            energy_status=d.get("energy_status"),
+            created_at=float(d.get("created_at", 0.0)),
+            schema=str(d.get("schema", CACHE_SCHEMA_VERSION)),
+        )
+    except (KeyError, TypeError, ValueError, AttributeError) as exc:
+        raise ResultCacheError(
+            f"result_ref cache entry has a malformed result_ref block: {exc!r}"
+        ) from exc
 
 
 def now_iso() -> str:

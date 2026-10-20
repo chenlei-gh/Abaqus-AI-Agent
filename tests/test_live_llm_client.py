@@ -149,6 +149,66 @@ def test_live_llm_client_partial_usage_is_unmeasured():
     assert res.total_tokens is None
 
 
+# ---------------------------------------------------------------------------
+# Malformed provider usage blocks
+# ---------------------------------------------------------------------------
+
+def _client() -> LiveLLMClient:
+    return LiveLLMClient(
+        api_key="sk-mock-key",
+        base_url="https://api.openai.com/v1",
+        model="gpt-4o-mini",
+    )
+
+
+def _completion_with_usage(usage) -> LiveLLMResponse:
+    body = {
+        "model": "gpt-4o-mini",
+        "choices": [{"index": 0, "message": {"role": "assistant", "content": "ok"}}],
+        "usage": usage,
+    }
+    mock_resp = MagicMock()
+    mock_resp.read.return_value = json.dumps(body).encode("utf-8")
+    mock_resp.__enter__.return_value = mock_resp
+    mock_resp.__exit__.return_value = None
+    with patch("urllib.request.urlopen", return_value=mock_resp):
+        return _client().chat_completion(messages=[{"role": "user", "content": "hi"}])
+
+
+@pytest.mark.parametrize(
+    "usage, reason",
+    [
+        pytest.param({"prompt_tokens": True, "completion_tokens": 10}, "prompt_or_completion_missing_or_invalid", id="bool_prompt"),
+        pytest.param({"prompt_tokens": 100, "completion_tokens": False}, "prompt_or_completion_missing_or_invalid", id="bool_completion"),
+        pytest.param({"prompt_tokens": -5, "completion_tokens": 10}, "prompt_or_completion_missing_or_invalid", id="negative_prompt"),
+        pytest.param({"prompt_tokens": 100, "completion_tokens": -1}, "prompt_or_completion_missing_or_invalid", id="negative_completion"),
+        pytest.param({"prompt_tokens": 100.5, "completion_tokens": 10}, "prompt_or_completion_missing_or_invalid", id="float_prompt"),
+        pytest.param({"prompt_tokens": 100, "completion_tokens": 10, "total_tokens": -110}, "total_tokens_invalid", id="negative_total"),
+        pytest.param({"prompt_tokens": 100, "completion_tokens": 10, "total_tokens": True}, "total_tokens_invalid", id="bool_total"),
+        pytest.param({"prompt_tokens": 100, "completion_tokens": 10, "total_tokens": 999}, "total_tokens_inconsistent", id="total_mismatch"),
+    ],
+)
+def test_malformed_provider_usage_is_rejected_not_claimed(usage, reason):
+    """`bool` is an `int` subclass and negatives are ints; neither is a token count."""
+    res = _completion_with_usage(usage)
+
+    assert res.usage_measured is False
+    assert res.token_source == "unmeasured"
+    assert res.usage_rejected_reason == reason
+    # Never partially claim a rejected block.
+    assert res.prompt_tokens is None
+    assert res.completion_tokens is None
+    assert res.total_tokens is None
+
+
+def test_valid_provider_usage_is_accepted_with_consistent_total():
+    res = _completion_with_usage({"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0})
+
+    assert res.usage_measured is True
+    assert res.usage_rejected_reason is None
+    assert res.total_tokens == 0
+
+
 def test_benchmark_dry_run_execution():
     """Offline mode must be labeled UNMEASURED, never sold as a measured saving."""
     results = run_benchmark(live_api=False)
@@ -160,6 +220,9 @@ def test_benchmark_dry_run_execution():
         case = results["cases"][case_key]
         # Heuristic sizes may still be printed, but the source is never a measurement.
         assert case["metrics"]["measurement_source"] == "unmeasured"
+        # Response usage and billing reconciliation are separate claims; neither is made here.
+        assert case["metrics"]["evidence_scope"] == "none"
+        assert case["metrics"]["billing_reconciled"] is False
         assert case["metrics"]["claimable"] is False
         assert case["metrics"]["status"] == "UNMEASURED"
         assert case["branch_a"]["source"] == "unmeasured"

@@ -15,6 +15,16 @@ import urllib.request
 from typing import Any, Dict, List, Optional
 
 
+def _is_valid_token_count(value: Any) -> bool:
+    """A provider count must be a non-negative ``int``.
+
+    ``bool`` is rejected explicitly: it is an ``int`` subclass in Python, so a JSON
+    ``true`` would otherwise be accepted as a token count of 1. Floats are rejected
+    too — no provider contract we target reports fractional tokens.
+    """
+    return isinstance(value, int) and not isinstance(value, bool) and value >= 0
+
+
 @dataclass(frozen=True)
 class LiveLLMResponse:
     """Structured response from live LLM endpoint with authoritative usage.
@@ -31,6 +41,9 @@ class LiveLLMResponse:
     latency_ms: float
     raw_response: Dict[str, Any] = field(default_factory=dict)
     usage_measured: bool = True
+    #: Why a present-looking ``usage`` block was rejected. ``None`` when the block was
+    #: either absent or accepted. A rejected block is never partially claimed.
+    usage_rejected_reason: Optional[str] = None
 
     @property
     def token_source(self) -> str:
@@ -151,15 +164,22 @@ class LiveLLMClient:
         completion_tokens: Optional[int] = None
         total_tokens: Optional[int] = None
         usage_measured = False
+        usage_rejected_reason: Optional[str] = None
 
         if isinstance(usage, dict):
             raw_prompt = usage.get("prompt_tokens")
             raw_completion = usage.get("completion_tokens")
-            if isinstance(raw_prompt, int) and isinstance(raw_completion, int):
+            raw_total = usage.get("total_tokens")
+            if not (_is_valid_token_count(raw_prompt) and _is_valid_token_count(raw_completion)):
+                usage_rejected_reason = "prompt_or_completion_missing_or_invalid"
+            elif raw_total is not None and not _is_valid_token_count(raw_total):
+                usage_rejected_reason = "total_tokens_invalid"
+            elif raw_total is not None and raw_total != raw_prompt + raw_completion:
+                usage_rejected_reason = "total_tokens_inconsistent"
+            else:
                 prompt_tokens = raw_prompt
                 completion_tokens = raw_completion
-                raw_total = usage.get("total_tokens")
-                total_tokens = raw_total if isinstance(raw_total, int) else raw_prompt + raw_completion
+                total_tokens = raw_total if raw_total is not None else raw_prompt + raw_completion
                 usage_measured = True
 
         choices = data.get("choices", [])
@@ -176,4 +196,5 @@ class LiveLLMClient:
             latency_ms=round(elapsed_ms, 2),
             raw_response=data,
             usage_measured=usage_measured,
+            usage_rejected_reason=usage_rejected_reason,
         )

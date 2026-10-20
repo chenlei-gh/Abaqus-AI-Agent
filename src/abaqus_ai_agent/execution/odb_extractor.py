@@ -112,7 +112,7 @@ class OdbExtractionReport:
         text = json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
         ordered = sorted(self.metrics.items(), key=lambda kv: (-abs(kv[1]), kv[0]))
         keep = len(ordered)
-        while keep > 0 and len(text) > max_chars:
+        while keep > 0 and len(text) >= max_chars:
             keep -= 1
             trimmed = dict(payload)
             trimmed["metrics"] = {k: v for k, v in ordered[:keep]}
@@ -1129,21 +1129,33 @@ def extract_odb_results(
     if enable_result_cache:
         cache_path = cache_entry_path(run_id, odb_sha256, cache_root)
         if cache_path.is_file():
+            # An unusable cache entry must degrade to a fresh extraction, never to an
+            # extraction failure. Two distinct failure modes are recorded because they
+            # mean different things to whoever inspects the cache directory:
+            #   unreadable_cache -> bytes/JSON damaged on disk
+            #   unusable_cache   -> valid JSON whose binding or report body is malformed
             try:
                 cached = read_result_cache_payload(cache_path)
-                hit, mismatched = check_cache_binding(cached, binding)
-            except ResultCacheError as exc:
+            except ResultCacheError:
+                cached = None
                 hit, mismatched = False, ("unreadable_cache",)
-            if hit:
-                cached_report = report_from_payload(cached)
-                ref = build_result_ref(cached_report, cache_path, EXTRACTOR_VERSION, binding)
-                return replace(
-                    cached_report,
-                    result_ref=ref,
-                    cache_hit=True,
-                    cache_status="hit",
-                    cache_detail={"cache_path": str(cache_path)},
-                )
+            if cached is not None:
+                try:
+                    hit, mismatched = check_cache_binding(cached, binding)
+                    if hit:
+                        cached_report = report_from_payload(cached)
+                        ref = build_result_ref(
+                            cached_report, cache_path, EXTRACTOR_VERSION, binding
+                        )
+                        return replace(
+                            cached_report,
+                            result_ref=ref,
+                            cache_hit=True,
+                            cache_status="hit",
+                            cache_detail={"cache_path": str(cache_path)},
+                        )
+                except ResultCacheError:
+                    hit, mismatched = False, ("unusable_cache",)
             # Never reuse on partial agreement; record which conditions failed.
             cache_mismatch_reasons: Tuple[str, ...] = mismatched
         else:

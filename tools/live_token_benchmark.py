@@ -289,6 +289,8 @@ def run_benchmark(live_api: bool = True) -> Dict[str, Any]:
                 "total_tokens": res_a.total_tokens,
                 "latency_ms": res_a.latency_ms,
                 "source": res_a.token_source,
+                "provider_response_id": res_a.raw_response.get("id"),
+                "usage_rejected_reason": res_a.usage_rejected_reason,
             }
             case_record["branch_b"] = {
                 "prompt_tokens": res_b.prompt_tokens,
@@ -296,6 +298,8 @@ def run_benchmark(live_api: bool = True) -> Dict[str, Any]:
                 "total_tokens": res_b.total_tokens,
                 "latency_ms": res_b.latency_ms,
                 "source": res_b.token_source,
+                "provider_response_id": res_b.raw_response.get("id"),
+                "usage_rejected_reason": res_b.usage_rejected_reason,
             }
 
             if res_a.usage_measured and res_b.usage_measured:
@@ -307,17 +311,28 @@ def run_benchmark(live_api: bool = True) -> Dict[str, Any]:
                     "measurement_source": "provider_usage",
                     "claimable": True,
                     "status": "QUALIFIED_LIVE",
+                    # Response-body usage is a measurement, not a billing record. The two
+                    # are tracked separately so QUALIFIED_LIVE is never read as
+                    # "provider invoice reconciled" (P2-LEFTOVER-01 stays open).
+                    "evidence_scope": "response_usage_verified",
+                    "billing_reconciled": False,
                 }
             else:
-                # The provider response did not expose usage. Reporting a reduction here
-                # would fabricate a measurement from a missing field.
+                # The provider response did not expose usable usage. Reporting a reduction
+                # here would fabricate a measurement from a missing field.
                 case_record["metrics"] = {
                     "prompt_token_reduction_pct": None,
                     "total_token_reduction_pct": None,
                     "measurement_source": "unmeasured",
                     "claimable": False,
                     "status": "UNMEASURED",
-                    "reason": "provider_response_omitted_usage",
+                    "reason": "provider_response_omitted_or_invalid_usage",
+                    "evidence_scope": "none",
+                    "billing_reconciled": False,
+                    "usage_rejected_reason": {
+                        "branch_a": res_a.usage_rejected_reason,
+                        "branch_b": res_b.usage_rejected_reason,
+                    },
                 }
         else:
             # No provider session. Heuristic sizes are printed for sizing intuition only;
@@ -352,6 +367,8 @@ def run_benchmark(live_api: bool = True) -> Dict[str, Any]:
                 "claimable": False,
                 "status": "UNMEASURED",
                 "reason": "no_provider_session",
+                "evidence_scope": "none",
+                "billing_reconciled": False,
             }
 
         results["cases"][case_key] = case_record
