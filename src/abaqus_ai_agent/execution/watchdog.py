@@ -3,6 +3,7 @@
 REQ-P1-056:
 - Monitors live process output streams (stdout, stderr) and working directory artifacts (.sta, .msg, .log, .odb, .dat).
 - Detects process stalls when a child process produces zero output and zero file modifications for stall_timeout seconds (default 120s).
+- Note: stall_timeout is a configurable engineering heuristic policy parameter, not an intrinsic physical or solver constant. Long-running, silent solver jobs should configure a larger threshold or additional heartbeat files.
 - Windows: Uses `taskkill /F /T /PID <pid>` to terminate the entire process tree (killing standard.exe / explicit.exe grandchild processes).
 - Non-Windows: Uses process group signal SIGKILL.
 - Asynchronous daemon threads consume stdout/stderr to prevent Windows pipe deadlocks.

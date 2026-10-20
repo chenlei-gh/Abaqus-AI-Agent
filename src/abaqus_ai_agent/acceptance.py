@@ -1762,6 +1762,8 @@ def evaluate_production_acceptance(
             audit_summary=res.audit_summary.replace("Engineering Acceptance: PASS", "Engineering Acceptance: FAIL"),
             odb_status=res.odb_status,
             evidence_status=str(new_validity),
+            stabilization_energy=res.stabilization_energy,
+            dynamic_energy=res.dynamic_energy,
         )
 
     return res

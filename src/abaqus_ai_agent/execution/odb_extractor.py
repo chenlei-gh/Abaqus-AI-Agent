@@ -922,7 +922,7 @@ def _extract_via_executor(
                     raise ExtractionFieldNotFoundError(f"Requirement '{req.value_key}' missing from batch result payload")
                 if not entry.get("success", False):
                     err_msg = entry.get("error", "Unknown batch extraction error")
-                    if any(k in err_msg.lower() for k in ("not found", "missing", "unavailable", "zero steps", "explicit step required", "specifies no step")):
+                    if any(k in err_msg.lower() for k in ("not found", "missing", "unavailable", "zero steps", "zero non-initial", "explicit step required", "specifies no step")):
                         raise ExtractionFieldNotFoundError(err_msg)
                     raise OdbExtractionError(err_msg)
                 val = float(entry["value"])

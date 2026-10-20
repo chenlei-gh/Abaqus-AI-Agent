@@ -306,6 +306,46 @@ def test_requirement_without_step_on_multi_step_fails_closed(tmp_path):
     assert "multiple non-Initial steps" in str(exc_info.value)
 
 
+def test_requirement_on_zero_non_initial_steps_fails_closed_with_field_not_found_error(tmp_path):
+    """Verify that batch extraction fails closed with ExtractionFieldNotFoundError when ODB has zero non-Initial analysis steps."""
+    odb_file = tmp_path / "zero_non_initial.odb"
+    odb_file.write_bytes(b"MOCK_ODB_HEADER" + b"\x00" * 1024)
+
+    req = ResultRequirement(
+        name="NoActiveStepReq",
+        value_key="no_step_disp",
+        output_kind="field",
+        field="U",
+        aggregation="max",
+    )
+
+    def mock_custom_runner(code: str):
+        assert "zero non-Initial analysis steps" in code
+        return {
+            "status": "success",
+            "metadata": {"status": "available", "steps": ["Initial"]},
+            "requirements": {
+                "no_step_disp": {
+                    "success": False,
+                    "error": "ODB contains zero non-Initial analysis steps",
+                }
+            },
+            "energy": None,
+        }
+
+    with pytest.raises(ExtractionFieldNotFoundError) as exc_info:
+        extract_odb_results(
+            odb_path=odb_file,
+            requirements_or_criteria=[req],
+            run_id="run-batch-zero-non-init",
+            input_hash="hash-zero-init",
+            workdir=tmp_path,
+            custom_runner=mock_custom_runner,
+        )
+
+    assert "zero non-Initial analysis steps" in str(exc_info.value)
+
+
 def test_in_process_requirement_step_binding_contract():
     """Verify _extract_single_requirement_in_process enforces explicit step binding on multi-step ODB."""
     from abaqus_ai_agent.execution.odb_extractor import _extract_single_requirement_in_process

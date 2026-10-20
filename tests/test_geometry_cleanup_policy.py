@@ -309,6 +309,7 @@ def test_guard_partial_registration_failure_raises_runtime_error():
 
     guard = render_geometry_guard()
     env = {}
+    orig_guard = getattr(sys, "__ABQAI_GEOMETRY_GUARD__", None)
     if hasattr(sys, "__ABQAI_GEOMETRY_GUARD__"):
         delattr(sys, "__ABQAI_GEOMETRY_GUARD__")
 
@@ -329,7 +330,9 @@ def test_guard_partial_registration_failure_raises_runtime_error():
             sys.modules["methodCallback"] = orig_mc
         else:
             sys.modules.pop("methodCallback", None)
-        if hasattr(sys, "__ABQAI_GEOMETRY_GUARD__"):
+        if orig_guard is not None:
+            setattr(sys, "__ABQAI_GEOMETRY_GUARD__", orig_guard)
+        elif hasattr(sys, "__ABQAI_GEOMETRY_GUARD__"):
             delattr(sys, "__ABQAI_GEOMETRY_GUARD__")
 
 

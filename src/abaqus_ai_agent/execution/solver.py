@@ -143,6 +143,13 @@ def _verify_odb_in_process(
         if not steps:
             return {"verified": False, "error": "ODB contains zero steps"}
 
+        non_initial_steps = [s for s in steps if str(s).strip().lower() != "initial"]
+        if not non_initial_steps:
+            return {
+                "verified": False,
+                "error": "ODB contains zero non-Initial analysis steps; simulation has no active analysis step",
+            }
+
         step_info = {}
         for s in steps:
             step_obj = odb.steps[s]
@@ -150,7 +157,13 @@ def _verify_odb_in_process(
             fields = list(step_obj.frames[-1].fieldOutputs.keys()) if n_frames > 0 else []
             step_info[s] = {"frames": n_frames, "fields": fields}
 
-        non_initial_steps = [s for s in steps if str(s).strip().lower() != "initial"]
+        for s in non_initial_steps:
+            if step_info[s]["frames"] <= 0:
+                return {
+                    "verified": False,
+                    "error": f"ODB step '{s}' contains zero frames; incomplete solution cannot be accepted as verified",
+                }
+
         req_step = str(required_step) if required_step else ""
         if req_step:
             if req_step not in step_info:
@@ -247,7 +260,9 @@ def _verify_odb_in_process(
             "instances": instance_details,
         }
 
-        steps_to_check = [req_step] if req_step else (non_initial_steps if non_initial_steps else steps)
+        steps_to_check = list(dict.fromkeys(non_initial_steps if non_initial_steps else steps))
+        if req_step and req_step not in steps_to_check:
+            steps_to_check.append(req_step)
         all_nonfinite_fields = []
         for s in steps_to_check:
             degenerate_error, nonfinite_fields = _degenerate_solution_error(odb, s)
@@ -317,7 +332,7 @@ def _degenerate_solution_error(odb, step_name):
     passes every structural check yet carries no usable result, so it must not
     reach acceptance as VALID.
 
-    Two conditions are rejected:
+    Every frame of the step is checked. Two conditions are rejected on any frame:
       * a core mechanical field (U/UR/S/RF/RM) is mostly non-finite;
       * every field carrying numeric values is entirely non-finite.
     A field with no values at all is not evidence either way and is ignored.
@@ -326,85 +341,53 @@ def _degenerate_solution_error(odb, step_name):
     """
     try:
         step_obj = odb.steps[step_name]
-        if len(step_obj.frames) == 0:
+        n_frames = len(step_obj.frames)
+        if n_frames == 0:
             return None, []
-        last = step_obj.frames[-1]
-        core_degenerate = []
-        nonfinite_fields = []
-        data_bearing = 0
-        for fname in last.fieldOutputs.keys():
-            total, finite = _finite_counts(last.fieldOutputs[fname].values)
-            if not total:
-                continue
-            data_bearing += 1
-            if not finite:
-                nonfinite_fields.append(str(fname))
-            base = str(fname).split()[0].upper()
-            if base in _CORE_RESULT_FIELDS and (finite / float(total)) < _MIN_FINITE_FRACTION:
-                core_degenerate.append("%s (%d/%d finite)" % (str(fname), finite, total))
+        all_nonfinite_fields = []
+        for fr_idx, frame in enumerate(step_obj.frames):
+            core_degenerate = []
+            frame_nonfinite_fields = []
+            data_bearing = 0
+            for fname in frame.fieldOutputs.keys():
+                total, finite = _finite_counts(frame.fieldOutputs[fname].values)
+                if not total:
+                    continue
+                data_bearing += 1
+                if not finite:
+                    frame_nonfinite_fields.append(str(fname))
+                    if str(fname) not in all_nonfinite_fields:
+                        all_nonfinite_fields.append(str(fname))
+                base = str(fname).split()[0].upper()
+                if base in _CORE_RESULT_FIELDS and (finite / float(total)) < _MIN_FINITE_FRACTION:
+                    core_degenerate.append("%s (%d/%d finite)" % (str(fname), finite, total))
+
+            frame_desc = "last frame" if fr_idx == n_frames - 1 else f"frame {fr_idx}"
+            if core_degenerate:
+                return (
+                    f"ODB step {step_name!r} {frame_desc} has a mostly non-finite core result field: {', '.join(sorted(core_degenerate))}; "
+                    "the solver reported completion but the solution is numerically degenerate"
+                ), all_nonfinite_fields
+            if data_bearing and len(frame_nonfinite_fields) == data_bearing:
+                return (
+                    f"ODB step {step_name!r} {frame_desc} contains no finite field values; the solver "
+                    f"reported completion but the solution is numerically degenerate (fields: {', '.join(sorted(frame_nonfinite_fields))})"
+                ), all_nonfinite_fields
+        return None, all_nonfinite_fields
     except Exception as exc:
         return "degenerate-result check failed: %s" % exc, []
 
-    if core_degenerate:
-        return (
-            "ODB step %r last frame has a mostly non-finite core result field: %s; "
-            "the solver reported completion but the solution is numerically degenerate"
-            % (step_name, ", ".join(sorted(core_degenerate)))
-        ), nonfinite_fields
-    if data_bearing and len(nonfinite_fields) == data_bearing:
-        return (
-            "ODB step %r last frame contains no finite field values; the solver "
-            "reported completion but the solution is numerically degenerate "
-            "(fields: %s)" % (step_name, ", ".join(sorted(nonfinite_fields)))
-        ), nonfinite_fields
-    return None, nonfinite_fields
 
-
-def verify_authentic_odb_structure(
+def _build_odb_probe_script(
     path: Union[str, Path],
-    launcher_cmd: Optional[str] = None,
     required_fields: Optional[Sequence[str]] = None,
     required_step: Optional[str] = None,
-    timeout: int = 60,
-) -> Dict[str, Any]:
-    """Perform native odbAccess structural verification using headless Abaqus Python (P0-5 / P0-A).
-
-    Verifies that:
-    1. File is valid non-empty binary ODB.
-    2. File can be opened via native odbAccess.openOdb (in-process if available, else via subprocess).
-    3. File contains at least one valid Step, and each Step contains at least one Frame.
-    4. Required step (if specified) is present and contains frames.
-    5. Required fields (if specified) are present in the last frame of the target/last step.
-    """
-    path = Path(path).resolve()
-    if not is_authentic_binary_odb(path):
-        return {
-            "verified": False,
-            "error": f"File {path} failed binary pre-filter (corrupt, empty, or plaintext mock)",
-        }
-
-    # 1. Native in-process path if running directly inside Abaqus Python / CAE environment
-    if has_native_odb_access():
-        return _verify_odb_in_process(
-            path,
-            required_fields=required_fields,
-            required_step=required_step,
-        )
-
-    # 2. External launcher path if running in host Python environment
-    launcher = find_abaqus_executable(launcher_cmd)
-    if not launcher:
-        # Host is offline or in mock test environment
-        return {
-            "verified": False,
-            "offline": True,
-            "error": "Abaqus executable not found on host to perform native openOdb verification",
-        }
-
+) -> str:
+    """Generate the headless Abaqus Python verification script for external launcher execution."""
     req_fields_json = json.dumps([str(f).upper() for f in (required_fields or ())])
     req_step_str = str(required_step) if required_step else ""
 
-    probe_script = f"""
+    return f"""
 import sys, json
 try:
     from odbAccess import openOdb
@@ -415,6 +398,12 @@ try:
         odb.close()
         sys.exit(1)
 
+    non_initial_steps = [s for s in steps if str(s).strip().lower() != "initial"]
+    if not non_initial_steps:
+        print("__ODB_VERIFIED__" + json.dumps({{'valid': False, 'error': "ODB contains zero non-Initial analysis steps; simulation has no active analysis step"}}))
+        odb.close()
+        sys.exit(1)
+
     step_info = {{}}
     for s in steps:
         step_obj = odb.steps[s]
@@ -422,8 +411,13 @@ try:
         fields = list(step_obj.frames[-1].fieldOutputs.keys()) if n_frames > 0 else []
         step_info[s] = {{'frames': n_frames, 'fields': fields}}
 
+    for s in non_initial_steps:
+        if step_info[s]['frames'] <= 0:
+            print("__ODB_VERIFIED__" + json.dumps({{'valid': False, 'error': f"ODB step '{{s}}' contains zero frames; incomplete solution cannot be accepted as verified"}}))
+            odb.close()
+            sys.exit(1)
+
     req_step = {req_step_str!r}
-    non_initial_steps = [s for s in steps if str(s).strip().lower() != "initial"]
     if req_step:
         if req_step not in step_info:
             print("__ODB_VERIFIED__" + json.dumps({{'valid': False, 'error': f"Required step '{{req_step}}' not found in ODB steps: {{steps}}"}}))
@@ -511,53 +505,56 @@ try:
     # Degenerate-result guard. Abaqus reports COMPLETED SUCCESSFULLY for some
     # contact runs whose solution has diverged numerically, writing NaN into the
     # field outputs. A structurally valid ODB full of NaN is not a result, so it
-    # must not reach acceptance as VALID.
+    # must not reach acceptance as VALID. Every frame of each analysis step is scanned.
     import math as _math
-    _steps_to_check = [req_step] if req_step else (non_initial_steps if non_initial_steps else steps)
+    _steps_to_check = list(dict.fromkeys(non_initial_steps if non_initial_steps else steps))
+    if req_step and req_step not in _steps_to_check:
+        _steps_to_check.append(req_step)
     _core = ('U', 'UT', 'UR', 'S', 'RF', 'RM')
     _all_nonfinite = []
     for _target_step in _steps_to_check:
-        if len(odb.steps[_target_step].frames) == 0:
-            continue
-        _last = odb.steps[_target_step].frames[-1]
-        _core_degenerate = []
-        _nonfinite = []
-        _data_bearing = 0
-        for _fname in _last.fieldOutputs.keys():
-            _tot = 0
-            _fin = 0
-            for _v in _last.fieldOutputs[_fname].values:
-                _data = _v.data
-                if not hasattr(_data, '__iter__'):
-                    _data = (_data,)
-                for _x in _data:
-                    if isinstance(_x, bool):
-                        continue
-                    try:
-                        _n = float(_x)
-                    except (TypeError, ValueError):
-                        continue
-                    _tot += 1
-                    if _math.isfinite(_n):
-                        _fin += 1
-            if not _tot:
-                continue
-            _data_bearing += 1
-            if not _fin:
-                _nonfinite.append(str(_fname))
-            if str(_fname).split()[0].upper() in _core and (_fin / float(_tot)) < 0.5:
-                _core_degenerate.append(f"{{_fname}} ({{_fin}}/{{_tot}} finite)")
-        for _f in _nonfinite:
-            if _f not in _all_nonfinite:
-                _all_nonfinite.append(_f)
-        if _core_degenerate:
-            print("__ODB_VERIFIED__" + json.dumps({{'valid': False, 'error': f"ODB step '{{_target_step}}' last frame has a mostly non-finite core result field: {{sorted(_core_degenerate)}}; the solver reported completion but the solution is numerically degenerate"}}))
-            odb.close()
-            sys.exit(1)
-        if _data_bearing and len(_nonfinite) == _data_bearing:
-            print("__ODB_VERIFIED__" + json.dumps({{'valid': False, 'error': f"ODB step '{{_target_step}}' last frame contains no finite field values; the solver reported completion but the solution is numerically degenerate (fields: {{sorted(_nonfinite)}})"}}))
-            odb.close()
-            sys.exit(1)
+        _step_obj = odb.steps[_target_step]
+        _n_frames = len(_step_obj.frames)
+        for _fr_idx, _frame in enumerate(_step_obj.frames):
+            _core_degenerate = []
+            _nonfinite = []
+            _data_bearing = 0
+            for _fname in _frame.fieldOutputs.keys():
+                _tot = 0
+                _fin = 0
+                for _v in _frame.fieldOutputs[_fname].values:
+                    _data = _v.data
+                    if not hasattr(_data, '__iter__'):
+                        _data = (_data,)
+                    for _x in _data:
+                        if isinstance(_x, bool):
+                            continue
+                        try:
+                            _n = float(_x)
+                        except (TypeError, ValueError):
+                            continue
+                        _tot += 1
+                        if _math.isfinite(_n):
+                            _fin += 1
+                if not _tot:
+                    continue
+                _data_bearing += 1
+                if not _fin:
+                    _nonfinite.append(str(_fname))
+                if str(_fname).split()[0].upper() in _core and (_fin / float(_tot)) < 0.5:
+                    _core_degenerate.append(f"{{_fname}} ({{_fin}}/{{_tot}} finite)")
+            for _f in _nonfinite:
+                if _f not in _all_nonfinite:
+                    _all_nonfinite.append(_f)
+            _frame_desc = "last frame" if _fr_idx == _n_frames - 1 else f"frame {{_fr_idx}}"
+            if _core_degenerate:
+                print("__ODB_VERIFIED__" + json.dumps({{'valid': False, 'error': f"ODB step '{{_target_step}}' {{_frame_desc}} has a mostly non-finite core result field: {{sorted(_core_degenerate)}}; the solver reported completion but the solution is numerically degenerate"}}))
+                odb.close()
+                sys.exit(1)
+            if _data_bearing and len(_nonfinite) == _data_bearing:
+                print("__ODB_VERIFIED__" + json.dumps({{'valid': False, 'error': f"ODB step '{{_target_step}}' {{_frame_desc}} contains no finite field values; the solver reported completion but the solution is numerically degenerate (fields: {{sorted(_nonfinite)}})"}}))
+                odb.close()
+                sys.exit(1)
 
     odb.close()
     print("__ODB_VERIFIED__" + json.dumps({{'valid': True, 'steps': step_info, 'mesh_metrics': mesh_metrics, 'nonfinite_fields': _all_nonfinite}}))
@@ -565,6 +562,54 @@ except Exception as exc:
     print("__ODB_VERIFIED__" + json.dumps({{'valid': False, 'error': str(exc)}}))
     sys.exit(1)
 """
+
+
+def verify_authentic_odb_structure(
+    path: Union[str, Path],
+    launcher_cmd: Optional[str] = None,
+    required_fields: Optional[Sequence[str]] = None,
+    required_step: Optional[str] = None,
+    timeout: int = 60,
+) -> Dict[str, Any]:
+    """Perform native odbAccess structural verification using headless Abaqus Python (P0-5 / P0-A).
+
+    Verifies that:
+    1. File is valid non-empty binary ODB.
+    2. File can be opened via native odbAccess.openOdb (in-process if available, else via subprocess).
+    3. File contains at least one valid Step, and each Step contains at least one Frame.
+    4. Required step (if specified) is present and contains frames.
+    5. Required fields (if specified) are present in the last frame of the target/last step.
+    """
+    path = Path(path).resolve()
+    if not is_authentic_binary_odb(path):
+        return {
+            "verified": False,
+            "error": f"File {path} failed binary pre-filter (corrupt, empty, or plaintext mock)",
+        }
+
+    # 1. Native in-process path if running directly inside Abaqus Python / CAE environment
+    if has_native_odb_access():
+        return _verify_odb_in_process(
+            path,
+            required_fields=required_fields,
+            required_step=required_step,
+        )
+
+    # 2. External launcher path if running in host Python environment
+    launcher = find_abaqus_executable(launcher_cmd)
+    if not launcher:
+        # Host is offline or in mock test environment
+        return {
+            "verified": False,
+            "offline": True,
+            "error": "Abaqus executable not found on host to perform native openOdb verification",
+        }
+
+    probe_script = _build_odb_probe_script(
+        path,
+        required_fields=required_fields,
+        required_step=required_step,
+    )
     try:
         with tempfile.TemporaryDirectory(prefix="abaqus_odb_probe_") as probe_scratch:
             probe_file = Path(probe_scratch) / "_odb_probe.py"

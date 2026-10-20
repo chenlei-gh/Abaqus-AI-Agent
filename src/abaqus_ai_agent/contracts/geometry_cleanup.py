@@ -263,6 +263,14 @@ def render_geometry_guard(policies=None, code=""):
 
     ``code`` is only used to record geometry-preparation tolerance changes, which
     are allowed but must stay visible in the evidence trail.
+
+    Security boundary note:
+    The guard operates within the same Abaqus Python interpreter to enforce policy
+    during normal workflow execution and prevent accidental or unvetted geometry
+    mutations. It does not act as an OS sandbox against actively adversarial scripts
+    running inside the same interpreter process (e.g., scripts intentionally unhooking
+    callbacks or modifying interpreter internals). Strong containment of untrusted
+    code requires process-level or OS-level isolation.
     """
     resolved = GeometryCleanupPolicySet.coerce(policies)
     payload = _policy_payload(resolved)

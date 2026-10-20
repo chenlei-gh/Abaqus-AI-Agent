@@ -364,7 +364,7 @@ def test_analysis_runner_full_orchestration_pre_injects_energy(monkeypatch, tmp_
     with monkeypatch.context() as m:
         import abaqus_ai_agent.execution.odb_extractor as ext_mod
         m.setattr(ext_mod, "extract_odb_results", mock_extract_odb_results)
-        runner.run(
+        summary1 = runner.run(
             model_name="Model-Dyn",
             job_name="Job_Dyn",
             odb_path=fake_odb,
@@ -377,6 +377,9 @@ def test_analysis_runner_full_orchestration_pre_injects_energy(monkeypatch, tmp_
     assert len(batched_extract_calls) == 1
     assert batched_extract_calls[0]["energy_spec"] == {"step": "Step-1"}
     assert secondary_extract_calls == []
+    assert summary1.acceptance.gates["dynamic_energy"] == "PASS"
+    assert summary1.acceptance.dynamic_energy is not None
+    assert summary1.acceptance.dynamic_energy["status"] == "PASS"
 
     # 2. Dynamic gate disabled -> pre_energy_spec is None
     batched_extract_calls.clear()
@@ -387,7 +390,7 @@ def test_analysis_runner_full_orchestration_pre_injects_energy(monkeypatch, tmp_
     with monkeypatch.context() as m:
         import abaqus_ai_agent.execution.odb_extractor as ext_mod
         m.setattr(ext_mod, "extract_odb_results", mock_extract_odb_results)
-        runner.run(
+        summary2 = runner.run(
             model_name="Model-Dyn",
             job_name="Job_Dyn",
             odb_path=fake_odb,
@@ -400,6 +403,8 @@ def test_analysis_runner_full_orchestration_pre_injects_energy(monkeypatch, tmp_
     assert len(batched_extract_calls) == 1
     assert batched_extract_calls[0]["energy_spec"] is None
     assert secondary_extract_calls == []
+    assert summary2.acceptance.gates["dynamic_energy"] == "SKIPPED"
+    assert summary2.acceptance.dynamic_energy is None
 
     # 3. Dynamic gate enabled but step omitted -> pre_energy_spec is None
     batched_extract_calls.clear()
@@ -422,3 +427,47 @@ def test_analysis_runner_full_orchestration_pre_injects_energy(monkeypatch, tmp_
         )
     assert len(batched_extract_calls) == 1
     assert batched_extract_calls[0]["energy_spec"] is None
+
+    # 4. Multi-step ODB without declared dynamic step -> pre_energy_spec is None and gate BLOCKED as ambiguous
+    batched_extract_calls.clear()
+    class MockMultiStepExecutor(MockFullExecutor):
+        def inspect_odb(self, path):
+            return {
+                "steps": {
+                    "Step-1": {
+                        "frames": [{"frameId": 0}, {"frameId": 1}],
+                        "history_regions": ["Assembly ASSEMBLY"],
+                    },
+                    "Step-2": {
+                        "frames": [{"frameId": 0}, {"frameId": 1}],
+                        "history_regions": ["Assembly ASSEMBLY"],
+                    },
+                }
+            }
+
+    multi_runner = AnalysisRunner(MockMultiStepExecutor())
+    with monkeypatch.context() as m:
+        import abaqus_ai_agent.execution.odb_extractor as ext_mod
+        m.setattr(ext_mod, "extract_odb_results", mock_extract_odb_results)
+        m.setattr(solver_module, "verify_authentic_odb_structure", lambda **kw: {
+            "verified": True,
+            "steps": {"Step-1": {"frames": 2, "fields": ["U"]}, "Step-2": {"frames": 2, "fields": ["U"]}},
+            "mesh_metrics": {"total_elements": 10, "total_nodes": 10, "element_types": {}, "instances": {}},
+            "nonfinite_fields": [],
+        })
+        summary4 = multi_runner.run(
+            model_name="Model-Dyn",
+            job_name="Job_Dyn",
+            odb_path=fake_odb,
+            criteria=[{"name": "max_displacement", "value_key": "max_displacement", "target": 10.0}],
+            workdir=p_ctx.solver_dir,
+            engineering_intent=intent_no_step,
+            require_production=True,
+            project_context=p_ctx,
+        )
+    assert len(batched_extract_calls) == 1
+    assert batched_extract_calls[0]["energy_spec"] is None
+    assert summary4.acceptance.gates["dynamic_energy"] == "BLOCKED"
+    assert summary4.acceptance.dynamic_energy is not None
+    assert summary4.acceptance.dynamic_energy["status"] == "BLOCKED"
+    assert summary4.acceptance.dynamic_energy["reason"] == "dynamic_step_ambiguous"
