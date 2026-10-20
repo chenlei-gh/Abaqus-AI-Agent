@@ -309,8 +309,9 @@ def test_guard_partial_registration_failure_raises_runtime_error():
 
     guard = render_geometry_guard()
     env = {}
+    had_orig_guard = hasattr(sys, "__ABQAI_GEOMETRY_GUARD__")
     orig_guard = getattr(sys, "__ABQAI_GEOMETRY_GUARD__", None)
-    if hasattr(sys, "__ABQAI_GEOMETRY_GUARD__"):
+    if had_orig_guard:
         delattr(sys, "__ABQAI_GEOMETRY_GUARD__")
 
     try:
@@ -330,8 +331,66 @@ def test_guard_partial_registration_failure_raises_runtime_error():
             sys.modules["methodCallback"] = orig_mc
         else:
             sys.modules.pop("methodCallback", None)
-        if orig_guard is not None:
+        if had_orig_guard:
             setattr(sys, "__ABQAI_GEOMETRY_GUARD__", orig_guard)
+        elif hasattr(sys, "__ABQAI_GEOMETRY_GUARD__"):
+            delattr(sys, "__ABQAI_GEOMETRY_GUARD__")
+
+
+def test_guard_partial_registration_restores_none_sentinel_without_deleting():
+    """Verify that if sys.__ABQAI_GEOMETRY_GUARD__ was pre-existing as None, it is restored as None, not deleted."""
+    import sys
+    import types
+    from abaqus_ai_agent.contracts.geometry_cleanup import render_geometry_guard
+
+    class MockFailingMethodCallback:
+        ALL_TYPES = "ALL_TYPES"
+        def callbackExists(self, cb_type, name, cb):
+            return False
+        def addCallback(self, cb_type, name, cb):
+            raise RuntimeError("forced registration error")
+
+    mock_inst = MockFailingMethodCallback()
+    mock_mod = types.ModuleType("methodCallback")
+    mock_mod.ALL_TYPES = mock_inst.ALL_TYPES
+    mock_mod.callbackExists = mock_inst.callbackExists
+    mock_mod.addCallback = mock_inst.addCallback
+
+    orig_mc = sys.modules.get("methodCallback")
+    sys.modules["methodCallback"] = mock_mod
+
+    # Pre-condition: attribute explicitly exists on sys with value None
+    had_pre_test = hasattr(sys, "__ABQAI_GEOMETRY_GUARD__")
+    val_pre_test = getattr(sys, "__ABQAI_GEOMETRY_GUARD__", None)
+    setattr(sys, "__ABQAI_GEOMETRY_GUARD__", None)
+
+    try:
+        guard = render_geometry_guard()
+        env = {}
+        had_orig_guard = hasattr(sys, "__ABQAI_GEOMETRY_GUARD__")
+        orig_guard = getattr(sys, "__ABQAI_GEOMETRY_GUARD__", None)
+        if had_orig_guard:
+            delattr(sys, "__ABQAI_GEOMETRY_GUARD__")
+
+        try:
+            with pytest.raises(RuntimeError):
+                exec(guard, env)
+        finally:
+            if had_orig_guard:
+                setattr(sys, "__ABQAI_GEOMETRY_GUARD__", orig_guard)
+            elif hasattr(sys, "__ABQAI_GEOMETRY_GUARD__"):
+                delattr(sys, "__ABQAI_GEOMETRY_GUARD__")
+
+        # Assert: the attribute was preserved as None, not deleted!
+        assert hasattr(sys, "__ABQAI_GEOMETRY_GUARD__")
+        assert getattr(sys, "__ABQAI_GEOMETRY_GUARD__") is None
+    finally:
+        if orig_mc is not None:
+            sys.modules["methodCallback"] = orig_mc
+        else:
+            sys.modules.pop("methodCallback", None)
+        if had_pre_test:
+            setattr(sys, "__ABQAI_GEOMETRY_GUARD__", val_pre_test)
         elif hasattr(sys, "__ABQAI_GEOMETRY_GUARD__"):
             delattr(sys, "__ABQAI_GEOMETRY_GUARD__")
 

@@ -246,6 +246,9 @@ def run_with_watchdog(
 
             # 2. Check total hard timeout
             if effective_total_timeout and (now - start_time) >= effective_total_timeout:
+                return_code = proc.poll()
+                if return_code is not None:
+                    break
                 timed_out = True
                 break
 
@@ -268,6 +271,9 @@ def run_with_watchdog(
                 idle_duration = now - last_activity_time[0]
 
             if effective_stall_timeout and idle_duration >= effective_stall_timeout:
+                return_code = proc.poll()
+                if return_code is not None:
+                    break
                 stalled = True
                 break
 

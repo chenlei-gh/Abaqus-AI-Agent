@@ -200,3 +200,85 @@ def test_diagnostics_and_remediator_recognize_solver_stalled():
     stall_rem = next(r for r in rems if r.diagnosis_id == "SOLVER_STALLED")
     assert stall_rem.parameters.get("initial_inc") == 0.01
     assert stall_rem.parameters.get("stabilization_magnitude") == 2e-4
+
+
+def test_watchdog_terminates_entire_process_tree_on_stall(tmp_path):
+    """When a process stalls, watchdog terminates the parent and all spawned descendants."""
+    parent_script = tmp_path / "parent.py"
+    pid_file = tmp_path / "grandchild.pid"
+
+    py_code = (
+        "import subprocess, sys, time, pathlib\n"
+        "gc = subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(60)'])\n"
+        f"pathlib.Path(r'{pid_file}').write_text(str(gc.pid), encoding='utf-8')\n"
+        "time.sleep(60)\n"
+    )
+    parent_script.write_text(py_code, encoding="utf-8")
+
+    with pytest.raises(SolverProcessStalledError):
+        run_with_watchdog(
+            [sys.executable, str(parent_script)],
+            cwd=tmp_path,
+            timeout=10.0,
+            stall_timeout=0.8,
+            poll_interval=0.1,
+        )
+
+    assert pid_file.is_file()
+    gc_pid = int(pid_file.read_text(encoding="utf-8").strip())
+    assert gc_pid > 0
+
+    time.sleep(0.5)
+    if os.name == "nt":
+        import ctypes
+        PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
+        handle = ctypes.windll.kernel32.OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, False, gc_pid)
+        if handle:
+            exit_code = ctypes.c_ulong()
+            ctypes.windll.kernel32.GetExitCodeProcess(handle, ctypes.byref(exit_code))
+            ctypes.windll.kernel32.CloseHandle(handle)
+            # STILL_ACTIVE = 259
+            assert exit_code.value != 259
+    else:
+        with pytest.raises(ProcessLookupError):
+            os.kill(gc_pid, 0)
+
+
+def test_watchdog_boundary_exit_prioritized_over_timeout_and_stall(tmp_path):
+    """If process completes exactly at the boundary of timeout or stall check, normal exit takes precedence."""
+    py_code = "import time, sys; time.sleep(0.15); sys.stdout.write('done\\n'); sys.exit(0)"
+    cmd = [sys.executable, "-c", py_code]
+
+    res = run_with_watchdog(
+        cmd,
+        cwd=tmp_path,
+        timeout=10.0,
+        stall_timeout=0.25,
+        poll_interval=0.05,
+    )
+    assert res.succeeded
+    assert res.returncode == 0
+    assert "done" in res.stdout
+    assert not res.stalled
+    assert not res.timed_out
+
+
+def test_watchdog_burst_output_rapid_exit_drains_cleanly(tmp_path):
+    """Processes that burst large stdout/stderr and exit immediately do not cause deadlock or truncated reads."""
+    py_code = (
+        "import sys\n"
+        "for i in range(1000):\n"
+        "    sys.stdout.write(f'out line {i}\\n')\n"
+        "    sys.stderr.write(f'err line {i}\\n')\n"
+        "sys.stdout.flush()\n"
+        "sys.stderr.flush()\n"
+        "sys.exit(0)\n"
+    )
+    cmd = [sys.executable, "-c", py_code]
+    res = run_with_watchdog(cmd, cwd=tmp_path, timeout=5.0, stall_timeout=3.0)
+    assert res.succeeded
+    assert res.returncode == 0
+    assert "out line 999" in res.stdout
+    assert "err line 999" in res.stderr
+    assert len(res.stdout.splitlines()) == 1000
+    assert len(res.stderr.splitlines()) == 1000
