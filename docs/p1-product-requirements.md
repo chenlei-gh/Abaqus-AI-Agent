@@ -122,7 +122,7 @@ Phase 4 才开始正式产品化：MCP / Agent Tool、UI / HITL 工作台、部�
 
 **版本:** 2026-10-20  
 **基线状态:** 20 L4 / 0 L3 物理工程领域已全部通过真实机全链路合格认证 (Agent Full-Chain Qualified)  
-**最新进展:** 全仓 1773 项自动化回归测试 100% 通过（0 失败，`pytest -W error`，exit 0）；MS13L 门手柄实测四大痛点已建立代码级防御（看门狗熔断 REQ-P1-056、单进程 ODB 批处理提取 REQ-P1-057、接触稳定化自愈 REQ-P1-041/042、几何清理同进程守卫与意图契约 REQ-P1-055、多步动态能量提取与门禁 REQ-P1-054）；Phase 2 Package B 工业级实战案例已达成 6/10 QUALIFIED，Case 07 输入资产与负向探针已就绪、求解证据待真机受控启动  
+**最新进展:** 全仓 1776 项自动化回归测试 100% 通过（0 失败，`pytest -W error`，exit 0）；MS13L 门手柄实测四大痛点已建立代码级防御（看门狗熔断 REQ-P1-056、单进程 ODB 批处理提取与严格分析步绑定 REQ-P1-057、接触稳定化自愈 REQ-P1-041/042、几何清理同进程守卫与意图契约 REQ-P1-055、多步动态能量提取与门禁 REQ-P1-054）；Phase 2 Package B 工业级实战案例已达成 6/10 QUALIFIED，Case 07 输入资产与负向探针已就绪、求解证据待真机受控启动  
 **战略阶段:** Phase 2 — 工程能力深度与真实复杂工程实战 (Package B 案例攻坚)
 
 ---
@@ -658,9 +658,9 @@ P1.0 产品主入口已彻底消除高层自然语言需求与底层 20 个 L4 �
 | **REQ-P1-049** | 安全凭据保护与密钥零泄露红线 | P1.4 | 环境变量与配置工件 | 深度脱敏审计追踪与零泄露 | Tier A | 杜绝 URL/Token/Prompt 泄露 | 🟢 **QUALIFIED (Credentials Deep Sanitized)** |
 | **REQ-P1-053** | 核心与外部服务资格分离验证 | P1.4 | 测试矩阵与真实机证据 | 分立的资格认定状态 | Tier A | 严禁以离线测试冒充外部/真机通过 | 🟢 **QUALIFIED (Tiered Rules Active - Solver Unverified)** |
 | **REQ-P1-054** | 瞬态动态能量平衡契约 | P1.4 | ODB 能量历史 (`ALLIE/ALLKE/ALLWK/ETOTAL`) | 动态能量漂移判定与门禁 | Tier A | 阈值与求解器产品必须显式声明，未声明即阻断；不得与静力 `ALLSD/ALLSE` 共用阈值 | 🟢 **QUALIFIED (Implicit/Explicit dual-solver verified on Abaqus 2025; multi-step step-binding ambiguity fail-closed; batched pre-injection pipeline active; 113+ dynamic energy tests pass)** |
-| **REQ-P1-055** | 几何清理策略全入口强制 | P1.4 | 几何清理策略与全部脚本生成路径 | 单一 choke point fail-closed 阻断 + 同进程运行时守卫 | Tier A | 默认拒绝不得被绕过；逃生通道不得洗白修复；虚拓扑仅候选 | 🟡 **IN_REVIEW (Defense Scope Qualified: 49 tests. Choke point fail-closed enforcement, runtime methodCallback guard with per-mutator registration verification, evaluate_geometry_cleanup_intent structured diagnostics; Real-geometry healing on damaged CAD unproven)** |
+| **REQ-P1-055** | 几何清理策略全入口强制 | P1.4 | 几何清理策略与全部脚本生成路径 | 单一 choke point fail-closed 阻断 + 同进程运行时守卫 | Tier A | 默认拒绝不得被绕过；逃生通道不得洗白修复；虚拓扑仅候选 | 🟡 **IN_REVIEW (Defense Scope Qualified: 49 tests. Choke point fail-closed enforcement, runtime methodCallback guard with per-mutator registration verification via sys.modules injection, evaluate_geometry_cleanup_intent structured diagnostics; Real-geometry healing on damaged CAD unproven)** |
 | **REQ-P1-056** | 求解进程活跃度看门狗与停滞熔断 | P1.4 | Abaqus 批处理/求解子进程 | 实时心跳监控、120s 停滞熔断、强类型 Stalled 诊断 | Tier A | 进程假死超过 120s 立即强杀并阻断交付 | 🟢 **QUALIFIED (8 tests. Real-time stdout/stderr daemon thread consumption, file heartbeat monitor, 120s stall circuit breaker with taskkill /F /T process tree termination, and SOLVER_STALLED diagnostic remediation)** |
-| **REQ-P1-057** | Headless ODB 数据提取单进程管线 | P1.4 | 求解生成的 ODB 文件 | 单次 `abaqus python` 会话提取全部场/历程变量与元数据 | Tier A | 提取脚本异常安全退出，缺失变量明确标记 | 🟢 **QUALIFIED (3 tests. Batched single-invocation pipeline for ODB metadata, field extrema, and energy history under atomic JSON envelope; eliminates redundant cold starts)** |
+| **REQ-P1-057** | Headless ODB 数据提取单进程管线 | P1.4 | 求解生成的 ODB 文件 | 单次 `abaqus python` 会话提取全部场/历程变量与元数据 | Tier A | 提取脚本异常安全退出，缺失变量明确标记 | 🟢 **QUALIFIED (5 tests. Batched single-invocation pipeline for ODB metadata, field extrema, and energy history under atomic JSON envelope; eliminates redundant cold starts; strict multi-step step-binding ambiguity fail-closed; solver structural check eliminates steps[-1] implicit guessing across all non-Initial steps)** |
 | **REQ-P1-050** | 3D 轻量级视口与面/边拾取 | P1.5 | 3D 几何模型 | 拾取事件与几何面候选 | Tier C | 拾取越界或歧义安全校验 | 📋 **PLANNED** |
 | **REQ-P1-051** | HITL 交互决策卡片界面 | P1.5 | 确认请求对象 | 工程师点击决策与签名 | Tier C | 未确认操作严禁下发后端 | 📋 **PLANNED** |
 | **REQ-P1-052** | 企业级调度与案例资产管理 | P1.5 | 批量工程计算任务 | 许可令牌与计算节点分配 | Tier C | 许可抢占与排队超时处理 | 📋 **PLANNED** |

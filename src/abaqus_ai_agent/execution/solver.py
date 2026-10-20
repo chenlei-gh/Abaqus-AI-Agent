@@ -150,6 +150,7 @@ def _verify_odb_in_process(
             fields = list(step_obj.frames[-1].fieldOutputs.keys()) if n_frames > 0 else []
             step_info[s] = {"frames": n_frames, "fields": fields}
 
+        non_initial_steps = [s for s in steps if str(s).strip().lower() != "initial"]
         req_step = str(required_step) if required_step else ""
         if req_step:
             if req_step not in step_info:
@@ -165,7 +166,20 @@ def _verify_odb_in_process(
 
         req_fields = [str(f).upper() for f in (required_fields or ())]
         if req_fields:
-            target_s = req_step if req_step else steps[-1]
+            if req_step:
+                target_s = req_step
+            elif len(non_initial_steps) == 1:
+                target_s = non_initial_steps[0]
+            elif len(non_initial_steps) > 1:
+                return {
+                    "verified": False,
+                    "error": f"Multiple non-Initial analysis steps present ({non_initial_steps}); required_step must be explicitly specified to verify required fields",
+                }
+            else:
+                return {
+                    "verified": False,
+                    "error": "ODB contains zero non-Initial analysis steps to verify required fields",
+                }
             avail_flds = [f.upper() for f in step_info[target_s]["fields"]]
             missing = [f for f in req_fields if f not in avail_flds]
             if missing:
@@ -233,17 +247,21 @@ def _verify_odb_in_process(
             "instances": instance_details,
         }
 
-        degenerate_error, nonfinite_fields = _degenerate_solution_error(
-            odb, req_step if req_step else steps[-1]
-        )
-        if degenerate_error:
-            return {"verified": False, "error": degenerate_error}
+        steps_to_check = [req_step] if req_step else (non_initial_steps if non_initial_steps else steps)
+        all_nonfinite_fields = []
+        for s in steps_to_check:
+            degenerate_error, nonfinite_fields = _degenerate_solution_error(odb, s)
+            for f in nonfinite_fields:
+                if f not in all_nonfinite_fields:
+                    all_nonfinite_fields.append(f)
+            if degenerate_error:
+                return {"verified": False, "error": degenerate_error}
 
         return {
             "verified": True,
             "steps": step_info,
             "mesh_metrics": mesh_metrics,
-            "nonfinite_fields": nonfinite_fields,
+            "nonfinite_fields": all_nonfinite_fields,
         }
     except Exception as exc:
         return {"verified": False, "error": str(exc)}
@@ -405,6 +423,7 @@ try:
         step_info[s] = {{'frames': n_frames, 'fields': fields}}
 
     req_step = {req_step_str!r}
+    non_initial_steps = [s for s in steps if str(s).strip().lower() != "initial"]
     if req_step:
         if req_step not in step_info:
             print("__ODB_VERIFIED__" + json.dumps({{'valid': False, 'error': f"Required step '{{req_step}}' not found in ODB steps: {{steps}}"}}))
@@ -417,7 +436,18 @@ try:
 
     req_fields = {req_fields_json}
     if req_fields:
-        target_s = req_step if req_step else steps[-1]
+        if req_step:
+            target_s = req_step
+        elif len(non_initial_steps) == 1:
+            target_s = non_initial_steps[0]
+        elif len(non_initial_steps) > 1:
+            print("__ODB_VERIFIED__" + json.dumps({{'valid': False, 'error': f"Multiple non-Initial analysis steps present ({{non_initial_steps}}); required_step must be explicitly specified to verify required fields"}}))
+            odb.close()
+            sys.exit(1)
+        else:
+            print("__ODB_VERIFIED__" + json.dumps({{'valid': False, 'error': "ODB contains zero non-Initial analysis steps to verify required fields"}}))
+            odb.close()
+            sys.exit(1)
         avail_flds = [f.upper() for f in step_info[target_s]['fields']]
         missing = [f for f in req_fields if f not in avail_flds]
         if missing:
@@ -483,47 +513,54 @@ try:
     # field outputs. A structurally valid ODB full of NaN is not a result, so it
     # must not reach acceptance as VALID.
     import math as _math
-    _target_step = req_step if req_step else steps[-1]
-    _last = odb.steps[_target_step].frames[-1]
+    _steps_to_check = [req_step] if req_step else (non_initial_steps if non_initial_steps else steps)
     _core = ('U', 'UT', 'UR', 'S', 'RF', 'RM')
-    _core_degenerate = []
-    _nonfinite = []
-    _data_bearing = 0
-    for _fname in _last.fieldOutputs.keys():
-        _tot = 0
-        _fin = 0
-        for _v in _last.fieldOutputs[_fname].values:
-            _data = _v.data
-            if not hasattr(_data, '__iter__'):
-                _data = (_data,)
-            for _x in _data:
-                if isinstance(_x, bool):
-                    continue
-                try:
-                    _n = float(_x)
-                except (TypeError, ValueError):
-                    continue
-                _tot += 1
-                if _math.isfinite(_n):
-                    _fin += 1
-        if not _tot:
+    _all_nonfinite = []
+    for _target_step in _steps_to_check:
+        if len(odb.steps[_target_step].frames) == 0:
             continue
-        _data_bearing += 1
-        if not _fin:
-            _nonfinite.append(str(_fname))
-        if str(_fname).split()[0].upper() in _core and (_fin / float(_tot)) < 0.5:
-            _core_degenerate.append(f"{{_fname}} ({{_fin}}/{{_tot}} finite)")
-    if _core_degenerate:
-        print("__ODB_VERIFIED__" + json.dumps({{'valid': False, 'error': f"ODB step '{{_target_step}}' last frame has a mostly non-finite core result field: {{sorted(_core_degenerate)}}; the solver reported completion but the solution is numerically degenerate"}}))
-        odb.close()
-        sys.exit(1)
-    if _data_bearing and len(_nonfinite) == _data_bearing:
-        print("__ODB_VERIFIED__" + json.dumps({{'valid': False, 'error': f"ODB step '{{_target_step}}' last frame contains no finite field values; the solver reported completion but the solution is numerically degenerate (fields: {{sorted(_nonfinite)}})"}}))
-        odb.close()
-        sys.exit(1)
+        _last = odb.steps[_target_step].frames[-1]
+        _core_degenerate = []
+        _nonfinite = []
+        _data_bearing = 0
+        for _fname in _last.fieldOutputs.keys():
+            _tot = 0
+            _fin = 0
+            for _v in _last.fieldOutputs[_fname].values:
+                _data = _v.data
+                if not hasattr(_data, '__iter__'):
+                    _data = (_data,)
+                for _x in _data:
+                    if isinstance(_x, bool):
+                        continue
+                    try:
+                        _n = float(_x)
+                    except (TypeError, ValueError):
+                        continue
+                    _tot += 1
+                    if _math.isfinite(_n):
+                        _fin += 1
+            if not _tot:
+                continue
+            _data_bearing += 1
+            if not _fin:
+                _nonfinite.append(str(_fname))
+            if str(_fname).split()[0].upper() in _core and (_fin / float(_tot)) < 0.5:
+                _core_degenerate.append(f"{{_fname}} ({{_fin}}/{{_tot}} finite)")
+        for _f in _nonfinite:
+            if _f not in _all_nonfinite:
+                _all_nonfinite.append(_f)
+        if _core_degenerate:
+            print("__ODB_VERIFIED__" + json.dumps({{'valid': False, 'error': f"ODB step '{{_target_step}}' last frame has a mostly non-finite core result field: {{sorted(_core_degenerate)}}; the solver reported completion but the solution is numerically degenerate"}}))
+            odb.close()
+            sys.exit(1)
+        if _data_bearing and len(_nonfinite) == _data_bearing:
+            print("__ODB_VERIFIED__" + json.dumps({{'valid': False, 'error': f"ODB step '{{_target_step}}' last frame contains no finite field values; the solver reported completion but the solution is numerically degenerate (fields: {{sorted(_nonfinite)}})"}}))
+            odb.close()
+            sys.exit(1)
 
     odb.close()
-    print("__ODB_VERIFIED__" + json.dumps({{'valid': True, 'steps': step_info, 'mesh_metrics': mesh_metrics, 'nonfinite_fields': _nonfinite}}))
+    print("__ODB_VERIFIED__" + json.dumps({{'valid': True, 'steps': step_info, 'mesh_metrics': mesh_metrics, 'nonfinite_fields': _all_nonfinite}}))
 except Exception as exc:
     print("__ODB_VERIFIED__" + json.dumps({{'valid': False, 'error': str(exc)}}))
     sys.exit(1)

@@ -279,7 +279,7 @@ def _extract_single_requirement_in_process(
     if requirement.step:
         step_name = requirement.step
     else:
-        non_initial_steps = [s for s in steps if str(s).lower() != "initial"]
+        non_initial_steps = [s for s in steps if str(s).strip().lower() != "initial"]
         if len(non_initial_steps) > 1:
             raise ExtractionFieldNotFoundError(
                 f"Requirement '{requirement.name or requirement.value_key}' does not specify a step, "
@@ -288,7 +288,7 @@ def _extract_single_requirement_in_process(
         elif len(non_initial_steps) == 1:
             step_name = non_initial_steps[0]
         else:
-            step_name = steps[0]
+            raise ExtractionFieldNotFoundError("ODB contains zero non-Initial analysis steps")
 
     if step_name not in odb.steps:
         raise ExtractionFieldNotFoundError(
@@ -677,7 +677,7 @@ for r in reqs:
         if req_step:
             step_name = req_step
         else:
-            non_init = [s for s in steps if str(s).lower() != "initial"]
+            non_init = [s for s in steps if str(s).strip().lower() != "initial"]
             if len(non_init) > 1:
                 payload["requirements"][vkey] = {{
                     "success": False,
@@ -687,7 +687,11 @@ for r in reqs:
             elif len(non_init) == 1:
                 step_name = non_init[0]
             else:
-                step_name = steps[0]
+                payload["requirements"][vkey] = {{
+                    "success": False,
+                    "error": "ODB contains zero non-Initial analysis steps"
+                }}
+                continue
         if step_name not in odb.steps:
             payload["requirements"][vkey] = {{"success": False, "error": f"Step '{{step_name}}' not found in ODB steps: {{steps}}"}}
             continue
@@ -845,6 +849,12 @@ if energy_spec_in:
                     "status": "unavailable",
                     "reason": "energy_step_ambiguous",
                     "available_steps": non_init_steps,
+                }}
+                e_step = None
+            else:
+                payload["energy"] = {{
+                    "status": "unavailable",
+                    "reason": "no_non_initial_steps",
                 }}
                 e_step = None
         e_region = energy_spec_in.get("region") or "Assembly ASSEMBLY"

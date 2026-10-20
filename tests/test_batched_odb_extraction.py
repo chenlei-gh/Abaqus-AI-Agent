@@ -335,3 +335,170 @@ def test_in_process_requirement_step_binding_contract():
         # Fails at frame count, proving it successfully bound to Step-1!
         assert "Step-1" in str(exc)
         assert "0 frames available" in str(exc)
+
+    # 3. ODB with zero non-initial steps fails closed
+    init_only_odb = MockOdb(["Initial"])
+    with pytest.raises(ExtractionFieldNotFoundError) as exc:
+        _extract_single_requirement_in_process(init_only_odb, req_no_step)
+    assert "zero non-Initial analysis steps" in str(exc.value)
+
+
+def test_batched_extraction_script_exec_direct_validation(tmp_path):
+    """Directly execute build_batched_extraction_script in a Python environment with mock odbAccess.
+
+    Verifies that the generated script itself:
+    1. Rejects requirements with omitted step on multi-step ODB with 'multiple non-Initial steps'.
+    2. Rejects requirements when ODB has zero non-Initial analysis steps.
+    3. Safely defaults to the single non-Initial step when exactly one exists.
+    4. Accurately extracts values when step is explicitly specified.
+    """
+    import io
+    import json
+    import sys
+    import types
+    from abaqus_ai_agent.execution.odb_extractor import (
+        ResultRequirement,
+        build_batched_extraction_script,
+    )
+
+    class MockFieldOutput:
+        def __init__(self, values):
+            self.values = values
+        def getSubset(self, **kwargs):
+            return self
+
+    class MockFieldValue:
+        def __init__(self, data):
+            self.data = data
+            self.nodeLabel = 1
+            self.elementLabel = 1
+            self.position = "NODAL"
+
+    class MockFrame:
+        def __init__(self, fields=None, frame_value=1.0):
+            self.fieldOutputs = fields or {}
+            self.frameValue = frame_value
+
+    class MockStep:
+        def __init__(self, frames=None):
+            self.frames = frames or []
+            self.historyRegions = {}
+
+    class MockInstance:
+        def __init__(self, name):
+            self.name = name
+
+    class MockAssembly:
+        def __init__(self):
+            self.instances = {"Inst-1": MockInstance("Inst-1")}
+
+    class MockOdb:
+        def __init__(self, step_dict):
+            self.steps = step_dict
+            self.rootAssembly = MockAssembly()
+        def close(self):
+            pass
+
+    active_mock_odb = [None]
+    mock_odb_acc = types.ModuleType("odbAccess")
+    def mock_open_odb(path, readOnly=True):
+        return active_mock_odb[0]
+    mock_odb_acc.openOdb = mock_open_odb
+
+    mock_abq_const = types.ModuleType("abaqusConstants")
+    mock_abq_const.NODAL = "NODAL"
+
+    orig_odb_acc = sys.modules.get("odbAccess")
+    orig_abq_const = sys.modules.get("abaqusConstants")
+    sys.modules["odbAccess"] = mock_odb_acc
+    sys.modules["abaqusConstants"] = mock_abq_const
+
+    def _run_script(script):
+        old_stdout = sys.stdout
+        buf = io.StringIO()
+        sys.stdout = buf
+        try:
+            exec(script, {})
+        finally:
+            sys.stdout = old_stdout
+        out = buf.getvalue()
+        for line in out.splitlines():
+            if line.startswith("__BATCH_ODB_PAYLOAD__"):
+                return json.loads(line[len("__BATCH_ODB_PAYLOAD__"):])
+        raise RuntimeError(f"Script did not output __BATCH_ODB_PAYLOAD__: {out}")
+
+    try:
+        # 1. Multi-step ODB without explicit step -> generated script records failure
+        active_mock_odb[0] = MockOdb({
+            "Initial": MockStep(),
+            "Step-1": MockStep([MockFrame()]),
+            "Step-2": MockStep([MockFrame()]),
+        })
+        req_ambig = ResultRequirement(
+            name="DispAmbig",
+            value_key="disp_ambig",
+            output_kind="field",
+            field="U",
+            aggregation="max",
+        )
+        script1 = build_batched_extraction_script("test.odb", [req_ambig])
+        payload1 = _run_script(script1)
+        assert payload1["status"] == "success"
+        req_res1 = payload1["requirements"]["disp_ambig"]
+        assert req_res1["success"] is False
+        assert "multiple non-Initial steps" in req_res1["error"]
+
+        # 2. Zero non-Initial steps -> generated script records failure
+        active_mock_odb[0] = MockOdb({
+            "Initial": MockStep(),
+        })
+        script2 = build_batched_extraction_script("test.odb", [req_ambig])
+        payload2 = _run_script(script2)
+        assert payload2["status"] == "success"
+        req_res2 = payload2["requirements"]["disp_ambig"]
+        assert req_res2["success"] is False
+        assert "zero non-Initial analysis steps" in req_res2["error"]
+
+        # 3. Single non-Initial step without explicit step -> safely binds to Step-1
+        active_mock_odb[0] = MockOdb({
+            "Initial": MockStep(),
+            "Step-1": MockStep([MockFrame({"U": MockFieldOutput([MockFieldValue(42.5)])})]),
+        })
+        script3 = build_batched_extraction_script("test.odb", [req_ambig])
+        payload3 = _run_script(script3)
+        assert payload3["status"] == "success"
+        req_res3 = payload3["requirements"]["disp_ambig"]
+        assert req_res3["success"] is True
+        assert req_res3["value"] == 42.5
+        assert req_res3["locator"]["step"] == "Step-1"
+
+        # 4. Multi-step ODB with explicit step -> successfully extracts from target step
+        active_mock_odb[0] = MockOdb({
+            "Initial": MockStep(),
+            "Step-1": MockStep([MockFrame({"U": MockFieldOutput([MockFieldValue(10.0)])})]),
+            "Step-2": MockStep([MockFrame({"U": MockFieldOutput([MockFieldValue(99.0)])})]),
+        })
+        req_explicit = ResultRequirement(
+            name="DispStep2",
+            value_key="disp_step2",
+            output_kind="field",
+            field="U",
+            step="Step-2",
+            aggregation="max",
+        )
+        script4 = build_batched_extraction_script("test.odb", [req_explicit])
+        payload4 = _run_script(script4)
+        assert payload4["status"] == "success"
+        req_res4 = payload4["requirements"]["disp_step2"]
+        assert req_res4["success"] is True
+        assert req_res4["value"] == 99.0
+        assert req_res4["locator"]["step"] == "Step-2"
+    finally:
+        if orig_odb_acc is not None:
+            sys.modules["odbAccess"] = orig_odb_acc
+        else:
+            sys.modules.pop("odbAccess", None)
+        if orig_abq_const is not None:
+            sys.modules["abaqusConstants"] = orig_abq_const
+        else:
+            sys.modules.pop("abaqusConstants", None)

@@ -283,6 +283,7 @@ def test_guard_refuses_to_claim_enforcement_when_registration_fails():
 def test_guard_partial_registration_failure_raises_runtime_error():
     """Simulate a partial registration failure where some callbacks fail to register."""
     import sys
+    import types
     from abaqus_ai_agent.contracts.geometry_cleanup import render_geometry_guard
 
     class MockMethodCallback:
@@ -292,26 +293,44 @@ def test_guard_partial_registration_failure_raises_runtime_error():
         def callbackExists(self, cb_type, name, cb):
             return False
         def addCallback(self, cb_type, name, cb):
-            # Simulate failure for 'removeInvalidGeometry'
+            # Simulate failure specifically for 'removeInvalidGeometry'
             if name == "removeInvalidGeometry":
                 raise ValueError("Abaqus kernel failed to hook removeInvalidGeometry")
             self.calls.append(name)
 
+    mock_inst = MockMethodCallback()
+    mock_mod = types.ModuleType("methodCallback")
+    mock_mod.ALL_TYPES = mock_inst.ALL_TYPES
+    mock_mod.callbackExists = mock_inst.callbackExists
+    mock_mod.addCallback = mock_inst.addCallback
+
+    orig_mc = sys.modules.get("methodCallback")
+    sys.modules["methodCallback"] = mock_mod
+
     guard = render_geometry_guard()
-    # Inject mock into globals
-    env = {
-        "_abqai_sys": sys,
-        "_abqai_mc_module": MockMethodCallback(),
-    }
-    # Clear sentinel if present
+    env = {}
     if hasattr(sys, "__ABQAI_GEOMETRY_GUARD__"):
         delattr(sys, "__ABQAI_GEOMETRY_GUARD__")
 
-    with pytest.raises(RuntimeError) as excinfo:
-        exec(guard, env)
+    try:
+        with pytest.raises(RuntimeError) as excinfo:
+            exec(guard, env)
 
-    assert "one or more required mutator callbacks failed to register" in str(excinfo.value)
-    assert "removeInvalidGeometry" in str(excinfo.value)
+        err_msg = str(excinfo.value)
+        assert "one or more required mutator callbacks failed to register" in err_msg
+        assert "removeInvalidGeometry" in err_msg
+        # Assert that other mutators registered successfully into methodCallback!
+        assert len(mock_inst.calls) > 0
+        assert "repairGeometry" in mock_inst.calls
+        assert "ignoreEntity" in mock_inst.calls
+        assert "removeInvalidGeometry" not in mock_inst.calls
+    finally:
+        if orig_mc is not None:
+            sys.modules["methodCallback"] = orig_mc
+        else:
+            sys.modules.pop("methodCallback", None)
+        if hasattr(sys, "__ABQAI_GEOMETRY_GUARD__"):
+            delattr(sys, "__ABQAI_GEOMETRY_GUARD__")
 
 
 def test_guard_records_tolerance_changes_without_blocking_them():

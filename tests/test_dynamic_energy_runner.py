@@ -254,3 +254,171 @@ def test_cached_energy_pre_injection_eliminates_secondary_extraction(monkeypatch
 ])
 def test_solver_product_mapping(strategy, expected):
     assert AnalysisRunner._solver_product_for_strategy(strategy) == expected
+
+
+def test_analysis_runner_full_orchestration_pre_injects_energy(monkeypatch, tmp_path):
+    """Full orchestration test verifying AnalysisRunner.run injects energy_spec into batch extraction."""
+    from pathlib import Path
+    from abaqus_ai_agent.execution.analysis_run import AnalysisRunner
+    from abaqus_ai_agent.execution.odb_extractor import OdbExtractionReport
+
+    fake_odb = tmp_path / "Job_Dyn.odb"
+    fake_odb.write_bytes(b"MOCK_ODB_BINARY_HEADER" + b"\x00" * 2048)
+
+    batched_extract_calls = []
+
+    def mock_extract_odb_results(**kwargs):
+        batched_extract_calls.append(kwargs)
+        cached_energy = {
+            "status": "available",
+            "step": kwargs.get("energy_spec", {}).get("step") if kwargs.get("energy_spec") else "Step-1",
+            "region": "Assembly ASSEMBLY",
+            "variables": {
+                name: {"status": "available", "data": data}
+                for name, data in _REAL_IMPLICIT.items()
+            },
+        } if kwargs.get("energy_spec") else None
+        return OdbExtractionReport(
+            run_id=kwargs.get("run_id", "run-1"),
+            input_hash="hash",
+            odb_path=Path(kwargs["odb_path"]),
+            odb_sha256="sha",
+            extractions=(),
+            metrics={},
+            evidence=(),
+            energy_evidence=cached_energy,
+        )
+
+    secondary_extract_calls = []
+    def mock_extract_energy_evidence(*args, **kwargs):
+        secondary_extract_calls.append(args)
+        raise AssertionError("Secondary energy extraction should never be triggered!")
+
+    from abaqus_ai_agent.execution.jobs import JobController, JobStatus, JobState
+    monkeypatch.setattr(JobController, "submit", lambda *a, **k: JobStatus("Job_Dyn", JobState.COMPLETED))
+
+    import abaqus_ai_agent.execution.odb as odb_module
+    import abaqus_ai_agent.execution.solver as solver_module
+    monkeypatch.setattr(odb_module, "extract_energy_evidence", mock_extract_energy_evidence)
+    monkeypatch.setattr(solver_module, "is_authentic_binary_odb", lambda p: True)
+    monkeypatch.setattr(solver_module, "verify_authentic_odb_structure", lambda **kw: {
+        "verified": True,
+        "steps": {"Step-1": {"frames": 2, "fields": ["U"]}},
+        "mesh_metrics": {"total_elements": 10, "total_nodes": 10, "element_types": {}, "instances": {}},
+        "nonfinite_fields": [],
+    })
+
+    from abaqus_ai_agent.execution.client import AbaqusExecutor
+
+    class MockFullExecutor(AbaqusExecutor):
+        def __init__(self):
+            self.launcher = "abaqus"
+        def execute(self, code, timeout=120):
+            return ""
+        def snapshot(self):
+            return None
+        def inspect_odb(self, path):
+            return {
+                "steps": {
+                    "Step-1": {
+                        "frames": [{"frameId": 0}, {"frameId": 1}],
+                        "history_regions": ["Assembly ASSEMBLY"],
+                    }
+                }
+            }
+
+    runner = AnalysisRunner(MockFullExecutor())
+
+    class MockProjectContext:
+        def __init__(self, root):
+            self.project_root = root
+            self.project_name = "test_project"
+            self.input_dir = root / "inputs"
+            self.working_dir = root / "working"
+            self.solver_dir = root / "solver"
+            self.evidence_dir = root / "evidence"
+            self.delivery_dir = root / "delivery"
+            for d in (self.input_dir, self.working_dir, self.solver_dir, self.evidence_dir, self.delivery_dir):
+                d.mkdir(parents=True, exist_ok=True)
+        def assert_within_subdir(self, path, subdir):
+            pass
+        def create_run_solver_dir(self, run_id):
+            p = self.solver_dir / run_id
+            p.mkdir(parents=True, exist_ok=True)
+            return p
+        def create_run_evidence_dir(self, run_id):
+            p = self.evidence_dir / run_id
+            p.mkdir(parents=True, exist_ok=True)
+            return p
+
+    p_ctx = MockProjectContext(tmp_path)
+    fake_odb = p_ctx.solver_dir / "Job_Dyn.odb"
+    fake_odb.write_bytes(b"MOCK_ODB_BINARY_HEADER" + b"\x00" * 2048)
+
+    # 1. Dynamic gate enabled with declared step -> pre_energy_spec injected and secondary extraction bypassed
+    intent_with_step = _Intent({
+        "dynamic_energy_gate": True,
+        "dynamic_energy_threshold": 0.05,
+        "dynamic_energy_step": "Step-1",
+    })
+    with monkeypatch.context() as m:
+        import abaqus_ai_agent.execution.odb_extractor as ext_mod
+        m.setattr(ext_mod, "extract_odb_results", mock_extract_odb_results)
+        runner.run(
+            model_name="Model-Dyn",
+            job_name="Job_Dyn",
+            odb_path=fake_odb,
+            criteria=[{"name": "max_displacement", "value_key": "max_displacement", "target": 10.0}],
+            workdir=p_ctx.solver_dir,
+            engineering_intent=intent_with_step,
+            require_production=True,
+            project_context=p_ctx,
+        )
+    assert len(batched_extract_calls) == 1
+    assert batched_extract_calls[0]["energy_spec"] == {"step": "Step-1"}
+    assert secondary_extract_calls == []
+
+    # 2. Dynamic gate disabled -> pre_energy_spec is None
+    batched_extract_calls.clear()
+    intent_disabled = _Intent({
+        "dynamic_energy_gate": False,
+        "dynamic_energy_threshold": 0.05,
+    })
+    with monkeypatch.context() as m:
+        import abaqus_ai_agent.execution.odb_extractor as ext_mod
+        m.setattr(ext_mod, "extract_odb_results", mock_extract_odb_results)
+        runner.run(
+            model_name="Model-Dyn",
+            job_name="Job_Dyn",
+            odb_path=fake_odb,
+            criteria=[{"name": "max_displacement", "value_key": "max_displacement", "target": 10.0}],
+            workdir=p_ctx.solver_dir,
+            engineering_intent=intent_disabled,
+            require_production=True,
+            project_context=p_ctx,
+        )
+    assert len(batched_extract_calls) == 1
+    assert batched_extract_calls[0]["energy_spec"] is None
+    assert secondary_extract_calls == []
+
+    # 3. Dynamic gate enabled but step omitted -> pre_energy_spec is None
+    batched_extract_calls.clear()
+    intent_no_step = _Intent({
+        "dynamic_energy_gate": True,
+        "dynamic_energy_threshold": 0.05,
+    })
+    with monkeypatch.context() as m:
+        import abaqus_ai_agent.execution.odb_extractor as ext_mod
+        m.setattr(ext_mod, "extract_odb_results", mock_extract_odb_results)
+        runner.run(
+            model_name="Model-Dyn",
+            job_name="Job_Dyn",
+            odb_path=fake_odb,
+            criteria=[{"name": "max_displacement", "value_key": "max_displacement", "target": 10.0}],
+            workdir=p_ctx.solver_dir,
+            engineering_intent=intent_no_step,
+            require_production=True,
+            project_context=p_ctx,
+        )
+    assert len(batched_extract_calls) == 1
+    assert batched_extract_calls[0]["energy_spec"] is None
