@@ -273,10 +273,45 @@ def test_guard_payload_carries_per_part_permissions():
 
 
 def test_guard_refuses_to_claim_enforcement_when_registration_fails():
-    """If methodCallback cannot be registered the guard must fail, not downgrade."""
+    """If any methodCallback mutator cannot be registered the guard must fail, not downgrade."""
     guard = render_geometry_guard()
-    assert "cannot enforce the geometry cleanup policy for" in guard
+    assert "cannot enforce the geometry cleanup policy" in guard
+    assert "one or more required mutator callbacks failed to register" in guard
     assert "raise RuntimeError" in guard
+
+
+def test_guard_partial_registration_failure_raises_runtime_error():
+    """Simulate a partial registration failure where some callbacks fail to register."""
+    import sys
+    from abaqus_ai_agent.contracts.geometry_cleanup import render_geometry_guard
+
+    class MockMethodCallback:
+        ALL_TYPES = "ALL_TYPES"
+        def __init__(self):
+            self.calls = []
+        def callbackExists(self, cb_type, name, cb):
+            return False
+        def addCallback(self, cb_type, name, cb):
+            # Simulate failure for 'removeInvalidGeometry'
+            if name == "removeInvalidGeometry":
+                raise ValueError("Abaqus kernel failed to hook removeInvalidGeometry")
+            self.calls.append(name)
+
+    guard = render_geometry_guard()
+    # Inject mock into globals
+    env = {
+        "_abqai_sys": sys,
+        "_abqai_mc_module": MockMethodCallback(),
+    }
+    # Clear sentinel if present
+    if hasattr(sys, "__ABQAI_GEOMETRY_GUARD__"):
+        delattr(sys, "__ABQAI_GEOMETRY_GUARD__")
+
+    with pytest.raises(RuntimeError) as excinfo:
+        exec(guard, env)
+
+    assert "one or more required mutator callbacks failed to register" in str(excinfo.value)
+    assert "removeInvalidGeometry" in str(excinfo.value)
 
 
 def test_guard_records_tolerance_changes_without_blocking_them():

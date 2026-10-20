@@ -209,6 +209,43 @@ def test_extraction_failure_blocks_instead_of_skipping(monkeypatch):
     assert verdict.reason == "dynamic_energy_extraction_failed"
 
 
+def test_cached_energy_pre_injection_eliminates_secondary_extraction(monkeypatch):
+    """When energy evidence is pre-injected in the batch run, secondary extraction is completely eliminated."""
+    import abaqus_ai_agent.execution.odb as odb_module
+
+    extracted = []
+    def _fail_if_called(*_args, **_kwargs):
+        extracted.append(True)
+        raise AssertionError("Secondary extraction should not be called when cached_energy matches target step")
+
+    monkeypatch.setattr(odb_module, "extract_energy_evidence", _fail_if_called)
+
+    cached_energy = {
+        "status": "available",
+        "step": "Step-1",
+        "region": "Assembly ASSEMBLY",
+        "variables": {
+            name: {"status": "available", "data": data}
+            for name, data in _REAL_IMPLICIT.items()
+        },
+    }
+
+    runner = AnalysisRunner(_Executor())
+    enabled, verdict = runner._evaluate_dynamic_energy_gate(
+        "",
+        {"steps": ["Initial", "Step-1"]},
+        {"history_regions": ["Assembly ASSEMBLY"]},
+        "job.odb",
+        _Intent({"dynamic_energy_threshold": 0.01, "dynamic_energy_gate": True}),
+        selection=_Selection("DYNAMIC_IMPLICIT"),
+        cached_energy=cached_energy,
+    )
+
+    assert enabled is True
+    assert extracted == []  # Not called!
+    assert verdict.status == "PASS"
+
+
 @pytest.mark.parametrize("strategy,expected", [
     ("DYNAMIC_IMPLICIT", "standard"),
     ("DYNAMIC_EXPLICIT", "explicit"),

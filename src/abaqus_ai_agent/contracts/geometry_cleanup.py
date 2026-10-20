@@ -186,13 +186,15 @@ def _abqai_install_geometry_guard():
             except Exception as _exc:
                 _state["registration_errors"].append([_name, repr(_exc)])
     if _enforcement_needed:
-        for _kind in ("repair", "virtual_topology"):
-            if any(_mutators.get(_n) == _kind for _n in _state["registered"]):
-                continue
+        _unregistered = [
+            _name for _name in _mutators
+            if _name not in _state["registered"]
+        ]
+        if _unregistered:
             raise RuntimeError(
-                "abaqus-ai-agent cannot enforce the geometry cleanup policy for %s: no "
-                "methodCallback registration succeeded (%r)"
-                % (_kind, _state["registration_errors"])
+                "abaqus-ai-agent cannot enforce the geometry cleanup policy: "
+                "one or more required mutator callbacks failed to register: %r (errors: %r)"
+                % (_unregistered, _state["registration_errors"])
             )
     _state["installed"] = True
     return _state

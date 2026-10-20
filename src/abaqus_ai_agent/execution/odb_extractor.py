@@ -276,7 +276,20 @@ def _extract_single_requirement_in_process(
     if not steps:
         raise ExtractionFieldNotFoundError("ODB contains zero steps")
 
-    step_name = requirement.step or steps[-1]
+    if requirement.step:
+        step_name = requirement.step
+    else:
+        non_initial_steps = [s for s in steps if str(s).lower() != "initial"]
+        if len(non_initial_steps) > 1:
+            raise ExtractionFieldNotFoundError(
+                f"Requirement '{requirement.name or requirement.value_key}' does not specify a step, "
+                f"but ODB contains multiple non-Initial steps: {non_initial_steps}. Explicit step binding required."
+            )
+        elif len(non_initial_steps) == 1:
+            step_name = non_initial_steps[0]
+        else:
+            step_name = steps[0]
+
     if step_name not in odb.steps:
         raise ExtractionFieldNotFoundError(
             f"Step '{step_name}' not found in ODB steps: {steps}"
@@ -660,7 +673,21 @@ for r in reqs:
         if not steps:
             payload["requirements"][vkey] = {{"success": False, "error": "ODB contains zero steps"}}
             continue
-        step_name = r["step"] or steps[-1]
+        req_step = r.get("step")
+        if req_step:
+            step_name = req_step
+        else:
+            non_init = [s for s in steps if str(s).lower() != "initial"]
+            if len(non_init) > 1:
+                payload["requirements"][vkey] = {{
+                    "success": False,
+                    "error": f"Requirement '{{r.get('name') or vkey}}' specifies no step, but ODB contains multiple non-Initial steps: {{non_init}}. Explicit step required."
+                }}
+                continue
+            elif len(non_init) == 1:
+                step_name = non_init[0]
+            else:
+                step_name = steps[0]
         if step_name not in odb.steps:
             payload["requirements"][vkey] = {{"success": False, "error": f"Step '{{step_name}}' not found in ODB steps: {{steps}}"}}
             continue
@@ -885,7 +912,7 @@ def _extract_via_executor(
                     raise ExtractionFieldNotFoundError(f"Requirement '{req.value_key}' missing from batch result payload")
                 if not entry.get("success", False):
                     err_msg = entry.get("error", "Unknown batch extraction error")
-                    if any(k in err_msg.lower() for k in ("not found", "missing", "unavailable", "zero steps")):
+                    if any(k in err_msg.lower() for k in ("not found", "missing", "unavailable", "zero steps", "explicit step required", "specifies no step")):
                         raise ExtractionFieldNotFoundError(err_msg)
                     raise OdbExtractionError(err_msg)
                 val = float(entry["value"])

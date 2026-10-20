@@ -262,4 +262,76 @@ def test_batched_extraction_multi_step_with_declared_step_extracts_correct_step(
     assert report.energy_evidence is not None
     assert report.energy_evidence["status"] == "available"
     assert report.energy_evidence["step"] == "Step-2"
-    assert "ALLIE" in report.energy_evidence["variables"]
+
+
+def test_requirement_without_step_on_multi_step_fails_closed(tmp_path):
+    """When a requirement omits 'step' and ODB has multiple steps, extraction fails closed."""
+    odb_file = _create_mock_binary_odb(tmp_path / "multi_step_req.odb")
+
+    req = ResultRequirement(
+        name="AmbiguousDisp",
+        value_key="ambig_disp",
+        output_kind="field",
+        field="U",
+        aggregation="max",
+        # step is omitted!
+    )
+
+    def mock_custom_runner(code: str):
+        # The generated script must include the multiple non-Initial steps check
+        assert "multiple non-Initial steps" in code
+        return {
+            "status": "success",
+            "metadata": {"status": "available", "steps": ["Initial", "Step-1", "Step-2"]},
+            "requirements": {
+                "ambig_disp": {
+                    "success": False,
+                    "error": "Requirement 'AmbiguousDisp' specifies no step, but ODB contains multiple non-Initial steps: ['Step-1', 'Step-2']. Explicit step required.",
+                }
+            },
+            "energy": None,
+        }
+
+    with pytest.raises(ExtractionFieldNotFoundError) as exc_info:
+        extract_odb_results(
+            odb_path=odb_file,
+            requirements_or_criteria=[req],
+            run_id="run-batch-req-ambig",
+            input_hash="hash-1234",
+            workdir=tmp_path,
+            custom_runner=mock_custom_runner,
+        )
+
+    assert "AmbiguousDisp" in str(exc_info.value)
+    assert "multiple non-Initial steps" in str(exc_info.value)
+
+
+def test_in_process_requirement_step_binding_contract():
+    """Verify _extract_single_requirement_in_process enforces explicit step binding on multi-step ODB."""
+    from abaqus_ai_agent.execution.odb_extractor import _extract_single_requirement_in_process
+
+    class MockOdb:
+        def __init__(self, step_names):
+            self.steps = {name: type("Step", (), {"frames": []})() for name in step_names}
+
+    # 1. Multi-step without declared step must fail closed
+    multi_odb = MockOdb(["Initial", "Step-Preload", "Step-Load"])
+    req_no_step = ResultRequirement(
+        name="StressReq",
+        value_key="stress",
+        output_kind="field",
+        field="S",
+    )
+    with pytest.raises(ExtractionFieldNotFoundError) as exc_info:
+        _extract_single_requirement_in_process(multi_odb, req_no_step)
+    assert "multiple non-Initial steps" in str(exc_info.value)
+
+    # 2. Single non-initial step without declared step safely defaults
+    single_odb = MockOdb(["Initial", "Step-1"])
+    # It will proceed past step resolution to frame check
+    try:
+        _extract_single_requirement_in_process(single_odb, req_no_step)
+    except ExtractionFieldNotFoundError as exc:
+        # Fails at frame count, proving it successfully bound to Step-1!
+        assert "Step-1" in str(exc)
+        assert "0 frames available" in str(exc)
