@@ -95,17 +95,73 @@ def test_benchmark_payload_construction():
     assert "Current Verified Engineering State" in branch_b_3["messages"][-1]["content"]
 
 
+def test_live_llm_client_missing_usage_is_unmeasured_not_zero():
+    """A provider response without a usage object must not be silently zero-filled."""
+    client = LiveLLMClient(
+        api_key="sk-mock-key",
+        base_url="https://api.openai.com/v1",
+        model="gpt-4o-mini",
+    )
+
+    body_without_usage = {
+        "model": "gpt-4o-mini",
+        "choices": [{"index": 0, "message": {"role": "assistant", "content": "ok"}}],
+    }
+
+    mock_resp = MagicMock()
+    mock_resp.read.return_value = json.dumps(body_without_usage).encode("utf-8")
+    mock_resp.__enter__.return_value = mock_resp
+    mock_resp.__exit__.return_value = None
+
+    with patch("urllib.request.urlopen", return_value=mock_resp):
+        res = client.chat_completion(messages=[{"role": "user", "content": "hi"}])
+
+    assert res.usage_measured is False
+    assert res.token_source == "unmeasured"
+    assert res.prompt_tokens is None
+    assert res.completion_tokens is None
+    assert res.total_tokens is None
+
+
+def test_live_llm_client_partial_usage_is_unmeasured():
+    """Only a complete prompt/completion pair counts as a provider measurement."""
+    client = LiveLLMClient(
+        api_key="sk-mock-key",
+        base_url="https://api.openai.com/v1",
+        model="gpt-4o-mini",
+    )
+
+    body = {
+        "model": "gpt-4o-mini",
+        "choices": [{"index": 0, "message": {"role": "assistant", "content": "ok"}}],
+        "usage": {"prompt_tokens": 120},
+    }
+
+    mock_resp = MagicMock()
+    mock_resp.read.return_value = json.dumps(body).encode("utf-8")
+    mock_resp.__enter__.return_value = mock_resp
+    mock_resp.__exit__.return_value = None
+
+    with patch("urllib.request.urlopen", return_value=mock_resp):
+        res = client.chat_completion(messages=[{"role": "user", "content": "hi"}])
+
+    assert res.usage_measured is False
+    assert res.total_tokens is None
+
+
 def test_benchmark_dry_run_execution():
-    """Verify benchmark executes in dry-run mode and produces evidence file."""
+    """Offline mode must be labeled UNMEASURED, never sold as a measured saving."""
     results = run_benchmark(live_api=False)
     assert results["benchmark_id"] == "Live-Token-Benchmark-Case1-Case3"
     assert "case_01" in results["cases"]
     assert "case_03" in results["cases"]
 
-    c1 = results["cases"]["case_01"]
-    assert c1["metrics"]["prompt_token_reduction_pct"] > 75.0
-    assert c1["metrics"]["measurement_source"] == "estimated"
-
-    c3 = results["cases"]["case_03"]
-    assert c3["metrics"]["prompt_token_reduction_pct"] > 75.0
-    assert c3["metrics"]["measurement_source"] == "estimated"
+    for case_key in ("case_01", "case_03"):
+        case = results["cases"][case_key]
+        # Heuristic sizes may still be printed, but the source is never a measurement.
+        assert case["metrics"]["measurement_source"] == "unmeasured"
+        assert case["metrics"]["claimable"] is False
+        assert case["metrics"]["status"] == "UNMEASURED"
+        assert case["branch_a"]["source"] == "unmeasured"
+        assert case["branch_b"]["source"] == "unmeasured"
+        assert case["branch_a"]["heuristic_size_estimate"] is True

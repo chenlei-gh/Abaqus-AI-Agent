@@ -14,14 +14,38 @@ from typing import Any, Dict, List, Optional, Tuple
 
 
 class TokenCountSource(str, Enum):
-    """Authority tier of token accounting."""
+    """Authority tier of token accounting.
+
+    Contract (Governance Plan 契约 B.1) requires exactly four tiers:
+    PROVIDER_USAGE > TOKENIZER > ESTIMATED > UNMEASURED.
+    The ``provider_reported`` / ``local_tokenizer`` members are retained only as
+    legacy aliases for already-persisted telemetry; new code must not emit them.
+    """
     PROVIDER_USAGE = "provider_usage"        # Real provider usage reported by LLM API (Highest Trust)
     PROVIDER_REPORTED = "provider_reported"  # Backward compatibility alias
     TOKENIZER = "tokenizer"                  # Exact token count via local library (e.g. tiktoken)
     LOCAL_TOKENIZER = "local_tokenizer"      # Backward compatibility alias
     ESTIMATED = "estimated"                  # Heuristic character-ratio fallback (Explicitly labeled)
     SYNTHETIC_PROJECTION = "synthetic_projection"  # Model/simulation projection, not physical API traffic
+    UNMEASURED = "unmeasured"                # Host/session did not expose usage; never backfilled
     UNKNOWN = "unknown"
+
+
+#: Sources that represent an actual measurement of the traffic (highest trust tiers).
+VERIFIED_TOKEN_SOURCES = frozenset({
+    TokenCountSource.PROVIDER_USAGE,
+    TokenCountSource.PROVIDER_REPORTED,
+    TokenCountSource.TOKENIZER,
+    TokenCountSource.LOCAL_TOKENIZER,
+})
+
+#: Sources that may never be used to claim an optimization effect.
+NON_CLAIMABLE_TOKEN_SOURCES = frozenset({
+    TokenCountSource.ESTIMATED,
+    TokenCountSource.SYNTHETIC_PROJECTION,
+    TokenCountSource.UNMEASURED,
+    TokenCountSource.UNKNOWN,
+})
 
 
 class EngineeringPhase(str, Enum):
@@ -80,12 +104,28 @@ class TokenBreakdown:
             TokenCountSource.UNKNOWN,
         )
 
+    @property
+    def is_unmeasured(self) -> bool:
+        """True when the host exposed no usage data and no value was substituted."""
+        return self.source is TokenCountSource.UNMEASURED
+
+    @property
+    def is_verified_measurement(self) -> bool:
+        return self.source in VERIFIED_TOKEN_SOURCES
+
+    @property
+    def is_claimable(self) -> bool:
+        """Only genuinely measured traffic may back an optimization claim."""
+        return self.source in VERIFIED_TOKEN_SOURCES
+
     def to_dict(self) -> Dict[str, Any]:
         d = asdict(self)
         d["source"] = self.source.value
         d["input_tokens"] = self.input_tokens
         d["total_tokens"] = self.total_tokens
         d["is_estimated"] = self.is_estimated
+        d["is_unmeasured"] = self.is_unmeasured
+        d["is_verified_measurement"] = self.is_verified_measurement
         d["deterministic_renderer_bytes"] = self.deterministic_renderer_bytes
         d["data_plane_artifact_bytes"] = self.data_plane_artifact_bytes
         return d
@@ -187,6 +227,14 @@ class CaseTelemetrySummary:
     deterministic_renderer_bytes: int = 0
     data_plane_artifact_bytes: int = 0
     is_synthetic_projection: bool = False
+    # Source purity (TC-TOK-01): the blended ``total_tokens`` above is never a KPI.
+    # Only a single, verified-measurement bucket may be promoted to a KPI bar.
+    token_source_buckets: Dict[str, Dict[str, int]] = field(default_factory=dict)
+    kpi_source: Optional[str] = None
+    kpi_tokens: Optional[int] = None
+    kpi_eligible: bool = False
+    blended_sources: Tuple[str, ...] = ()
+    has_unmeasured_calls: bool = False
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -212,4 +260,10 @@ class CaseTelemetrySummary:
             "deterministic_renderer_bytes": self.deterministic_renderer_bytes,
             "data_plane_artifact_bytes": self.data_plane_artifact_bytes,
             "is_synthetic_projection": self.is_synthetic_projection,
+            "token_source_buckets": self.token_source_buckets,
+            "kpi_source": self.kpi_source,
+            "kpi_tokens": self.kpi_tokens,
+            "kpi_eligible": self.kpi_eligible,
+            "blended_sources": list(self.blended_sources),
+            "has_unmeasured_calls": self.has_unmeasured_calls,
         }

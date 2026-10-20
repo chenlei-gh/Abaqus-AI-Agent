@@ -3,7 +3,7 @@
 Provides zero-overhead observation and persistence of LLM context usage.
 Strict rules:
 1. Every LLM call receives a unique call_id linked to run_id and phase.
-2. Token source is explicitly labeled (provider_reported vs local_tokenizer vs estimated).
+2. Token source is explicitly labeled (provider_usage vs tokenizer vs estimated vs unmeasured).
 3. Telemetry strictly writes to disk and returns only minimal status indicator.
 """
 
@@ -24,7 +24,20 @@ from .contracts import (
     PhaseSummary,
     TokenBreakdown,
     TokenCountSource,
+    VERIFIED_TOKEN_SOURCES,
 )
+
+
+#: Legacy alias -> canonical tier. Persisted telemetry may still contain the aliases.
+_CANONICAL_SOURCE: Dict[TokenCountSource, TokenCountSource] = {
+    TokenCountSource.PROVIDER_REPORTED: TokenCountSource.PROVIDER_USAGE,
+    TokenCountSource.LOCAL_TOKENIZER: TokenCountSource.TOKENIZER,
+}
+
+
+def canonical_token_source(source: TokenCountSource) -> TokenCountSource:
+    """Collapse legacy aliases onto the four authoritative tiers (契约 B.1)."""
+    return _CANONICAL_SOURCE.get(source, source)
 
 
 def _heuristic_count_tokens(text: str) -> int:
@@ -169,12 +182,26 @@ class ContextTelemetryTracker:
 
         sources = set()
 
+        break_downs: Dict[TokenCountSource, Dict[str, int]] = {}
+
         for c in self.calls:
             p_val = c.phase.value
             ps = phases_map[p_val]
             ps.calls_count += 1
             b = c.breakdown
-            sources.add(b.source.value)
+            canon = canonical_token_source(b.source)
+            sources.add(canon.value)
+
+            # Per-source bucketing is mandatory: a blended sum of provider_usage and
+            # estimated tokens is not a measurement (TC-TOK-01).
+            bucket = break_downs.setdefault(canon, {
+                "calls": 0,
+                "input_tokens": 0,
+                "output_tokens": 0,
+            })
+            bucket["calls"] += 1
+            bucket["input_tokens"] += b.input_tokens
+            bucket["output_tokens"] += b.output_tokens
 
             ps.system_tokens += b.system_tokens
             ps.tool_schema_tokens += b.tool_schema_tokens
@@ -194,6 +221,16 @@ class ContextTelemetryTracker:
             comp_totals["output_tokens"] += b.output_tokens
 
         total_tokens = tot_input + tot_output
+
+        source_buckets: Dict[str, Dict[str, int]] = {}
+        for src, bkt in break_downs.items():
+            source_buckets[src.value] = {
+                "calls": bkt["calls"],
+                "input_tokens": bkt["input_tokens"],
+                "output_tokens": bkt["output_tokens"],
+                "total_tokens": bkt["input_tokens"] + bkt["output_tokens"],
+                "claimable": src in VERIFIED_TOKEN_SOURCES,
+            }
 
         # Component percentages & ranking
         comp_pcts: Dict[str, float] = {}
@@ -218,8 +255,22 @@ class ContextTelemetryTracker:
         tot_renderer_bytes = sum(c.breakdown.deterministic_renderer_bytes for c in self.calls)
         tot_artifact_bytes = sum(c.breakdown.data_plane_artifact_bytes for c in self.calls)
         is_synthetic = any(c.breakdown.source in (TokenCountSource.SYNTHETIC_PROJECTION, TokenCountSource.ESTIMATED) for c in self.calls)
+        has_unmeasured = any(canonical_token_source(c.breakdown.source) is TokenCountSource.UNMEASURED for c in self.calls)
 
         accounting_source = ", ".join(sorted(sources)) if sources else "unknown"
+
+        # TC-TOK-01: promote at most one bucket to KPI. A KPI bar is only legal when
+        # every call came from one and the same verified measurement tier; mixing tiers
+        # (or mixing a measurement with an estimate) yields no KPI at all.
+        kpi_source: Optional[str] = None
+        kpi_tokens: Optional[int] = None
+        kpi_eligible = False
+        if len(source_buckets) == 1:
+            only_src, only_bkt = next(iter(source_buckets.items()))
+            if only_bkt["claimable"]:
+                kpi_source = only_src
+                kpi_tokens = only_bkt["total_tokens"]
+                kpi_eligible = True
 
         summary = CaseTelemetrySummary(
             case_id=self.case_id,
@@ -238,6 +289,12 @@ class ContextTelemetryTracker:
             deterministic_renderer_bytes=tot_renderer_bytes,
             data_plane_artifact_bytes=tot_artifact_bytes,
             is_synthetic_projection=is_synthetic,
+            token_source_buckets=source_buckets,
+            kpi_source=kpi_source,
+            kpi_tokens=kpi_tokens,
+            kpi_eligible=kpi_eligible,
+            blended_sources=tuple(sorted(source_buckets)),
+            has_unmeasured_calls=has_unmeasured,
         )
 
         summary_file = self.output_dir / "summary.json"

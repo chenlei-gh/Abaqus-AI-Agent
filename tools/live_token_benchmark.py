@@ -4,6 +4,12 @@ Evaluates real provider-reported tokens (usage.prompt_tokens and usage.completio
 comparing:
   - Branch A (Unmanaged Baseline): Full Static Schemas (24) + Bloated History + Raw Result Dump
   - Branch B (Managed Three-Plane Architecture): Dynamic Schemas + State Context + Result Query + Delivery Card
+
+Source purity (Governance Plan 契约 B.1):
+  - ``provider_usage`` is emitted only when the provider response actually carried a usage object.
+  - ``unmeasured`` is emitted whenever usage was not exposed. Heuristic numbers may still be
+    printed for sizing intuition, but they are never labeled as a measurement and never back
+    a reduction claim.
 """
 
 from __future__ import annotations
@@ -277,32 +283,46 @@ def run_benchmark(live_api: bool = True) -> Dict[str, Any]:
             )
             print(f"  -> Prompt Tokens: {res_b.prompt_tokens}, Completion Tokens: {res_b.completion_tokens}, Latency: {res_b.latency_ms}ms")
 
-            reduction = (res_a.prompt_tokens - res_b.prompt_tokens) / max(res_a.prompt_tokens, 1) * 100.0
-            total_red = (res_a.total_tokens - res_b.total_tokens) / max(res_a.total_tokens, 1) * 100.0
-
             case_record["branch_a"] = {
                 "prompt_tokens": res_a.prompt_tokens,
                 "completion_tokens": res_a.completion_tokens,
                 "total_tokens": res_a.total_tokens,
                 "latency_ms": res_a.latency_ms,
-                "source": "provider_usage",
+                "source": res_a.token_source,
             }
             case_record["branch_b"] = {
                 "prompt_tokens": res_b.prompt_tokens,
                 "completion_tokens": res_b.completion_tokens,
                 "total_tokens": res_b.total_tokens,
                 "latency_ms": res_b.latency_ms,
-                "source": "provider_usage",
+                "source": res_b.token_source,
             }
-            case_record["metrics"] = {
-                "prompt_token_reduction_pct": round(reduction, 2),
-                "total_token_reduction_pct": round(total_red, 2),
-                "measurement_source": "provider_usage",
-                "status": "QUALIFIED_LIVE",
-            }
+
+            if res_a.usage_measured and res_b.usage_measured:
+                reduction = (res_a.prompt_tokens - res_b.prompt_tokens) / max(res_a.prompt_tokens, 1) * 100.0
+                total_red = (res_a.total_tokens - res_b.total_tokens) / max(res_a.total_tokens, 1) * 100.0
+                case_record["metrics"] = {
+                    "prompt_token_reduction_pct": round(reduction, 2),
+                    "total_token_reduction_pct": round(total_red, 2),
+                    "measurement_source": "provider_usage",
+                    "claimable": True,
+                    "status": "QUALIFIED_LIVE",
+                }
+            else:
+                # The provider response did not expose usage. Reporting a reduction here
+                # would fabricate a measurement from a missing field.
+                case_record["metrics"] = {
+                    "prompt_token_reduction_pct": None,
+                    "total_token_reduction_pct": None,
+                    "measurement_source": "unmeasured",
+                    "claimable": False,
+                    "status": "UNMEASURED",
+                    "reason": "provider_response_omitted_usage",
+                }
         else:
-            # Offline / dry-run estimation mode
-            print(f"[Dry-Run / Offline Mode] Estimating token footprints...")
+            # No provider session. Heuristic sizes are printed for sizing intuition only;
+            # they are explicitly NOT a measurement and NOT claimable (契约 B.1).
+            print(f"[Offline Mode] No provider usage available. Heuristic sizes are non-claimable.")
             est_a_prompt = _heuristic_count_tokens(json.dumps(branch_a["messages"]) + json.dumps(branch_a["tools"]))
             est_a_comp = 600
             est_b_prompt = _heuristic_count_tokens(json.dumps(branch_b["messages"]) + json.dumps(branch_b["tools"]))
@@ -314,20 +334,24 @@ def run_benchmark(live_api: bool = True) -> Dict[str, Any]:
                 "completion_tokens": est_a_comp,
                 "total_tokens": est_a_prompt + est_a_comp,
                 "latency_ms": 0.0,
-                "source": "estimated",
+                "source": "unmeasured",
+                "heuristic_size_estimate": True,
             }
             case_record["branch_b"] = {
                 "prompt_tokens": est_b_prompt,
                 "completion_tokens": est_b_comp,
                 "total_tokens": est_b_prompt + est_b_comp,
                 "latency_ms": 0.0,
-                "source": "estimated",
+                "source": "unmeasured",
+                "heuristic_size_estimate": True,
             }
             case_record["metrics"] = {
                 "prompt_token_reduction_pct": round(red, 2),
                 "total_token_reduction_pct": round((est_a_prompt + est_a_comp - est_b_prompt - est_b_comp) / (est_a_prompt + est_a_comp) * 100.0, 2),
-                "measurement_source": "estimated",
-                "status": "DRY_RUN_READY",
+                "measurement_source": "unmeasured",
+                "claimable": False,
+                "status": "UNMEASURED",
+                "reason": "no_provider_session",
             }
 
         results["cases"][case_key] = case_record

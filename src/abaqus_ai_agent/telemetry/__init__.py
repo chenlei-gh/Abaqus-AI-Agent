@@ -5,11 +5,13 @@ from .contracts import (
     CallTelemetry,
     CaseTelemetrySummary,
     EngineeringPhase,
+    NON_CLAIMABLE_TOKEN_SOURCES,
     PhaseSummary,
     TokenBreakdown,
     TokenCountSource,
+    VERIFIED_TOKEN_SOURCES,
 )
-from .tracker import ContextTelemetryTracker
+from .tracker import ContextTelemetryTracker, canonical_token_source
 
 __all__ = [
     "ArtifactContextMetrics",
@@ -17,7 +19,10 @@ __all__ = [
     "CaseTelemetrySummary",
     "ContextTelemetryTracker",
     "EngineeringPhase",
+    "NON_CLAIMABLE_TOKEN_SOURCES",
     "PhaseSummary",
     "TokenBreakdown",
     "TokenCountSource",
+    "VERIFIED_TOKEN_SOURCES",
+    "canonical_token_source",
 ]

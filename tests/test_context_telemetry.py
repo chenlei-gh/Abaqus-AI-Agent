@@ -83,3 +83,108 @@ def test_telemetry_call_recording_and_persistence(tmp_path: Path):
         saved_summary = json.load(f)
     assert saved_summary["run_id"] == "RUN-TEST-001"
     assert len(saved_summary["ranking_by_component"]) > 0
+
+
+# ---------------------------------------------------------------------------
+# TC-TOK-01: source purity in the aggregate report
+# ---------------------------------------------------------------------------
+
+def _record(tracker, phase, tokens, source):
+    return tracker.record_call(
+        phase=phase,
+        system_tokens=tokens,
+        output_tokens=0,
+        source=source,
+    )
+
+
+def test_tc_tok_01_single_verified_source_is_promoted_to_kpi(tmp_path: Path):
+    """A report built from one verified tier may expose exactly one KPI."""
+    tracker = ContextTelemetryTracker(
+        case_id="TC_TOK_01_PURE",
+        run_id="RUN-TOK-PURE",
+        output_dir=tmp_path,
+    )
+    _record(tracker, EngineeringPhase.INTENT, 500, TokenCountSource.PROVIDER_USAGE)
+    _record(tracker, EngineeringPhase.EXECUTION, 300, TokenCountSource.PROVIDER_USAGE)
+
+    summary = tracker.finalize()
+
+    assert summary.kpi_eligible is True
+    assert summary.kpi_source == "provider_usage"
+    assert summary.kpi_tokens == 800
+    assert summary.blended_sources == ("provider_usage",)
+    assert summary.token_source_buckets["provider_usage"]["claimable"] is True
+
+
+def test_tc_tok_01_provider_and_estimated_never_share_one_kpi(tmp_path: Path):
+    """provider_usage and estimated must not be summed into a single KPI figure."""
+    tracker = ContextTelemetryTracker(
+        case_id="TC_TOK_01_MIXED",
+        run_id="RUN-TOK-MIXED",
+        output_dir=tmp_path,
+    )
+    _record(tracker, EngineeringPhase.INTENT, 700, TokenCountSource.PROVIDER_USAGE)
+    _record(tracker, EngineeringPhase.EXECUTION, 300, TokenCountSource.ESTIMATED)
+
+    summary = tracker.finalize()
+
+    # No KPI is promoted: the tiers cannot be combined.
+    assert summary.kpi_eligible is False
+    assert summary.kpi_source is None
+    assert summary.kpi_tokens is None
+
+    # Each tier keeps its own bucket, and the blended total is not claimable.
+    assert summary.token_source_buckets["provider_usage"]["total_tokens"] == 700
+    assert summary.token_source_buckets["estimated"]["total_tokens"] == 300
+    assert summary.token_source_buckets["estimated"]["claimable"] is False
+    assert summary.blended_sources == ("estimated", "provider_usage")
+    assert summary.is_synthetic_projection is True
+    assert summary.token_accounting_source == "estimated, provider_usage"
+
+
+def test_tc_tok_01_estimated_only_report_is_never_claimable(tmp_path: Path):
+    tracker = ContextTelemetryTracker(
+        case_id="TC_TOK_01_EST",
+        run_id="RUN-TOK-EST",
+        output_dir=tmp_path,
+    )
+    _record(tracker, EngineeringPhase.INTENT, 400, TokenCountSource.ESTIMATED)
+
+    summary = tracker.finalize()
+    assert summary.kpi_eligible is False
+    assert summary.token_source_buckets["estimated"]["claimable"] is False
+
+
+# ---------------------------------------------------------------------------
+# TC-TOK-02: external sessions must be recorded as UNMEASURED
+# ---------------------------------------------------------------------------
+
+def test_tc_tok_02_external_session_is_labeled_unmeasured(tmp_path: Path):
+    """A host that cannot expose usage must record UNMEASURED, never an estimate."""
+    tracker = ContextTelemetryTracker(
+        case_id="TC_TOK_02_EXT",
+        run_id="RUN-TOK-EXT",
+        output_dir=tmp_path,
+        source=TokenCountSource.UNMEASURED,
+    )
+    call = tracker.record_call(
+        phase=EngineeringPhase.OTHER,
+        user_input_text="external IDE session without usage plumbing",
+    )
+
+    assert call.breakdown.source is TokenCountSource.UNMEASURED
+    assert call.breakdown.is_unmeasured is True
+    assert call.breakdown.is_estimated is False
+    assert call.breakdown.is_claimable is False
+
+    summary = tracker.finalize()
+    assert summary.has_unmeasured_calls is True
+    assert summary.kpi_eligible is False
+    assert summary.token_source_buckets["unmeasured"]["claimable"] is False
+
+    call_file = tmp_path / "RUN-TOK-EXT" / "telemetry" / "calls" / f"{call.call_id}.json"
+    with open(call_file, "r", encoding="utf-8") as f:
+        saved = json.load(f)
+    assert saved["breakdown"]["source"] == "unmeasured"
+    assert saved["breakdown"]["is_unmeasured"] is True
