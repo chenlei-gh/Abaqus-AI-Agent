@@ -4,6 +4,7 @@ REQ-P1-056:
 - Monitors live process output streams (stdout, stderr) and working directory artifacts (.sta, .msg, .log, .odb, .dat).
 - Detects process stalls when a child process produces zero output and zero file modifications for stall_timeout seconds (default 120s).
 - Note: stall_timeout is a configurable engineering heuristic policy parameter, not an intrinsic physical or solver constant. Long-running, silent solver jobs should configure a larger threshold or additional heartbeat files.
+- Adaptive relaxation: a large implicit solve can legitimately stay silent for many minutes while the solver factors a stiffness matrix. When `adaptive_heartbeat` is enabled and the `.msg` tail proves the job has entered equilibrium iterations, the effective stall window is relaxed by a bounded multiplier. The relaxation never applies without that textual evidence, and is always hard-capped by `max_stall_timeout`, so a genuinely hung process is still killed.
 - Windows: Uses `taskkill /F /T /PID <pid>` to terminate the entire process tree (killing standard.exe / explicit.exe grandchild processes).
 - Non-Windows: Uses process group signal SIGKILL.
 - Asynchronous daemon threads consume stdout/stderr to prevent Windows pipe deadlocks.
@@ -13,6 +14,7 @@ REQ-P1-056:
 from __future__ import annotations
 
 import os
+import re
 import signal
 import subprocess
 import threading
@@ -24,6 +26,20 @@ from typing import Any, Callable, Dict, List, Optional, Sequence, Set, Tuple, Un
 
 DEFAULT_STALL_TIMEOUT: float = 120.0
 DEFAULT_TOTAL_TIMEOUT: float = 3600.0
+# Upper bound applied to the adaptive relaxation of the stall window. A silent
+# implicit solve is allowed this many times the base stall timeout, never more.
+DEFAULT_ADAPTIVE_STALL_MULTIPLIER: float = 10.0
+DEFAULT_MAX_STALL_TIMEOUT: float = 1800.0
+# How many trailing bytes of the .msg file the evidence probe reads. Abaqus
+# writes new iteration blocks at the end of the file, so the tail is where
+# "has this job actually started iterating?" is answerable.
+_MSG_TAIL_BYTES: int = 65536
+# Markers that prove the solver is inside equilibrium iterations rather than
+# still preprocessing. These are the phrases the solver itself emits per
+# increment; they are not speculative keyword guesses.
+_ITERATION_EVIDENCE_RE = re.compile(
+    r"(?i)begin\s+iteration|equilibrium\s+iteration|increment\s+\d+|\bitrs\b|iterations\s+\d+"
+)
 DEFAULT_MONITORED_EXTENSIONS: Tuple[str, ...] = (
     ".sta", ".msg", ".log", ".odb", ".dat", ".sim", ".fil", ".prt", ".mdl", ".ipm", ".pac", ".abq"
 )
@@ -145,6 +161,34 @@ def _scan_monitored_artifacts(
     return snapshot
 
 
+def _msg_shows_equilibrium_iterations(workdir_path: Path, job_name: Optional[str]) -> bool:
+    """Return True when the solver's own .msg tail proves it has begun iterating.
+
+    This is the evidence gate for adaptive stall relaxation: a silent job is only
+    allowed a wider heartbeat window once Abaqus has actually entered equilibrium
+    iterations. A job still in preprocessing/assembly gets no relaxation, so a
+    writer that dies early is still caught by the base threshold.
+
+    Any read failure is treated as "no evidence" (False) rather than as proof,
+    because relaxing a kill threshold on a guess is the failure mode this guards
+    against.
+    """
+    if not job_name:
+        return False
+    msg_path = workdir_path / f"{job_name}.msg"
+    try:
+        with open(msg_path, "rb") as f:
+            f.seek(0, os.SEEK_END)
+            size = f.tell()
+            f.seek(max(0, size - _MSG_TAIL_BYTES))
+            tail = f.read().decode("utf-8", errors="replace")
+    except OSError:
+        return False
+    if not tail:
+        return False
+    return _ITERATION_EVIDENCE_RE.search(tail) is not None
+
+
 def run_with_watchdog(
     cmd: Sequence[str],
     *,
@@ -156,6 +200,10 @@ def run_with_watchdog(
     env: Optional[Dict[str, str]] = None,
     shell: bool = False,
     heartbeat_callback: Optional[Callable[[int, Path], bool]] = None,
+    adaptive_heartbeat: bool = False,
+    adaptive_stall_multiplier: float = DEFAULT_ADAPTIVE_STALL_MULTIPLIER,
+    max_stall_timeout: Optional[float] = DEFAULT_MAX_STALL_TIMEOUT,
+    job_name: Optional[str] = None,
 ) -> WatchedProcessResult:
     """Execute a subprocess under activity and stall watchdog surveillance.
 
@@ -171,6 +219,16 @@ def run_with_watchdog(
         heartbeat_callback: Optional callable `(pid, workdir) -> bool` returning True
             if external/process heartbeat is verified (e.g., active CPU utilization
             or solver scratch progress during large matrix factorization).
+        adaptive_heartbeat: When True, relax the stall window once the `.msg` tail
+            shows equilibrium iterations have started. Disabled by default so that
+            callers opt in explicitly.
+        adaptive_stall_multiplier: Bounded multiplier applied to `stall_timeout`.
+            Clamped to >= 1.0; values below 1 would tighten, not relax.
+        max_stall_timeout: Absolute ceiling for the relaxed window. `None` means the
+            multiplier alone bounds it. Applied only to the relaxed window; the base
+            threshold is never raised.
+        job_name: Job base name used to locate `<job_name>.msg` for the evidence
+            probe. Required for `adaptive_heartbeat` to have any effect.
 
     Returns:
         WatchedProcessResult on completion.
@@ -235,9 +293,28 @@ def run_with_watchdog(
     effective_stall_timeout = float(stall_timeout) if (stall_timeout and stall_timeout > 0) else None
     effective_total_timeout = float(timeout) if (timeout and timeout > 0) else None
 
+    # Adaptive relaxation is opt-in and evidence-gated. The multiplier is clamped
+    # to >= 1.0 so it can only ever widen the window, never silently tighten the
+    # caller's configured threshold.
+    relaxed_stall_timeout: Optional[float] = None
+    if effective_stall_timeout and adaptive_heartbeat:
+        multiplier = max(1.0, float(adaptive_stall_multiplier))
+        candidate = effective_stall_timeout * multiplier
+        cap = float(max_stall_timeout) if max_stall_timeout else None
+        if cap is not None:
+            # The ceiling must never fall below the configured base threshold,
+            # otherwise enabling adaptation would shorten the caller's window.
+            candidate = min(candidate, max(cap, effective_stall_timeout))
+        relaxed_stall_timeout = candidate
+
+    stall_relaxed = False
+
     stalled = False
     timed_out = False
     return_code: Optional[int] = None
+    # The threshold actually enforced when the stall breaker fired, captured for
+    # the diagnostic so a relaxed kill is never indistinguishable from a plain one.
+    enforced_stall_limit: Optional[float] = None
 
     try:
         while True:
@@ -277,14 +354,23 @@ def run_with_watchdog(
                 except Exception:
                     pass
 
-            # 4. Check stall inactivity
+            # 4. Check stall inactivity against the base or evidence-relaxed window
             with lock:
                 idle_duration = now - last_activity_time[0]
 
-            if effective_stall_timeout and idle_duration >= effective_stall_timeout:
+            active_stall_limit = effective_stall_timeout
+            if relaxed_stall_timeout is not None and not stall_relaxed:
+                if _msg_shows_equilibrium_iterations(workdir_path, job_name):
+                    stall_relaxed = True
+                    active_stall_limit = relaxed_stall_timeout
+            elif relaxed_stall_timeout is not None:
+                active_stall_limit = relaxed_stall_timeout
+
+            if active_stall_limit and idle_duration >= active_stall_limit:
                 return_code = proc.poll()
                 if return_code is not None:
                     break
+                enforced_stall_limit = active_stall_limit
                 stalled = True
                 break
 
@@ -313,13 +399,14 @@ def run_with_watchdog(
     if stalled:
         with lock:
             final_stall_duration = time.monotonic() - last_activity_time[0]
+        raised_limit = enforced_stall_limit or effective_stall_timeout or DEFAULT_STALL_TIMEOUT
         raise SolverProcessStalledError(
-            f"Process stalled for {final_stall_duration:.1f}s exceeding threshold {effective_stall_timeout:.1f}s "
+            f"Process stalled for {final_stall_duration:.1f}s exceeding threshold {raised_limit:.1f}s "
             f"without stream output or disk activity in {workdir_path}",
             cmd=effective_cmd,
             workdir=str(workdir_path),
             stall_duration=final_stall_duration,
-            stall_timeout=effective_stall_timeout or DEFAULT_STALL_TIMEOUT,
+            stall_timeout=raised_limit,
             total_duration=total_duration,
             stdout=captured_stdout,
             stderr=captured_stderr,

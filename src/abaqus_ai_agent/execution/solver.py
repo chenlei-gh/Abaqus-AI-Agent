@@ -34,6 +34,11 @@ class AbaqusBatchJob:
     timeout_seconds: int = 1800
     stall_timeout_seconds: int = 120
     submodel: bool = False
+    # Opt-in relaxation of the stall window for large implicit solves. When enabled,
+    # the watchdog widens its heartbeat window only after the `.msg` tail proves
+    # equilibrium iterations have begun; see `watchdog.run_with_watchdog`.
+    adaptive_stall_timeout: bool = False
+    max_stall_timeout_seconds: Optional[float] = 1800.0
 
 
 @dataclass(frozen=True)
@@ -102,8 +107,48 @@ def parse_solver_diagnostics(workdir: Path, job_name: str) -> List[str]:
     return diags
 
 
+def _is_uniform_fill(path: Path, window: int = 512) -> bool:
+    """Return True when both ends of the file are a single repeated byte value.
+
+    A uniformly filled file cannot be a valid ODB: every ODB carries record
+    structure (section tables, instance/frame headers, payload blocks), so its
+    first and last bytes are never one constant value. This is a structural
+    necessity rather than a guessed magic number, which is why it is safe to
+    apply as a pre-filter without rejecting a legitimate file.
+
+    The check samples only the head and tail windows so it stays O(1) on
+    gigabyte-scale ODBs. It deliberately does NOT require any specific signature
+    bytes: the on-disk ODB header format is not documented in this repository,
+    and inventing one would reject valid files written by other Abaqus releases.
+    """
+    try:
+        size = path.stat().st_size
+        with open(path, "rb") as f:
+            head = f.read(window)
+            f.seek(max(0, size - window))
+            tail = f.read(window)
+    except OSError:
+        return False
+    if not head or not tail:
+        return False
+    if len(set(head)) != 1 or len(set(tail)) != 1:
+        return False
+    # Both windows are constant; they must also agree with each other, otherwise
+    # this is a legitimately structured file with padding at one end.
+    return head[0] == tail[0]
+
+
 def is_authentic_binary_odb(path: Union[str, Path]) -> bool:
-    """Validate that an ODB file is not empty and is not a plaintext JSON or text mock."""
+    """Validate that an ODB file is not empty and is not a plaintext or filled mock.
+
+    This is the lightweight pre-filter documented in P0-5, not a structural
+    verification. It rejects three classes that cannot be a real ODB:
+      1. files below 1024 bytes (no room for an ODB header);
+      2. plaintext JSON / XML / YAML / comment mocks;
+      3. uniformly filled files (all-zero, all-0xFF) with no record structure.
+    Truncation and corruption of an otherwise structured binary cannot be judged
+    at this layer; ``verify_authentic_odb_structure`` must confirm those.
+    """
     path = Path(path)
     if not path.is_file():
         return False
@@ -114,6 +159,8 @@ def is_authentic_binary_odb(path: Union[str, Path]) -> bool:
         header = path.read_bytes()[:32].strip()
         # Plaintext JSON / XML / YAML mocks start with {, [, <, or comment
         if header.startswith((b"{", b"[", b"<", b"#", b"--")):
+            return False
+        if _is_uniform_fill(path):
             return False
         return True
     except Exception:
@@ -661,6 +708,31 @@ def verify_authentic_odb_structure(
         return {"verified": False, "error": str(exc)}
 
 
+def _release_locks_after_kill(job: AbaqusBatchJob) -> str:
+    """Release a solver ``.lck`` left behind by a forced termination.
+
+    After a stall or hard timeout the process tree is killed, so Abaqus never
+    gets to remove its own lock. Leaving that file behind makes every subsequent
+    recovery probe see a phantom running job. The release is still conditional:
+    it only removes the lock once ``wait_for_lock_release`` proves no live
+    process holds it, and the outcome is reported as a diagnostic line so the
+    audit trail shows whether the workspace was actually cleaned.
+    """
+    try:
+        from .recovery import wait_for_lock_release
+        outcome = wait_for_lock_release(str(job.workdir), job_name=job.job_name)
+    except Exception as exc:  # pragma: no cover - defensive, must not mask the kill
+        return f"LOCK_RELEASE_ERROR: {exc}"
+    if not outcome.get("path"):
+        return "LOCK_RELEASE_SKIPPED: no lock path resolved"
+    if outcome.get("released"):
+        return (
+            f"LOCK_RELEASED: cleaned={outcome.get('cleaned', 0)} "
+            f"waited={outcome.get('waited', 0.0):.1f}s"
+        )
+    return f"LOCK_STILL_HELD: {outcome.get('path')} after {outcome.get('waited', 0.0):.1f}s wait"
+
+
 def find_abaqus_executable(launcher_cmd: Optional[str] = None) -> Optional[str]:
     """Find authentic Abaqus executable or return None if offline."""
     if launcher_cmd:
@@ -737,6 +809,9 @@ def execute_abaqus_batch_job(
             cwd=job.workdir,
             timeout=job.timeout_seconds,
             stall_timeout=getattr(job, "stall_timeout_seconds", 120),
+            adaptive_heartbeat=getattr(job, "adaptive_stall_timeout", False),
+            max_stall_timeout=getattr(job, "max_stall_timeout_seconds", 1800.0),
+            job_name=job.job_name,
         )
     except SolverProcessStalledError as exc:
         diags = parse_solver_diagnostics(job.workdir, job.job_name)
@@ -747,6 +822,7 @@ def execute_abaqus_batch_job(
             diags.append(f"STALL_LAST_STDOUT: {exc.last_stdout_line}")
         if exc.last_stderr_line:
             diags.append(f"STALL_LAST_STDERR: {exc.last_stderr_line}")
+        diags.append(_release_locks_after_kill(job))
         return AbaqusJobResult(
             job_name=job.job_name,
             state="ABORTED",
@@ -756,13 +832,15 @@ def execute_abaqus_batch_job(
             diagnostics=diags,
         )
     except subprocess.TimeoutExpired:
+        diags = [f"Solver execution timed out after {job.timeout_seconds}s"]
+        diags.append(_release_locks_after_kill(job))
         return AbaqusJobResult(
             job_name=job.job_name,
             state="TIMEOUT",
             returncode=-1,
             workdir=job.workdir,
             is_live=True,
-            diagnostics=[f"Solver execution timed out after {job.timeout_seconds}s"],
+            diagnostics=diags,
         )
     except Exception as exc:
         return AbaqusJobResult(

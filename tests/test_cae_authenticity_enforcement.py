@@ -105,6 +105,39 @@ def test_is_authentic_binary_odb_rejects_fake_json_and_small_files(tmp_path: Pat
     assert is_authentic_binary_odb(valid_odb) is True
 
 
+def test_is_authentic_binary_odb_rejects_uniform_fill_and_accepts_structured(
+    tmp_path: Path,
+):
+    """Uniform-fill and truncated files are rejected; structured binaries pass.
+
+    The only rejection claim made at this layer is structural, not signature
+    based: a file whose first and last windows are one constant byte cannot be
+    an ODB, because every ODB carries record structure at both ends. The negative
+    cases below are therefore all-zero / all-0xFF fills, while the positive case
+    is the same size with a non-constant head and tail.
+    """
+    # Negative: all-zero fill of a plausible size.
+    zero_fill = tmp_path / "zero_fill.odb"
+    zero_fill.write_bytes(b"\x00" * 8192)
+    assert is_authentic_binary_odb(zero_fill) is False
+
+    # Negative: all-0xFF fill, proving the rule is about constancy, not zero bytes.
+    ff_fill = tmp_path / "ff_fill.odb"
+    ff_fill.write_bytes(b"\xff" * 8192)
+    assert is_authentic_binary_odb(ff_fill) is False
+
+    # Negative: truncated artifact. A file that stops below the header floor has
+    # no room for a valid ODB header regardless of its content.
+    truncated = tmp_path / "truncated.odb"
+    truncated.write_bytes(b"\x7fSIMULIA\x00\x01\x02\x03")
+    assert is_authentic_binary_odb(truncated) is False
+
+    # Positive: same size, structured head and tail.
+    structured = tmp_path / "structured.odb"
+    structured.write_bytes(b"\x7fSIMULIA\x00\x01\x02\x03" + b"\x00" * 4084 + b"\x01\x02")
+    assert is_authentic_binary_odb(structured) is True
+
+
 def test_hex_mesh_audit_computes_genuine_3d_jacobian():
     """Verify Hex element audit uses genuine isoparametric shape function derivatives and determinant."""
     # Ideal unit cube [0, 1]^3: min_det == 1.0, AR == 1.0, Jacobian ratio == 1.0

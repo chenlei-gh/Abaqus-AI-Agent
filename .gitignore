@@ -69,3 +69,8 @@ abaqus_v6.env
 /probe_*.py
 tools/_probe_*.py
 .tmp_view/
+
+# Life-cycle ledger written beside a solver workdir (see execution/reconciliation.py).
+# It is machine-local resume state, never tracked evidence.
+.state/
+**/.state/run_lifecycle.json

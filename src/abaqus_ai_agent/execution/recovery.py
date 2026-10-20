@@ -1,5 +1,6 @@
 import os
 import re
+import time
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Dict, List, Optional, Tuple
@@ -62,6 +63,61 @@ def is_lock_active(lock_path: str, associated_pid: Optional[int] = None) -> bool
         return False
     except (PermissionError, OSError):
         return True
+
+
+def wait_for_lock_release(
+    workspace_dir: str,
+    job_name: Optional[str] = None,
+    *,
+    associated_pid: Optional[int] = None,
+    timeout: float = 10.0,
+    poll_interval: float = 0.25,
+) -> Dict[str, Any]:
+    """Wait for a solver ``.lck`` to disappear after a forced termination.
+
+    A hard kill terminates the process tree before the child can remove its own
+    lock file, so a stall or timeout kill routinely leaves a zombie ``.lck``
+    behind. This helper polls the lock to give the OS time to drop the handle,
+    then removes it only when ``is_lock_active`` proves nothing holds it.
+
+    Lock files that are actively held are never removed: the probe refuses, so a
+    concurrently running solver cannot be unlocked by mistake.
+
+    Returns:
+        Dict with ``released`` (no lock remains), ``waited`` seconds,
+        ``cleaned`` (files removed by this call) and ``path``.
+    """
+    abs_dir = os.path.abspath(workspace_dir)
+    lock_path = os.path.join(abs_dir, f"{job_name}.lck") if job_name else ""
+    started = time.monotonic()
+    deadline = started + max(0.0, float(timeout))
+
+    while True:
+        if not lock_path or not os.path.exists(lock_path):
+            return {
+                "released": True,
+                "waited": round(time.monotonic() - started, 3),
+                "cleaned": 0,
+                "path": lock_path or None,
+            }
+        if not is_lock_active(lock_path, associated_pid=associated_pid):
+            break
+        if time.monotonic() >= deadline:
+            return {
+                "released": False,
+                "waited": round(time.monotonic() - started, 3),
+                "cleaned": 0,
+                "path": lock_path,
+            }
+        time.sleep(poll_interval)
+
+    cleaned = clean_stale_locks(abs_dir, job_name=job_name, associated_pid=associated_pid)
+    return {
+        "released": not os.path.exists(lock_path),
+        "waited": round(time.monotonic() - started, 3),
+        "cleaned": cleaned,
+        "path": lock_path,
+    }
 
 
 def clean_stale_locks(

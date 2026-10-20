@@ -780,6 +780,50 @@ class AnalysisRunner:
                 )
 
         jobs = JobController(self.executor)
+
+        # Life-cycle ledger (Contract A): record enough state that a later session
+        # can find this run again, without ever deciding the outcome from the file
+        # alone. Writes are best-effort: a read-only or locked workspace must not
+        # turn a healthy solve into a failure, and resumption re-verifies reality
+        # through the physical probes in `reconciliation.reconcile_run_state`.
+        _ledger_api = None
+        try:
+            from .reconciliation import RunSnapshot, get_current_git_status, write_snapshot
+            _ledger_api = (RunSnapshot, write_snapshot, get_current_git_status)
+        except Exception:
+            _ledger_api = None
+
+        git_head, git_dirty = None, False
+        if _ledger_api is not None:
+            try:
+                git_head, git_dirty = _ledger_api[2]()
+            except Exception:
+                git_head, git_dirty = None, False
+
+        def _persist_ledger(phase: str, run_obj, *, pid=None) -> None:
+            if _ledger_api is None:
+                return
+            try:
+                snapshot_cls, write_snapshot_fn, _ = _ledger_api
+                write_snapshot_fn(
+                    snapshot_cls(
+                        task_id=provenance.run_id,
+                        run_id=provenance.run_id,
+                        phase=phase,
+                        job_name=job_name,
+                        sandbox_dir=workdir,
+                        git_head_commit=git_head,
+                        git_is_dirty=git_dirty,
+                        pid=pid,
+                        odb_path=getattr(run_obj, "odb_path", None),
+                        metadata={"model_name": model_name},
+                    )
+                )
+            except Exception:
+                # Snapshotting is an index, never a gate on execution.
+                pass
+
+        _persist_ledger("PREFLIGHTED", run)
         try:
             snapshot = initial_snapshot
             if snapshot is not None and job_name not in snapshot.jobs:
@@ -938,6 +982,7 @@ class AnalysisRunner:
                 run.state,
                 provenance=_provenance_with_artifacts(run.provenance, artifacts),
             )
+            _persist_ledger("SOLVING", run)
             if status.state != JobState.COMPLETED:
                 solver_diagnostics = _collect_diagnostics(self.executor, job_name, workdir=workdir)
                 sta_tail = solver_diagnostics.get(".sta", {}).get("tail", "")
@@ -950,7 +995,7 @@ class AnalysisRunner:
                         if status.state in (JobState.ABORTED, JobState.TERMINATED,
                                              JobState.ERROR, JobState.TIMEOUT)
                         else EngineeringStatus.EXECUTION_FAILED)
-                    return run.with_state(
+                    failed_run = run.with_state(
                         AnalysisRunState.FAILED,
                         job_status=status,
                         engineering_status=engineering.value,
@@ -958,20 +1003,25 @@ class AnalysisRunner:
                         diagnostics=({"reason": "job_not_completed",
                                       "state": status.state.value,
                                       "solver_artifacts": solver_diagnostics},))
+                    _persist_ledger("FAILED", failed_run)
+                    return failed_run
 
             run = run.with_state(
                 AnalysisRunState.COMPLETED,
                 job_status=status,
                 engineering_status=EngineeringStatus.RESULT_SUSPICIOUS.value,
                 artifacts=artifacts)
+            _persist_ledger("COMPLETED", run)
 
             path = odb_path or discover_odb(self.executor, job_name, workdir=workdir)
             if not path:
-                return run.with_state(
+                missing_run = run.with_state(
                     AnalysisRunState.FAILED,
                     engineering_status=EngineeringStatus.ODB_MISSING.value,
                     diagnostics=({"reason": "odb_missing"},),
                     artifacts=artifacts)
+                _persist_ledger("FAILED", missing_run)
+                return missing_run
 
             raw_odb = None
             if hasattr(self.executor, "inspect_odb"):
@@ -979,12 +1029,14 @@ class AnalysisRunner:
                 raw_odb = inspect_odb(self.executor, path)
             odb = summarize_odb(raw_odb) if raw_odb is not None else {"status": "unavailable"}
             if odb.get("status") != "available" or not odb.get("steps"):
-                return run.with_state(
+                invalid_run = run.with_state(
                     AnalysisRunState.FAILED,
                     odb_path=path,
                     engineering_status=EngineeringStatus.RESULT_INVALID.value,
                     diagnostics=({"reason": "odb_invalid", "odb": odb},),
                     evidence=EvidenceBundle((Evidence(kind="odb_summary", source="odb", locator=path, value=odb),)), artifacts=artifacts)
+                _persist_ledger("FAILED", invalid_run)
+                return invalid_run
 
             run = run.with_state(
                 AnalysisRunState.ODB_VALIDATED,
@@ -1515,11 +1567,13 @@ class AnalysisRunner:
         except Exception as exc:
             artifacts = _collect_artifacts(self.executor, job_name, workdir=workdir)
             diagnostics = _collect_diagnostics(self.executor, job_name, workdir=workdir)
-            return run.with_state(
+            failed_run = run.with_state(
                 AnalysisRunState.FAILED,
                 engineering_status=EngineeringStatus.EXECUTION_FAILED.value,
                 artifacts=artifacts,
                 diagnostics=({"error": str(exc), "solver_artifacts": diagnostics},))
+            _persist_ledger("FAILED", failed_run)
+            return failed_run
         finally:
             if hasattr(self.executor, "workdir"):
                 self.executor.workdir = orig_executor_workdir

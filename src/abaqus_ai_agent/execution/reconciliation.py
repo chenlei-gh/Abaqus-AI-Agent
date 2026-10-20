@@ -21,7 +21,14 @@ from dataclasses import asdict, dataclass, field
 from enum import Enum
 from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
 
-from .recovery import RecoveryVerdict, inspect_run_state, is_lock_active, is_pid_alive
+from .recovery import (
+    RecoveryVerdict,
+    clean_stale_locks,
+    inspect_run_state,
+    is_lock_active,
+    is_pid_alive,
+)
+from .solver import is_authentic_binary_odb
 
 
 class ReconciliationAction(str, Enum):
@@ -81,13 +88,25 @@ class RunSnapshot:
         )
 
     def save_atomic(self, target_path: Union[str, Path]) -> Path:
-        """Write snapshot atomically via a temp file and os.replace."""
+        """Write snapshot atomically via a temp file and os.replace.
+
+        If the swap fails, the previously persisted ledger must remain intact and
+        the temp file is removed: a leftover ``*.tmp_*`` file is indistinguishable
+        from a half-written snapshot to a later recovery attempt.
+        """
         resolved = Path(target_path).resolve()
         resolved.parent.mkdir(parents=True, exist_ok=True)
         tmp_path = resolved.parent / f"{resolved.name}.tmp_{uuid.uuid4().hex[:8]}"
-        with open(tmp_path, "w", encoding="utf-8") as f:
-            json.dump(self.to_dict(), f, indent=2, ensure_ascii=False)
-        os.replace(tmp_path, resolved)
+        try:
+            with open(tmp_path, "w", encoding="utf-8") as f:
+                json.dump(self.to_dict(), f, indent=2, ensure_ascii=False)
+            os.replace(tmp_path, resolved)
+        except BaseException:
+            try:
+                tmp_path.unlink(missing_ok=True)
+            except OSError:
+                pass
+            raise
         return resolved
 
     @classmethod
@@ -96,6 +115,71 @@ class RunSnapshot:
         with open(resolved, "r", encoding="utf-8") as f:
             data = json.load(f)
         return cls.from_dict(data)
+
+
+LEDGER_FILENAME = "run_lifecycle.json"
+
+
+def default_ledger_path(workspace_root: Optional[Union[str, Path]] = None) -> Path:
+    """Return the canonical lifecycle ledger location under ``<root>/.state``.
+
+    The ledger lives beside the workspace it describes, not inside the source
+    repository, so a snapshot can never be mistaken for tracked evidence.
+    """
+    root = Path(workspace_root).resolve() if workspace_root else Path.cwd().resolve()
+    return root / ".state" / LEDGER_FILENAME
+
+
+def write_snapshot(snapshot: RunSnapshot, ledger_path: Optional[Union[str, Path]] = None) -> Path:
+    """Persist a snapshot atomically to the lifecycle ledger.
+
+    Thin wrapper so callers do not each re-derive the ledger path or re-implement
+    the temp-file swap. Atomicity itself stays in ``RunSnapshot.save_atomic``.
+    """
+    target = Path(ledger_path) if ledger_path else default_ledger_path(snapshot.sandbox_dir)
+    return snapshot.save_atomic(target)
+
+
+def load_snapshot(ledger_path: Optional[Union[str, Path]] = None) -> Optional[RunSnapshot]:
+    """Load the lifecycle ledger, or return None when it is absent or unreadable.
+
+    A corrupt ledger is treated as absent on purpose: resumption decisions are
+    then driven by the physical probes in ``reconcile_run_state``, which is the
+    authority. Silently trusting a half-written file would be worse.
+    """
+    if ledger_path is None:
+        return None
+    path = Path(ledger_path)
+    if not path.is_file():
+        return None
+    try:
+        return RunSnapshot.load(path)
+    except Exception:
+        return None
+
+
+def resume_from_ledger(
+    ledger_path: Optional[Union[str, Path]] = None,
+    *,
+    fallback_workdir: Optional[Union[str, Path]] = None,
+    job_name: Optional[str] = None,
+    repo_root: Optional[Union[str, Path]] = None,
+    allow_git_drift: bool = False,
+) -> ReconciliationReport:
+    """Cross-session reconnect entry point: read the ledger, then re-verify reality.
+
+    The ledger is only an index of where to look. Every verdict still comes from
+    the physical probes in ``reconcile_run_state``, so a stale or forged snapshot
+    cannot by itself authorize a resubmission.
+    """
+    snapshot = load_snapshot(ledger_path)
+    return reconcile_run_state(
+        snapshot,
+        fallback_workdir=fallback_workdir,
+        job_name=job_name,
+        repo_root=repo_root,
+        allow_git_drift=allow_git_drift,
+    )
 
 
 @dataclass(frozen=True)
@@ -128,6 +212,48 @@ class ReconciliationReport:
             "workdir": self.workdir,
             "metadata": dict(self.metadata),
         }
+
+
+def _release_stale_locks(
+    workdir: str,
+    job_name: str,
+    associated_pid: Optional[int],
+) -> Dict[str, Any]:
+    """Clear zombie ``.lck`` files on the resubmit path and report the outcome.
+
+    A hard kill terminates the solver process tree before the child can delete
+    its own lock, so ``CLEANUP_AND_RESUBMIT`` routinely starts with a stale
+    ``.lck`` still on disk. Recommending a resubmit without removing it would
+    hand the next solver a workspace that looks busy forever.
+
+    Removal stays delegated to ``clean_stale_locks``, which re-probes the lock
+    and refuses any lock proven live. If the lock survives this call (because a
+    process took it in between probes, or the OS still holds the handle), the
+    caller must treat the run as unrecoverable rather than resubmitting on top
+    of a live lock.
+    """
+    lock_path = os.path.join(workdir, f"{job_name}.lck") if job_name else None
+    present_before = bool(lock_path and os.path.exists(lock_path))
+
+    if not job_name:
+        return {
+            "lock_path": None,
+            "lock_present_before": False,
+            "cleaned_locks_count": 0,
+            "lock_present_after": False,
+            "lock_released": False,
+            "lock_cleanup_skipped": "job_name_unknown",
+        }
+
+    cleaned = clean_stale_locks(workdir, job_name=job_name, associated_pid=associated_pid)
+    present_after = os.path.exists(lock_path)
+    return {
+        "lock_path": lock_path,
+        "lock_present_before": present_before,
+        "cleaned_locks_count": cleaned,
+        "lock_present_after": present_after,
+        "lock_released": present_before and not present_after,
+    }
 
 
 def get_current_git_status(repo_root: Optional[Union[str, Path]] = None) -> Tuple[Optional[str], bool]:
@@ -240,7 +366,14 @@ def reconcile_run_state(
     # 4. Probe 4 & 5: Tail status and ODB presence via recovery inspection
     inspection = inspect_run_state(eff_workdir, eff_job_name)
     sta_status = inspection.sta_status
-    has_valid_odb = inspection.has_odb and inspection.odb_size > 1024
+    odb_candidate = os.path.join(eff_workdir, f"{eff_job_name}.odb") if eff_job_name else None
+    odb_authentic = bool(odb_candidate and is_authentic_binary_odb(odb_candidate))
+    # Probe 5 is a pre-filter, not structural verification: the size floor and
+    # the plaintext/uniform-fill rejections are the only claims documented for
+    # this layer (P0-5). Anything it cannot rule out still needs the native
+    # ``odbAccess`` check before results are trusted, but a file that fails here
+    # can never authorize a read-only recovery.
+    has_valid_odb = inspection.has_odb and inspection.odb_size > 1024 and odb_authentic
 
     # Evaluate physical conflicts against snapshot expectations
     if snapshot:
@@ -248,7 +381,9 @@ def reconcile_run_state(
             conflicts.append("snapshot_claims_completed_but_odb_missing_or_empty")
         if snapshot.phase == "COMPLETED" and sta_status not in ("COMPLETED", "MISSING"):
             conflicts.append(f"snapshot_claims_completed_but_sta_is_{sta_status}")
-        if snapshot.phase == "RUNNING" and not live_pid and not live_lock and sta_status != "COMPLETED":
+        # "SOLVING" is persisted by the runner immediately after submit, so it
+        # means exactly what "RUNNING" means: a solver was expected to be live.
+        if snapshot.phase in ("RUNNING", "SOLVING") and not live_pid and not live_lock and sta_status != "COMPLETED":
             conflicts.append("snapshot_claims_running_but_solver_process_is_dead")
 
     # Decision Matrix
@@ -307,6 +442,24 @@ def reconcile_run_state(
             rec_action = ReconciliationAction.RECOVERY_REQUIRED
             rec_reason = "Contradiction: Snapshot marked completed but ODB artifact is missing. Manual review needed."
 
+        metadata: Dict[str, Any] = {
+            "msg_errors": inspection.msg_error_count,
+            "odb_authentic_prefilter": odb_authentic,
+        }
+
+        # Stale-lock cleanup only runs when resubmission is actually the verdict.
+        # A blocked run must not mutate the workspace it refused to touch.
+        if rec_action == ReconciliationAction.CLEANUP_AND_RESUBMIT:
+            lock_report = _release_stale_locks(eff_workdir, eff_job_name, pid)
+            metadata.update(lock_report)
+            if lock_report["lock_present_after"]:
+                rec_action = ReconciliationAction.RECOVERY_REQUIRED
+                rec_reason = (
+                    "Stale lock could not be released: a process still holds it. "
+                    "Refusing to resubmit on top of a live lock."
+                )
+                metadata["lock_release_failure"] = "lock_still_active"
+
         return ReconciliationReport(
             action=rec_action,
             is_blocked=(rec_action == ReconciliationAction.RECOVERY_REQUIRED),
@@ -318,7 +471,7 @@ def reconcile_run_state(
             live_lock=False,
             sta_status=sta_status,
             workdir=eff_workdir,
-            metadata={"msg_errors": inspection.msg_error_count},
+            metadata=metadata,
         )
 
     # Fallback

@@ -511,3 +511,119 @@ def test_watchdog_adaptive_heartbeat_callback_trips_when_returning_false(tmp_pat
             heartbeat_callback=dead_heartbeat,
         )
 
+
+def test_watchdog_adaptive_relaxation_requires_msg_evidence(tmp_path):
+    """A silent job without iteration evidence still trips the base stall threshold."""
+    cmd = [sys.executable, "-c", "import time; time.sleep(10)"]
+
+    with pytest.raises(SolverProcessStalledError) as exc_info:
+        run_with_watchdog(
+            cmd,
+            cwd=tmp_path,
+            timeout=10.0,
+            stall_timeout=0.5,
+            poll_interval=0.1,
+            adaptive_heartbeat=True,
+            adaptive_stall_multiplier=10.0,
+            max_stall_timeout=30.0,
+            job_name="NoEvidenceJob",
+        )
+
+    # No .msg exists, so no relaxation may be granted.
+    assert exc_info.value.stall_timeout == pytest.approx(0.5)
+
+
+def test_watchdog_adaptive_relaxation_applies_once_iterating(tmp_path):
+    """Evidence of equilibrium iterations in .msg widens the window for a silent job."""
+    msg = tmp_path / "IteratingJob.msg"
+    msg.write_text(
+        "  STEP    1  INCREMENT     1  ITERATION     1\n"
+        "  BEGIN ITERATION, TIME INCREMENT = 0.100\n",
+        encoding="utf-8",
+    )
+
+    # Sits silent for 1.5s: longer than the 0.5s base window, shorter than the
+    # 5.0s relaxed window granted by the evidence-gated multiplier.
+    cmd = [sys.executable, "-c", "import time; time.sleep(1.5)"]
+    res = run_with_watchdog(
+        cmd,
+        cwd=tmp_path,
+        timeout=20.0,
+        stall_timeout=0.5,
+        poll_interval=0.1,
+        adaptive_heartbeat=True,
+        adaptive_stall_multiplier=10.0,
+        max_stall_timeout=30.0,
+        job_name="IteratingJob",
+    )
+
+    assert res.succeeded
+    assert res.returncode == 0
+
+
+def test_watchdog_adaptive_relaxation_is_disabled_by_default(tmp_path):
+    """Without opt-in, an iterating job is still held to the base threshold."""
+    msg = tmp_path / "IteratingJob.msg"
+    msg.write_text("  BEGIN ITERATION, TIME INCREMENT = 0.100\n", encoding="utf-8")
+
+    cmd = [sys.executable, "-c", "import time; time.sleep(10)"]
+    with pytest.raises(SolverProcessStalledError) as exc_info:
+        run_with_watchdog(
+            cmd,
+            cwd=tmp_path,
+            timeout=10.0,
+            stall_timeout=0.5,
+            poll_interval=0.1,
+            job_name="IteratingJob",
+        )
+
+    assert exc_info.value.stall_timeout == pytest.approx(0.5)
+
+
+def test_watchdog_adaptive_ceiling_never_shortens_configured_window(tmp_path):
+    """A ceiling below the base threshold must not tighten the caller's window."""
+    cmd = [sys.executable, "-c", "import time; time.sleep(10)"]
+
+    with pytest.raises(SolverProcessStalledError) as exc_info:
+        run_with_watchdog(
+            cmd,
+            cwd=tmp_path,
+            timeout=10.0,
+            stall_timeout=1.0,
+            poll_interval=0.1,
+            adaptive_heartbeat=True,
+            adaptive_stall_multiplier=10.0,
+            max_stall_timeout=0.2,  # Absurdly small ceiling
+            job_name="NoEvidenceJob",
+        )
+
+    # Base threshold wins; adaptation can only widen, never narrow.
+    assert exc_info.value.stall_timeout == pytest.approx(1.0)
+
+
+def test_solver_job_releases_lck_after_forced_kill(tmp_path, monkeypatch):
+    """A killed solver leaves no zombie .lck behind, and the outcome is reported."""
+    inp = tmp_path / "test.inp"
+    inp.write_text("*HEADING\n", encoding="utf-8")
+    lck = tmp_path / "KilledJob.lck"
+    lck.write_text("stale", encoding="utf-8")
+
+    def mock_run_with_watchdog(*args, **kwargs):
+        raise SolverProcessStalledError(
+            "Process stalled", cmd=["abaqus"], workdir=str(tmp_path), stall_duration=1.0, stall_timeout=1.0
+        )
+
+    monkeypatch.setattr("abaqus_ai_agent.execution.watchdog.run_with_watchdog", mock_run_with_watchdog)
+    monkeypatch.setattr("abaqus_ai_agent.execution.solver.find_abaqus_executable", lambda x: "dummy_abaqus")
+    monkeypatch.setattr(
+        "abaqus_ai_agent.execution.recovery.is_lock_active",
+        lambda path, associated_pid=None: False,
+    )
+
+    job = AbaqusBatchJob(job_name="KilledJob", inp_path=inp, workdir=tmp_path, timeout_seconds=10)
+    result = execute_abaqus_batch_job(job)
+
+    assert result.state == "ABORTED"
+    assert not lck.exists()
+    assert any(d.startswith("LOCK_RELEASED") for d in result.diagnostics)
+
