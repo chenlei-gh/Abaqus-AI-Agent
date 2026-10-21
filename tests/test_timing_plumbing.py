@@ -389,17 +389,62 @@ def test_attach_license_timing_records_cleanly():
 
 
 def test_attach_license_timing_none_or_invalid_marks_not_run():
-    """None, negative, or non-finite wait times mark NOT_RUN, never invent 0.0."""
+    """None, boolean, string, negative, or non-finite wait times mark NOT_RUN, never invent 0.0 or raise."""
     from abaqus_ai_agent.execution.license import attach_license_timing
     from abaqus_ai_agent.telemetry.phase_profile import PhaseProfiler, PipelinePhase, PhaseStatus
 
+    # None input
     profiler = PhaseProfiler(strict=False)
-    attach_license_timing(profiler, None)
-    profile = profiler.finalize()
+    summary_none = attach_license_timing(profiler, None)
+    assert summary_none["recorded_as"] == "not_run"
+    assert profiler.finalize().get(PipelinePhase.LICENSE_QUEUE).status is PhaseStatus.NOT_RUN
 
-    record = profile.get(PipelinePhase.LICENSE_QUEUE)
-    assert record.status is PhaseStatus.NOT_RUN
-    assert record.duration_s is None
+    # Boolean inputs (must NOT be coerced to 1.0 or 0.0)
+    for b_val in (True, False):
+        p = PhaseProfiler(strict=False)
+        s = attach_license_timing(p, b_val)
+        assert s["recorded_as"] == "not_run"
+        assert p.finalize().get(PipelinePhase.LICENSE_QUEUE).status is PhaseStatus.NOT_RUN
+
+    # Non-numeric string and object inputs (must NOT raise ValueError/TypeError)
+    for bad_val in ("invalid", "1.25", object(), [1.25]):
+        p = PhaseProfiler(strict=False)
+        s = attach_license_timing(p, bad_val)
+        assert s["recorded_as"] == "not_run"
+        assert p.finalize().get(PipelinePhase.LICENSE_QUEUE).status is PhaseStatus.NOT_RUN
+
+    # Non-finite and negative inputs
+    for invalid_num in (float("nan"), float("inf"), float("-inf"), -5.0):
+        p = PhaseProfiler(strict=False)
+        s = attach_license_timing(p, invalid_num)
+        assert s["recorded_as"] == "not_run"
+        assert p.finalize().get(PipelinePhase.LICENSE_QUEUE).status is PhaseStatus.NOT_RUN
+
+
+def test_attach_license_timing_exception_isolation():
+    """Observation failures are isolated to profiler.internal_errors and never crash callers."""
+    from abaqus_ai_agent.execution.license import attach_license_timing
+
+    class BrokenProfiler:
+        def __init__(self):
+            self.internal_errors = []
+
+        def mark_not_run(self, phase, reason=None):
+            raise RuntimeError("Corrupted mark_not_run")
+
+        def record_external(self, phase, duration_s, **kwargs):
+            raise RuntimeError("Corrupted record_external")
+
+    broken = BrokenProfiler()
+    # Call with valid value -> record_external raises -> caught and logged
+    summary1 = attach_license_timing(broken, 2.5)
+    assert len(broken.internal_errors) == 1
+    assert "license timing not recorded" in broken.internal_errors[0]
+
+    # Call with invalid value -> mark_not_run raises -> caught and logged
+    summary2 = attach_license_timing(broken, None)
+    assert len(broken.internal_errors) == 2
+    assert "license timing mark_not_run failed" in broken.internal_errors[1]
 
 
 def test_license_context_profiler_integration():

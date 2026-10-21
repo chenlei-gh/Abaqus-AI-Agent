@@ -42,22 +42,34 @@ def is_close_scalar(val_a: float, val_b: float, tol: float = DEFAULT_FLOAT_TOLER
     """Evaluate if two scalar floats are within absolute/relative tolerance.
 
     Strictly enforces:
-    1. Rejects non-finite values (NaN, Inf).
-    2. Rejects tolerances exceeding the contract upper bound (1e-6) or non-positive.
-    3. Exact equality (zero drift) always passes.
-    4. Non-zero drift must be strictly less than tol * scale (strictly < 1e-6).
+    1. Rejects boolean inputs (bool is a subclass of int in Python).
+    2. Rejects non-numeric types and non-finite values (NaN, Inf).
+    3. Rejects tolerances exceeding the contract upper bound (1e-6) or non-positive.
+    4. Exact equality (zero drift) always passes.
+    5. Non-zero drift must be strictly less than tol * scale (strictly < 1e-6).
     """
-    if not (math.isfinite(val_a) and math.isfinite(val_b)):
+    if isinstance(val_a, bool) or not isinstance(val_a, (int, float)):
         return False
-    if not math.isfinite(tol) or tol <= 0.0 or tol > CONTRACT_TOLERANCE_UPPER_BOUND:
+    if isinstance(val_b, bool) or not isinstance(val_b, (int, float)):
+        return False
+    if isinstance(tol, bool) or not isinstance(tol, (int, float)):
         return False
 
-    diff = abs(val_a - val_b)
+    val_a_f = float(val_a)
+    val_b_f = float(val_b)
+    tol_f = float(tol)
+
+    if not (math.isfinite(val_a_f) and math.isfinite(val_b_f) and math.isfinite(tol_f)):
+        return False
+    if tol_f <= 0.0 or tol_f > CONTRACT_TOLERANCE_UPPER_BOUND:
+        return False
+
+    diff = abs(val_a_f - val_b_f)
     if diff == 0.0:
         return True
 
-    scale = max(1.0, abs(val_a), abs(val_b))
-    return diff < (tol * scale)
+    scale = max(1.0, abs(val_a_f), abs(val_b_f))
+    return diff < (tol_f * scale)
 
 
 @dataclass(frozen=True)
@@ -141,23 +153,45 @@ def verify_extraction_equivalence(
         if not isinstance(loc_can, dict) or not isinstance(loc_blk, dict):
             raise BulkDataEquivalenceError("Locators must be dictionary objects.")
 
+        # Check locator key symmetry and type validity
+        for k in ("instance", "node_label", "element_label"):
+            has_can = loc_can.get(k) is not None
+            has_blk = loc_blk.get(k) is not None
+            if has_can != has_blk:
+                raise BulkDataEquivalenceError(
+                    f"Asymmetric locator metadata for key '{k}': canonical={loc_can.get(k)!r}, bulk={loc_blk.get(k)!r}"
+                )
+
         # Instance name check
         inst_can = loc_can.get("instance")
         inst_blk = loc_blk.get("instance")
-        if inst_can is not None and inst_blk is not None and inst_can != inst_blk:
-            return BulkDataEquivalenceStatus.LOCATOR_MISMATCH
+        if inst_can is not None and inst_blk is not None:
+            if not isinstance(inst_can, str) or not isinstance(inst_blk, str):
+                raise BulkDataEquivalenceError("Instance names in locator must be strings.")
+            if inst_can != inst_blk:
+                return BulkDataEquivalenceStatus.LOCATOR_MISMATCH
 
-        # Node label check (when present in both)
+        # Node label check
         nl_can = loc_can.get("node_label")
         nl_blk = loc_blk.get("node_label")
-        if nl_can is not None and nl_blk is not None and nl_can != nl_blk:
-            return BulkDataEquivalenceStatus.LOCATOR_MISMATCH
+        if nl_can is not None and nl_blk is not None:
+            if isinstance(nl_can, bool) or not isinstance(nl_can, int) or nl_can <= 0:
+                raise BulkDataEquivalenceError(f"Invalid canonical node_label: {nl_can!r}")
+            if isinstance(nl_blk, bool) or not isinstance(nl_blk, int) or nl_blk <= 0:
+                raise BulkDataEquivalenceError(f"Invalid bulk node_label: {nl_blk!r}")
+            if nl_can != nl_blk:
+                return BulkDataEquivalenceStatus.LOCATOR_MISMATCH
 
-        # Element label check (when present in both)
+        # Element label check
         el_can = loc_can.get("element_label")
         el_blk = loc_blk.get("element_label")
-        if el_can is not None and el_blk is not None and el_can != el_blk:
-            return BulkDataEquivalenceStatus.LOCATOR_MISMATCH
+        if el_can is not None and el_blk is not None:
+            if isinstance(el_can, bool) or not isinstance(el_can, int) or el_can <= 0:
+                raise BulkDataEquivalenceError(f"Invalid canonical element_label: {el_can!r}")
+            if isinstance(el_blk, bool) or not isinstance(el_blk, int) or el_blk <= 0:
+                raise BulkDataEquivalenceError(f"Invalid bulk element_label: {el_blk!r}")
+            if el_can != el_blk:
+                return BulkDataEquivalenceStatus.LOCATOR_MISMATCH
 
     if diff == 0.0:
         return BulkDataEquivalenceStatus.EXACT_MATCH
@@ -165,18 +199,20 @@ def verify_extraction_equivalence(
 
 
 def extract_scalar_from_blocks(
-    blocks: Sequence[Any],
+    blocks: Optional[Sequence[Any]],
     aggregation: str = "max",
 ) -> Optional[ScalarExtractionResult]:
     """Pure-Python offline reference algorithm for extracting scalar metrics from bulkDataBlocks.
 
     Each block is expected to offer:
     - `data`: iterable of rows, where row is float or sequence with float as first element
-    - `nodeLabels`: optional sequence of int node labels
-    - `elementLabels`: optional sequence of int element labels
+    - `nodeLabels`: optional sequence of int node labels (must match data length if provided)
+    - `elementLabels`: optional sequence of int element labels (must match data length if provided)
     - `instance`: optional object with name attribute
     """
-    if not blocks:
+    if blocks is None:
+        raise BulkDataEquivalenceError("Blocks sequence cannot be None.")
+    if len(blocks) == 0:
         return None
 
     best_val: Optional[float] = None
@@ -192,10 +228,40 @@ def extract_scalar_from_blocks(
         data = getattr(b, "data", None)
         if data is None:
             raise BulkDataEquivalenceError(f"Block at index {b_idx} lacks required 'data' field.")
+        
         node_labels = getattr(b, "nodeLabels", None)
         elem_labels = getattr(b, "elementLabels", None)
         inst = getattr(b, "instance", None)
         inst_name = getattr(inst, "name", str(inst)) if inst else None
+
+        len_data = len(data) if hasattr(data, "__len__") else None
+
+        # Validate label array lengths and types if provided
+        if node_labels is not None:
+            if isinstance(node_labels, bool) or not hasattr(node_labels, "__len__"):
+                raise BulkDataEquivalenceError(f"Block at index {b_idx} has invalid nodeLabels format.")
+            if len_data is not None and len(node_labels) != len_data:
+                raise BulkDataEquivalenceError(
+                    f"Block at index {b_idx} nodeLabels length ({len(node_labels)}) != data length ({len_data})"
+                )
+            for nl_idx, nl in enumerate(node_labels):
+                if isinstance(nl, bool) or not isinstance(nl, int) or nl <= 0:
+                    raise BulkDataEquivalenceError(
+                        f"Block at index {b_idx} nodeLabels[{nl_idx}] has non-positive or invalid integer label: {nl!r}"
+                    )
+
+        if elem_labels is not None:
+            if isinstance(elem_labels, bool) or not hasattr(elem_labels, "__len__"):
+                raise BulkDataEquivalenceError(f"Block at index {b_idx} has invalid elementLabels format.")
+            if len_data is not None and len(elem_labels) != len_data:
+                raise BulkDataEquivalenceError(
+                    f"Block at index {b_idx} elementLabels length ({len(elem_labels)}) != data length ({len_data})"
+                )
+            for el_idx, el in enumerate(elem_labels):
+                if isinstance(el, bool) or not isinstance(el, int) or el <= 0:
+                    raise BulkDataEquivalenceError(
+                        f"Block at index {b_idx} elementLabels[{el_idx}] has non-positive or invalid integer label: {el!r}"
+                    )
 
         for idx, row in enumerate(data):
             if isinstance(row, bool):
@@ -241,8 +307,8 @@ def extract_scalar_from_blocks(
                 best_val = v
                 best_loc = {
                     "instance": inst_name,
-                    "node_label": node_labels[idx] if node_labels is not None and idx < len(node_labels) else None,
-                    "element_label": elem_labels[idx] if elem_labels is not None and idx < len(elem_labels) else None,
+                    "node_label": node_labels[idx] if node_labels is not None else None,
+                    "element_label": elem_labels[idx] if elem_labels is not None else None,
                 }
 
     if count == 0:

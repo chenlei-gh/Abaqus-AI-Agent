@@ -103,8 +103,8 @@ def attach_license_timing(
     Strict isolation rules:
     1. Records to PipelinePhase.LICENSE_QUEUE via profiler.record_external().
     2. Derivation is strictly "none" (NEVER the arithmetic difference T4a - T4b).
-    3. Missing or non-finite wait_seconds marks NOT_RUN with explicit reason.
-    4. Observation must not raise into the execution path; catches errors and appends
+    3. Missing, boolean, non-numeric, or non-finite wait_seconds marks NOT_RUN with explicit reason.
+    4. Observation must not raise into the execution path; catches all errors and appends
        to profiler.internal_errors.
     """
     summary: Dict[str, Any] = {
@@ -115,23 +115,29 @@ def attach_license_timing(
     if profiler is None:
         return summary
 
-    import math
-    from ..telemetry.phase_profile import PipelinePhase
-
-    if wait_seconds is None or not math.isfinite(float(wait_seconds)) or float(wait_seconds) < 0.0:
-        try:
-            profiler.mark_not_run(
-                PipelinePhase.LICENSE_QUEUE,
-                reason="License wait duration not measured or invalid",
-            )
-            summary["recorded_as"] = "not_run"
-        except Exception as exc:
-            note = getattr(profiler, "internal_errors", None)
-            if isinstance(note, list):
-                note.append(f"license timing mark_not_run failed: {exc!r}")
-        return summary
-
     try:
+        import math
+        from ..telemetry.phase_profile import PipelinePhase
+
+        is_valid = False
+        if wait_seconds is not None and not isinstance(wait_seconds, bool) and isinstance(wait_seconds, (int, float)):
+            f_val = float(wait_seconds)
+            if math.isfinite(f_val) and f_val >= 0.0:
+                is_valid = True
+
+        if not is_valid:
+            try:
+                profiler.mark_not_run(
+                    PipelinePhase.LICENSE_QUEUE,
+                    reason="License wait duration not measured or invalid",
+                )
+                summary["recorded_as"] = "not_run"
+            except Exception as exc:
+                note = getattr(profiler, "internal_errors", None)
+                if isinstance(note, list):
+                    note.append(f"license timing mark_not_run failed: {exc!r}")
+            return summary
+
         record = profiler.record_external(
             PipelinePhase.LICENSE_QUEUE,
             float(wait_seconds),

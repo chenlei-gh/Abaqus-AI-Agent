@@ -92,8 +92,12 @@
 两条路径独立存在：`AnalysisRunQueue` 走 `reserve(timeout=0.0)` + 退避重试，
 `_LicenseContext` 走阻塞式 `reserve(timeout=...)`，**两者时基不同、测量口径不同，绝对不能混用**。
 
-**尚未完成**：两个字段都只是"可读取"，没有调用方把它们交给 `profiler.record_external()`。
-P3-LEFTOVER-03 保持未闭合。
+**代码接线与隔离已闭环**：
+已实现 `attach_license_timing()` 函数并在 `_LicenseContext`（source=`<Provider>.reserve`）、`AnalysisRunner.run`（source=`queue_dispatch`）、`AbaqusAIAgent.analysis_run`、`RunWorker.execute_item` 完整接线：
+1. 当传入 `None`、`bool` 或非法非有限值时，明确调用 `profiler.mark_not_run(PipelinePhase.LICENSE_QUEUE)` 标记 `NOT_RUN`，绝不留下未决状态，绝不捏造 0.0 秒；
+2. 当有合法正浮点耗时时，通过 `profiler.record_external(PipelinePhase.LICENSE_QUEUE, float(wait_seconds), source=source, derivation="none")` 记录为 `MEASURED`；
+3. 观测异常全流程隔离至 `profiler.internal_errors`，绝不向求解业务链路抛出任何异常；
+4. 真实 FlexNet/DSLS 许可排队数据与端到端高并发争抢验证，统一保留在真机清单 **MV-09**，在此之前禁止关闭真机排队遗留项。
 
 **硬隔离红线（严禁推导）**：
 `AnalysisRunner` 主链路在 CAE 会话内直接通过 `mdb.jobs.submit()` 运行，未经过 `_LicenseContext` 或 `AnalysisRunQueue`。在物理运行中，License 检出排队被包含在 T4a（`waitForCompletion` 作业总等待）内，而**不包含**在 T4b（`.log` 中求解器纯运行时长）内。

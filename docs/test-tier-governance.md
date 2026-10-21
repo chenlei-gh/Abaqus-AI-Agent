@@ -12,7 +12,12 @@
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
 | **Tier 1: Unit**<br/>单元与契约级 | `@pytest.mark.unit` | 纯离线逻辑、契约边界、Fail-Closed 防御、数据结构序列化与状态机校验 | `tests/test_*.py`（如 `test_parallel_experiment.py`, `test_solver_timing.py`, `test_timing_plumbing.py`） | 纯 Python，无任何外部 Abaqus 进程依赖 | 全量套件 ≤ 180 s（单用例 < 1 s） | 每次 Commit 必须 100% 通过且零警告（`pytest -W error -q` 必须通过） |
 | **Tier 2: Smoke**<br/>冒烟与连通级 | `@pytest.mark.smoke` | 真实 Abaqus CLI/API 连通性、基本求解链路、进程管理与简单工件生成验证 | `tools/runtime_smoke.py`, `tests/test_runtime_smoke.py`（单砖三维静力分析） | 真实物理宿主 Abaqus 安装环境 | 单次运行 10 ~ 30 s | 作为进入长周期真机实验的前置连通性自检探针 |
-| **Tier 3: Full Acceptance**<br/>全量工程验收级 | `@pytest.mark.acceptance`<br/>`@pytest.mark.live` | 复杂非线性物理响应、真实网格收敛、长周期矩阵分解、接触稳定化闭环、正式基准测量 | `tools/case_07_jounce_bumper_e2e.py`（Standard/Explicit 双作业）、MV-01～MV-10 生产验证清单 | 真实物理宿主 Abaqus 2025、完整许可证、受控硬件与电源环境 | 按案例定义（如 5 ~ 90 分钟） | 严禁降低网格精度；所有验收指标与物理准则 100% 达成并生成防篡改证据清单 |
+| **Tier 3: Full Acceptance**<br/>全量工程验收级 | `@pytest.mark.acceptance`<br/>`@pytest.mark.live` | 复杂非线性物理响应、真实网格收敛、长周期矩阵分解、接触稳定化闭环、正式基准测量 | `tools/case_07_jounce_bumper_e2e.py`（Standard/Explicit 双作业）、MV-01～MV-11 生产验证清单 | 真实物理宿主 Abaqus 2025、完整许可证、受控硬件与电源环境 | 按案例定义（如 5 ~ 90 分钟） | 严禁降低网格精度；所有验收指标与物理准则 100% 达成并生成防篡改证据清单 |
+
+> **Marker 互斥与隔离铁律（P0-01 闭环规约）**：
+> - `unit` 与 `smoke`、`acceptance`、`live` **严格互斥**。`conftest.py` 确保任何被归类为 smoke、acceptance 或 live 的用例严禁打上 `unit` marker；
+> - `pytest -m unit` 选出的测试集合 100% 为纯离线单元逻辑用例，绝不卷入任何需要外部进程或工程耗时的验收用例；
+> - `live` 是 `acceptance` 的实机子集（兼具 live 与 acceptance marker，但绝无 unit marker）。未检测到真实 Abaqus 环境时，live 用例被探针显式判定为 `BLOCKED` 并记入审计跟踪，绝不作为 unit 运行。
 
 ---
 
@@ -36,11 +41,18 @@
   3. 控制变量冻结：模型几何、网格划分、材料非线性、载荷步与收敛准则在所有实验组中严格一致；
   4. 硬件与环境固化：记录宿主硬件元数据（CPU 型号、物理核心数、内存带宽）并保持操作系统高性能模式运行。
 
+### 3.3 bulkDataBlocks 真实工程 ODB 数值等价与性能收益验证（MV-11 准入规约）
+- **目标**：在真实工程规模 ODB（全场应力与位移场）上验证 `bulkDataBlocks` 相比 canonical `fo.values` 遍历的数值等价性与提取速度收益。
+- **准入与通过标准**：
+  1. 标量峰值与均值相对漂移**严格 `< 1e-6`**（相对公差 `abs(a - b) / max(1.0, abs(a), abs(b)) < 1e-6`）；
+  2. 三元空间定位器（`instance`, `node_label`, `element_label`）必须严格对称且类型合法；
+  3. 耗时收益必须为统计显著的正向加速；若漂移超标或无显著收益，**坚决不并入主生产链路**。
+
 ---
 
 ## 4. 生产测试状态判定四态标准（Verdict Standards）
 
-生产测试与真机验证清单（MV-01～MV-10）必须采用统一的严格四态标识，严禁使用模糊的“基本通过”或“待定”：
+生产测试与真机验证清单（MV-01～MV-11）必须采用统一的严格四态标识，严禁使用模糊的“基本通过”或“待定”：
 
 1. **`PASS`（通过）**：
    - 满足该项定义的全部硬性通过标准；

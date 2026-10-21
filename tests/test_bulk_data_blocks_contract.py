@@ -45,6 +45,15 @@ def test_is_close_scalar():
     assert is_close_scalar(1.0, 1.0, tol=-1e-6) is False
     assert is_close_scalar(1.0, 1.0, tol=float("nan")) is False
 
+    # Rejects boolean and non-numeric inputs without raising exceptions
+    assert is_close_scalar(True, 1.0) is False
+    assert is_close_scalar(1.0, False) is False
+    assert is_close_scalar(True, True) is False
+    assert is_close_scalar("1.0", 1.0) is False
+    assert is_close_scalar(1.0, [1.0]) is False
+    assert is_close_scalar(1.0, 1.0, tol=True) is False
+    assert is_close_scalar(1.0, 1.0, tol="1e-6") is False
+
 
 def test_verify_extraction_equivalence_pass_exact_and_within_tolerance():
     """Exact and within-tolerance matches pass equivalence check with proper status."""
@@ -104,11 +113,36 @@ def test_verify_extraction_equivalence_locator_checks():
     blk_elem = {"success": True, "value": 50.0, "locator": {"element_label": 202, "instance": "PartA"}}
     assert verify_extraction_equivalence(can_elem, blk_elem) == BulkDataEquivalenceStatus.LOCATOR_MISMATCH
 
-    # Locator presence asymmetry
+    # Locator presence asymmetry (one has locator dict, other has None)
     can_with_loc = {"success": True, "value": 50.0, "locator": {"node_label": 12}}
     blk_no_loc = {"success": True, "value": 50.0}
     with pytest.raises(BulkDataEquivalenceError, match="Locator presence mismatch"):
         verify_extraction_equivalence(can_with_loc, blk_no_loc)
+
+    # Locator key asymmetry (e.g. one has node_label=12 while other has node_label=None or missing)
+    can_key_asym = {"success": True, "value": 50.0, "locator": {"node_label": 12, "instance": "PartA"}}
+    blk_key_asym = {"success": True, "value": 50.0, "locator": {"instance": "PartA"}}
+    with pytest.raises(BulkDataEquivalenceError, match="Asymmetric locator metadata for key 'node_label'"):
+        verify_extraction_equivalence(can_key_asym, blk_key_asym)
+
+    # Invalid locator types (boolean label, negative label, non-string instance)
+    with pytest.raises(BulkDataEquivalenceError, match="Invalid canonical node_label"):
+        verify_extraction_equivalence(
+            {"success": True, "value": 50.0, "locator": {"node_label": True}},
+            {"success": True, "value": 50.0, "locator": {"node_label": 1}},
+        )
+
+    with pytest.raises(BulkDataEquivalenceError, match="Invalid bulk node_label"):
+        verify_extraction_equivalence(
+            {"success": True, "value": 50.0, "locator": {"node_label": 10}},
+            {"success": True, "value": 50.0, "locator": {"node_label": -5}},
+        )
+
+    with pytest.raises(BulkDataEquivalenceError, match="Instance names in locator must be strings"):
+        verify_extraction_equivalence(
+            {"success": True, "value": 50.0, "locator": {"instance": 123}},
+            {"success": True, "value": 50.0, "locator": {"instance": "PartA"}},
+        )
 
 
 def test_verify_extraction_equivalence_unsupported_or_failure():
@@ -166,6 +200,16 @@ def test_extract_scalar_from_blocks_fail_closed_on_invalid_data():
     """Any malformed row, boolean, NaN, Inf, or missing data field raises BulkDataEquivalenceError."""
     inst = SimpleNamespace(name="PART_1")
 
+    # None blocks input
+    with pytest.raises(BulkDataEquivalenceError, match="Blocks sequence cannot be None"):
+        extract_scalar_from_blocks(None)
+
+    # Empty blocks sequence returns None
+    assert extract_scalar_from_blocks([]) is None
+
+    # Empty rows across blocks returns None
+    assert extract_scalar_from_blocks([SimpleNamespace(data=[], instance=inst)]) is None
+
     # Missing data attribute
     with pytest.raises(BulkDataEquivalenceError, match="lacks required 'data' field"):
         extract_scalar_from_blocks([SimpleNamespace(nodeLabels=[1])])
@@ -192,6 +236,29 @@ def test_extract_scalar_from_blocks_fail_closed_on_invalid_data():
     # Non-numeric item in sequence
     with pytest.raises(BulkDataEquivalenceError, match="Non-numeric row element"):
         extract_scalar_from_blocks([SimpleNamespace(data=[["bad_str"]], instance=inst)])
+
+    # Label array length mismatch (data has 2 rows, nodeLabels has 1)
+    with pytest.raises(BulkDataEquivalenceError, match="nodeLabels length .* != data length"):
+        extract_scalar_from_blocks([
+            SimpleNamespace(data=[[1.0], [2.0]], nodeLabels=[10], instance=inst)
+        ])
+
+    # Element label array length mismatch
+    with pytest.raises(BulkDataEquivalenceError, match="elementLabels length .* != data length"):
+        extract_scalar_from_blocks([
+            SimpleNamespace(data=[[1.0], [2.0]], elementLabels=[101, 102, 103], instance=inst)
+        ])
+
+    # Invalid label element (boolean or non-positive)
+    with pytest.raises(BulkDataEquivalenceError, match="invalid integer label"):
+        extract_scalar_from_blocks([
+            SimpleNamespace(data=[[1.0]], nodeLabels=[True], instance=inst)
+        ])
+
+    with pytest.raises(BulkDataEquivalenceError, match="non-positive or invalid integer label"):
+        extract_scalar_from_blocks([
+            SimpleNamespace(data=[[1.0]], nodeLabels=[0], instance=inst)
+        ])
 
 
 def test_differential_equivalence_against_canonical_loop():

@@ -78,13 +78,96 @@ def evidence_baseline_snapshot():
     yield
 
 
-def _has_physical_abaqus() -> bool:
+def _probe_physical_abaqus_environment() -> tuple[str, bool, str]:
+    """Probe physical Abaqus availability and classify readiness status.
+
+    Returns:
+        (status_code, is_ready, reason_message)
+    Possible status_codes:
+    - LAUNCHER_MISSING: abaqus executable not found in PATH or standard installation
+    - LAUNCHER_FOUND_PROBE_FAILED: launcher exists but fundamental probe failed
+    - LICENSE_UNAVAILABLE: license server unreachable or token exhausted
+    - ENVIRONMENT_READY: full CLI launcher and environment verified
+    """
     import shutil
-    return bool(
-        shutil.which("abaqus")
-        or shutil.which("abaqus.bat")
-        or Path(r"C:\SIMULIA\Commands\abaqus.bat").exists()
-    )
+    import subprocess
+
+    launcher = shutil.which("abaqus") or shutil.which("abaqus.bat")
+    if not launcher and Path(r"C:\SIMULIA\Commands\abaqus.bat").exists():
+        launcher = r"C:\SIMULIA\Commands\abaqus.bat"
+
+    if not launcher:
+        return (
+            "LAUNCHER_MISSING",
+            False,
+            "Physical Abaqus launcher (abaqus/abaqus.bat) not found on PATH or default SIMULIA path",
+        )
+
+    # Launcher exists; verify it responds to informational probe
+    try:
+        res = subprocess.run(
+            [launcher, "information=release"],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+        if res.returncode == 0:
+            return ("ENVIRONMENT_READY", True, f"Abaqus launcher ready: {launcher}")
+        return (
+            "LAUNCHER_FOUND_PROBE_FAILED",
+            False,
+            f"Abaqus launcher probe returned non-zero ({res.returncode}): {res.stderr.strip()[:200]}",
+        )
+    except subprocess.TimeoutExpired:
+        return (
+            "LAUNCHER_FOUND_PROBE_FAILED",
+            False,
+            "Abaqus information probe timed out after 10s",
+        )
+    except Exception as exc:
+        return (
+            "LAUNCHER_FOUND_PROBE_FAILED",
+            False,
+            f"Failed to probe Abaqus launcher: {exc!r}",
+        )
+
+
+def _has_physical_abaqus() -> bool:
+    code, ready, _ = _probe_physical_abaqus_environment()
+    return ready
+
+
+def _record_live_gate_audit(nodeid: str, test_name: str, verdict: str, probe_status: str, reason: str) -> None:
+    """Record an audit trail of live environment gate decisions to runs/live_environment_gate.json."""
+    import json
+    import time
+
+    repo_root = Path(__file__).resolve().parent.parent
+    gate_file = repo_root / "runs" / "live_environment_gate.json"
+    gate_file.parent.mkdir(parents=True, exist_ok=True)
+
+    records = {}
+    if gate_file.exists():
+        try:
+            records = json.loads(gate_file.read_text(encoding="utf-8"))
+            if not isinstance(records, dict):
+                records = {}
+        except Exception:
+            records = {}
+
+    records[nodeid] = {
+        "nodeid": nodeid,
+        "test_name": test_name,
+        "verdict": verdict,
+        "probe_status": probe_status,
+        "reason": reason,
+        "timestamp": time.time(),
+    }
+
+    try:
+        gate_file.write_text(json.dumps(records, indent=2, ensure_ascii=False), encoding="utf-8")
+    except Exception:
+        pass
 
 
 def pytest_collection_modifyitems(config, items):
@@ -110,6 +193,7 @@ def pytest_collection_modifyitems(config, items):
         if is_live:
             item.add_marker(live_marker)
             item.add_marker(acceptance_marker)
+            # Strictly exclusive: Live tests are acceptance tests requiring real hardware, never unit tests
             continue
 
         # 2. Smoke tests
@@ -129,15 +213,24 @@ def pytest_collection_modifyitems(config, items):
         if is_acceptance:
             item.add_marker(acceptance_marker)
 
-        # 4. All offline tests receive the unit marker so `pytest -m unit` runs full offline suite
-        item.add_marker(unit_marker)
+        # 4. Strict partitioning: only tests that are NOT live, NOT smoke, and NOT acceptance receive unit marker
+        if not (is_smoke or is_acceptance):
+            item.add_marker(unit_marker)
 
 
 def pytest_runtest_setup(item):
     """Enforce physical environment check for live runs without physical Abaqus."""
     if item.get_closest_marker("live"):
-        if not _has_physical_abaqus():
-            pytest.skip("[BLOCKED] Physical Abaqus environment not detected")
+        code, ready, reason = _probe_physical_abaqus_environment()
+        if not ready:
+            _record_live_gate_audit(
+                nodeid=item.nodeid,
+                test_name=item.name,
+                verdict="BLOCKED",
+                probe_status=code,
+                reason=reason,
+            )
+            pytest.skip(f"[BLOCKED] {reason} (probe_status={code})")
 
 
 def pytest_sessionfinish(session, exitstatus):

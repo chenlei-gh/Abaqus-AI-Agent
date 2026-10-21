@@ -5,6 +5,7 @@ import pytest
 from tools.h6_image_intent_grounding_e2e import run_h6_grounding_e2e
 
 
+@pytest.mark.live
 def test_h6_image_intent_grounding_e2e():
     has_launcher = bool(
         shutil.which("abaqus")

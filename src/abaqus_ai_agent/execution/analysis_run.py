@@ -980,7 +980,8 @@ class AnalysisRunner:
 
             # T3: If a license wait duration was measured upstream (e.g. queue dispatch),
             # attach it to the profiler with source="queue_dispatch" and derivation="none".
-            if phase_profiler is not None and license_wait_seconds is not None:
+            # If wait duration was not measured (None), attach_license_timing explicitly records NOT_RUN.
+            if phase_profiler is not None:
                 from .license import attach_license_timing
                 attach_license_timing(
                     phase_profiler,

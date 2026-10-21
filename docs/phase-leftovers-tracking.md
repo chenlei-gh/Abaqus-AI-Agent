@@ -390,7 +390,7 @@ A4 的审计结果比预期严重，必须单独记录（详见 `docs/phase-timi
 #### 3.3.1 决策阻塞项 C2S 定案
 1. **适用场景严格收敛**：`bulkDataBlocks` 优化范围仅限于全场标量扫描与极值/均值提取（如全场最大 Mises 应力、最大位移标量分量）。
 2. **排除场景**：局部节点集/单元集过滤、历程输出（History Output）、含空间过滤的多步张量不变量重构等，保持走 canonical `fo.values` 遍历，不冒进替换。
-3. **数值等价性公差**：固定为严格 `< 1e-6`（相对公差为 `abs(a - b) / max(1.0, abs(a), abs(b)) <= 1e-6`）。
+3. **数值等价性公差**：固定为严格 `< 1e-6`（相对公差为 `abs(a - b) / max(1.0, abs(a), abs(b)) < 1e-6`，严格小于，杜绝等于边界）。
 4. **主生产链路保持不变**：`src/abaqus_ai_agent/execution/odb_extractor.py` 主提取链路保持原有的 canonical `fo.values` 遍历逻辑不变；必须在真机工程规模 ODB（MV-11）上证明数值零漂移且具有确凿的正向耗时收益后，方可评估合并。
 
 #### 3.3.2 交付物与契约结构
@@ -490,3 +490,4 @@ A4 的审计结果比预期严重，必须单独记录（详见 `docs/phase-timi
 | 2026-10-21 | 阶段 3.2 并行度实验准备与配置审计：实现 `ParallelRunSpec`（严格约束 1/2/4/8，拒绝 bool/float/范围外数值）、`ParallelExperimentResult`、宿主硬件元数据安全收集；改造 `case_07_jounce_bumper_e2e.py` 消除写死并增加 CLI 参数；新增 `tests/test_parallel_experiment.py`（44 passed）。真实基线保留在 MV-07，严禁提前宣称加速比 |
 | 2026-10-21 | 阶段 3.3 与 3.4 实施准备：C2S 定案（仅限全场标量，公差严格 < 1e-6，主链路保持 values 遍历）；交付 `bulk_data_contract.py` 与差分测试（8 passed）；交付测试分级治理 `docs/test-tier-governance.md` 并注册 markers；真机清单扩充 MV-11 并确立严格四态标准（PASS/FAIL/BLOCKED/NOT_RUN） |
 | 2026-10-21 | 门禁 A/B/C 离线闭合加固：(1) 阶段 3.3 `bulk_data_contract.py` 严格公差边界 `< tol * scale` 且强制 `<= 1e-6`、完整三元空间定位器校验、非法数据 Fail-Closed 拒绝（9 passed）；(2) 探针 5 规约正式修订定案，废止 mtime 比较规则（P1-LEFTOVER-04 闭合废止）；(3) 阶段 3.1 License 计时数据接线闭合（P3-LEFTOVER-03）：实现 `attach_license_timing()`，在 `_LicenseContext`、`AnalysisRunner.run`、`agent.analysis_run`、`RunWorker.execute_item` 完整接线，严格标记 `derivation="none"`，单元与集成测试全绿（19 passed）；(4) 阶段 3.4 测试分级落地：`tests/conftest.py` 自动分类赋予 `@pytest.mark.unit`，实机环境缺失显式 `[BLOCKED]` 阻断，2074 unit 用例 100% 通过且零警告。除真机证据项（MV-01～MV-11）外所有离线门禁全部闭环 |
+| 2026-10-21 | 最终离线准入门禁整改（P0-01～P0-09, P1-01～P1-04 一次性闭环）：(1) `conftest.py` 严格分区 markers，unit 与 (smoke|acceptance|live) 严格互斥，1715 纯单元用例 100% 隔离；Live 门禁增强四态状态探针并落盘 `runs/live_environment_gate.json`；(2) `bulk_data_contract.py` 严密加固三元定位器对称校验、标签数组长度全等校验、`is_close_scalar` 排除 bool/非有限数、空块与非法数据 Fail-Closed 拒绝、文档与代码全域统一公差严格 `< 1e-6`；(3) `license.py` 之 `attach_license_timing` 全流程异常隔离防崩溃，布尔/非法值安全转为 NOT_RUN；`analysis_run.py` 与 `worker.py` 所有分支统一透传 profiler 与 license_wait_seconds；(4) 文档编号、时基、T3 接线全域统一。全量 2082 测试（含 `-W error`）全绿，工作区零污染 |

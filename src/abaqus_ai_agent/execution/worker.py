@@ -57,11 +57,13 @@ class RunWorker:
                 if isinstance(payload, AnalysisRun):
                     job_name = payload.job_name
                     model_name = payload.model_name
+                    prof = payload.metadata.get("phase_profiler") if isinstance(payload.metadata, dict) else getattr(payload, "phase_profiler", None)
                     result_run = self.runner.run(
                         model_name=model_name,
                         job_name=job_name,
                         action_plan=payload.action_plan,
                         workdir=sandbox.sandbox_dir,
+                        phase_profiler=prof,
                         license_wait_seconds=item.license_wait_seconds,
                     )
                 elif isinstance(payload, dict):
@@ -78,10 +80,13 @@ class RunWorker:
                     )
                 else:
                     # Generic runner call with sandbox working dir
+                    job_name = getattr(payload, "job_name", "Job-1") if hasattr(payload, "job_name") else "Job-1"
+                    prof = getattr(payload, "phase_profiler", None)
                     result_run = self.runner.run(
                         model_name="Model-1",
                         job_name=job_name,
                         workdir=sandbox.sandbox_dir,
+                        phase_profiler=prof,
                         license_wait_seconds=item.license_wait_seconds,
                     )
             else:
