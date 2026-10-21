@@ -42,6 +42,9 @@ SRC = ROOT / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
+from typing import Optional
+from abaqus_ai_agent.execution.parallel_experiment import ParallelRunSpec
+
 PROBLEM_REL = "test_assets/engineering_cases/case_07_jounce_bumper_self_contact/problem_statement.json"
 CASE_ID = "CASE_07_AUTOMOTIVE_JOUNCE_BUMPER"
 DEFAULT_PROJECT = Path("D:/AbaqusProjects/Case_07_Jounce_Bumper")
@@ -314,8 +317,20 @@ def _build_materials(mdb, model_name):
        "srho": STEEL_DENSITY, "se": STEEL_E, "snu": STEEL_NU}
 
 
-def build_seat_script(src_dir: Path) -> str:
+def build_seat_script(
+    src_dir: Path,
+    num_cpus: int = 4,
+    num_domains: Optional[int] = None,
+) -> str:
     """Abaqus/Standard Step-1: 0.50 mm interference seating."""
+    spec = ParallelRunSpec(
+        job_name="C07SeatJob",
+        model_name="C07Seat",
+        solver_type="STANDARD",
+        num_cpus=num_cpus,
+        num_domains=num_domains,
+        precision="FULL",
+    )
     geo = _fmt_geometry()
     body = '''
 import sys
@@ -378,7 +393,7 @@ model.HistoryOutputRequest(name='EnergyHist', createStepName=STEP,
                            variables=('ALLIE', 'ALLKE', 'ALLSE', 'ALLSD', 'ALLWK', 'ETOTAL'),
                            numIntervals=50)
 
-job = mdb.Job(name=JOB, model=MODEL, type=ANALYSIS, numCpus=4, numDomains=4,
+job = mdb.Job(name=JOB, model=MODEL, type=ANALYSIS, numCpus=%(num_cpus)d, numDomains=%(num_domains)d,
               nodalOutputPrecision=FULL)
 job.writeInput(consistencyChecking=ON)
 print('C07_SEAT_INP_WRITTEN')
@@ -430,12 +445,26 @@ print('C07_SEAT_DONE')
         "si": STRIKER_INNER_RADIUS,
         "so": STRIKER_OUTER_RADIUS,
         "seat": SEAT_STROKE,
+        "num_cpus": spec.num_cpus,
+        "num_domains": spec.effective_domains,
     }
     return body
 
 
-def build_compress_script(src_dir: Path) -> str:
+def build_compress_script(
+    src_dir: Path,
+    num_cpus: int = 4,
+    num_domains: Optional[int] = None,
+) -> str:
     """Abaqus/Explicit Step-2: 51.0 mm quasi-static compression."""
+    spec = ParallelRunSpec(
+        job_name="C07CompressJob",
+        model_name="C07Compress",
+        solver_type="EXPLICIT",
+        num_cpus=num_cpus,
+        num_domains=num_domains,
+        precision="DOUBLE_PLUS_PACK",
+    )
     geo = _fmt_geometry()
     body = '''
 import sys
@@ -507,7 +536,7 @@ model.HistoryOutputRequest(name='EnergyHist', createStepName=STEP,
                                       'ALLPD', 'ALLVD', 'ALLFD', 'ETOTAL'),
                            numIntervals=400)
 
-job = mdb.Job(name=JOB, model=MODEL, type=ANALYSIS, numCpus=4, numDomains=4,
+job = mdb.Job(name=JOB, model=MODEL, type=ANALYSIS, numCpus=%(num_cpus)d, numDomains=%(num_domains)d,
               explicitPrecision=DOUBLE_PLUS_PACK, nodalOutputPrecision=FULL)
 job.writeInput(consistencyChecking=ON)
 print('C07_COMPRESS_INP_WRITTEN')
@@ -553,6 +582,8 @@ print('C07_COMPRESS_DONE')
         "so": STRIKER_OUTER_RADIUS,
         "t": QUASI_STATIC_TIME,
         "stroke": COMPRESSION_STROKE,
+        "num_cpus": spec.num_cpus,
+        "num_domains": spec.effective_domains,
     }
     return body
 
@@ -1103,6 +1134,19 @@ def main() -> int:
         action="store_true",
         help="Skip automatic HTML report and manifest generation on deliverable pass.",
     )
+    parser.add_argument(
+        "--num-cpus",
+        type=int,
+        default=4,
+        choices=[1, 2, 4, 8],
+        help="Parallel CPU count for Abaqus solvers (1, 2, 4, 8; default: 4)",
+    )
+    parser.add_argument(
+        "--num-domains",
+        type=int,
+        default=None,
+        help="Parallel domain decomposition count (default: equals num_cpus)",
+    )
     args = parser.parse_args()
 
     from abaqus_ai_agent.execution.batch import BatchExecutor, resolve_default_launcher
@@ -1130,8 +1174,14 @@ def main() -> int:
     post_script = ctx.working_dir / "case_07_odb_postprocess.py"
     viewer_script = ctx.working_dir / "case_07_render_contours.py"
 
-    seat_script.write_text(build_seat_script(SRC), encoding="utf-8")
-    compress_script.write_text(build_compress_script(SRC), encoding="utf-8")
+    seat_script.write_text(
+        build_seat_script(SRC, num_cpus=args.num_cpus, num_domains=args.num_domains),
+        encoding="utf-8",
+    )
+    compress_script.write_text(
+        build_compress_script(SRC, num_cpus=args.num_cpus, num_domains=args.num_domains),
+        encoding="utf-8",
+    )
     post_script.write_text(POST_SCRIPT, encoding="utf-8")
 
     runs = {}

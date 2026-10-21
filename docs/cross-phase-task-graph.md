@@ -143,7 +143,7 @@ graph TD
 
 | ID | 任务 | 类型 | 前置 |
 | :--- | :--- | :--- | :--- |
-| C1 | `numCpus` = 1/2/4/8 实验框架 | [待实现][待真机] | BASE + T4b（需算例 ≥ 60 s） |
+| C1 | `numCpus` = 1/2/4/8 实验框架 | **[脚手架完成][待真机]** | 脚手架与配置审计已就绪；真机对比实验强依 BASE + 算例 ≥ 60 s |
 | D3 | watchdog 大型隐式真机验证 | [待真机] | 大型算例（**不依赖 BASE**，验证误杀不需性能数据） |
 
 ### 不在本批次
@@ -242,3 +242,4 @@ A2 的契约审查进一步确认：T4 可以不改主链路地拆为 T4a（等�
 | 2026-10-21 | 生产入口默认采集 T4 并落盘到 `evidence/<run.id>/phase_profile.json`。直接调用 `run()` 仍关闭。不闭合 `P3-LEFTOVER-02`，不选基准算例 |
 | 2026-10-21 | 计时落盘失败改为独立 logger 出口。真实读回未做，不闭合 `P3-LEFTOVER-02` |
 | 2026-10-21 | 加固复杂求解日志与 License 契约：T4b 解析器支持双精度并排除 package.exe 等辅助工具；澄清单 job 多 step 为单段；restart 多 job 头判为 AMBIGUOUS；确立严禁 `T4a - T4b` 推导 License 等待的硬隔离红线。真机多步/restart 日志与真实 License 数据纳入统一真机清单 |
+| 2026-10-21 | 阶段 3.2 并行度实验脚手架完成：实现 `ParallelRunSpec`（约束 1/2/4/8 并解耦 numDomains）、`ParallelExperimentResult`、宿主硬件元数据采集；消除 `case_07_jounce_bumper_e2e.py` 写死并新增 CLI 参数；测试（44 passed）。C1 状态更新为 [脚手架完成][待真机] |

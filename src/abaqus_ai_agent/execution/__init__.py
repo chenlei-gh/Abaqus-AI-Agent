@@ -57,3 +57,9 @@ from .reconciliation import (
     write_snapshot,
 )
 from .worker import RunWorker, RunWorkerPool
+from .parallel_experiment import (
+    ParallelRunSpec,
+    ParallelExperimentResult,
+    ParallelExperimentError,
+    collect_host_hardware_metadata,
+)

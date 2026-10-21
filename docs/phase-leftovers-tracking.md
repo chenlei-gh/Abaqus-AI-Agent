@@ -52,7 +52,7 @@
 | 项 | 状态 |
 | :--- | :--- |
 | BASE（完整 T1~T6 基线） | **未启动**；T2 缺失使其只能成为部分基线 |
-| C1（`numCpus` 正式实验） | **未启动**；需 T4b 落地且算例 ≥ 60 s |
+| C1（`numCpus` 正式实验） | **脚手架与配置审计完成**；需真机基线（MV-07，算例 ≥ 60 s）与准入条件满足后统一采集 |
 | C2（`bulkDataBlocks` 等价性） | **未启动**；需 C2S 定案 |
 | D3（watchdog 大型算例） | **未启动**；可独立准备 |
 | 阶段 3.4（测试分级治理） | **未启动** |
@@ -346,7 +346,43 @@ A4 的审计结果比预期严重，必须单独记录（详见 `docs/phase-timi
 
 #### 未启动项
 
-阶段 3.2（`numCpus` 对比）与 3.3（`bulkDataBlocks`）**未启动**，3.4（测试分级治理）未启动。在真实耗时基线（P3-LEFTOVER-01）取得之前，不具备做并行度对比的依据。
+阶段 3.3（`bulkDataBlocks`）**未启动**，3.4（测试分级治理）未启动。在真实耗时基线（P3-LEFTOVER-01）取得之前，不具备做并行度对比的依据。
+
+---
+
+### 3.2 并行度实验准备与配置审计（脚手架就绪，未采集真机基线）
+
+#### 3.2.1 审计发现与异构性确认
+
+1. **并行参数调用点硬编码消除**：
+   - 原 `tools/case_07_jounce_bumper_e2e.py` 中将 Standard（`C07SeatJob`）与 Explicit（`C07CompressJob`）的并行参数死扣为 `numCpus=4, numDomains=4`；
+   - 现已重构 `build_seat_script` 与 `build_compress_script`，支持传入受控的 `num_cpus` 与 `num_domains`，并通过 CLI 参数 `--num-cpus` 与 `--num-domains` 动态配置，默认保持为 4（向下兼容）。
+2. **算例双作业异构性与控制变量**：
+   - `C07SeatJob`（Abaqus/Standard）依赖隐式迭代与刚度矩阵分解；
+   - `C07CompressJob`（Abaqus/Explicit）为大变形准静态显式积分，指定 `explicitPrecision=DOUBLE_PLUS_PACK`；
+   - 两者求解物理与并行机制完全不同，必须独立配置、独立实验记录，绝不能混为同一种求解器的重复实验。
+3. **`numDomains` 显式解耦**：
+   - 独立记录域分解子域数 `numDomains`，不假设其永远等于 `numCpus`（默认缺省时等于 `numCpus`）。
+
+#### 3.2.2 契约数据结构与交付物
+
+1. **`ParallelRunSpec`（`src/abaqus_ai_agent/execution/parallel_experiment.py`）**：
+   - `num_cpus`: 必须严格为 `int` 且取值限于 `{1, 2, 4, 8}`，严禁 `bool`、浮点或范围外数值；
+   - `num_domains`: 可选 `int >= 1`，严格拒绝 `bool`；
+   - `solver_type`: 规范化并校验必须为 `"STANDARD"` 或 `"EXPLICIT"`；
+   - `precision`: 显式记录精度（如 `"SINGLE"`, `"DOUBLE_PLUS_PACK"`, `"FULL"`）；
+   - 提供 `effective_domains` 属性与 `to_dict()` / `from_dict()` 双向序列化。
+2. **`ParallelExperimentResult`**：
+   - 记录 `spec`, `run_id`, `repeat_index`, `status`, `t4a_duration_s`, `t4b_solver_s`, `model_hash`, `inp_hash`, `host_hardware`, `environment`, `evidence_paths`, `timestamp_utc`；
+   - 校验 `repeat_index >= 0`（非 bool）、耗时必须为非负有限浮点数（拒绝 `NaN`/`±Inf`/`bool`）；
+   - 提供 `collect_host_hardware_metadata()` 收集宿主系统、架构、逻辑核心数及内存元数据（纯只读且安全回退）。
+3. **测试资产（`tests/test_parallel_experiment.py`，44 passed）**：
+   - 全面覆盖 1/2/4/8 有效组合、非法 CPU/Domain/Solver 拒绝、布尔与浮点注入防范、硬件收集不崩溃、JSON 序列化往返及 Case 07 脚本文本代码生成验证。
+
+#### 3.2.3 红线约束与当前状态
+
+- **严禁提前宣称加速比**：在真机基线满足准入条件（算例时长 ≥ 60 s、环境控制严格）前，绝不宣称任何多核加速比或性能结论；
+- **真机基线仍未采集**：本子批次仅交付静态配置层与实验脚手架，真实多核基线采集统一保留在 `MV-07`。
 
 ---
 
@@ -417,3 +453,4 @@ A4 的审计结果比预期严重，必须单独记录（详见 `docs/phase-timi
 | 2026-10-21 | 修正 License 计时时钟源与语义契约：明确路径 A（`_LicenseContext`）使用 `time.monotonic()` 测单次 reserve() 耗时，路径 B（`QueueItem`）使用 `time.time()` 测含所有退避重试的全生命周期等待；补充覆盖退避累加与超限失败保持 None 的契约测试（11 passed）。MV-09 保持未验证，T2 保持无可测边界 |
 | 2026-10-21 | 补齐队列 License 等待时长持久化：`_persist_state()` 写入 `license_wait_seconds`，`_load_state()` 兼容旧版恢复，`recover_orphaned_runs()` 崩溃复位；新增持久化往返、旧版兼容及崩溃恢复测试（定向 14 passed） |
 | 2026-10-21 | 加固孤儿任务终止测量语义：`recover_orphaned_runs()` 终止分支（FAILED）保留 RUNNING 状态下已测得的 `license_wait_seconds` 历史证据，仅 requeue 分支清零重测；补充测试（定向 15 passed） |
+| 2026-10-21 | 阶段 3.2 并行度实验准备与配置审计：实现 `ParallelRunSpec`（严格约束 1/2/4/8，拒绝 bool/float/范围外数值）、`ParallelExperimentResult`、宿主硬件元数据安全收集；改造 `case_07_jounce_bumper_e2e.py` 消除写死并增加 CLI 参数；新增 `tests/test_parallel_experiment.py`（44 passed）。真实基线保留在 MV-07，严禁提前宣称加速比 |
