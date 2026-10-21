@@ -19,6 +19,24 @@ class RunResult:
     odb_summary: object = None
 
 
+def _evidence_dir_of(run):
+    """Return the evidence directory this run already owns, or ``None``.
+
+    ``AnalysisRunner.run`` records that directory on the provenance environment
+    when a project context created one. Persistence must reuse it: the run id
+    and the job name are different strings, and creating a second directory
+    from either of them would orphan the file from the rest of the evidence.
+    """
+    provenance = getattr(run, "provenance", None)
+    environment = getattr(provenance, "environment", None)
+    if not isinstance(environment, dict):
+        return None
+    raw = environment.get("evidence_dir")
+    if not raw:
+        return None
+    return Path(raw)
+
+
 def _screening_error_text(exc):
     """Keep the original exception text without turning it into a pass."""
     detail = str(exc).strip()
@@ -700,12 +718,21 @@ class AbaqusAIAgent:
                      action_plan=(), environment=None, timeout=3600, workdir=None,
                      require_production=None, project_context=None):
         from .execution.analysis_run import AnalysisRunner
+        from .telemetry.phase_profile import PhaseProfiler
         cname = getattr(self.executor, "__class__", None).__name__ or ""
         is_test_double = any(token in cname for token in ("Mock", "Fake", "Stub", "Dummy", "OdbBackedExecutor")) or \
                          getattr(self.executor, "_is_mock", False)
         if require_production is None:
             require_production = (self.mode == "production" and not is_test_double)
-        return AnalysisRunner(self.executor).run(
+
+        # Timing is on by default for this entry point. ``strict=False`` so a
+        # profiling fault is recorded, never raised into the solve. The profiler
+        # is created here and finalized here; ``run()`` only writes into it, so
+        # its many early returns cannot skip persistence. The id is filled in
+        # after ``run()`` returns: that method owns the run id, and writing the
+        # profile under the job name would land it in a different evidence dir.
+        profiler = PhaseProfiler(run_id="", strict=False)
+        run = AnalysisRunner(self.executor).run(
             model_name, job_name, odb_path=odb_path, criteria=criteria,
             result_values=result_values, numerical_verification=numerical_verification,
             engineering_checks=engineering_checks, mesh_quality=mesh_quality,
@@ -714,7 +741,58 @@ class AbaqusAIAgent:
             uncertainty=uncertainty, engineering_intent=engineering_intent,
             postprocess_profile=postprocess_profile, action_plan=action_plan,
             environment=environment, timeout=timeout, workdir=workdir,
-            require_production=require_production, project_context=project_context)
+            require_production=require_production, project_context=project_context,
+            phase_profiler=profiler)
+        self._persist_phase_profile(profiler, run)
+        return run
+
+    @staticmethod
+    def _persist_phase_profile(profiler, run):
+        """Write the finalized timing profile into this run's evidence directory.
+
+        Best-effort: a missing context, a read-only directory, or a profiler that
+        refuses to finalize must not change the run the caller already has. The
+        failure is recorded on the profiler so it is not silent, but it is not
+        re-raised.
+
+        The file is written only into the evidence directory ``run()`` already
+        created for this run (``environment["evidence_dir"]``). Creating a new
+        directory from the job name would split one run's evidence across two
+        ids, and a later reader would not know which file belongs to the run.
+        """
+        import json
+        run_id = str(getattr(run, "id", "") or "")
+        if run_id and not getattr(profiler, "run_id", ""):
+            profiler.run_id = run_id
+        try:
+            profile = profiler.finalize()
+        except Exception as exc:  # noqa: BLE001 - observation must not sink the run
+            note = getattr(profiler, "internal_errors", None)
+            if isinstance(note, list):
+                note.append("phase profile not finalized: %r" % (exc,))
+            return
+        evidence_dir = _evidence_dir_of(run)
+        if evidence_dir is None:
+            # No evidence directory was created for this run. The profile stays
+            # in memory only; inventing a path would write it somewhere unsafe.
+            return
+        try:
+            target = evidence_dir / "phase_profile.json"
+            temporary = evidence_dir / ".phase_profile.json.tmp"
+            payload = json.dumps(profile.to_dict(), ensure_ascii=False, indent=2)
+            temporary.write_text(payload, encoding="utf-8")
+            os.replace(str(temporary), str(target))
+        except Exception as exc:  # noqa: BLE001 - persistence is not a solve result
+            note = getattr(profiler, "internal_errors", None)
+            if isinstance(note, list):
+                note.append("phase profile not persisted: %r" % (exc,))
+            try:
+                if evidence_dir is not None:
+                    leftover = evidence_dir / ".phase_profile.json.tmp"
+                    if leftover.is_file():
+                        leftover.unlink()
+            except Exception:
+                pass
 
     def submit(self, job_name, wait=False):
         from .execution.jobs import JobController

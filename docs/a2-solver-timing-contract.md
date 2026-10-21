@@ -147,10 +147,12 @@ T4b 必须**直接取自求解器自报证据**，不能是推导量。这条与
 通过后才求和；若真实多步日志出现时间区间重叠或 job 头重复，解析器会拒绝而非猜测。
 这是 Fail-Closed，但不等于解析正确。
 
-## 3.4 profiler 接入（已实现，未接主链路）
+## 3.4 profiler 接入（生产入口默认采集 T4，不是全生命周期）
 
-`attach_solver_timing()` 把 T4a 与 T4b 写入同一个 `PhaseProfiler`，**不修改**
-`AnalysisRunner`。调用方自行测量等待时长、读取 `.log`，再调用该函数。
+`attach_solver_timing()` 把 T4a 与 T4b 写入同一个 `PhaseProfiler`。
+`AbaqusAIAgent.analysis_run` 现在默认创建该 profiler 并传入 `AnalysisRunner.run`，
+返回后把定稿写入本次运行已有的 `evidence/<run.id>/phase_profile.json`。
+直接调用 `AnalysisRunner.run` 仍然默认不计时。
 
 ### 与 A2-3 / A2-4 的偏差（必须保留，不擅自改条款）
 
@@ -179,8 +181,9 @@ A2-3 要求 T4b 记为独立的 `record_external()` 调用，A2-4 要求 T4b 缺
 * 无 T4a 时阶段记 `NOT_RUN`，不伪造一个实测的 `SOLVER` 记录。
 * 非法等待时长（`NaN`、负数）被拒绝并记入 `internal_errors`，不抛出。
 
-**未完成**：没有任何生产调用方调用 `attach_solver_timing()`。`P3-LEFTOVER-02`
-（剖析器未接入执行链路）因此**不因本函数存在而闭合**。
+**未完成**：生产入口只采集并落盘 T4。T1/T2/T3/T5/T6 仍未接入，
+也没有真实 Abaqus 运行读回过这个文件。`P3-LEFTOVER-02` 因此保持部分接入，
+不因落盘代码存在而闭合。
 
 ## 4. 契约条款
 
@@ -233,3 +236,4 @@ A2-3 的 `scope` 字段是硬要求：没有它，下游无法判断拿到的是
 | 2026-10-21 | 建立本文件：T4 拆为 T4a/T4b；用真实产物证明等待段仅 47% 是求解；确认 `.dat`/`.log` 均为 1 s 量化且小算例不可用；给出 7 条契约条款；解除 A2 阻塞但不实现 |
 | 2026-10-21 | 实现 `execution/solver_timing.py`：五类失败状态（均不返回 0.0）、多段结构自洽性检查后才求和、CRLF/编码容错。真实单砖日志验证得 7.0 s（手算 7 s）。31 项单元测试通过。多步/restart/Explicit 真机结构仍未验证 |
 | 2026-10-21 | 新增 `attach_solver_timing()`：T4a/T4b 写入同一 `PhaseProfiler`，**不改** `AnalysisRunner`。因阶段记录唯一，T4b 存为 `detail["t4b"]` 而非独立 `record_external()`——**偏离 A2-3/A2-4**，偏差写入 `contract_note`。无生产调用方，`P3-LEFTOVER-02` 不因此闭合 |
+| 2026-10-21 | 生产入口 `analysis_run` 默认调用上述接入，并把定稿写入 `evidence/<run.id>/phase_profile.json`。直接调用 `run()` 仍默认关闭。A2-3/A2-4 偏差保留。真实运行未验证 |
