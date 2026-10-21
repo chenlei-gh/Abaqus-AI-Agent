@@ -494,3 +494,42 @@ def test_verify_extraction_equivalence_rejects_conflicting_metric_types():
         "metric_type": "mean",
     }
     assert verify_extraction_equivalence(can_avg, blk_synonym_mean) == BulkDataEquivalenceStatus.EXACT_MATCH
+
+def test_verify_extraction_equivalence_rejects_internal_metric_alias_conflicts():
+    """A result cannot declare contradictory metric_type and aggregation aliases."""
+    canonical_max = {
+        "success": True,
+        "value": 50.0,
+        "locator": {"instance": "PartA", "node_label": 10},
+        "metric_type": "max",
+        "aggregation": "max",
+    }
+    bulk_max = {
+        "success": True,
+        "value": 50.0,
+        "locator": {"instance": "PartA", "node_label": 10},
+        "metric_type": "max",
+        "aggregation": "max",
+    }
+
+    conflicting_canonical = dict(canonical_max, aggregation="average")
+    with pytest.raises(
+        BulkDataEquivalenceError,
+        match="Conflicting metric declarations within canonical",
+    ):
+        verify_extraction_equivalence(conflicting_canonical, bulk_max)
+
+    conflicting_bulk = dict(bulk_max, aggregation="min")
+    with pytest.raises(
+        BulkDataEquivalenceError,
+        match="Conflicting metric declarations within bulk",
+    ):
+        verify_extraction_equivalence(canonical_max, conflicting_bulk)
+
+    # Compatible aliases are accepted after normalization.
+    compatible_aliases = dict(bulk_max, metric_type="peak", aggregation="max")
+    assert (
+        verify_extraction_equivalence(canonical_max, compatible_aliases)
+        == BulkDataEquivalenceStatus.EXACT_MATCH
+    )
+
