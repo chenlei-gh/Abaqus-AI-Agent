@@ -241,3 +241,93 @@ def test_queue_item_exhausted_retries_keeps_license_wait_none():
     queue.process_next(current_time=item.next_eligible_at + 1.0)
     assert item.state is QueueItemState.FAILED
     assert item.license_wait_seconds is None
+
+
+def test_queue_item_license_wait_seconds_persists_and_restores(tmp_path):
+    """license_wait_seconds must survive queue persistence and reloading."""
+    state_file = str(tmp_path / "queue_state.json")
+    provider = MockLicenseProvider()
+    queue = AnalysisRunQueue(max_concurrency=2, license_provider=provider, persistence_path=state_file)
+
+    t0 = 2000.0
+    item = queue.enqueue(
+        payload={"task": "solve"},
+        resources=RunResourceSpec(feature="standard", tokens=1),
+    )
+    item.enqueued_at = t0
+    item.next_eligible_at = t0
+
+    # Dispatch at t0 + 4.25s -> grant license and persist
+    dispatched = queue.process_next(current_time=t0 + 4.25)
+    assert dispatched is not None
+    assert dispatched.license_wait_seconds == pytest.approx(4.25)
+
+    # Reload into a completely fresh queue instance
+    fresh_queue = AnalysisRunQueue(max_concurrency=2, license_provider=provider, persistence_path=state_file)
+    restored = fresh_queue.get_item(item.item_id)
+    assert restored is not None
+    assert restored.state is QueueItemState.RUNNING
+    assert restored.license_wait_seconds == pytest.approx(4.25)
+    assert restored.to_dict()["license_wait_seconds"] == pytest.approx(4.25)
+
+
+def test_queue_item_legacy_persisted_state_without_license_wait_defaults_to_none(tmp_path):
+    """Legacy queue state files lacking 'license_wait_seconds' must restore cleanly with None."""
+    import json
+    state_file = str(tmp_path / "legacy_queue_state.json")
+    legacy_payload = {
+        "version": "queue_state_v1",
+        "saved_at": 1700000000.0,
+        "items": {
+            "legacy_item_1": {
+                "item_id": "legacy_item_1",
+                "priority": "normal",
+                "state": "running",
+                "enqueued_at": 1700000000.0,
+                "started_at": 1700000005.0,
+                "finished_at": None,
+                "retry_count": 0,
+                "max_retries": 3,
+                "backoff_base": 1.0,
+                "backoff_max": 30.0,
+                "jitter_ratio": 0.2,
+                "next_eligible_at": 1700000000.0,
+                "error": None,
+                "resources": {"feature": "standard", "tokens": 1, "cpus": 1, "memory_mb": None, "custom": {}},
+                # "license_wait_seconds" is deliberately absent
+                "payload": {"data": 123},
+                "result": None,
+            }
+        }
+    }
+    with open(state_file, "w", encoding="utf-8") as f:
+        json.dump(legacy_payload, f)
+
+    queue = AnalysisRunQueue(max_concurrency=2, persistence_path=state_file)
+    restored = queue.get_item("legacy_item_1")
+    assert restored is not None
+    assert restored.state is QueueItemState.RUNNING
+    assert restored.license_wait_seconds is None
+
+
+def test_queue_item_orphan_recovery_resets_license_wait_seconds(tmp_path):
+    """When orphaned RUNNING item is requeued after abnormal crash, wait is reset to None."""
+    state_file = str(tmp_path / "crash_queue_state.json")
+    provider = MockLicenseProvider()
+    queue = AnalysisRunQueue(max_concurrency=2, license_provider=provider, persistence_path=state_file)
+
+    t0 = 3000.0
+    item = queue.enqueue(
+        payload={"task": "crash_test"},
+        resources=RunResourceSpec(feature="standard", tokens=1),
+    )
+    item.enqueued_at = t0
+    item.next_eligible_at = t0
+    queue.process_next(current_time=t0 + 2.0)
+    assert item.license_wait_seconds == pytest.approx(2.0)
+
+    # Simulate crash recovery with requeue strategy
+    recovered = queue.recover_orphaned_runs(recovery_strategy="requeue")
+    assert recovered == 1
+    assert item.state is QueueItemState.RETRYING
+    assert item.license_wait_seconds is None

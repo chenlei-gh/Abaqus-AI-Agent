@@ -199,6 +199,7 @@ class AnalysisRunQueue:
                 "jitter_ratio": it.jitter_ratio,
                 "next_eligible_at": it.next_eligible_at,
                 "error": it.error,
+                "license_wait_seconds": it.license_wait_seconds,
                 "resources": {
                     "feature": it.resources.feature,
                     "tokens": it.resources.tokens,
@@ -292,6 +293,11 @@ class AnalysisRunQueue:
                     next_eligible_at=float(it.get("next_eligible_at", time.time())),
                     error=it.get("error"),
                     result=it.get("result"),
+                    license_wait_seconds=(
+                        float(it["license_wait_seconds"])
+                        if it.get("license_wait_seconds") is not None
+                        else None
+                    ),
                 )
                 self._items[qitem.item_id] = qitem
         except Exception:
@@ -313,10 +319,12 @@ class AnalysisRunQueue:
                         it.retry_count += 1
                         it.error = "Recovered from process crash; requeued for clean execution"
                         it.next_eligible_at = time.time()
+                        it.license_wait_seconds = None
                     else:
                         it.state = QueueItemState.FAILED
                         it.error = "Orphaned run aborted due to abnormal system termination"
                         it.finished_at = time.time()
+                        it.license_wait_seconds = None
                     recovered += 1
             if recovered > 0:
                 self._persist_state()
