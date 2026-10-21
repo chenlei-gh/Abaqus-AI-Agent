@@ -23,7 +23,7 @@
 | P2-LEFTOVER-04 | 图像分层核验未接入真实视口捕获链路 | **未接入（按范围决定）** |
 | P2-LEFTOVER-05 | JPEG 仅有头部校验 | **已知边界** |
 | P3-LEFTOVER-02 | 剖析器未接入任何执行链路 | **未接入** |
-| T4b 解析器 | `.log`/`.dat` 求解器耗时**解析器尚未实现** | **未实现** |
+| P3-LEFTOVER-04 | T4b 多步/restart 日志结构未验证 | **解析器已实现，真机结构未验** |
 | T1/T3/T5/T6 打点 | 边界已定义，**无一处接线** | **未接线** |
 | T2 | 网格阶段**无可测边界** | **阻塞**（见 `phase-timing-boundaries.md` §3） |
 
@@ -44,7 +44,7 @@
 | ID | 待定内容 | 状态 |
 | :--- | :--- | :--- |
 | P1-LEFTOVER-04 | 契约 A 探针 5 的 mtime 规则被真实证据双向驳倒 | **待修订** |
-| A2 | T4 已拆为 T4a/T4b，但 **T4b 多步分析聚合规则未验证** | **部分定案** |
+| A2 | T4 已拆为 T4a/T4b，解析器已实现；**T4b 多段语义与多步日志结构未验证** | **部分定案** |
 | C2S | `bulkDataBlocks` 浮点公差适用场景 | **决策阻塞** |
 
 ### 0.4 未启动
@@ -259,6 +259,7 @@
 | P3-LEFTOVER-01 | 真实运行耗时基线未采集 | **未验证** | 无任何真实 Abaqus 运行的 T1~T6 数据；现有测试仅用注入的假时钟与合成耗时 |
 | P3-LEFTOVER-02 | 剖析器未接入执行链路 | **未接入** | `AnalysisRunner` 主链路按决定不改；当前模块是独立可观测组件，任何「主链路已具备分阶段剖析」的说法都不成立 |
 | P3-LEFTOVER-03 | T3 License 排队耗时仍为内部量 | **导出能力已实现，仍无真实测量** | A3 已让 `_LicenseContext.wait_seconds` 与 `QueueItem.license_wait_seconds` 可读取并有单元测试；但**没有调用方**把它们交给 `profiler.record_external()`，也没有真实 FlexNet/DSLS 排队数据。关闭条件「取得真实排队耗时」未满足 |
+| P3-LEFTOVER-04 | T4b 多步 / restart 日志结构未验证 | **解析器已实现，真机结构未验** | `execution/solver_timing.py` 已能解析真实单砖 `.log`（7.0 s，手算 7 s），且多段仅在结构自洽时求和。但**多步分析是否产生多个 solver 段**、这些段语义上是否可加、restart 与 Explicit 的日志结构，均无真实样本。不得把「解析器已实现」读作「多步分析已支持」 | 用真实多步算例（含至少两个载荷步）与一个 restart 算例的 `.log` 重跑解析器，确认段数与耗时与手工核算一致 |
 
 #### 验证层级声明
 
@@ -274,10 +275,22 @@
 | :--- | :--- |
 | 定向 `tests/test_phase_profile.py` | 44 passed → **51 passed**（A5 异常隔离后） |
 | 定向 `tests/test_timing_plumbing.py` | **9 passed**（A1 / A3 新增） |
-| 定向合计（两文件） | **60 passed**（0.43 s） |
+| 定向 `tests/test_solver_timing.py` | **31 passed**（T4b 解析器，含真实日志用例） |
+| 定向合计（三文件） | **91 passed** |
 | 全量 `pytest -q` | **1957 passed**（108.84 s） |
 | 全量 `pytest -W error -q` | **1957 passed**（108.24 s） |
 | `tools/check_workspace_pollution.py` | 提交后校验 |
+
+#### T4b 解析器的验证层级
+
+| 层面 | 已做 |
+| :--- | :--- |
+| 单元（构造日志） | 30 项：单段/多段/重叠/重复/多 job 头/截断/缺失时间戳/倒序时间戳/混乱格式/空文件 |
+| 真实产物（单步单砖） | 1 项：`runs/odb_sample_run/AIAgent_ODBSample.log` → 7.0 s，与手工核算一致 |
+| **真机多步 / restart / Explicit** | **未做**（无样本） |
+
+真实日志用例在该文件不存在时**跳过**而非降级为断言通过；因此 CI 全绿
+**不能**证明解析器与真实日志一致，只能证明它在构造样本上符合契约。
 
 #### 3.1.1 计时基础设施补齐（任务图 A1 / A3 / A4 / A5）
 
@@ -349,3 +362,6 @@ A4 的审计结果比预期严重，必须单独记录（详见 `docs/phase-timi
 | 2026-10-21 | 阶段 3.1：新增 `telemetry/phase_profile.py` 及 24 项单元测试，落地 T1~T6 计时契约（封闭阶段集、单调时钟、失败留痕、未测量≠零、不可重叠、与墙上时钟对账）；登记 3 项遗留（真实耗时基线、未接入 `AnalysisRunner`、`license.py` 耗时未导出）。全量 1921 passed（含 `-W error`） |
 | 2026-10-21 | 阶段 3.1 契约边界加固（仅 `phase_profile.py` 与对应测试）：摘要改为三档完整 JSON 回退（不再按字符截断，放不下则报错）、外部耗时拒绝 `NaN`/`±inf`、`mark_not_run()` 补活动阶段冲突检查。定向 44 passed |
 | 2026-10-21 | 任务图 A1/A3/A4/A5：`BatchResult.duration` 透传、License 排队耗时外露、`PhaseProfiler` 异常隔离（`strict=False` 降级不掩盖真实异常）、T1~T6 边界定义（新增 `docs/phase-timing-boundaries.md`）。**关键发现：T2 无可测边界**（`audit_inp_mesh_quality` 生产零调用，网格生成混在主链路循环内）。定向 60 passed。`P3-LEFTOVER-01/02/03` 全部保持未闭合 |
+| 2026-10-21 | A2 契约（`docs/a2-solver-timing-contract.md`）：T4 拆为 T4a 等待 / T4b 求解器；真实日志证明 15 s 等待中仅 7 s 是 `standard.exe`；`.dat`/`.log` 均为 1 s 量化 |
+| 2026-10-21 | 新增 §0 未完成项总览表（19 项），并把 A2 契约条款与 T4b 实现状态写入文档 |
+| 2026-10-21 | 实现 T4b 解析器 `execution/solver_timing.py` + 31 项测试：五类失败状态均不返回 0.0，多段需结构自洽才求和。真实单砖日志得 7.0 s。新增 `P3-LEFTOVER-04`（多步/restart/Explicit 日志结构未验证） |

@@ -37,6 +37,14 @@ from .recovery import (
     inspect_run_state,
     recover_and_resume,
 )
+from .solver_timing import (
+    LogSegment,
+    SolverTiming,
+    SolverTimingStatus,
+    parse_log_text,
+    read_solver_timing,
+    summarize_solver_timing,
+)
 from .reconciliation import (
     ReconciliationAction,
     ReconciliationReport,
