@@ -41,6 +41,7 @@ from .solver_timing import (
     LogSegment,
     SolverTiming,
     SolverTimingStatus,
+    attach_solver_timing,
     parse_log_text,
     read_solver_timing,
     summarize_solver_timing,

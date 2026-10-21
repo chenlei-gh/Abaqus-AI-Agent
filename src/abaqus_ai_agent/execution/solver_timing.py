@@ -46,6 +46,8 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
 
+from ..telemetry.phase_profile import PipelinePhase
+
 #: .log files only contain phase markers, so they stay small even for large
 #: analyses. The cap exists to keep a pathological file from being slurped, not
 #: because normal logs approach it.
@@ -449,6 +451,100 @@ def read_solver_timing(log_path: Union[str, os.PathLike]) -> SolverTiming:
             detail=timing.detail,
         )
     return timing
+
+
+#: Below this, 1 s quantization makes T4b usable only for order-of-magnitude
+#: judgement, not for comparing runs. Mirrors contract clause A2-7.
+PRECISION_LIMITED_BELOW_S = 10.0
+
+#: ``detail`` keys owned by the profiler; passing one of these makes
+#: ``record_external`` raise, which would drop the whole measurement.
+_PROFILER_RESERVED_DETAIL_KEYS = frozenset({"attempts"})
+
+
+def attach_solver_timing(
+    profiler: Any,
+    wait_seconds: Optional[float],
+    timing: SolverTiming,
+    *,
+    wait_status: str = "",
+) -> Dict[str, Any]:
+    """Record T4a and T4b into a ``PhaseProfiler`` without one overwriting the other.
+
+    The profiler keeps exactly one record per phase (``_measured`` is keyed by
+    ``PipelinePhase``), and a second write to ``SOLVER`` replaces the first while
+    bumping ``attempts``. So T4b cannot be a second ``record_external(SOLVER)``
+    call: it would erase T4a, or be erased by it. It is stored as
+    ``detail["t4b"]`` on the single ``SOLVER`` record instead.
+
+    This is a deliberate deviation from contract clauses A2-3 and A2-4, which ask
+    for T4b to be its own ``record_external`` record and for a missing T4b to be
+    ``NOT_RUN``. Those two cannot coexist with the one-record-per-phase rule
+    without losing one of the two numbers. The deviation is recorded in
+    ``detail["t4b"]["contract_note"]`` rather than silently reinterpreting the
+    clause. See ``docs/a2-solver-timing-contract.md``.
+
+    What this function guarantees instead:
+
+    * T4a and T4b are both present in the serialized profile, under different keys.
+    * A missing or failed T4b is ``"not_measured"`` with ``solver_seconds=None``,
+      never ``0.0`` and never back-filled from the wait.
+    * T4b is never computed by subtracting anything from T4a.
+
+    Returns the same dict as ``summarize_solver_timing`` so callers can persist the
+    aggregate without a second pass. ``profiler`` is typed loosely to avoid an
+    import cycle between ``execution`` and ``telemetry``.
+    """
+    summary = summarize_solver_timing(wait_seconds, timing, wait_status=wait_status)
+
+    t4b_detail = timing.to_dict()
+    t4b_detail["scope"] = "solver_only"
+    t4b_detail["precision_limited"] = bool(
+        timing.measured and timing.solver_seconds < PRECISION_LIMITED_BELOW_S
+    )
+    t4b_detail["contract_note"] = (
+        "stored as detail of the SOLVER record, not as its own record_external "
+        "call: the profiler keeps one record per phase, so a second SOLVER write "
+        "would overwrite T4a. Deviates from contract clauses A2-3 and A2-4."
+    )
+
+    reserved = _PROFILER_RESERVED_DETAIL_KEYS & set(t4b_detail)
+    if reserved:  # pragma: no cover - defensive; to_dict() never emits these
+        raise ValueError(
+            f"T4b detail collides with profiler-reserved keys: {sorted(reserved)}"
+        )
+
+    if wait_seconds is None:
+        # No wait measurement exists. Recording SOLVER as measured with a made-up
+        # duration would be exactly the failure mode this split exists to prevent,
+        # so the phase stays explicitly not-run and T4b rides along in its detail.
+        profiler.mark_not_run(
+            PipelinePhase.SOLVER,
+            reason="T4a wait duration not measured",
+        )
+        # mark_not_run only carries a reason string, so attach T4b by recording it
+        # on the aggregate the caller persists. The phase record itself says why
+        # it is empty.
+        summary["recorded_as"] = "not_run"
+        summary["t4b_attached"] = False
+        summary["t4b_attachment_note"] = (
+            "no T4a measurement to attach T4b to; phase marked NOT_RUN and T4b is "
+            "only in this summary, not in the phase record"
+        )
+        return summary
+
+    record = profiler.record_external(
+        PipelinePhase.SOLVER,
+        wait_seconds,
+        scope="wait",
+        t4b=t4b_detail,
+    )
+    # record_external degrades to NOT_RUN on a rejected duration instead of
+    # raising. Surface that, because a caller who only checks the return value of
+    # this function would otherwise believe T4a was stored.
+    summary["recorded_as"] = record.status.value
+    summary["t4b_attached"] = "t4b" in record.detail
+    return summary
 
 
 def summarize_solver_timing(

@@ -27,9 +27,15 @@ import pytest
 from abaqus_ai_agent.execution.solver_timing import (
     LOG_RESOLUTION_S,
     SolverTimingStatus,
+    attach_solver_timing,
     parse_log_text,
     read_solver_timing,
     summarize_solver_timing,
+)
+from abaqus_ai_agent.telemetry.phase_profile import (
+    PhaseProfiler,
+    PhaseStatus,
+    PipelinePhase,
 )
 
 #: A real single-element Abaqus 2025 job on this machine. Git-ignored; absent on
@@ -427,6 +433,130 @@ def test_summary_zero_wait_does_not_divide_by_zero():
     summary = summarize_solver_timing(0.0, timing)
     assert summary["solver_share_of_wait"] is None
     assert "zero" in summary["solver_share_note"]
+
+
+# ---------------------------------------------------------------------------
+# Profiler attachment: T4a and T4b share one SOLVER record
+# ---------------------------------------------------------------------------
+
+def test_attachment_keeps_both_numbers_in_one_record():
+    """A second SOLVER write would overwrite the first; both must survive."""
+    profiler = PhaseProfiler(run_id="attach-both")
+    timing = parse_log_text(_log(_PRE, _SOLVER, _WRAP))
+    summary = attach_solver_timing(profiler, 15.0, timing)
+
+    profile = profiler.finalize()
+    record = profile.get(PipelinePhase.SOLVER)
+
+    assert record.status is PhaseStatus.MEASURED
+    assert record.duration_s == pytest.approx(15.0)
+    assert record.detail["scope"] == "wait"
+    # ``attempts`` is only written on overwrite. Its absence means exactly one write.
+    assert "attempts" not in record.detail
+
+    t4b = record.detail["t4b"]
+    assert t4b["scope"] == "solver_only"
+    assert t4b["solver_seconds"] == pytest.approx(7.0)
+    assert t4b["resolution_s"] == LOG_RESOLUTION_S
+    assert t4b["precision_limited"] is True  # 7 s < 10 s threshold
+    assert "A2-3" in t4b["contract_note"]
+
+    # The aggregate agrees with what was stored, and derives nothing.
+    assert summary["derivation"] == "none"
+    assert summary["t4b_attached"] is True
+    assert summary["recorded_as"] == "measured"
+
+
+def test_attachment_serializes_both_values():
+    profiler = PhaseProfiler(run_id="attach-json")
+    timing = parse_log_text(_log(_SOLVER))
+    attach_solver_timing(profiler, 15.0, timing)
+
+    payload = profiler.finalize().to_dict()
+    solver = next(p for p in payload["phases"] if p["phase"] == "T4_solver")
+    assert solver["duration_s"] == pytest.approx(15.0)
+    assert solver["detail"]["t4b"]["solver_seconds"] == pytest.approx(7.0)
+    assert solver["detail"]["t4b"]["measured"] is True
+
+
+def test_attachment_does_not_invent_zero_when_log_has_no_solver():
+    """No solver segment: T4a is kept, T4b is explicitly absent, never 0.0."""
+    profiler = PhaseProfiler(run_id="attach-missing")
+    timing = parse_log_text(_log(_PRE, _WRAP))
+    summary = attach_solver_timing(profiler, 15.0, timing)
+
+    record = profiler.finalize().get(PipelinePhase.SOLVER)
+    assert record.duration_s == pytest.approx(15.0)
+    assert record.detail["t4b"]["solver_seconds"] is None
+    assert record.detail["t4b"]["measured"] is False
+    assert record.detail["t4b"]["status"] == "no_solver_segment"
+    # The wait must not leak into the solver field.
+    assert summary["t4b_solver"]["solver_seconds"] is None
+    assert summary["solver_share_of_wait"] is None
+
+
+def test_attachment_truncated_log_is_not_a_short_solve():
+    profiler = PhaseProfiler(run_id="attach-truncated")
+    # A solver block that opens and never closes: the job was killed mid-solve.
+    text = (
+        _HEADER
+        + "Begin Abaqus/Standard Analysis\n"
+        + "10/21/2026 9:27:53 AM\n"
+        + "Run standard.exe\n"
+    )
+    timing = parse_log_text(text)
+    attach_solver_timing(profiler, 15.0, timing)
+
+    t4b = profiler.finalize().get(PipelinePhase.SOLVER).detail["t4b"]
+    assert t4b["status"] == "incomplete"
+    assert t4b["solver_seconds"] is None
+    assert t4b["measured"] is False
+
+
+def test_attachment_without_wait_does_not_fake_a_measured_phase():
+    """No T4a means the phase is NOT_RUN, even if T4b parsed fine."""
+    profiler = PhaseProfiler(run_id="attach-no-wait")
+    timing = parse_log_text(_log(_SOLVER))
+    summary = attach_solver_timing(profiler, None, timing)
+
+    record = profiler.finalize().get(PipelinePhase.SOLVER)
+    assert record.status is PhaseStatus.NOT_RUN
+    assert record.duration_s is None
+    assert summary["recorded_as"] == "not_run"
+    assert summary["t4b_attached"] is False
+    # T4b is not discarded, just not stored inside a phase record.
+    assert summary["t4b_solver"]["solver_seconds"] == pytest.approx(7.0)
+
+
+def test_attachment_rejects_non_finite_wait_without_losing_the_run():
+    """A bad wait duration degrades the record; it must not raise."""
+    profiler = PhaseProfiler(run_id="attach-bad-wait", strict=False)
+    timing = parse_log_text(_log(_SOLVER))
+    summary = attach_solver_timing(profiler, float("nan"), timing)
+
+    record = profiler.finalize().get(PipelinePhase.SOLVER)
+    assert record.status is PhaseStatus.NOT_RUN
+    assert record.duration_s is None
+    assert summary["recorded_as"] == "not_run"
+    assert summary["t4b_attached"] is False
+    assert profiler.internal_errors  # the rejection is visible, not swallowed
+
+
+def test_attachment_long_solve_is_not_flagged_precision_limited():
+    profiler = PhaseProfiler(run_id="attach-long")
+    long_solver = (
+        "Begin Abaqus/Standard Analysis",
+        "standard.exe",
+        "10/21/2026 10:00:00 AM",
+        "10/21/2026 10:01:30 AM",
+        "End Abaqus/Standard Analysis",
+    )
+    timing = parse_log_text(_log(long_solver))
+    attach_solver_timing(profiler, 120.0, timing)
+
+    t4b = profiler.finalize().get(PipelinePhase.SOLVER).detail["t4b"]
+    assert t4b["solver_seconds"] == pytest.approx(90.0)
+    assert t4b["precision_limited"] is False
 
 
 # ---------------------------------------------------------------------------

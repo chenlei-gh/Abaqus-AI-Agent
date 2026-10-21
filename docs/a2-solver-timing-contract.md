@@ -147,6 +147,41 @@ T4b 必须**直接取自求解器自报证据**，不能是推导量。这条与
 通过后才求和；若真实多步日志出现时间区间重叠或 job 头重复，解析器会拒绝而非猜测。
 这是 Fail-Closed，但不等于解析正确。
 
+## 3.4 profiler 接入（已实现，未接主链路）
+
+`attach_solver_timing()` 把 T4a 与 T4b 写入同一个 `PhaseProfiler`，**不修改**
+`AnalysisRunner`。调用方自行测量等待时长、读取 `.log`，再调用该函数。
+
+### 与 A2-3 / A2-4 的偏差（必须保留，不擅自改条款）
+
+A2-3 要求 T4b 记为独立的 `record_external()` 调用，A2-4 要求 T4b 缺失时记
+`NOT_RUN`。这两条与 `PhaseProfiler` 的实现冲突：`_measured` 按 `PipelinePhase`
+唯一（`phase_profile.py:170`），同一阶段第二次写入会**覆盖**第一次并抬高
+`attempts`。若 T4a 与 T4b 都写 `SOLVER`，基线会丢失其中一个。
+
+因此实现选择是：
+
+| 条款 | 原要求 | 实际做法 | 原因 |
+| :--- | :--- | :--- | :--- |
+| A2-2 | T4a 记为 `SOLVER`，`detail` 带 `scope="wait"` | **照做** | 与唯一记录约束兼容 |
+| A2-3 | T4b 独立 `record_external()` | **偏离**：T4b 存为该记录的 `detail["t4b"]` | 第二次写入会覆盖 T4a |
+| A2-4 | T4b 缺失记 `NOT_RUN` | **偏离**：记 `solver_seconds=None`、`measured=false` | `NOT_RUN` 会覆盖已有的 T4a 记录 |
+| A2-5 | 不得由 T4a 减法得到 | **照做** | `derivation="none"` |
+| A2-6 | `resolution_s=1` | **照做** | 来自 `timing.to_dict()` |
+| A2-7 | < 10 s 标 `precision_limited` | **照做** | `detail["t4b"]["precision_limited"]` |
+
+偏差写入 `detail["t4b"]["contract_note"]`，序列化后可见，不靠口头说明。
+
+保留的硬保证（不受偏差影响）：
+
+* T4a 与 T4b 都出现在序列化结果中，键不同，互不覆盖。
+* 失败、缺失、截断的 T4b 是 `None`，**不是 `0.0`**，也不回退成 T4a。
+* 无 T4a 时阶段记 `NOT_RUN`，不伪造一个实测的 `SOLVER` 记录。
+* 非法等待时长（`NaN`、负数）被拒绝并记入 `internal_errors`，不抛出。
+
+**未完成**：没有任何生产调用方调用 `attach_solver_timing()`。`P3-LEFTOVER-02`
+（剖析器未接入执行链路）因此**不因本函数存在而闭合**。
+
 ## 4. 契约条款
 
 | # | 条款 |
@@ -197,3 +232,4 @@ A2-3 的 `scope` 字段是硬要求：没有它，下游无法判断拿到的是
 | :--- | :--- |
 | 2026-10-21 | 建立本文件：T4 拆为 T4a/T4b；用真实产物证明等待段仅 47% 是求解；确认 `.dat`/`.log` 均为 1 s 量化且小算例不可用；给出 7 条契约条款；解除 A2 阻塞但不实现 |
 | 2026-10-21 | 实现 `execution/solver_timing.py`：五类失败状态（均不返回 0.0）、多段结构自洽性检查后才求和、CRLF/编码容错。真实单砖日志验证得 7.0 s（手算 7 s）。31 项单元测试通过。多步/restart/Explicit 真机结构仍未验证 |
+| 2026-10-21 | 新增 `attach_solver_timing()`：T4a/T4b 写入同一 `PhaseProfiler`，**不改** `AnalysisRunner`。因阶段记录唯一，T4b 存为 `detail["t4b"]` 而非独立 `record_external()`——**偏离 A2-3/A2-4**，偏差写入 `contract_note`。无生产调用方，`P3-LEFTOVER-02` 不因此闭合 |

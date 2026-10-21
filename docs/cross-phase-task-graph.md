@@ -237,3 +237,4 @@ A2 的契约审查进一步确认：T4 可以不改主链路地拆为 T4a（等�
 | 2026-10-21 | A2 契约审查完成（`docs/a2-solver-timing-contract.md`）：根据真实 `.log` 将 T4 拆为 T4a（等待，15 s）/ T4b（求解器，7 s），证明等待≠求解；确认 `.dat`/`.log` 均为 1 s 量化且秒级算例不可用。**阻塞解除，且确认不需要改主链路**；T4b 解析器仍未实现 |
 | 2026-10-21 | 按决定调整依赖图：D3 不再挂在 BASE 下（验证误杀不需性能基线），C1 仍强依 BASE |
 | 2026-10-21 | T4b 解析器实现：`execution/solver_timing.py`，五类失败状态均不返回 0.0；真实单砖日志验证 7.0 s。多步/restart 结构登记为 `P3-LEFTOVER-04` |
+| 2026-10-21 | T4a/T4b 接入 `PhaseProfiler`：`attach_solver_timing()`，不改主链路。因阶段记录唯一而偏离 A2-3/A2-4，T4b 存为 `detail["t4b"]`。无生产调用方，不闭合 `P3-LEFTOVER-02` |
