@@ -132,6 +132,71 @@
 
 ---
 
+## 阶段 3 验收记录（进行中）
+
+阶段 2 的实现保持不变；真实 Provider、真实 ODB、真实规模计时统一留到最后一轮集中验证。
+
+### 3.1 全生命周期耗时剖析（T1 ~ T6）
+
+#### 审计结论：当前仓库不具备任何分阶段耗时剖析设施
+
+| T 阶段 | 审计时已有能力 | 结论 |
+| :--- | :--- | :--- |
+| T1 CAD 解析 | 无 | 缺失 |
+| T2 网格编译 | 无 | 缺失 |
+| T3 License 排队 | `execution/license.py` 内部算 `elapsed` 但未返回 | 需外部适配 |
+| T4 物理求解 | `execution/watchdog.py` 已有 `total_duration` / `WatchedProcessResult.duration` | 可外部登记 |
+| T5 数据提取 | `execution/odb_extractor.py` 仅有文件时间戳 | 缺失 |
+| T6 报告生成 | 无 | 缺失 |
+
+审计结论：**不存在**统一的分阶段剖析设施，也没有跨阶段一致性校验。
+
+#### 计时契约（`telemetry/phase_profile.py`）
+
+| # | 契约 | 落地方式 |
+| :--- | :--- | :--- |
+| 1 | 阶段集合封闭为 6 个 | `PipelinePhase` 枚举；`to_dict()` 恒输出全部 6 项 |
+| 2 | 单调时钟 | `time.monotonic()`；同时记录 UTC 起止供审计 |
+| 3 | 失败是记录结果，不是丢失测量 | `FAILED` + 已耗时 + 异常类型/消息，异常原样重抛 |
+| 4 | 未测量 ≠ 零 | 未进入阶段为 `NOT_RUN` 且 `duration_s=None`；`mark_not_run()` 不能覆盖已有实测 |
+| 5 | 阶段不可重叠 | 重入另一阶段抛 `PhaseProfileError` |
+| 6 | 分解必须与墙上时钟对账 | `unattributed_s` 如实报告；阶段总和超墙上时钟时给出 `reconciliation_error`，**不 clamp 为 0** |
+
+墙上时钟自 `PhaseProfiler` **构造时**起算，而非首次 `measure()`。否则首个阶段之前的初始化耗时会被排除，`unattributed_s` 会低估真实开销。
+
+`record_external()` 用于把既有测量（`WatchedProcessResult.duration`、lmstat 轮询耗时）纳入同一契约，**不改造** `license.py` / `watchdog.py` 的返回语义，也不触碰求解器热路径。
+
+#### 本阶段遗留项
+
+| ID | 项 | 状态 | 说明 |
+| :--- | :--- | :--- | :--- |
+| P3-LEFTOVER-01 | 真实运行耗时基线未采集 | **未验证** | 无任何真实 Abaqus 运行的 T1~T6 数据；现有测试仅用注入的假时钟与合成耗时 |
+| P3-LEFTOVER-02 | 剖析器未接入执行链路 | **未接入** | `AnalysisRunner` 主链路按决定不改；当前模块是独立可观测组件，任何「主链路已具备分阶段剖析」的说法都不成立 |
+| P3-LEFTOVER-03 | T3 License 排队耗时仍为内部量 | **未导出** | `license.py` 的 `elapsed` 未返回，需在真正接线时再适配，本轮不改动 |
+
+#### 验证层级声明
+
+本项证据全部为**单元级**：
+
+- `tests/test_phase_profile.py`（24 passed）使用 `FakeClock` 注入 `pp.time.monotonic`，断言的是契约行为，不是真实耗时；
+- **没有**真实 Abaqus 求解、**没有**真实 License 排队、**没有**真实 ODB 提取；
+- 通过本组测试**不能**推断任何真实阶段耗时，也**不能**推断阶段 1/2 的真实环境遗留项已关闭。
+
+#### 测试与回归
+
+| 项 | 结果 |
+| :--- | :--- |
+| 定向 `tests/test_phase_profile.py` | 24 passed |
+| 全量 `pytest -q` | 1921 passed（116 s） |
+| 全量 `pytest -W error -q` | 1921 passed（108 s） |
+| `tools/check_workspace_pollution.py` | passed |
+
+#### 未启动项
+
+阶段 3.2（`numCpus` 对比）与 3.3（`bulkDataBlocks`）**未启动**，3.4（测试分级治理）未启动。在真实耗时基线（P3-LEFTOVER-01）取得之前，不具备做并行度对比的依据。
+
+---
+
 ## 变更历史
 
 | 日期 | 变更 |
@@ -141,3 +206,4 @@
 | 2026-10-21 | 契约加固：缓存结构损坏归一为未命中、计数自洽校验、摘要严格 `<1500`、遥测来源降级、Provider usage 有效性校验、基准证据分层。全量 1889 passed（含 `-W error`） |
 | 2026-10-21 | 补齐计数校验边界：`_coerce_count` 拒绝 `bool`/浮点/负数/缺失（不再依赖会截断的 `int()`），计数校验进入同一归一化块， `result_ref_from_payload` 同口径。全量 1897 passed（含 `-W error`） |
 | 2026-10-21 | 在 §2.4 增加计量的三个层级声明：请求级 usage、组件级本地分解、账单对账不得混用（仅文档澄清，无代码变更） |
+| 2026-10-21 | 阶段 3.1：新增 `telemetry/phase_profile.py` 及 24 项单元测试，落地 T1~T6 计时契约（封闭阶段集、单调时钟、失败留痕、未测量≠零、不可重叠、与墙上时钟对账）；登记 3 项遗留（真实耗时基线、未接入 `AnalysisRunner`、`license.py` 耗时未导出）。全量 1921 passed（含 `-W error`） |
