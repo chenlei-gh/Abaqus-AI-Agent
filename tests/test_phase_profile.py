@@ -13,6 +13,9 @@ Deliberately NOT asserted here:
 
 from __future__ import annotations
 
+import json
+import math
+
 import pytest
 
 from abaqus_ai_agent.telemetry import phase_profile as pp
@@ -284,11 +287,64 @@ def test_external_duration_validates_its_input(clock, bad_duration):
         profiler.record_external(PipelinePhase.SOLVER, bad_duration)
 
 
+@pytest.mark.parametrize(
+    "non_finite,slips_past_negative_check",
+    [
+        (float("nan"), True),
+        (float("inf"), True),
+        (float("-inf"), False),
+    ],
+    ids=["nan", "pos_inf", "neg_inf"],
+)
+def test_external_duration_rejects_non_finite_values(
+    clock, non_finite, slips_past_negative_check
+):
+    """``nan``/``inf`` pass a ``< 0`` check, so finiteness needs its own gate."""
+    assert (not non_finite < 0) is slips_past_negative_check
+    profiler = PhaseProfiler()
+    with pytest.raises(PhaseProfileError, match="finite"):
+        profiler.record_external(PipelinePhase.SOLVER, non_finite)
+
+
+def test_non_finite_duration_cannot_poison_reconciliation(clock):
+    """A rejected non-finite value must leave the profile reconcilable."""
+    profiler = PhaseProfiler()
+    with pytest.raises(PhaseProfileError):
+        profiler.record_external(PipelinePhase.SOLVER, math.nan)
+    profiler.mark_not_run(PipelinePhase.SOLVER, reason="not attempted")
+    clock.advance(1.0)
+    profile = profiler.finalize()
+
+    assert profile.sum_phase_s == 0.0
+    assert profile.reconciliation_error is None
+    assert profile.unattributed_s == pytest.approx(1.0)
+
+
 def test_external_duration_refused_while_another_phase_is_active(clock):
     profiler = PhaseProfiler()
     with profiler.measure(PipelinePhase.SOLVER):
         with pytest.raises(PhaseProfileError, match="while"):
             profiler.record_external(PipelinePhase.DATA_EXTRACTION, 1.0)
+
+
+def test_mark_not_run_refused_while_a_phase_is_active(clock):
+    """NOT_RUN written mid-measurement would be overwritten and inflate attempts."""
+    profiler = PhaseProfiler()
+    with profiler.measure(PipelinePhase.SOLVER):
+        with pytest.raises(PhaseProfileError, match="while"):
+            profiler.mark_not_run(PipelinePhase.DATA_EXTRACTION, reason="skipped")
+
+
+def test_mark_not_run_refused_for_the_phase_being_measured(clock):
+    profiler = PhaseProfiler()
+    with profiler.measure(PipelinePhase.SOLVER):
+        with pytest.raises(PhaseProfileError, match="while"):
+            profiler.mark_not_run(PipelinePhase.SOLVER)
+
+    profile = profiler.finalize()
+    record = profile.get(PipelinePhase.SOLVER)
+    assert record.status is PhaseStatus.MEASURED
+    assert "attempts" not in record.detail
 
 
 # ---------------------------------------------------------------------------
@@ -313,9 +369,59 @@ def test_llm_summary_is_bounded_and_marks_missing_phases(clock):
     profile = profiler.finalize()
 
     summary = profile.to_llm_summary(max_chars=400)
-    assert len(summary) < 400
+    assert len(summary) <= 400
     assert "T4_solver" in summary
     assert "not_run" in summary
+
+
+@pytest.mark.parametrize("max_chars", [140, 160, 240, 400, 600, 2000])
+def test_llm_summary_is_always_valid_json(clock, max_chars):
+    """Bounding must never slice the payload mid-token."""
+    profiler = PhaseProfiler(run_id="R-json")
+    with profiler.measure(PipelinePhase.SOLVER):
+        clock.advance(8.0)
+    with pytest.raises(RuntimeError):
+        with profiler.measure(PipelinePhase.DATA_EXTRACTION):
+            raise RuntimeError("extraction exploded")
+    profiler.mark_not_run(PipelinePhase.CAD_PARSING, reason="no CAD")
+    profile = profiler.finalize()
+
+    summary = profile.to_llm_summary(max_chars=max_chars)
+    assert len(summary) <= max_chars
+    parsed = json.loads(summary)
+    assert parsed["run_id"] == "R-json"
+
+
+def test_llm_summary_degrades_without_losing_measured_phases(clock):
+    """Tighter budgets drop detail, never the measurements themselves."""
+    profiler = PhaseProfiler(run_id="R-tiers")
+    with profiler.measure(PipelinePhase.SOLVER):
+        clock.advance(8.0)
+    profile = profiler.finalize()
+
+    wide = json.loads(profile.to_llm_summary(max_chars=2000))
+    narrow = json.loads(profile.to_llm_summary(max_chars=140))
+
+    assert len(wide["phases"]) == 6
+    assert narrow["phases"]["T4_solver"] == pytest.approx(8.0)
+    assert "not_run" in narrow or "not_run_count" in narrow
+
+
+def test_llm_summary_refuses_an_impossible_budget(clock):
+    profiler = PhaseProfiler(run_id="R" * 120)
+    with profiler.measure(PipelinePhase.SOLVER):
+        clock.advance(1.0)
+    profile = profiler.finalize()
+
+    with pytest.raises(PhaseProfileError, match="valid"):
+        profile.to_llm_summary(max_chars=40)
+
+
+@pytest.mark.parametrize("bad", [0, -1, 3.5, True, "600", None], ids=["zero", "neg", "float", "bool", "str", "none"])
+def test_llm_summary_validates_max_chars(clock, bad):
+    profile = PhaseProfiler().finalize()
+    with pytest.raises(PhaseProfileError, match="max_chars"):
+        profile.to_llm_summary(max_chars=bad)
 
 
 def test_llm_summary_surfaces_reconciliation_errors():
@@ -330,4 +436,6 @@ def test_llm_summary_surfaces_reconciliation_errors():
         ),
         total_wall_clock_s=1.0,
     )
-    assert "reconciliation_error" in profile.to_llm_summary()
+    summary = profile.to_llm_summary()
+    assert "reconciliation_error" in summary
+    assert json.loads(summary)["reconciliation_error"]

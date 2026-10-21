@@ -166,6 +166,16 @@
 
 `record_external()` 用于把既有测量（`WatchedProcessResult.duration`、lmstat 轮询耗时）纳入同一契约，**不改造** `license.py` / `watchdog.py` 的返回语义，也不触碰求解器热路径。
 
+外部耗时的取值校验：非数值、`bool`、负数、以及**非有限值**（`NaN` / `±inf`）一律拒绝。非有限值绕得过 `< 0` 检查（`nan < 0` 与 `inf < 0` 均为 `False`），却能污染 `sum_phase_s` 与 `unattributed_s` 而表面仍像已测量，故单独以 `math.isfinite()` 设闸。
+
+`mark_not_run()` 与 `record_external()` 共用同一条活动阶段冲突规则：任何阶段正在计时时，不得写入 `NOT_RUN`。否则 `NOT_RUN` 会被随后正常结束的计时覆盖，并凭空抬高 `attempts` 计数。
+
+#### 摘要输出的有界化（`to_llm_summary`）
+
+摘要**不再按字符数切割**。截断后的 JSON 不是更短的摘要，而是损坏的输出。实现改为三档物料（全六阶段 / 实测值 + 未运行清单 / 实测值 + 未运行计数），**每档都是完整 JSON**，取第一个满足预算的档位返回；三档均放不下时抛 `PhaseProfileError`，而不是返回不可解析的字符串。`max_chars` 本身也校验为严格正整数。
+
+档位长度并不严格单调（无 `NOT_RUN` 时，较短档位携带空列表而略长），但因「首个适配即返回」且更长档位必定更长，结论不受影响；关键在于任何档位都从未被切割。
+
 #### 本阶段遗留项
 
 | ID | 项 | 状态 | 说明 |
@@ -186,9 +196,9 @@
 
 | 项 | 结果 |
 | :--- | :--- |
-| 定向 `tests/test_phase_profile.py` | 24 passed |
-| 全量 `pytest -q` | 1921 passed（116 s） |
-| 全量 `pytest -W error -q` | 1921 passed（108 s） |
+| 定向 `tests/test_phase_profile.py` | 44 passed |
+| 全量 `pytest -q` | 1921 passed（116 s）→ 1941 passed（契约边界加固后） |
+| 全量 `pytest -W error -q` | 1921 passed（108 s）→ 1941 passed（契约边界加固后） |
 | `tools/check_workspace_pollution.py` | passed |
 
 #### 未启动项
@@ -207,3 +217,4 @@
 | 2026-10-21 | 补齐计数校验边界：`_coerce_count` 拒绝 `bool`/浮点/负数/缺失（不再依赖会截断的 `int()`），计数校验进入同一归一化块， `result_ref_from_payload` 同口径。全量 1897 passed（含 `-W error`） |
 | 2026-10-21 | 在 §2.4 增加计量的三个层级声明：请求级 usage、组件级本地分解、账单对账不得混用（仅文档澄清，无代码变更） |
 | 2026-10-21 | 阶段 3.1：新增 `telemetry/phase_profile.py` 及 24 项单元测试，落地 T1~T6 计时契约（封闭阶段集、单调时钟、失败留痕、未测量≠零、不可重叠、与墙上时钟对账）；登记 3 项遗留（真实耗时基线、未接入 `AnalysisRunner`、`license.py` 耗时未导出）。全量 1921 passed（含 `-W error`） |
+| 2026-10-21 | 阶段 3.1 契约边界加固（仅 `phase_profile.py` 与对应测试）：摘要改为三档完整 JSON 回退（不再按字符截断，放不下则报错）、外部耗时拒绝 `NaN`/`±inf`、`mark_not_run()` 补活动阶段冲突检查。定向 44 passed |

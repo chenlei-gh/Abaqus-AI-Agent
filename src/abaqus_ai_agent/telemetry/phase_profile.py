@@ -34,6 +34,8 @@ Contract
 from __future__ import annotations
 
 import datetime
+import json
+import math
 import time
 from contextlib import contextmanager
 from dataclasses import dataclass, field, replace
@@ -255,6 +257,12 @@ class PhaseProfiler:
             raise PhaseProfileError(
                 f"duration_s must be a number, got {type(duration_s).__name__}."
             )
+        # Non-finite values pass a ``< 0`` check (nan and inf both compare False),
+        # and would poison sum_phase_s / unattributed_s while still looking measured.
+        if not math.isfinite(duration_s):
+            raise PhaseProfileError(
+                f"duration_s must be finite, got {duration_s!r}."
+            )
         if duration_s < 0:
             raise PhaseProfileError(f"duration_s must be non-negative, got {duration_s}.")
         record = PhaseRecord(
@@ -271,6 +279,13 @@ class PhaseProfiler:
         """Record that a phase was deliberately skipped, without inventing a 0.0."""
         if self._finalized:
             raise PhaseProfileError("Cannot mark a phase after finalize().")
+        # Same conflict rule as record_external(): marking a phase while another
+        # measurement is open would let a later close overwrite this NOT_RUN and
+        # inflate the retry counter with contradictory states.
+        if self._active is not None:
+            raise PhaseProfileError(
+                f"Cannot mark {phase.value} while {self._active.value} is active."
+            )
         if phase in self._measured and self._measured[phase].is_measured:
             raise PhaseProfileError(
                 f"Phase {phase.value} already has a measurement; refusing to overwrite "
@@ -379,21 +394,61 @@ class PhaseProfile:
         }
 
     def to_llm_summary(self, max_chars: int = 600) -> str:
-        """Bounded scalar view for model context; full profile stays on disk."""
-        import json
+        """Bounded scalar view for model context; full profile stays on disk.
 
-        payload = {
+        Every tier of the fallback chain emits complete JSON. The summary is never
+        sliced by character count: a truncated JSON string is not a smaller summary,
+        it is corrupt output. If no tier fits ``max_chars``, the call fails loudly
+        instead of returning something a consumer cannot parse.
+        """
+        if isinstance(max_chars, bool) or not isinstance(max_chars, int) or max_chars < 1:
+            raise PhaseProfileError(
+                f"max_chars must be a positive int, got {max_chars!r}."
+            )
+
+        for payload in self._summary_tiers():
+            text = json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
+            if len(text) <= max_chars:
+                return text
+
+        raise PhaseProfileError(
+            f"Cannot render a summary within {max_chars} characters while staying valid "
+            f"JSON; run_id alone is {len(self.run_id)} characters. Use to_dict() for the "
+            "full profile or raise the limit."
+        )
+
+    def _summary_tiers(self) -> Iterator[Dict[str, Any]]:
+        """Payloads from most to least detailed; each one is complete JSON.
+
+        The tiers are not strictly monotonic in size: when no phase is ``NOT_RUN``,
+        the shorter tiers carry a redundant empty list. That is harmless because the
+        first fit wins -- if a tier fails to fit while a later one succeeds, the later
+        one is necessarily shorter. What matters is that no tier is ever sliced.
+        """
+        measured = [(r.phase.value, r.duration_s) for r in self.records if r.is_measured]
+        not_run = [r.phase.value for r in self.records if r.status is PhaseStatus.NOT_RUN]
+
+        base: Dict[str, Any] = {
             "run_id": self.run_id,
             "wall_s": self.total_wall_clock_s,
             "unattributed_s": self.unattributed_s,
+        }
+        if self.reconciliation_error:
+            base["reconciliation_error"] = self.reconciliation_error
+
+        # 1. All six phases, discriminated by status.
+        yield {
+            **base,
             "phases": {
-                r.phase.value: (
-                    r.duration_s if r.is_measured else "not_run"
-                )
+                r.phase.value: (r.duration_s if r.is_measured else "not_run")
                 for r in self.records
             },
         }
-        if self.reconciliation_error:
-            payload["reconciliation_error"] = self.reconciliation_error
-        text = json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
-        return text if len(text) < max_chars else text[: max_chars - 4] + "..."
+        # 2. Measured durations plus an explicit list of what was skipped.
+        yield {**base, "phases": dict(measured), "not_run": not_run}
+        # 3. Counts only. ``not_run_count`` keeps absence visible without naming it.
+        yield {
+            **base,
+            "phases": dict(measured),
+            "not_run_count": len(not_run),
+        }
