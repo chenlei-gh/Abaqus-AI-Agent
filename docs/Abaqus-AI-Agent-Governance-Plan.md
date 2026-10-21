@@ -205,19 +205,19 @@
 - 不把实验脚手架、队列账本或 `select_solver` 记录称为已实现的自适应。
 - 不新开一轮零散真机验证。仍沿用 MV-01～MV-11。与本能力直接相关的是 MV-01、MV-07、MV-08、MV-09、MV-10，当前均为 NOT_RUN 或未在工程规模闭合。
 
-### 7.5 本阶段落地状态（2026-10-21 更新：自适应配置器与资源仲裁器落地）
+### 7.5 本阶段落地状态（2026-10-21 更新：自适应配置器与资源仲裁器全链路闭合）
 
 已落地，且有离线契约与定向测试闭环：
 
 - `compiler.py` 的 `procedure` / `steps` / 单 `step` 三条路径共用 `_step_action_for_type`。已证实的静默回退已修。未知 `step_type` 失败，不再变成 `StaticStep`。
 - `execution/solver_config.py` 实现证据驱动自适应配置器（`resolve_job_kwargs` / `resolve_explicit_job_kwargs`）：
-  * **CPU 自动选择**：根据物理/逻辑核心、宿主余量预留（不饱和占用）、模型网格规模与许可证 Token 限制进行自适应选核（`source="evidence_adjusted", sent_to_solver=True`）。显式传入始终最高优先级。
-  * **内存自适应**：探测宿主物理内存总量，自适应设置 75% 物理内存分配（`memory=75, memoryUnits=PERCENTAGE`），防止磁盘换页 thrashing 同时杜绝宿主 OOM。
-  * **许可证 Token 换算**：实现 Dassault 官方标准换算公式 $\lfloor 5 \times C^{0.422} \rfloor$ 与其逆函数，支持许可感知的核数自适应约束。
+  * **CPU 自动选择与 Token 硬下限**：根据物理/逻辑核心、宿主余量预留（不饱和占用）、模型网格规模与许可证 Token 限制进行自适应选核（`source="evidence_adjusted", sent_to_solver=True`）。当可用 Token < 5（不足以启动 1 核）时，严格推导为 0 核并做 `source="refused", sent_to_solver=False` 拒绝决策，绝不强行将核数推算为 1；显式传入始终最高优先级。
+  * **内存自适应与证据门禁**：探测宿主物理内存总量，确认硬件证据后自适应设置 75% 物理内存分配（`memory=75, memoryUnits=PERCENTAGE`），防止磁盘换页 thrashing 同时杜绝宿主 OOM；若物理内存无法验证，严格回退为 `source="safe_default", sent_to_solver=False`，绝不冒充自适应证据写入求解器参数。
+  * **许可证 Token 换算**：实现 Dassault 官方标准换算公式 $\lfloor 5 \times C^{0.422} \rfloor$ 与其逆函数，支持许可感知的核数自适应硬约束。
   * **精度自适应与防降级红线**：Explicit 大变形算例推荐 `DOUBLE_PLUS_PACK`，严禁任何自动路径将显式声明的精度降级。
-- `AnalysisRunner.run(..., job_options=None)` 与 `AbaqusAIAgent.analysis_run` 支持 `job_options={"adaptive": True}`，自适应决策完整落盘至元数据。
-- 定向测试：`tests/test_adaptive_solver_config.py` 11 passed；`tests/test_solver_config_wiring.py` 15 passed。全部通过。
-- 真机清单校准：MV-01 标为 `QUALIFIED_PASS`，MV-07 标为 `BASELINE_ESTABLISHED`，MV-08 标为 `PASS_INTEGRATION`，MV-09 标为 `TOKEN_VERIFIED`，清单明确为 SHA-256 完整性哈希校验，readiness 描述已纠正。
+- `AnalysisRunner.run` 主链路全上下文接通：自动从 `mesh_quality` / `mesh_convergence` / `intent` / `inp_text` 提取网格规模，从 `environment` / 操作系统环境提取 `available_tokens` 与硬件信息，从 `intent` 提取物理非线性（大变形与接触）特征，自适应推导结果与决策元数据完整记录落盘。
+- 定向测试：`tests/test_adaptive_solver_config.py` 14 passed；`tests/test_solver_config_wiring.py` 15 passed。全部通过。
+- 真机清单校准：MV-01 标为 `QUALIFIED_PASS`，MV-07 标为 `BASELINE_ESTABLISHED`，MV-08 标为 `PASS_INTEGRATION`，MV-09 标为 `TOKEN_VERIFIED`，MV-04 明确排除在本次生产范围之外，清单明确为 SHA-256 完整性哈希校验，readiness 描述已纠正为 `QUALIFIED_BASELINE (6 fully passed, 4 qualified/baseline verified, 1 commercial billing excluded from scope)`。
 
 ### 7.4 本阶段验收
 

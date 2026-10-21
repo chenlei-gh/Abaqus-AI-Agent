@@ -828,13 +828,122 @@ class AnalysisRunner:
         _persist_ledger("PREFLIGHTED", run)
         try:
             snapshot = initial_snapshot
-            if snapshot is not None and job_name not in snapshot.jobs:
+            if snapshot is not None and job_name not in getattr(snapshot, "jobs", ()):
                 from .solver_config import resolve_job_kwargs
                 is_adaptive = bool(job_options and job_options.get("adaptive", False))
+
+                # 1. Resolve solver_type from self, intent, or postprocess_profile
+                effective_solver_type = getattr(self, "solver_type", None)
+                if not effective_solver_type and engineering_intent is not None:
+                    try:
+                        from ..contracts.solver_selection import select_solver
+                        selection = select_solver(engineering_intent)
+                        slv = getattr(selection, "solver", "") or getattr(selection, "product", "")
+                        if "EXPLICIT" in str(slv).upper():
+                            effective_solver_type = "EXPLICIT"
+                        elif "STANDARD" in str(slv).upper():
+                            effective_solver_type = "STANDARD"
+                    except Exception:
+                        pass
+                    if not effective_solver_type:
+                        atype = str(getattr(engineering_intent, "analysis_type", "")).upper()
+                        if "EXPLICIT" in atype:
+                            effective_solver_type = "EXPLICIT"
+                if not effective_solver_type:
+                    effective_solver_type = "STANDARD"
+
+                # 2. Extract element_count from available signals
+                resolved_elements = None
+                if job_options:
+                    resolved_elements = job_options.get("element_count") or (job_options.get("context") or {}).get("element_count")
+                if resolved_elements is None and mesh_quality:
+                    if isinstance(mesh_quality, dict):
+                        resolved_elements = mesh_quality.get("element_count") or mesh_quality.get("num_elements") or mesh_quality.get("total_elements")
+                    else:
+                        resolved_elements = getattr(mesh_quality, "element_count", None) or getattr(mesh_quality, "num_elements", None)
+                if resolved_elements is None and mesh_convergence:
+                    if isinstance(mesh_convergence, dict):
+                        resolved_elements = mesh_convergence.get("element_count") or mesh_convergence.get("num_elements")
+                    else:
+                        resolved_elements = getattr(mesh_convergence, "element_count", None)
+                if resolved_elements is None and engineering_intent is not None:
+                    intent_meta = getattr(engineering_intent, "metadata", {}) or {}
+                    if isinstance(intent_meta, dict):
+                        resolved_elements = intent_meta.get("mesh_elements") or intent_meta.get("element_count")
+                if resolved_elements is None:
+                    candidate_inp = inp_text
+                    if not candidate_inp and workdir and job_name:
+                        try:
+                            fpath = os.path.join(str(workdir), f"{job_name}.inp")
+                            if os.path.isfile(fpath):
+                                candidate_inp = Path(fpath).read_text(encoding="utf-8", errors="ignore")
+                        except Exception:
+                            candidate_inp = None
+                    if candidate_inp:
+                        try:
+                            elem_lines = 0
+                            in_elem = False
+                            for line in candidate_inp.splitlines():
+                                s = line.strip()
+                                if s.startswith("*"):
+                                    in_elem = s.upper().startswith("*ELEMENT")
+                                elif in_elem and s and not s.startswith("**"):
+                                    elem_lines += 1
+                            if elem_lines > 0:
+                                resolved_elements = elem_lines
+                        except Exception:
+                            pass
+
+                # 3. Extract available_tokens from job_options, environment, or os env
+                resolved_tokens = None
+                if job_options:
+                    resolved_tokens = job_options.get("available_tokens") or (job_options.get("context") or {}).get("available_tokens")
+                if resolved_tokens is None and environment:
+                    resolved_tokens = environment.get("available_tokens")
+                if resolved_tokens is None:
+                    env_tok = os.environ.get("ABAQUS_AVAILABLE_TOKENS")
+                    if env_tok:
+                        try:
+                            tok_val = int(env_tok.strip())
+                            if tok_val >= 0:
+                                resolved_tokens = tok_val
+                        except (ValueError, TypeError):
+                            pass
+
+                # 4. Extract hardware context
+                resolved_hardware = None
+                if job_options:
+                    resolved_hardware = job_options.get("host_hardware") or (job_options.get("context") or {}).get("host_hardware")
+                if resolved_hardware is None and environment:
+                    resolved_hardware = environment.get("host_hardware")
+
+                # 5. Physics non-linear flags
+                is_large_strain = False
+                has_contact = False
+                if engineering_intent is not None:
+                    intent_meta = getattr(engineering_intent, "metadata", {}) or {}
+                    if not isinstance(intent_meta, dict):
+                        intent_meta = {}
+                    is_large_strain = bool(
+                        intent_meta.get("large_deformation")
+                        or intent_meta.get("large_deflection")
+                        or intent_meta.get("nlgeom")
+                    )
+                    has_contact = bool(
+                        getattr(engineering_intent, "contacts", ())
+                        or intent_meta.get("has_contact")
+                        or intent_meta.get("contact_pairs")
+                    )
+
                 solver_ctx = {
                     "model_name": model_name,
                     "job_name": job_name,
-                    "solver_type": getattr(self, "solver_type", "STANDARD"),
+                    "solver_type": effective_solver_type,
+                    "element_count": resolved_elements,
+                    "available_tokens": resolved_tokens,
+                    "host_hardware": resolved_hardware,
+                    "large_deformation": is_large_strain,
+                    "has_contact": has_contact,
                 }
                 job_kwargs, job_decisions = resolve_job_kwargs(
                     job_options, adaptive=is_adaptive, context=solver_ctx

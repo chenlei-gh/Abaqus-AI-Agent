@@ -190,7 +190,11 @@ def calculate_adaptive_cpus(
     license_desc = "unconstrained"
     if available_tokens is not None:
         lic_cap = max_cpus_for_tokens(available_tokens)
-        candidates.append(max(1, lic_cap))
+        if lic_cap <= 0:
+            evidence = f"host_cpus({core_type}), license(available_tokens={available_tokens} < 5, max_lic_cpus=0), solver={solver_upper}"
+            reason = f"insufficient license tokens: available {available_tokens} tokens cannot satisfy minimum 1 CPU requirement (requires at least 5 tokens); cannot execute"
+            return 0, evidence, reason
+        candidates.append(lic_cap)
         license_desc = f"available_tokens={available_tokens} (max_lic_cpus={lic_cap})"
 
     # 4. Caller max cap
@@ -198,6 +202,8 @@ def calculate_adaptive_cpus(
         candidates.append(max(1, caller_max_cpus))
 
     chosen = min(candidates)
+    if chosen <= 0:
+        return 0, f"host_cpus({core_type}), license({license_desc}), solver={solver_upper}", "zero or negative CPU limit determined"
     # Snap to standard engineering core candidates: 1, 2, 4, 8
     standard_core_tiers = (1, 2, 4, 8)
     chosen_core = 1
@@ -214,24 +220,29 @@ def calculate_adaptive_memory(
     *,
     host_hardware: Optional[Dict[str, Any]] = None,
     target_percentage: int = 75,
-) -> Tuple[int, str, str, str]:
+) -> Tuple[Optional[int], Optional[str], str, str]:
     """Adaptively configure solver memory allocation limit to prevent disk thrashing.
 
     Returns:
         (memory_value, memory_units, evidence_str, reason_str)
+        If host physical memory cannot be verified, memory_value and memory_units are None.
     """
-    total_bytes = (host_hardware or {}).get("total_memory_bytes") or _collect_host_memory_bytes()
+    hw = host_hardware or {}
+    if "total_memory_bytes" in hw:
+        total_bytes = hw["total_memory_bytes"]
+    else:
+        total_bytes = _collect_host_memory_bytes()
     percentage = max(20, min(90, int(target_percentage)))
 
     if total_bytes and total_bytes > 0:
         total_gb = round(total_bytes / (1024 ** 3), 1)
         evidence = f"host_physical_memory={total_gb}GB ({total_bytes} bytes)"
         reason = f"allocate {percentage}% physical memory to Abaqus solver cache to minimize disk I/O paging"
+        return percentage, "PERCENTAGE", evidence, reason
     else:
         evidence = "host_physical_memory_unverified"
-        reason = f"apply standard engineering safe allocation of {percentage}% memory"
-
-    return percentage, "PERCENTAGE", evidence, reason
+        reason = "host physical memory could not be verified; refusing to invent memory allocation, Abaqus default memory policy retained"
+        return None, None, evidence, reason
 
 
 def resolve_job_kwargs(
@@ -254,6 +265,25 @@ def resolve_job_kwargs(
     """
     options = dict(job_options or {})
     ctx = dict(context or {})
+
+    # Extract any context overrides supplied directly in job_options
+    if "context" in options and isinstance(options["context"], dict):
+        ctx.update(options.pop("context"))
+    for k in (
+        "element_count",
+        "mesh_elements",
+        "available_tokens",
+        "host_hardware",
+        "caller_max_cpus",
+        "target_memory_percentage",
+        "large_deformation",
+        "has_contact",
+        "solver_type",
+    ):
+        if k in options:
+            ctx[k] = options.pop(k)
+    if "mesh_elements" in ctx and "element_count" not in ctx:
+        ctx["element_count"] = ctx["mesh_elements"]
 
     # Detect adaptive mode flag
     is_adaptive = bool(adaptive or options.pop("adaptive", False))
@@ -306,15 +336,25 @@ def resolve_job_kwargs(
             available_tokens=ctx.get("available_tokens"),
             caller_max_cpus=ctx.get("caller_max_cpus"),
         )
-        kwargs["numCpus"] = adap_cpus
-        decisions.append(SolverParameterDecision(
-            name="numCpus",
-            value=adap_cpus,
-            source="evidence_adjusted",
-            evidence=adap_ev,
-            reason=adap_reason,
-            sent_to_solver=True,
-        ))
+        if adap_cpus <= 0:
+            decisions.append(SolverParameterDecision(
+                name="numCpus",
+                value=0,
+                source="refused",
+                evidence=adap_ev,
+                reason=adap_reason,
+                sent_to_solver=False,
+            ))
+        else:
+            kwargs["numCpus"] = adap_cpus
+            decisions.append(SolverParameterDecision(
+                name="numCpus",
+                value=adap_cpus,
+                source="evidence_adjusted",
+                evidence=adap_ev,
+                reason=adap_reason,
+                sent_to_solver=True,
+            ))
     else:
         decisions.append(SolverParameterDecision(
             name="numCpus",
@@ -385,16 +425,26 @@ def resolve_job_kwargs(
                 host_hardware=ctx.get("host_hardware"),
                 target_percentage=ctx.get("target_memory_percentage", 75),
             )
-            kwargs["memory"] = mem_val
-            kwargs["memoryUnits"] = mem_u
-            decisions.append(SolverParameterDecision(
-                name="memory",
-                value=mem_val,
-                source="evidence_adjusted",
-                evidence=mem_ev,
-                reason=mem_reason,
-                sent_to_solver=True,
-            ))
+            if mem_val is not None and mem_u is not None:
+                kwargs["memory"] = mem_val
+                kwargs["memoryUnits"] = mem_u
+                decisions.append(SolverParameterDecision(
+                    name="memory",
+                    value=mem_val,
+                    source="evidence_adjusted",
+                    evidence=mem_ev,
+                    reason=mem_reason,
+                    sent_to_solver=True,
+                ))
+            else:
+                decisions.append(SolverParameterDecision(
+                    name="memory",
+                    value=None,
+                    source="safe_default",
+                    evidence="omitted",
+                    reason=mem_reason,
+                    sent_to_solver=False,
+                ))
     elif "memory" not in options:
         decisions.append(SolverParameterDecision(
             name="memory",

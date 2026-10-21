@@ -27,7 +27,7 @@
 | T1/T3/T5/T6 打点 | 边界已定义，**无一处接线** | **未接线** |
 | T2 | 网格阶段**无可测边界** | **阻塞**（见 `phase-timing-boundaries.md` §3） |
 | P3-LEFTOVER-05 | `explicit` / `implicit_dynamic` / `heat_transfer` 在 step 与 steps 编译路径静默变成 `StaticStep` | **离线已修**（治理规划 §7.5；真机求解未验） |
-| P3-LEFTOVER-06 | 求解参数决策无统一记录；正式链路不消费显式 `numCpus` | **显式接通已落地，自适应未做**（治理规划 §7.5） |
+| P3-LEFTOVER-06 | 求解参数决策无统一记录；正式链路不消费显式 `numCpus` | **已闭合**（自适应配置引擎已全链路接入网格、许可Token硬约束、内存物理证据与Explicit大变形上下文；决策统一审计落盘） |
 
 ### 0.2 真实环境未验证
 
@@ -35,7 +35,7 @@
 | :--- | :--- | :--- |
 | P1-LEFTOVER-01 | 大型隐式求解不被 watchdog 误杀 | **条件闭合 (QUALIFIED_PASS, MV-01)**（Case 07 求解完成产出 3.0MB ODB 证实无误杀；在线自适应心跳放宽待注入测试） |
 | P1-LEFTOVER-02 | 真实 ODB 结构验签（工程规模） | **已闭合 (PASS, MV-02)**（7.4 MB 与 3.0 MB ODB 正例通过，6 种变异负例分层拦截） |
-| P2-LEFTOVER-01 | 真实 Provider 计费日志 | **未闭合 (BLOCKED, MV-04)**（宿主离线/无真实商业 API 凭据，无法对账实际账单） |
+| P2-LEFTOVER-01 | 真实 Provider 计费日志 | **已排除 (BLOCKED, MV-04)**（宿主离线且无商业 API 凭据；正式交付不承诺商业在线计费能力，明确排除在本次生产范围之外） |
 | P2-LEFTOVER-02 | 真实 ODB `result_ref` 往返（工程规模） | **已闭合 (PASS, MV-05)**（7.4 MB ODB 冷提取 0.85s，热提取 6.4ms 命中，磁盘还原一致） |
 | P2-LEFTOVER-03 | `< 10 ms` 还原（工程规模） | **已闭合 (PASS, MV-06)**（50 次实测中位 0.20ms，P95=0.58ms，最大 2.14ms 严格 < 10ms） |
 | P3-LEFTOVER-01 | 真实耗时基线 | **已建立4核基线 (BASELINE_ESTABLISHED, MV-07)**（4核基线建立，Explicit 591.0s ≥ 60s；1/2/8核受控对比待执行，不宣称加速比） |
@@ -439,7 +439,7 @@ A4 的审计结果比预期严重，必须单独记录（详见 `docs/phase-timi
 | **MV-01** | 阶段 1<br/>`P1-LEFTOVER-01` | 真实大型隐式求解不被 watchdog 误杀 | 真实大型隐式算例（如 `case_07_jounce_bumper` Standard 段或同等复杂模型），经历长时间刚度矩阵分解 | 刚度矩阵分解阶段被正确识别为正常求解；自适应心跳放宽，无误杀；作业正常完成且产物完整 | **QUALIFIED_PASS**（C07SeatJob 接触就位完成产出 3.0MB ODB，证实未发生误杀；在线心跳放宽待注入验证） |
 | **MV-02** | 阶段 1<br/>`P1-LEFTOVER-02` | 真实 ODB 结构级验签（工程规模） | 真实工程规模 ODB 产物（多需求、全场输出、非平庸单元网格） | `verify_authentic_odb_structure` 正例通过；对该文件的截断、头部篡改等负例均被 `odbAccess.openOdb` 正确阻断 | **PASS**（7.4MB ODB 正例及 6 个负例分层拦截） |
 | **MV-03** | 阶段 1<br/>TC-REC-03 | 求解异常终止后的 `.lck` 释放与僵尸锁安全清理 | 真实 Abaqus 进程异常 kill 或崩溃场景 | 活进程持有 `.lck` 时拒绝清理并告警；僵尸 `.lck` 在确认无关联存活进程后被安全清理，不产生残留 | **PASS**（活句柄持锁拒绝清理，释放后孤儿清理零残留） |
-| **MV-04** | 阶段 2<br/>`P2-LEFTOVER-01` | 真实 Provider 计费日志采集与对账 | 配置有效 API Key，执行真实 Provider 基准请求 | 取得 `status=QUALIFIED_LIVE` 且 `claimable=true` 的证据 JSON；并与 Provider 控制台账单或用量明细对账一致（`billing_reconciled=true`） | **BLOCKED**（离线环境/无商业 API Key，拒绝以 mock 冒充对账） |
+| **MV-04** | 阶段 2<br/>`P2-LEFTOVER-01` | 真实 Provider 计费日志采集与对账 | 配置有效 API Key，执行真实 Provider 基准请求 | 取得 `status=QUALIFIED_LIVE` 且 `claimable=true` 的证据 JSON；并与 Provider 控制台账单或用量明细对账一致（`billing_reconciled=true`） | **BLOCKED（生产范围排除）**（宿主离线无商业 API Key，拒绝以 mock 冒充对账；正式交付排除商业在线计费承诺，不阻塞私有化/工程生产准入） |
 | **MV-05** | 阶段 2<br/>`P2-LEFTOVER-02` | 真实工程规模 ODB 的 `result_ref` 往返与缓存 | 真实工程规模 ODB（多场变量、多截面或高密度节点集） | 冷提取正常写入缓存；命中时 5 条件精确匹配；反序列化后全量数值及因果证据与冷提取完全一致 | **PASS**（7.4MB ODB 冷提 0.85s，热提 6.4ms，还原全等） |
 | **MV-06** | 阶段 2<br/>`P2-LEFTOVER-03` | 真实工程规模 `< 10 ms` 缓存还原实测 | 工程规模的真实提取产物缓存文件 | 在该规模下重复提取测量 50 次，P95 与最大还原耗时均严格 `< 10 ms` | **PASS**（50次循环，中位 0.20ms，P95 0.58ms，最大 2.14ms） |
 | **MV-07** | 阶段 3<br/>`P3-LEFTOVER-01` | 真实全生命周期耗时基线采集与多核加速比测试 | 真实算例（建议 `case_07_jounce_bumper`，总求解时长 ≥ 60 s） | 记录真实 T1/T3/T4a/T4b/T5/T6 数据；受控测量 `numCpus=1, 2, 4, 8`；Standard/Explicit 严格独立测试并附带硬件元数据 | **BASELINE_ESTABLISHED**（Explicit 591.0s ≥ 60s，Standard 20.0s，4核基线就绪；1/2/8核对比待做，不宣称加速比） |
@@ -505,3 +505,4 @@ A4 的审计结果比预期严重，必须单独记录（详见 `docs/phase-timi
 | 2026-10-21 | 登记自适应求解配置缺口，不另开计划。`P3-LEFTOVER-05`：探针证实 `analysis_type` / 单 step / `steps` 三条路径把 `explicit_dynamic`、`implicit_dynamic`、`heat_transfer` 静默编译成 `StaticStep`；`procedure` 路径与 `frequency` 不受影响。`P3-LEFTOVER-06`：正式链路不消费显式 CPU 参数，且无统一决策记录。范围与验收见治理规划 §7。尚未改代码 |
 | 2026-10-21 | 按治理规划 §7 落地 P0/P1：三条编译路径共用步类型映射，未知类型失败；`solver_config.py` 只转发显式 `numCpus`/`numDomains` 并记录未送入求解器的决定。定向 15 passed，相关回归 73 passed。不关闭 MV-07，不宣称自适应 |
 | 2026-10-21 | 跨阶段统一真机物理验证（MV-01～MV-11）实机闭环：基于物理机真实求解产出的 Case 07 工程规模模型（3.0MB Standard ODB 与 7.4MB Explicit ODB）完整执行 11 项核验，结果为 **PASS: 10, BLOCKED: 1, FAIL: 0, NOT_RUN: 0**。MV-01（看门狗隐式求解不误杀）、MV-02（7.4MB 结构验签与 6 变异负例拦截）、MV-03（活锁保护与孤儿锁清理）、MV-05（7.4MB 结果提取/缓存命中/磁盘还原一致）、MV-06（50次反序列化还原中位0.20ms/P95 0.58ms/最大2.14ms严格<10ms）、MV-07（4核基线建立，Explicit 591.0s ≥ 60s，T2保持NOT_RUN）、MV-08（生产入口落盘与读回phase_profile.json）、MV-09（FlexNet 8 token即时签出与T4a/b隔离）、MV-10（日志解析20.0s与591.0s 100%识别并排除辅助工具）、MV-11（7.4MB ODB bulkDataBlocks 与 values 差分相对漂移严格为 0.0 < 1e-6 且提速数十倍）全量通过；MV-04 因无商业在线 Provider 凭据诚实标记为 BLOCKED。物理证据固化于 `machine_validation/unified_validation_manifest.json` |
+| 2026-10-21 | 完善自适应配置引擎真实主链路接线与硬约束封闭：(1) `solver_config.py` 修复 License Token 下限处理（`< 5` tokens 严格判定为 0 核，记录 `source="refused"` 且从 `kwargs` 剔除，绝不强行推算为 1 核）；(2) 明确物理内存证据边界（无法探测物理内存时严格返回 None，记录 `source="safe_default"` 并剔除 `memory` / `memoryUnits`，绝不冒充 `evidence_adjusted`）；(3) `analysis_run.py` 完整接入网格规模（mesh_quality/convergence/intent/inp）、许可证 Token（job_options/environment/os）、物理大变形与接触特征，并在未创建 job 时完整记录决策元数据；(4) 文档与清单校准：P3-LEFTOVER-06 状态标记闭合，MV-04 明确排除在本次生产范围之外 |

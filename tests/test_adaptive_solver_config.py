@@ -73,6 +73,14 @@ def test_adaptive_cpu_sizing_by_mesh_scale():
 
 def test_adaptive_cpu_constrained_by_license_tokens():
     hw = {"logical_cpu_count": 24, "physical_cpu_count": 12}
+    # With 0 or < 5 tokens, insufficient for even 1 core: returns 0 and refuses
+    cpus, ev, reason = calculate_adaptive_cpus(
+        host_hardware=hw, element_count=200000, available_tokens=3
+    )
+    assert cpus == 0
+    assert "available_tokens=3 < 5" in ev
+    assert "insufficient license tokens" in reason
+
     # With 6 tokens, can only afford 2 cores despite large host and model
     cpus, ev, reason = calculate_adaptive_cpus(
         host_hardware=hw, element_count=200000, available_tokens=6
@@ -85,6 +93,43 @@ def test_adaptive_cpu_constrained_by_license_tokens():
         host_hardware=hw, element_count=200000, available_tokens=8
     )
     assert cpus == 4
+
+
+def test_adaptive_token_shortage_refuses_cpu_forwarding():
+    """Verify that when available tokens < 5, numCpus is refused and omitted from kwargs."""
+    context = {
+        "host_hardware": {"logical_cpu_count": 16, "physical_cpu_count": 8},
+        "element_count": 50000,
+        "available_tokens": 2,
+    }
+    kwargs, decisions = resolve_job_kwargs({"adaptive": True}, context=context)
+    by_name = {d.name: d for d in decisions}
+
+    assert "numCpus" not in kwargs
+    assert by_name["numCpus"].source == "refused"
+    assert by_name["numCpus"].value == 0
+    assert by_name["numCpus"].sent_to_solver is False
+    assert "insufficient license tokens" in by_name["numCpus"].reason
+
+
+def test_adaptive_memory_unverified_fallback_to_safe_default():
+    """When physical memory cannot be verified, refuse to invent allocation and fallback to safe default."""
+    val, units, ev, reason = calculate_adaptive_memory(host_hardware={"total_memory_bytes": 0})
+    assert val is None
+    assert units is None
+    assert "unverified" in ev
+
+    kwargs, decisions = resolve_job_kwargs(
+        {"adaptive": True},
+        context={"host_hardware": {"total_memory_bytes": 0}},
+    )
+    by_name = {d.name: d for d in decisions}
+
+    assert "memory" not in kwargs
+    assert "memoryUnits" not in kwargs
+    assert by_name["memory"].source == "safe_default"
+    assert by_name["memory"].value is None
+    assert by_name["memory"].sent_to_solver is False
 
 
 def test_adaptive_cpu_preserves_host_headroom():
@@ -227,3 +272,52 @@ def test_runner_executes_with_adaptive_job_options(tmp_path):
     assert decisions["numCpus"].sent_to_solver is True
     assert decisions["memory"].source == "evidence_adjusted"
     assert decisions["memory"].sent_to_solver is True
+
+
+def test_runner_full_context_wiring_with_intent_and_mesh(tmp_path):
+    from abaqus_ai_agent.contracts.intent import EngineeringIntent
+    from abaqus_ai_agent.contracts.material import ElasticProperties, MaterialDefinition
+    from abaqus_ai_agent.execution.analysis_run import AnalysisRunner
+
+    workdir = str(tmp_path / "full_context_run")
+    executor = _RecordingExecutor()
+    executor.workdir = workdir
+
+    intent = EngineeringIntent(
+        id="C07-EXP",
+        kind="explicit_dynamic",
+        description="Explicit dynamic crash simulation",
+        analysis_type="explicit_dynamic",
+        material=MaterialDefinition(
+            name="Steel", unit_system="MM_N_MPA",
+            elastic=ElasticProperties(youngs_modulus=210000.0, poisson_ratio=0.3)
+        ),
+        metadata={"large_deformation": True},
+    )
+
+    runner = AnalysisRunner(executor)
+    run = runner.run(
+        model_name="CrashModel",
+        job_name="CrashJob",
+        workdir=workdir,
+        require_production=False,
+        engineering_intent=intent,
+        mesh_quality={"element_count": 85000},
+        environment={"available_tokens": 12},
+        job_options={"adaptive": True},
+    )
+
+    decisions = {d.name: d for d in run.metadata["solver_parameter_decisions"]}
+    # With 85k elements, host headroom, and 12 tokens (affords 8 cores):
+    assert decisions["numCpus"].value in (4, 8)
+    assert decisions["numCpus"].source == "evidence_adjusted"
+    assert decisions["numCpus"].sent_to_solver is True
+
+    # In Explicit dynamics with large deformation, precision and domains are adaptively matched
+    assert decisions["explicitPrecision"].value == "DOUBLE_PLUS_PACK"
+    assert decisions["explicitPrecision"].source == "evidence_adjusted"
+    assert decisions["numDomains"].value == decisions["numCpus"].value
+
+    created = [c for c in executor.commands if c.startswith("mdb.Job(")]
+    assert len(created) == 1
+    assert "explicitPrecision='DOUBLE_PLUS_PACK'" in created[0]

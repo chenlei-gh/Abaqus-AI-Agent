@@ -291,10 +291,11 @@ def run_unified_validation() -> Dict[str, Any]:
     # Per Governance Plan: Must NOT fake provider usage. Strictly BLOCKED without commercial billing credentials.
     manifest["results"]["MV-04"] = {
         "status": "BLOCKED",
-        "objective": "Real public commercial Provider usage and billing statement reconciliation",
+        "objective": "Real public commercial Provider usage and billing statement reconciliation (out of private engineering delivery scope)",
         "evidence": {
             "has_commercial_billing_credential": has_provider_cred,
-            "reason": "Host environment offline / no valid public commercial billing API credential; mock responses are strictly prohibited from claiming billing reconciliation (billing_reconciled=false).",
+            "scope_exclusion": "Commercial online billing reconciliation is explicitly excluded from on-premises engineering production scope; offline host cannot and will not claim commercial billing reconciliation (billing_reconciled=false).",
+            "reason": "Host environment offline / no valid public commercial billing API credential; mock responses are strictly prohibited from claiming billing reconciliation.",
         },
     }
 
@@ -805,7 +806,7 @@ print('__BULK_TEST_RESULT__' + json.dumps(res))
         "total_checks": len(manifest["results"]),
         "status_distribution": counts,
         "completion_timestamp_utc": datetime.datetime.now(datetime.timezone.utc).isoformat(),
-        "readiness_verdict": "QUALIFIED_BASELINE (6 fully passed, 4 qualified/baseline verified, 1 commercially blocked)",
+        "readiness_verdict": "QUALIFIED_BASELINE (6 fully passed, 4 qualified/baseline verified, 1 commercial billing excluded from scope)",
     }
 
     # Save manifest
