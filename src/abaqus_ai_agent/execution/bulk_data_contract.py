@@ -163,12 +163,33 @@ def verify_extraction_equivalence(
             f"bulk={val_blk_f}, relative_diff={rel_diff:.3e}"
         )
 
-    # Determine extraction metric types and enforce semantic agreement
+    # Resolve both declarations independently. If a result supplies both
+    # metric_type and aggregation, they are aliases for the same contract and
+    # must agree; never silently hide a contradictory declaration by precedence.
     norm_arg = _normalize_metric_type(metric_type)
-    raw_can = canonical.get("metric_type") or canonical.get("aggregation")
-    raw_blk = bulk.get("metric_type") or bulk.get("aggregation")
-    norm_can = _normalize_metric_type(raw_can)
-    norm_blk = _normalize_metric_type(raw_blk)
+
+    def resolve_declared_metric(result: Dict[str, Any], side: str) -> Tuple[Optional[str], Optional[str]]:
+        raw_metric = result.get("metric_type")
+        raw_aggregation = result.get("aggregation")
+        norm_metric = _normalize_metric_type(raw_metric)
+        norm_aggregation = _normalize_metric_type(raw_aggregation)
+        if (
+            norm_metric is not None
+            and norm_aggregation is not None
+            and norm_metric != norm_aggregation
+        ):
+            raise BulkDataEquivalenceError(
+                f"Conflicting metric declarations within {side}: "
+                f"metric_type={raw_metric!r}, aggregation={raw_aggregation!r}."
+            )
+        if norm_metric is not None:
+            return norm_metric, raw_metric
+        if norm_aggregation is not None:
+            return norm_aggregation, raw_aggregation
+        return None, None
+
+    norm_can, raw_can = resolve_declared_metric(canonical, "canonical")
+    norm_blk, raw_blk = resolve_declared_metric(bulk, "bulk")
 
     if norm_can is not None and norm_blk is not None and norm_can != norm_blk:
         raise BulkDataEquivalenceError(
