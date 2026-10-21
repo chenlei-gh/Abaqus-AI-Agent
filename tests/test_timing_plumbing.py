@@ -326,8 +326,39 @@ def test_queue_item_orphan_recovery_resets_license_wait_seconds(tmp_path):
     queue.process_next(current_time=t0 + 2.0)
     assert item.license_wait_seconds == pytest.approx(2.0)
 
-    # Simulate crash recovery with requeue strategy
+    # Simulate crash recovery with requeue strategy -> reset for fresh re-measurement
     recovered = queue.recover_orphaned_runs(recovery_strategy="requeue")
     assert recovered == 1
     assert item.state is QueueItemState.RETRYING
     assert item.license_wait_seconds is None
+
+
+def test_queue_item_orphan_recovery_abort_retains_measured_wait_seconds(tmp_path):
+    """When orphaned RUNNING item is aborted/marked FAILED, valid historical wait is retained."""
+    state_file = str(tmp_path / "abort_crash_queue_state.json")
+    provider = MockLicenseProvider()
+    queue = AnalysisRunQueue(max_concurrency=2, license_provider=provider, persistence_path=state_file)
+
+    t0 = 4000.0
+    item = queue.enqueue(
+        payload={"task": "abort_test"},
+        resources=RunResourceSpec(feature="standard", tokens=1),
+    )
+    item.enqueued_at = t0
+    item.next_eligible_at = t0
+    queue.process_next(current_time=t0 + 3.5)
+    assert item.state is QueueItemState.RUNNING
+    assert item.license_wait_seconds == pytest.approx(3.5)
+
+    # Abort / terminal failure strategy must preserve the historical measurement
+    recovered = queue.recover_orphaned_runs(recovery_strategy="abort")
+    assert recovered == 1
+    assert item.state is QueueItemState.FAILED
+    assert item.license_wait_seconds == pytest.approx(3.5)
+
+    # Verify reloading from disk preserves the value in FAILED state
+    reloaded_queue = AnalysisRunQueue(max_concurrency=2, persistence_path=state_file)
+    reloaded_item = reloaded_queue.get_item(item.item_id)
+    assert reloaded_item is not None
+    assert reloaded_item.state is QueueItemState.FAILED
+    assert reloaded_item.license_wait_seconds == pytest.approx(3.5)

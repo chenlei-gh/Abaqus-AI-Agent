@@ -324,7 +324,8 @@ class AnalysisRunQueue:
                         it.state = QueueItemState.FAILED
                         it.error = "Orphaned run aborted due to abnormal system termination"
                         it.finished_at = time.time()
-                        it.license_wait_seconds = None
+                        # Retain measured license_wait_seconds if it had already entered RUNNING;
+                        # do not overwrite valid historical wait measurements on terminal failure.
                     recovered += 1
             if recovered > 0:
                 self._persist_state()
