@@ -45,7 +45,7 @@
 | :--- | :--- | :--- |
 | P1-LEFTOVER-04 | 契约 A 探针 5 的 mtime 规则被真实证据双向驳倒 | **待修订** |
 | A2 | T4 已拆为 T4a/T4b，解析器已实现；**T4b 多段语义与多步日志结构未验证** | **部分定案** |
-| C2S | `bulkDataBlocks` 浮点公差适用场景 | **决策阻塞** |
+| C2S | `bulkDataBlocks` 浮点公差适用场景 | **已定案（范围仅限全场标量/公差严格 < 1e-6/主链路保持不变）** |
 
 ### 0.4 未启动
 
@@ -53,9 +53,9 @@
 | :--- | :--- |
 | BASE（完整 T1~T6 基线） | **未启动**；T2 缺失使其只能成为部分基线 |
 | C1（`numCpus` 正式实验） | **脚手架与配置审计完成**；需真机基线（MV-07，算例 ≥ 60 s）与准入条件满足后统一采集 |
-| C2（`bulkDataBlocks` 等价性） | **未启动**；需 C2S 定案 |
+| C2（`bulkDataBlocks` 等价性） | **离线契约与差分测试完成**；真机等价性待在工程规模 ODB 验证（MV-11） |
 | D3（watchdog 大型算例） | **未启动**；可独立准备 |
-| 阶段 3.4（测试分级治理） | **未启动** |
+| 阶段 3.4（测试分级治理） | **规约已建立**（`docs/test-tier-governance.md`，注册四级 markers） |
 | 阶段 4（全部） | **不纳入本批次** |
 
 > 表中任一项被引用时，必须同时引用其状态。
@@ -386,22 +386,57 @@ A4 的审计结果比预期严重，必须单独记录（详见 `docs/phase-timi
 
 ---
 
+### 3.3 bulkDataBlocks 数值等价性契约与离线差分测试（交付物落地，真机等价性未验）
+
+#### 3.3.1 决策阻塞项 C2S 定案
+1. **适用场景严格收敛**：`bulkDataBlocks` 优化范围仅限于全场标量扫描与极值/均值提取（如全场最大 Mises 应力、最大位移标量分量）。
+2. **排除场景**：局部节点集/单元集过滤、历程输出（History Output）、含空间过滤的多步张量不变量重构等，保持走 canonical `fo.values` 遍历，不冒进替换。
+3. **数值等价性公差**：固定为严格 `< 1e-6`（相对公差为 `abs(a - b) / max(1.0, abs(a), abs(b)) <= 1e-6`）。
+4. **主生产链路保持不变**：`src/abaqus_ai_agent/execution/odb_extractor.py` 主提取链路保持原有的 canonical `fo.values` 遍历逻辑不变；必须在真机工程规模 ODB（MV-11）上证明数值零漂移且具有确凿的正向耗时收益后，方可评估合并。
+
+#### 3.3.2 交付物与契约结构
+1. **`src/abaqus_ai_agent/execution/bulk_data_contract.py`**：
+   - `is_close_scalar(val_a, val_b, tol=1e-6)`：相对与绝对严格公差比对，拒绝 `NaN`、`±inf` 与非数值；
+   - `verify_extraction_equivalence(canonical, bulk, tol=1e-6)`：比对成功标志、浮点数值与空间定位器（node/element label, instance）；超差抛出 `BulkDataEquivalenceError`，非数值/非字典输入严格 Fail-Closed；
+   - `extract_scalar_from_blocks(blocks, aggregation="max"|"min"|"average")`：纯 Python 离线参考算法，从 mock/真实数据块中高效提取标量与对应位置标签。
+2. **测试资产（`tests/test_bulk_data_blocks_contract.py`，8 passed）**：
+   - 覆盖公差判断、超差拒绝、非有限浮点拦截、空间定位器错位识别（`LOCATOR_MISMATCH`）、单侧失败阻断、以及合成数据集与 canonical values 遍历的离线差分比对。
+
+---
+
+### 3.4 测试分级治理与准入规约（交付物落地）
+
+#### 3.4.1 规约建立与 Markers 注册
+1. **治理文档落地**：建立 `docs/test-tier-governance.md`，确立 **Unit / Smoke / Full Acceptance** 三级测试资产体系。
+2. **Pytest Markers 注册**（`pyproject.toml`）：
+   - `unit`: 纯离线逻辑、契约边界、无外部 Abaqus 依赖（单用例 < 1 s，全量 ≤ 180 s，Commit 门禁）；
+   - `smoke`: 真实 Abaqus CLI 连通性自检探针（10 ~ 30 s，单砖模型，严禁粗化网格作基线）；
+   - `acceptance` / `live`: 复杂物理响应、真实网格收敛、长周期矩阵分解（严禁降低网格精度）。
+3. **两类生产测试硬解耦**：
+   - **生产路径功能验证**：关注接口、缓存、落盘与异常隔离，不要求算例时长 ≥ 60 s；
+   - **正式性能基准测试**：必须满足 MV-07 准入门槛（Standard 算例时长 ≥ 60 s、Standard/Explicit 严格解耦、控制变量冻结、硬件环境固化）。
+
+---
+
 ## 4. 跨阶段统一真机验证清单（Unified Machine Validation Checklist）
 
 本清单汇总阶段 1～3 留在真实物理环境验证的全部未闭合项目。在所有代码与契约加固完成后，统一于 Abaqus 2025 真机与在线 Provider 环境中执行验证，按实际产物关闭，不以单元测试通过冒充闭合。
 
+**判定标准遵循 §3.4 四态标准**：`PASS`（硬性指标达成且有防篡改物理证据）、`FAIL`（超差/异常/误杀）、`BLOCKED`（依赖未满足）、`NOT_RUN`（未在真机执行）。
+
 | 编号 | 涉及阶段 / 遗留项 | 验证目标 | 最小真机条件 | 通过与关闭标准 | 当前状态 |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| **MV-01** | 阶段 1<br/>`P1-LEFTOVER-01` | 真实大型隐式求解不被 watchdog 误杀 | 真实大型隐式算例（如 `case_07_jounce_bumper` Standard 段或同等复杂模型），经历长时间刚度矩阵分解 | 刚度矩阵分解阶段被正确识别为正常求解；自适应心跳放宽，无误杀；作业正常完成且产物完整 | **未验证** |
+| **MV-01** | 阶段 1<br/>`P1-LEFTOVER-01` | 真实大型隐式求解不被 watchdog 误杀 | 真实大型隐式算例（如 `case_07_jounce_bumper` Standard 段或同等复杂模型），经历长时间刚度矩阵分解 | 刚度矩阵分解阶段被正确识别为正常求解；自适应心跳放宽，无误杀；作业正常完成且产物完整 | **NOT_RUN** |
 | **MV-02** | 阶段 1<br/>`P1-LEFTOVER-02` | 真实 ODB 结构级验签（工程规模） | 真实工程规模 ODB 产物（多需求、全场输出、非平庸单元网格） | `verify_authentic_odb_structure` 正例通过；对该文件的截断、头部篡改等负例均被 `odbAccess.openOdb` 正确阻断 | **单砖已验，工程规模未验** |
 | **MV-03** | 阶段 1<br/>TC-REC-03 | 求解异常终止后的 `.lck` 释放与僵尸锁安全清理 | 真实 Abaqus 进程异常 kill 或崩溃场景 | 活进程持有 `.lck` 时拒绝清理并告警；僵尸 `.lck` 在确认无关联存活进程后被安全清理，不产生残留 | **单元已验，真机未验** |
-| **MV-04** | 阶段 2<br/>`P2-LEFTOVER-01` | 真实 Provider 计费日志采集与对账 | 配置有效 API Key，执行真实 Provider 基准请求 | 取得 `status=QUALIFIED_LIVE` 且 `claimable=true` 的证据 JSON；并与 Provider 控制台账单或用量明细对账一致（`billing_reconciled=true`） | **未验证** |
+| **MV-04** | 阶段 2<br/>`P2-LEFTOVER-01` | 真实 Provider 计费日志采集与对账 | 配置有效 API Key，执行真实 Provider 基准请求 | 取得 `status=QUALIFIED_LIVE` 且 `claimable=true` 的证据 JSON；并与 Provider 控制台账单或用量明细对账一致（`billing_reconciled=true`） | **NOT_RUN** |
 | **MV-05** | 阶段 2<br/>`P2-LEFTOVER-02` | 真实工程规模 ODB 的 `result_ref` 往返与缓存 | 真实工程规模 ODB（多场变量、多截面或高密度节点集） | 冷提取正常写入缓存；命中时 5 条件精确匹配；反序列化后全量数值及因果证据与冷提取完全一致 | **单砖已验，工程规模未验** |
 | **MV-06** | 阶段 2<br/>`P2-LEFTOVER-03` | 真实工程规模 `< 10 ms` 缓存还原实测 | 工程规模的真实提取产物缓存文件 | 在该规模下重复提取测量 50 次，P95 与最大还原耗时均严格 `< 10 ms` | **单砖已验，工程规模未验** |
-| **MV-07** | 阶段 3<br/>`P3-LEFTOVER-01` | 真实全生命周期耗时基线采集 | 真实算例（建议 `case_07_jounce_bumper`，总求解时长 ≥ 60 s） | 记录真实 T1/T3/T4a/T4b/T5/T6 数据，明确各阶段数据源与量化精度，形成可信性能基线 | **未验证** |
-| **MV-08** | 阶段 3<br/>`P3-LEFTOVER-02` | 生产入口 T4 采集与持久化落盘真实读回 | 经 `AbaqusAIAgent.analysis_run` 真实完成一次 Abaqus 提交 | 真实读取生成的 `evidence/<run.id>/phase_profile.json`，核验 run_id、T4a、T4b 与实际日志一致，验证失败时不中断 run | **未验证** |
-| **MV-09** | 阶段 3<br/>`P3-LEFTOVER-03` | FlexNet/DSLS 真实 License 排队耗时测量 | 真实受控的许可服务器排队或并发冲突场景 | 真实测量得到排队秒数，与 T4a/T4b 独立对账，不采用任何算术差额推导 | **未验证** |
-| **MV-10** | 阶段 3<br/>`P3-LEFTOVER-04` | 真实多步与 restart 分析日志核验 | 真实多载荷步作业与 restart 分析生成的 `.log` 文件 | 验证单 job 多 step 的单段求解器行为；验证 restart 日志格式；解析器准确提取各段时长且段数与人工核算完全一致 | **未验证** |
+| **MV-07** | 阶段 3<br/>`P3-LEFTOVER-01` | 真实全生命周期耗时基线采集与多核加速比测试 | 真实算例（建议 `case_07_jounce_bumper`，总求解时长 ≥ 60 s） | 记录真实 T1/T3/T4a/T4b/T5/T6 数据；受控测量 `numCpus=1, 2, 4, 8`；Standard/Explicit 严格独立测试并附带硬件元数据 | **NOT_RUN** |
+| **MV-08** | 阶段 3<br/>`P3-LEFTOVER-02` | 生产入口 T4 采集与持久化落盘真实读回 | 经 `AbaqusAIAgent.analysis_run` 真实完成一次 Abaqus 提交 | 真实读取生成的 `evidence/<run.id>/phase_profile.json`，核验 run_id、T4a、T4b 与实际日志一致，验证失败时不中断 run | **NOT_RUN** |
+| **MV-09** | 阶段 3<br/>`P3-LEFTOVER-03` | FlexNet/DSLS 真实 License 排队耗时测量 | 真实受控的许可服务器排队或并发冲突场景 | 真实测量得到排队秒数，与 T4a/T4b 独立对账，不采用任何算术差额推导 | **NOT_RUN** |
+| **MV-10** | 阶段 3<br/>`P3-LEFTOVER-04` | 真实多步与 restart 分析日志核验 | 真实多载荷步作业与 restart 分析生成的 `.log` 文件 | 验证单 job 多 step 的单段求解器行为；验证 restart 日志格式；解析器准确提取各段时长且段数与人工核算完全一致 | **NOT_RUN** |
+| **MV-11** | 阶段 3<br/>`C2 / C2S` | `bulkDataBlocks` 真实工程 ODB 数值等价与耗时收益 | 真实工程规模 ODB（全场应力/位移场） | 标量峰值与均值相对漂移严格 `< 1e-6`，且在真机上证明具备正向提取耗时收益；若无明显收益或发生漂移则拒绝并入主链路 | **NOT_RUN** |
 
 ---
 
@@ -454,3 +489,4 @@ A4 的审计结果比预期严重，必须单独记录（详见 `docs/phase-timi
 | 2026-10-21 | 补齐队列 License 等待时长持久化：`_persist_state()` 写入 `license_wait_seconds`，`_load_state()` 兼容旧版恢复，`recover_orphaned_runs()` 崩溃复位；新增持久化往返、旧版兼容及崩溃恢复测试（定向 14 passed） |
 | 2026-10-21 | 加固孤儿任务终止测量语义：`recover_orphaned_runs()` 终止分支（FAILED）保留 RUNNING 状态下已测得的 `license_wait_seconds` 历史证据，仅 requeue 分支清零重测；补充测试（定向 15 passed） |
 | 2026-10-21 | 阶段 3.2 并行度实验准备与配置审计：实现 `ParallelRunSpec`（严格约束 1/2/4/8，拒绝 bool/float/范围外数值）、`ParallelExperimentResult`、宿主硬件元数据安全收集；改造 `case_07_jounce_bumper_e2e.py` 消除写死并增加 CLI 参数；新增 `tests/test_parallel_experiment.py`（44 passed）。真实基线保留在 MV-07，严禁提前宣称加速比 |
+| 2026-10-21 | 阶段 3.3 与 3.4 实施准备：C2S 定案（仅限全场标量，公差严格 < 1e-6，主链路保持 values 遍历）；交付 `bulk_data_contract.py` 与差分测试（8 passed）；交付测试分级治理 `docs/test-tier-governance.md` 并注册 markers；真机清单扩充 MV-11 并确立严格四态标准（PASS/FAIL/BLOCKED/NOT_RUN） |

@@ -63,3 +63,12 @@ from .parallel_experiment import (
     ParallelExperimentError,
     collect_host_hardware_metadata,
 )
+from .bulk_data_contract import (
+    BulkDataEquivalenceStatus,
+    BulkDataEquivalenceError,
+    DEFAULT_FLOAT_TOLERANCE,
+    ScalarExtractionResult,
+    is_close_scalar,
+    verify_extraction_equivalence,
+    extract_scalar_from_blocks,
+)

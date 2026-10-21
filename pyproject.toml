@@ -31,5 +31,8 @@ filterwarnings = [
     "ignore::DeprecationWarning:pkg_resources.*",
 ]
 markers = [
+    "unit: fast offline unit, contract, and mock tests with no external solver required",
+    "smoke: rapid end-to-end connectivity and API verification runs (budget: 10-30s)",
+    "acceptance: full engineering acceptance and benchmark qualifications with uncompromised fidelity",
     "live: tests requiring real Abaqus solver subprocess execution on physical host",
 ]

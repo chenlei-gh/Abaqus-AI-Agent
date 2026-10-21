@@ -62,8 +62,8 @@ graph TD
     BASE["真实耗时基线<br/>P3-LEFTOVER-01<br/>（只能部分）"]
 
     C1["C1 numCpus 实验框架<br/>阶段 3.2"]
-    C2["C2 bulkDataBlocks 等价性<br/>阶段 3.3"]
-    C2S["C2S 数值验收标准与样本"]
+    C2["C2 bulkDataBlocks 等价性<br/>阶段 3.3（离线完成/待真机）"]
+    C2S["C2S 数值验收标准与样本<br/>（已定案）"]
 
     D3["D3 watchdog 大型隐式真机验证<br/>P1-LEFTOVER-01"]
     D1["D1 Provider 计费证据<br/>P2-LEFTOVER-01"]
@@ -129,7 +129,7 @@ graph TD
 | B3 | 真实 ODB `result_ref` 往返 | [待真机] | B1 | 关闭 `P2-LEFTOVER-02` |
 | B4 | 真机损坏负例 | [待真机] | B1 | 截断/全零/头部篡改，验证 Fail-Closed |
 | D2 | ODB mtime 契约审查 | [待真机] | B1 | 关闭或修订 `P1-LEFTOVER-04` |
-| C2S | `bulkDataBlocks` 数值验收标准 | [决策阻塞] | 无 | 规划要求浮点公差 `<1e-6`，需确认适用场景 |
+| C2S | `bulkDataBlocks` 数值验收标准 | **[已定案]** | 无 | 范围仅限全场标量扫描，公差严格 `< 1e-6`，主链路保持 values 遍历 |
 
 ### 第 3 批：依赖基线
 
@@ -137,7 +137,7 @@ graph TD
 | :--- | :--- | :--- | :--- |
 | BASE | 真实耗时基线采集 | [待真机] | 第 1+2 批 |
 | A2 | T4 计时契约 | **[解析器已实现·单元级加固]** | 生产入口已落盘 T4；支持双精度，排除 package.exe 等；多步/restart 契约已加固但真机结构待验（P3-LEFTOVER-04） |
-| C2 | `bulkDataBlocks` 等价性 | [待实现][待真机] | B1 + C2S |
+| C2 | `bulkDataBlocks` 等价性 | **[离线契约与差分完成·8 passed][待真机]** | B1 + C2S | 交付 `bulk_data_contract.py` 与差分测试；真机留待 MV-11 |
 
 ### 第 4 批：性能实验与大型验证
 
@@ -145,6 +145,7 @@ graph TD
 | :--- | :--- | :--- | :--- |
 | C1 | `numCpus` = 1/2/4/8 实验框架 | **[脚手架完成][待真机]** | 脚手架与配置审计已就绪；真机对比实验强依 BASE + 算例 ≥ 60 s |
 | D3 | watchdog 大型隐式真机验证 | [待真机] | 大型算例（**不依赖 BASE**，验证误杀不需性能数据） |
+| 阶段 3.4 | 测试分级治理与准入规约 | **[规约已建立·静态]** | 建立 `docs/test-tier-governance.md`，注册 markers，确立四态判定标准 |
 
 ### 不在本批次
 
@@ -204,9 +205,11 @@ A2 的契约审查进一步确认：T4 可以不改主链路地拆为 T4a（等�
 
 ### C2S：`bulkDataBlocks` 数值验收标准
 
-规划要求浮点公差 `<1e-6`，但**未定义适用场景**。`bulkDataBlocks` 在 Abaqus 中用于
-批量提取全场数据，若无明确场景与容差依据，等价比对会变成伪验收。需先确定：
-哪些提取路径可用、哪些因集合语义不同不可等价、公差基于什么物理量级。
+**当前状态：阻塞解除（已定案，主链路保持 values 遍历）**。
+
+1. **场景范围收敛**：仅限于全场标量扫描与极值/均值提取（如最大 Mises 应力、最大位移分量）；局部节点/单元集过滤及含空间过滤的张量不变量重构仍走 canonical `fo.values`。
+2. **公差门槛**：数值等价性相对公差严格取 `< 1e-6`，绝对/相对联合判定（`is_close_scalar`）。
+3. **主链路控制**：`odb_extractor.py` 主链路保持不变，不冒进替换；真机工程规模 ODB（MV-11）上证明零漂移且耗时确有正向收益后方可评估合并。
 
 ## 5. 证据留存规则
 
@@ -243,3 +246,4 @@ A2 的契约审查进一步确认：T4 可以不改主链路地拆为 T4a（等�
 | 2026-10-21 | 计时落盘失败改为独立 logger 出口。真实读回未做，不闭合 `P3-LEFTOVER-02` |
 | 2026-10-21 | 加固复杂求解日志与 License 契约：T4b 解析器支持双精度并排除 package.exe 等辅助工具；澄清单 job 多 step 为单段；restart 多 job 头判为 AMBIGUOUS；确立严禁 `T4a - T4b` 推导 License 等待的硬隔离红线。真机多步/restart 日志与真实 License 数据纳入统一真机清单 |
 | 2026-10-21 | 阶段 3.2 并行度实验脚手架完成：实现 `ParallelRunSpec`（约束 1/2/4/8 并解耦 numDomains）、`ParallelExperimentResult`、宿主硬件元数据采集；消除 `case_07_jounce_bumper_e2e.py` 写死并新增 CLI 参数；测试（44 passed）。C1 状态更新为 [脚手架完成][待真机] |
+| 2026-10-21 | 阶段 3.3 与 3.4 准备就绪：C2S 定案解除阻塞（收敛为全场标量，公差 < 1e-6，主链路保持 values 遍历）；交付 `bulk_data_contract.py` 与差分测试（8 passed）；交付 `docs/test-tier-governance.md` 确立三级测试体系与严格四态判定标准 |
