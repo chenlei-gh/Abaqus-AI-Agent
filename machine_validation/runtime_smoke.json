@@ -1,8 +1,8 @@
 {
   "command": [
-    "C:\\SIMULIA\\Commands\\abaqus.bat",
+    "C:/SIMULIA/Commands/abaqus.bat",
     "cae",
-    "noGUI=D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\machine_validation\\AIAgent_RuntimeSmoke_script.py"
+    "noGUI=D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\runs\\odb_sample_run\\AIAgent_ODBSample_script.py"
   ],
   "harness": {
     "error_class": null,
@@ -17,12 +17,12 @@
     "required_outputs_present": true,
     "script_completed": true
   },
-  "launcher": "abaqus",
+  "launcher": "C:/SIMULIA/Commands/abaqus.bat",
   "process_succeeded": true,
   "return_code": 0,
-  "script": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\machine_validation\\AIAgent_RuntimeSmoke_script.py",
+  "script": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\runs\\odb_sample_run\\AIAgent_ODBSample_script.py",
   "status": "pass",
   "stderr": "Abaqus License Manager checked out the following license:\n\"cae\" from Flexnet server DESKTOP-9EAL2I4\n<9998 out of 9999 licenses remain available>.\n",
   "stdout": "",
-  "workdir": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent"
+  "workdir": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\runs\\odb_sample_run"
 }

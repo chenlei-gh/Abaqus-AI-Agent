@@ -1,0 +1,138 @@
+{
+  "schema": "real_odb_validation_v1",
+  "created_at_utc": "2026-10-21T01:30:00Z",
+  "purpose": "First execution of ODB structure verification, result_ref round-trip and mtime semantics review against a REAL Abaqus-produced ODB (leftovers P1-LEFTOVER-02, P1-LEFTOVER-04, P2-LEFTOVER-02, P2-LEFTOVER-03).",
+  "evidence_layer": "real_abaqus_run",
+  "not_proven_by_this_file": [
+    "watchdog behaviour on large implicit solves (P1-LEFTOVER-01) - this is a single-element static job",
+    "real-scale cache restore timing (P2-LEFTOVER-03) - payload is 2 extractions, 8 KB",
+    "any T1-T6 production timing baseline (P3-LEFTOVER-01)"
+  ],
+
+  "environment": {
+    "abaqus_version": "Abaqus/Standard 2025",
+    "launcher": "C:/SIMULIA/Commands/abaqus.bat",
+    "products_root": "/c/SIMULIA/EstProducts/2025",
+    "license_server": "Flexnet server DESKTOP-9EAL2I4",
+    "host_python": ".venv/Scripts/python.exe",
+    "odb_generator": "tools/runtime_smoke.py (single C3D8R brick, static step)"
+  },
+
+  "sample": {
+    "odb_local_path": "runs/odb_sample_run/AIAgent_ODBSample.odb",
+    "committed": false,
+    "why_not_committed": ".gitignore:28 ignores *.odb; only the description below can be committed",
+    "size_bytes": 220260,
+    "sha256": "da7b4f2dfe9ec966d1a40e60d058022a5abb7fb425d395ee364aeee609f61b09",
+    "input_file": "AIAgent_ODBSample.inp",
+    "input_sha256": "3d23f4a08e7ca33022ec8941b89768b7c25faed6c610c37843193161af3b48c1",
+    "header_hex_32": "484b5352443000000000000c444442206f626a65637400000000000000000000",
+    "header_ascii_32": "HKSRD0......DDB object..........",
+    "observed_magic_prefix": "HKSRD0",
+    "job_status_sta": "THE ANALYSIS HAS COMPLETED SUCCESSFULLY",
+    "steps": ["Step-1"],
+    "frames_step1": 2,
+    "fields_step1": ["CF", "E", "RF", "S", "U"],
+    "mesh": {"elements": 8, "nodes": 27, "element_types": {"C3D8R": 8}}
+  },
+
+  "b2_structure_verification": {
+    "leftover": "P1-LEFTOVER-02",
+    "call": "verify_authentic_odb_structure(path, launcher_cmd=..., required_step='Step-1')",
+    "positive_case": {
+      "pre_filter": true,
+      "verified": true,
+      "note": "First time the odbAccess.openOdb() path ran against a real ODB"
+    },
+    "negative_cases": [
+      {"case": "truncated_50pct", "size": 110130, "pre_filter": true, "verified": false,
+       "layer_that_caught_it": "odbAccess.openOdb",
+       "error_excerpt": "Cannot open file ... ***ERROR: The Abaqus database"},
+      {"case": "header_corrupt_4k", "size": 220260, "pre_filter": true, "verified": false,
+       "layer_that_caught_it": "odbAccess.openOdb",
+       "error_excerpt": "Cannot open file ... ***ERROR"},
+      {"case": "all_zero", "size": 220260, "pre_filter": false, "verified": false,
+       "layer_that_caught_it": "pre_filter"},
+      {"case": "all_ff", "size": 220260, "pre_filter": false, "verified": false,
+       "layer_that_caught_it": "pre_filter"},
+      {"case": "tiny_100b", "size": 100, "pre_filter": false, "verified": false,
+       "layer_that_caught_it": "pre_filter"},
+      {"case": "plaintext_json", "size": 2600, "pre_filter": false, "verified": false,
+       "layer_that_caught_it": "pre_filter"}
+    ],
+    "conclusion": "Layered defence holds on real data: the pre-filter rejects size/fill/plaintext classes; truncation and header corruption pass the pre-filter but are caught by odbAccess.openOdb. The pre-filter alone is insufficient, which was already documented; this run confirms both layers are load-bearing.",
+    "leftover_status": "EVIDENCE_OBTAINED_SINGLE_BRICK_ONLY",
+    "why_still_open": "Positive and negative evidence now exists on a real ODB, but on a single-element static job. No large implicit ODB has been verified. Closing P1-LEFTOVER-02 needs a real ODB from case_07_jounce_bumper or equivalent."
+  },
+
+  "b3_result_ref_roundtrip": {
+    "leftover": "P2-LEFTOVER-02",
+    "requirements": [
+      {"name": "max_mises", "field": "S", "invariant": "MISES", "step": "Step-1"},
+      {"name": "max_u2", "field": "U", "component": "U2", "step": "Step-1"}
+    ],
+    "cold_extract_s": 0.371,
+    "cache_hit_extract_s": 0.001,
+    "metrics": {"max_mises": 11.682844161987305, "max_u2": 0.0005291567649692297},
+    "extractions": 2,
+    "evidence": 2,
+    "result_ref": "B3-real-odb_da7b4f2d",
+    "cache_file_bytes": 8423,
+    "restore_metrics_equal": true,
+    "summary_len_chars": 664,
+    "summary_under_1500": true,
+    "conclusion": "Cold extract -> cache write -> cache hit -> disk restore all hold on a real ODB with real odbAccess data. The round-trip is confirmed end to end.",
+    "leftover_status": "EVIDENCE_OBTAINED_SINGLE_BRICK_ONLY",
+    "why_still_open": "Same ODB, 2 extractions. A production-scale extraction (many requirements, large meshes) is not covered."
+  },
+
+  "p2_leftover_03_restore_timing": {
+    "leftover": "P2-LEFTOVER-03",
+    "iterations": 50,
+    "restore_ms_min": 0.092,
+    "restore_ms_median": 0.099,
+    "restore_ms_p95": 0.12,
+    "restore_ms_max": 0.153,
+    "budget_ms": 10,
+    "all_under_budget": true,
+    "leftover_status": "STILL_OPEN_SCALE_UNVERIFIED",
+    "why_still_open": "The payload is 8 KB / 2 extractions. The <10ms budget has now been met on real ODB output, but not at real engineering scale. This does not close the leftover, which is explicitly about scale."
+  },
+
+  "b4_mtime_semantics_review": {
+    "leftover": "P1-LEFTOVER-04",
+    "question": "Does 'ODB mtime must be later than .sta' actually discriminate corrupt from valid ODBs?",
+    "measurements_epoch": {
+      "AIAgent_ODBSample.dat": 1792546080.524957,
+      "AIAgent_ODBSample.msg": 1792546080.524957,
+      "AIAgent_ODBSample.odb": 1792546080.6655573,
+      "AIAgent_ODBSample.sta": 1792546080.524957,
+      "AIAgent_ODBSample.log": 1792546081.0532918
+    },
+    "finding_1_valid_odb_would_be_rejected": {
+      "case": "byte-identical copy of the VALID ODB, mtime set to 09:00:00 (earlier than .sta at 09:28:00)",
+      "rule_verdict": "REJECT (mtime earlier than .sta)",
+      "actual": {"verified": true, "frames": 2},
+      "meaning": "A legitimate, fully readable ODB is rejected purely by timestamp ordering. This is a false rejection on real data, not a hypothetical."
+    },
+    "finding_2_rule_cannot_catch_corruption": {
+      "case": "truncated_50pct and header_corrupt_4k negatives",
+      "their_mtimes_epoch": [1792546095.2053101, 1792546095.20631],
+      "sta_mtime_epoch": 1792546080.524957,
+      "rule_verdict": "PASS (both later than .sta)",
+      "actual_verified": [false, false],
+      "meaning": "Both corrupted files satisfy the proposed mtime rule. The rule has zero discriminating power for the corruption classes it was meant to catch."
+    },
+    "conclusion": "The mtime comparison is refuted in both directions on real data: it rejects a valid file and accepts corrupt ones. It must not be implemented as a recovery gate.",
+    "recommendation": "Revise the contract text rather than implement the rule. Recommended replacement criterion, which this run shows IS discriminating: reject if the file is smaller than 1024 bytes, uniform-fill, or plaintext; then require odbAccess.openOdb() to open it and yield at least one non-initial step with at least one frame. mtime carries no additional signal.",
+    "leftover_status": "REFUTED_PENDING_CONTRACT_REVISION",
+    "why_still_open": "The governance plan still contains the mtime requirement. Revising contract text requires an explicit decision; this evidence supports revision but does not itself amend the plan."
+  },
+
+  "reproduction": {
+    "generate_odb": ".venv/Scripts/python.exe tools/runtime_smoke.py --launcher \"C:/SIMULIA/Commands/abaqus.bat\" --workdir runs/odb_sample_run --job-name AIAgent_ODBSample --timeout 1800",
+    "verify_structure": "verify_authentic_odb_structure(path, launcher_cmd='C:/SIMULIA/Commands/abaqus.bat', required_step='Step-1')",
+    "extraction_requires": "a customer project root OUTSIDE the repo with input/, working/, solver/, evidence/, delivery/ (paths.require_customer_project_context)",
+    "note": "The cold extraction call fails with a production guard if the ODB lives inside the repository. Place the ODB under an external project root before extracting."
+  }
+}
