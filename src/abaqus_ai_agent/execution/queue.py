@@ -105,6 +105,12 @@ class QueueItem:
     error: Optional[str] = None
     license_handle: Optional[LicenseHandle] = None
     result: Optional[Any] = None
+    #: Seconds from enqueue to license grant, i.e. the T3 "license queue" phase.
+    #: ``None`` until a license is actually granted; a retried item measures the
+    #: span from ``enqueued_at``, which includes every backoff it sat through, so it
+    #: reports the wall-clock cost the caller actually paid rather than the cost of
+    #: the final successful attempt only.
+    license_wait_seconds: Optional[float] = None
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -119,6 +125,7 @@ class QueueItem:
             "next_eligible_at": self.next_eligible_at,
             "error": self.error,
             "license_handle": self.license_handle.to_dict() if self.license_handle else None,
+            "license_wait_seconds": self.license_wait_seconds,
             "resources": {
                 "feature": self.resources.feature,
                 "tokens": self.resources.tokens,
@@ -406,6 +413,10 @@ class AnalysisRunQueue:
                     item.license_handle = handle
                     item.state = QueueItemState.RUNNING
                     item.started_at = now
+                    # Measure against the enqueue time, not this pump step: a retried
+                    # item paid for every backoff it slept through, and that total is
+                    # what the caller experienced as waiting.
+                    item.license_wait_seconds = max(0.0, round(now - item.enqueued_at, 6))
                     self._persist_state()
                     return item
                 else:

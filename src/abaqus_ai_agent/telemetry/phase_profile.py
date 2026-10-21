@@ -153,8 +153,20 @@ class PhaseProfiler:
     phases are sequential, and pretending otherwise would hide a real overlap.
     """
 
-    def __init__(self, run_id: str = "") -> None:
+    def __init__(self, run_id: str = "", strict: bool = True) -> None:
         self.run_id = run_id
+        # ``strict`` decides what happens when the *profiling contract* is violated
+        # (phase overlap, double finalize, reserved detail keys). It never decides
+        # what happens to the measured code's own exception, which always propagates.
+        #
+        # strict=True  -> contract violations raise PhaseProfileError. Correct for
+        #                 tests and for callers who want the bug surfaced loudly.
+        # strict=False -> violations are recorded in ``internal_errors`` and the
+        #                 profiler degrades to "no data for that phase". This is the
+        #                 mode for wiring into a production run: observation must not
+        #                 become a new failure source.
+        self.strict = strict
+        self.internal_errors: List[str] = []
         self._measured: Dict[PipelinePhase, PhaseRecord] = {}
         self._active: Optional[PipelinePhase] = None
         # The wall clock starts at construction, not at the first phase. Otherwise
@@ -162,6 +174,12 @@ class PhaseProfiler:
         # ``unattributed_s`` would understate the real overhead.
         self._started_monotonic: float = time.monotonic()
         self._finalized = False
+
+    def _violation(self, message: str) -> None:
+        """Report a contract violation: raise in strict mode, record otherwise."""
+        if self.strict:
+            raise PhaseProfileError(message)
+        self.internal_errors.append(message)
 
     # -- measurement ------------------------------------------------------
 
@@ -193,46 +211,81 @@ class PhaseProfiler:
 
     @contextmanager
     def measure(self, phase: PipelinePhase, **detail: Any) -> Iterator[None]:
-        """Time one phase. Exceptions propagate unchanged after being recorded."""
+        """Time one phase. Exceptions from the body propagate unchanged, always.
+
+        Isolation guarantee (independent of ``strict``): if the profiler itself fails
+        while recording -- a clock error, a full disk on UTC formatting, a reserved
+        detail key -- the body's own exception is re-raised and the profiling fault is
+        demoted to ``internal_errors``. Turning a successful phase into a failure, or
+        masking a real exception with a bookkeeping one, would make the observer more
+        dangerous than the thing it observes.
+        """
         if self._finalized:
-            raise PhaseProfileError("Cannot measure a phase after finalize().")
+            self._violation("Cannot measure a phase after finalize().")
+            yield
+            return
         if self._active is not None:
-            raise PhaseProfileError(
+            self._violation(
                 f"Phase {phase.value} entered while {self._active.value} is still active. "
                 "Phases must not overlap; concurrent phases make the breakdown sum "
                 "meaningless."
             )
+            yield
+            return
 
         self._active = phase
-        started = self._now()
-        started_utc = _utc_now_iso()
+        try:
+            started = self._now()
+            started_utc = _utc_now_iso()
+        except Exception as exc:  # pragma: no cover - clock/format failure is exotic
+            self._active = None
+            self._note_internal(f"could not start timing {phase.value}: {exc!r}")
+            yield
+            return
+
         try:
             yield
         except BaseException as exc:  # noqa: BLE001 - recorded, then re-raised verbatim
-            finished = time.monotonic()
-            self._store(PhaseRecord(
-                phase=phase,
-                status=PhaseStatus.FAILED,
-                duration_s=round(finished - started, 6),
-                started_at_utc=started_utc,
-                finished_at_utc=_utc_now_iso(),
-                exception_type=type(exc).__name__,
-                exception_message=str(exc),
-                detail=dict(detail),
-            ))
+            self._safe_store(phase, PhaseStatus.FAILED, started, started_utc, detail, exc)
             raise
         else:
+            self._safe_store(phase, PhaseStatus.MEASURED, started, started_utc, detail, None)
+        finally:
+            self._active = None
+
+    def _note_internal(self, message: str) -> None:
+        self.internal_errors.append(message)
+
+    def _safe_store(
+        self,
+        phase: PipelinePhase,
+        status: PhaseStatus,
+        started: float,
+        started_utc: str,
+        detail: Dict[str, Any],
+        exc: Optional[BaseException],
+    ) -> None:
+        """Record a finished phase without ever replacing the body's outcome."""
+        try:
             finished = time.monotonic()
             self._store(PhaseRecord(
                 phase=phase,
-                status=PhaseStatus.MEASURED,
+                status=status,
                 duration_s=round(finished - started, 6),
                 started_at_utc=started_utc,
                 finished_at_utc=_utc_now_iso(),
+                exception_type=type(exc).__name__ if exc is not None else "",
+                exception_message=str(exc) if exc is not None else "",
                 detail=dict(detail),
             ))
-        finally:
-            self._active = None
+        except Exception as store_exc:
+            message = f"could not record {phase.value} as {status.value}: {store_exc!r}"
+            self._note_internal(message)
+            # Precedence rule: an exception already in flight from the measured body
+            # always wins. Masking a real failure with a bookkeeping one would send
+            # the caller chasing the profiler instead of the actual defect.
+            if exc is None and self.strict:
+                raise PhaseProfileError(message) from store_exc
 
     def record_external(
         self,
@@ -248,23 +301,17 @@ class PhaseProfiler:
         changing those modules' semantics or return shapes.
         """
         if self._finalized:
-            raise PhaseProfileError("Cannot record a phase after finalize().")
+            self._violation("Cannot record a phase after finalize().")
+            return PhaseRecord(phase=phase, status=PhaseStatus.NOT_RUN)
         if self._active is not None:
-            raise PhaseProfileError(
+            self._violation(
                 f"Cannot record {phase.value} while {self._active.value} is active."
             )
-        if isinstance(duration_s, bool) or not isinstance(duration_s, (int, float)):
-            raise PhaseProfileError(
-                f"duration_s must be a number, got {type(duration_s).__name__}."
-            )
-        # Non-finite values pass a ``< 0`` check (nan and inf both compare False),
-        # and would poison sum_phase_s / unattributed_s while still looking measured.
-        if not math.isfinite(duration_s):
-            raise PhaseProfileError(
-                f"duration_s must be finite, got {duration_s!r}."
-            )
-        if duration_s < 0:
-            raise PhaseProfileError(f"duration_s must be non-negative, got {duration_s}.")
+            return PhaseRecord(phase=phase, status=PhaseStatus.NOT_RUN)
+        problem = self._duration_problem(duration_s)
+        if problem is not None:
+            self._violation(problem)
+            return PhaseRecord(phase=phase, status=PhaseStatus.NOT_RUN)
         record = PhaseRecord(
             phase=phase,
             status=PhaseStatus.MEASURED,
@@ -273,24 +320,48 @@ class PhaseProfiler:
             finished_at_utc="",
             detail=dict(detail),
         )
-        return self._store(record)
+        try:
+            return self._store(record)
+        except Exception as store_exc:
+            self._note_internal(f"could not record {phase.value}: {store_exc!r}")
+            return PhaseRecord(phase=phase, status=PhaseStatus.NOT_RUN)
+
+    @staticmethod
+    def _duration_problem(duration_s: Any) -> Optional[str]:
+        """Return a reason string when ``duration_s`` is not acceptable.
+
+        Separate from the raising path so both ``strict`` modes can share one rule;
+        duplicating the checks is how validation quietly drifts apart.
+        """
+        if isinstance(duration_s, bool) or not isinstance(duration_s, (int, float)):
+            return f"duration_s must be a number, got {type(duration_s).__name__}."
+        # Non-finite values pass a ``< 0`` check (nan and inf both compare False),
+        # and would poison sum_phase_s / unattributed_s while still looking measured.
+        if not math.isfinite(duration_s):
+            return f"duration_s must be finite, got {duration_s!r}."
+        if duration_s < 0:
+            return f"duration_s must be non-negative, got {duration_s}."
+        return None
 
     def mark_not_run(self, phase: PipelinePhase, reason: str = "") -> PhaseRecord:
         """Record that a phase was deliberately skipped, without inventing a 0.0."""
         if self._finalized:
-            raise PhaseProfileError("Cannot mark a phase after finalize().")
+            self._violation("Cannot mark a phase after finalize().")
+            return PhaseRecord(phase=phase, status=PhaseStatus.NOT_RUN)
         # Same conflict rule as record_external(): marking a phase while another
         # measurement is open would let a later close overwrite this NOT_RUN and
         # inflate the retry counter with contradictory states.
         if self._active is not None:
-            raise PhaseProfileError(
+            self._violation(
                 f"Cannot mark {phase.value} while {self._active.value} is active."
             )
+            return PhaseRecord(phase=phase, status=PhaseStatus.NOT_RUN)
         if phase in self._measured and self._measured[phase].is_measured:
-            raise PhaseProfileError(
+            self._violation(
                 f"Phase {phase.value} already has a measurement; refusing to overwrite "
                 "it with NOT_RUN."
             )
+            return self._measured[phase]
         record = PhaseRecord(
             phase=phase,
             status=PhaseStatus.NOT_RUN,
@@ -305,11 +376,18 @@ class PhaseProfiler:
     def finalize(self) -> "PhaseProfile":
         """Close the profile and reconcile phase durations against the wall clock."""
         if self._finalized:
-            raise PhaseProfileError("finalize() already called.")
+            note = "finalize() already called."
+            if self.strict:
+                raise PhaseProfileError(note)
+            self._note_internal(note)
         if self._active is not None:
-            raise PhaseProfileError(
-                f"Cannot finalize while {self._active.value} is still active."
-            )
+            note = f"Cannot finalize while {self._active.value} is still active."
+            if self.strict:
+                raise PhaseProfileError(note)
+            self._note_internal(note)
+            # The stale active phase would otherwise make every later call a
+            # violation; the profile is being closed, so the window is over.
+            self._active = None
         self._finalized = True
 
         total_wall = time.monotonic() - self._started_monotonic
@@ -321,6 +399,7 @@ class PhaseProfiler:
                 for p in sorted(PipelinePhase, key=lambda p: p.order)
             ),
             total_wall_clock_s=round(total_wall, 6),
+            internal_errors=tuple(self.internal_errors),
         )
 
 
@@ -332,6 +411,10 @@ class PhaseProfile:
     records: Tuple[PhaseRecord, ...]
     total_wall_clock_s: float
     schema: str = "phase_profile_v1"
+    #: Contract violations demoted by ``strict=False``. Empty means the profile is
+    #: clean. Non-empty means the timing data may be incomplete, not that the run
+    #: failed: this field exists so silent degradation is still visible.
+    internal_errors: Tuple[str, ...] = ()
 
     @property
     def measured_phases(self) -> Tuple[PhaseRecord, ...]:
@@ -391,6 +474,7 @@ class PhaseProfile:
             "measured_count": len(self.measured_phases),
             "not_run": [p.value for p in self.not_run_phases],
             "failed": [r.phase.value for r in self.failed_phases],
+            "profiling_errors": list(self.internal_errors),
         }
 
     def to_llm_summary(self, max_chars: int = 600) -> str:

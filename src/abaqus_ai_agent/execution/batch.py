@@ -36,6 +36,12 @@ class BatchResult:
     stdout: str = ""
     stderr: str = ""
     workdir: Optional[str] = None
+    #: Wall-clock seconds spent in the watched process, or ``None`` when the caller
+    #: constructed the result without a measurement (tests, stubs, hand-built fakes).
+    #: ``None`` means "not measured", never "took no time": a real run always has a
+    #: positive duration, and a fast run still reports a small float. This is
+    #: ``WatchedProcessResult.duration`` passed through, not a re-measurement.
+    duration: Optional[float] = None
 
     @property
     def succeeded(self) -> bool:
@@ -112,7 +118,7 @@ class BatchExecutor:
             stall_timeout=eff_stall,
         )
         return BatchResult(command, proc.returncode, proc.stdout, proc.stderr,
-                           effective_workdir)
+                           effective_workdir, proc.duration)
 
     def run_input(self, input_path, job_name=None, timeout=None, workdir=None):
         path = os.path.abspath(input_path)

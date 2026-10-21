@@ -114,16 +114,16 @@ graph TD
 | ID | 任务 | 类型 | 写范围 | 说明 |
 | :--- | :--- | :--- | :--- | :--- |
 | B1 | 用 `runtime_smoke.py` 生成并留存真实 ODB | [待真机] | `runs/`（不入库）、`machine_validation/*.json` | 记录运行环境、输入版本、作业状态、文件校验信息 |
-| A1 | `BatchResult` 携带耗时 | [待实现] | `execution/batch.py` | 纯增量字段，默认 `None`，不改变现有语义 |
-| A3 | License 排队耗时外露 | [待实现] | `execution/license.py` | 需先确认不改 `_LicenseContext` 的返回形状 |
-| A5 | profile 异常隔离契约 | [待实现] | `telemetry/phase_profile.py` + 测试 | 计时失败不得影响任务成功判定 |
+| A1 | `BatchResult` 携带耗时 | **[已实现·单元级]** | `execution/batch.py` | 纯增量字段，默认 `None`；透传 `WatchedProcessResult.duration`，不重复测量 |
+| A3 | License 排队耗时外露 | **[已实现·单元级]** | `execution/license.py`、`execution/queue.py` | 字段可读且有测试；**尚无调用方**送入 profiler，`P3-LEFTOVER-03` 未闭合 |
+| A5 | profile 异常隔离契约 | **[已实现·单元级]** | `telemetry/phase_profile.py` + 测试 | `strict=False` 降级写入 `internal_errors`；记录失败永不掩盖真实异常 |
 | D1 | Provider 计费证据采集 | [待真机] | `tools/live_token_benchmark.py` | 与 ODB 无关；需真实 Key，费用自负 |
 
 ### 第 2 批：依赖第 1 批
 
 | ID | 任务 | 类型 | 前置 | 说明 |
 | :--- | :--- | :--- | :--- | :--- |
-| A4 | T1/T2/T6 阶段边界定义 | [待实现] | 无（可与第 1 批并行） | 需先明确起止边界，否则打点是假的 |
+| A4 | T1/T2/T6 阶段边界定义 | **[已定义·静态]** | 无（可与第 1 批并行） | 落于 `docs/phase-timing-boundaries.md`。**结论：T2 当前无可测边界**（`audit_inp_mesh_quality` 生产零调用，网格生成混在 `apply_plan` 循环内） |
 | B2 | 真实 ODB 结构级验签 | [待真机] | B1 | `verify_authentic_odb_structure` 的 `odbAccess.openOdb()` 路径从未对真实 ODB 执行 |
 | B3 | 真实 ODB `result_ref` 往返 | [待真机] | B1 | 关闭 `P2-LEFTOVER-02` |
 | B4 | 真机损坏负例 | [待真机] | B1 | 截断/全零/头部篡改，验证 Fail-Closed |
@@ -149,6 +149,21 @@ graph TD
 
 阶段 4（声明式建模闭环、分类错误熔断与受控恢复）**不并入**。它与性能测量目标正交，
 混做会扩大回归面。等阶段 3 遗留项清完后单独立项。
+
+### 第 1 批的实际进展（2026-10-21）
+
+| ID | 变化 |
+| :--- | :--- |
+| A1 | [待实现] → **[已实现·单元级]** |
+| A3 | [待实现] → **[已实现·单元级]**（导出能力有了，真实数据仍无） |
+| A4 | [待实现] → **[已定义·静态]**；**新增发现：T2 无边界** |
+| A5 | [待实现] → **[已实现·单元级]** |
+| B1 | 已完成：单砖真实 ODB 已生成并取得证据（见 `machine_validation/real_odb_validation.json`） |
+| B2 / B3 / B4 / D2 | 证据已取得（单砖规模），**均未闭合**；需工程规模复验 |
+
+A4 的结论改变了 BASE 的前置条件：**T2 无法在不改主链路的前提下测量**，
+因此 BASE 若要覆盖完整 T1~T6，必须先把 A2（主链路计时）的决策阻塞解开。
+否则 BASE 只能产出 T1/T3/T5/T6 的不完整基线，且 T4 仅为「等待时间」。
 
 ## 4. 决策阻塞项
 
@@ -197,3 +212,4 @@ graph TD
 | 日期 | 变更 |
 | :--- | :--- |
 | 2026-10-21 | 建立本文件：核实 13 条事实（F1～F13），给出四批任务依赖图，登记 2 项决策阻塞（A2 主链路 T4 计时、C2S `bulkDataBlocks` 数值标准）。明确小型 ODB 不能替代大型隐式验证，Provider/计时基础设施不依赖 ODB |
+| 2026-10-21 | 第 1 批进展：A1/A3/A5 已实现（单元级），A4 已定义边界并**发现 T2 无可测边界**。该发现抬高了 BASE 的前置条件：完整 T1~T6 基线依赖 A2 决策先解开 |

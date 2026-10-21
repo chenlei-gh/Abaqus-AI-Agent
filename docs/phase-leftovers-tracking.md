@@ -170,6 +170,10 @@
 
 审计结论：**不存在**统一的分阶段剖析设施，也没有跨阶段一致性校验。
 
+> A4 复核（见 `docs/phase-timing-boundaries.md`）进一步确认：T2「缺失」不是因为没有网格代码，
+> 而是网格生成发生在 `apply_plan()` 的混合循环内且不返回耗时；`audit_inp_mesh_quality`
+> 在生产代码中零调用。因此 T2 缺少的是**可测边界**，而非缺少网格能力。
+
 #### 计时契约（`telemetry/phase_profile.py`）
 
 | # | 契约 | 落地方式 |
@@ -201,7 +205,7 @@
 | :--- | :--- | :--- | :--- |
 | P3-LEFTOVER-01 | 真实运行耗时基线未采集 | **未验证** | 无任何真实 Abaqus 运行的 T1~T6 数据；现有测试仅用注入的假时钟与合成耗时 |
 | P3-LEFTOVER-02 | 剖析器未接入执行链路 | **未接入** | `AnalysisRunner` 主链路按决定不改；当前模块是独立可观测组件，任何「主链路已具备分阶段剖析」的说法都不成立 |
-| P3-LEFTOVER-03 | T3 License 排队耗时仍为内部量 | **未导出** | `license.py` 的 `elapsed` 未返回，需在真正接线时再适配，本轮不改动 |
+| P3-LEFTOVER-03 | T3 License 排队耗时仍为内部量 | **导出能力已实现，仍无真实测量** | A3 已让 `_LicenseContext.wait_seconds` 与 `QueueItem.license_wait_seconds` 可读取并有单元测试；但**没有调用方**把它们交给 `profiler.record_external()`，也没有真实 FlexNet/DSLS 排队数据。关闭条件「取得真实排队耗时」未满足 |
 
 #### 验证层级声明
 
@@ -215,10 +219,64 @@
 
 | 项 | 结果 |
 | :--- | :--- |
-| 定向 `tests/test_phase_profile.py` | 44 passed |
-| 全量 `pytest -q` | 1921 passed（116 s）→ 1941 passed（契约边界加固后） |
-| 全量 `pytest -W error -q` | 1921 passed（108 s）→ 1941 passed（契约边界加固后） |
-| `tools/check_workspace_pollution.py` | passed |
+| 定向 `tests/test_phase_profile.py` | 44 passed → **51 passed**（A5 异常隔离后） |
+| 定向 `tests/test_timing_plumbing.py` | **9 passed**（A1 / A3 新增） |
+| 定向合计（两文件） | **60 passed**（0.43 s） |
+| 全量 `pytest -q` | **1957 passed**（108.84 s） |
+| 全量 `pytest -W error -q` | **1957 passed**（108.24 s） |
+| `tools/check_workspace_pollution.py` | 提交后校验 |
+
+#### 3.1.1 计时基础设施补齐（任务图 A1 / A3 / A4 / A5）
+
+这四项是**打点的前置条件**，不是打点本身。完成它们**不产生**任何阶段耗时数据。
+
+| ID | 内容 | 落点 | 验证层级 |
+| :--- | :--- | :--- | :--- |
+| A1 | `BatchResult.duration` 透传 `WatchedProcessResult.duration` | `execution/batch.py:39-45`、`:118-121` | 单元级 |
+| A3 | `_LicenseContext.wait_seconds`、`QueueItem.license_wait_seconds` | `execution/license.py:58-61`、`execution/queue.py:108-113`、`:419` | 单元级 |
+| A4 | T1/T2/T6 边界定义（及 T3/T4/T5 边界复核） | `docs/phase-timing-boundaries.md` | **纯静态**，无运行证据 |
+| A5 | `PhaseProfiler(strict=False)` 异常隔离 | `telemetry/phase_profile.py:156-176`、`_safe_store` | 单元级 |
+
+**A5 的核心规则**（已核实代码）：`_safe_store()` 捕获记录期异常后，若被测代码已有异常在飞
+（`exc is not None`），**永不覆盖**它；仅当 `exc is None and self.strict` 时才抛
+`PhaseProfileError`。即「记录失败绝不能掩盖真实异常」。`strict=False` 下契约违例降级写入
+`internal_errors`，最终经 `to_dict()` 暴露为 `profiling_errors`——**降级可见，不是静默吞掉**。
+
+**A3 的时基校验**（已核实）：`QueueItem.enqueued_at` 与 `process_next()` 的 `now` **同为
+`time.time()`**（`queue.py:96`、`:388`），差值有效；`current_time` 外部注入时必须同源。
+`_LicenseContext` 走 `time.monotonic()`，两条路径各自自洽，**不可混用**。
+
+#### 3.1.2 A4 的关键结论：T2 当前没有可测边界
+
+A4 的审计结果比预期严重，必须单独记录（详见 `docs/phase-timing-boundaries.md` §3）：
+
+| 候选锚点 | 不可用原因 |
+| :--- | :--- |
+| `audit_inp_mesh_quality` | 生产代码**零调用**，仅测试引用 |
+| `evaluate_mesh_quality_gate` | 纯规则评估，不含网格生成 |
+| `generate_mesh` action | 混在 `apply_plan` 的同一循环内（`agent.py:273-278`） |
+| `writeInput` 段 | 是导出 inp + 装配审计，不是网格生成 |
+
+`apply_plan` 逐个 `execute()` 并丢弃返回值耗时，**不暴露任何计时点**。要测 T2 必须改这条
+循环，与 A2（T4 主链路计时）同属主链路语义变更，**未获授权**。
+
+因此：**T2 在接入前只能登记 `NOT_RUN`**。任何「T2 已可测量」的说法都不成立。
+
+#### 3.1.3 T4 的语义偏差（必须保留标注）
+
+唯一可用边界是 `jobs.submit(job_name, wait=True, ...)`（`analysis_run.py:979`）。它测的是
+**「提交到完成的等待时间」**，可能含求解器启动、License 排队与 IO，**不是纯刚度矩阵分解时间**。
+把该值称为「求解耗时」属于扩大解释，验收记录不得这样写。
+
+#### 3.1.4 本子批次未闭合项
+
+| 项 | 状态 |
+| :--- | :--- |
+| T1 打点接入 | **未接线**（仅有边界定义） |
+| T2 打点接入 | **未接线且无可测边界**（见 §3.1.2） |
+| T3 打点接入 | **未接线**；字段可读但无调用方送入 profiler |
+| T6 打点接入 | **未接线**（仅有边界定义） |
+| 真实耗时数据 | **仍为零**，`P3-LEFTOVER-01` 保持未验证 |
 
 #### 未启动项
 
@@ -237,3 +295,4 @@
 | 2026-10-21 | 在 §2.4 增加计量的三个层级声明：请求级 usage、组件级本地分解、账单对账不得混用（仅文档澄清，无代码变更） |
 | 2026-10-21 | 阶段 3.1：新增 `telemetry/phase_profile.py` 及 24 项单元测试，落地 T1~T6 计时契约（封闭阶段集、单调时钟、失败留痕、未测量≠零、不可重叠、与墙上时钟对账）；登记 3 项遗留（真实耗时基线、未接入 `AnalysisRunner`、`license.py` 耗时未导出）。全量 1921 passed（含 `-W error`） |
 | 2026-10-21 | 阶段 3.1 契约边界加固（仅 `phase_profile.py` 与对应测试）：摘要改为三档完整 JSON 回退（不再按字符截断，放不下则报错）、外部耗时拒绝 `NaN`/`±inf`、`mark_not_run()` 补活动阶段冲突检查。定向 44 passed |
+| 2026-10-21 | 任务图 A1/A3/A4/A5：`BatchResult.duration` 透传、License 排队耗时外露、`PhaseProfiler` 异常隔离（`strict=False` 降级不掩盖真实异常）、T1~T6 边界定义（新增 `docs/phase-timing-boundaries.md`）。**关键发现：T2 无可测边界**（`audit_inp_mesh_quality` 生产零调用，网格生成混在主链路循环内）。定向 60 passed。`P3-LEFTOVER-01/02/03` 全部保持未闭合 |

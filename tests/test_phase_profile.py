@@ -359,6 +359,86 @@ def test_caller_cannot_forge_the_attempts_counter(clock):
 
 
 # ---------------------------------------------------------------------------
+# Observation must never become a new failure source
+# ---------------------------------------------------------------------------
+
+def test_non_strict_mode_demotes_violations_instead_of_raising(clock):
+    profiler = PhaseProfiler(run_id="R-soft", strict=False)
+    with profiler.measure(PipelinePhase.SOLVER):
+        # Reserved key is a contract violation; in non-strict mode it must not
+        # escape into the measured body's control flow.
+        with profiler.measure(PipelinePhase.DATA_EXTRACTION, attempts=7):
+            clock.advance(1.0)
+    profile = profiler.finalize()
+
+    assert len(profile.records) == 6
+    assert profile.internal_errors  # degradation is visible, not silent
+
+
+def test_non_strict_overlap_is_recorded_not_raised(clock):
+    profiler = PhaseProfiler(strict=False)
+    with profiler.measure(PipelinePhase.SOLVER):
+        with profiler.measure(PipelinePhase.DATA_EXTRACTION):
+            clock.advance(1.0)
+    profile = profiler.finalize()
+
+    assert any("still active" in e for e in profile.internal_errors)
+    assert profile.get(PipelinePhase.SOLVER).status is PhaseStatus.MEASURED
+
+
+def test_profiler_fault_never_masks_the_body_exception(clock):
+    """A failing phase must surface its own error, even if recording also fails."""
+    profiler = PhaseProfiler(strict=False)
+    with pytest.raises(ValueError, match="real failure"):
+        with profiler.measure(PipelinePhase.SOLVER, attempts=1):
+            clock.advance(0.5)
+            raise ValueError("real failure")
+    profile = profiler.finalize()
+    assert any("attempts" in e or "could not record" in e for e in profile.internal_errors)
+
+
+def test_strict_mode_still_raises_on_reserved_keys(clock):
+    profiler = PhaseProfiler(strict=True)
+    with pytest.raises(PhaseProfileError, match="reserved"):
+        with profiler.measure(PipelinePhase.SOLVER, attempts=1):
+            pass
+
+
+def test_non_strict_double_finalize_does_not_raise(clock):
+    profiler = PhaseProfiler(strict=False)
+    first = profiler.finalize()
+    second = profiler.finalize()
+    assert first.run_id == second.run_id
+    assert any("already called" in e for e in second.internal_errors)
+
+
+def test_clean_profile_reports_no_profiling_errors(clock):
+    profiler = PhaseProfiler()
+    with profiler.measure(PipelinePhase.SOLVER):
+        clock.advance(1.0)
+    payload = profiler.finalize().to_dict()
+    assert payload["profiling_errors"] == []
+
+
+# ---------------------------------------------------------------------------
+# Real measurements can enter through record_external
+# ---------------------------------------------------------------------------
+
+def test_batch_duration_can_be_recorded_as_solver_time(clock):
+    """A1 feeds A4: BatchResult.duration enters the profile unchanged."""
+    profiler = PhaseProfiler(run_id="R-batch")
+    profiler.record_external(
+        PipelinePhase.SOLVER, 12.75, source="BatchResult.duration"
+    )
+    clock.advance(20.0)
+    profile = profiler.finalize()
+
+    assert profile.get(PipelinePhase.SOLVER).duration_s == pytest.approx(12.75)
+    assert profile.get(PipelinePhase.SOLVER).detail["source"] == "BatchResult.duration"
+    assert profile.unattributed_s == pytest.approx(7.25)
+
+
+# ---------------------------------------------------------------------------
 # Model-facing summary stays bounded
 # ---------------------------------------------------------------------------
 

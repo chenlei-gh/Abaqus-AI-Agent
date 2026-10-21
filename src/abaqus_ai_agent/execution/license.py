@@ -55,14 +55,21 @@ class _LicenseContext:
         self.tokens = tokens
         self.timeout = timeout
         self.handle: Optional[LicenseHandle] = None
+        #: Seconds spent inside ``reserve()``. Populated on success only: a failed
+        #: acquisition has no "queue time" worth reporting, and recording a partial
+        #: wait would look like a measurement of something that never happened.
+        self.wait_seconds: Optional[float] = None
 
     def __enter__(self) -> LicenseHandle:
+        started = time.monotonic()
         self.handle = self.provider.reserve(feature=self.feature, tokens=self.tokens, timeout=self.timeout)
+        elapsed = time.monotonic() - started
         if self.handle is None:
             raise TimeoutError(
                 f"Failed to acquire {self.tokens} tokens for feature '{self.feature}' "
                 f"from {self.provider.__class__.__name__} within {self.timeout}s timeout"
             )
+        self.wait_seconds = max(0.0, round(elapsed, 6))
         return self.handle
 
     def __exit__(self, exc_type, exc_val, exc_tb):
