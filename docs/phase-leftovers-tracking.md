@@ -257,7 +257,7 @@
 | ID | 项 | 状态 | 说明 |
 | :--- | :--- | :--- | :--- |
 | P3-LEFTOVER-01 | 真实运行耗时基线未采集 | **未验证** | 无任何真实 Abaqus 运行的 T1~T6 数据；现有测试仅用注入的假时钟与合成耗时 |
-| P3-LEFTOVER-02 | 剖析器未接入执行链路 | **未接入** | `attach_solver_timing()` 已能把 T4a/T4b 写入 `PhaseProfiler`，但**没有任何生产调用方**调用它，`AnalysisRunner` 主链路按决定不改。存在可调用函数不等于主链路已具备分阶段剖析 |
+| P3-LEFTOVER-02 | 剖析器未接入执行链路 | **部分接入** | `AnalysisRunner.run` 新增可选参数 `phase_profiler`。传入时，T4a（`jobs.submit` 等待时长）与 T4b（`.log` 求解器时长）写入 `SOLVER` 记录；不传时行为与改动前完全一致。**默认不启用**，且 T1/T2/T3/T5/T6 仍未接入。因此「主链路已具备全生命周期剖析」仍不成立 |
 | P3-LEFTOVER-03 | T3 License 排队耗时仍为内部量 | **导出能力已实现，仍无真实测量** | A3 已让 `_LicenseContext.wait_seconds` 与 `QueueItem.license_wait_seconds` 可读取并有单元测试；但**没有调用方**把它们交给 `profiler.record_external()`，也没有真实 FlexNet/DSLS 排队数据。关闭条件「取得真实排队耗时」未满足 |
 | P3-LEFTOVER-04 | T4b 多步 / restart 日志结构未验证 | **解析器已实现，真机结构未验** | `execution/solver_timing.py` 已能解析真实单砖 `.log`（7.0 s，手算 7 s），且多段仅在结构自洽时求和。但**多步分析是否产生多个 solver 段**、这些段语义上是否可加、restart 与 Explicit 的日志结构，均无真实样本。不得把「解析器已实现」读作「多步分析已支持」 | 用真实多步算例（含至少两个载荷步）与一个 restart 算例的 `.log` 重跑解析器，确认段数与耗时与手工核算一致 |
 
@@ -366,3 +366,4 @@ A4 的审计结果比预期严重，必须单独记录（详见 `docs/phase-timi
 | 2026-10-21 | 新增 §0 未完成项总览表（19 项），并把 A2 契约条款与 T4b 实现状态写入文档 |
 | 2026-10-21 | 实现 T4b 解析器 `execution/solver_timing.py` + 31 项测试：五类失败状态均不返回 0.0，多段需结构自洽才求和。真实单砖日志得 7.0 s。新增 `P3-LEFTOVER-04`（多步/restart/Explicit 日志结构未验证） |
 | 2026-10-21 | `attach_solver_timing()` 把 T4a/T4b 写入同一 `PhaseProfiler`，不改 `AnalysisRunner`。因阶段记录唯一，T4b 存为 `detail["t4b"]`，**偏离契约 A2-3/A2-4**（偏差见 `a2-solver-timing-contract.md` §3.4）。无生产调用方，`P3-LEFTOVER-02` 保持未接入。定向 38 passed |
+| 2026-10-21 | `AnalysisRunner.run` 新增可选参数 `phase_profiler`：传入时记录 T4a/T4b，不传时行为不变。经影响分析确认执行/超时/终止/返回值语义均不变，计时失败不改变 run 状态。T1/T2/T3/T5/T6 未接入，`P3-LEFTOVER-02` 改为**部分接入**。全量 1999 passed（含 `-W error`） |

@@ -1,4 +1,5 @@
 import os
+import time
 from pathlib import Path
 import uuid
 import hashlib
@@ -628,6 +629,7 @@ class AnalysisRunner:
             mesh_quality=None, mesh_convergence=None, fatigue=None, contact_diagnostics=None,
             connector_kinematics=None, fmbd_dynamics=None, sensitivity=None, uncertainty=None,
             timeout=3600, action_plan=(), environment=None, engineering_intent=None,
+            phase_profiler=None,
             postprocess_profile=None, workdir=None, physics_domain=None, require_evidence=None,
             require_production=None, project_context=None, elastic_validity=None,
             inp_text=None):
@@ -976,8 +978,20 @@ class AnalysisRunner:
                             f"Pre-submission consistency mismatch: included deck dependency '{inc_p_str}' changed after audit."
                         )
 
-            status = jobs.submit(job_name, wait=True, timeout=timeout)
+            # T4a: wall clock around the existing submit. This is "submitted until
+            # the wait returned", which includes solver startup, license queueing and
+            # the solve itself -- it is not solver runtime. T4b (solver runtime) is
+            # read from the job log afterwards and kept under a different key, so the
+            # two can never be substituted for each other.
+            #
+            # The timing block must not change what this method returns. A failure
+            # while recording is noted and swallowed; the job status and the run state
+            # machine below are untouched. ``phase_profiler is None`` (the default)
+            # skips all of this, so existing callers see no behaviour change.
+            status, _t4a_wait_s = _submit_and_time(jobs, job_name, timeout, phase_profiler)
             artifacts = _collect_artifacts(self.executor, job_name, workdir=workdir)
+            if phase_profiler is not None:
+                _record_solver_timing(phase_profiler, _t4a_wait_s, job_name, workdir)
             run = run.with_state(
                 run.state,
                 provenance=_provenance_with_artifacts(run.provenance, artifacts),
@@ -1624,6 +1638,63 @@ def _provenance_with_artifacts(provenance, artifacts):
     if updated.metadata.get("agent_issued"):
         updated = attach_delivery_stamp(updated)
     return updated
+
+def _submit_and_time(jobs, job_name, timeout, profiler):
+    """Submit once and, if a profiler is attached, return how long the wait took.
+
+    ``jobs.submit`` is called exactly once either way. The clock is read only when
+    a profiler was supplied, so the default path does not even observe the time.
+    A clock failure degrades to "wait not measured" rather than failing the job:
+    the status is what the caller acts on, the duration is bookkeeping.
+    """
+    if profiler is None:
+        return jobs.submit(job_name, wait=True, timeout=timeout), None
+    started = time.monotonic()
+    status = jobs.submit(job_name, wait=True, timeout=timeout)
+    try:
+        elapsed = time.monotonic() - started
+    except Exception as exc:  # noqa: BLE001 - clock failure is not a job failure
+        note = getattr(profiler, "internal_errors", None)
+        if isinstance(note, list):
+            note.append(f"could not read clock after submit: {exc!r}")
+        return status, None
+    if elapsed < 0:
+        # A backwards step would be rejected downstream and look like a bug in the
+        # job. Report it as unmeasured instead.
+        note = getattr(profiler, "internal_errors", None)
+        if isinstance(note, list):
+            note.append(f"clock moved backwards by {-elapsed:.6f}s during submit")
+        return status, None
+    return status, elapsed
+
+
+def _record_solver_timing(profiler, wait_seconds, job_name, workdir):
+    """Attach T4a/T4b to ``profiler``. Never raises into the run.
+
+    Observation must not become a new way for a completed job to fail. Any error
+    here -- a missing log, a profiler contract violation, a clock glitch -- is
+    recorded on the profiler and otherwise ignored. The job outcome was already
+    decided by ``jobs.submit`` before this is called.
+    """
+    try:
+        from .solver_timing import attach_solver_timing, read_solver_timing
+
+        log_path = os.path.join(workdir, f"{job_name}.log") if workdir else ""
+        timing = read_solver_timing(log_path) if log_path else None
+        if timing is None:
+            # No workdir means there is no log to read. Say so explicitly rather
+            # than letting a missing path look like a measured zero.
+            from .solver_timing import SolverTiming, SolverTimingStatus
+            timing = SolverTiming(
+                status=SolverTimingStatus.FILE_MISSING,
+                notes=("no workdir; job log path unknown",),
+            )
+        attach_solver_timing(profiler, wait_seconds, timing)
+    except Exception as exc:  # noqa: BLE001 - profiling must not fail the run
+        note = getattr(profiler, "internal_errors", None)
+        if isinstance(note, list):
+            note.append(f"solver timing not recorded: {exc!r}")
+
 
 def _collect_diagnostics(executor, job_name, workdir=None):
     try:
