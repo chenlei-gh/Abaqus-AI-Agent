@@ -829,8 +829,16 @@ class AnalysisRunner:
         try:
             snapshot = initial_snapshot
             if snapshot is not None and job_name not in snapshot.jobs:
-                from .solver_config import resolve_explicit_job_kwargs
-                job_kwargs, job_decisions = resolve_explicit_job_kwargs(job_options)
+                from .solver_config import resolve_job_kwargs
+                is_adaptive = bool(job_options and job_options.get("adaptive", False))
+                solver_ctx = {
+                    "model_name": model_name,
+                    "job_name": job_name,
+                    "solver_type": getattr(self, "solver_type", "STANDARD"),
+                }
+                job_kwargs, job_decisions = resolve_job_kwargs(
+                    job_options, adaptive=is_adaptive, context=solver_ctx
+                )
                 metadata = dict(run.metadata)
                 metadata["solver_parameter_decisions"] = job_decisions
                 run = run.with_state(run.state, metadata=metadata)

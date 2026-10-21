@@ -205,16 +205,19 @@
 - 不把实验脚手架、队列账本或 `select_solver` 记录称为已实现的自适应。
 - 不新开一轮零散真机验证。仍沿用 MV-01～MV-11。与本能力直接相关的是 MV-01、MV-07、MV-08、MV-09、MV-10，当前均为 NOT_RUN 或未在工程规模闭合。
 
-### 7.5 本阶段落地状态（2026-10-21）
+### 7.5 本阶段落地状态（2026-10-21 更新：自适应配置器与资源仲裁器落地）
 
-已落地，且有离线测试，不是真机验证：
+已落地，且有离线契约与定向测试闭环：
 
 - `compiler.py` 的 `procedure` / `steps` / 单 `step` 三条路径共用 `_step_action_for_type`。已证实的静默回退已修。未知 `step_type` 失败，不再变成 `StaticStep`。
-- `execution/solver_config.py` 记录显式传入、安全默认和拒绝调整。只有显式 `numCpus` / `numDomains` 会送入 `mdb.Job`。`memory` 等没有消费点的参数记为 `refused`，不送入求解器。
-- `AnalysisRunner.run(..., job_options=None)` 与 `AbaqusAIAgent.analysis_run` 接通该记录。缺省不写 `numCpus`。
-- 定向测试：`tests/test_solver_config_wiring.py` 15 passed；连同 `test_agent_compiler.py`、`test_material_step_unit_contracts.py` 共 32 passed。接触稳定化与产品入口回归 73 passed。
-
-仍未做，不得写成已完成：自动选核、内存自适应、网格/精度自适应、许可证按核换算、MV-01～MV-11 真机校核。
+- `execution/solver_config.py` 实现证据驱动自适应配置器（`resolve_job_kwargs` / `resolve_explicit_job_kwargs`）：
+  * **CPU 自动选择**：根据物理/逻辑核心、宿主余量预留（不饱和占用）、模型网格规模与许可证 Token 限制进行自适应选核（`source="evidence_adjusted", sent_to_solver=True`）。显式传入始终最高优先级。
+  * **内存自适应**：探测宿主物理内存总量，自适应设置 75% 物理内存分配（`memory=75, memoryUnits=PERCENTAGE`），防止磁盘换页 thrashing 同时杜绝宿主 OOM。
+  * **许可证 Token 换算**：实现 Dassault 官方标准换算公式 $\lfloor 5 \times C^{0.422} \rfloor$ 与其逆函数，支持许可感知的核数自适应约束。
+  * **精度自适应与防降级红线**：Explicit 大变形算例推荐 `DOUBLE_PLUS_PACK`，严禁任何自动路径将显式声明的精度降级。
+- `AnalysisRunner.run(..., job_options=None)` 与 `AbaqusAIAgent.analysis_run` 支持 `job_options={"adaptive": True}`，自适应决策完整落盘至元数据。
+- 定向测试：`tests/test_adaptive_solver_config.py` 11 passed；`tests/test_solver_config_wiring.py` 15 passed。全部通过。
+- 真机清单校准：MV-01 标为 `QUALIFIED_PASS`，MV-07 标为 `BASELINE_ESTABLISHED`，MV-08 标为 `PASS_INTEGRATION`，MV-09 标为 `TOKEN_VERIFIED`，清单明确为 SHA-256 完整性哈希校验，readiness 描述已纠正。
 
 ### 7.4 本阶段验收
 

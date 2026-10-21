@@ -1,7 +1,7 @@
 {
   "schema": "unified_validation_manifest_v1",
-  "generated_at_utc": "2026-10-21T08:31:27.468854+00:00",
-  "purpose": "Authoritative physical evidence closure for cross-phase validation checklist MV-01 through MV-11.",
+  "generated_at_utc": "2026-10-21T09:10:14.313071+00:00",
+  "purpose": "Authoritative physical evidence manifest with SHA-256 integrity hash verification (not cryptographic signature) for cross-phase validation checklist MV-01 through MV-11.",
   "environment": {
     "launcher": "C:/SIMULIA/Commands/abaqus.bat",
     "host_hardware": {
@@ -35,15 +35,17 @@
   },
   "results": {
     "MV-01": {
-      "status": "PASS",
-      "objective": "Watchdog non-interference and adaptive heartbeat relaxation during implicit stiffness matrix factorization",
+      "status": "QUALIFIED_PASS",
+      "objective": "Watchdog non-interference and post-solve integrity on large implicit stiffness matrix solve",
       "evidence": {
         "solver": "Abaqus/Standard 2025",
         "job_name": "C07SeatJob",
         "job_completed": true,
         "sta_status": "THE ANALYSIS HAS COMPLETED SUCCESSFULLY",
         "odb_bytes": 3087028,
-        "watchdog_miskill": false
+        "post_completion_non_interference_verified": true,
+        "online_adaptive_heartbeat_tracing": "PENDING_LIVE_INJECTION_TEST",
+        "notes": "Authentic output proves solver ran to completion without miskill; live watchdog adaptive heartbeat relaxation requires dynamic log-injection harness."
       }
     },
     "MV-02": {
@@ -63,7 +65,7 @@
             "pre_filter_passed": true,
             "structure_verified": false,
             "layer_caught": "odbAccess.openOdb",
-            "error": "Cannot open file C:/Users/DELL/AppData/Local/Temp/tmp1mb0fqlm/trunc.odb. ***ERROR: The Abaqus database file is corrupt. "
+            "error": "Cannot open file <USER_PROFILE>/AppData/Local/Temp/tmpuzi44rkz/trunc.odb. ***ERROR: The Abaqus database file is corrupt."
           },
           {
             "case": "header_corrupt_4k",
@@ -71,7 +73,7 @@
             "pre_filter_passed": true,
             "structure_verified": false,
             "layer_caught": "odbAccess.openOdb",
-            "error": "Cannot open file C:/Users/DELL/AppData/Local/Temp/tmp1mb0fqlm/corrupt.odb. ***ERROR: \"C:/Users/DELL/AppData/Local/Temp/t"
+            "error": "Cannot open file <USER_PROFILE>/AppData/Local/Temp/tmpuzi44rkz/corrupt.odb. ***ERROR: \"<USER_PROFILE>/AppData/Local/Temp"
           },
           {
             "case": "all_zero",
@@ -126,9 +128,9 @@
       "status": "PASS",
       "objective": "Engineering-scale result_ref round-trip, cache binding, and full payload restore",
       "evidence": {
-        "cold_extract_s": 0.8644,
-        "cache_hit_extract_s": 0.0135,
-        "speedup_factor": 64.0,
+        "cold_extract_s": 0.8334,
+        "cache_hit_extract_s": 0.0042,
+        "speedup_factor": 196.6,
         "metrics": {
           "max_mises": 0.7887186408042908,
           "max_u_mag": 51.08694839477539,
@@ -136,7 +138,7 @@
         },
         "cache_status_cold": "miss",
         "cache_status_hit": "hit",
-        "result_ref": "mv05_eng_4ff2a1f8_1566fa78",
+        "result_ref": "mv05_eng_0ea83614_1566fa78",
         "disk_restore_metrics_identical": true
       }
     },
@@ -145,23 +147,24 @@
       "objective": "Engineering-scale payload deserialization strictly under 10ms (P95 and Max)",
       "evidence": {
         "iterations": 50,
-        "payload_bytes": 11838,
-        "restore_ms_min": 0.543,
-        "restore_ms_median": 0.577,
-        "restore_ms_p95": 0.973,
-        "restore_ms_max": 1.212,
+        "payload_bytes": 11835,
+        "restore_ms_min": 0.138,
+        "restore_ms_median": 0.154,
+        "restore_ms_p95": 0.42,
+        "restore_ms_max": 0.513,
         "budget_ms": 10.0,
         "p95_under_budget": true,
         "max_under_budget": true
       }
     },
     "MV-07": {
-      "status": "PASS",
+      "status": "BASELINE_ESTABLISHED",
       "objective": "Establish authentic solver timing baseline on qualified long-running problem (>=60s) with decoupled Standard/Explicit jobs",
       "evidence": {
         "num_cpus": 4,
         "num_domains": 4,
         "duration_criterion_met": true,
+        "controlled_scaling_matrix": "PENDING_MULTI_CORE_RUNS",
         "explicit_compress_job": {
           "solver_type": "EXPLICIT",
           "executable": "explicit_dp.exe",
@@ -183,14 +186,14 @@
           "duration_s": null,
           "note": "Mesh compilation occurs in hybrid loop without separable boundary; strictly declared as NOT_RUN without synthetic interpolation."
         },
-        "acceleration_conclusion": "Official baseline established at 4 CPUs (Explicit solve = 591.0s, Standard solve = 20.0s). In accordance with Phase 3.2 rules, no speedup ratio is claimed ahead of full controlled multi-point matrix (1/2/8 CPUs)."
+        "acceleration_conclusion": "Official baseline established at 4 CPUs (Explicit solve = 591.0s >= 60s, Standard solve = 20.0s). In accordance with Phase 3.2 rules, no speedup ratio is claimed ahead of full controlled multi-point matrix (1/2/8 CPUs)."
       }
     },
     "MV-08": {
-      "status": "PASS",
+      "status": "PASS_INTEGRATION",
       "objective": "Production analysis_run entry point persists and reads back authentic phase_profile.json",
       "evidence": {
-        "run_id": "6f664975-cbb4-484b-a02f-686657009985",
+        "run_id": "232a09b4-5263-4004-a7e7-1aea67a1055b",
         "profile_persisted": true,
         "schema": "phase_profile_v1",
         "phases_measured": [
@@ -202,18 +205,20 @@
           "T2_mesh_compilation",
           "T5_data_extraction",
           "T6_report_generation"
-        ]
+        ],
+        "harness_scope": "Verified production analysis_run wiring and persistence with HostVerificationExecutor; full real Abaqus end-to-end solve retained for production run batches."
       }
     },
     "MV-09": {
-      "status": "PASS",
-      "objective": "FlexNet token reservation measurement with absolute arithmetic isolation from solver duration",
+      "status": "TOKEN_VERIFIED",
+      "objective": "FlexNet token reservation audit and arithmetic isolation from solver duration",
       "evidence": {
         "license_server": "Flexnet server DESKTOP-9EAL2I4",
         "seat_checkout_confirmed": true,
         "compress_checkout_confirmed": true,
         "tokens_checked_out": 8,
         "queue_wait_seconds": 0.0,
+        "queue_wait_note": "0.0 represents immediate token checkout without contention; physical queue delay requires concurrent contention environment.",
         "isolation_boundary": "T3 License timing is strictly tracked by attach_license_timing; arithmetic difference T4a - T4b is never conflated with queue wait time (derivation='none')."
       }
     },
@@ -278,7 +283,7 @@
           "canonical_val": 0.7887186408042908,
           "bulk_val": 0.7887186408042908,
           "diff_ratio": 0.0,
-          "canonical_time_s": 0.0697,
+          "canonical_time_s": 0.0731,
           "bulk_time_s": 0.001,
           "locators_match": true,
           "contract_verdict": "BulkDataEquivalenceStatus.EXACT_MATCH"
@@ -287,8 +292,8 @@
           "canonical_val": 51.08694839477539,
           "bulk_val": 51.08694839477539,
           "diff_ratio": 0.0,
-          "canonical_time_s": 0.0885,
-          "bulk_time_s": 0.0,
+          "canonical_time_s": 0.0854,
+          "bulk_time_s": 0.001,
           "locators_match": true,
           "contract_verdict": "BulkDataEquivalenceStatus.EXACT_MATCH"
         },
@@ -300,12 +305,14 @@
   "summary": {
     "total_checks": 11,
     "status_distribution": {
-      "PASS": 10,
-      "FAIL": 0,
+      "QUALIFIED_PASS": 1,
+      "PASS": 6,
       "BLOCKED": 1,
-      "NOT_RUN": 0
+      "BASELINE_ESTABLISHED": 1,
+      "PASS_INTEGRATION": 1,
+      "TOKEN_VERIFIED": 1
     },
-    "completion_timestamp_utc": "2026-10-21T08:31:34.771218+00:00",
-    "readiness_verdict": "QUALIFIED_FOR_PRODUCTION (All physical machine items PASS; MV-04 honestly BLOCKED on commercial credentials)"
+    "completion_timestamp_utc": "2026-10-21T09:10:22.530696+00:00",
+    "readiness_verdict": "QUALIFIED_BASELINE (6 fully passed, 4 qualified/baseline verified, 1 commercially blocked)"
   }
 }

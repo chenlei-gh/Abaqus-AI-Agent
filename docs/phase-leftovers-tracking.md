@@ -33,13 +33,13 @@
 
 | ID | 缺什么 | 状态 |
 | :--- | :--- | :--- |
-| P1-LEFTOVER-01 | 大型隐式求解不被 watchdog 误杀 | **已闭合 (PASS, MV-01)**（Case 07 Standard 段刚度矩阵分解完成，自适应心跳放宽，无误杀） |
+| P1-LEFTOVER-01 | 大型隐式求解不被 watchdog 误杀 | **条件闭合 (QUALIFIED_PASS, MV-01)**（Case 07 求解完成产出 3.0MB ODB 证实无误杀；在线自适应心跳放宽待注入测试） |
 | P1-LEFTOVER-02 | 真实 ODB 结构验签（工程规模） | **已闭合 (PASS, MV-02)**（7.4 MB 与 3.0 MB ODB 正例通过，6 种变异负例分层拦截） |
 | P2-LEFTOVER-01 | 真实 Provider 计费日志 | **未闭合 (BLOCKED, MV-04)**（宿主离线/无真实商业 API 凭据，无法对账实际账单） |
 | P2-LEFTOVER-02 | 真实 ODB `result_ref` 往返（工程规模） | **已闭合 (PASS, MV-05)**（7.4 MB ODB 冷提取 0.85s，热提取 6.4ms 命中，磁盘还原一致） |
 | P2-LEFTOVER-03 | `< 10 ms` 还原（工程规模） | **已闭合 (PASS, MV-06)**（50 次实测中位 0.20ms，P95=0.58ms，最大 2.14ms 严格 < 10ms） |
-| P3-LEFTOVER-01 | 真实耗时基线 | **已建立部分基线 (PASS, MV-07)**（4核基线建立，Explicit 591.0s ≥ 60s，T2 保持 NOT_RUN） |
-| P3-LEFTOVER-03 | T3 真实排队耗时 | **已闭合 (PASS, MV-09)**（FlexNet token 8 个即时签出无排队，严禁 T4a-T4b 差额推导） |
+| P3-LEFTOVER-01 | 真实耗时基线 | **已建立4核基线 (BASELINE_ESTABLISHED, MV-07)**（4核基线建立，Explicit 591.0s ≥ 60s；1/2/8核受控对比待执行，不宣称加速比） |
+| P3-LEFTOVER-03 | T3 真实排队耗时 | **Token验讫 (TOKEN_VERIFIED, MV-09)**（日志证实 FlexNet 8 token 即时签出无排队；物理排队实测待高并发环境） |
 | P3-LEFTOVER-04 | T4b 多步/restart 日志结构 | **已闭合 (PASS, MV-10)**（日志解析 20.0s 与 591.0s 100% 准确，排除 package/pre 等工具） |
 | MV-11 | `bulkDataBlocks` 工程规模数值等价与收益 | **已闭合 (PASS, MV-11)**（7.4 MB ODB 相对漂移为 0.0 < 1e-6，耗时从 95ms 降至 < 1ms） |
 
@@ -436,15 +436,15 @@ A4 的审计结果比预期严重，必须单独记录（详见 `docs/phase-timi
 
 | 编号 | 涉及阶段 / 遗留项 | 验证目标 | 最小真机条件 | 通过与关闭标准 | 当前状态 |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| **MV-01** | 阶段 1<br/>`P1-LEFTOVER-01` | 真实大型隐式求解不被 watchdog 误杀 | 真实大型隐式算例（如 `case_07_jounce_bumper` Standard 段或同等复杂模型），经历长时间刚度矩阵分解 | 刚度矩阵分解阶段被正确识别为正常求解；自适应心跳放宽，无误杀；作业正常完成且产物完整 | **PASS**（C07SeatJob 接触就位完成，3.0MB ODB） |
+| **MV-01** | 阶段 1<br/>`P1-LEFTOVER-01` | 真实大型隐式求解不被 watchdog 误杀 | 真实大型隐式算例（如 `case_07_jounce_bumper` Standard 段或同等复杂模型），经历长时间刚度矩阵分解 | 刚度矩阵分解阶段被正确识别为正常求解；自适应心跳放宽，无误杀；作业正常完成且产物完整 | **QUALIFIED_PASS**（C07SeatJob 接触就位完成产出 3.0MB ODB，证实未发生误杀；在线心跳放宽待注入验证） |
 | **MV-02** | 阶段 1<br/>`P1-LEFTOVER-02` | 真实 ODB 结构级验签（工程规模） | 真实工程规模 ODB 产物（多需求、全场输出、非平庸单元网格） | `verify_authentic_odb_structure` 正例通过；对该文件的截断、头部篡改等负例均被 `odbAccess.openOdb` 正确阻断 | **PASS**（7.4MB ODB 正例及 6 个负例分层拦截） |
 | **MV-03** | 阶段 1<br/>TC-REC-03 | 求解异常终止后的 `.lck` 释放与僵尸锁安全清理 | 真实 Abaqus 进程异常 kill 或崩溃场景 | 活进程持有 `.lck` 时拒绝清理并告警；僵尸 `.lck` 在确认无关联存活进程后被安全清理，不产生残留 | **PASS**（活句柄持锁拒绝清理，释放后孤儿清理零残留） |
 | **MV-04** | 阶段 2<br/>`P2-LEFTOVER-01` | 真实 Provider 计费日志采集与对账 | 配置有效 API Key，执行真实 Provider 基准请求 | 取得 `status=QUALIFIED_LIVE` 且 `claimable=true` 的证据 JSON；并与 Provider 控制台账单或用量明细对账一致（`billing_reconciled=true`） | **BLOCKED**（离线环境/无商业 API Key，拒绝以 mock 冒充对账） |
 | **MV-05** | 阶段 2<br/>`P2-LEFTOVER-02` | 真实工程规模 ODB 的 `result_ref` 往返与缓存 | 真实工程规模 ODB（多场变量、多截面或高密度节点集） | 冷提取正常写入缓存；命中时 5 条件精确匹配；反序列化后全量数值及因果证据与冷提取完全一致 | **PASS**（7.4MB ODB 冷提 0.85s，热提 6.4ms，还原全等） |
 | **MV-06** | 阶段 2<br/>`P2-LEFTOVER-03` | 真实工程规模 `< 10 ms` 缓存还原实测 | 工程规模的真实提取产物缓存文件 | 在该规模下重复提取测量 50 次，P95 与最大还原耗时均严格 `< 10 ms` | **PASS**（50次循环，中位 0.20ms，P95 0.58ms，最大 2.14ms） |
-| **MV-07** | 阶段 3<br/>`P3-LEFTOVER-01` | 真实全生命周期耗时基线采集与多核加速比测试 | 真实算例（建议 `case_07_jounce_bumper`，总求解时长 ≥ 60 s） | 记录真实 T1/T3/T4a/T4b/T5/T6 数据；受控测量 `numCpus=1, 2, 4, 8`；Standard/Explicit 严格独立测试并附带硬件元数据 | **PASS (Baseline Established)**（Explicit 591.0s ≥ 60s，Standard 20.0s，4核基线） |
-| **MV-08** | 阶段 3<br/>`P3-LEFTOVER-02` | 生产入口 T4 采集与持久化落盘真实读回 | 经 `AbaqusAIAgent.analysis_run` 真实完成一次 Abaqus 提交 | 真实读取生成的 `evidence/<run.id>/phase_profile.json`，核验 run_id、T4a、T4b 与实际日志一致，验证失败时不中断 run | **PASS**（生产入口写入并读回 phase_profile.json 成功） |
-| **MV-09** | 阶段 3<br/>`P3-LEFTOVER-03` | FlexNet/DSLS 真实 License 排队耗时测量 | 真实受控的许可服务器排队或并发冲突场景 | 真实测量得到排队秒数，与 T4a/T4b 独立对账，不采用任何算术差额推导 | **PASS**（FlexNet 8 token 即时签出无排队，与 T4a 隔离） |
+| **MV-07** | 阶段 3<br/>`P3-LEFTOVER-01` | 真实全生命周期耗时基线采集与多核加速比测试 | 真实算例（建议 `case_07_jounce_bumper`，总求解时长 ≥ 60 s） | 记录真实 T1/T3/T4a/T4b/T5/T6 数据；受控测量 `numCpus=1, 2, 4, 8`；Standard/Explicit 严格独立测试并附带硬件元数据 | **BASELINE_ESTABLISHED**（Explicit 591.0s ≥ 60s，Standard 20.0s，4核基线就绪；1/2/8核对比待做，不宣称加速比） |
+| **MV-08** | 阶段 3<br/>`P3-LEFTOVER-02` | 生产入口 T4 采集与持久化落盘真实读回 | 经 `AbaqusAIAgent.analysis_run` 真实完成一次 Abaqus 提交 | 真实读取生成的 `evidence/<run.id>/phase_profile.json`，核验 run_id、T4a、T4b 与实际日志一致，验证失败时不中断 run | **PASS_INTEGRATION**（生产入口接线与 phase_profile.json 落盘读回通过 HostVerificationExecutor 验证通过） |
+| **MV-09** | 阶段 3<br/>`P3-LEFTOVER-03` | FlexNet/DSLS 真实 License 排队耗时测量 | 真实受控的许可服务器排队或并发冲突场景 | 真实测量得到排队秒数，与 T4a/T4b 独立对账，不采用任何算术差额推导 | **TOKEN_VERIFIED**（日志证实 FlexNet 8 token 即时签出无排队；物理排队实测待并发冲突环境） |
 | **MV-10** | 阶段 3<br/>`P3-LEFTOVER-04` | 真实多步与 restart 分析日志核验 | 真实多载荷步作业与 restart 分析生成的 `.log` 文件 | 验证单 job 多 step 的单段求解器行为；验证 restart 日志格式；解析器准确提取各段时长且段数与人工核算完全一致 | **PASS**（标准 20.0s 与显式 591.0s 准确识别，排除辅助工具） |
 | **MV-11** | 阶段 3<br/>`C2 / C2S` | `bulkDataBlocks` 真实工程 ODB 数值等价与耗时收益 | 真实工程规模 ODB（全场应力/位移场） | 标量峰值与均值相对漂移严格 `< 1e-6`，且在真机上证明具备正向提取耗时收益；若无明显收益或发生漂移则拒绝并入主链路 | **PASS**（7.4MB ODB 相对漂移为 0.0 < 1e-6，耗时 95ms 降至 < 1ms） |
 

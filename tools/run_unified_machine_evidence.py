@@ -56,6 +56,15 @@ def compute_sha256(path: Path) -> str:
     return h.hexdigest()
 
 
+def _sanitize_leak_patterns(text: str) -> str:
+    """Sanitize personal username and profile paths to comply with CHK-02 security audit."""
+    import re
+    # Windows & POSIX personal profile paths
+    res = re.sub(r"[a-zA-Z]:[/\\][Uu]sers[/\\][a-zA-Z0-9_\.]+", "<USER_PROFILE>", text)
+    res = re.sub(r"/(?:home|Users)/[a-zA-Z0-9_\.]+", "<USER_PROFILE>", res)
+    return res
+
+
 def run_unified_validation() -> Dict[str, Any]:
     timestamp_start = datetime.datetime.now(datetime.timezone.utc).isoformat()
     launcher = "C:/SIMULIA/Commands/abaqus.bat"
@@ -74,7 +83,7 @@ def run_unified_validation() -> Dict[str, Any]:
     manifest: Dict[str, Any] = {
         "schema": "unified_validation_manifest_v1",
         "generated_at_utc": timestamp_start,
-        "purpose": "Authoritative physical evidence closure for cross-phase validation checklist MV-01 through MV-11.",
+        "purpose": "Authoritative physical evidence manifest with SHA-256 integrity hash verification (not cryptographic signature) for cross-phase validation checklist MV-01 through MV-11.",
         "environment": {
             "launcher": launcher,
             "host_hardware": collect_host_hardware_metadata(),
@@ -117,15 +126,17 @@ def run_unified_validation() -> Dict[str, Any]:
         and seat_odb.stat().st_size >= 1024 * 1024
     )
     manifest["results"]["MV-01"] = {
-        "status": "PASS" if mv01_passed else "FAIL",
-        "objective": "Watchdog non-interference and adaptive heartbeat relaxation during implicit stiffness matrix factorization",
+        "status": "QUALIFIED_PASS" if mv01_passed else "FAIL",
+        "objective": "Watchdog non-interference and post-solve integrity on large implicit stiffness matrix solve",
         "evidence": {
             "solver": "Abaqus/Standard 2025",
             "job_name": "C07SeatJob",
             "job_completed": "Abaqus JOB C07SeatJob COMPLETED" in seat_log_text,
             "sta_status": "THE ANALYSIS HAS COMPLETED SUCCESSFULLY",
             "odb_bytes": seat_odb.stat().st_size,
-            "watchdog_miskill": False,
+            "post_completion_non_interference_verified": True,
+            "online_adaptive_heartbeat_tracing": "PENDING_LIVE_INJECTION_TEST",
+            "notes": "Authentic output proves solver ran to completion without miskill; live watchdog adaptive heartbeat relaxation requires dynamic log-injection harness.",
         },
     }
 
@@ -154,7 +165,7 @@ def run_unified_validation() -> Dict[str, Any]:
             "pre_filter_passed": p_trunc,
             "structure_verified": v_trunc.get("verified"),
             "layer_caught": "odbAccess.openOdb" if p_trunc and not v_trunc.get("verified") else "pre_filter",
-            "error": str(v_trunc.get("error", ""))[:120],
+            "error": _sanitize_leak_patterns(str(v_trunc.get("error", "")))[:120],
         })
 
         # Header corrupt 4KB
@@ -168,7 +179,7 @@ def run_unified_validation() -> Dict[str, Any]:
             "pre_filter_passed": p_corrupt,
             "structure_verified": v_corrupt.get("verified"),
             "layer_caught": "odbAccess.openOdb" if p_corrupt and not v_corrupt.get("verified") else "pre_filter",
-            "error": str(v_corrupt.get("error", ""))[:120],
+            "error": _sanitize_leak_patterns(str(v_corrupt.get("error", "")))[:120],
         })
 
         # All zero
@@ -437,12 +448,13 @@ def run_unified_validation() -> Dict[str, Any]:
     duration_qualified = compress_timing.solver_seconds >= 60.0
 
     manifest["results"]["MV-07"] = {
-        "status": "PASS",
+        "status": "BASELINE_ESTABLISHED",
         "objective": "Establish authentic solver timing baseline on qualified long-running problem (>=60s) with decoupled Standard/Explicit jobs",
         "evidence": {
             "num_cpus": 4,
             "num_domains": 4,
             "duration_criterion_met": duration_qualified,
+            "controlled_scaling_matrix": "PENDING_MULTI_CORE_RUNS",
             "explicit_compress_job": {
                 "solver_type": "EXPLICIT",
                 "executable": "explicit_dp.exe",
@@ -464,7 +476,7 @@ def run_unified_validation() -> Dict[str, Any]:
                 "duration_s": None,
                 "note": "Mesh compilation occurs in hybrid loop without separable boundary; strictly declared as NOT_RUN without synthetic interpolation.",
             },
-            "acceleration_conclusion": "Official baseline established at 4 CPUs (Explicit solve = 591.0s, Standard solve = 20.0s). In accordance with Phase 3.2 rules, no speedup ratio is claimed ahead of full controlled multi-point matrix (1/2/8 CPUs).",
+            "acceleration_conclusion": "Official baseline established at 4 CPUs (Explicit solve = 591.0s >= 60s, Standard solve = 20.0s). In accordance with Phase 3.2 rules, no speedup ratio is claimed ahead of full controlled multi-point matrix (1/2/8 CPUs).",
         },
     }
 
@@ -525,7 +537,7 @@ def run_unified_validation() -> Dict[str, Any]:
         and any(p.get("phase") == "T4_solver" and p.get("status") == "measured" for p in readback_data.get("phases", []))
     )
     manifest["results"]["MV-08"] = {
-        "status": "PASS" if mv08_passed else "FAIL",
+        "status": "PASS_INTEGRATION" if mv08_passed else "FAIL",
         "objective": "Production analysis_run entry point persists and reads back authentic phase_profile.json",
         "evidence": {
             "run_id": run.id,
@@ -533,6 +545,7 @@ def run_unified_validation() -> Dict[str, Any]:
             "schema": readback_data.get("schema"),
             "phases_measured": [p["phase"] for p in readback_data.get("phases", []) if p["status"] == "measured"],
             "not_run_phases": readback_data.get("not_run", []),
+            "harness_scope": "Verified production analysis_run wiring and persistence with HostVerificationExecutor; full real Abaqus end-to-end solve retained for production run batches.",
         },
     }
 
@@ -546,14 +559,15 @@ def run_unified_validation() -> Dict[str, Any]:
     compress_checkout_present = "checked out 8 tokens from Flexnet server" in compress_log_text
 
     manifest["results"]["MV-09"] = {
-        "status": "PASS",
-        "objective": "FlexNet token reservation measurement with absolute arithmetic isolation from solver duration",
+        "status": "TOKEN_VERIFIED",
+        "objective": "FlexNet token reservation audit and arithmetic isolation from solver duration",
         "evidence": {
             "license_server": "Flexnet server DESKTOP-9EAL2I4",
             "seat_checkout_confirmed": seat_checkout_present,
             "compress_checkout_confirmed": compress_checkout_present,
             "tokens_checked_out": 8,
             "queue_wait_seconds": 0.0,
+            "queue_wait_note": "0.0 represents immediate token checkout without contention; physical queue delay requires concurrent contention environment.",
             "isolation_boundary": "T3 License timing is strictly tracked by attach_license_timing; arithmetic difference T4a - T4b is never conflated with queue wait time (derivation='none').",
         },
     }
@@ -782,15 +796,16 @@ print('__BULK_TEST_RESULT__' + json.dumps(res))
     }
 
     # Summary
-    counts = {"PASS": 0, "FAIL": 0, "BLOCKED": 0, "NOT_RUN": 0}
+    counts: Dict[str, int] = {}
     for item in manifest["results"].values():
-        counts[item["status"]] = counts.get(item["status"], 0) + 1
+        st = item["status"]
+        counts[st] = counts.get(st, 0) + 1
 
     manifest["summary"] = {
         "total_checks": len(manifest["results"]),
         "status_distribution": counts,
         "completion_timestamp_utc": datetime.datetime.now(datetime.timezone.utc).isoformat(),
-        "readiness_verdict": "QUALIFIED_FOR_PRODUCTION (All physical machine items PASS; MV-04 honestly BLOCKED on commercial credentials)",
+        "readiness_verdict": "QUALIFIED_BASELINE (6 fully passed, 4 qualified/baseline verified, 1 commercially blocked)",
     }
 
     # Save manifest
