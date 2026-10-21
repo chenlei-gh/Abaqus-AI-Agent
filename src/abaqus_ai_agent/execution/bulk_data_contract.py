@@ -79,6 +79,7 @@ class ScalarExtractionResult:
     value: float
     locator: Dict[str, Any] = field(default_factory=dict)
     method: str = "canonical_values"
+    aggregation: str = "max"
 
     def __post_init__(self) -> None:
         if not math.isfinite(self.value):
@@ -89,6 +90,7 @@ def verify_extraction_equivalence(
     canonical: Dict[str, Any],
     bulk: Dict[str, Any],
     tol: float = DEFAULT_FLOAT_TOLERANCE,
+    metric_type: Optional[str] = None,
 ) -> BulkDataEquivalenceStatus:
     """Verify that canonical values and bulkDataBlocks results are numerically equivalent.
 
@@ -97,7 +99,7 @@ def verify_extraction_equivalence(
     2. Tolerance exceeds the contract upper bound of 1e-6 or is non-positive.
     3. Execution success flags do not match.
     4. Numerical drift exceeds tolerance (< 1e-6 relative drift).
-    5. Required locator metadata is missing.
+    5. Required locator metadata is missing (both missing, empty dict, or missing instance/label for peak extractions).
     """
     if not isinstance(canonical, dict) or not isinstance(bulk, dict):
         raise BulkDataEquivalenceError("Both canonical and bulk results must be dictionaries.")
@@ -140,20 +142,58 @@ def verify_extraction_equivalence(
             f"bulk={val_blk_f}, relative_diff={rel_diff:.3e}"
         )
 
-    # Compare spatial locators: instance, node_label, element_label
+    # Determine extraction metric type
+    m_type = (
+        metric_type
+        or canonical.get("metric_type")
+        or canonical.get("aggregation")
+        or bulk.get("metric_type")
+        or bulk.get("aggregation")
+        or "peak"
+    )
+    if not isinstance(m_type, str):
+        raise BulkDataEquivalenceError(f"metric_type must be a string, got: {type(m_type)}")
+    m_type = m_type.lower().strip()
+
     loc_can = canonical.get("locator")
     loc_blk = bulk.get("locator")
 
-    if loc_can is not None or loc_blk is not None:
+    if m_type in {"peak", "max", "min", "extreme"}:
+        # Peak / extreme scalar extractions REQUIRE spatial locator metadata
         if loc_can is None or loc_blk is None:
-            # One has locator metadata while the other is missing
             raise BulkDataEquivalenceError(
-                f"Locator presence mismatch: canonical has={loc_can is not None}, bulk has={loc_blk is not None}"
+                f"Required locator metadata is missing for {m_type} extraction: "
+                f"canonical has={loc_can is not None}, bulk has={loc_blk is not None}"
             )
         if not isinstance(loc_can, dict) or not isinstance(loc_blk, dict):
             raise BulkDataEquivalenceError("Locators must be dictionary objects.")
+        if len(loc_can) == 0 or len(loc_blk) == 0:
+            raise BulkDataEquivalenceError(
+                f"Empty locator dictionary is forbidden for {m_type} extraction."
+            )
 
-        # Check locator key symmetry and type validity
+        # Instance name is strictly required
+        inst_can = loc_can.get("instance")
+        inst_blk = loc_blk.get("instance")
+        if not inst_can or not inst_blk:
+            raise BulkDataEquivalenceError(
+                f"Locator must contain non-empty 'instance' string for {m_type} extraction: "
+                f"canonical={inst_can!r}, bulk={inst_blk!r}"
+            )
+        if not isinstance(inst_can, str) or not isinstance(inst_blk, str):
+            raise BulkDataEquivalenceError("Instance names in locator must be strings.")
+        if inst_can != inst_blk:
+            return BulkDataEquivalenceStatus.LOCATOR_MISMATCH
+
+        # At least one spatial label (node_label or element_label) is strictly required
+        has_label_can = loc_can.get("node_label") is not None or loc_can.get("element_label") is not None
+        has_label_blk = loc_blk.get("node_label") is not None or loc_blk.get("element_label") is not None
+        if not has_label_can or not has_label_blk:
+            raise BulkDataEquivalenceError(
+                f"Locator must specify at least 'node_label' or 'element_label' for {m_type} extraction."
+            )
+
+        # Symmetry check for all locator keys
         for k in ("instance", "node_label", "element_label"):
             has_can = loc_can.get(k) is not None
             has_blk = loc_blk.get(k) is not None
@@ -161,15 +201,6 @@ def verify_extraction_equivalence(
                 raise BulkDataEquivalenceError(
                     f"Asymmetric locator metadata for key '{k}': canonical={loc_can.get(k)!r}, bulk={loc_blk.get(k)!r}"
                 )
-
-        # Instance name check
-        inst_can = loc_can.get("instance")
-        inst_blk = loc_blk.get("instance")
-        if inst_can is not None and inst_blk is not None:
-            if not isinstance(inst_can, str) or not isinstance(inst_blk, str):
-                raise BulkDataEquivalenceError("Instance names in locator must be strings.")
-            if inst_can != inst_blk:
-                return BulkDataEquivalenceStatus.LOCATOR_MISMATCH
 
         # Node label check
         nl_can = loc_can.get("node_label")
@@ -192,6 +223,34 @@ def verify_extraction_equivalence(
                 raise BulkDataEquivalenceError(f"Invalid bulk element_label: {el_blk!r}")
             if el_can != el_blk:
                 return BulkDataEquivalenceStatus.LOCATOR_MISMATCH
+
+    elif m_type in {"average", "mean"}:
+        # Average / mean metrics have independent locator rules:
+        # They cannot bind to a localized point (node or element label).
+        for side_name, loc in (("canonical", loc_can), ("bulk", loc_blk)):
+            if isinstance(loc, dict):
+                if loc.get("node_label") is not None or loc.get("element_label") is not None:
+                    raise BulkDataEquivalenceError(
+                        f"Average extraction cannot bind to specific point locator in {side_name}: {loc!r}"
+                    )
+        # Check instance symmetry if specified on either side
+        if loc_can is not None or loc_blk is not None:
+            if loc_can is None or loc_blk is None:
+                raise BulkDataEquivalenceError(
+                    f"Locator presence mismatch for {m_type}: canonical has={loc_can is not None}, bulk has={loc_blk is not None}"
+                )
+            if not isinstance(loc_can, dict) or not isinstance(loc_blk, dict):
+                raise BulkDataEquivalenceError("Locators must be dictionary objects.")
+            inst_can = loc_can.get("instance")
+            inst_blk = loc_blk.get("instance")
+            if (inst_can is not None) != (inst_blk is not None):
+                raise BulkDataEquivalenceError(
+                    f"Asymmetric instance metadata for {m_type}: canonical={inst_can!r}, bulk={inst_blk!r}"
+                )
+            if inst_can is not None and inst_blk is not None and inst_can != inst_blk:
+                return BulkDataEquivalenceStatus.LOCATOR_MISMATCH
+    else:
+        raise BulkDataEquivalenceError(f"Unsupported metric_type: {m_type!r}")
 
     if diff == 0.0:
         return BulkDataEquivalenceStatus.EXACT_MATCH
@@ -319,6 +378,7 @@ def extract_scalar_from_blocks(
             value=sum_val / float(count),
             locator={},
             method="bulk_data_blocks",
+            aggregation="average",
         )
 
     assert best_val is not None
@@ -326,4 +386,5 @@ def extract_scalar_from_blocks(
         value=best_val,
         locator=best_loc,
         method="bulk_data_blocks",
+        aggregation=agg,
     )

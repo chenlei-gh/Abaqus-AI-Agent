@@ -55,6 +55,7 @@ def test_live_environment_probe_contract():
         "LAUNCHER_MISSING",
         "LAUNCHER_FOUND_PROBE_FAILED",
         "LICENSE_UNAVAILABLE",
+        "LAUNCHER_READY",
         "ENVIRONMENT_READY",
         "SMOKE_SOLVE_PASSED",
     }

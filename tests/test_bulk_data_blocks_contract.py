@@ -114,35 +114,113 @@ def test_verify_extraction_equivalence_locator_checks():
     assert verify_extraction_equivalence(can_elem, blk_elem) == BulkDataEquivalenceStatus.LOCATOR_MISMATCH
 
     # Locator presence asymmetry (one has locator dict, other has None)
-    can_with_loc = {"success": True, "value": 50.0, "locator": {"node_label": 12}}
+    can_with_loc = {"success": True, "value": 50.0, "locator": {"node_label": 12, "instance": "PartA"}}
     blk_no_loc = {"success": True, "value": 50.0}
-    with pytest.raises(BulkDataEquivalenceError, match="Locator presence mismatch"):
+    with pytest.raises(BulkDataEquivalenceError, match="Required locator metadata is missing"):
         verify_extraction_equivalence(can_with_loc, blk_no_loc)
 
-    # Locator key asymmetry (e.g. one has node_label=12 while other has node_label=None or missing)
-    can_key_asym = {"success": True, "value": 50.0, "locator": {"node_label": 12, "instance": "PartA"}}
-    blk_key_asym = {"success": True, "value": 50.0, "locator": {"instance": "PartA"}}
+    # Locator key asymmetry (e.g. one has node_label=12 while other has node_label=None or missing, with element_label present on both)
+    can_key_asym = {"success": True, "value": 50.0, "locator": {"node_label": 12, "element_label": 100, "instance": "PartA"}}
+    blk_key_asym = {"success": True, "value": 50.0, "locator": {"element_label": 100, "instance": "PartA"}}
     with pytest.raises(BulkDataEquivalenceError, match="Asymmetric locator metadata for key 'node_label'"):
         verify_extraction_equivalence(can_key_asym, blk_key_asym)
 
     # Invalid locator types (boolean label, negative label, non-string instance)
     with pytest.raises(BulkDataEquivalenceError, match="Invalid canonical node_label"):
         verify_extraction_equivalence(
-            {"success": True, "value": 50.0, "locator": {"node_label": True}},
-            {"success": True, "value": 50.0, "locator": {"node_label": 1}},
+            {"success": True, "value": 50.0, "locator": {"node_label": True, "instance": "PartA"}},
+            {"success": True, "value": 50.0, "locator": {"node_label": 1, "instance": "PartA"}},
         )
 
     with pytest.raises(BulkDataEquivalenceError, match="Invalid bulk node_label"):
         verify_extraction_equivalence(
-            {"success": True, "value": 50.0, "locator": {"node_label": 10}},
-            {"success": True, "value": 50.0, "locator": {"node_label": -5}},
+            {"success": True, "value": 50.0, "locator": {"node_label": 10, "instance": "PartA"}},
+            {"success": True, "value": 50.0, "locator": {"node_label": -5, "instance": "PartA"}},
         )
 
     with pytest.raises(BulkDataEquivalenceError, match="Instance names in locator must be strings"):
         verify_extraction_equivalence(
-            {"success": True, "value": 50.0, "locator": {"instance": 123}},
+            {"success": True, "value": 50.0, "locator": {"node_label": 10, "instance": 123}},
+            {"success": True, "value": 50.0, "locator": {"node_label": 10, "instance": "PartA"}},
+        )
+
+
+def test_verify_extraction_equivalence_rejects_missing_locators_for_peak():
+    """Peak and extreme extractions must fail-closed if locator metadata is missing or incomplete."""
+    base_can = {"success": True, "value": 50.0}
+    base_blk = {"success": True, "value": 50.0}
+
+    # 1. Both completely missing locator key
+    with pytest.raises(BulkDataEquivalenceError, match="Required locator metadata is missing for peak"):
+        verify_extraction_equivalence(base_can, base_blk)
+
+    # 2. Both locator are None
+    with pytest.raises(BulkDataEquivalenceError, match="Required locator metadata is missing for peak"):
+        verify_extraction_equivalence(
+            {"success": True, "value": 50.0, "locator": None},
+            {"success": True, "value": 50.0, "locator": None},
+        )
+
+    # 3. Both locator are empty dicts
+    with pytest.raises(BulkDataEquivalenceError, match="Empty locator dictionary is forbidden for peak"):
+        verify_extraction_equivalence(
+            {"success": True, "value": 50.0, "locator": {}},
+            {"success": True, "value": 50.0, "locator": {}},
+        )
+
+    # 4. One locator is empty dict, other has full locator
+    with pytest.raises(BulkDataEquivalenceError, match="Empty locator dictionary is forbidden for peak"):
+        verify_extraction_equivalence(
+            {"success": True, "value": 50.0, "locator": {}},
+            {"success": True, "value": 50.0, "locator": {"instance": "PartA", "node_label": 10}},
+        )
+
+    # 5. Missing instance (only node_label provided)
+    with pytest.raises(BulkDataEquivalenceError, match="Locator must contain non-empty 'instance'"):
+        verify_extraction_equivalence(
+            {"success": True, "value": 50.0, "locator": {"node_label": 10}},
+            {"success": True, "value": 50.0, "locator": {"node_label": 10}},
+        )
+
+    # 6. Instance is empty string
+    with pytest.raises(BulkDataEquivalenceError, match="Locator must contain non-empty 'instance'"):
+        verify_extraction_equivalence(
+            {"success": True, "value": 50.0, "locator": {"instance": "", "node_label": 10}},
+            {"success": True, "value": 50.0, "locator": {"instance": "", "node_label": 10}},
+        )
+
+    # 7. Neither node_label nor element_label provided (only instance)
+    with pytest.raises(BulkDataEquivalenceError, match="Locator must specify at least 'node_label' or 'element_label'"):
+        verify_extraction_equivalence(
+            {"success": True, "value": 50.0, "locator": {"instance": "PartA"}},
             {"success": True, "value": 50.0, "locator": {"instance": "PartA"}},
         )
+
+    # 8. Average metric rejects localized node_label / element_label
+    with pytest.raises(BulkDataEquivalenceError, match="Average extraction cannot bind to specific point locator"):
+        verify_extraction_equivalence(
+            {"success": True, "value": 50.0, "locator": {"node_label": 10}, "aggregation": "average"},
+            {"success": True, "value": 50.0, "locator": {}, "aggregation": "average"},
+        )
+
+    with pytest.raises(BulkDataEquivalenceError, match="Average extraction cannot bind to specific point locator"):
+        verify_extraction_equivalence(
+            {"success": True, "value": 50.0, "locator": {}, "aggregation": "average"},
+            {"success": True, "value": 50.0, "locator": {"element_label": 20}, "aggregation": "average"},
+        )
+
+    # 9. Average metric passes with empty locator or instance-only locator
+    avg_can = {"success": True, "value": 50.0, "locator": {}, "aggregation": "average"}
+    avg_blk = {"success": True, "value": 50.0, "locator": {}, "aggregation": "average"}
+    assert verify_extraction_equivalence(avg_can, avg_blk) == BulkDataEquivalenceStatus.EXACT_MATCH
+
+    avg_inst_can = {"success": True, "value": 50.0, "locator": {"instance": "PartA"}, "aggregation": "average"}
+    avg_inst_blk = {"success": True, "value": 50.0, "locator": {"instance": "PartA"}, "aggregation": "average"}
+    assert verify_extraction_equivalence(avg_inst_can, avg_inst_blk) == BulkDataEquivalenceStatus.EXACT_MATCH
+
+    # 10. Average metric locator instance mismatch returns LOCATOR_MISMATCH
+    avg_diff_inst = {"success": True, "value": 50.0, "locator": {"instance": "PartB"}, "aggregation": "average"}
+    assert verify_extraction_equivalence(avg_inst_can, avg_diff_inst) == BulkDataEquivalenceStatus.LOCATOR_MISMATCH
 
 
 def test_verify_extraction_equivalence_unsupported_or_failure():
@@ -301,6 +379,7 @@ def test_differential_equivalence_against_canonical_loop():
         "success": True,
         "value": sum(p["val"] for p in raw_points) / float(len(raw_points)),
         "locator": {},
+        "aggregation": "average",
     }
 
     # Bulk blocks representation
@@ -332,7 +411,12 @@ def test_differential_equivalence_against_canonical_loop():
     # 3. AVERAGE Equivalence
     bulk_avg = extract_scalar_from_blocks([b1, b2], aggregation="average")
     assert bulk_avg is not None
-    bulk_avg_dict = {"success": True, "value": bulk_avg.value, "locator": bulk_avg.locator}
+    bulk_avg_dict = {
+        "success": True,
+        "value": bulk_avg.value,
+        "locator": bulk_avg.locator,
+        "aggregation": bulk_avg.aggregation,
+    }
     assert verify_extraction_equivalence(canonical_avg, bulk_avg_dict) == BulkDataEquivalenceStatus.EXACT_MATCH
 
     # 4. Injected drift Fail-Closed rejection

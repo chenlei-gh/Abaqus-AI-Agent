@@ -86,8 +86,13 @@ def _probe_physical_abaqus_environment() -> tuple[str, bool, str]:
     Possible status_codes:
     - LAUNCHER_MISSING: abaqus executable not found in PATH or standard installation
     - LAUNCHER_FOUND_PROBE_FAILED: launcher exists but fundamental probe failed
+    - LAUNCHER_READY: CLI launcher release probe succeeded (information=release returned 0).
+      IMPORTANT: This confirms CLI launcher availability, but DOES NOT prove license
+      token availability or successful FEA solving. Real license connectivity and solver
+      acceptance must be verified by Tier 2 Smoke single-brick execution.
     - LICENSE_UNAVAILABLE: license server unreachable or token exhausted
-    - ENVIRONMENT_READY: full CLI launcher and environment verified
+    - ENVIRONMENT_READY: legacy alias for LAUNCHER_READY
+    - SMOKE_SOLVE_PASSED: Tier 2 Smoke single-brick solve completed and verified
     """
     import shutil
     import subprocess
@@ -112,7 +117,7 @@ def _probe_physical_abaqus_environment() -> tuple[str, bool, str]:
             timeout=10,
         )
         if res.returncode == 0:
-            return ("ENVIRONMENT_READY", True, f"Abaqus launcher ready: {launcher}")
+            return ("LAUNCHER_READY", True, f"Abaqus launcher ready: {launcher}")
         return (
             "LAUNCHER_FOUND_PROBE_FAILED",
             False,
