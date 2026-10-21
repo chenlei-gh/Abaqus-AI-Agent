@@ -151,46 +151,46 @@ def test_verify_extraction_equivalence_rejects_missing_locators_for_peak():
     base_blk = {"success": True, "value": 50.0}
 
     # 1. Both completely missing locator key
-    with pytest.raises(BulkDataEquivalenceError, match="Required locator metadata is missing for peak"):
+    with pytest.raises(BulkDataEquivalenceError, match=r"Required locator metadata is missing for (peak|max)"):
         verify_extraction_equivalence(base_can, base_blk)
 
     # 2. Both locator are None
-    with pytest.raises(BulkDataEquivalenceError, match="Required locator metadata is missing for peak"):
+    with pytest.raises(BulkDataEquivalenceError, match=r"Required locator metadata is missing for (peak|max)"):
         verify_extraction_equivalence(
             {"success": True, "value": 50.0, "locator": None},
             {"success": True, "value": 50.0, "locator": None},
         )
 
     # 3. Both locator are empty dicts
-    with pytest.raises(BulkDataEquivalenceError, match="Empty locator dictionary is forbidden for peak"):
+    with pytest.raises(BulkDataEquivalenceError, match=r"Empty locator dictionary is forbidden for (peak|max)"):
         verify_extraction_equivalence(
             {"success": True, "value": 50.0, "locator": {}},
             {"success": True, "value": 50.0, "locator": {}},
         )
 
     # 4. One locator is empty dict, other has full locator
-    with pytest.raises(BulkDataEquivalenceError, match="Empty locator dictionary is forbidden for peak"):
+    with pytest.raises(BulkDataEquivalenceError, match=r"Empty locator dictionary is forbidden for (peak|max)"):
         verify_extraction_equivalence(
             {"success": True, "value": 50.0, "locator": {}},
             {"success": True, "value": 50.0, "locator": {"instance": "PartA", "node_label": 10}},
         )
 
     # 5. Missing instance (only node_label provided)
-    with pytest.raises(BulkDataEquivalenceError, match="Locator must contain non-empty 'instance'"):
+    with pytest.raises(BulkDataEquivalenceError, match=r"Locator must contain non-empty 'instance'"):
         verify_extraction_equivalence(
             {"success": True, "value": 50.0, "locator": {"node_label": 10}},
             {"success": True, "value": 50.0, "locator": {"node_label": 10}},
         )
 
     # 6. Instance is empty string
-    with pytest.raises(BulkDataEquivalenceError, match="Locator must contain non-empty 'instance'"):
+    with pytest.raises(BulkDataEquivalenceError, match=r"Locator must contain non-empty 'instance'"):
         verify_extraction_equivalence(
             {"success": True, "value": 50.0, "locator": {"instance": "", "node_label": 10}},
             {"success": True, "value": 50.0, "locator": {"instance": "", "node_label": 10}},
         )
 
     # 7. Neither node_label nor element_label provided (only instance)
-    with pytest.raises(BulkDataEquivalenceError, match="Locator must specify at least 'node_label' or 'element_label'"):
+    with pytest.raises(BulkDataEquivalenceError, match=r"Locator must specify at least 'node_label' or 'element_label'"):
         verify_extraction_equivalence(
             {"success": True, "value": 50.0, "locator": {"instance": "PartA"}},
             {"success": True, "value": 50.0, "locator": {"instance": "PartA"}},
@@ -424,3 +424,73 @@ def test_differential_equivalence_against_canonical_loop():
     drifted_bulk["value"] += 1e-4
     with pytest.raises(BulkDataEquivalenceError, match="Numerical drift exceeded tolerance"):
         verify_extraction_equivalence(canonical_max, drifted_bulk)
+
+
+def test_verify_extraction_equivalence_rejects_conflicting_metric_types():
+    """Extracting different metrics (e.g. average vs peak, or max vs min) must be rejected even if values match."""
+    # Same value (50.0), but one is average and other is peak/max
+    can_avg = {
+        "success": True,
+        "value": 50.0,
+        "locator": {},
+        "aggregation": "average",
+    }
+    blk_peak = {
+        "success": True,
+        "value": 50.0,
+        "locator": {"instance": "PartA", "node_label": 10},
+        "aggregation": "max",
+    }
+    with pytest.raises(BulkDataEquivalenceError, match="Conflicting metric types between canonical .* and bulk"):
+        verify_extraction_equivalence(can_avg, blk_peak)
+
+    # Max vs min conflict
+    can_max = {
+        "success": True,
+        "value": 50.0,
+        "locator": {"instance": "PartA", "node_label": 10},
+        "aggregation": "max",
+    }
+    blk_min = {
+        "success": True,
+        "value": 50.0,
+        "locator": {"instance": "PartA", "node_label": 10},
+        "aggregation": "min",
+    }
+    with pytest.raises(BulkDataEquivalenceError, match="Conflicting metric types"):
+        verify_extraction_equivalence(can_max, blk_min)
+
+    # Explicit metric_type argument conflicts with dictionary declaration
+    with pytest.raises(BulkDataEquivalenceError, match="Explicit metric_type .* conflicts with canonical"):
+        verify_extraction_equivalence(can_avg, can_avg, metric_type="max")
+
+    can_no_metric = {
+        "success": True,
+        "value": 50.0,
+        "locator": {"instance": "PartA", "node_label": 10},
+    }
+    with pytest.raises(BulkDataEquivalenceError, match="Explicit metric_type .* conflicts with bulk"):
+        verify_extraction_equivalence(can_no_metric, can_max, metric_type="average")
+
+    # Non-string metric type rejected
+    with pytest.raises(BulkDataEquivalenceError, match="metric_type/aggregation must be string"):
+        verify_extraction_equivalence(can_max, can_max, metric_type=123)
+
+    # Synonyms / compatible aliases pass without conflict
+    # "peak" and "max" are compatible
+    blk_synonym_peak = {
+        "success": True,
+        "value": 50.0,
+        "locator": {"instance": "PartA", "node_label": 10},
+        "metric_type": "peak",
+    }
+    assert verify_extraction_equivalence(can_max, blk_synonym_peak) == BulkDataEquivalenceStatus.EXACT_MATCH
+
+    # "average" and "mean" are compatible
+    blk_synonym_mean = {
+        "success": True,
+        "value": 50.0,
+        "locator": {},
+        "metric_type": "mean",
+    }
+    assert verify_extraction_equivalence(can_avg, blk_synonym_mean) == BulkDataEquivalenceStatus.EXACT_MATCH

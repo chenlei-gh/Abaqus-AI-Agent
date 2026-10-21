@@ -86,6 +86,26 @@ class ScalarExtractionResult:
             raise BulkDataEquivalenceError(f"Extraction value must be finite, got: {self.value}")
 
 
+def _normalize_metric_type(t: Any) -> Optional[str]:
+    """Normalize metric type string to canonical form (max, min, average, extreme)."""
+    if t is None:
+        return None
+    if isinstance(t, bool) or not isinstance(t, str):
+        raise BulkDataEquivalenceError(f"metric_type/aggregation must be string, got: {type(t)}")
+    s = t.lower().strip()
+    if not s:
+        return None
+    if s in {"max", "peak"}:
+        return "max"
+    if s in {"min"}:
+        return "min"
+    if s in {"average", "mean"}:
+        return "average"
+    if s in {"extreme"}:
+        return "extreme"
+    return s
+
+
 def verify_extraction_equivalence(
     canonical: Dict[str, Any],
     bulk: Dict[str, Any],
@@ -100,6 +120,7 @@ def verify_extraction_equivalence(
     3. Execution success flags do not match.
     4. Numerical drift exceeds tolerance (< 1e-6 relative drift).
     5. Required locator metadata is missing (both missing, empty dict, or missing instance/label for peak extractions).
+    6. Declared metric types / aggregations conflict between canonical and bulk, or with metric_type argument.
     """
     if not isinstance(canonical, dict) or not isinstance(bulk, dict):
         raise BulkDataEquivalenceError("Both canonical and bulk results must be dictionaries.")
@@ -142,18 +163,29 @@ def verify_extraction_equivalence(
             f"bulk={val_blk_f}, relative_diff={rel_diff:.3e}"
         )
 
-    # Determine extraction metric type
-    m_type = (
-        metric_type
-        or canonical.get("metric_type")
-        or canonical.get("aggregation")
-        or bulk.get("metric_type")
-        or bulk.get("aggregation")
-        or "peak"
-    )
-    if not isinstance(m_type, str):
-        raise BulkDataEquivalenceError(f"metric_type must be a string, got: {type(m_type)}")
-    m_type = m_type.lower().strip()
+    # Determine extraction metric types and enforce semantic agreement
+    norm_arg = _normalize_metric_type(metric_type)
+    raw_can = canonical.get("metric_type") or canonical.get("aggregation")
+    raw_blk = bulk.get("metric_type") or bulk.get("aggregation")
+    norm_can = _normalize_metric_type(raw_can)
+    norm_blk = _normalize_metric_type(raw_blk)
+
+    if norm_can is not None and norm_blk is not None and norm_can != norm_blk:
+        raise BulkDataEquivalenceError(
+            f"Conflicting metric types between canonical ({raw_can!r}) and bulk ({raw_blk!r})."
+        )
+
+    if norm_arg is not None:
+        if norm_can is not None and norm_arg != norm_can:
+            raise BulkDataEquivalenceError(
+                f"Explicit metric_type ({metric_type!r}) conflicts with canonical metric ({raw_can!r})."
+            )
+        if norm_blk is not None and norm_arg != norm_blk:
+            raise BulkDataEquivalenceError(
+                f"Explicit metric_type ({metric_type!r}) conflicts with bulk metric ({raw_blk!r})."
+            )
+
+    m_type = norm_arg or norm_can or norm_blk or "max"
 
     loc_can = canonical.get("locator")
     loc_blk = bulk.get("locator")
