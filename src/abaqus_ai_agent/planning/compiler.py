@@ -172,6 +172,96 @@ class CompiledAgentPlan:
     material: Optional[MaterialDefinition] = None
 
 
+_STEP_TYPE_ALIASES = {
+    "static": "static",
+    "static_general": "static",
+    "frequency": "frequency",
+    "modal": "frequency",
+    "implicit_dynamic": "implicit_dynamic",
+    "dynamic_implicit": "implicit_dynamic",
+    "explicit_dynamic": "explicit_dynamic",
+    "dynamic_explicit": "explicit_dynamic",
+    "heat_transfer": "heat_transfer",
+    "thermal": "heat_transfer",
+}
+
+
+def _canonical_step_type(step_type: Optional[str]) -> str:
+    raw = str(step_type or "static").strip().lower().replace("-", "_")
+    canonical = _STEP_TYPE_ALIASES.get(raw)
+    if canonical is None:
+        raise ValueError(
+            "unsupported step_type %r; refusing to silently compile it as StaticStep. "
+            "Supported types: %s" % (step_type, ", ".join(sorted(_STEP_TYPE_ALIASES)))
+        )
+    return canonical
+
+
+def _step_action_for_type(step_type, model_name, *, name, previous, nlgeom=False,
+                          time_period=1.0, stabilization_method="NONE",
+                          stabilization_magnitude=None, initial_inc=None, min_inc=None,
+                          max_inc=None, max_num_inc=100, heat_response="STEADY_STATE",
+                          num_eigen=10):
+    """Map one declared procedure onto its Abaqus step action.
+
+    Unknown types fail closed. They must not become ``StaticStep``.
+    """
+    kind = _canonical_step_type(step_type)
+    if kind == "static":
+        return builders.static_step(
+            model=model_name,
+            name=name,
+            previous=previous,
+            nlgeom=nlgeom,
+            time_period=time_period,
+            stabilization_method=stabilization_method,
+            stabilization_magnitude=stabilization_magnitude,
+            initial_inc=initial_inc,
+            min_inc=min_inc,
+            max_inc=max_inc,
+            max_num_inc=max_num_inc,
+        )
+    if kind == "frequency":
+        return builders.frequency_step(
+            model=model_name,
+            name=name,
+            previous=previous,
+            num_eigen=num_eigen,
+        )
+    if kind == "implicit_dynamic":
+        return builders.implicit_dynamic_step(
+            model=model_name,
+            name=name,
+            previous=previous,
+            nlgeom=nlgeom,
+            time_period=time_period,
+            initial_inc=initial_inc,
+            min_inc=min_inc,
+            max_inc=max_inc,
+            max_num_inc=max_num_inc,
+        )
+    if kind == "explicit_dynamic":
+        return builders.dynamic_explicit_step(
+            model=model_name,
+            name=name,
+            previous=previous,
+            time_period=time_period,
+            nlgeom=nlgeom,
+            max_increment=max_inc,
+        )
+    return builders.heat_transfer_step(
+        model=model_name,
+        name=name,
+        previous=previous,
+        response=heat_response,
+        time_period=time_period,
+        initial_inc=initial_inc,
+        min_inc=min_inc,
+        max_inc=max_inc,
+        max_num_inc=max_num_inc,
+    )
+
+
 def compile_intent_to_actions(
     model_name: str,
     part_name: str,
@@ -502,6 +592,8 @@ def compile_intent_to_actions(
             ))
 
     # 6. Analysis Steps Actions
+    # All three entry paths share one mapper. A non-static procedure must not
+    # silently become StaticStep; an unknown type fails closed.
     defined_steps: List[str] = []
     if procedure is not None:
         valid, errors = procedure.validate_dag()
@@ -511,127 +603,62 @@ def compile_intent_to_actions(
             proc_type = s.procedure.lower() if s.procedure else "static"
             nlgeom_val = s.nlgeom if s.nlgeom is not None else False
             proc_controls = dict(getattr(s, "metadata", {}) or {}).get("step_controls") or {}
-            if proc_type in ("static", "static_general"):
-                actions.append(builders.static_step(
-                    model=model_name,
-                    name=s.name,
-                    previous=s.previous,
-                    nlgeom=nlgeom_val,
-                    time_period=s.time_period,
-                    stabilization_method=proc_controls.get("stabilization_method", "NONE"),
-                    stabilization_magnitude=proc_controls.get("stabilization_magnitude"),
-                    initial_inc=proc_controls.get("initial_inc", s.initial_inc),
-                    min_inc=proc_controls.get("min_inc", s.min_inc),
-                    max_inc=proc_controls.get("max_inc", s.max_inc),
-                    max_num_inc=proc_controls.get("max_num_inc", s.max_num_inc),
-                ))
-            elif proc_type == "frequency":
-                actions.append(builders.frequency_step(
-                    model=model_name,
-                    name=s.name,
-                    previous=s.previous,
-                ))
-            elif proc_type in ("implicit_dynamic", "dynamic_implicit"):
-                actions.append(builders.implicit_dynamic_step(
-                    model=model_name,
-                    name=s.name,
-                    previous=s.previous,
-                    nlgeom=nlgeom_val,
-                    time_period=s.time_period,
-                    initial_inc=s.initial_inc,
-                    min_inc=s.min_inc,
-                    max_inc=s.max_inc,
-                    max_num_inc=s.max_num_inc,
-                ))
-            elif proc_type in ("explicit_dynamic", "dynamic_explicit"):
-                actions.append(builders.dynamic_explicit_step(
-                    model=model_name,
-                    name=s.name,
-                    previous=s.previous,
-                    time_period=s.time_period,
-                    nlgeom=nlgeom_val,
-                ))
-            elif proc_type == "heat_transfer":
-                resp_val = s.metadata.get("response", "STEADY_STATE") if (hasattr(s, "metadata") and s.metadata) else "STEADY_STATE"
-                actions.append(builders.heat_transfer_step(
-                    model=model_name,
-                    name=s.name,
-                    previous=s.previous,
-                    response=resp_val,
-                    time_period=s.time_period,
-                    initial_inc=s.initial_inc,
-                    min_inc=s.min_inc,
-                    max_inc=s.max_inc,
-                    max_num_inc=s.max_num_inc,
-                ))
-            else:
-                actions.append(builders.static_step(
-                    model=model_name,
-                    name=s.name,
-                    previous=s.previous,
-                ))
+            actions.append(_step_action_for_type(
+                proc_type,
+                model_name,
+                name=s.name,
+                previous=s.previous,
+                nlgeom=nlgeom_val,
+                time_period=s.time_period,
+                stabilization_method=proc_controls.get("stabilization_method", "NONE"),
+                stabilization_magnitude=proc_controls.get("stabilization_magnitude"),
+                initial_inc=proc_controls.get("initial_inc", s.initial_inc),
+                min_inc=proc_controls.get("min_inc", s.min_inc),
+                max_inc=proc_controls.get("max_inc", s.max_inc),
+                max_num_inc=proc_controls.get("max_num_inc", s.max_num_inc),
+                heat_response=(
+                    s.metadata.get("response", "STEADY_STATE")
+                    if (hasattr(s, "metadata") and s.metadata) else "STEADY_STATE"
+                ),
+            ))
             defined_steps.append(s.name)
         default_step_name = defined_steps[0]
     elif steps is not None and len(steps) > 0:
         for idx, s in enumerate(steps):
             prev = s.previous if (s.previous != "Initial" or idx == 0) else steps[idx - 1].name
-            if s.step_type in ("static", "static_general"):
-                actions.append(builders.static_step(
-                    model=model_name,
-                    name=s.name,
-                    previous=prev,
-                    nlgeom=s.nlgeom,
-                    time_period=s.time_period,
-                    stabilization_method=s.stabilization_method or "NONE",
-                    stabilization_magnitude=s.stabilization_magnitude,
-                    max_num_inc=s.max_num_inc or 100,
-                    initial_inc=s.initial_inc,
-                    min_inc=s.min_inc,
-                    max_inc=s.max_inc,
-                ))
-            elif s.step_type == "frequency":
-                actions.append(builders.frequency_step(
-                    model=model_name,
-                    name=s.name,
-                    previous=prev,
-                ))
-            else:
-                actions.append(builders.static_step(
-                    model=model_name,
-                    name=s.name,
-                    previous=prev,
-                ))
+            actions.append(_step_action_for_type(
+                s.step_type,
+                model_name,
+                name=s.name,
+                previous=prev,
+                nlgeom=s.nlgeom,
+                time_period=s.time_period,
+                stabilization_method=s.stabilization_method or "NONE",
+                stabilization_magnitude=s.stabilization_magnitude,
+                max_num_inc=s.max_num_inc or 100,
+                initial_inc=s.initial_inc,
+                min_inc=s.min_inc,
+                max_inc=s.max_inc,
+            ))
             defined_steps.append(s.name)
         default_step_name = defined_steps[0]
     else:
         active_step = step if step is not None else IntentStepSpec(name="Step-1")
-        if active_step.step_type in ("static", "static_general"):
-            actions.append(builders.static_step(
-                model=model_name,
-                name=active_step.name,
-                previous=active_step.previous,
-                nlgeom=active_step.nlgeom,
-                time_period=active_step.time_period,
-                stabilization_method=active_step.stabilization_method or "NONE",
-                stabilization_magnitude=active_step.stabilization_magnitude,
-                max_num_inc=active_step.max_num_inc or 100,
-                initial_inc=active_step.initial_inc,
-                min_inc=active_step.min_inc,
-                max_inc=active_step.max_inc,
-            ))
-        elif active_step.step_type == "frequency":
-            actions.append(builders.frequency_step(
-                model=model_name,
-                name=active_step.name,
-                previous=active_step.previous,
-                num_eigen=10,
-            ))
-        else:
-            actions.append(builders.static_step(
-                model=model_name,
-                name=active_step.name,
-                previous=active_step.previous,
-            ))
+        actions.append(_step_action_for_type(
+            active_step.step_type,
+            model_name,
+            name=active_step.name,
+            previous=active_step.previous,
+            nlgeom=active_step.nlgeom,
+            time_period=active_step.time_period,
+            stabilization_method=active_step.stabilization_method or "NONE",
+            stabilization_magnitude=active_step.stabilization_magnitude,
+            max_num_inc=active_step.max_num_inc or 100,
+            initial_inc=active_step.initial_inc,
+            min_inc=active_step.min_inc,
+            max_inc=active_step.max_inc,
+            num_eigen=10,
+        ))
         defined_steps.append(active_step.name)
         default_step_name = active_step.name
 

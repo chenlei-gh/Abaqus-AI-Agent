@@ -155,3 +155,72 @@
 1. **先做 Gap 审计与基线记录，再动代码**：任何优化在修改前，必须在当前主线上采集基线数据并留存。
 2. **渐进式演进，禁止破坏既有测试**：所有改动以非破坏性方式引入，每次改动必须保证现有的所有单元测试与契约测试完全绿灯。
 3. **关键物理模块变更必须多方签署**：涉及 `contracts/stabilization_energy.py`、`contracts/contact_stabilization.py` 等物理力学契约的修改，必须出具物理力学论证与基准对比，严禁单方面放宽判断标准。
+
+---
+
+## 7. 自适应求解配置：当前实施范围（2026-10-21 审计后锁定）
+
+这一节是第 4 节阶段 3「多核并行受控实验」的后续收口，不另建计划文件。目标是把自适应求解配置做成统一能力：先识别硬件、模型、求解器和许可证等实际条件，有可靠证据才调整；没有依据时使用安全默认值，并记录每次决策及原因。
+
+**当前判定：值得做，但现在不能开始全面改造，也不实现自动选核。** 并行实验脚手架已存在。本节锁定的 P0/P1 已落地；自动选核、内存、网格精度和许可证换算仍未做。
+
+### 7.1 已核实的事实
+
+以下不是审计推断。`tools/_probe_step_fallback.py` 已对真实编译结果跑过，随后删除。
+
+| 输入路径 | `explicit_dynamic` / `implicit_dynamic` / `heat_transfer` 的实际产物 | 判定 |
+| :--- | :--- | :--- |
+| `procedure=` 路径（`compiler.py` 约 504–572 行） | 发出对应动作：`dynamic_explicit_step` → 脚本 `ExplicitDynamicsStep` | 正确，不改 |
+| `compile_engineering_intent(analysis_type=...)` | 动作为 `static_step`，脚本为 `StaticStep` | **已证实缺陷** |
+| `compile_intent_to_actions(step=IntentStepSpec(step_type=...))` | 同上 | **已证实缺陷** |
+| `compile_intent_to_actions(steps=(...))` | 同上 | **已证实缺陷** |
+| 同上三条路径的 `frequency` | `frequency_step` / `FrequencyStep` | 不是缺陷，不当回退修 |
+
+缺陷位置是 `compiler.py` 的 `steps` 分支（约 575–603 行）和单 `step` 分支（约 606–634 行）：非 `static` / `frequency` 静默回退成 `StaticStep`。`compile_engineering_intent` 会把 `explicit` / `implicit_dynamic` / `heat_transfer` 编成对应 `step_type`（约 2105–2112 行），再走这条回退。调用方看不到求解器族被改掉。
+
+正式 CAE 链路的资源参数仍未接通，这一条是读代码确认，不是探针结论：
+
+- `analysis_run.py` 约 832 行 `jobs.create(job_name, model_name)` 不传 kwargs。
+- `JobController.create`（`jobs.py:43-47`）能把 kwargs 写进 `mdb.Job(...)`，正式调用方不用。
+- 编译器 Job 写死 `type=ANALYSIS, waitMinutes=0, waitHours=0`（`compiler.py` 约 1654–1656 行），没有 `numCpus` / `numDomains` / `memory`。
+- `select_solver` 只写入运行元数据，不改 step，不改 Job。
+- 队列 `cpus` / `memory_mb` 不传给 runner。它们现在只是队列账本。
+- `ParallelRunSpec` 是实验契约，不是运行时配置。`precision` 默认 `SINGLE` 不进求解器。case_07 的 4 核不得升为全局默认。
+
+### 7.2 本阶段只做这三件
+
+1. **P0 求解语义正确性。** 修已证实的两条静默回退。`explicit_dynamic`、`implicit_dynamic`、`heat_transfer` 在 `step` 与 `steps` 路径上必须发出与 `procedure` 路径同族的动作。未知类型不得再静默变成 `StaticStep`，必须失败并说明类型。补负例测试：覆盖 `analysis_type`、单 step、`steps` 三条路径，断言脚本中的 Abaqus 步类名。`frequency` 保持现状。
+2. **P0 参数决策可追溯。** 记录参数名、最终值、来源（显式传入 / 安全默认 / 有证据调整 / 证据不足拒绝调整）、证据、回退原因、是否真正送入求解器。不新建配置架构。没有消费点的参数只能标 `recorded_only` 或 `not_consumed`，不能标成已生效或已自适应。
+3. **P1 接通正式求解链路的显式参数。** 调用方可显式传入已支持的 `numCpus` / `numDomains`。未传时 `mdb.Job` 不得出现这些参数，保持 Abaqus 默认 1 核。不把 case_07 的 4 核提升为生产默认。队列 `cpus` / `memory_mb` 在接通前仍只是账本，不得偷偷写入 Job。
+
+三件一次做完，不逐轮追加小问题。
+
+### 7.3 本阶段明确不做
+
+- 不自动选核。CPU 规则只有在 MV-07 取得可比较真机数据之后才能制定：同模型、同网格、同收敛、同精度，Standard / Explicit 分开，T4b ≥ 60 s，核数 1/2/4/8。
+- 不自动限制或放宽内存。没有可用内存和模型规模证据。
+- 不自动降网格、不自动降精度。网格与精度服从工程正确性，不能套用性能自适应。
+- 不按 CPU 核数换算许可证 token。许可证只能保留现有并发闸门；真实排队仍待 MV-09。
+- 不用 `T4a - T4b` 估许可证等待。
+- 不把实验脚手架、队列账本或 `select_solver` 记录称为已实现的自适应。
+- 不新开一轮零散真机验证。仍沿用 MV-01～MV-11。与本能力直接相关的是 MV-01、MV-07、MV-08、MV-09、MV-10，当前均为 NOT_RUN 或未在工程规模闭合。
+
+### 7.5 本阶段落地状态（2026-10-21）
+
+已落地，且有离线测试，不是真机验证：
+
+- `compiler.py` 的 `procedure` / `steps` / 单 `step` 三条路径共用 `_step_action_for_type`。已证实的静默回退已修。未知 `step_type` 失败，不再变成 `StaticStep`。
+- `execution/solver_config.py` 记录显式传入、安全默认和拒绝调整。只有显式 `numCpus` / `numDomains` 会送入 `mdb.Job`。`memory` 等没有消费点的参数记为 `refused`，不送入求解器。
+- `AnalysisRunner.run(..., job_options=None)` 与 `AbaqusAIAgent.analysis_run` 接通该记录。缺省不写 `numCpus`。
+- 定向测试：`tests/test_solver_config_wiring.py` 15 passed；连同 `test_agent_compiler.py`、`test_material_step_unit_contracts.py` 共 32 passed。接触稳定化与产品入口回归 73 passed。
+
+仍未做，不得写成已完成：自动选核、内存自适应、网格/精度自适应、许可证按核换算、MV-01～MV-11 真机校核。
+
+### 7.4 本阶段验收
+
+- 负例：`analysis_type="explicit_dynamic"`、`"implicit_dynamic"`、`"heat_transfer"` 的编译脚本分别含 `ExplicitDynamicsStep`、`ImplicitDynamicsStep`、`HeatTransferStep`，且不含被替换掉的 `StaticStep`。单 step 与 `steps` 路径同样。
+- 未知 `step_type` 编译失败，错误信息带出该类型，不生成 `StaticStep`。
+- 决策记录能区分四种来源；未送入求解器的项不得标为已生效。
+- 正式链路测试：未传并行参数时 `mdb.Job` 不含 `numCpus`；显式传入时才出现。不得用 case_07 脚本文本测试冒充。
+- 任何自动路径不得减小 `global_size`，不得把 FULL / DOUBLE 降为 SINGLE，除非调用方显式要求。
+- 单元测试通过不等于真机验证。本阶段不宣称加速比。

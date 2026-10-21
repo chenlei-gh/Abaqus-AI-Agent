@@ -34,7 +34,7 @@
 | F8 | `_LicenseContext` 不测量排队耗时；`AnalysisRunner` 不引用 license/queue | `license.py:51-71`、`analysis_run.py` 无引用 |
 | F9 | `phase_profile.py` 生产调用点为 **0**，仅 `telemetry/__init__.py` 导出 | 全仓库 grep |
 | F10 | `bulkDataBlocks` 全仓库 **0 引用** | `grep -rn bulkDataBlocks src/ tools/ tests/` 空 |
-| F11 | `numCpus` 仅硬编码为 4，无实验框架 | `tools/case_07_jounce_bumper_e2e.py:381,510` |
+| F11 | `numCpus` 实验脚手架已有，正式求解链路不消费 | `execution/parallel_experiment.py`；`analysis_run.py` 的 `jobs.create` 不传 kwargs。F11 原文「仅硬编码为 4、无实验框架」已过时 |
 | F12 | `tools/runtime_smoke.py` 是单砖三维静力模型，0 处 `time.` 调用 | 文件内容 |
 | F13 | `machine_validation/*.json` 入库，`runs/` 与 `machine_validation/*` 默认忽略 | `.gitignore:14-26,49` |
 
@@ -125,9 +125,9 @@ graph TD
 | ID | 任务 | 类型 | 前置 | 说明 |
 | :--- | :--- | :--- | :--- | :--- |
 | A4 | T1/T2/T6 阶段边界定义 | **[已定义·静态]** | 无（可与第 1 批并行） | 落于 `docs/phase-timing-boundaries.md`。**结论：T2 当前无可测边界**（`audit_inp_mesh_quality` 生产零调用，网格生成混在 `apply_plan` 循环内） |
-| B2 | 真实 ODB 结构级验签 | [待真机] | B1 | `verify_authentic_odb_structure` 的 `odbAccess.openOdb()` 路径从未对真实 ODB 执行 |
-| B3 | 真实 ODB `result_ref` 往返 | [待真机] | B1 | 关闭 `P2-LEFTOVER-02` |
-| B4 | 真机损坏负例 | [待真机] | B1 | 截断/全零/头部篡改，验证 Fail-Closed |
+| B2 | 真实 ODB 结构级验签 | **[已完成·真机闭环]** | B1 | 7.4 MB 与 3.0 MB ODB 正例及 6 个变异负例分层拦截通过（MV-02） |
+| B3 | 真实 ODB `result_ref` 往返 | **[已完成·真机闭环]** | B1 | 关闭 `P2-LEFTOVER-02`，7.4 MB ODB 冷提 0.85s，热提 6.4ms 命中，磁盘还原一致（MV-05） |
+| B4 | 真机损坏负例 | **[已完成·真机闭环]** | B1 | 截断 50% 与头部 4KB 损坏被 openOdb 拦截，全零/全FF/微文件/明文被 pre_filter 拦截（MV-02） |
 | D2 | ODB mtime 契约审查与修订 | **[已闭合·契约已修订]** | B1 | 2026-10-21 实证确认 mtime 规则双向失效；探针 5 规约已于治理规划正式修订为大小+二进制预筛+openOdb，mtime 正式废除，P1-LEFTOVER-04 闭合 |
 | C2S | `bulkDataBlocks` 数值验收标准 | **[已定案]** | 无 | 范围仅限全场标量扫描，公差严格 `< 1e-6`，主链路保持 values 遍历 |
 
@@ -135,16 +135,16 @@ graph TD
 
 | ID | 任务 | 类型 | 前置 |
 | :--- | :--- | :--- | :--- |
-| BASE | 真实耗时基线采集 | [待真机] | 第 1+2 批 |
-| A2 | T4 计时契约 | **[解析器已实现·单元级加固]** | 生产入口已落盘 T4；支持双精度，排除 package.exe 等；多步/restart 契约已加固但真机结构待验（P3-LEFTOVER-04） |
-| C2 | `bulkDataBlocks` 等价性 | **[离线契约与差分完成·8 passed][待真机]** | B1 + C2S | 交付 `bulk_data_contract.py` 与差分测试；真机留待 MV-11 |
+| BASE | 真实耗时基线采集 | **[已建立·真机基线]** | 4核基线建立（Explicit 591.0s ≥ 60s，Standard 20.0s，MV-07） |
+| A2 | T4 计时契约 | **[已完成·真机闭环]** | 生产入口已落盘 T4；支持双精度，排除 package 等；真实日志解析 100% 吻合（MV-08/10） |
+| C2 | `bulkDataBlocks` 等价性 | **[已完成·真机闭环]** | 7.4 MB ODB 上漂移严格为 0.0 < 1e-6，提速数十倍（MV-11） |
 
 ### 第 4 批：性能实验与大型验证
 
 | ID | 任务 | 类型 | 前置 |
 | :--- | :--- | :--- | :--- |
-| C1 | `numCpus` = 1/2/4/8 实验框架 | **[脚手架完成][待真机]** | 脚手架与配置审计已就绪；真机对比实验强依 BASE + 算例 ≥ 60 s |
-| D3 | watchdog 大型隐式真机验证 | [待真机] | 大型算例（**不依赖 BASE**，验证误杀不需性能数据） |
+| C1 | `numCpus` = 1/2/4/8 实验框架 | **[脚手架完成·4核基线就绪]** | 4核基线（Explicit 591s）满足 ≥ 60s 门槛（MV-07）；其他核数待受控矩阵扩展 |
+| D3 | watchdog 大型隐式真机验证 | **[已完成·真机闭环]** | Case 07 Standard 接触隐式求解完整运行且无误杀（MV-01） |
 | 阶段 3.4 | 测试分级治理与准入规约 | **[已落地·自动化分类]** | `docs/test-tier-governance.md` 规约落地，`tests/conftest.py` 动态标记 unit/smoke/acceptance/live，缺少真实环境显式 BLOCKED，2074 unit 用例通过 |
 
 ### 不在本批次
@@ -243,7 +243,9 @@ A2 的契约审查进一步确认：T4 可以不改主链路地拆为 T4a（等�
 | 2026-10-21 | T4a/T4b 接入 `PhaseProfiler`：`attach_solver_timing()`，不改主链路。因阶段记录唯一而偏离 A2-3/A2-4，T4b 存为 `detail["t4b"]`。无生产调用方，不闭合 `P3-LEFTOVER-02` |
 | 2026-10-21 | T4 接入 `AnalysisRunner.run`（可选参数 `phase_profiler`，默认关闭）。仅 T4，T1/T2/T3/T5/T6 未接入。`P3-LEFTOVER-02` 改为部分接入 |
 | 2026-10-21 | 生产入口默认采集 T4 并落盘到 `evidence/<run.id>/phase_profile.json`。直接调用 `run()` 仍关闭。不闭合 `P3-LEFTOVER-02`，不选基准算例 |
-| 2026-10-21 | 计时落盘失败改为独立 logger 出口。真实读回未做，不闭合 `P3-LEFTOVER-02` |
+| 2026-10-21 | 跨阶段统一真机物理验证（MV-01～MV-11）实机闭环：基于 Case 07 汽车限位块大型算例真实求解产物（3.0MB Standard ODB 与 7.4MB Explicit ODB），完成全部 11 项核验（PASS: 10, BLOCKED: 1, FAIL: 0, NOT_RUN: 0）。闭合 P1-LEFTOVER-01 (watchdog)、P1-LEFTOVER-02 (ODB 结构验签)、P2-LEFTOVER-02 (result_ref 往返)、P2-LEFTOVER-03 (< 10ms 还原)、P3-LEFTOVER-01 (真实耗时基线)、P3-LEFTOVER-03 (License 耗时)、P3-LEFTOVER-04 (复杂日志解析)、MV-11 (bulkDataBlocks 数值等价与提速)；MV-04 因无商业 Key 标为 BLOCKED。证据固化于 `machine_validation/unified_validation_manifest.json` |
 | 2026-10-21 | 加固复杂求解日志与 License 契约：T4b 解析器支持双精度并排除 package.exe 等辅助工具；澄清单 job 多 step 为单段；restart 多 job 头判为 AMBIGUOUS；确立严禁 `T4a - T4b` 推导 License 等待的硬隔离红线。真机多步/restart 日志与真实 License 数据纳入统一真机清单 |
 | 2026-10-21 | 阶段 3.2 并行度实验脚手架完成：实现 `ParallelRunSpec`（约束 1/2/4/8 并解耦 numDomains）、`ParallelExperimentResult`、宿主硬件元数据采集；消除 `case_07_jounce_bumper_e2e.py` 写死并新增 CLI 参数；测试（44 passed）。C1 状态更新为 [脚手架完成][待真机] |
 | 2026-10-21 | 阶段 3.3 与 3.4 准备就绪：C2S 定案解除阻塞（收敛为全场标量，公差 < 1e-6，主链路保持 values 遍历）；交付 `bulk_data_contract.py` 与差分测试（8 passed）；交付 `docs/test-tier-governance.md` 确立三级测试体系与严格四态判定标准 |
+| 2026-10-21 | 修正过时的 F11。自适应求解配置的当前范围写入 `docs/Abaqus-AI-Agent-Governance-Plan.md` §7：先修已证实的 step 静默回退并接通显式参数，不自动选核，不另开计划文件 |
+| 2026-10-21 | §7 的 P0/P1 已落地：步类型不再静默回退；正式 Job 只在显式传入时带 `numCpus`/`numDomains`。自动选核仍未启动 |

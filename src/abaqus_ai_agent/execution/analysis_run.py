@@ -632,7 +632,7 @@ class AnalysisRunner:
             phase_profiler=None, license_wait_seconds=None,
             postprocess_profile=None, workdir=None, physics_domain=None, require_evidence=None,
             require_production=None, project_context=None, elastic_validity=None,
-            inp_text=None):
+            inp_text=None, job_options=None):
         if require_production is None:
             # Explicit test flag via environment or executor attribute takes precedence
             is_explicit_test = (
@@ -829,7 +829,12 @@ class AnalysisRunner:
         try:
             snapshot = initial_snapshot
             if snapshot is not None and job_name not in snapshot.jobs:
-                jobs.create(job_name, model_name)
+                from .solver_config import resolve_explicit_job_kwargs
+                job_kwargs, job_decisions = resolve_explicit_job_kwargs(job_options)
+                metadata = dict(run.metadata)
+                metadata["solver_parameter_decisions"] = job_decisions
+                run = run.with_state(run.state, metadata=metadata)
+                jobs.create(job_name, model_name, **job_kwargs)
 
             from ..planning.output import plan_outputs, actions_from_output_plan, criteria_from_postprocess_profile
             effective_criteria = tuple(criteria or ())

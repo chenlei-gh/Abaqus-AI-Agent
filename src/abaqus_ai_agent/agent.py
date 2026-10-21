@@ -733,7 +733,7 @@ class AbaqusAIAgent:
                      engineering_intent=None, postprocess_profile=None,
                      action_plan=(), environment=None, timeout=3600, workdir=None,
                      require_production=None, project_context=None,
-                     license_wait_seconds=None):
+                     license_wait_seconds=None, job_options=None):
         from .execution.analysis_run import AnalysisRunner
         from .telemetry.phase_profile import PhaseProfiler
         cname = getattr(self.executor, "__class__", None).__name__ or ""
@@ -759,7 +759,8 @@ class AbaqusAIAgent:
             postprocess_profile=postprocess_profile, action_plan=action_plan,
             environment=environment, timeout=timeout, workdir=workdir,
             require_production=require_production, project_context=project_context,
-            phase_profiler=profiler, license_wait_seconds=license_wait_seconds)
+            phase_profiler=profiler, license_wait_seconds=license_wait_seconds,
+            job_options=job_options)
         self._persist_phase_profile(profiler, run)
         return run
 
