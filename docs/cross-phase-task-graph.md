@@ -116,7 +116,7 @@ graph TD
 | :--- | :--- | :--- | :--- | :--- |
 | B1 | 用 `runtime_smoke.py` 生成并留存真实 ODB | [待真机] | `runs/`（不入库）、`machine_validation/*.json` | 记录运行环境、输入版本、作业状态、文件校验信息 |
 | A1 | `BatchResult` 携带耗时 | **[已实现·单元级]** | `execution/batch.py` | 纯增量字段，默认 `None`；透传 `WatchedProcessResult.duration`，不重复测量 |
-| A3 | License 排队耗时外露 | **[已实现·单元级]** | `execution/license.py`、`execution/queue.py` | 字段可读且有测试；**尚无调用方**送入 profiler，`P3-LEFTOVER-03` 未闭合 |
+| A3 | License 排队耗时外露 | **[已实现·单元级]** | `execution/license.py`、`execution/queue.py` | 字段可读且有测试；**尚无调用方**送入 profiler，`P3-LEFTOVER-03` 未闭合。**硬隔离红线**：严禁 `T4a - T4b` 算作 License 等待时间，差额含 pre.exe 等开销 |
 | A5 | profile 异常隔离契约 | **[已实现·单元级]** | `telemetry/phase_profile.py` + 测试 | `strict=False` 降级写入 `internal_errors`；记录失败永不掩盖真实异常 |
 | D1 | Provider 计费证据采集 | [待真机] | `tools/live_token_benchmark.py` | 与 ODB 无关；需真实 Key，费用自负 |
 
@@ -136,7 +136,7 @@ graph TD
 | ID | 任务 | 类型 | 前置 |
 | :--- | :--- | :--- | :--- |
 | BASE | 真实耗时基线采集 | [待真机] | 第 1+2 批 |
-| A2 | T4 计时契约 | **[解析器已实现·单步已验证]** | 无需改主链路；多步/restart 未验（P3-LEFTOVER-04） |
+| A2 | T4 计时契约 | **[解析器已实现·单元级加固]** | 生产入口已落盘 T4；支持双精度，排除 package.exe 等；多步/restart 契约已加固但真机结构待验（P3-LEFTOVER-04） |
 | C2 | `bulkDataBlocks` 等价性 | [待实现][待真机] | B1 + C2S |
 
 ### 第 4 批：性能实验与大型验证
@@ -241,3 +241,4 @@ A2 的契约审查进一步确认：T4 可以不改主链路地拆为 T4a（等�
 | 2026-10-21 | T4 接入 `AnalysisRunner.run`（可选参数 `phase_profiler`，默认关闭）。仅 T4，T1/T2/T3/T5/T6 未接入。`P3-LEFTOVER-02` 改为部分接入 |
 | 2026-10-21 | 生产入口默认采集 T4 并落盘到 `evidence/<run.id>/phase_profile.json`。直接调用 `run()` 仍关闭。不闭合 `P3-LEFTOVER-02`，不选基准算例 |
 | 2026-10-21 | 计时落盘失败改为独立 logger 出口。真实读回未做，不闭合 `P3-LEFTOVER-02` |
+| 2026-10-21 | 加固复杂求解日志与 License 契约：T4b 解析器支持双精度并排除 package.exe 等辅助工具；澄清单 job 多 step 为单段；restart 多 job 头判为 AMBIGUOUS；确立严禁 `T4a - T4b` 推导 License 等待的硬隔离红线。真机多步/restart 日志与真实 License 数据纳入统一真机清单 |

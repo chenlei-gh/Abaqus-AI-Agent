@@ -63,9 +63,16 @@ _SOLVER_BLOCK_PATTERNS = (
 )
 
 #: Executable basenames that indicate the solver, used only as a fallback when
-#: the block name is unfamiliar. ``pre.exe`` (input processing) and
-#: ``SMASimUtility.exe`` (wrap-up) are deliberately absent.
-_SOLVER_EXECUTABLES = frozenset({"standard.exe", "explicit.exe"})
+#: the block name is unfamiliar. Standard and Explicit solvers (including double
+#: precision binaries like ``standard_dp.exe`` and ``explicit_dp.exe``) are included.
+#: Ancillary binaries such as ``pre.exe`` (input processing), ``package.exe``
+#: (Explicit packager), and ``SMASimUtility.exe`` (wrap-up) are deliberately absent.
+_SOLVER_EXECUTABLES = frozenset({
+    "standard.exe",
+    "standard_dp.exe",
+    "explicit.exe",
+    "explicit_dp.exe",
+})
 
 _BEGIN_RE = re.compile(r"^\s*Begin\s+(.+?)\s*$", re.IGNORECASE)
 _END_RE = re.compile(r"^\s*End\s+(.+?)\s*$", re.IGNORECASE)

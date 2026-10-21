@@ -23,7 +23,7 @@
 | P2-LEFTOVER-04 | 图像分层核验未接入真实视口捕获链路 | **未接入（按范围决定）** |
 | P2-LEFTOVER-05 | JPEG 仅有头部校验 | **已知边界** |
 | P3-LEFTOVER-02 | 剖析器仅接入 T4，且未经真实运行验证 | **部分接入** |
-| P3-LEFTOVER-04 | T4b 多步/restart 日志结构未验证 | **解析器已实现，真机结构未验** |
+| P3-LEFTOVER-04 | T4b 多步/restart 日志结构未验证 | **单元级加固，真机结构未验** |
 | T1/T3/T5/T6 打点 | 边界已定义，**无一处接线** | **未接线** |
 | T2 | 网格阶段**无可测边界** | **阻塞**（见 `phase-timing-boundaries.md` §3） |
 
@@ -37,7 +37,7 @@
 | P2-LEFTOVER-02 | 真实 ODB `result_ref` 往返（工程规模） | **单砖已验，未闭合** |
 | P2-LEFTOVER-03 | `< 10 ms` 还原（工程规模） | **规模未验证** |
 | P3-LEFTOVER-01 | 真实耗时基线 | **未验证（数据为零）** |
-| P3-LEFTOVER-03 | T3 真实排队耗时 | **字段已可读，无真实数据** |
+| P3-LEFTOVER-03 | T3 真实排队耗时 | **字段已可读，严禁算术推导，无真实数据** |
 
 ### 0.3 契约待修订
 
@@ -258,8 +258,8 @@
 | :--- | :--- | :--- | :--- |
 | P3-LEFTOVER-01 | 真实运行耗时基线未采集 | **未验证** | 无任何真实 Abaqus 运行的 T1~T6 数据；现有测试仅用注入的假时钟与合成耗时 |
 | P3-LEFTOVER-02 | 剖析器未接入执行链路 | **部分接入** | 生产入口 `AbaqusAIAgent.analysis_run` 默认创建 `PhaseProfiler(strict=False)` 并传入 `AnalysisRunner.run`。该入口覆盖 `solve_requirement` 与自愈重跑。返回后把 `finalize().to_dict()` 写入本次运行已有的 `evidence/<run.id>/phase_profile.json`（不按 job 名另建目录）。无证据目录不记为失败。`finalize()` 失败或写文件失败不改变 run，也不写入 `AnalysisRun.diagnostics`；失败通过 `abaqus_ai_agent.agent` 的 `logger.warning` 发出（含 `run_id`），不依赖写失败的同一个 JSON。内存中的 `internal_errors` 仍会追加，但调用方拿不到 profiler，不能把它当作可观测出口。提交之后的作业失败仍落盘 T4；提交之前的 preflight 失败也会落盘，但六阶段均为 `NOT_RUN`，不是漏写。两次运行按 `run.id` 分目录，互不覆盖。`AnalysisRunner.run` 直接调用仍默认不计时。落盘内容只有 T4a/T4b；T1/T2/T3/T5/T6 仍为 `NOT_RUN`。**未经真实 Abaqus 运行读回**。「主链路已具备全生命周期剖析」仍不成立 |
-| P3-LEFTOVER-03 | T3 License 排队耗时仍为内部量 | **导出能力已实现，仍无真实测量** | A3 已让 `_LicenseContext.wait_seconds` 与 `QueueItem.license_wait_seconds` 可读取并有单元测试；但**没有调用方**把它们交给 `profiler.record_external()`，也没有真实 FlexNet/DSLS 排队数据。关闭条件「取得真实排队耗时」未满足 |
-| P3-LEFTOVER-04 | T4b 多步 / restart 日志结构未验证 | **解析器已实现，真机结构未验** | `execution/solver_timing.py` 已能解析真实单砖 `.log`（7.0 s，手算 7 s），且多段仅在结构自洽时求和。但**多步分析是否产生多个 solver 段**、这些段语义上是否可加、restart 与 Explicit 的日志结构，均无真实样本。不得把「解析器已实现」读作「多步分析已支持」 | 用真实多步算例（含至少两个载荷步）与一个 restart 算例的 `.log` 重跑解析器，确认段数与耗时与手工核算一致 |
+| P3-LEFTOVER-03 | T3 License 排队耗时仍为内部量 | **导出能力已实现，严禁算术推导，仍无真实测量** | A3 已让 `_LicenseContext.wait_seconds` 与 `QueueItem.license_wait_seconds` 可读取并有单元测试；但**没有调用方**把它们交给 `profiler.record_external()`，也没有真实 FlexNet/DSLS 排队数据。**硬隔离红线**：严禁将 `T4a - T4b` 误作 License 等待时间，差额包含 pre.exe、package.exe、SMASimUtility.exe、进程拉起与 IPC 等开销。关闭条件「取得独立真实排队耗时」未满足 |
+| P3-LEFTOVER-04 | T4b 多步 / restart 日志结构未验证 | **单元级加固完成，真机结构未验** | `execution/solver_timing.py` 已能解析真实单砖 `.log`（7.0 s，手算 7 s）。已完成单元级加固：扩展双精度求解器（`standard_dp.exe`, `explicit_dp.exe`）；显式排除 `package.exe`（Explicit Packager）等辅助工具；澄清单 job 多 step 为单进程段；追加多 job 头的 restart 日志严格判为 `AMBIGUOUS`（定向 43 passed）。**但**真机多步与 restart 的真实 `.log` 结构未获真实产物核验。不得把「解析器已实现」读作「多步分析已支持」 | 用真实多步算例（含至少两个载荷步）与一个 restart 算例的 `.log` 重跑解析器，确认段数与耗时与手工核算一致 |
 
 #### 验证层级声明
 
@@ -350,6 +350,50 @@ A4 的审计结果比预期严重，必须单独记录（详见 `docs/phase-timi
 
 ---
 
+## 4. 跨阶段统一真机验证清单（Unified Machine Validation Checklist）
+
+本清单汇总阶段 1～3 留在真实物理环境验证的全部未闭合项目。在所有代码与契约加固完成后，统一于 Abaqus 2025 真机与在线 Provider 环境中执行验证，按实际产物关闭，不以单元测试通过冒充闭合。
+
+| 编号 | 涉及阶段 / 遗留项 | 验证目标 | 最小真机条件 | 通过与关闭标准 | 当前状态 |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **MV-01** | 阶段 1<br/>`P1-LEFTOVER-01` | 真实大型隐式求解不被 watchdog 误杀 | 真实大型隐式算例（如 `case_07_jounce_bumper` Standard 段或同等复杂模型），经历长时间刚度矩阵分解 | 刚度矩阵分解阶段被正确识别为正常求解；自适应心跳放宽，无误杀；作业正常完成且产物完整 | **未验证** |
+| **MV-02** | 阶段 1<br/>`P1-LEFTOVER-02` | 真实 ODB 结构级验签（工程规模） | 真实工程规模 ODB 产物（多需求、全场输出、非平庸单元网格） | `verify_authentic_odb_structure` 正例通过；对该文件的截断、头部篡改等负例均被 `odbAccess.openOdb` 正确阻断 | **单砖已验，工程规模未验** |
+| **MV-03** | 阶段 1<br/>TC-REC-03 | 求解异常终止后的 `.lck` 释放与僵尸锁安全清理 | 真实 Abaqus 进程异常 kill 或崩溃场景 | 活进程持有 `.lck` 时拒绝清理并告警；僵尸 `.lck` 在确认无关联存活进程后被安全清理，不产生残留 | **单元已验，真机未验** |
+| **MV-04** | 阶段 2<br/>`P2-LEFTOVER-01` | 真实 Provider 计费日志采集与对账 | 配置有效 API Key，执行真实 Provider 基准请求 | 取得 `status=QUALIFIED_LIVE` 且 `claimable=true` 的证据 JSON；并与 Provider 控制台账单或用量明细对账一致（`billing_reconciled=true`） | **未验证** |
+| **MV-05** | 阶段 2<br/>`P2-LEFTOVER-02` | 真实工程规模 ODB 的 `result_ref` 往返与缓存 | 真实工程规模 ODB（多场变量、多截面或高密度节点集） | 冷提取正常写入缓存；命中时 5 条件精确匹配；反序列化后全量数值及因果证据与冷提取完全一致 | **单砖已验，工程规模未验** |
+| **MV-06** | 阶段 2<br/>`P2-LEFTOVER-03` | 真实工程规模 `< 10 ms` 缓存还原实测 | 工程规模的真实提取产物缓存文件 | 在该规模下重复提取测量 50 次，P95 与最大还原耗时均严格 `< 10 ms` | **单砖已验，工程规模未验** |
+| **MV-07** | 阶段 3<br/>`P3-LEFTOVER-01` | 真实全生命周期耗时基线采集 | 真实算例（建议 `case_07_jounce_bumper`，总求解时长 ≥ 60 s） | 记录真实 T1/T3/T4a/T4b/T5/T6 数据，明确各阶段数据源与量化精度，形成可信性能基线 | **未验证** |
+| **MV-08** | 阶段 3<br/>`P3-LEFTOVER-02` | 生产入口 T4 采集与持久化落盘真实读回 | 经 `AbaqusAIAgent.analysis_run` 真实完成一次 Abaqus 提交 | 真实读取生成的 `evidence/<run.id>/phase_profile.json`，核验 run_id、T4a、T4b 与实际日志一致，验证失败时不中断 run | **未验证** |
+| **MV-09** | 阶段 3<br/>`P3-LEFTOVER-03` | FlexNet/DSLS 真实 License 排队耗时测量 | 真实受控的许可服务器排队或并发冲突场景 | 真实测量得到排队秒数，与 T4a/T4b 独立对账，不采用任何算术差额推导 | **未验证** |
+| **MV-10** | 阶段 3<br/>`P3-LEFTOVER-04` | 真实多步与 restart 分析日志核验 | 真实多载荷步作业与 restart 分析生成的 `.log` 文件 | 验证单 job 多 step 的单段求解器行为；验证 restart 日志格式；解析器准确提取各段时长且段数与人工核算完全一致 | **未验证** |
+
+---
+
+## 5. 阶段 3.2 准入条件（Entry Criteria for Phase 3.2）
+
+在启动阶段 3.2（`numCpus` 并行度 1/2/4/8 对比实验与加速比分析）之前，必须满足以下四项硬性门槛：
+
+1. **测量契约稳定且边界清晰**：
+   - T4a（CAE 作业总等待时长）与 T4b（求解器自报运行时长）已在契约与数据结构中完全分离；
+   - T4b 解析器已落地，显式排除 `package.exe`、`pre.exe`、`SMASimUtility.exe` 等非求解内核开销，支持双精度二进制；
+   - 确立硬隔离红线：严禁将 `T4a - T4b` 误作 License 等待时间；
+   - 生产入口已默认具备 T4 剖析落盘与独立异常隔离出口。
+2. **算例尺度必须具备可测性（时长门槛）**：
+   - 严禁使用几秒的秒级模型（如单砖单单元模型）做并行度性能结论；
+   - 基准算例总求解时长必须 **≥ 60 s**，且 T4b 求解器时长远超 10 s（Abaqus 日志按整秒量化，10 s 时量化误差高达 10%，60 s 时降至 <1.7%）；
+   - 算例必须具备可重复性与稳定性，避免偶发收敛波动干扰性能对比。
+3. **实验矩阵与控制变量已固化**：
+   - 模型几何、网格划分、材料非线性、载荷步与收敛准则在所有对比组中严格一致；
+   - 单双精度设置、求解器类型（Standard vs Explicit）完全相同；
+   - `numCpus` 对比覆盖 1, 2, 4, 8，并严格记录 `numDomains` 分区策略；
+   - 记录每次实验的宿主硬件环境（CPU 型号、物理核心数、内存带宽）与求解 License 状态。
+4. **遗留项与真机验证清单已完整锁定**：
+   - 跨阶段统一真机验证清单（MV-01～MV-10）已完整登记在本文档中；
+   - 明确阶段 3.2 期间只开展受控对比实验与基线采集，不提前宣称加速比结论，也不开展 `bulkDataBlocks` 代码编写；
+   - 绝不把单元测试通过等同于真机验证闭合。
+
+---
+
 ## 变更历史
 
 | 日期 | 变更 |
@@ -369,3 +413,4 @@ A4 的审计结果比预期严重，必须单独记录（详见 `docs/phase-timi
 | 2026-10-21 | `AnalysisRunner.run` 新增可选参数 `phase_profiler`：传入时记录 T4a/T4b，不传时行为不变。经影响分析确认执行/超时/终止/返回值语义均不变，计时失败不改变 run 状态。T1/T2/T3/T5/T6 未接入，`P3-LEFTOVER-02` 改为**部分接入**。全量 1999 passed（含 `-W error`） |
 | 2026-10-21 | 生产入口 `analysis_run` 默认采集 T4，并把 profile 写入本次运行已有的 `evidence/<run.id>/phase_profile.json`。落盘失败不改变 run。直接调用 `AnalysisRunner.run` 仍默认关闭。T1/T2/T3/T5/T6 仍未接入，真实耗时仍未采集，`P3-LEFTOVER-02` 保持部分接入。全量 2004 passed（含 `-W error`） |
 | 2026-10-21 | 计时落盘失败改为经 `abaqus_ai_agent.agent` logger 发出，不再只留在调用方拿不到的 `internal_errors`。补了提交后失败仍落盘、两次运行互不覆盖、preflight 失败写出全 `NOT_RUN` 的测试。真实 Abaqus 读回未做，`P3-LEFTOVER-01/02/03/04` 不关闭。全量 2010 passed |
+| 2026-10-21 | 阶段 3.1 测量契约审查与复杂求解日志加固：支持双精度、排除 package.exe/pre.exe/SMASimUtility.exe、澄清单 job 多 step 单段行为、restart 多 job 头判为 AMBIGUOUS；确立严禁 `T4a - T4b` 推导 License 的硬隔离红线。新增 §4 跨阶段统一真机验证清单（MV-01~MV-10）与 §5 阶段 3.2 准入条件。定向 43 passed，全量保持全绿 |

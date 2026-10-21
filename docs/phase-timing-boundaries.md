@@ -94,19 +94,25 @@
 **尚未完成**：两个字段都只是"可读取"，没有调用方把它们交给 `profiler.record_external()`。
 P3-LEFTOVER-03 保持未闭合。
 
-## 5. T4 物理求解 —— 只有"等待"边界
+**硬隔离红线（严禁推导）**：
+`AnalysisRunner` 主链路在 CAE 会话内直接通过 `mdb.jobs.submit()` 运行，未经过 `_LicenseContext` 或 `AnalysisRunQueue`。在物理运行中，License 检出排队被包含在 T4a（`waitForCompletion` 作业总等待）内，而**不包含**在 T4b（`.log` 中求解器纯运行时长）内。
+**严禁将 `T4a - T4b` 算作 License 排队时间**！因为 `T4a - T4b` 差额中不仅包含可能的许可排队，还包含 `pre.exe`（前处理/输入解析）、`package.exe`（Explicit packager）、`SMASimUtility.exe`（收尾工具）、进程拉起、磁盘 IO 与 IPC 开销。真实的 License 耗时必须由独立许可探针/日志导出，绝不可通过算术差额推导。
+
+## 5. T4 物理求解 —— T4a 等待与 T4b 求解器
 
 | 项 | 定义 |
 | :--- | :--- |
-| 唯一可用边界 | `jobs.submit(job_name, wait=True, timeout=...)` — `analysis_run.py:979` |
-| 边界内包含 | `mdb.jobs[...].submit()` + `waitForCompletion()` / `monitor_job()` |
-| **不包含** | 提交前的 `writeInput` + 装配审计（`:901-977`）、提交后的 `_collect_artifacts`（`:980`） |
+| T4a 可用边界 | `jobs.submit(job_name, wait=True, timeout=...)` — `analysis_run.py:979` |
+| T4a 边界内包含 | `mdb.jobs[...].submit()` + `waitForCompletion()` / `monitor_job()` 宿主总等待 |
+| T4a **不包含** | 提交前的 `writeInput` + 装配审计（`:901-977`）、提交后的 `_collect_artifacts`（`:980`） |
+| T4b 可用边界 | 求解器 `.log` 中自报的时长（`execution/solver_timing.py::parse_log_file`） |
+| T4b 计入二进制 | `standard.exe`、`standard_dp.exe`、`explicit.exe`、`explicit_dp.exe` |
+| T4b **显式排除** | `pre.exe`（前处理）、`package.exe`（Explicit Packager）、`SMASimUtility.exe`（收尾工具） |
 
-**必须如实标注**：这个边界测的是"提交到完成的等待时间"，其中可能包含求解器启动、
-License 等待和 IO，**不是纯刚度矩阵分解时间**。把它称为"求解耗时"是扩大解释。
-
-Abaqus 侧的真实求解耗时（`.sta` 事件、增量的 wall time）未采集，也不在本轮范围。
-因此 T4 与 A2 一并登记为决策阻塞：先约定语义，再谈实现。
+**必须如实标注**：
+1. T4a 测的是"提交到完成的等待时间"，包含求解器启动、潜在 License 排队与辅助进程耗时，**不是纯刚度矩阵分解或求解器积分时间**。
+2. T4b 是从 `.log` 中解析的求解器执行耗时，量化精度受 Abaqus 日志 1 s 粒度限制；多段日志仅在结构自洽时求和。
+3. 生产入口当前将 T4a 作为主阶段耗时，T4b 存放在 `detail["t4b"]` 中，暂未改动主链路以避免语义破坏。两者语义严格独立，禁止混淆。
 
 ## 6. T5 数据提取
 
@@ -167,6 +173,11 @@ Abaqus 侧的真实求解耗时（`.sta` 事件、增量的 wall time）未采�
 阶段 3.1 已验收。它只回答一个问题：接入时该在哪里切。
 
 ## 变更历史
+
+| 日期 | 变更 |
+| :--- | :--- |
+| 2026-10-21 | 建立本文件；定义 T1/T3/T4/T5/T6 边界；确认 T2 无可测边界 |
+| 2026-10-21 | 明确 T4a（等待）与 T4b（求解器）边界；确认 T4b 支持双精度并排除 package.exe/pre.exe/SMASimUtility.exe；确立严禁 `T4a - T4b` 推导 License 等待的硬隔离红线 |
 
 | 日期 | 变更 |
 | :--- | :--- |

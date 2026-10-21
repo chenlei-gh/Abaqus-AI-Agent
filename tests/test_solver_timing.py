@@ -560,6 +560,145 @@ def test_attachment_long_solve_is_not_flagged_precision_limited():
 
 
 # ---------------------------------------------------------------------------
+# Complex solving scenarios: Double Precision, Multi-Step, Restart, Mixed
+# ---------------------------------------------------------------------------
+
+def test_double_precision_binaries_recognized_on_fallback():
+    """Unfamiliar block names with standard_dp.exe or explicit_dp.exe must be recognized."""
+    text_std = _log((
+        "Begin Custom Solver Run",
+        "standard_dp.exe",
+        "10/21/2026 10:00:00 AM",
+        "10/21/2026 10:00:15 AM",
+        "End Custom Solver Run",
+    ))
+    timing_std = parse_log_text(text_std)
+    assert timing_std.status is SolverTimingStatus.MEASURED
+    assert timing_std.solver_seconds == pytest.approx(15.0)
+    assert timing_std.solver_segments[0].executable == "standard_dp.exe"
+
+    text_exp = _log((
+        "Begin Custom Dynamic Run",
+        "explicit_dp.exe",
+        "10/21/2026 10:00:00 AM",
+        "10/21/2026 10:00:25 AM",
+        "End Custom Dynamic Run",
+    ))
+    timing_exp = parse_log_text(text_exp)
+    assert timing_exp.status is SolverTimingStatus.MEASURED
+    assert timing_exp.solver_seconds == pytest.approx(25.0)
+    assert timing_exp.solver_segments[0].executable == "explicit_dp.exe"
+
+
+def test_explicit_with_packager_counts_only_solver():
+    """Abaqus/Explicit logs often include package.exe. It must not be counted as solver."""
+    text = _log(
+        _PRE,
+        (
+            "Begin Abaqus/Explicit Packager",
+            "package.exe",
+            "10/21/2026 10:00:05 AM",
+            "10/21/2026 10:00:10 AM",
+            "End Abaqus/Explicit Packager",
+        ),
+        (
+            "Begin Abaqus/Explicit Analysis",
+            "explicit.exe",
+            "10/21/2026 10:00:10 AM",
+            "10/21/2026 10:00:40 AM",
+            "End Abaqus/Explicit Analysis",
+        ),
+        _WRAP,
+    )
+    timing = parse_log_text(text)
+    assert timing.status is SolverTimingStatus.MEASURED
+    assert timing.solver_seconds == pytest.approx(30.0)
+    assert len(timing.solver_segments) == 1
+    assert timing.solver_segments[0].executable == "explicit.exe"
+    # Total segments are pre, packager, explicit, wrap-up: 4 segments
+    assert len(timing.segments) == 4
+
+
+def test_multistep_standard_job_is_single_solver_segment():
+    """In Abaqus/Standard, multiple *STEP definitions run inside one standard.exe process.
+
+    The log contains a single Begin/End Abaqus/Standard Analysis block that spans
+    all steps. Step breakdown belongs to .msg/.sta, not .log.
+    """
+    text = _log(
+        _PRE,
+        (
+            "Begin Abaqus/Standard Analysis",
+            "standard.exe",
+            "10/21/2026 10:00:00 AM",
+            "10/21/2026 10:05:00 AM",
+            "End Abaqus/Standard Analysis",
+        ),
+        _WRAP,
+    )
+    timing = parse_log_text(text)
+    assert timing.status is SolverTimingStatus.MEASURED
+    assert timing.solver_seconds == pytest.approx(300.0)
+    assert len(timing.solver_segments) == 1
+    assert timing.detail["multi_segment"] is False
+
+
+def test_mixed_solver_segments_sequential_are_summed():
+    """Co-simulation / staged analyses with sequential Standard then Explicit."""
+    text = _log(
+        _PRE,
+        (
+            "Begin Abaqus/Standard Analysis",
+            "standard.exe",
+            "10/21/2026 10:00:00 AM",
+            "10/21/2026 10:00:20 AM",
+            "End Abaqus/Standard Analysis",
+        ),
+        (
+            "Begin Abaqus/Explicit Analysis",
+            "explicit.exe",
+            "10/21/2026 10:00:20 AM",
+            "10/21/2026 10:00:50 AM",
+            "End Abaqus/Explicit Analysis",
+        ),
+        _WRAP,
+    )
+    timing = parse_log_text(text)
+    assert timing.status is SolverTimingStatus.MEASURED
+    assert timing.solver_seconds == pytest.approx(50.0)
+    assert len(timing.solver_segments) == 2
+    assert timing.detail["multi_segment"] is True
+
+
+def test_concatenated_restart_logs_with_multiple_headers_are_ambiguous():
+    """If a restart job appends into the existing log with a second 'Abaqus JOB' header,
+
+    the file suggests concatenated runs. Summing would double-count or mix separate jobs.
+    """
+    header1 = "Analysis initiated from SIMULIA established products\nAbaqus JOB JobBase\nAbaqus 2025\n"
+    header2 = "Analysis initiated from SIMULIA established products\nAbaqus JOB JobRestart\nAbaqus 2025\n"
+    seg1 = (
+        "Begin Abaqus/Standard Analysis\n"
+        "10/21/2026 10:00:00 AM\n"
+        "Run standard.exe\n"
+        "10/21/2026 10:00:10 AM\n"
+        "End Abaqus/Standard Analysis\n"
+    )
+    seg2 = (
+        "Begin Abaqus/Standard Analysis\n"
+        "10/21/2026 10:05:00 AM\n"
+        "Run standard.exe\n"
+        "10/21/2026 10:05:20 AM\n"
+        "End Abaqus/Standard Analysis\n"
+    )
+    text = header1 + seg1 + header2 + seg2
+    timing = parse_log_text(text)
+    assert timing.status is SolverTimingStatus.AMBIGUOUS
+    assert timing.solver_seconds is None
+    assert any("headers" in note for note in timing.notes)
+
+
+# ---------------------------------------------------------------------------
 # Real Abaqus artifact (skipped when absent)
 # ---------------------------------------------------------------------------
 

@@ -136,16 +136,16 @@ T4b 必须**直接取自求解器自报证据**，不能是推导量。这条与
 
 | 项 | 状态 | 为何无法从单样本推断 |
 | :--- | :--- | :--- |
-| 多步分析是否产生**多个** solver 段 | **未验证** | 本机仅有单步样本；多步/多载荷步的日志结构未知 |
-| 多段是否语义上可加 | **未验证** | 解析器不重叠就求和，但“不重叠”不等于“同一次求解的连续阶段” |
-| restart 分析的日志结构 | **未验证** | 无样本 |
-| `Abaqus/Explicit` 真实日志而非合成 | **未验证** | 仅用构造样本测过分枝 |
+| 多步分析在 .log 中的表现 | **契约澄清** | 单作业内多个 `*STEP` 在标准分析中由单个 `standard.exe` 进程求解，`.log` 中为单段；多 step 耗时分解属于 `.msg`/`.sta`，而非 `.log` 多段。单元测试已覆盖 |
+| 双精度与 Explicit packager | **已加固·单元级** | `_SOLVER_EXECUTABLES` 扩展支持 `standard_dp.exe` 与 `explicit_dp.exe`；Explicit packager（`package.exe`）明确排除在求解内核外，不计入 T4b。单元测试已覆盖 |
+| restart 分析的日志结构 | **契约明确·真机未验** | 追加多 job 头的 restart 日志严格判为 `AMBIGUOUS` 拒绝求和；真机 restart 日志结构仍待验证 |
+| `Abaqus/Explicit` 真实日志而非合成 | **未验证** | 仅用构造样本测过分支，无真实 Explicit 运行产物 |
 | 工程规模下 1 s 量化是否够用 | **未验证** | 需 ≥ 60 s 算例 |
 | T4b 是否代表 CPU 纯计算时间 | **不成立** | 该值含 IO、求解器启动与线程同步，属墙钟时间 |
 
-**特别说明**：§2 的多段求和不等于“已支持多步分析”。当前实现是在**结构自洽性检查**
+**特别说明**：多段求和不等于“已支持多步分析”。当前实现是在**结构自洽性检查**
 通过后才求和；若真实多步日志出现时间区间重叠或 job 头重复，解析器会拒绝而非猜测。
-这是 Fail-Closed，但不等于解析正确。
+这是 Fail-Closed，但不等于解析正确。真机多步与 restart 日志产物核验列入统一真机清单。
 
 ## 3.4 profiler 接入（生产入口默认采集 T4，不是全生命周期）
 
@@ -244,3 +244,4 @@ A2-3 的 `scope` 字段是硬要求：没有它，下游无法判断拿到的是
 | 2026-10-21 | 新增 `attach_solver_timing()`：T4a/T4b 写入同一 `PhaseProfiler`，**不改** `AnalysisRunner`。因阶段记录唯一，T4b 存为 `detail["t4b"]` 而非独立 `record_external()`——**偏离 A2-3/A2-4**，偏差写入 `contract_note`。无生产调用方，`P3-LEFTOVER-02` 不因此闭合 |
 | 2026-10-21 | 生产入口 `analysis_run` 默认调用上述接入，并把定稿写入 `evidence/<run.id>/phase_profile.json`。直接调用 `run()` 仍默认关闭。A2-3/A2-4 偏差保留。真实运行未验证 |
 | 2026-10-21 | 落盘失败改为独立 logger 出口。preflight 失败仍落盘全 `NOT_RUN`。真实读回未做 |
+| 2026-10-21 | 加固复杂求解日志契约：扩展双精度求解器二进制（`standard_dp.exe`, `explicit_dp.exe`）；排除 `package.exe`（Explicit Packager）；澄清单 job 多 step 为单进程段；明确 restart 多 header 为 AMBIGUOUS。新增 5 项定向测试（43 passed）。真机日志结构仍列入统一真机清单 |
