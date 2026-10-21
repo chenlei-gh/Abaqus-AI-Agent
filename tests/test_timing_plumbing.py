@@ -153,3 +153,91 @@ def test_queue_item_wait_starts_as_not_measured():
     assert queue.process_next() is None
     for it in queue.list_items():
         assert it.license_wait_seconds is None
+
+
+def test_queue_item_retry_backoff_accumulates_into_license_wait_seconds():
+    """Queue path T3 includes all retries and backoffs suffered before license grant."""
+    class _ContendedProvider(LicenseProvider):
+        def __init__(self, succeed_on_attempt: int = 2):
+            self.attempts = 0
+            self.succeed_on_attempt = succeed_on_attempt
+
+        def available_tokens(self, feature="standard"):
+            return 1 if self.attempts >= self.succeed_on_attempt else 0
+
+        def reserve(self, feature="standard", tokens=1, timeout=0.0):
+            self.attempts += 1
+            if self.attempts >= self.succeed_on_attempt:
+                return LicenseHandle(handle_id="h2", feature=feature, tokens=tokens, provider_name="Contended")
+            return None
+
+        def release(self, handle):
+            return True
+
+        def health(self):
+            from abaqus_ai_agent.execution.license import LicenseHealthStatus
+            return LicenseHealthStatus(healthy=True, server="test", available_tokens=1, total_tokens=1)
+
+    provider = _ContendedProvider(succeed_on_attempt=2)
+    queue = AnalysisRunQueue(max_concurrency=2, license_provider=provider)
+    t0 = 1000.0
+    item = queue.enqueue(
+        payload={"k": "v"},
+        resources=RunResourceSpec(feature="standard", tokens=1),
+    )
+    item.enqueued_at = t0
+    item.next_eligible_at = t0
+    # Attempt 1 fails at t0 -> backoff scheduled
+    res1 = queue.process_next(current_time=t0)
+    assert res1 is None
+    assert item.state is QueueItemState.RETRYING
+    assert item.retry_count == 1
+    assert item.license_wait_seconds is None
+
+    # Before next_eligible_at -> cannot dispatch
+    res_early = queue.process_next(current_time=item.next_eligible_at - 0.01)
+    assert res_early is None
+    assert item.license_wait_seconds is None
+
+    # Attempt 2 at t0 + 15.0 succeeds -> license_wait_seconds reflects full span from t0
+    t_success = t0 + 15.0
+    res2 = queue.process_next(current_time=t_success)
+    assert res2 is not None
+    assert res2.state is QueueItemState.RUNNING
+    assert res2.license_wait_seconds == pytest.approx(15.0)
+
+
+def test_queue_item_exhausted_retries_keeps_license_wait_none():
+    """An item that fails due to license exhaustion must never report a wait duration."""
+    class _FailingProvider(LicenseProvider):
+        def available_tokens(self, feature="standard"):
+            return 0
+
+        def reserve(self, feature="standard", tokens=1, timeout=0.0):
+            return None
+
+        def release(self, handle):
+            return True
+
+        def health(self):
+            from abaqus_ai_agent.execution.license import LicenseHealthStatus
+            return LicenseHealthStatus(healthy=False, server="test", available_tokens=0, total_tokens=0)
+
+    queue = AnalysisRunQueue(max_concurrency=2, license_provider=_FailingProvider())
+    t0 = 1000.0
+    item = queue.enqueue(
+        payload={"k": "v"},
+        resources=RunResourceSpec(feature="standard", tokens=1),
+    )
+    item.enqueued_at = t0
+    item.next_eligible_at = t0
+    item.max_retries = 1
+    # First attempt fails -> RETRYING
+    queue.process_next(current_time=t0)
+    assert item.state is QueueItemState.RETRYING
+    assert item.license_wait_seconds is None
+
+    # Second attempt fails -> FAILED
+    queue.process_next(current_time=item.next_eligible_at + 1.0)
+    assert item.state is QueueItemState.FAILED
+    assert item.license_wait_seconds is None

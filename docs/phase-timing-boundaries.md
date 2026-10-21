@@ -82,14 +82,15 @@
 
 | 项 | 定义 |
 | :--- | :--- |
-| 边界 A | `_LicenseContext.__enter__` 内 `reserve()` 前后 — `license.py:64-73` |
-| 边界 B | `QueueItem.enqueued_at` → `process_next()` 授予 handle — `queue.py:419` |
-| 语义差异 | A 只测最后一次 `reserve()`；B 含全部退避等待 |
-| 失败记录 | 获取失败时 `wait_seconds` 保持 `None`，**不记 0** |
-| 时基 | 两条路径均为 `time.time()`；`current_time` 参数须同源，否则差值为垃圾 |
+| 边界 A（`_LicenseContext`） | `_LicenseContext.__enter__` 内 `reserve()` 前后 — `license.py:64-73` |
+| 边界 B（`QueueItem`） | `QueueItem.enqueued_at` → `process_next()` 授予 handle — `queue.py:419` |
+| 测量对象差异 | A 测的是**单次阻塞式 `reserve()` 调用的耗时**（只针对最后一次成功调用）；B 测的是**端到端排队等待时长**（从任务入队到最终授予，包含所有退避重试经历的完整等待） |
+| 时钟源差异 | **路径 A 使用 `time.monotonic()`**（单调时钟，不受系统时间调整影响）；**路径 B 使用 `time.time()`**（队列系统状态与时间戳基线，注入 `current_time` 时须同源） |
+| 失败记录 | 路径 A 获取超时抛错时保持 `None`；路径 B 在排队中或超限 `FAILED` 时保持 `None`。**失败均不记 0，也不把超时当作成功排队耗时** |
+| 重试口径 | 路径 A 不感知重试；路径 B 明确累加跨次尝试的所有退避等待时长 |
 
 两条路径独立存在：`AnalysisRunQueue` 走 `reserve(timeout=0.0)` + 退避重试，
-`_LicenseContext` 走阻塞式 `reserve(timeout=...)`，**不能互换**。
+`_LicenseContext` 走阻塞式 `reserve(timeout=...)`，**两者时基不同、测量口径不同，绝对不能混用**。
 
 **尚未完成**：两个字段都只是"可读取"，没有调用方把它们交给 `profiler.record_external()`。
 P3-LEFTOVER-03 保持未闭合。
@@ -178,6 +179,7 @@ P3-LEFTOVER-03 保持未闭合。
 | :--- | :--- |
 | 2026-10-21 | 建立本文件；定义 T1/T3/T4/T5/T6 边界；确认 T2 无可测边界 |
 | 2026-10-21 | 明确 T4a（等待）与 T4b（求解器）边界；确认 T4b 支持双精度并排除 package.exe/pre.exe/SMASimUtility.exe；确立严禁 `T4a - T4b` 推导 License 等待的硬隔离红线 |
+| 2026-10-21 | 修正 §4 License 计时时钟源与语义：路径 A 使用 time.monotonic() 测单次 reserve() 耗时；路径 B 使用 time.time() 测包含所有退避重试的端到端墙钟等待。严禁混用 |
 
 | 日期 | 变更 |
 | :--- | :--- |

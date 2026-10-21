@@ -414,3 +414,4 @@ A4 的审计结果比预期严重，必须单独记录（详见 `docs/phase-timi
 | 2026-10-21 | 生产入口 `analysis_run` 默认采集 T4，并把 profile 写入本次运行已有的 `evidence/<run.id>/phase_profile.json`。落盘失败不改变 run。直接调用 `AnalysisRunner.run` 仍默认关闭。T1/T2/T3/T5/T6 仍未接入，真实耗时仍未采集，`P3-LEFTOVER-02` 保持部分接入。全量 2004 passed（含 `-W error`） |
 | 2026-10-21 | 计时落盘失败改为经 `abaqus_ai_agent.agent` logger 发出，不再只留在调用方拿不到的 `internal_errors`。补了提交后失败仍落盘、两次运行互不覆盖、preflight 失败写出全 `NOT_RUN` 的测试。真实 Abaqus 读回未做，`P3-LEFTOVER-01/02/03/04` 不关闭。全量 2010 passed |
 | 2026-10-21 | 阶段 3.1 测量契约审查与复杂求解日志加固：支持双精度、排除 package.exe/pre.exe/SMASimUtility.exe、澄清单 job 多 step 单段行为、restart 多 job 头判为 AMBIGUOUS；确立严禁 `T4a - T4b` 推导 License 的硬隔离红线。新增 §4 跨阶段统一真机验证清单（MV-01~MV-10）与 §5 阶段 3.2 准入条件。定向 43 passed，全量保持全绿 |
+| 2026-10-21 | 修正 License 计时时钟源与语义契约：明确路径 A（`_LicenseContext`）使用 `time.monotonic()` 测单次 reserve() 耗时，路径 B（`QueueItem`）使用 `time.time()` 测含所有退避重试的全生命周期等待；补充覆盖退避累加与超限失败保持 None 的契约测试（11 passed）。MV-09 保持未验证，T2 保持无可测边界 |
