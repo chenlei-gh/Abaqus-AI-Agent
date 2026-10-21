@@ -240,3 +240,4 @@ A2 的契约审查进一步确认：T4 可以不改主链路地拆为 T4a（等�
 | 2026-10-21 | T4a/T4b 接入 `PhaseProfiler`：`attach_solver_timing()`，不改主链路。因阶段记录唯一而偏离 A2-3/A2-4，T4b 存为 `detail["t4b"]`。无生产调用方，不闭合 `P3-LEFTOVER-02` |
 | 2026-10-21 | T4 接入 `AnalysisRunner.run`（可选参数 `phase_profiler`，默认关闭）。仅 T4，T1/T2/T3/T5/T6 未接入。`P3-LEFTOVER-02` 改为部分接入 |
 | 2026-10-21 | 生产入口默认采集 T4 并落盘到 `evidence/<run.id>/phase_profile.json`。直接调用 `run()` 仍关闭。不闭合 `P3-LEFTOVER-02`，不选基准算例 |
+| 2026-10-21 | 计时落盘失败改为独立 logger 出口。真实读回未做，不闭合 `P3-LEFTOVER-02` |

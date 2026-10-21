@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+import logging
 import os
 from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple, Union
+
+logger = logging.getLogger(__name__)
 
 from .actions.runner import execute
 from .evidence.result import summarize_odb
@@ -17,6 +20,19 @@ class RunResult:
     execution_results: list
     job_result: object = None
     odb_summary: object = None
+
+
+def _note_profile_failure(profiler, run_id, what, exc):
+    """Record a profiling failure where a later reader can actually see it.
+
+    ``logger.warning`` is the exit. Appending to ``internal_errors`` keeps the
+    in-memory note for tests that still hold the profiler, but that list is not
+    returned to ``analysis_run`` callers and is not written into ``AnalysisRun``.
+    """
+    logger.warning("%s: run_id=%s error=%r", what, run_id or "<unknown>", exc)
+    note = getattr(profiler, "internal_errors", None)
+    if isinstance(note, list):
+        note.append("%s: %r" % (what, exc))
 
 
 def _evidence_dir_of(run):
@@ -751,9 +767,16 @@ class AbaqusAIAgent:
         """Write the finalized timing profile into this run's evidence directory.
 
         Best-effort: a missing context, a read-only directory, or a profiler that
-        refuses to finalize must not change the run the caller already has. The
-        failure is recorded on the profiler so it is not silent, but it is not
-        re-raised.
+        refuses to finalize must not change the run the caller already has.
+        Failures are logged on this module's logger. That channel is independent
+        of ``phase_profile.json``: a write failure cannot be reported by the file
+        that failed to be written, and ``finalize()`` has already returned an
+        immutable profile by the time a write can fail. The in-memory
+        ``internal_errors`` list is also updated, but callers of ``analysis_run``
+        do not receive the profiler, so that list is not the observable exit.
+
+        A missing evidence directory is expected (direct runs without a project
+        context) and is not a failure.
 
         The file is written only into the evidence directory ``run()`` already
         created for this run (``environment["evidence_dir"]``). Creating a new
@@ -767,9 +790,7 @@ class AbaqusAIAgent:
         try:
             profile = profiler.finalize()
         except Exception as exc:  # noqa: BLE001 - observation must not sink the run
-            note = getattr(profiler, "internal_errors", None)
-            if isinstance(note, list):
-                note.append("phase profile not finalized: %r" % (exc,))
+            _note_profile_failure(profiler, run_id, "phase profile not finalized", exc)
             return
         evidence_dir = _evidence_dir_of(run)
         if evidence_dir is None:
@@ -783,9 +804,7 @@ class AbaqusAIAgent:
             temporary.write_text(payload, encoding="utf-8")
             os.replace(str(temporary), str(target))
         except Exception as exc:  # noqa: BLE001 - persistence is not a solve result
-            note = getattr(profiler, "internal_errors", None)
-            if isinstance(note, list):
-                note.append("phase profile not persisted: %r" % (exc,))
+            _note_profile_failure(profiler, run_id, "phase profile not persisted", exc)
             try:
                 if evidence_dir is not None:
                     leftover = evidence_dir / ".phase_profile.json.tmp"

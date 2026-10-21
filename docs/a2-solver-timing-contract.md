@@ -181,6 +181,12 @@ A2-3 要求 T4b 记为独立的 `record_external()` 调用，A2-4 要求 T4b 缺
 * 无 T4a 时阶段记 `NOT_RUN`，不伪造一个实测的 `SOLVER` 记录。
 * 非法等待时长（`NaN`、负数）被拒绝并记入 `internal_errors`，不抛出。
 
+**失败可观测性**：`finalize()` 失败和写文件失败经 `abaqus_ai_agent.agent`
+的 `logger.warning` 发出，信息含 `run_id`。该出口独立于 `phase_profile.json`，
+也不写入 `AnalysisRun`。没有证据目录是预期情况，不记为失败。
+提交之前返回（例如 preflight 失败）仍会落盘，内容是六阶段 `NOT_RUN`，
+不是已测量的 T4。
+
 **未完成**：生产入口只采集并落盘 T4。T1/T2/T3/T5/T6 仍未接入，
 也没有真实 Abaqus 运行读回过这个文件。`P3-LEFTOVER-02` 因此保持部分接入，
 不因落盘代码存在而闭合。
@@ -237,3 +243,4 @@ A2-3 的 `scope` 字段是硬要求：没有它，下游无法判断拿到的是
 | 2026-10-21 | 实现 `execution/solver_timing.py`：五类失败状态（均不返回 0.0）、多段结构自洽性检查后才求和、CRLF/编码容错。真实单砖日志验证得 7.0 s（手算 7 s）。31 项单元测试通过。多步/restart/Explicit 真机结构仍未验证 |
 | 2026-10-21 | 新增 `attach_solver_timing()`：T4a/T4b 写入同一 `PhaseProfiler`，**不改** `AnalysisRunner`。因阶段记录唯一，T4b 存为 `detail["t4b"]` 而非独立 `record_external()`——**偏离 A2-3/A2-4**，偏差写入 `contract_note`。无生产调用方，`P3-LEFTOVER-02` 不因此闭合 |
 | 2026-10-21 | 生产入口 `analysis_run` 默认调用上述接入，并把定稿写入 `evidence/<run.id>/phase_profile.json`。直接调用 `run()` 仍默认关闭。A2-3/A2-4 偏差保留。真实运行未验证 |
+| 2026-10-21 | 落盘失败改为独立 logger 出口。preflight 失败仍落盘全 `NOT_RUN`。真实读回未做 |
