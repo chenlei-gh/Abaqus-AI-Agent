@@ -18,6 +18,7 @@ from .license import (
     LocalLicenseProvider,
     FlexNetAdapter,
     DSLSAdapter,
+    attach_license_timing,
 )
 from .sandbox import RunSandbox, PromotedArtifact
 from .queue import (
@@ -66,6 +67,7 @@ from .parallel_experiment import (
 from .bulk_data_contract import (
     BulkDataEquivalenceStatus,
     BulkDataEquivalenceError,
+    CONTRACT_TOLERANCE_UPPER_BOUND,
     DEFAULT_FLOAT_TOLERANCE,
     ScalarExtractionResult,
     is_close_scalar,

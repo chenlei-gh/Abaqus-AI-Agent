@@ -629,7 +629,7 @@ class AnalysisRunner:
             mesh_quality=None, mesh_convergence=None, fatigue=None, contact_diagnostics=None,
             connector_kinematics=None, fmbd_dynamics=None, sensitivity=None, uncertainty=None,
             timeout=3600, action_plan=(), environment=None, engineering_intent=None,
-            phase_profiler=None,
+            phase_profiler=None, license_wait_seconds=None,
             postprocess_profile=None, workdir=None, physics_domain=None, require_evidence=None,
             require_production=None, project_context=None, elastic_validity=None,
             inp_text=None):
@@ -977,6 +977,16 @@ class AnalysisRunner:
                         raise AssemblyContractViolation(
                             f"Pre-submission consistency mismatch: included deck dependency '{inc_p_str}' changed after audit."
                         )
+
+            # T3: If a license wait duration was measured upstream (e.g. queue dispatch),
+            # attach it to the profiler with source="queue_dispatch" and derivation="none".
+            if phase_profiler is not None and license_wait_seconds is not None:
+                from .license import attach_license_timing
+                attach_license_timing(
+                    phase_profiler,
+                    license_wait_seconds,
+                    source="queue_dispatch",
+                )
 
             # T4a: wall clock around the existing submit. This is "submitted until
             # the wait returned", which includes solver startup, license queueing and

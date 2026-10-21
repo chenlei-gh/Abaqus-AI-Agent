@@ -49,11 +49,19 @@ class LicenseHandle:
 
 
 class _LicenseContext:
-    def __init__(self, provider: "LicenseProvider", feature: str, tokens: int, timeout: float):
+    def __init__(
+        self,
+        provider: "LicenseProvider",
+        feature: str,
+        tokens: int,
+        timeout: float,
+        profiler: Optional[Any] = None,
+    ):
         self.provider = provider
         self.feature = feature
         self.tokens = tokens
         self.timeout = timeout
+        self.profiler = profiler
         self.handle: Optional[LicenseHandle] = None
         #: Seconds spent inside ``reserve()``. Populated on success only: a failed
         #: acquisition has no "queue time" worth reporting, and recording a partial
@@ -70,12 +78,72 @@ class _LicenseContext:
                 f"from {self.provider.__class__.__name__} within {self.timeout}s timeout"
             )
         self.wait_seconds = max(0.0, round(elapsed, 6))
+        if self.profiler is not None:
+            attach_license_timing(
+                self.profiler,
+                self.wait_seconds,
+                source=f"{self.provider.__class__.__name__}.reserve",
+            )
         return self.handle
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         if self.handle is not None:
             self.provider.release(self.handle)
             self.handle = None
+
+
+def attach_license_timing(
+    profiler: Any,
+    wait_seconds: Optional[float],
+    *,
+    source: str = "direct_reservation",
+) -> Dict[str, Any]:
+    """Attach measured license wait time to a PhaseProfiler.
+
+    Strict isolation rules:
+    1. Records to PipelinePhase.LICENSE_QUEUE via profiler.record_external().
+    2. Derivation is strictly "none" (NEVER the arithmetic difference T4a - T4b).
+    3. Missing or non-finite wait_seconds marks NOT_RUN with explicit reason.
+    4. Observation must not raise into the execution path; catches errors and appends
+       to profiler.internal_errors.
+    """
+    summary: Dict[str, Any] = {
+        "recorded_as": "not_recorded",
+        "wait_seconds": wait_seconds,
+        "source": source,
+    }
+    if profiler is None:
+        return summary
+
+    import math
+    from ..telemetry.phase_profile import PipelinePhase
+
+    if wait_seconds is None or not math.isfinite(float(wait_seconds)) or float(wait_seconds) < 0.0:
+        try:
+            profiler.mark_not_run(
+                PipelinePhase.LICENSE_QUEUE,
+                reason="License wait duration not measured or invalid",
+            )
+            summary["recorded_as"] = "not_run"
+        except Exception as exc:
+            note = getattr(profiler, "internal_errors", None)
+            if isinstance(note, list):
+                note.append(f"license timing mark_not_run failed: {exc!r}")
+        return summary
+
+    try:
+        record = profiler.record_external(
+            PipelinePhase.LICENSE_QUEUE,
+            float(wait_seconds),
+            source=source,
+            derivation="none",
+        )
+        summary["recorded_as"] = getattr(record.status, "value", str(record.status))
+    except Exception as exc:
+        note = getattr(profiler, "internal_errors", None)
+        if isinstance(note, list):
+            note.append(f"license timing not recorded: {exc!r}")
+    return summary
 
 
 class LicenseProvider(ABC):
@@ -104,9 +172,15 @@ class LicenseProvider(ABC):
         """Check connection health and aggregate status of the license server."""
         pass
 
-    def acquire(self, feature: str = "standard", tokens: int = 1, timeout: float = 0.0) -> _LicenseContext:
+    def acquire(
+        self,
+        feature: str = "standard",
+        tokens: int = 1,
+        timeout: float = 0.0,
+        profiler: Optional[Any] = None,
+    ) -> _LicenseContext:
         """Context manager for scoped token reservation and automatic release."""
-        return _LicenseContext(self, feature, tokens, timeout)
+        return _LicenseContext(self, feature, tokens, timeout, profiler=profiler)
 
 
 class MockLicenseProvider(LicenseProvider):

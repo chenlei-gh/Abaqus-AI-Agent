@@ -62,6 +62,7 @@ class RunWorker:
                         job_name=job_name,
                         action_plan=payload.action_plan,
                         workdir=sandbox.sandbox_dir,
+                        license_wait_seconds=item.license_wait_seconds,
                     )
                 elif isinstance(payload, dict):
                     job_name = payload.get("job_name", "Job-1")
@@ -72,6 +73,8 @@ class RunWorker:
                         criteria=payload.get("criteria", ()),
                         action_plan=payload.get("action_plan", ()),
                         workdir=sandbox.sandbox_dir,
+                        phase_profiler=payload.get("phase_profiler"),
+                        license_wait_seconds=item.license_wait_seconds,
                     )
                 else:
                     # Generic runner call with sandbox working dir
@@ -79,6 +82,7 @@ class RunWorker:
                         model_name="Model-1",
                         job_name=job_name,
                         workdir=sandbox.sandbox_dir,
+                        license_wait_seconds=item.license_wait_seconds,
                     )
             else:
                 result_run = payload

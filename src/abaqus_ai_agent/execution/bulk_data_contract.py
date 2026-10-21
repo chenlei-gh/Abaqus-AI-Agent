@@ -20,11 +20,13 @@ import math
 from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
 
 DEFAULT_FLOAT_TOLERANCE: float = 1e-6
+CONTRACT_TOLERANCE_UPPER_BOUND: float = 1e-6
 
 
 class BulkDataEquivalenceStatus(str, Enum):
     """Evaluation verdict for bulkDataBlocks vs canonical values extraction."""
 
+    EXACT_MATCH = "EXACT_MATCH"
     EQUIVALENT = "EQUIVALENT"
     NUMERICAL_DRIFT = "NUMERICAL_DRIFT"
     LOCATOR_MISMATCH = "LOCATOR_MISMATCH"
@@ -37,11 +39,25 @@ class BulkDataEquivalenceError(ValueError):
 
 
 def is_close_scalar(val_a: float, val_b: float, tol: float = DEFAULT_FLOAT_TOLERANCE) -> bool:
-    """Evaluate if two scalar floats are within absolute/relative tolerance."""
+    """Evaluate if two scalar floats are within absolute/relative tolerance.
+
+    Strictly enforces:
+    1. Rejects non-finite values (NaN, Inf).
+    2. Rejects tolerances exceeding the contract upper bound (1e-6) or non-positive.
+    3. Exact equality (zero drift) always passes.
+    4. Non-zero drift must be strictly less than tol * scale (strictly < 1e-6).
+    """
     if not (math.isfinite(val_a) and math.isfinite(val_b)):
         return False
+    if not math.isfinite(tol) or tol <= 0.0 or tol > CONTRACT_TOLERANCE_UPPER_BOUND:
+        return False
+
+    diff = abs(val_a - val_b)
+    if diff == 0.0:
+        return True
+
     scale = max(1.0, abs(val_a), abs(val_b))
-    return abs(val_a - val_b) <= tol * scale
+    return diff < (tol * scale)
 
 
 @dataclass(frozen=True)
@@ -64,10 +80,23 @@ def verify_extraction_equivalence(
 ) -> BulkDataEquivalenceStatus:
     """Verify that canonical values and bulkDataBlocks results are numerically equivalent.
 
-    Raises BulkDataEquivalenceError if status fails or numerical drift exceeds tol.
+    Raises BulkDataEquivalenceError if:
+    1. Input types are malformed.
+    2. Tolerance exceeds the contract upper bound of 1e-6 or is non-positive.
+    3. Execution success flags do not match.
+    4. Numerical drift exceeds tolerance (< 1e-6 relative drift).
+    5. Required locator metadata is missing.
     """
     if not isinstance(canonical, dict) or not isinstance(bulk, dict):
         raise BulkDataEquivalenceError("Both canonical and bulk results must be dictionaries.")
+
+    if not isinstance(tol, (int, float)) or isinstance(tol, bool) or not math.isfinite(tol):
+        raise BulkDataEquivalenceError(f"Tolerance must be a finite float, got: {tol!r}")
+    if tol <= 0.0 or tol > CONTRACT_TOLERANCE_UPPER_BOUND:
+        raise BulkDataEquivalenceError(
+            f"Tolerance cannot exceed contract upper bound {CONTRACT_TOLERANCE_UPPER_BOUND} "
+            f"or be non-positive, got: {tol}"
+        )
 
     can_succ = canonical.get("success", False)
     blk_succ = bulk.get("success", False)
@@ -82,39 +111,56 @@ def verify_extraction_equivalence(
     val_can = canonical.get("value")
     val_blk = bulk.get("value")
 
-    if not isinstance(val_can, (int, float)) or not isinstance(val_blk, (int, float)):
-        raise BulkDataEquivalenceError(
-            f"Non-numeric values returned: canonical={val_can!r}, bulk={val_blk!r}"
-        )
+    if not isinstance(val_can, (int, float)) or isinstance(val_can, bool) or not math.isfinite(float(val_can)):
+        raise BulkDataEquivalenceError(f"Non-numeric or non-finite canonical value: {val_can!r}")
+    if not isinstance(val_blk, (int, float)) or isinstance(val_blk, bool) or not math.isfinite(float(val_blk)):
+        raise BulkDataEquivalenceError(f"Non-numeric or non-finite bulk value: {val_blk!r}")
 
     val_can_f = float(val_can)
     val_blk_f = float(val_blk)
 
+    diff = abs(val_can_f - val_blk_f)
     if not is_close_scalar(val_can_f, val_blk_f, tol=tol):
         scale = max(1.0, abs(val_can_f), abs(val_blk_f))
-        diff = abs(val_can_f - val_blk_f) / scale
+        rel_diff = diff / scale
         raise BulkDataEquivalenceError(
             f"Numerical drift exceeded tolerance ({tol}): canonical={val_can_f}, "
-            f"bulk={val_blk_f}, relative_diff={diff:.3e}"
+            f"bulk={val_blk_f}, relative_diff={rel_diff:.3e}"
         )
 
-    # Compare spatial locators if present
-    loc_can = canonical.get("locator") or {}
-    loc_blk = bulk.get("locator") or {}
+    # Compare spatial locators: instance, node_label, element_label
+    loc_can = canonical.get("locator")
+    loc_blk = bulk.get("locator")
 
-    # Node label check (when present in both)
-    nl_can = loc_can.get("node_label")
-    nl_blk = loc_blk.get("node_label")
-    if nl_can is not None and nl_blk is not None and nl_can != nl_blk:
-        # If values are numerically identical (e.g. symmetric max), locator mismatch is noted
-        return BulkDataEquivalenceStatus.LOCATOR_MISMATCH
+    if loc_can is not None or loc_blk is not None:
+        if loc_can is None or loc_blk is None:
+            # One has locator metadata while the other is missing
+            raise BulkDataEquivalenceError(
+                f"Locator presence mismatch: canonical has={loc_can is not None}, bulk has={loc_blk is not None}"
+            )
+        if not isinstance(loc_can, dict) or not isinstance(loc_blk, dict):
+            raise BulkDataEquivalenceError("Locators must be dictionary objects.")
 
-    # Element label check (when present in both)
-    el_can = loc_can.get("element_label")
-    el_blk = loc_blk.get("element_label")
-    if el_can is not None and el_blk is not None and el_can != el_blk:
-        return BulkDataEquivalenceStatus.LOCATOR_MISMATCH
+        # Instance name check
+        inst_can = loc_can.get("instance")
+        inst_blk = loc_blk.get("instance")
+        if inst_can is not None and inst_blk is not None and inst_can != inst_blk:
+            return BulkDataEquivalenceStatus.LOCATOR_MISMATCH
 
+        # Node label check (when present in both)
+        nl_can = loc_can.get("node_label")
+        nl_blk = loc_blk.get("node_label")
+        if nl_can is not None and nl_blk is not None and nl_can != nl_blk:
+            return BulkDataEquivalenceStatus.LOCATOR_MISMATCH
+
+        # Element label check (when present in both)
+        el_can = loc_can.get("element_label")
+        el_blk = loc_blk.get("element_label")
+        if el_can is not None and el_blk is not None and el_can != el_blk:
+            return BulkDataEquivalenceStatus.LOCATOR_MISMATCH
+
+    if diff == 0.0:
+        return BulkDataEquivalenceStatus.EXACT_MATCH
     return BulkDataEquivalenceStatus.EQUIVALENT
 
 
@@ -142,25 +188,43 @@ def extract_scalar_from_blocks(
     if agg not in {"max", "min", "average"}:
         raise BulkDataEquivalenceError(f"Unsupported aggregation: {aggregation!r}")
 
-    for b in blocks:
+    for b_idx, b in enumerate(blocks):
         data = getattr(b, "data", None)
         if data is None:
-            continue
+            raise BulkDataEquivalenceError(f"Block at index {b_idx} lacks required 'data' field.")
         node_labels = getattr(b, "nodeLabels", None)
         elem_labels = getattr(b, "elementLabels", None)
         inst = getattr(b, "instance", None)
         inst_name = getattr(inst, "name", str(inst)) if inst else None
 
         for idx, row in enumerate(data):
+            if isinstance(row, bool):
+                raise BulkDataEquivalenceError(
+                    f"Boolean row invalid at block {b_idx}, row {idx}"
+                )
             if isinstance(row, (int, float)):
                 v = float(row)
             elif hasattr(row, "__iter__"):
                 row_list = list(row)
-                if not row_list or not isinstance(row_list[0], (int, float)):
-                    continue
-                v = float(row_list[0])
+                if not row_list:
+                    raise BulkDataEquivalenceError(
+                        f"Empty row data at block {b_idx}, row {idx}"
+                    )
+                first_item = row_list[0]
+                if not isinstance(first_item, (int, float)) or isinstance(first_item, bool):
+                    raise BulkDataEquivalenceError(
+                        f"Non-numeric row element at block {b_idx}, row {idx}: {first_item!r}"
+                    )
+                v = float(first_item)
             else:
-                continue
+                raise BulkDataEquivalenceError(
+                    f"Malformed row data type at block {b_idx}, row {idx}: {type(row)}"
+                )
+
+            if not math.isfinite(v):
+                raise BulkDataEquivalenceError(
+                    f"Non-finite float at block {b_idx}, row {idx}: {v}"
+                )
 
             count += 1
             sum_val += v

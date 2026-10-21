@@ -31,19 +31,19 @@
 
 | ID | 缺什么 | 状态 |
 | :--- | :--- | :--- |
-| P1-LEFTOVER-01 | 大型隐式求解不被 watchdog 误杀 | **未验证** |
-| P1-LEFTOVER-02 | 真实 ODB 结构验签（工程规模） | **单砖已验，未闭合** |
-| P2-LEFTOVER-01 | 真实 Provider 计费日志 | **未验证** |
-| P2-LEFTOVER-02 | 真实 ODB `result_ref` 往返（工程规模） | **单砖已验，未闭合** |
-| P2-LEFTOVER-03 | `< 10 ms` 还原（工程规模） | **规模未验证** |
-| P3-LEFTOVER-01 | 真实耗时基线 | **未验证（数据为零）** |
-| P3-LEFTOVER-03 | T3 真实排队耗时 | **字段已可读，严禁算术推导，无真实数据** |
+| P1-LEFTOVER-01 | 大型隐式求解不被 watchdog 误杀 | **未验证**（待 MV-01） |
+| P1-LEFTOVER-02 | 真实 ODB 结构验签（工程规模） | **单砖已验，未闭合**（待 MV-02） |
+| P2-LEFTOVER-01 | 真实 Provider 计费日志 | **未验证**（待 MV-04） |
+| P2-LEFTOVER-02 | 真实 ODB `result_ref` 往返（工程规模） | **单砖已验，未闭合**（待 MV-05） |
+| P2-LEFTOVER-03 | `< 10 ms` 还原（工程规模） | **规模未验证**（待 MV-06） |
+| P3-LEFTOVER-01 | 真实耗时基线 | **未验证（数据为零）**（待 MV-07） |
+| P3-LEFTOVER-03 | T3 真实排队耗时 | **数据接线与单元测试已闭合；真实排队数据待 MV-09** |
 
 ### 0.3 契约待修订
 
 | ID | 待定内容 | 状态 |
 | :--- | :--- | :--- |
-| P1-LEFTOVER-04 | 契约 A 探针 5 的 mtime 规则被真实证据双向驳倒 | **待修订** |
+| P1-LEFTOVER-04 | 契约 A 探针 5 的 mtime 规则被真实证据双向驳倒，已正式修订废止 | **已正式修订废止**（探针 5 明确为大小+二进制预筛+openOdb，mtime 彻底废弃） |
 | A2 | T4 已拆为 T4a/T4b，解析器已实现；**T4b 多段语义与多步日志结构未验证** | **部分定案** |
 | C2S | `bulkDataBlocks` 浮点公差适用场景 | **已定案（范围仅限全场标量/公差严格 < 1e-6/主链路保持不变）** |
 
@@ -55,7 +55,7 @@
 | C1（`numCpus` 正式实验） | **脚手架与配置审计完成**；需真机基线（MV-07，算例 ≥ 60 s）与准入条件满足后统一采集 |
 | C2（`bulkDataBlocks` 等价性） | **离线契约与差分测试完成**；真机等价性待在工程规模 ODB 验证（MV-11） |
 | D3（watchdog 大型算例） | **未启动**；可独立准备 |
-| 阶段 3.4（测试分级治理） | **规约已建立**（`docs/test-tier-governance.md`，注册四级 markers） |
+| 阶段 3.4（测试分级治理） | **规约与 conftest 自动化标记已落地**（注册四级 markers，自动分类，环境缺失显式 BLOCKED 阻断，2074 unit passed） |
 | 阶段 4（全部） | **不纳入本批次** |
 
 > 表中任一项被引用时，必须同时引用其状态。
@@ -72,7 +72,7 @@
 | P1-LEFTOVER-01 | 真实 Abaqus 大型隐式求解不被看门狗误杀 | **未验证** | 现有证据均为模拟进程（`time.sleep` 静默）与合成文件；无真实 `standard.exe` 刚度矩阵分解阶段的运行记录 | 一次真实大型隐式算例中，求解阶段识别、自适应心跳放宽、正常完成三条均有运行日志佐证 |
 | P1-LEFTOVER-02 | 真实 ODB 结构级验签 | **证据已取得（单砖规模），未闭合** | 已于 2026-10-21 用真实 Abaqus 2025 产出的 ODB 跑通 `verify_authentic_odb_structure`（正例 2 帧/5 场输出，6 个负例全部阻断，其中截断与头部篡改由 `odbAccess.openOdb` 捕获）。**但**样本为单 C3D8R 单元静力作业，无大型隐式 ODB | 用真实大型算例（`case_07_jounce_bumper` 或同等）产出的 ODB 重跑同一验签，保留正例与负例结果 |
 | P1-LEFTOVER-03 | 自适应心跳未接入 `AnalysisRunner` 主链路 | **未完成（按决定不做）** | `AnalysisRunner` 经 `JobController` 在 CAE 会话内提交，不暴露宿主 PID，执行路径不经过 `run_with_watchdog`；接入会改变主链路执行/超时/终止语义，超出阶段 1 已确认的最小补齐范围 | 由总体规划决定；若决定接入，需单独评估对主链路语义的影响并补充对应测试 |
-| P1-LEFTOVER-04 | 契约 A 要求核验 ODB 修改时间戳，当前未实现 | **已被真机证据驳倒，待契约修订** | 2026-10-21 实证：mtime 规则双向失效——（a）把合法 ODB 的 mtime 改早于 `.sta` 后，规则会拒绝一个 `verified: true` 的可读文件；（b）截断与头部篡改两个真实损坏样本的 mtime 均**晚于** `.sta`，规则会放行。该规则既可误拒合法文件，又不能识别损坏，**不得**作为恢复门控 | 需明确决定修订契约文本（非实现该规则）。修订建议见下方 §P1-LEFTOVER-04 详细记录 |
+| P1-LEFTOVER-04 | 契约 A 要求核验 ODB 修改时间戳，当前未实现 | **已正式修订废止** | 2026-10-21 实证：mtime 规则双向失效——（a）把合法 ODB 的 mtime 改早于 `.sta` 后，规则会拒绝一个 `verified: true` 的可读文件；（b）截断与头部篡改两个真实损坏样本的 mtime 均**晚于** `.sta`，规则会放行。该规则既可误拒合法文件，又不能识别损坏，**严禁**作为恢复门控。探针 5 规范已于治理规划正式修订为：文件大小（>=1024B）、二进制非恒定填充头预筛与原生 `odbAccess.openOdb()` 结构验签 | 契约文本已正式完成修订，该条规则彻底废除，不再列为待办 |
 
 ### P1-LEFTOVER-04 的详细记录
 
@@ -107,12 +107,11 @@
    预筛（大小 < 1024、恒定填充、明文前缀）捕获全零/全 `0xFF`/过小/明文伪造；
    `odbAccess.openOdb()` 捕获截断与头部篡改（这两类**能通过**预筛，说明预筛单独不够）。
    mtime 不在这条判别链上。
-4. **建议的契约修订方向**（需批准，本文件未自行修改规划）：将探针 5 的"修改时间戳"要素替换为
-   "能被 `odbAccess.openOdb()` 打开，且至少含一个非 `initial` 步、该步至少一帧"。
-   这是本次实测中唯一具备判别力的结构条件。
-5. **当前处置**：保留规划原文，不做静默豁免。该项状态由"验收偏差"更新为"已被反驳、待契约修订"；
-   **仍未关闭**，且不得在任何实现中被当作恢复门控使用。
-6. **后续决定点**：批准契约修订，或提供 mtime 有效的反例证据（目前不存在）。
+4. **正式契约修订定案**：已于《Abaqus-AI-Agent 系统级综合治理与实施规划》契约 A 探针 5 中正式修订为：
+   “核验 ODB 大小（>=1024B）、二进制非恒定填充头预筛，并由原生 `odbAccess.openOdb()` 结构验签；修改时间戳（mtime）规则经实证确认双向失效，已正式废弃，严禁作为恢复门控”。
+5. **当前处置**：规划原文与契约已同步修订。P1-LEFTOVER-04 标记为“已正式修订废止”并予以闭合；
+   任何恢复代码严禁将时间戳作为门控使用。
+6. **最终判定**：**已闭合（规约已修订废止）**。
 
 ---
 
@@ -258,7 +257,7 @@
 | :--- | :--- | :--- | :--- |
 | P3-LEFTOVER-01 | 真实运行耗时基线未采集 | **未验证** | 无任何真实 Abaqus 运行的 T1~T6 数据；现有测试仅用注入的假时钟与合成耗时 |
 | P3-LEFTOVER-02 | 剖析器未接入执行链路 | **部分接入** | 生产入口 `AbaqusAIAgent.analysis_run` 默认创建 `PhaseProfiler(strict=False)` 并传入 `AnalysisRunner.run`。该入口覆盖 `solve_requirement` 与自愈重跑。返回后把 `finalize().to_dict()` 写入本次运行已有的 `evidence/<run.id>/phase_profile.json`（不按 job 名另建目录）。无证据目录不记为失败。`finalize()` 失败或写文件失败不改变 run，也不写入 `AnalysisRun.diagnostics`；失败通过 `abaqus_ai_agent.agent` 的 `logger.warning` 发出（含 `run_id`），不依赖写失败的同一个 JSON。内存中的 `internal_errors` 仍会追加，但调用方拿不到 profiler，不能把它当作可观测出口。提交之后的作业失败仍落盘 T4；提交之前的 preflight 失败也会落盘，但六阶段均为 `NOT_RUN`，不是漏写。两次运行按 `run.id` 分目录，互不覆盖。`AnalysisRunner.run` 直接调用仍默认不计时。落盘内容只有 T4a/T4b；T1/T2/T3/T5/T6 仍为 `NOT_RUN`。**未经真实 Abaqus 运行读回**。「主链路已具备全生命周期剖析」仍不成立 |
-| P3-LEFTOVER-03 | T3 License 排队耗时仍为内部量 | **导出能力已实现，严禁算术推导，仍无真实测量** | A3 已让 `_LicenseContext.wait_seconds` 与 `QueueItem.license_wait_seconds` 可读取并有单元测试；但**没有调用方**把它们交给 `profiler.record_external()`，也没有真实 FlexNet/DSLS 排队数据。**硬隔离红线**：严禁将 `T4a - T4b` 误作 License 等待时间，差额包含 pre.exe、package.exe、SMASimUtility.exe、进程拉起与 IPC 等开销。关闭条件「取得独立真实排队耗时」未满足 |
+| P3-LEFTOVER-03 | T3 License 排队耗时仍为内部量 | **数据接线与导出已闭合，严禁算术推导，真实排队待 MV-09** | A3 已实现 `_LicenseContext.wait_seconds` 与 `QueueItem.license_wait_seconds` 测量；进一步实现了 `attach_license_timing()`，将实测 wait_seconds 送入 `profiler.record_external(PipelinePhase.LICENSE_QUEUE)`，并在 `_LicenseContext`、`AnalysisRunner.run`、`agent.analysis_run`、`RunWorker.execute_item` 完整接线。**硬隔离红线**：严禁将 `T4a - T4b` 误作 License 等待时间，差额包含 pre.exe、package.exe、SMASimUtility.exe、进程拉起与 IPC 等开销，`derivation` 显式标为 `none`。单元测试（`test_timing_plumbing.py`）19 项全绿。真实 FlexNet/DSLS 排队测量待统一真机验证 MV-09 执行 |
 | P3-LEFTOVER-04 | T4b 多步 / restart 日志结构未验证 | **单元级加固完成，真机结构未验** | `execution/solver_timing.py` 已能解析真实单砖 `.log`（7.0 s，手算 7 s）。已完成单元级加固：扩展双精度求解器（`standard_dp.exe`, `explicit_dp.exe`）；显式排除 `package.exe`（Explicit Packager）等辅助工具；澄清单 job 多 step 为单进程段；追加多 job 头的 restart 日志严格判为 `AMBIGUOUS`（定向 43 passed）。**但**真机多步与 restart 的真实 `.log` 结构未获真实产物核验。不得把「解析器已实现」读作「多步分析已支持」 | 用真实多步算例（含至少两个载荷步）与一个 restart 算例的 `.log` 重跑解析器，确认段数与耗时与手工核算一致 |
 
 #### 验证层级声明
@@ -490,3 +489,4 @@ A4 的审计结果比预期严重，必须单独记录（详见 `docs/phase-timi
 | 2026-10-21 | 加固孤儿任务终止测量语义：`recover_orphaned_runs()` 终止分支（FAILED）保留 RUNNING 状态下已测得的 `license_wait_seconds` 历史证据，仅 requeue 分支清零重测；补充测试（定向 15 passed） |
 | 2026-10-21 | 阶段 3.2 并行度实验准备与配置审计：实现 `ParallelRunSpec`（严格约束 1/2/4/8，拒绝 bool/float/范围外数值）、`ParallelExperimentResult`、宿主硬件元数据安全收集；改造 `case_07_jounce_bumper_e2e.py` 消除写死并增加 CLI 参数；新增 `tests/test_parallel_experiment.py`（44 passed）。真实基线保留在 MV-07，严禁提前宣称加速比 |
 | 2026-10-21 | 阶段 3.3 与 3.4 实施准备：C2S 定案（仅限全场标量，公差严格 < 1e-6，主链路保持 values 遍历）；交付 `bulk_data_contract.py` 与差分测试（8 passed）；交付测试分级治理 `docs/test-tier-governance.md` 并注册 markers；真机清单扩充 MV-11 并确立严格四态标准（PASS/FAIL/BLOCKED/NOT_RUN） |
+| 2026-10-21 | 门禁 A/B/C 离线闭合加固：(1) 阶段 3.3 `bulk_data_contract.py` 严格公差边界 `< tol * scale` 且强制 `<= 1e-6`、完整三元空间定位器校验、非法数据 Fail-Closed 拒绝（9 passed）；(2) 探针 5 规约正式修订定案，废止 mtime 比较规则（P1-LEFTOVER-04 闭合废止）；(3) 阶段 3.1 License 计时数据接线闭合（P3-LEFTOVER-03）：实现 `attach_license_timing()`，在 `_LicenseContext`、`AnalysisRunner.run`、`agent.analysis_run`、`RunWorker.execute_item` 完整接线，严格标记 `derivation="none"`，单元与集成测试全绿（19 passed）；(4) 阶段 3.4 测试分级落地：`tests/conftest.py` 自动分类赋予 `@pytest.mark.unit`，实机环境缺失显式 `[BLOCKED]` 阻断，2074 unit 用例 100% 通过且零警告。除真机证据项（MV-01～MV-11）外所有离线门禁全部闭环 |

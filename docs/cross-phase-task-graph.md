@@ -51,7 +51,7 @@ graph TD
     B2["B2 真实 ODB 结构级验签<br/>P1-LEFTOVER-02"]
     B3["B3 真实 ODB result_ref 往返<br/>P2-LEFTOVER-02"]
     B4["B4 真机损坏负例<br/>截断 / 全零 / 头部篡改"]
-    D2["D2 ODB mtime 契约审查<br/>P1-LEFTOVER-04"]
+    D2["D2 ODB mtime 契约修订<br/>P1-LEFTOVER-04 [已闭合]"]
 
     A1["A1 BatchResult 携带 duration"]
     A3["A3 License 排队耗时外露<br/>P3-LEFTOVER-03"]
@@ -116,7 +116,7 @@ graph TD
 | :--- | :--- | :--- | :--- | :--- |
 | B1 | 用 `runtime_smoke.py` 生成并留存真实 ODB | [待真机] | `runs/`（不入库）、`machine_validation/*.json` | 记录运行环境、输入版本、作业状态、文件校验信息 |
 | A1 | `BatchResult` 携带耗时 | **[已实现·单元级]** | `execution/batch.py` | 纯增量字段，默认 `None`；透传 `WatchedProcessResult.duration`，不重复测量 |
-| A3 | License 排队耗时外露 | **[已实现·单元级]** | `execution/license.py`、`execution/queue.py` | 字段可读且有测试；**尚无调用方**送入 profiler，`P3-LEFTOVER-03` 未闭合。**硬隔离红线**：严禁 `T4a - T4b` 算作 License 等待时间，差额含 pre.exe 等开销 |
+| A3 | License 排队耗时外露与接入 | **[已实现·数据接线闭合]** | `execution/license.py`、`execution/queue.py`、`analysis_run.py`、`agent.py`、`worker.py` | 字段可读且实现 `attach_license_timing()` 完整接线，严格标记 `derivation="none"`。单元测试（19 passed）全绿。真实排队数据待 MV-09 |
 | A5 | profile 异常隔离契约 | **[已实现·单元级]** | `telemetry/phase_profile.py` + 测试 | `strict=False` 降级写入 `internal_errors`；记录失败永不掩盖真实异常 |
 | D1 | Provider 计费证据采集 | [待真机] | `tools/live_token_benchmark.py` | 与 ODB 无关；需真实 Key，费用自负 |
 
@@ -128,7 +128,7 @@ graph TD
 | B2 | 真实 ODB 结构级验签 | [待真机] | B1 | `verify_authentic_odb_structure` 的 `odbAccess.openOdb()` 路径从未对真实 ODB 执行 |
 | B3 | 真实 ODB `result_ref` 往返 | [待真机] | B1 | 关闭 `P2-LEFTOVER-02` |
 | B4 | 真机损坏负例 | [待真机] | B1 | 截断/全零/头部篡改，验证 Fail-Closed |
-| D2 | ODB mtime 契约审查 | [待真机] | B1 | 关闭或修订 `P1-LEFTOVER-04` |
+| D2 | ODB mtime 契约审查与修订 | **[已闭合·契约已修订]** | B1 | 2026-10-21 实证确认 mtime 规则双向失效；探针 5 规约已于治理规划正式修订为大小+二进制预筛+openOdb，mtime 正式废除，P1-LEFTOVER-04 闭合 |
 | C2S | `bulkDataBlocks` 数值验收标准 | **[已定案]** | 无 | 范围仅限全场标量扫描，公差严格 `< 1e-6`，主链路保持 values 遍历 |
 
 ### 第 3 批：依赖基线
@@ -145,7 +145,7 @@ graph TD
 | :--- | :--- | :--- | :--- |
 | C1 | `numCpus` = 1/2/4/8 实验框架 | **[脚手架完成][待真机]** | 脚手架与配置审计已就绪；真机对比实验强依 BASE + 算例 ≥ 60 s |
 | D3 | watchdog 大型隐式真机验证 | [待真机] | 大型算例（**不依赖 BASE**，验证误杀不需性能数据） |
-| 阶段 3.4 | 测试分级治理与准入规约 | **[规约已建立·静态]** | 建立 `docs/test-tier-governance.md`，注册 markers，确立四态判定标准 |
+| 阶段 3.4 | 测试分级治理与准入规约 | **[已落地·自动化分类]** | `docs/test-tier-governance.md` 规约落地，`tests/conftest.py` 动态标记 unit/smoke/acceptance/live，缺少真实环境显式 BLOCKED，2074 unit 用例通过 |
 
 ### 不在本批次
 

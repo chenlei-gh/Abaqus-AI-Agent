@@ -78,6 +78,68 @@ def evidence_baseline_snapshot():
     yield
 
 
+def _has_physical_abaqus() -> bool:
+    import shutil
+    return bool(
+        shutil.which("abaqus")
+        or shutil.which("abaqus.bat")
+        or Path(r"C:\SIMULIA\Commands\abaqus.bat").exists()
+    )
+
+
+def pytest_collection_modifyitems(config, items):
+    unit_marker = pytest.mark.unit
+    smoke_marker = pytest.mark.smoke
+    acceptance_marker = pytest.mark.acceptance
+    live_marker = pytest.mark.live
+
+    for item in items:
+        existing = {m.name for m in item.iter_markers()}
+
+        # 1. Live tests (requires physical Abaqus launcher execution)
+        is_evidence_audit = any(k in item.name.lower() for k in ("manifest", "integrity", "audit", "envelope", "json"))
+        is_live = (
+            (
+                "live" in existing
+                or "live_abaqus" in item.name.lower()
+                or item.name.endswith("_real_machine")
+                or "h6_image_intent_grounding_e2e" in item.nodeid
+            )
+            and not is_evidence_audit
+        )
+        if is_live:
+            item.add_marker(live_marker)
+            item.add_marker(acceptance_marker)
+            continue
+
+        # 2. Smoke tests
+        is_smoke = "smoke" in existing or "smoke" in item.name.lower() or "smoke" in str(item.fspath).lower()
+        if is_smoke:
+            item.add_marker(smoke_marker)
+
+        # 3. Acceptance / benchmark / golden / qualification / e2e
+        is_acceptance = (
+            "acceptance" in existing
+            or "acceptance" in str(item.fspath).lower()
+            or "golden" in str(item.fspath).lower()
+            or "benchmark" in str(item.fspath).lower()
+            or "qualification" in str(item.fspath).lower()
+            or "e2e" in str(item.fspath).lower()
+        )
+        if is_acceptance:
+            item.add_marker(acceptance_marker)
+
+        # 4. All offline tests receive the unit marker so `pytest -m unit` runs full offline suite
+        item.add_marker(unit_marker)
+
+
+def pytest_runtest_setup(item):
+    """Enforce physical environment check for live runs without physical Abaqus."""
+    if item.get_closest_marker("live"):
+        if not _has_physical_abaqus():
+            pytest.skip("[BLOCKED] Physical Abaqus environment not detected")
+
+
 def pytest_sessionfinish(session, exitstatus):
     """Fail the session if a test rewrote tracked evidence despite the read-only guard."""
     baseline = getattr(pytest, "_evidence_baseline", None)

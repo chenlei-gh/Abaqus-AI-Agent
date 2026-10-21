@@ -362,3 +362,85 @@ def test_queue_item_orphan_recovery_abort_retains_measured_wait_seconds(tmp_path
     assert reloaded_item is not None
     assert reloaded_item.state is QueueItemState.FAILED
     assert reloaded_item.license_wait_seconds == pytest.approx(3.5)
+
+
+# ---------------------------------------------------------------------------
+# P3-LEFTOVER-03: License wait time wiring to PhaseProfiler (strict isolation)
+# ---------------------------------------------------------------------------
+
+def test_attach_license_timing_records_cleanly():
+    """attach_license_timing records directly to PipelinePhase.LICENSE_QUEUE."""
+    from abaqus_ai_agent.execution.license import attach_license_timing
+    from abaqus_ai_agent.telemetry.phase_profile import PhaseProfiler, PipelinePhase, PhaseStatus
+
+    profiler = PhaseProfiler(strict=False)
+    summary = attach_license_timing(profiler, 1.25, source="test_license_provider")
+
+    assert summary["recorded_as"] == "measured"
+    assert summary["wait_seconds"] == 1.25
+    assert summary["source"] == "test_license_provider"
+
+    profile = profiler.finalize()
+    record = profile.get(PipelinePhase.LICENSE_QUEUE)
+    assert record.status is PhaseStatus.MEASURED
+    assert record.duration_s == pytest.approx(1.25)
+    assert record.detail["source"] == "test_license_provider"
+    assert record.detail["derivation"] == "none"
+
+
+def test_attach_license_timing_none_or_invalid_marks_not_run():
+    """None, negative, or non-finite wait times mark NOT_RUN, never invent 0.0."""
+    from abaqus_ai_agent.execution.license import attach_license_timing
+    from abaqus_ai_agent.telemetry.phase_profile import PhaseProfiler, PipelinePhase, PhaseStatus
+
+    profiler = PhaseProfiler(strict=False)
+    attach_license_timing(profiler, None)
+    profile = profiler.finalize()
+
+    record = profile.get(PipelinePhase.LICENSE_QUEUE)
+    assert record.status is PhaseStatus.NOT_RUN
+    assert record.duration_s is None
+
+
+def test_license_context_profiler_integration():
+    """_LicenseContext automatically attaches wait time to profiler upon acquisition."""
+    from abaqus_ai_agent.telemetry.phase_profile import PhaseProfiler, PipelinePhase, PhaseStatus
+
+    profiler = PhaseProfiler(strict=False)
+    provider = _SlowProvider(delay=0.03, grant=True)
+    with provider.acquire(timeout=2.0, profiler=profiler):
+        pass
+
+    profile = profiler.finalize()
+    record = profile.get(PipelinePhase.LICENSE_QUEUE)
+    assert record.status is PhaseStatus.MEASURED
+    assert record.duration_s >= 0.02
+    assert record.detail["derivation"] == "none"
+    assert "_SlowProvider.reserve" in record.detail["source"]
+
+
+def test_analysis_runner_and_agent_wire_license_timing(tmp_path):
+    """AnalysisRunner and AbaqusAIAgent wire license_wait_seconds into PhaseProfiler."""
+    from abaqus_ai_agent.agent import AbaqusAIAgent
+    from abaqus_ai_agent.execution.analysis_run import AnalysisRunner
+    from abaqus_ai_agent.telemetry.phase_profile import PhaseProfiler, PipelinePhase, PhaseStatus
+
+    class _MockExecutor:
+        def execute(self, code, timeout=None):
+            return {"stdout": "OK"}
+
+    # Direct AnalysisRunner.run
+    runner = AnalysisRunner(_MockExecutor())
+    profiler = PhaseProfiler(strict=False)
+    runner.run(
+        model_name="M",
+        job_name="J",
+        phase_profiler=profiler,
+        license_wait_seconds=4.5,
+    )
+    profile = profiler.finalize()
+    rec = profile.get(PipelinePhase.LICENSE_QUEUE)
+    assert rec.status is PhaseStatus.MEASURED
+    assert rec.duration_s == pytest.approx(4.5)
+    assert rec.detail["source"] == "queue_dispatch"
+    assert rec.detail["derivation"] == "none"
