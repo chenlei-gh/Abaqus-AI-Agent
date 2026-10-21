@@ -398,11 +398,11 @@ A4 的审计结果比预期严重，必须单独记录（详见 `docs/phase-timi
    - `is_close_scalar(val_a, val_b, tol=1e-6)`：相对与绝对严格公差比对，拒绝 `NaN`、`±inf` 与非数值；
    - `verify_extraction_equivalence(canonical, bulk, tol=1e-6)`：比对成功标志、浮点数值与空间定位器（node/element label, instance）；超差抛出 `BulkDataEquivalenceError`，非数值/非字典输入严格 Fail-Closed；
    - `extract_scalar_from_blocks(blocks, aggregation="max"|"min"|"average")`：纯 Python 离线参考算法，从 mock/真实数据块中高效提取标量与对应位置标签。
-2. **测试资产（`tests/test_bulk_data_blocks_contract.py`，11 passed）**：
+2. **测试资产（`tests/test_bulk_data_blocks_contract.py`，12 passed）**：
    - 覆盖公差判断、超差拒绝、非有限浮点拦截、空间定位器错位识别（`LOCATOR_MISMATCH`）、单侧失败阻断、以及合成数据集与 canonical values 遍历的离线差分比对；
    - 补齐定位器缺失 Fail-Closed 负例：极值/峰值提取禁止双侧缺少 locator、双侧空字典 `{}`、缺少 `instance`、缺少 `node_label`/`element_label`；
    - 规范平均值独立定位契约：禁止绑定局部点标签，允许空 locator 或仅指定 `instance`；
-   - 闭环指标语义冲突拦截：两侧声明的提取度量冲突（如 `average` vs `peak`/`max`, `max` vs `min`，或显式传参冲突）时严格 Fail-Closed 抛错，杜绝数值巧合放行。
+   - 闭环指标语义冲突拦截：两侧声明的提取度量冲突（如 `average` vs `peak`/`max`, `max` vs `min`，或显式传参冲突）以及单侧结果内部 `metric_type` 与 `aggregation` 别名互斥时，严格 Fail-Closed 抛错，杜绝数值巧合放行。
 
 3. **环境探针与求解验收分级**：
    - `_probe_physical_abaqus_environment()` 返回状态码明确为 `LAUNCHER_READY`；
