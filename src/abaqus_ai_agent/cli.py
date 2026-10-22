@@ -130,6 +130,34 @@ def _build_parser() -> argparse.ArgumentParser:
     p_assets.add_argument("--case", help="Filter and display details for a specific case_id.")
     p_assets.add_argument("--json", action="store_true", help="Output machine-readable JSON format.")
 
+    # 10. material (Authentic engineering materials, properties, and experimental curves)
+    p_mat = subparsers.add_parser(
+        "material",
+        help="Query and inspect authentic engineering materials, properties, and experimental curves.",
+    )
+    p_mat.add_argument(
+        "name",
+        nargs="?",
+        help="Material grade, trade name, or alias (e.g. 'Ultramid A3WG6', 'Q235', '6061-T6', 'Ti-6Al-4V').",
+    )
+    p_mat.add_argument(
+        "--list",
+        "-l",
+        action="store_true",
+        help="List all registered materials from standard catalog and CAMPUS/MMPDS databases.",
+    )
+    p_mat.add_argument(
+        "--curves",
+        "-c",
+        action="store_true",
+        help="Display experimental stress-strain curves and calibrated Abaqus *Plastic tables.",
+    )
+    p_mat.add_argument(
+        "--json",
+        action="store_true",
+        help="Output machine-readable JSON format.",
+    )
+
     return parser
 
 
@@ -249,6 +277,20 @@ def handle_inspect(args: argparse.Namespace) -> int:
 
 
 def handle_ask(args: argparse.Namespace) -> int:
+    clean_prompt = args.prompt.strip()
+    for prefix in ("查询材料", "查材料", "material "):
+        if clean_prompt.startswith(prefix):
+            mat_name = clean_prompt[len(prefix):].strip()
+            if mat_name:
+                import argparse as ap
+                mat_args = ap.Namespace(
+                    name=mat_name,
+                    list=False,
+                    curves=True,
+                    json=getattr(args, "json", False),
+                )
+                return handle_material(mat_args)
+
     from .typesafe_intent import JevIntentRouter
 
     router = JevIntentRouter(mode=getattr(args, "mode", "offline"))
@@ -1163,6 +1205,243 @@ def handle_assets(args: argparse.Namespace) -> int:
     return 0
 
 
+def handle_material(args: argparse.Namespace) -> int:
+    """Query and inspect authentic engineering materials, properties, and experimental curves."""
+    from .materials.provider import MaterialProvider
+    from .reasoning.material_catalog import STANDARD_MATERIALS, _find_profile
+    from .contracts.material_resolver import MaterialResolver
+
+    provider = MaterialProvider.default()
+
+    # 1. List all materials
+    if args.list or not args.name:
+        items = []
+        seen_grades = set()
+
+        # Builtin standard catalog
+        for p in STANDARD_MATERIALS:
+            seen_grades.add(p.canonical_name.lower())
+            items.append({
+                "name": p.canonical_name,
+                "family": p.material_family,
+                "source": p.standard_reference,
+                "type": "standard_reference",
+                "curves_available": False,
+                "youngs_modulus_mpa": p.youngs_modulus_mpa,
+                "yield_strength_mpa": p.yield_strength_mpa,
+                "density_tonne_mm3": p.density_tonne_mm3,
+                "aliases": list(p.aliases),
+            })
+
+        # Authentic provider records (CAMPUS / MMPDS / lab datasheets)
+        for canonical_key, rec in provider._records_by_grade.items():
+            if rec.identity.grade.lower() in seen_grades:
+                continue
+            seen_grades.add(rec.identity.grade.lower())
+            prop_e = rec.get_property("youngs_modulus") or rec.get_property("tensile_modulus")
+            prop_sy = rec.get_property("yield_stress") or rec.get_property("stress_at_break")
+            prop_rho = rec.get_property("density")
+
+            rho_val = None
+            if prop_rho:
+                if prop_rho.unit in ("g/cm3", "g/cm^3"):
+                    rho_val = prop_rho.value * 1e-9
+                elif prop_rho.unit in ("kg/m3", "kg/m^3"):
+                    rho_val = prop_rho.value * 1e-12
+                else:
+                    rho_val = prop_rho.value
+
+            items.append({
+                "name": rec.identity.grade,
+                "family": rec.identity.polymer_family,
+                "source": f"{rec.identity.manufacturer} / {rec.source.provider} ({rec.source.source_type})",
+                "type": "authentic_datasheet",
+                "curves_available": len(rec.curves) > 0,
+                "youngs_modulus_mpa": prop_e.value if prop_e else None,
+                "yield_strength_mpa": prop_sy.value if prop_sy else None,
+                "density_tonne_mm3": rho_val,
+                "aliases": [k for k, v in provider._alias_map.items() if v == canonical_key],
+            })
+
+        if args.json:
+            print(json.dumps({"total": len(items), "materials": items}, indent=2, ensure_ascii=False))
+        else:
+            print(f"=== Registered Engineering Materials ({len(items)} items) ===")
+            print(f"{'Material / Grade':<26} | {'Family':<18} | {'E (MPa)':<10} | {'Yield (MPa)':<12} | {'Curves':<7} | Source")
+            print("-" * 105)
+            for it in items:
+                e_str = f"{it['youngs_modulus_mpa']:.0f}" if it['youngs_modulus_mpa'] is not None else "N/A"
+                sy_str = f"{it['yield_strength_mpa']:.1f}" if it['yield_strength_mpa'] is not None else "N/A"
+                curv_str = "YES" if it["curves_available"] else "NO"
+                print(f"{it['name']:<26} | {it['family']:<18} | {e_str:<10} | {sy_str:<12} | {curv_str:<7} | {it['source']}")
+        return 0
+
+    # 2. Query specific material by name
+    name_query = args.name.strip()
+    rec = provider.find_record(name_query)
+
+    if rec is not None:
+        prop_e = rec.get_property("youngs_modulus") or rec.get_property("tensile_modulus")
+        prop_nu = rec.get_property("poissons_ratio")
+        prop_rho = rec.get_property("density")
+        prop_sy = rec.get_property("yield_stress") or rec.get_property("stress_at_break")
+        prop_tc = rec.get_property("thermal_conductivity")
+        prop_exp = rec.get_property("expansion_coefficient") or rec.get_property("clte")
+
+        rho_val = None
+        if prop_rho:
+            if prop_rho.unit in ("g/cm3", "g/cm^3"):
+                rho_val = prop_rho.value * 1e-9
+            elif prop_rho.unit in ("kg/m3", "kg/m^3"):
+                rho_val = prop_rho.value * 1e-12
+            else:
+                rho_val = prop_rho.value
+
+        # Attempt resolving to Abaqus MaterialDefinition for calibrated *Plastic table
+        res_result = MaterialResolver.resolve(
+            rec,
+            constitutive_intent="elastoplastic",
+            target_unit_system="MM_N_MPA",
+            allow_assisted_assumptions=True,
+        )
+
+        plastic_table = []
+        if res_result.is_executable and res_result.material_definition and res_result.material_definition.plastic:
+            plastic_table = [
+                {"yield_stress_mpa": pt[0], "plastic_strain": pt[1]}
+                for pt in res_result.material_definition.plastic.hardening_table
+            ]
+
+        curves_data = []
+        for c in rec.curves:
+            curves_data.append({
+                "curve_type": c.curve_type,
+                "x_name": c.x_name,
+                "x_unit": c.x_unit,
+                "y_name": c.y_name,
+                "y_unit": c.y_unit,
+                "num_points": len(c.points),
+                "condition": c.condition.to_dict(),
+                "points": [list(pt) for pt in c.points],
+            })
+
+        nu_disp = prop_nu.value if prop_nu else (
+            res_result.material_definition.elastic.poisson_ratio
+            if res_result.material_definition and res_result.material_definition.elastic
+            else None
+        )
+
+        out_data = {
+            "found": True,
+            "category": "authentic_datasheet",
+            "identity": rec.identity.to_dict(),
+            "source": rec.source.to_dict(),
+            "default_condition": rec.default_condition.to_dict(),
+            "properties": {
+                "youngs_modulus_mpa": prop_e.value if prop_e else None,
+                "poissons_ratio": nu_disp,
+                "density_tonne_mm3": rho_val,
+                "yield_strength_mpa": prop_sy.value if prop_sy else None,
+                "thermal_conductivity": prop_tc.value if prop_tc else None,
+                "expansion_coefficient": prop_exp.value if prop_exp else None,
+            },
+            "calibrated_abaqus_plastic": plastic_table,
+            "curves": curves_data,
+        }
+
+        if args.json:
+            print(json.dumps(out_data, indent=2, ensure_ascii=False))
+            return 0
+
+        # Human-readable format
+        print(f"=== Authentic Engineering Material: {rec.identity.grade} ===")
+        print(f"Manufacturer:     {rec.identity.manufacturer}")
+        print(f"Polymer / Family: {rec.identity.polymer_family}")
+        if rec.identity.trade_name:
+            print(f"Trade Name:       {rec.identity.trade_name}")
+        if rec.identity.reinforcement_type:
+            print(f"Reinforcement:    {rec.identity.reinforcement_type} ({rec.identity.reinforcement_content or 0:.0f} wt%)")
+        print(f"Source Database:  {rec.source.provider} [{rec.source.source_type}] (Locator: {rec.source.locator})")
+        print(f"Evidence Level:   {rec.source.evidence_level}")
+        print(f"Test Condition:   T={rec.default_condition.temperature}°{rec.default_condition.temperature_unit}, {rec.default_condition.humidity_state}")
+
+        print("\n--- Physical & Mechanical Properties (MM_N_MPA) ---")
+        if prop_e:
+            print(f"Young's Modulus (E):   {prop_e.value:.1f} MPa ({prop_e.value / 1000.0:.2f} GPa)")
+        if nu_disp is not None:
+            print(f"Poisson's Ratio (nu):  {nu_disp:.3f}")
+        if rho_val is not None:
+            print(f"Density (rho):         {rho_val:.3e} tonne/mm3 ({rho_val * 1e12:.1f} kg/m3)")
+        if prop_sy:
+            print(f"Yield / Break Stress:  {prop_sy.value:.1f} MPa")
+        if prop_tc:
+            print(f"Thermal Conductivity:  {prop_tc.value} {prop_tc.unit}")
+        if prop_exp:
+            print(f"CLTE:                  {prop_exp.value} {prop_exp.unit}")
+
+        if plastic_table:
+            print(f"\n--- Calibrated Abaqus *Plastic Hardening Table ({len(plastic_table)} points) ---")
+            print(f"  {'Yield Stress (MPa)':<20} | {'Plastic Strain':<16}")
+            print("  " + "-" * 38)
+            limit_pts = plastic_table if args.curves else plastic_table[:8]
+            for pt in limit_pts:
+                print(f"  {pt['yield_stress_mpa']:<20.2f} | {pt['plastic_strain']:<16.6f}")
+            if len(plastic_table) > len(limit_pts):
+                print(f"  ... ({len(plastic_table) - len(limit_pts)} more points. Pass --curves to display full table)")
+
+        if curves_data:
+            print(f"\n--- Experimental Curves Available: {len(curves_data)} curve(s) ---")
+            for c in curves_data:
+                print(f"  Curve: {c['curve_type']} ({c['x_name']} [{c['x_unit']}] vs {c['y_name']} [{c['y_unit']}], {c['num_points']} pts)")
+                if args.curves:
+                    print(f"    {'Strain (' + c['x_unit'] + ')':<20} | {'Stress (' + c['y_unit'] + ')':<20}")
+                    print("    " + "-" * 42)
+                    for pt in c["points"]:
+                        print(f"    {pt[0]:<20.4f} | {pt[1]:<20.2f}")
+
+        return 0
+
+    # 3. Check standard reference catalog
+    profile = _find_profile(name_query)
+    if profile is not None:
+        out_data = {
+            "found": True,
+            "category": "standard_reference",
+            "name": profile.canonical_name,
+            "family": profile.material_family,
+            "source": profile.standard_reference,
+            "properties": {
+                "youngs_modulus_mpa": profile.youngs_modulus_mpa,
+                "poissons_ratio": profile.poissons_ratio,
+                "density_tonne_mm3": profile.density_tonne_mm3,
+                "yield_strength_mpa": profile.yield_strength_mpa,
+            },
+            "aliases": list(profile.aliases),
+            "curves": [],
+        }
+
+        if args.json:
+            print(json.dumps(out_data, indent=2, ensure_ascii=False))
+            return 0
+
+        print(f"=== Standard Reference Material: {profile.canonical_name} ===")
+        print(f"Family:           {profile.material_family}")
+        print(f"Standard / Ref:   {profile.standard_reference}")
+        print(f"Aliases:          {', '.join(profile.aliases)}")
+        print("\n--- Standard Properties (MM_N_MPA) ---")
+        print(f"Young's Modulus (E):   {profile.youngs_modulus_mpa:.1f} MPa ({profile.youngs_modulus_mpa / 1000.0:.2f} GPa)")
+        print(f"Poisson's Ratio (nu):  {profile.poissons_ratio:.3f}")
+        print(f"Density (rho):         {profile.density_tonne_mm3:.3e} tonne/mm3 ({profile.density_tonne_mm3 * 1e12:.1f} kg/m3)")
+        print(f"Yield Strength (Sy):   {profile.yield_strength_mpa:.1f} MPa")
+        print("Note: Reference catalog provides canonical linear-elastic/yield values. No multi-point experimental curves.")
+        return 0
+
+    # 4. Not found
+    print(f"Error: Material '{name_query}' not found in standard catalog or authentic databases.", file=sys.stderr)
+    print("Pass 'abaqus-ai-agent material --list' to inspect all registered materials.", file=sys.stderr)
+    return 1
+
+
 def main(argv: Optional[Sequence[str]] = None) -> int:
     parser = _build_parser()
     args = parser.parse_args(argv)
@@ -1178,6 +1457,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         "memory": handle_memory,
         "ask": handle_ask,
         "assets": handle_assets,
+        "material": handle_material,
     }
 
     handler = handlers.get(args.subcommand)

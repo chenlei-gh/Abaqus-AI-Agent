@@ -752,8 +752,10 @@ def _normalize_material_class(name: Optional[str]) -> Optional[str]:
         return "rubber"
     if any(w in nl for w in ("copper", "铜", "黄铜", "紫铜")):
         return "copper"
-    if any(w in nl for w in ("titanium", "钛", "钛合金", "ti6al4v")):
+    if any(w in nl for w in ("titanium", "钛", "钛合金", "ti6al4v", "ti-6al-4v", "tc4")):
         return "titanium"
+    if any(w in nl for w in ("polymer", "plastic", "pa66", "ultramid", "makrolon", "pc", "pom", "尼龙", "聚合物", "塑料")):
+        return "polymer"
     if any(w in nl for w in ("elastic", "linear_elastic", "线性弹性")):
         return "linear_elastic"
     return nl
@@ -2644,51 +2646,100 @@ class EngineeringIntentRouter:
         if loads:
             params["loads"] = loads
 
-        # Material detection
-        if any(w in prompt_lower for w in ("结构钢", "steel", "钢", "q235")):
-            params["material"] = {
-                "name": "Structural_Steel",
-                "elastic_modulus": 210000.0,
-                "poisson_ratio": 0.3,
-                "unit": "MPa",
-                "source": "standard_reference_library",
-                "material_evidence_level": "REFERENCE_LIBRARY",
-                "has_verified_properties": False,
-                "is_reference_assumption": True,
-            }
-        elif any(w in prompt_lower for w in ("铝", "aluminum", "al6061")):
-            params["material"] = {
-                "name": "Aluminum_6061",
-                "elastic_modulus": 70000.0,
-                "poisson_ratio": 0.33,
-                "unit": "MPa",
-                "source": "standard_reference_library",
-                "material_evidence_level": "REFERENCE_LIBRARY",
-                "has_verified_properties": False,
-                "is_reference_assumption": True,
-            }
-        elif any(w in prompt_lower for w in ("橡胶", "rubber")):
-            params["material"] = {
-                "name": "Rubber_Hyperelastic",
-                "elastic_modulus": 10.0,
-                "poisson_ratio": 0.499,
-                "unit": "MPa",
-                "source": "standard_reference_library",
-                "material_evidence_level": "REFERENCE_LIBRARY",
-                "has_verified_properties": False,
-                "is_reference_assumption": True,
-            }
-        elif any(w in prompt_lower for w in ("elastic", "弹性")):
-            params["material"] = {
-                "name": "Linear_Elastic",
-                "elastic_modulus": 200000.0,
-                "poisson_ratio": 0.3,
-                "unit": "MPa",
-                "source": "standard_reference_library",
-                "material_evidence_level": "REFERENCE_LIBRARY",
-                "has_verified_properties": False,
-                "is_reference_assumption": True,
-            }
+        # Material detection with authentic catalog & provider grounding
+        from .reasoning.material_catalog import match_engineering_material
+
+        mat_extracted = None
+
+        # 1. Check explicit material declarations (e.g. 材质: Ultramid A3WG6, 材料=Q345, material: PA66-GF30)
+        explicit_mat_match = re.search(
+            r"(?:材质|材料|牌号|material|grade)\s*[:：=]?\s*([a-zA-Z0-9_\-\u4e00-\u9fa5]+)",
+            prompt,
+            re.IGNORECASE,
+        )
+        if explicit_mat_match and explicit_mat_match.group(1):
+            cand = explicit_mat_match.group(1).strip()
+            mat_dict, _ = match_engineering_material(cand)
+            if mat_dict:
+                mat_extracted = mat_dict
+
+        # 2. Check authentic provider records & standard material catalog aliases in prompt text
+        if not mat_extracted:
+            from .materials.provider import MaterialProvider
+            from .reasoning.material_catalog import STANDARD_MATERIALS
+
+            # Build list of specific keywords to probe (longest first)
+            specific_keywords: List[str] = []
+            provider = MaterialProvider.default()
+            for alias in provider._alias_map:
+                if len(alias) >= 3:
+                    specific_keywords.append(alias)
+            for sm in STANDARD_MATERIALS:
+                for a in sm.aliases:
+                    if len(a) >= 2 and a not in ("钢", "al"):
+                        specific_keywords.append(a)
+                specific_keywords.append(sm.canonical_name.lower())
+
+            # De-duplicate while preserving length-descending sort
+            specific_keywords = sorted(list(set(specific_keywords)), key=lambda s: -len(s))
+
+            for kw in specific_keywords:
+                pattern = rf"(?<![a-zA-Z0-9]){re.escape(kw)}(?![a-zA-Z0-9])" if kw.isascii() else re.escape(kw)
+                if re.search(pattern, prompt_lower):
+                    mat_dict, _ = match_engineering_material(kw)
+                    if mat_dict:
+                        mat_extracted = mat_dict
+                        break
+
+        # 3. Fallback to generic engineering classifications
+        if not mat_extracted:
+            if any(w in prompt_lower for w in ("结构钢", "碳钢", "steel", "q235", "钢")):
+                mat_extracted = {
+                    "name": "Structural_Steel",
+                    "elastic_modulus": 210000.0,
+                    "poisson_ratio": 0.3,
+                    "unit": "MPa",
+                    "source": "standard_reference_library",
+                    "material_evidence_level": "REFERENCE_LIBRARY",
+                    "has_verified_properties": False,
+                    "is_reference_assumption": True,
+                }
+            elif any(w in prompt_lower for w in ("铝合金", "铝", "aluminum", "al6061")):
+                mat_extracted = {
+                    "name": "Aluminum_6061",
+                    "elastic_modulus": 70000.0,
+                    "poisson_ratio": 0.33,
+                    "unit": "MPa",
+                    "source": "standard_reference_library",
+                    "material_evidence_level": "REFERENCE_LIBRARY",
+                    "has_verified_properties": False,
+                    "is_reference_assumption": True,
+                }
+            elif any(w in prompt_lower for w in ("橡胶", "rubber")):
+                mat_extracted = {
+                    "name": "Rubber_Hyperelastic",
+                    "elastic_modulus": 10.0,
+                    "poisson_ratio": 0.499,
+                    "unit": "MPa",
+                    "source": "standard_reference_library",
+                    "material_evidence_level": "REFERENCE_LIBRARY",
+                    "has_verified_properties": False,
+                    "is_reference_assumption": True,
+                }
+            elif any(w in prompt_lower for w in ("elastic", "弹性")):
+                mat_extracted = {
+                    "name": "Linear_Elastic",
+                    "elastic_modulus": 200000.0,
+                    "poisson_ratio": 0.3,
+                    "unit": "MPa",
+                    "source": "standard_reference_library",
+                    "material_evidence_level": "REFERENCE_LIBRARY",
+                    "has_verified_properties": False,
+                    "is_reference_assumption": True,
+                }
+
+        if mat_extracted:
+            params["material"] = mat_extracted
 
         return params
 

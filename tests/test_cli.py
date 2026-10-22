@@ -243,3 +243,72 @@ def test_cli_memory_list_and_search(tmp_path, capsys):
     captured = capsys.readouterr()
     assert "run-cli-1" in captured.out
     assert "run-cli-2" not in captured.out
+
+
+def test_cli_material_list_json(capsys):
+    ret = main(["material", "--list", "--json"])
+    assert ret == 0
+    captured = capsys.readouterr()
+    data = json.loads(captured.out)
+    assert "total" in data
+    assert data["total"] >= 15
+    grades = [m["name"].lower() for m in data["materials"]]
+    assert any("q235" in g for g in grades)
+    assert any("ultramid" in g or "a3wg6" in g for g in grades)
+
+
+def test_cli_material_list_text(capsys):
+    ret = main(["material", "--list"])
+    assert ret == 0
+    captured = capsys.readouterr()
+    assert "Registered Engineering Materials" in captured.out
+    assert "Q235" in captured.out
+
+
+def test_cli_material_query_authentic(capsys):
+    ret = main(["material", "Ultramid A3WG6", "--json"])
+    assert ret == 0
+    captured = capsys.readouterr()
+    data = json.loads(captured.out)
+    assert data["found"] is True
+    assert data["category"] == "authentic_datasheet"
+    assert data["identity"]["grade"] == "Ultramid A3WG6"
+    assert data["identity"]["manufacturer"] == "BASF"
+    assert data["properties"]["youngs_modulus_mpa"] == pytest.approx(8500.0, rel=0.05)
+    assert len(data["calibrated_abaqus_plastic"]) > 0
+
+
+def test_cli_material_query_with_curves(capsys):
+    ret = main(["material", "Ultramid A3WG6", "--curves"])
+    assert ret == 0
+    captured = capsys.readouterr()
+    assert "Authentic Engineering Material: Ultramid A3WG6" in captured.out
+    assert "Calibrated Abaqus *Plastic Hardening Table" in captured.out
+    assert "Experimental Curves Available" in captured.out
+
+
+def test_cli_material_query_standard(capsys):
+    ret = main(["material", "Q235", "--json"])
+    assert ret == 0
+    captured = capsys.readouterr()
+    data = json.loads(captured.out)
+    assert data["found"] is True
+    assert data["category"] == "standard_reference"
+    assert data["name"] == "Q235"
+    assert data["properties"]["youngs_modulus_mpa"] == 210000.0
+
+
+def test_cli_material_not_found(capsys):
+    ret = main(["material", "NonExistentVibranium999"])
+    assert ret == 1
+    captured = capsys.readouterr()
+    assert "not found" in captured.err
+
+
+def test_cli_ask_material_redirect(capsys):
+    ret = main(["ask", "查询材料 Ultramid A3WG6", "--json"])
+    assert ret == 0
+    captured = capsys.readouterr()
+    data = json.loads(captured.out)
+    assert data["found"] is True
+    assert data["identity"]["grade"] == "Ultramid A3WG6"

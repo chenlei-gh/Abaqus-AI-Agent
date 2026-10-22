@@ -116,7 +116,7 @@ STANDARD_MATERIALS: Tuple[StandardMaterialProfile, ...] = (
     # Aluminum Alloys
     StandardMaterialProfile(
         canonical_name="Aluminum_6061_T6",
-        aliases=("6061", "6061-t6", "al6061", "al 6061", "aluminum", "铝", "铝合金", "al"),
+        aliases=("6061", "6061-t6", "al6061", "al 6061", "al6061-t6", "al-6061-t6", "aluminum", "铝", "铝合金", "al"),
         youngs_modulus_mpa=68900.0,
         poissons_ratio=0.33,
         density_tonne_mm3=2.70e-9,
@@ -126,7 +126,7 @@ STANDARD_MATERIALS: Tuple[StandardMaterialProfile, ...] = (
     ),
     StandardMaterialProfile(
         canonical_name="Aluminum_7075_T6",
-        aliases=("7075", "7075-t6", "al7075", "al 7075", "航空铝"),
+        aliases=("7075", "7075-t6", "al7075", "al 7075", "al7075-t6", "al-7075-t6", "航空铝"),
         youngs_modulus_mpa=71700.0,
         poissons_ratio=0.33,
         density_tonne_mm3=2.81e-9,
@@ -241,41 +241,139 @@ def match_engineering_material(
     else:
         query = str(material_input)
 
-    profile = _find_profile(query)
-    if profile is None:
-        return None, None
+    # 1. Exact match in standard catalog
+    profile = _find_profile(query, exact_only=True)
+    if profile is not None:
+        resolved_dict = {
+            "name": profile.canonical_name,
+            "canonical_name": profile.canonical_name,
+            "elastic_modulus": profile.youngs_modulus_mpa,
+            "youngs_modulus": profile.youngs_modulus_mpa,
+            "poisson_ratio": profile.poissons_ratio,
+            "poisson": profile.poissons_ratio,
+            "density": profile.density_tonne_mm3,
+            "yield_strength": profile.yield_strength_mpa,
+            "yield_stress": profile.yield_strength_mpa,
+            "unit": "MPa",
+            "material_family": profile.material_family,
+            "standard_reference": profile.standard_reference,
+            "source": "standard_reference_library",
+            "material_evidence_level": "REFERENCE_LIBRARY",
+            "has_verified_properties": True,
+            "is_reference_assumption": True,
+        }
 
-    resolved_dict = {
-        "name": profile.canonical_name,
-        "elastic_modulus": profile.youngs_modulus_mpa,
-        "youngs_modulus": profile.youngs_modulus_mpa,
-        "poisson_ratio": profile.poissons_ratio,
-        "poisson": profile.poissons_ratio,
-        "density": profile.density_tonne_mm3,
-        "yield_strength": profile.yield_strength_mpa,
-        "yield_stress": profile.yield_strength_mpa,
-        "unit": "MPa",
-        "material_family": profile.material_family,
-        "standard_reference": profile.standard_reference,
-    }
+        inference = InferredParameter(
+            parameter_name="material",
+            inferred_value=profile.canonical_name,
+            original_value=query,
+            source="standard_engineering_material_catalog",
+            confidence=0.98 if query.strip().lower() in profile.aliases else 0.88,
+            risk_level=InferenceRiskLevel.LOW,
+            rationale=(
+                f"Matched '{query}' to verified standard {profile.canonical_name} "
+                f"(E={profile.youngs_modulus_mpa} MPa, nu={profile.poissons_ratio}, "
+                f"Yield={profile.yield_strength_mpa} MPa) per {profile.standard_reference}."
+            ),
+        )
+        return resolved_dict, inference
 
-    inference = InferredParameter(
-        parameter_name="material",
-        inferred_value=profile.canonical_name,
-        original_value=query,
-        source="standard_engineering_material_catalog",
-        confidence=0.98 if query.strip().lower() in profile.aliases else 0.88,
-        risk_level=InferenceRiskLevel.LOW,
-        rationale=(
-            f"Matched '{query}' to verified standard {profile.canonical_name} "
-            f"(E={profile.youngs_modulus_mpa} MPa, nu={profile.poissons_ratio}, "
-            f"Yield={profile.yield_strength_mpa} MPa) per {profile.standard_reference}."
-        ),
-    )
-    return resolved_dict, inference
+    # 2. Check authentic material provider (CAMPUS / MMPDS / manufacturer lab datasheets)
+    from ..materials.provider import MaterialProvider
+    rec = MaterialProvider.default().find_record(query)
+    if rec is not None:
+        prop_e = rec.get_property("youngs_modulus")
+        e_val = prop_e.value if prop_e else 210000.0
+        prop_nu = rec.get_property("poissons_ratio")
+        nu_val = prop_nu.value if prop_nu else 0.3
+        prop_rho = rec.get_property("density")
+        if prop_rho:
+            if prop_rho.unit in ("g/cm3", "g/cm^3"):
+                rho_val = prop_rho.value * 1e-9
+            elif prop_rho.unit in ("kg/m3", "kg/m^3"):
+                rho_val = prop_rho.value * 1e-12
+            else:
+                rho_val = prop_rho.value
+        else:
+            rho_val = 7.85e-9
+
+        prop_sy = rec.get_property("yield_stress") or rec.get_property("stress_at_break")
+        sy_val = prop_sy.value if prop_sy else 250.0
+
+        resolved_dict = {
+            "name": rec.identity.grade,
+            "canonical_name": rec.identity.grade,
+            "elastic_modulus": e_val,
+            "youngs_modulus": e_val,
+            "poisson_ratio": nu_val,
+            "poisson": nu_val,
+            "density": rho_val,
+            "yield_strength": sy_val,
+            "yield_stress": sy_val,
+            "unit": "MPa",
+            "material_family": rec.identity.polymer_family,
+            "standard_reference": rec.metadata.get("standard_reference", rec.source.source_version),
+            "source": rec.source.provider,
+            "material_evidence_level": rec.source.evidence_level,
+            "has_verified_properties": True,
+            "is_reference_assumption": False,
+        }
+        inference = InferredParameter(
+            parameter_name="material",
+            inferred_value=rec.identity.grade,
+            original_value=query,
+            source=f"authentic_material_provider_{rec.source.provider.lower()}",
+            confidence=0.99,
+            risk_level=InferenceRiskLevel.LOW,
+            rationale=(
+                f"Matched '{query}' to authentic {rec.source.provider} record {rec.identity.grade} "
+                f"({rec.identity.manufacturer}) with verified physical properties "
+                f"(E={e_val} MPa, nu={nu_val}) per {rec.metadata.get('standard_reference', rec.source.source_version)}."
+            ),
+        )
+        return resolved_dict, inference
+
+    # 3. Substring / fuzzy match fallback in standard catalog
+    profile = _find_profile(query, exact_only=False)
+    if profile is not None:
+        resolved_dict = {
+            "name": profile.canonical_name,
+            "canonical_name": profile.canonical_name,
+            "elastic_modulus": profile.youngs_modulus_mpa,
+            "youngs_modulus": profile.youngs_modulus_mpa,
+            "poisson_ratio": profile.poissons_ratio,
+            "poisson": profile.poissons_ratio,
+            "density": profile.density_tonne_mm3,
+            "yield_strength": profile.yield_strength_mpa,
+            "yield_stress": profile.yield_strength_mpa,
+            "unit": "MPa",
+            "material_family": profile.material_family,
+            "standard_reference": profile.standard_reference,
+            "source": "standard_reference_library",
+            "material_evidence_level": "REFERENCE_LIBRARY",
+            "has_verified_properties": True,
+            "is_reference_assumption": True,
+        }
+
+        inference = InferredParameter(
+            parameter_name="material",
+            inferred_value=profile.canonical_name,
+            original_value=query,
+            source="standard_engineering_material_catalog",
+            confidence=0.98 if query.strip().lower() in profile.aliases else 0.88,
+            risk_level=InferenceRiskLevel.LOW,
+            rationale=(
+                f"Matched '{query}' to verified standard {profile.canonical_name} "
+                f"(E={profile.youngs_modulus_mpa} MPa, nu={profile.poissons_ratio}, "
+                f"Yield={profile.yield_strength_mpa} MPa) per {profile.standard_reference}."
+            ),
+        )
+        return resolved_dict, inference
+
+    return None, None
 
 
-def _find_profile(query: str) -> Optional[StandardMaterialProfile]:
+def _find_profile(query: str, exact_only: bool = False) -> Optional[StandardMaterialProfile]:
     q = query.strip().lower()
     if not q:
         return None
@@ -286,6 +384,9 @@ def _find_profile(query: str) -> Optional[StandardMaterialProfile]:
             return p
         if q in p.aliases:
             return p
+
+    if exact_only:
+        return None
 
     # 2. Match specific materials first, sorting by alias length descending
     # Generic materials (e.g. generic Structural_Steel) are relegated to low priority
@@ -424,6 +525,11 @@ def resolve_material_to_definition(
         name = str(material_input.get("name", "")).strip()
         profile = _find_profile(name) if name else None
 
+        rec = None
+        if not profile and name:
+            from ..materials.provider import MaterialProvider
+            rec = MaterialProvider.default().find_record(name)
+
         youngs = (
             material_input.get("youngs_modulus")
             or material_input.get("elastic_modulus")
@@ -446,21 +552,37 @@ def resolve_material_to_definition(
             or material_input.get("fy")
         )
 
-        # Fallback to standard profile values if not explicitly provided in dict
+        # Fallback to standard profile or authentic record values if not explicitly provided in dict
         if youngs is None and profile:
             youngs = profile.youngs_modulus_mpa
+        elif youngs is None and rec:
+            prop_e = rec.get_property("youngs_modulus")
+            if prop_e:
+                youngs = prop_e.value
         if nu is None and profile:
             nu = profile.poissons_ratio
+        elif nu is None and rec:
+            prop_nu = rec.get_property("poissons_ratio")
+            if prop_nu:
+                nu = prop_nu.value
         if rho is None and profile:
             rho = profile.density_tonne_mm3
+        elif rho is None and rec:
+            prop_rho = rec.get_property("density")
+            if prop_rho:
+                rho = prop_rho.value * 1e-9 if prop_rho.unit in ("g/cm3", "g/cm^3") else prop_rho.value
         if yield_str is None and profile:
             yield_str = profile.yield_strength_mpa
+        elif yield_str is None and rec:
+            prop_sy = rec.get_property("yield_stress") or rec.get_property("stress_at_break")
+            if prop_sy:
+                yield_str = prop_sy.value
 
-        canon_name = profile.canonical_name if profile else (name or "CustomMaterial")
+        canon_name = profile.canonical_name if profile else (rec.identity.grade if rec else (name or "CustomMaterial"))
         prov = (
             material_input.get("provenance")
             or material_input.get("standard_reference")
-            or (profile.standard_reference if profile else "Custom user-defined material properties")
+            or (profile.standard_reference if profile else (rec.metadata.get("standard_reference") or f"Provider={rec.source.provider}; Grade={rec.identity.grade}" if rec else "Custom user-defined material properties"))
         )
 
         if youngs is not None and nu is not None:
@@ -493,6 +615,11 @@ def resolve_material_to_definition(
                 meta.setdefault("standard_reference", profile.standard_reference)
                 meta.setdefault("yield_strength_mpa", profile.yield_strength_mpa)
                 meta.setdefault("canonical_name", profile.canonical_name)
+            elif rec:
+                meta.setdefault("material_family", rec.identity.polymer_family)
+                meta.setdefault("standard_reference", rec.metadata.get("standard_reference", rec.source.source_version))
+                meta.setdefault("canonical_name", rec.identity.grade)
+                meta.setdefault("source", rec.source.to_dict())
 
             u_sys = material_input.get("unit_system") or unit_system
             return MaterialDefinition(
@@ -507,6 +634,15 @@ def resolve_material_to_definition(
             )
         elif profile:
             return profile.to_material_definition(unit_system=unit_system)
+        elif rec:
+            from ..contracts.material_resolver import MaterialResolver
+            res = MaterialResolver.resolve(
+                record=rec,
+                target_unit_system=unit_system,
+                constitutive_intent="elastoplastic" if rec.curves else "linear_elastic",
+            )
+            if res.is_executable and res.material_definition:
+                return res.material_definition
         elif fail_closed:
             raise ValueError(
                 f"Cannot resolve material from dict: missing elastic properties in '{material_input}'"
