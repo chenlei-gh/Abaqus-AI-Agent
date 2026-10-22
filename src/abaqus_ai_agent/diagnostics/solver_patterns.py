@@ -87,6 +87,19 @@ PATTERNS = [
         ),
     },
     {
+        "id": "STRAIN_INCREMENT_EXCEEDS_YIELD",
+        "regex": r"(?i)strain increment has exceeded fifty times the strain to cause",
+        "severity": "WARNING",
+        "likely_cause": (
+            "A strain increment exceeded fifty times the strain that causes first yield. "
+            "This is a precursor warning, not by itself a terminal solver error."
+        ),
+        "remediation": (
+            "Inspect the failed increment, material curve, load rate, and whether geometric "
+            "nonlinearity is required. Do not treat this warning as a completed diagnosis."
+        ),
+    },
+    {
         "id": "EXCESSIVE_DISTORTION",
         "regex": r"(?i)excessive distortion|distorted elements",
         "severity": "ERROR",
@@ -244,6 +257,61 @@ def _failure_evidence_reason(msg_text: str, sta_text: str, job_status: Optional[
     return None
 
 
+_STRAIN_INCREMENT_YIELD = re.compile(
+    r"(?i)THE STRAIN INCREMENT HAS EXCEEDED FIFTY TIMES THE STRAIN TO CAUSE"
+)
+_EXCESSIVE_DISTORTION_COUNT = re.compile(
+    r"(?i)EXCESSIVE DISTORTION AT A TOTAL OF (\d+) INTEGRATION POINTS"
+)
+_INCREMENT_START = re.compile(
+    r"(?i)INCREMENT\s+(\d+)\s+STARTS"
+)
+_STEP_HEADER = re.compile(
+    r"(?i)S\s*T\s*E\s*P\s+(\d+)"
+)
+
+
+def _solid_distortion_convergence_metadata(msg_text: str) -> Optional[Dict[str, Any]]:
+    """Summarize the solid-distortion failure combination when all three signals exist.
+
+    A falling distorted-point count is cutback history, not evidence that the model
+    is recovering. The combination is therefore reported as one convergence failure
+    rather than three unrelated warnings.
+    """
+    if not msg_text:
+        return None
+    if not _STRAIN_INCREMENT_YIELD.search(msg_text):
+        return None
+    counts = [int(match.group(1)) for match in _EXCESSIVE_DISTORTION_COUNT.finditer(msg_text)]
+    if not counts or not _TERMINAL_SOLVER_ERROR.search(msg_text):
+        return None
+
+    increment = None
+    step = None
+    increment_matches = list(_INCREMENT_START.finditer(msg_text))
+    if increment_matches:
+        increment = int(increment_matches[-1].group(1))
+    step_matches = list(_STEP_HEADER.finditer(msg_text))
+    if step_matches:
+        step = int(step_matches[-1].group(1))
+
+    metadata: Dict[str, Any] = {
+        "pattern": "SOLID_DISTORTION_CONVERGENCE",
+        "distorted_point_counts": counts,
+        "distorted_point_count_first": counts[0],
+        "distorted_point_count_last": counts[-1],
+        "count_decrease_is_recovery": False,
+        "terminal_error": "TOO_MANY_ATTEMPTS",
+        "automatic_contact_stabilization_allowed": False,
+        "automatic_artificial_damping_allowed": False,
+    }
+    if increment is not None:
+        metadata["failed_increment"] = increment
+    if step is not None:
+        metadata["failed_step"] = step
+    return metadata
+
+
 def diagnose_solver_artifacts(
     msg_text: str = "",
     sta_text: str = "",
@@ -321,6 +389,41 @@ def diagnose_solver_artifacts(
                 suggested_remediation=p["remediation"],
                 file_source=matched_source,
                 metadata=metadata,
+            )
+        )
+
+    distortion = _solid_distortion_convergence_metadata(msg_text)
+    if distortion is not None:
+        evidence = [
+            "STRAIN INCREMENT HAS EXCEEDED FIFTY TIMES THE STRAIN TO CAUSE FIRST YIELD",
+            "EXCESSIVE DISTORTION AT A TOTAL OF %d INTEGRATION POINTS" % distortion["distorted_point_count_first"],
+            "EXCESSIVE DISTORTION AT A TOTAL OF %d INTEGRATION POINTS" % distortion["distorted_point_count_last"],
+            "TOO MANY ATTEMPTS MADE FOR THIS INCREMENT",
+        ]
+        issues.append(
+            DiagnosticIssue(
+                diagnosis_id="SOLID_DISTORTION_CONVERGENCE",
+                severity="ERROR",
+                supporting_evidence=tuple(evidence),
+                likely_cause=(
+                    "Abaqus/Standard cut the increment back after solid integration points "
+                    "distorted and the strain increment exceeded fifty times first yield. "
+                    "The distorted-point count falling from %d to %d is failed cutback history, "
+                    "not recovery. The terminal error is too many attempts for the increment."
+                    % (
+                        distortion["distorted_point_count_first"],
+                        distortion["distorted_point_count_last"],
+                    )
+                ),
+                suggested_remediation=(
+                    "Do not add contact stabilization or artificial damping to hide this failure. "
+                    "Propose, and require confirmation before applying, one model change at a time: "
+                    "local mesh refinement at the distorted region, enabling nlgeom when the "
+                    "deformation is large, or correcting the material curve. A smaller initial "
+                    "increment is only a diagnostic probe and does not establish the physical cause."
+                ),
+                file_source="msg",
+                metadata=distortion,
             )
         )
 

@@ -118,7 +118,46 @@ class SolverRemediator:
                 )
             )
 
-        # 3. Cutback exhaustion / Minimum increment exceeded -> Step controls & stabilization
+        # 3. Solid distortion that exhausted cutbacks is not a damping problem.
+        # Contact stabilization and artificial damping would hide the element
+        # failure instead of identifying it. Model changes stay proposals.
+        if "SOLID_DISTORTION_CONVERGENCE" in issue_ids:
+            distortion = next(
+                iss for iss in issues if iss.diagnosis_id == "SOLID_DISTORTION_CONVERGENCE"
+            )
+            counts = distortion.metadata.get("distorted_point_counts") or ()
+            remediations.append(
+                RemediationAction(
+                    action_id=f"rem_distort_{uuid.uuid4().hex[:6]}",
+                    category=RemediationCategory.UNRESOLVED,
+                    diagnosis_id="SOLID_DISTORTION_CONVERGENCE",
+                    description=(
+                        "Solid integration points distorted and the strain increment exceeded "
+                        "fifty times first yield before cutbacks were exhausted. "
+                        "A falling distorted-point count is not recovery. "
+                        "Automatic contact stabilization and artificial damping are forbidden."
+                    ),
+                    parameters={
+                        "retry_allowed": False,
+                        "automatic_contact_stabilization_allowed": False,
+                        "automatic_artificial_damping_allowed": False,
+                        "distorted_point_counts": list(counts),
+                        "proposals_requiring_confirmation": [
+                            "local_mesh_refinement",
+                            "enable_nlgeom",
+                            "material_curve_review",
+                        ],
+                    },
+                    rationale=(
+                        "Element distortion is a model or discretization failure. "
+                        "Damping can make the increment pass without removing the distortion."
+                    ),
+                    risk_level=RemediationRisk.HIGH,
+                )
+            )
+            return tuple(remediations)
+
+        # 3b. Cutback exhaustion / Minimum increment exceeded -> Step controls & stabilization
         if "TIME_INCREMENT_LESS_THAN_MINIMUM" in issue_ids or "TOO_MANY_CUTBACKS" in issue_ids:
             remediations.append(
                 RemediationAction(
