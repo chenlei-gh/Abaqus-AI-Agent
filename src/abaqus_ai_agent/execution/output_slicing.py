@@ -64,6 +64,10 @@ class FailureSlice:
         if self.assertion_line:
             parts.append(f"assert: {self.assertion_line}")
 
+        remedy = self.extra.get("remedy")
+        if remedy:
+            parts.append(f"remedy: {remedy}")
+
         if self.evidence_path:
             parts.append(f"full log: {self.evidence_path}")
 
@@ -177,6 +181,17 @@ def build_failure_slice(
     if not message and returncode is not None:
         message = f"{operation} exited with returncode {returncode}"
 
+    extra: Dict[str, Any] = {"returncode": returncode} if returncode is not None else {}
+
+    # Environment misuse (wrong interpreter, launcher off PATH, cp936 default)
+    # is recoverable without touching the model, so surface the fix inline
+    # instead of leaving only a bare traceback.
+    from .environment_hints import diagnose_environment
+
+    remedy = diagnose_environment(combined, operation=operation)
+    if remedy:
+        extra["remedy"] = remedy
+
     return FailureSlice(
         exception_type=base.exception_type,
         exception_message=message,
@@ -185,10 +200,25 @@ def build_failure_slice(
         frame_function=base.frame_function,
         assertion_line=base.assertion_line,
         evidence_path=str(evidence_path) if evidence_path else None,
-        extra={"returncode": returncode} if returncode is not None else {},
+        extra=extra,
     )
 
 
 def slice_traceback_text(text: str, max_chars: int = MAX_FAILURE_CHARS) -> str:
     """Convenience: turn a raw traceback blob into a bounded failure message."""
-    return parse_failure(text).to_message(max_chars=max_chars)
+    parsed = parse_failure(text)
+    from .environment_hints import diagnose_environment
+
+    remedy = diagnose_environment(text)
+    if remedy:
+        parsed = FailureSlice(
+            exception_type=parsed.exception_type,
+            exception_message=parsed.exception_message,
+            frame_file=parsed.frame_file,
+            frame_line=parsed.frame_line,
+            frame_function=parsed.frame_function,
+            assertion_line=parsed.assertion_line,
+            evidence_path=parsed.evidence_path,
+            extra={**parsed.extra, "remedy": remedy},
+        )
+    return parsed.to_message(max_chars=max_chars)

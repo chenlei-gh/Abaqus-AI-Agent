@@ -547,7 +547,7 @@ evidence = {{
     "strict_gate": eval_result["strict_gate"],
 }}
 
-with open(output_json, "w") as f:
+with open(output_json, "w", encoding="utf-8") as f:
     json.dump(evidence, f, indent=2)
 
 print("AIAgent_FATIGUE_EVALUATION_COMPLETED")

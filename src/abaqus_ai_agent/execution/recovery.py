@@ -261,7 +261,7 @@ def inspect_run_state(workdir: str, job_name: str) -> RunRecoveryInspection:
     sta_status = "MISSING"
     if os.path.exists(sta_path):
         try:
-            with open(sta_path, "r", errors="ignore") as f:
+            with open(sta_path, "r", encoding="utf-8", errors="ignore") as f:
                 lines = f.readlines()
             sta_tail = "\n".join(lines[-20:]).upper()
             if "COMPLETED SUCCESSFULLY" in sta_tail or "ANALYSIS COMPLETED" in sta_tail:
@@ -277,7 +277,7 @@ def inspect_run_state(workdir: str, job_name: str) -> RunRecoveryInspection:
     msg_error_count = 0
     if os.path.exists(msg_path):
         try:
-            with open(msg_path, "r", errors="ignore") as f:
+            with open(msg_path, "r", encoding="utf-8", errors="ignore") as f:
                 content = f.read()
             msg_error_count = len(re.findall(r"\*\*\*ERROR|\*\*\*FATAL", content, re.IGNORECASE))
         except Exception:

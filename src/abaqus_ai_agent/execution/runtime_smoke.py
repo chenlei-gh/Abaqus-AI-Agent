@@ -112,10 +112,10 @@ try:
         sta_ok = False
         log_ok = False
         if os.path.exists(sta_path):
-            with open(sta_path, "r") as handle:
+            with open(sta_path, "r", encoding="utf-8", errors="replace") as handle:
                 sta_ok = "THE ANALYSIS HAS COMPLETED SUCCESSFULLY" in handle.read()
         if os.path.exists(log_path):
-            with open(log_path, "r") as handle:
+            with open(log_path, "r", encoding="utf-8", errors="replace") as handle:
                 log_ok = ("Abaqus JOB " + JOB + " COMPLETED") in handle.read()
         if sta_ok and log_ok:
             status = "COMPLETED"
