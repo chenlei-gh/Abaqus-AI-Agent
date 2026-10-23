@@ -528,6 +528,200 @@ def test_agent_solve_requirement_require_production_full_closure_and_delivery(tm
     assert (ctx.delivery_dir / "report.html").exists() or (workdir / "report.html").exists()
 
 
+def test_agent_report_stage_fidelity_blocks_formal_write_when_earlier_gates_bypassed(
+    tmp_path: Path, monkeypatch
+):
+    """Report-stage fidelity verdict is the final barrier: even if the reasoning
+    and compile-time fidelity interceptions are bypassed, a non-kinematic blocker
+    (unverifiable coating claim) found at report stage must refuse formal write.
+
+    The wrapper discriminates call sites by the explicit ``plan_actions`` keyword:
+    only the report-stage producer in agent.solve_requirement passes it. Reasoning
+    and compile-time calls (no ``plan_actions``) are answered with a clean verdict
+    to simulate their interception being bypassed; the report-stage call runs the
+    real audit against the identical intent.
+    """
+    from abaqus_ai_agent.agent import AbaqusAIAgent
+    from abaqus_ai_agent.contracts.intent import EngineeringIntent
+    from abaqus_ai_agent.contracts.material import ElasticProperties, MaterialDefinition
+    from abaqus_ai_agent.contracts.task import TaskStatus
+    from abaqus_ai_agent.planning.compiler import IntentGeometrySpec
+    import abaqus_ai_agent.validation.condition_fidelity as fidelity_mod
+
+    real_audit = fidelity_mod.audit_condition_fidelity
+
+    def _bypassed_earlier_gates(intent=None, **kwargs):
+        if "plan_actions" not in kwargs:
+            # Reasoning / compile-time interception simulated as bypassed.
+            clean = dict(real_audit(None))
+            return clean
+        return real_audit(intent, **kwargs)
+
+    monkeypatch.setattr(fidelity_mod, "audit_condition_fidelity", _bypassed_earlier_gates)
+    # reasoning.engine binds audit_condition_fidelity at module import time, so the
+    # module-attribute patch above does not reach it; patch that binding as well.
+    # The wrapper semantics are identical: calls without plan_actions (reasoning,
+    # compile gate) are simulated as bypassed; the report-stage producer in
+    # agent.solve_requirement passes plan_actions explicitly and runs the real audit.
+    import abaqus_ai_agent.reasoning.engine as reasoning_engine_mod
+    monkeypatch.setattr(reasoning_engine_mod, "audit_condition_fidelity", _bypassed_earlier_gates)
+
+    ctx = _make_test_ctx(tmp_path, "prod_agent_fidelity_proj")
+    workdir = ctx.create_run_solver_dir("Job_FIDELITY")
+    executor = MockCaeExecutor(workdir, job_name="Job_FIDELITY")
+    executor.launcher = "abaqus"
+    monkeypatch.setattr(
+        "abaqus_ai_agent.execution.solver.verify_authentic_odb_structure",
+        lambda **kwargs: {"verified": True, "offline": False, "steps": {"Step-1": {"frames": [0, 1]}}, "fields": ["S", "U"]},
+    )
+    # Mock headless viewer rendering so authentic figures are generated during
+    # pipeline execution; otherwise a missing real viewer session fails the run
+    # before the report-stage fidelity verdict is even reached.
+    import abaqus_ai_agent.execution.odb_rendering as rend_mod
+
+    def _mock_render_vis(odb_path, specs, output_dir, **kwargs):
+        import hashlib
+        from abaqus_ai_agent.execution.odb_rendering import (
+            compute_viewer_session_token,
+            create_render_execution_evidence,
+        )
+        rendered = []
+        session_nonce = "0123456789abcdef0123456789abcdef"
+        run_id = str(kwargs.get("run_id", "PROD")).strip()
+        odb_sha256 = ""
+        if odb_path and Path(odb_path).exists():
+            odb_sha256 = hashlib.sha256(Path(odb_path).read_bytes()).hexdigest()
+        input_hash = str(kwargs.get("input_hash") or "")
+        rendered_summary = []
+        for s in specs:
+            out_file = Path(output_dir) / s.target_filename
+            if not out_file.exists():
+                out_file.write_bytes(MINIMAL_VALID_PNG_BYTES)
+            img_bytes = out_file.read_bytes()
+            sha = hashlib.sha256(img_bytes).hexdigest()
+            rendered_summary.append({"filename": out_file.name, "image_sha256": sha})
+
+        render_ev = create_render_execution_evidence(
+            session_nonce=session_nonce,
+            run_id=run_id,
+            odb_sha256=odb_sha256,
+            rendered_figures=rendered_summary,
+            input_hash=input_hash,
+        )
+
+        for s in specs:
+            out_file = Path(output_dir) / s.target_filename
+            img_bytes = out_file.read_bytes()
+            sha = hashlib.sha256(img_bytes).hexdigest()
+            token = compute_viewer_session_token(
+                session_nonce=session_nonce,
+                run_id=run_id,
+                odb_sha256=odb_sha256,
+                target_filename=out_file.name,
+                image_sha256=sha,
+            )
+            rendered.append(
+                ReportFigure(
+                    kind=s.visualization_type,
+                    path=str(out_file.as_posix()),
+                    caption=getattr(s, "caption_zh", "") or getattr(s, "caption", ""),
+                    source=f"{s.field_name}.{s.component}",
+                    metadata={
+                        "field": s.field_name,
+                        "component": s.component,
+                        "step": s.step_name,
+                        "frame": s.frame_index,
+                        "actual_frame": s.actual_frame_index,
+                        "region": getattr(s, "region", "WHOLE_MODEL"),
+                        "output_position": getattr(s, "output_position", "INTEGRATION_POINT"),
+                        "run_id": run_id,
+                        "input_hash": kwargs.get("input_hash", ""),
+                        "odb_sha256": odb_sha256,
+                        "image_sha256": sha,
+                        "sha256": sha,
+                        "viewer_rendered": True,
+                        "session_nonce": session_nonce,
+                        "viewer_session_token": token,
+                        "render_execution_evidence": render_ev.to_dict(),
+                    },
+                )
+            )
+        return rendered
+
+    monkeypatch.setattr(rend_mod, "render_authentic_visualizations", _mock_render_vis)
+
+    _STATIC_METRIC_VALUES = {
+        "max_mises": 150.0,
+        "max_displacement": 0.42,
+        "reaction_force": 1000.0,
+    }
+
+    def _fake_extract(executor, path, crit):
+        extractions = []
+        for item in crit or ():
+            key = item.get("value_key") if isinstance(item, dict) else None
+            if key not in _STATIC_METRIC_VALUES:
+                continue
+            requirement = ResultRequirement(
+                name=key,
+                value_key=key,
+                field=item.get("field") or ("S" if key == "max_mises" else "U" if key == "max_displacement" else "RF"),
+                step=item.get("step") or "Step-1",
+                frame=-1,
+                unit=item.get("unit") or "",
+            )
+            extractions.append(
+                ResultExtraction(
+                    requirement=requirement,
+                    value=_STATIC_METRIC_VALUES[key],
+                    locator={"step": "Step-1", "frame": -1, "source": "odb", "value_key": key},
+                )
+            )
+        return extractions, ()
+
+    import abaqus_ai_agent.execution.results as res_mod
+    monkeypatch.setattr(res_mod, "extract_requirements", _fake_extract)
+
+    img_mises = workdir / "mises_stress_hotspot.png"
+    img_mises.write_bytes(MINIMAL_VALID_PNG_BYTES)
+    img_disp = workdir / "total_displacement.png"
+    img_disp.write_bytes(MINIMAL_VALID_PNG_BYTES)
+
+    agent = AbaqusAIAgent(executor)
+    geom = IntentGeometrySpec(shape="cantilever_box", length=100.0, width=10.0, height=10.0)
+    mat = MaterialDefinition(
+        name="Steel",
+        unit_system="MM_N_MPA",
+        elastic=ElasticProperties(youngs_modulus=210000.0, poisson_ratio=0.3),
+        density=7.85e-9,
+    )
+    intent = EngineeringIntent(
+        id="FIDELITY",
+        kind="linear_static",
+        description="Linear static analysis of the chrome plated cantilever",
+        boundary_conditions=({"type": "encastre", "region": "RootFace"},),
+        loads=({"type": "concentrated_force", "region": "TipFace", "magnitude": 1000.0, "direction": "-Y"},),
+        acceptance_criteria=(
+            {"name": "mises_limit", "value_key": "max_mises", "operator": "<=", "limit": 250.0, "unit": "MPa", "required": True},
+        ),
+    )
+
+    result = agent.solve_requirement(
+        requirement=intent,
+        geometry=geom,
+        material=mat,
+        workdir=str(workdir),
+        project_context=ctx,
+        require_production=True,
+    )
+
+    assert result.status == TaskStatus.FAILED
+    assert result.summary_card["engineering_status"] == "DELIVERY_BLOCKED"
+    assert any("coating_claim_without_surface_treatment_spec" in err for err in result.errors)
+    assert not (ctx.delivery_dir / "report.html").exists()
+    assert not (workdir / "report.html").exists()
+
+
 def test_agent_solve_requirement_require_production_blocks_fake_odb(tmp_path: Path):
     """When require_production=True and ODB is a fake plaintext mock, delivery is blocked."""
     from abaqus_ai_agent.agent import AbaqusAIAgent

@@ -1948,6 +1948,7 @@ class AbaqusAIAgent:
                 out_dir = official_dir
                 scope_payload = _analysis_scope_for_figures(plan, geometry) or {}
                 from .validation.condition_fidelity import (
+                    audit_condition_fidelity,
                     audit_interface_kinematics,
                     required_preprocessing_figure_kinds,
                 )
@@ -1962,9 +1963,23 @@ class AbaqusAIAgent:
                 scope_contacts = tuple(
                     scope_payload.get("contact_records") or scope_payload.get("contacts") or ()
                 )
+                # Re-run the full condition-fidelity audit against the same intent
+                # the compile gate saw (identical intent/description, no re-scoped
+                # loads/contacts) plus the plan that now exists. The compile gate
+                # normally rejects these blockers first; this report-stage verdict
+                # is the final barrier, so it must not go blind to non-kinematic
+                # fidelity failures if any earlier interception is bypassed.
+                fidelity_full = audit_condition_fidelity(
+                    intent,
+                    description=getattr(intent, "description", "") or "",
+                    plan_actions=getattr(plan, "actions", ()) or (),
+                )
                 # Report the interface kinematics verdict the plan actually supports.
                 # Without it the pipeline cannot tell a model that answers the
                 # separation question from one that answers a different question.
+                # This call stays authoritative for tie detection because it also
+                # inspects interaction specs (intent.contacts), which the full
+                # audit's internal kinematics check does not receive.
                 kinematics = audit_interface_kinematics(
                     intent,
                     description=getattr(intent, "description", "") or "",
@@ -1972,15 +1987,24 @@ class AbaqusAIAgent:
                     plan_actions=getattr(plan, "actions", ()) or (),
                     interactions=getattr(intent, "contacts", ()) or (),
                 )
-                fidelity_verdict = {
-                    "passed": not kinematics["blockers"],
-                    "formal_model_allowed": not kinematics["blockers"],
-                    "formal_report_allowed": not kinematics["blockers"],
-                    "blockers": list(kinematics["blockers"]),
-                    "warnings": list(kinematics["warnings"]),
+                merged_blockers = tuple(dict.fromkeys(
+                    tuple(fidelity_full["blockers"]) + tuple(kinematics["blockers"])
+                ))
+                merged_warnings = tuple(dict.fromkeys(
+                    tuple(fidelity_full["warnings"]) + tuple(kinematics["warnings"])
+                ))
+                fidelity_verdict = dict(fidelity_full)
+                fidelity_verdict.update({
+                    "passed": not merged_blockers,
+                    "formal_model_allowed": not merged_blockers,
+                    "formal_report_allowed": (
+                        bool(fidelity_full["formal_report_allowed"]) and not merged_blockers
+                    ),
+                    "blockers": list(merged_blockers),
+                    "warnings": list(merged_warnings),
                     "separation_required": kinematics["separation_required"],
-                    "source": "plan_interface_kinematics",
-                }
+                    "source": "plan_condition_fidelity",
+                })
                 deterministic_delivery_card, _, det_report_data = pipeline.build_and_render(
                     output_dir=Path(official_dir),
                     title=report_title,

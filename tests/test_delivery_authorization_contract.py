@@ -111,6 +111,69 @@ def test_fidelity_blocker_blocks_writer_formal_write(tmp_path):
     assert not formal.exists()
 
 
+def test_non_kinematic_fidelity_blocker_blocks_pipeline_formal_write(tmp_path, monkeypatch):
+    """A non-kinematic fidelity blocker (e.g. an unverifiable coating claim) must
+    also be refused by the pipeline, not just tie-vs-contact kinematics."""
+    import hashlib
+
+    from abaqus_ai_agent.contracts.provenance import issue_agent_run_record
+    from abaqus_ai_agent.reporting.figure_selector import FigureSelectionResult, FigureSelector
+    from abaqus_ai_agent.reporting.pipeline import DeterministicReportPipeline
+    from abaqus_ai_agent.validation.condition_fidelity import audit_condition_fidelity
+
+    monkeypatch.setattr(
+        FigureSelector,
+        "select_figures",
+        lambda *a, **k: FigureSelectionResult(scenario="none"),
+    )
+
+    odb = tmp_path / "job.odb"
+    odb.write_bytes(b"\x7fSIMULIA_ODB_BINARY_HEADER" + b"\x00" * 1024)
+    odb_sha = hashlib.sha256(odb.read_bytes()).hexdigest()
+    issued = issue_agent_run_record(
+        model_snapshot_hash='snap-test',
+        content_hash_scope='content-test',
+        action_plan_scope='plan-test',
+        run_id="run-blocked-coating",
+        model_name="BlockedCoating",
+        job_name="case_blocked_coating",
+        input_hash="a" * 64,
+        output_hash=odb_sha,
+        requirement_kind="engineering_intent",
+        jev_routed=False,
+    )
+    fidelity = dict(audit_condition_fidelity())
+    fidelity["passed"] = False
+    fidelity["formal_report_allowed"] = False
+    fidelity["blockers"] = ["coating_claim_without_surface_treatment_spec"]
+    assert verify_deliverable(
+        {
+            "provenance": issued,
+            "results": [],
+            "acceptance": {"status": "PASS", "deliverable": True},
+            "condition_fidelity": fidelity,
+        }
+    )["deliverable_file_allowed"] is False
+
+    pipeline = DeterministicReportPipeline()
+    with pytest.raises(PermissionError, match="coating_claim_without_surface_treatment_spec"):
+        pipeline.build_and_render(
+            output_dir=tmp_path,
+            title="BlockedCoating",
+            case_id="case_blocked_coating",
+            run_id="run-blocked-coating",
+            model_info={"name": "BlockedCoating"},
+            results_info=(),
+            acceptance_info={"status": "PASS", "deliverable": True},
+            require_deliverable=True,
+            provenance=issued,
+            input_hash="a" * 64,
+            odb_path=odb,
+            condition_fidelity=fidelity,
+        )
+    assert not (tmp_path / "report.html").exists()
+
+
 def test_missing_acceptance_is_blocked_not_downgraded(tmp_path):
     """Absent evidence must never be read as a passing verdict."""
     from abaqus_ai_agent.validation.condition_fidelity import audit_condition_fidelity
