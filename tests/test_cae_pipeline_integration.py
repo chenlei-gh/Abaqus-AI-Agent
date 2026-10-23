@@ -525,6 +525,7 @@ def test_agent_solve_requirement_require_production_full_closure_and_delivery(tm
     assert result.summary_card["deliverable"] is True
     assert result.summary_card["figure_selection"]["scenario"] == "static_structural"
     assert result.summary_card["delivery_card"] is not None
+    assert result.metadata.get("formal_report_written") is True
     assert (ctx.delivery_dir / "report.html").exists() or (workdir / "report.html").exists()
 
 
@@ -718,6 +719,7 @@ def test_agent_report_stage_fidelity_blocks_formal_write_when_earlier_gates_bypa
     assert result.status == TaskStatus.FAILED
     assert result.summary_card["engineering_status"] == "DELIVERY_BLOCKED"
     assert any("coating_claim_without_surface_treatment_spec" in err for err in result.errors)
+    assert result.metadata.get("formal_report_written") is False
     assert not (ctx.delivery_dir / "report.html").exists()
     assert not (workdir / "report.html").exists()
 

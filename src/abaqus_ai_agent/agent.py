@@ -2208,8 +2208,19 @@ class AbaqusAIAgent:
             if out_dir:
                 task_metadata["diagnostic_report_path"] = str(Path(out_dir) / "report.diagnostic.html")
         else:
+            # formal_report_written certifies an actual on-disk formal deliverable.
+            # It is claimed only when the gated pipeline returned a delivery card
+            # without raising AND the formal file exists. A blocked, failed, or
+            # unwritten delivery must keep this False (mirrors the input_modes.py
+            # convention); a run marked DELIVERY_BLOCKED must never assert it.
+            formal_file = Path(official_dir) / "report.html" if official_dir else None
             task_metadata["report_kind"] = "official_html"
-            task_metadata["formal_report_written"] = True
+            task_metadata["formal_report_written"] = bool(
+                delivery_block_error is None
+                and deterministic_delivery_card is not None
+                and formal_file is not None
+                and formal_file.is_file()
+            )
         return EngineeringTaskResult(
             status=task_status,
             intent=intent,
