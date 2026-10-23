@@ -107,6 +107,16 @@ class IntentMeshSpec:
     deviation_factor: float = 0.1
     element_library: str = "STANDARD"  # "STANDARD", "EXPLICIT"
     local_seeds: Tuple[LocalSeed, ...] = ()
+    # Quality thresholds passed to Part.verifyMeshQuality(). None means "no
+    # explicit threshold", not "the check passed": the native criterion still
+    # runs and its failed/warning element counts are recorded either way.
+    max_aspect_ratio: Optional[float] = None
+    min_angle: Optional[float] = None
+    max_angle: Optional[float] = None
+    max_angular_deviation: Optional[float] = None
+    max_geometric_deviation_factor: Optional[float] = None
+    min_jacobian: Optional[float] = None
+    max_skew: Optional[float] = None
 
     def __post_init__(self):
         if self.global_size is None or float(self.global_size) <= 0:
@@ -262,6 +272,38 @@ def _step_action_for_type(step_type, model_name, *, name, previous, nlgeom=False
     )
 
 
+def _mesh_quality_targets(geometry, active_scope, part_name):
+    """Return the part names whose generated mesh must be quality-checked.
+
+    Mirrors the parts that section 11 actually meshed. A check on a part that
+    was never meshed would produce a verdict about a different model.
+    """
+    shape = getattr(geometry, "shape", "")
+    if shape in ("step_assembly", "two_blocks_contact") and active_scope is not None:
+        names = []
+        for part in getattr(active_scope, "parts", ()) or ():
+            name = getattr(part, "name", None)
+            if name and name not in names:
+                names.append(name)
+        return tuple(names)
+    return (part_name,)
+
+
+def _resolve_physics_domain(intent: EngineeringIntent) -> Optional[str]:
+    """Resolve the physics domain used to pick mesh quality thresholds.
+
+    Resolution failures must not silently drop the thresholds. An unknown domain
+    falls back to the conservative default policy, which still submits shape
+    criteria, so the check can always reject an unusable mesh.
+    """
+    try:
+        from ..contracts.capability import resolve_capability
+
+        return resolve_capability(intent).physics_domain
+    except Exception:
+        return getattr(intent, "analysis_type", None) or getattr(intent, "kind", None)
+
+
 def compile_intent_to_actions(
     model_name: str,
     part_name: str,
@@ -286,6 +328,7 @@ def compile_intent_to_actions(
     fatigue: Optional[IntentFatigueSpec] = None,
     contact_stabilization: Optional[Any] = None,
     submit_job: bool = False,
+    physics_domain: Optional[str] = None,
 ) -> CompiledAgentPlan:
     """Compile declarative engineering specifications into canonical AbaqusActions and CAE script."""
     from ..reasoning.material_catalog import resolve_material_to_definition
@@ -1624,6 +1667,41 @@ def compile_intent_to_actions(
             )
         actions.append(builders.python_action(model_name, mesh_elem_code))
 
+    # 11b. Mesh Quality Verification Action
+    #
+    # Generating a mesh is not evidence that the mesh is usable. The quality
+    # inspection must be its own action so its verdict can be captured as a
+    # result binding instead of being inferred from the fact that
+    # generateMesh() did not raise.
+    #
+    # Thresholds are never left empty. Measured on Abaqus 2025, ANALYSIS_CHECKS
+    # alone reports zero failed elements on a mesh that fails ASPECT_RATIO on
+    # 124/166 elements, so a check with no shape threshold cannot reject a bad
+    # mesh. Missing thresholds are filled from the domain policy rather than
+    # silently omitted.
+    from ..contracts.mesh_quality import resolve_domain_mesh_quality_policy
+
+    mq_policy = resolve_domain_mesh_quality_policy(physics_domain)
+    mq_thresholds = {
+        "max_aspect_ratio": mesh.max_aspect_ratio if mesh.max_aspect_ratio is not None else mq_policy.max_aspect_ratio,
+        "min_angle": mesh.min_angle if mesh.min_angle is not None else mq_policy.min_angle,
+        "max_angle": mesh.max_angle if mesh.max_angle is not None else mq_policy.max_angle,
+    }
+    for _mq_part in _mesh_quality_targets(geometry, active_scope, part_name):
+        actions.append(builders.mesh_quality(
+            model=model_name,
+            part=_mq_part,
+            max_aspect_ratio=mq_thresholds["max_aspect_ratio"],
+            min_angle=mq_thresholds["min_angle"],
+            max_angle=mq_thresholds["max_angle"],
+            max_angular_deviation=mesh.max_angular_deviation,
+            max_geometric_deviation_factor=mesh.max_geometric_deviation_factor,
+            min_jacobian=mesh.min_jacobian,
+            max_skew=mesh.max_skew,
+            analysis_checks=True,
+            job_name=job_name,
+        ))
+
     # 12. Output Requests & Job Creation
     # Contact stabilization is only auditable if the dissipation it introduces is
     # written to the ODB. Abaqus does not include ALLSD in the default PRESELECT
@@ -2396,7 +2474,7 @@ def compile_engineering_intent(
     eff_fmbd = intent.fmbd
     eff_contact_stabilization = intent.metadata.get("contact_stabilization")
 
-    return compile_intent_to_actions(
+    compiled = compile_intent_to_actions(
         model_name=eff_model,
         part_name=eff_part,
         job_name=eff_job,
@@ -2420,4 +2498,33 @@ def compile_engineering_intent(
         fmbd=eff_fmbd,
         contact_stabilization=eff_contact_stabilization,
         submit_job=submit_job,
+        physics_domain=_resolve_physics_domain(intent),
     )
+
+    # The plan must be able to represent the behaviour the question asks about.
+    # A tie makes two surfaces permanently coincident, so a tie-only plan cannot
+    # answer a question that requires the interface to open or slide.
+    from ..validation.condition_fidelity import audit_interface_kinematics
+    kinematics = audit_interface_kinematics(
+        intent,
+        description=intent.description or "",
+        contacts=eff_interactions or (),
+        plan_actions=compiled.actions,
+        interactions=eff_interactions or (),
+    )
+    if kinematics["blockers"]:
+        raise ValueError(
+            "Cannot compile engineering intent: the plan cannot answer the requested "
+            "interface behaviour ("
+            + "; ".join(kinematics["blockers"])
+            + "). The interface is constrained to stay coincident, so a separation, "
+            "sliding, or pull-out question would be answered by a different model."
+        )
+    summary = dict(compiled.intent_summary)
+    summary["interface_kinematics"] = {
+        "separation_required": kinematics["separation_required"],
+        "tie_count": kinematics["tie_count"],
+        "contact_count": kinematics["contact_count"],
+        "warnings": list(kinematics["warnings"]),
+    }
+    return replace(compiled, intent_summary=summary)

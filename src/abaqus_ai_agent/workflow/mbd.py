@@ -10,7 +10,7 @@ class MultiBodyAnalysisPlan:
     notes: tuple = field(default_factory=tuple)
 
 
-def build_mbd_plan(
+def build_mbd_plan(  # ZERO-CALL CANDIDATE: no product caller found. Do not delete from that fact alone.
     model_name,
     part_name,
     material,

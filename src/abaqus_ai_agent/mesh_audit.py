@@ -288,6 +288,12 @@ def parse_and_audit_inp_deck(inp_path: Union[Path, str]) -> Dict[str, Any]:
     nodes: Dict[int, Tuple[float, float, float]] = {}
     quad_elements: Dict[int, Tuple[int, int, int, int]] = {}
     hex_elements: Dict[int, Tuple[int, ...]] = {}
+    # Element families this auditor can actually evaluate, and the ones it saw
+    # but cannot. Without the second set, a tetrahedral-only deck is reported as
+    # "zero auditable elements", which reads like an empty model instead of an
+    # unsupported element family.
+    unsupported_element_types: Dict[str, int] = {}
+    total_declared_elements = 0
 
     current_mode = None
     current_elem_type = ""
@@ -324,10 +330,14 @@ def parse_and_audit_inp_deck(inp_path: Union[Path, str]) -> Dict[str, Any]:
             try:
                 eid = int(tokens[0])
                 node_ids = [int(t) for t in tokens[1:]]
+                total_declared_elements += 1
                 if current_elem_type.startswith(("S4", "S4R", "CPS4", "CPE4", "CAX4")) and len(node_ids) >= 4:
                     quad_elements[eid] = (node_ids[0], node_ids[1], node_ids[2], node_ids[3])
                 elif current_elem_type.startswith(("C3D8", "C3D8R", "C3D8I")) and len(node_ids) >= 8:
                     hex_elements[eid] = tuple(node_ids[:8])
+                else:
+                    key = current_elem_type or "UNKNOWN"
+                    unsupported_element_types[key] = unsupported_element_types.get(key, 0) + 1
             except ValueError:
                 pass
 
@@ -355,6 +365,8 @@ def parse_and_audit_inp_deck(inp_path: Union[Path, str]) -> Dict[str, Any]:
         "audited_quads": audited_quads,
         "audited_hexes": audited_hexes,
         "missing_node_elements_count": missing_node_quads + missing_node_hexes,
+        "unsupported_element_types": dict(unsupported_element_types),
+        "total_declared_elements": total_declared_elements,
     }
 
 
@@ -405,8 +417,36 @@ def audit_inp_mesh_quality(
     quads = parsed["audited_quads"]
     hexes = parsed["audited_hexes"]
     total_audited = len(quads) + len(hexes)
+    unsupported_types = dict(parsed.get("unsupported_element_types") or {})
 
     if total_audited == 0:
+        # Two different situations both leave nothing to audit, and they need
+        # different codes: an empty deck is a defect, an unsupported element
+        # family is a blind spot. Reporting the second as "zero auditable
+        # elements" implies the model is empty and hides the real cause.
+        if unsupported_types:
+            detail = ",".join(
+                "%s:%d" % (name, count) for name, count in sorted(unsupported_types.items())
+            )
+            unsupported = "element_type_not_supported:%s" % detail
+            gate_eval = MeshGateEvaluation(
+                passed=False,
+                status="BLOCKED",
+                metrics={},
+                violations=(unsupported,),
+            )
+            return gate_eval, {
+                "gate_status": "BLOCKED",
+                "status": "unsupported",
+                "passed": False,
+                "violations": [unsupported],
+                "unsupported_checks": [unsupported],
+                "governing_metrics": {},
+                "nodes_count": parsed["nodes_count"],
+                "total_elements_audited": 0,
+                "unsupported_element_types": unsupported_types,
+                "audit_source": str(p),
+            }
         violations.append("inp_contains_zero_auditable_finite_elements")
 
     if violations:
@@ -461,6 +501,9 @@ def audit_inp_mesh_quality(
 
     detailed_report = {
         "gate_status": gate_eval.status,
+        "status": "fail" if gate_eval.status == "BLOCKED" else (
+            "warning" if gate_eval.status == "WARNING" else "pass"
+        ),
         "passed": gate_eval.passed,
         "violations": list(gate_eval.violations),
         "warnings": list(gate_eval.warnings),
@@ -469,6 +512,7 @@ def audit_inp_mesh_quality(
         "quad_elements_count": len(quads),
         "hex_elements_count": len(hexes),
         "total_elements_audited": total_audited,
+        "unsupported_element_types": unsupported_types,
         "audit_source": str(p),
     }
 

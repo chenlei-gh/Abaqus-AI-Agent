@@ -45,6 +45,68 @@ def is_invalid_result_validity(val) -> bool:
     return str(val) in _INVALID_RESULT_STATES
 
 
+_MESH_STATUS_TO_GATE = {
+    "pass": "PASS",
+    "warning": "WARNING",
+    "fail": "FAIL",
+    "unsupported": "UNSUPPORTED",
+    "not_run": "NOT_RUN",
+    "expired": "EXPIRED",
+}
+
+
+def _mesh_quality_shape_metrics(mq: Any) -> tuple:
+    """Return the shape criteria this result actually measured.
+
+    `ANALYSIS_CHECKS` answers a different question and cannot stand in for a
+    shape threshold: on Abaqus 2025 a C3D10M mesh that failed `ASPECT_RATIO` on
+    124/166 elements produced `failedElements=0` for `ANALYSIS_CHECKS`. A
+    required mesh gate therefore needs at least one shape metric before its
+    verdict can mean anything.
+    """
+    from .contracts.mesh_quality import SHAPE_THRESHOLD_FIELDS
+
+    metrics = getattr(mq, "metrics", None) or {}
+    return tuple(name for name in SHAPE_THRESHOLD_FIELDS if name in metrics)
+
+
+def _normalize_mesh_quality(mesh_quality: Any):
+    """Coerce any producer's mesh verdict onto the canonical result contract."""
+    from .contracts.mesh_quality import MeshQualityResult
+
+    if isinstance(mesh_quality, MeshQualityResult):
+        return mesh_quality
+    if isinstance(mesh_quality, dict):
+        return MeshQualityResult.from_mapping(mesh_quality)
+    # A dataclass-like producer: read the same keys from_mapping() would use.
+    payload = {}
+    for key in (
+        "status", "gate_status", "severity", "metrics", "violations", "warnings",
+        "evidence", "source", "failed_element_count", "warning_element_count",
+        "quality_scope", "job_name", "model_name", "part_name", "run_id",
+        "input_sha256", "odb_sha256", "created_at", "unsupported_checks",
+        "execution_error",
+    ):
+        if hasattr(mesh_quality, key):
+            payload[key] = getattr(mesh_quality, key)
+    return MeshQualityResult.from_mapping(payload)
+
+
+def _mesh_quality_failure_code(mq: Any) -> str:
+    """Name the verdict honestly instead of lumping every defect into one code."""
+    if mq.status == "fail":
+        return "mesh_quality_failed"
+    if mq.status == "warning":
+        # A warning only reaches here when the domain made it blocking.
+        return "mesh_quality_warning_blocking"
+    if mq.status == "unsupported":
+        detail = ",".join(mq.unsupported_checks) or "unspecified"
+        return "mesh_quality_unsupported:%s" % detail
+    if mq.status == "expired":
+        return "mesh_quality_expired"
+    return "mesh_quality_not_run"
+
+
 _PEAK_STRESS_KEYS = (
     "max_mises",
     "max_stress",
@@ -830,13 +892,45 @@ def evaluate_result_acceptance(result_status, numerical=None, engineering=None,
         gates["engineering_checks"] = "SKIPPED"
 
     # Gate 6: Mesh Quality Gate
+    #
+    # A mesh verdict is not a yes/no bit. `warning` is a real result that may be
+    # advisory or blocking depending on the domain, `unsupported`/`not_run` mean
+    # the check could not speak to this model, and neither may fall through to
+    # SKIPPED. Mapping every non-`pass` value to FAIL was an over-correction:
+    # it hid the difference between "the mesh is bad" and "we did not look".
     if mesh_quality is not None:
-        mq_status = mesh_quality.get("status") if isinstance(mesh_quality, dict) else getattr(mesh_quality, "status", None)
-        if mq_status in ("pass",):
-            gates["mesh_quality"] = "PASS"
+        mq = _normalize_mesh_quality(mesh_quality)
+        gates["mesh_quality"] = _MESH_STATUS_TO_GATE[mq.status]
+        domain_requires = "mesh_quality" in effective_required_gates
+        if mq.status == "pass":
+            pass
+        elif mq.status == "fail":
+            # A fatal defect is a physical failure, not a missing-gate block.
+            failures.append(_mesh_quality_failure_code(mq))
+        elif mq.severity == "blocking":
+            code = _mesh_quality_failure_code(mq)
+            failures.append(code)
+            blocked.append(code)
+        elif domain_requires and mq.status in ("unsupported", "not_run", "expired"):
+            # Cannot answer, in a domain that requires the answer.
+            code = _mesh_quality_failure_code(mq)
+            failures.append(code)
+            blocked.append(code)
+        elif domain_requires and not _mesh_quality_shape_metrics(mq):
+            # The check ran, but only against criteria that cannot fail on shape.
+            # Reporting that as a pass would make the mandatory gate decorative.
+            code = "mesh_quality_no_shape_criterion"
+            failures.append(code)
+            blocked.append(code)
         else:
-            failures.append("mesh_quality_failed")
-            gates["mesh_quality"] = "FAIL"
+            # advisory: visible in the gate verdict and the justifications, but it
+            # does not silently turn a legitimate analysis into a non-deliverable.
+            # `warnings` is a delivery-affecting list; using it here would make
+            # every advisory mesh note block formal delivery.
+            notes = ["mesh_quality_status=%s" % mq.status]
+            notes.extend(mq.warnings)
+            notes.extend(mq.unsupported_checks)
+            effective_justifications["mesh_quality"] = "; ".join(notes)
     elif "mesh_quality" in effective_required_gates:
         gates["mesh_quality"] = "BLOCKED"
         failures.append("missing_mandatory_gate:mesh_quality")

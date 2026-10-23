@@ -63,6 +63,9 @@ def test_authorized_report_cli_writes_html_not_markdown(tmp_path, capsys):
     from abaqus_ai_agent.contracts.provenance import issue_agent_run_record
 
     issued = issue_agent_run_record(
+        model_snapshot_hash='snap-test',
+        content_hash_scope='content-test',
+        action_plan_scope='plan-test',
         run_id="run-cli-html",
         model_name="Handle",
         job_name="Job-1",
@@ -72,7 +75,10 @@ def test_authorized_report_cli_writes_html_not_markdown(tmp_path, capsys):
     )
     evidence = tmp_path / "evidence.json"
     evidence.write_text(
-        '{"case_id": "probe", "odb_path": "job.odb", "results": {"max_mises": 1.0}, "provenance": '
+        '{"case_id": "probe", "odb_path": "job.odb", "results": {"max_mises": 1.0}, '
+        '"acceptance": {"status": "PASS", "deliverable": true}, '
+        '"condition_fidelity": {"passed": true, "formal_report_allowed": true, "blockers": []}, '
+        '"provenance": '
         + __import__("json").dumps(issued.to_dict(), ensure_ascii=False)
         + "}",
         encoding="utf-8",

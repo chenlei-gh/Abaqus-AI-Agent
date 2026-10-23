@@ -15,7 +15,7 @@ import dataclasses
 from pathlib import Path
 from typing import Any, Dict, Optional
 
-from ..contracts.provenance import provenance_from_mapping, verify_deliverable
+from ..contracts.provenance import build_delivery_record, provenance_from_mapping, verify_deliverable
 from ..contracts.report import EngineeringReportData
 from .renderer import render_html
 
@@ -55,6 +55,22 @@ def _as_record(record: Any, odb_sha256: Optional[str] = None, results: Any = Non
     if results is not None and not payload.get("results"):
         payload["results"] = list(results)
     return payload
+
+
+def _declared_figure_requirement(record: Any) -> Any:
+    """Return the figure kinds a record declares, without flattening them.
+
+    A record may name the kinds it claims (`required_preprocessing_figures`) or
+    only say that preprocessing figures are required. The named kinds must reach
+    build_delivery_record() as a tuple: `bool()` here would erase them and force
+    every formal preprocessing figure to be present.
+    """
+    if not isinstance(record, dict):
+        return False
+    declared = record.get("required_preprocessing_figures")
+    if declared:
+        return tuple(str(kind) for kind in declared)
+    return record.get("require_preprocessing_figures") or False
 
 
 def _with_authorization(report: EngineeringReportData, gate: Dict[str, Any], provenance: Any) -> EngineeringReportData:
@@ -115,7 +131,26 @@ def write_gated_engineering_report(
             "Markdown engineering reports are not written. HTML is the only report file."
         )
     resolved_fmt = "html"
-    payload = _as_record(record, odb_sha256=odb_sha256, results=results)
+    payload = build_delivery_record(
+        provenance=(
+            record.get("provenance") if isinstance(record, dict) else record
+        ),
+        results=(
+            (record.get("results") if isinstance(record, dict) else None)
+            or results
+            or ()
+        ),
+        odb_path=record.get("odb_path") if isinstance(record, dict) else None,
+        odb_sha256=odb_sha256 or (record.get("odb_sha256") if isinstance(record, dict) else None),
+        acceptance=record.get("acceptance") if isinstance(record, dict) else None,
+        condition_fidelity=record.get("condition_fidelity") if isinstance(record, dict) else None,
+        figures=record.get("figures") if isinstance(record, dict) else (),
+        # Pass the declared figure kinds through unchanged. Collapsing this to a
+        # bool loses the kinds a caller actually claimed and silently upgrades the
+        # requirement to every formal preprocessing figure.
+        require_preprocessing_figures=_declared_figure_requirement(record),
+        model_contract_mismatch=record.get("model_contract_mismatch") if isinstance(record, dict) else None,
+    )
     if report is not None and not payload.get("results"):
         report_results = getattr(report, "results", None) or ()
         if report_results:
@@ -125,7 +160,10 @@ def write_gated_engineering_report(
         if provenance is not None:
             payload["provenance"] = provenance.to_dict()
 
-    gate = verify_deliverable(payload)
+    # The writer is the last line of defence: it re-runs the same verdict and
+    # never trusts a caller-supplied flag. A filename is a naming convention, not
+    # an authorization, so it only decides how a refusal is presented.
+    gate = verify_deliverable(payload, require_decision_inputs=not allow_diagnostic_draft)
     allowed = bool(gate.get("deliverable_file_allowed"))
     formal_name = (
         target.stem.lower() in _FORMAL_STEMS
@@ -148,12 +186,35 @@ def write_gated_engineering_report(
                         "without a JEV-routed run record."
                     )
         write_path.parent.mkdir(parents=True, exist_ok=True)
-        write_path.write_text(body, encoding="utf-8")
+        try:
+            write_path.write_text(body, encoding="utf-8")
+        except Exception as exc:
+            # A granted authorization is not a written deliverable. Report the
+            # failure honestly and leave no partial file behind.
+            try:
+                if write_path.exists():
+                    write_path.unlink()
+            except Exception:
+                pass
+            return {
+                "written": False,
+                "kind": "delivery_write_failed",
+                "path": str(write_path),
+                "formal_path_refused": None,
+                "delivery_requested": True,
+                "delivery_granted": True,
+                "delivery_written": False,
+                "write_error": str(exc),
+                "gate": gate,
+            }
         return {
             "written": True,
             "kind": write_kind,
             "path": str(write_path),
             "formal_path_refused": str(target) if write_path != target else None,
+            "delivery_requested": True,
+            "delivery_granted": True,
+            "delivery_written": True,
             "gate": gate,
         }
 
@@ -182,11 +243,27 @@ def write_gated_engineering_report(
     if "Abaqus-AI-Agent 编制" in body:
         body = body.replace("Abaqus-AI-Agent 编制", "未授权署名")
     draft_path.parent.mkdir(parents=True, exist_ok=True)
-    draft_path.write_text(body, encoding="utf-8")
+    try:
+        draft_path.write_text(body, encoding="utf-8")
+    except Exception as exc:
+        return {
+            "written": False,
+            "kind": "delivery_write_failed",
+            "path": str(draft_path),
+            "formal_path_refused": str(target),
+            "delivery_requested": True,
+            "delivery_granted": False,
+            "delivery_written": False,
+            "write_error": str(exc),
+            "gate": gate,
+        }
     return {
         "written": True,
         "kind": "diagnostic_draft",
         "path": str(draft_path),
         "formal_path_refused": str(target),
+        "delivery_requested": True,
+        "delivery_granted": False,
+        "delivery_written": True,
         "gate": gate,
     }

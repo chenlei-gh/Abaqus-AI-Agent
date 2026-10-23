@@ -112,6 +112,183 @@ def _record_payload(item):
     return payload or None
 
 
+_EVIDENCE_PRODUCING_ACTIONS = frozenset({"mesh_quality"})
+
+
+def _load_result_items_sidecar(workdir, job_name):
+    """Read the atomic result-item fallback for one job.
+
+    A missing file is not evidence. A file for another job, or a file that is
+    not valid JSON, is an execution error rather than a pass.
+    """
+    if not workdir or not job_name:
+        return None
+    path = Path(workdir) / (str(job_name) + ".result_items.json")
+    if not path.is_file():
+        return None
+    try:
+        import json as _json
+
+        payload = _json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        return {"status": "not_run", "execution_error": "result_items_unreadable", "job_name": job_name}
+    if not isinstance(payload, dict) or str(payload.get("job_name") or "") != str(job_name):
+        return {"status": "expired", "execution_error": "expired_result_items", "job_name": job_name}
+    items = payload.get("items") or ()
+    for item in items:
+        if isinstance(item, dict) and item.get("kind", "mesh_quality") == "mesh_quality":
+            return dict(item)
+    return None
+
+
+def _decode_mesh_result_payload(raw):
+    """Decode one mesh quality action result into a mapping.
+
+    The CAE script prints a Python literal, so a text result must be parsed
+    rather than treated as evidence. An unparsable result is reported as an
+    execution error, never as a pass.
+    """
+    if isinstance(raw, dict):
+        return dict(raw)
+    if raw is None:
+        return None
+    if not isinstance(raw, str):
+        return None
+    text = raw.strip()
+    if not text:
+        return None
+    last = text.splitlines()[-1].strip()
+    try:
+        import json as _json
+
+        decoded = _json.loads(last)
+        return dict(decoded) if isinstance(decoded, dict) else None
+    except Exception:
+        pass
+    try:
+        import ast as _ast
+
+        decoded = _ast.literal_eval(last)
+        return dict(decoded) if isinstance(decoded, dict) else None
+    except Exception:
+        return {"status": "not_run", "execution_error": "mesh_result_not_parsable"}
+
+
+def _mesh_quality_rank(status):
+    """Order verdicts by how much they should hold back a report."""
+    return {
+        "pass": 0,
+        "warning": 1,
+        "not_run": 2,
+        "expired": 3,
+        "unsupported": 4,
+        "fail": 5,
+    }.get(status, 2)
+
+
+def _combine_mesh_quality_results(results):
+    """Reduce per-part verdicts to the one the gate must consider.
+
+    A clean part cannot outvote a defective one: the worst verdict wins, and the
+    contributing part names are kept so the report can say which part failed.
+    """
+    from .contracts.mesh_quality import MeshQualityResult
+
+    if not results:
+        return None
+    if len(results) == 1:
+        return results[0]
+    worst = max(results, key=lambda item: _mesh_quality_rank(item.status))
+    parts = [r.part_name for r in results if r.part_name]
+    violations = []
+    warnings = []
+    unsupported = []
+    for item in results:
+        prefix = "%s:" % item.part_name if item.part_name else ""
+        violations.extend(prefix + v for v in item.violations)
+        warnings.extend(prefix + w for w in item.warnings)
+        unsupported.extend(prefix + u for u in item.unsupported_checks)
+    return MeshQualityResult(
+        status=worst.status,
+        severity=worst.severity or None,
+        metrics=dict(worst.metrics),
+        violations=tuple(violations),
+        warnings=tuple(warnings),
+        evidence=tuple(sorted({e for item in results for e in item.evidence})),
+        source=worst.source,
+        failed_element_count=sum(r.failed_element_count for r in results),
+        warning_element_count=sum(r.warning_element_count for r in results),
+        job_name=worst.job_name,
+        model_name=worst.model_name,
+        part_name=",".join(parts) if parts else None,
+        unsupported_checks=tuple(unsupported),
+        execution_error=worst.execution_error,
+    )
+
+
+def _resolve_mesh_gate_status(mq_audit, acceptance):
+    """Return (display status, audit payload) from one canonical mesh verdict.
+
+    Producers wrote `status` and `gate_status` in incompatible casing, and this
+    reader used to look at `gate_status` only. A result that carried `status`
+    therefore read as NOT_CHECKED even though the check had run. The canonical
+    contract is consulted first; the acceptance gate's own verdict is used only
+    when no mesh result exists, and that fallback is labelled as such.
+    """
+    from .contracts.mesh_quality import MeshQualityResult, normalize_mesh_quality_status
+
+    payload = {}
+    if isinstance(mq_audit, dict):
+        payload = dict(mq_audit)
+    elif mq_audit is not None:
+        for key in (
+            "status", "gate_status", "severity", "metrics", "violations", "warnings",
+            "evidence", "source", "failed_element_count", "warning_element_count",
+            "quality_scope", "job_name", "model_name", "part_name", "run_id",
+            "input_sha256", "odb_sha256", "created_at", "unsupported_checks",
+            "execution_error",
+        ):
+            if hasattr(mq_audit, key):
+                payload[key] = getattr(mq_audit, key)
+
+    if payload:
+        result = MeshQualityResult.from_mapping(payload)
+        payload = result.to_dict()
+        if result.status == "pass":
+            return "PASS", payload
+        if result.status == "warning":
+            return "WARNING", payload
+        if result.status == "unsupported":
+            return "UNSUPPORTED", payload
+        if result.status == "expired":
+            return "EXPIRED", payload
+        if result.status == "not_run":
+            return "NOT_CHECKED", payload
+        return "FAIL", payload
+
+    acc_gates = {}
+    if isinstance(acceptance, dict):
+        acc_gates = acceptance.get("gates") or {}
+    elif hasattr(acceptance, "gates"):
+        acc_gates = getattr(acceptance, "gates") or {}
+    mq_gate_val = acc_gates.get("mesh_quality")
+    if mq_gate_val is not None:
+        canonical = normalize_mesh_quality_status(mq_gate_val)
+        display = {
+            "pass": "PASS",
+            "warning": "WARNING",
+            "fail": "FAIL",
+            "unsupported": "UNSUPPORTED",
+            "expired": "EXPIRED",
+        }.get(canonical, "NOT_CHECKED")
+        return display, {
+            "gate_status": display,
+            "source": "acceptance_gate_only",
+            "status": canonical,
+        }
+    return "NOT_CHECKED", {}
+
+
 def _analysis_scope_for_figures(plan, geometry):
     """Reuse the already compiled assembly scope. Do not rescreen parts here."""
     summary = getattr(plan, "intent_summary", None) or {}
@@ -305,15 +482,126 @@ class AbaqusAIAgent:
         self.mode = mode
 
     def apply_plan(self, plan):
+        """Execute every action and return one record per action.
+
+        The returned records are the only trace of what the CAE session actually
+        did. Discarding them meant a mesh quality action could run and its result
+        be lost before anything could bind it to the run.
+        """
         validate_plan(plan)
         results = []
         for action in plan.actions:
             results.append(execute(self.executor, action))
         return results
 
+    def apply_plan_with_evidence(self, plan, result_dir=None):
+        """Execute the plan and keep each action's result keyed by action type.
+
+        Actions that produce delivery evidence (currently mesh quality) run
+        through `execute_verified()` so the result carries a journal record and
+        an evidence bundle. An action whose result never went through that path
+        cannot later be mistaken for verified evidence.
+
+        `result_dir` binds the structured fallback file to the run's workdir.
+        The writer used to resolve its own location from the CAE session's current
+        directory, which is not the same directory the reader inspects.
+        """
+        validate_plan(plan)
+        records = []
+        by_type: Dict[str, List[Any]] = {}
+        for action in plan.actions:
+            if action.action_type in _EVIDENCE_PRODUCING_ACTIONS:
+                from .actions.runner import execute_verified
+
+                if result_dir and "result_dir" not in action.parameters:
+                    action = replace(
+                        action,
+                        parameters=dict(action.parameters, result_dir=str(result_dir)),
+                    )
+                outcome = execute_verified(self.executor, action)
+                result = outcome.get("result")
+                records.append({
+                    "action_type": action.action_type,
+                    "result": result,
+                    "verified": True,
+                    "record": outcome.get("record"),
+                    "evidence": outcome.get("evidence"),
+                })
+            else:
+                result = execute(self.executor, action)
+                records.append({"action_type": action.action_type, "result": result, "verified": False})
+            by_type.setdefault(action.action_type, []).append(result)
+        return records, by_type
+
     def inspect_model(self):
         from .execution.inspection import get_model_info
         return get_model_info(self.executor)
+
+    def _mesh_quality_from_plan(self, results_by_type, plan=None, intent=None, workdir=None):
+        """Build a bound mesh quality verdict from the executed plan's results.
+
+        This is the producer the acceptance gate reads. It returns None when the
+        plan contained no quality action, which the gate reports distinctly from
+        a check that ran and found nothing wrong.
+        """
+        from .contracts.mesh_quality import MeshQualityBinding, MeshQualityResult, mesh_quality_expiry_reasons
+
+        raw_results = list((results_by_type or {}).get("mesh_quality") or ())
+        if not any(_decode_mesh_result_payload(item) for item in raw_results):
+            sidecar = _load_result_items_sidecar(workdir, getattr(plan, "job_name", None) if plan is not None else None)
+            if sidecar is not None:
+                raw_results.append(sidecar)
+        if not raw_results:
+            return None
+
+        job_name = getattr(plan, "job_name", None) if plan is not None else None
+        model_name = getattr(plan, "model_name", None) if plan is not None else None
+        input_sha256 = None
+        if workdir and job_name:
+            try:
+                import hashlib as _hashlib
+
+                candidate = Path(workdir) / (str(job_name) + ".inp")
+                if candidate.is_file():
+                    input_sha256 = _hashlib.sha256(candidate.read_bytes()).hexdigest()
+            except Exception:
+                input_sha256 = None
+
+        built = []
+        for raw in raw_results:
+            payload = _decode_mesh_result_payload(raw)
+            if not payload:
+                built.append(MeshQualityResult(
+                    status="not_run",
+                    source="native_abaqus_verifyMeshQuality",
+                    execution_error="mesh_quality_result_missing",
+                    job_name=job_name,
+                    model_name=model_name,
+                    input_sha256=input_sha256,
+                ))
+                continue
+            if job_name:
+                payload.setdefault("job_name", job_name)
+            if model_name:
+                payload.setdefault("model_name", model_name)
+            if input_sha256:
+                payload.setdefault("input_sha256", input_sha256)
+            built.append(MeshQualityResult.from_mapping(payload))
+
+        combined = _combine_mesh_quality_results(built)
+        if combined is None:
+            return None
+        # A result that contradicts this job cannot be used as its evidence.
+        expired = mesh_quality_expiry_reasons(
+            combined, MeshQualityBinding(job_name=job_name, input_sha256=input_sha256)
+        )
+        if expired:
+            data = combined.to_dict()
+            data["status"] = "expired"
+            data["severity"] = "blocking"
+            data["violations"] = list(combined.violations) + list(expired)
+            return MeshQualityResult.from_mapping(data)
+        return combined
 
     def snapshot(self):
         from .execution.snapshot import read_model_snapshot
@@ -733,7 +1021,7 @@ class AbaqusAIAgent:
                      engineering_intent=None, postprocess_profile=None,
                      action_plan=(), environment=None, timeout=3600, workdir=None,
                      require_production=None, project_context=None,
-                     license_wait_seconds=None, job_options=None):
+                     license_wait_seconds=None, job_options=None, physics_domain=None):
         from .execution.analysis_run import AnalysisRunner
         from .telemetry.phase_profile import PhaseProfiler
         cname = getattr(self.executor, "__class__", None).__name__ or ""
@@ -760,7 +1048,7 @@ class AbaqusAIAgent:
             environment=environment, timeout=timeout, workdir=workdir,
             require_production=require_production, project_context=project_context,
             phase_profiler=profiler, license_wait_seconds=license_wait_seconds,
-            job_options=job_options)
+            job_options=job_options, physics_domain=physics_domain)
         self._persist_phase_profile(profiler, run)
         return run
 
@@ -1271,7 +1559,20 @@ class AbaqusAIAgent:
                         target_workdir = str(project_context.create_run_solver_dir(plan.job_name or "run"))
 
         # 5. Apply Plan Actions to CAE Environment
-        self.apply_plan(plan)
+        #
+        # Action results are kept, not discarded: the mesh quality inspection is
+        # an action whose verdict is the evidence. Without capturing it here the
+        # gate could only ever see "no mesh quality result" even though the check
+        # had run.
+        plan_records, plan_results_by_type = self.apply_plan_with_evidence(
+            plan, result_dir=target_workdir or getattr(plan, "workdir", None)
+        )
+        mesh_quality_from_plan = self._mesh_quality_from_plan(
+            plan_results_by_type,
+            plan=plan,
+            intent=intent,
+            workdir=target_workdir,
+        )
 
         # 6. Single Canonical Production Outlet: AnalysisRunner
         criteria = kwargs.pop("criteria", None) or intent.acceptance_criteria or ()
@@ -1289,6 +1590,8 @@ class AbaqusAIAgent:
             workdir=target_workdir,
             require_production=prod_req,
             project_context=project_context,
+            mesh_quality=mesh_quality_from_plan,
+            physics_domain=getattr(capability, "physics_domain", None),
             **kwargs,
         )
 
@@ -1309,9 +1612,18 @@ class AbaqusAIAgent:
             from .diagnostics.orchestrator import SelfHealingOrchestrator
             heal_kwargs = dict(kwargs)
             # Consent is an explicit product flag. Do not let a leaked kwarg
-            # silently authorize a model-changing rerun.
-            heal_kwargs.pop("confirm_model_change", None)
-            heal_workdir = heal_kwargs.pop("workdir", getattr(run, "work_dir", None))
+            # silently authorize a model-changing rerun. The same rule applies
+            # to the context the rerun must inherit: a stale kwarg must not
+            # replace the workdir, production flag, or project context that
+            # this call already resolved.
+            for reserved in (
+                "confirm_model_change",
+                "project_context",
+                "require_production",
+                "workdir",
+            ):
+                heal_kwargs.pop(reserved, None)
+            heal_workdir = getattr(run, "work_dir", None) or target_workdir
             if not heal_workdir:
                 if project_context is not None:
                     heal_workdir = str(project_context.create_run_solver_dir(getattr(run, "id", "heal")))
@@ -1339,6 +1651,8 @@ class AbaqusAIAgent:
                 criteria=criteria,
                 postprocess_profile=capability.profile,
                 confirm_model_change=bool(confirm_model_change),
+                project_context=project_context,
+                require_production=prod_req,
                 **heal_kwargs,
             )
             model_change_applied = bool(
@@ -1599,41 +1913,9 @@ class AbaqusAIAgent:
                 if not mq_audit or not isinstance(mq_audit, dict):
                     mq_audit = (getattr(run, "verification", {}) or {}).get("mesh_gate")
 
-                resolved_gate_status = "NOT_CHECKED"
-                if isinstance(mq_audit, dict) and mq_audit.get("gate_status"):
-                    raw_status = str(mq_audit["gate_status"]).upper()
-                    if "PASS" in raw_status:
-                        resolved_gate_status = "PASS"
-                    elif "WARN" in raw_status:
-                        resolved_gate_status = "WARNING"
-                    elif "BLOCK" in raw_status:
-                        resolved_gate_status = "BLOCKED"
-                    elif "FAIL" in raw_status:
-                        resolved_gate_status = "FAIL"
-                    else:
-                        resolved_gate_status = "NOT_CHECKED"
-                else:
-                    acc_gates = {}
-                    if isinstance(acceptance, dict):
-                        acc_gates = acceptance.get("gates") or {}
-                    elif hasattr(acceptance, "gates"):
-                        acc_gates = getattr(acceptance, "gates") or {}
-                    mq_gate_val = acc_gates.get("mesh_quality")
-                    if mq_gate_val is not None:
-                        val_str = str(mq_gate_val).upper()
-                        if val_str == "PASS":
-                            resolved_gate_status = "PASS"
-                        elif "WARN" in val_str:
-                            resolved_gate_status = "WARNING"
-                        elif "BLOCK" in val_str:
-                            resolved_gate_status = "BLOCKED"
-                        elif "FAIL" in val_str:
-                            resolved_gate_status = "FAIL"
-                        else:
-                            resolved_gate_status = "NOT_CHECKED"
-
-                quality_audit_payload = dict(mq_audit) if isinstance(mq_audit, dict) else {}
-                quality_audit_payload["gate_status"] = resolved_gate_status
+                resolved_gate_status, quality_audit_payload = _resolve_mesh_gate_status(
+                    mq_audit, acceptance
+                )
 
                 mesh_info_payload = {
                     "discretization": disc_data,
@@ -1665,7 +1947,10 @@ class AbaqusAIAgent:
                     )
                 out_dir = official_dir
                 scope_payload = _analysis_scope_for_figures(plan, geometry) or {}
-                from .validation.condition_fidelity import required_preprocessing_figure_kinds
+                from .validation.condition_fidelity import (
+                    audit_interface_kinematics,
+                    required_preprocessing_figure_kinds,
+                )
                 required_figures = required_preprocessing_figure_kinds(
                     boundary_evidence=boundary_for_figures,
                     loads=_report_loads(boundary_for_figures),
@@ -1674,6 +1959,28 @@ class AbaqusAIAgent:
                     description=getattr(intent, "description", "") or "",
                     intent=intent,
                 )
+                scope_contacts = tuple(
+                    scope_payload.get("contact_records") or scope_payload.get("contacts") or ()
+                )
+                # Report the interface kinematics verdict the plan actually supports.
+                # Without it the pipeline cannot tell a model that answers the
+                # separation question from one that answers a different question.
+                kinematics = audit_interface_kinematics(
+                    intent,
+                    description=getattr(intent, "description", "") or "",
+                    contacts=scope_contacts,
+                    plan_actions=getattr(plan, "actions", ()) or (),
+                    interactions=getattr(intent, "contacts", ()) or (),
+                )
+                fidelity_verdict = {
+                    "passed": not kinematics["blockers"],
+                    "formal_model_allowed": not kinematics["blockers"],
+                    "formal_report_allowed": not kinematics["blockers"],
+                    "blockers": list(kinematics["blockers"]),
+                    "warnings": list(kinematics["warnings"]),
+                    "separation_required": kinematics["separation_required"],
+                    "source": "plan_interface_kinematics",
+                }
                 deterministic_delivery_card, _, det_report_data = pipeline.build_and_render(
                     output_dir=Path(official_dir),
                     title=report_title,
@@ -1716,6 +2023,7 @@ class AbaqusAIAgent:
                     result_intelligence=ri_bundle,
                     self_healing=healing_result,
                     required_preprocessing_figures=required_figures,
+                    condition_fidelity=fidelity_verdict,
                 )
                 report_md = render_markdown(det_report_data)
                 report_html_str = render_html(det_report_data, base_dir=out_dir)

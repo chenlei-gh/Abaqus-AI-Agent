@@ -31,6 +31,7 @@ from abaqus_ai_agent.reporting import (
     VisualizationSpec,
 )
 from abaqus_ai_agent.telemetry.tracker import _heuristic_count_tokens
+from abaqus_ai_agent.validation.condition_fidelity import audit_condition_fidelity
 
 
 def test_adaptive_report_template_polymorphic_switching():
@@ -181,7 +182,11 @@ def test_visualization_spec_and_deterministic_figure_binding(tmp_path: Path):
         acceptance_info={"status": "PASS", "deliverable": True},
         visualization_specs=[spec],
         figures=[fig],
+        condition_fidelity=audit_condition_fidelity(),
         provenance=issue_agent_run_record(
+            model_snapshot_hash='snap-test',
+            content_hash_scope='content-test',
+            action_plan_scope='plan-test',
             run_id=test_run_id,
             model_name="BoltedFlange",
             job_name="case_03_flange",
@@ -380,7 +385,11 @@ def test_ab_qualification_full_llm_report_vs_deterministic_pipeline(tmp_path: Pa
         loads_info=({"name": "BoltPreload", "magnitude": 1000.0, "direction": "-Z"},),
         bcs_info=({"name": "EncastreBase", "type": "ENCASTRE"},),
         language="bilingual",
+        condition_fidelity=audit_condition_fidelity(),
         provenance=issue_agent_run_record(
+            model_snapshot_hash='snap-test',
+            content_hash_scope='content-test',
+            action_plan_scope='plan-test',
             run_id=ab_run_id,
             model_name="FlangeJoint",
             job_name="case_03_bolted_joint",

@@ -168,7 +168,11 @@ def test_mesh_quality_and_convergence_gate_acceptance():
         criteria=(),
     )
     assert not result.passed
-    assert "mesh_quality_failed" in result.failures
+    # A warning is recorded as a warning, not promoted to a fatal defect. The
+    # convergence failure is what stops this acceptance.
+    assert "mesh_quality_failed" not in result.failures
+    assert result.gates["mesh_quality"] == "WARNING"
+    assert "bad_transition" in result.gate_justifications["mesh_quality"]
     assert "mesh_convergence_failed" in result.failures
 
 

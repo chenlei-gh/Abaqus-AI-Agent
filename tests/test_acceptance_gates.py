@@ -28,6 +28,12 @@ def test_matching_required_fields_passes():
         result_status="completed",
         values={"max_displacement": 0.5, "max_mises": 120.0, "reaction_force": 1000.0},
         criteria=[{"name": "disp", "value_key": "max_displacement", "operator": "<", "limit": 1.0}],
+        mesh_quality={
+            # `static` requires the mesh gate; a pass therefore needs a real
+            # mesh verdict instead of a skipped gate.
+            "status": "pass",
+            "metrics": {"max_aspect_ratio": 2.279, "min_angle": 26.971, "max_angle": 114.747},
+        },
         physics_domain="static",
         odb_fields=["U", "S", "RF"],
     )

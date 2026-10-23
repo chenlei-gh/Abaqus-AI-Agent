@@ -118,6 +118,8 @@ def test_plain_beam_without_coating_or_indenter_claim_is_not_blocked_by_this_gat
 
 
 def test_formal_report_without_preprocessing_figures_is_blocked(tmp_path):
+    from abaqus_ai_agent.validation.condition_fidelity import audit_condition_fidelity
+
     odb = tmp_path / "job.odb"
     odb.write_bytes(b"odb-bytes-for-figure-gate")
     odb_hash = hashlib.sha256(odb.read_bytes()).hexdigest()
@@ -145,6 +147,9 @@ def test_formal_report_without_preprocessing_figures_is_blocked(tmp_path):
         deliverable = True
 
     pipeline = DeterministicReportPipeline()
+    # The fidelity verdict is a real producer output; only the figures are missing.
+    fidelity = audit_condition_fidelity(description="Handle under a tip force")
+    assert fidelity["blockers"] == ()
     with pytest.raises(PermissionError, match="preprocessing evidence"):
         pipeline.build_and_render(
             output_dir=tmp_path,
@@ -160,5 +165,6 @@ def test_formal_report_without_preprocessing_figures_is_blocked(tmp_path):
             odb_path=str(odb),
             input_hash="a" * 64,
             required_preprocessing_figures=("boundary_conditions", "contact_definition", "load_application"),
+            condition_fidelity=fidelity,
         )
     assert not (tmp_path / "report.html").exists()

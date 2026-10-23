@@ -90,6 +90,7 @@ _RESULT_QUANTITIES = {
     "max_temperature": "temperature",
     "max_strain": None,
     "max_reaction_force": "force",
+    "reaction_force": "force",
     "max_rf": "force",
     "frequency": "frequency",
     "connector_relative_motion": "displacement",
@@ -149,6 +150,11 @@ _FIELD_ALIASES = {
     "max_temperature": ("NT11", None),
     "max_strain": ("E", "MISES"),
     "max_reaction_force": ("RF", "MAGNITUDE"),
+    # The static domain profile declares `reaction_force`, so the acceptance gate
+    # asks for that exact key. Without this mapping the requirement could never be
+    # satisfied by any ODB extraction, and a valid run would be blocked for a
+    # naming difference rather than a missing result.
+    "reaction_force": ("RF", "MAGNITUDE"),
     "max_rf": ("RF", "MAGNITUDE"),
     "max_mises_stress": ("S", "MISES"),
     "tip_displacement": ("U", "MAGNITUDE"),
@@ -263,7 +269,7 @@ def get_physics_result_profile(domain: str, **custom_overrides) -> PhysicsResult
             domain="static",
             required_fields=("U", "S", "RF"),
             required_metrics=("max_displacement", "max_mises", "reaction_force"),
-            required_gates=("execution", "odb", "criteria"),
+            required_gates=("execution", "odb", "mesh_quality", "criteria"),
             gate_justifications={
                 "contact": "Single continuum structure; contact diagnostics gate not applicable.",
                 "fatigue": "Monotonic static loading; fatigue life gate not requested.",
@@ -421,12 +427,27 @@ def get_physics_result_profile(domain: str, **custom_overrides) -> PhysicsResult
         justs.update(custom_overrides.get("gate_justifications", {}))
         step_reqs = dict(prof.step_requirements)
         step_reqs.update(custom_overrides.get("step_requirements", {}))
-        return PhysicsResultProfile(
+        prof = PhysicsResultProfile(
             domain=d,
             required_fields=tuple(fields),
             required_metrics=tuple(metrics),
             required_gates=tuple(gates),
             gate_justifications=justs,
             step_requirements=step_reqs,
+        )
+
+    # A domain that requires the mesh gate must also say which shape criterion can
+    # fail. Abaqus 2025 reported `failedElements=0` from ANALYSIS_CHECKS on a
+    # C3D10M mesh that failed ASPECT_RATIO on 124/166 elements, so a required gate
+    # backed only by analysis checks cannot reject anything. Refusing to build
+    # such a profile is the fail-closed choice.
+    from .mesh_quality import mesh_quality_gate_configuration_errors
+
+    configuration_errors = mesh_quality_gate_configuration_errors(prof.domain, prof.required_gates)
+    if configuration_errors:
+        raise ValueError(
+            "Invalid physics result profile for domain %r: %s. Configure at least one "
+            "shape threshold (max_aspect_ratio / min_angle / max_angle) before making "
+            "mesh_quality a required gate." % (d, "; ".join(configuration_errors))
         )
     return prof

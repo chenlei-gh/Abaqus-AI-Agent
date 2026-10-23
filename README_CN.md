@@ -70,7 +70,11 @@ JEV **不会**：
 
 **弹性应力超过屈服不是塑性。** 调用方传入 `elastic_validity`，且 deck 为纯弹性、屈服强度和峰值应力都是有限数、峰值超过屈服时，验收返回 `RESULT_INVALID`，`deliverable=False`。结果不得写成塑性变形。
 
-**主路径现在会自己读取已求解的 deck。** `AnalysisRunner` 在 `<workdir>/<job>.inp` 存在时读取它，记录契约警告，并在屈服强度和提取应力都是有限数时组装 `elastic_validity`。`solve_requirement()` 会把这份 deck 文本传给 `build_and_render()`。声明的单元类型或塑性与 `*ELEMENT` / `*PLASTIC` 矛盾，仍然强制 `is_deliverable=False`。报告同时保留全场峰值和 99.5% 分位，分位数不能掩盖峰值。`C3D4` 警告本身不会把合法模型判失败。
+**主路径现在会自己读取已求解的 deck。** `AnalysisRunner` 在 `<workdir>/<job>.inp` 存在时读取它，记录契约警告，并在屈服强度和提取应力都是有限数时组装 `elastic_validity`。`solve_requirement()` 会把这份 deck 文本传给 `build_and_render()`。声明的单元类型或塑性与 `*ELEMENT` / `*PLASTIC` 矛盾，仍然强制 `is_deliverable=False`。有 deck 文本时，报告里的材料表从这份 deck 解析。调用方另给的材料表如果在名称、单位、弹性参数、塑性数据点或 deck 哈希上不一致，记为 `material_card_mismatch`，并阻断正式交付。报告同时保留全场峰值和 99.5% 分位，分位数不能掩盖峰值。`C3D4` 警告本身不会把合法模型判失败。
+
+**求解入口是 Python API。** 受支持的求解入口是 `AbaqusAIAgent.solve_requirement()` 和 `solve_user_inp()`。`abaqus-ai-agent report` 只消费已有证据文件，不求解。本次也不新增求解子命令。
+
+**正式署名必须带运行指纹。** 只有 `agent_issued=True` 不够。正式交付的运行记录还必须带 `model_snapshot_hash`、`content_hash_scope` 和 `action_plan_scope`，并且这些字段进入 stamp。手写 HTML 不是正式交付。
 
 **正式报告只能是 HTML 文件。** `abaqus-ai-agent report` 不再接受 `--format markdown`，也不会把显式请求的 `.md` 路径写成文件。带门禁的写文件函数同样拒绝 Markdown，包括已授权的请求：不写 `report.md`，也不写 `*.preview.md`。门禁失败不会创建 `report.html`。诊断草稿只能是带非正式横幅的 `report.diagnostic.html`。`solve_user_inp(generate_report=True)` 没有代理验收结论和运行记录时，不写 `report.html`，也不写 `report.md`。删掉内存中的 Markdown 渲染器，并不能阻止编码代理用自己的编辑器工具直接写文件。这种文件不属于产品出口，也不是 Agent 正式交付。
 

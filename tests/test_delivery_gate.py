@@ -29,6 +29,9 @@ def _stamped(**meta):
             "agent_issued": True,
             "agent_entry": "solve_requirement",
             "requirement_kind": "natural_language",
+            "model_snapshot_hash": "snap-test",
+            "content_hash_scope": "content-test",
+            "action_plan_scope": "plan-test",
             **meta,
         },
     )
@@ -152,6 +155,9 @@ def test_authorized_markdown_request_writes_no_file(tmp_path):
     from abaqus_ai_agent.contracts.provenance import issue_agent_run_record
 
     issued = issue_agent_run_record(
+        model_snapshot_hash='snap-test',
+        content_hash_scope='content-test',
+        action_plan_scope='plan-test',
         run_id="run-qual",
         model_name="Beam",
         job_name="Job-1",
@@ -187,10 +193,37 @@ def test_refused_markdown_request_does_not_file_markdown(tmp_path):
     assert not list(tmp_path.glob("*.html"))
 
 
-def test_engineering_intent_record_may_file_but_not_claim_jev(tmp_path):
-    from abaqus_ai_agent.contracts.provenance import issue_agent_run_record
+def test_formal_attribution_requires_execution_fingerprint():
+    from abaqus_ai_agent.contracts.provenance import issue_agent_run_record, verify_deliverable
 
     issued = issue_agent_run_record(
+        run_id="run-no-fingerprint",
+        model_name="Beam",
+        job_name="Job-1",
+        output_hash="c" * 64,
+    )
+    verdict = verify_deliverable(
+        {
+            "provenance": issued,
+            "acceptance": {"deliverable": True},
+            "condition_fidelity": {"blockers": []},
+        },
+        require_decision_inputs=True,
+    )
+    assert verdict["deliverable_file_allowed"] is False
+    assert "missing_model_snapshot_hash" in verdict["reasons"]
+    assert "missing_content_hash_scope" in verdict["reasons"]
+    assert "missing_action_plan_scope" in verdict["reasons"]
+
+
+def test_engineering_intent_record_may_file_but_not_claim_jev(tmp_path):
+    from abaqus_ai_agent.contracts.provenance import issue_agent_run_record
+    from abaqus_ai_agent.validation.condition_fidelity import audit_condition_fidelity
+
+    issued = issue_agent_run_record(
+        model_snapshot_hash='snap-test',
+        content_hash_scope='content-test',
+        action_plan_scope='plan-test',
         run_id="run-qual",
         model_name="Beam",
         job_name="Job-1",
@@ -204,14 +237,23 @@ def test_engineering_intent_record_may_file_but_not_claim_jev(tmp_path):
         results=(),
     )
     formal = tmp_path / "report.html"
+    fidelity = audit_condition_fidelity(description="Cantilever beam under a tip force")
+    assert fidelity["blockers"] == ()
     written = write_gated_engineering_report(
         formal,
         report=report,
-        record=issued,
+        record={
+            "provenance": issued,
+            "odb_sha256": "c" * 64,
+            "acceptance": {"status": "PASS", "deliverable": True},
+            "condition_fidelity": fidelity,
+        },
         odb_sha256="c" * 64,
         allow_diagnostic_draft=False,
     )
     assert written["kind"] == "deliverable"
+    assert written["delivery_granted"] is True
+    assert written["delivery_written"] is True
     assert formal.exists()
     text = formal.read_text(encoding="utf-8")
     assert "Prepared by Abaqus-AI-Agent. The run record shows" not in text

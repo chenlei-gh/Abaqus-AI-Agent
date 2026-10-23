@@ -429,6 +429,10 @@ def test_result_intelligence_auxiliary_figures_do_not_block_official_delivery(tm
     )
 
     acceptance = {"status": "PASS", "deliverable": True}
+    from abaqus_ai_agent.validation.condition_fidelity import audit_condition_fidelity
+
+    fidelity = audit_condition_fidelity(description="Cantilever under a tip force")
+    assert fidelity["blockers"] == ()
 
     delivery_card, report_pointer, report_data = pipeline.build_and_render(
         output_dir=tmp_path,
@@ -443,7 +447,11 @@ def test_result_intelligence_auxiliary_figures_do_not_block_official_delivery(tm
         visualization_specs=[spec],
         figures=[cae_fig],
         require_deliverable=True,
+        condition_fidelity=fidelity,
         provenance=issue_agent_run_record(
+            model_snapshot_hash='snap-test',
+            content_hash_scope='content-test',
+            action_plan_scope='plan-test',
             run_id=run_id,
             model_name="Cantilever",
             job_name="case_valid_01",

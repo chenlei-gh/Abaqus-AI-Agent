@@ -292,6 +292,13 @@ def test_pos_p0_01_standard_golden_pass(tmp_path: Path):
         result_status="completed",
         values={"max_displacement": 0.5, "max_mises": 120.0, "reaction_force": 1000.0},
         criteria=[{"name": "disp", "value_key": "max_displacement", "operator": "<", "limit": 1.0}],
+        mesh_quality={
+            # The static profile makes the mesh gate mandatory, so a golden pass
+            # needs a real mesh verdict. Measured shape metrics from a healthy
+            # Abaqus 2025 C3D10M mesh (see tests/test_mesh_quality_gate_reachability.py).
+            "status": "pass",
+            "metrics": {"max_aspect_ratio": 2.279, "min_angle": 26.971, "max_angle": 114.747},
+        },
         physics_domain="static",
         odb_fields=["U", "S", "RF"],
         evidence_manifest=manifest,
@@ -353,6 +360,13 @@ def test_neg_isolated_complete_evidence_with_unmet_criteria_yields_fail(tmp_path
         result_status="completed",
         values={"max_displacement": 0.2, "max_mises": 320.0, "reaction_force": 500.0},
         criteria=[{"name": "mises", "value_key": "max_mises", "operator": "<=", "limit": 200.0}],
+        mesh_quality={
+            # The static profile makes the mesh gate mandatory, so a golden pass
+            # needs a real mesh verdict. Measured shape metrics from a healthy
+            # Abaqus 2025 C3D10M mesh (see tests/test_mesh_quality_gate_reachability.py).
+            "status": "pass",
+            "metrics": {"max_aspect_ratio": 2.279, "min_angle": 26.971, "max_angle": 114.747},
+        },
         physics_domain="static",
         odb_fields=["U", "S", "RF"],
         evidence_manifest=manifest,
@@ -383,6 +397,13 @@ def test_pos_p0_02_pure_mechanical_fail_with_valid_evidence(tmp_path: Path):
         result_status="completed",
         values={"max_displacement": 0.5, "max_mises": 280.0, "reaction_force": 1000.0},
         criteria=[{"name": "mises", "value_key": "max_mises", "operator": "<", "limit": 200.0}],
+        mesh_quality={
+            # The static profile makes the mesh gate mandatory, so a golden pass
+            # needs a real mesh verdict. Measured shape metrics from a healthy
+            # Abaqus 2025 C3D10M mesh (see tests/test_mesh_quality_gate_reachability.py).
+            "status": "pass",
+            "metrics": {"max_aspect_ratio": 2.279, "min_angle": 26.971, "max_angle": 114.747},
+        },
         physics_domain="static",
         odb_fields=["U", "S", "RF"],
         evidence_manifest=manifest,
@@ -529,6 +550,12 @@ def test_p0_c_production_acceptance_golden_path(tmp_path: Path):
         ],
         evidence_manifest=manifest,
         base_dir=str(tmp_path),
+        mesh_quality={
+            # `static` now requires the mesh gate, so a production golden pass must
+            # carry a real mesh verdict rather than inherit a SKIPPED gate.
+            "status": "pass",
+            "metrics": {"max_aspect_ratio": 2.279, "min_angle": 26.971, "max_angle": 114.747},
+        },
         physics_domain="static",
         odb_fields=["U", "S", "RF"],
     )
@@ -1423,6 +1450,12 @@ def test_p0_d_authentic_cae_visualization_asset_succeeds_in_official_delivery(tm
     fig.metadata["viewer_session_token"] = auth_token
     fig.metadata["render_execution_evidence"] = auth_ev.to_dict()
     from abaqus_ai_agent.contracts.provenance import issue_agent_run_record
+    from abaqus_ai_agent.validation.condition_fidelity import audit_condition_fidelity
+
+    # A formal file needs both engineering verdicts. Neither is defaulted here:
+    # the fidelity verdict is a real producer output for this plain static case.
+    fidelity = audit_condition_fidelity(description="Cantilever under a tip force")
+    assert fidelity["blockers"] == ()
 
     card, pointer, data = pipeline.build_and_render(
         output_dir=out_dir,
@@ -1437,7 +1470,11 @@ def test_p0_d_authentic_cae_visualization_asset_succeeds_in_official_delivery(tm
         visualization_specs=specs,
         figures=[fig],
         require_deliverable=True,
+        condition_fidelity=fidelity,
         provenance=issue_agent_run_record(
+            model_snapshot_hash='snap-test',
+            content_hash_scope='content-test',
+            action_plan_scope='plan-test',
             run_id="run_authentic_asset",
             model_name="Authentic",
             job_name="case_authentic_asset",

@@ -66,6 +66,30 @@ class MockCaeExecutor(AbaqusExecutor):
 
     def execute(self, code, timeout=120):
         self.commands.append(code)
+        # A real CAE session answers the quality action structurally. Returning an
+        # empty string here would make this substitute describe a session where the
+        # check never ran, and the mandatory mesh gate would be tested against that
+        # fiction instead of against the product's decoder.
+        if "verifyMeshQuality" in code:
+            return {
+                "part": "Part-1",
+                "node_count": 408,
+                "element_count": 195,
+                "metrics": {
+                    "max_aspect_ratio": 2.279,
+                    "min_angle": 26.971,
+                    "max_angle": 114.747,
+                },
+                "violations": [],
+                "warnings": [],
+                "evidence": ["native_verify:ASPECT_RATIO"],
+                "status": "pass",
+                "source": "native_abaqus_verifyMeshQuality",
+                "failed_element_count": 0,
+                "warning_element_count": 0,
+                "unsupported_checks": [],
+                "kind": "mesh_quality",
+            }
         if "print(mdb.jobs" in code or "waitForCompletion" in code or "status" in code:
             return self.job_status_response
         return ""
@@ -218,6 +242,10 @@ def test_analysis_runner_require_production_full_causal_binding_and_delivery(tmp
     # Downstream Report Pipeline succeeds
     report_out = tmp_path / "report_auth_out"
     pipeline = DeterministicReportPipeline()
+    from abaqus_ai_agent.validation.condition_fidelity import audit_condition_fidelity
+
+    fidelity = audit_condition_fidelity(description="Linear static cantilever under a tip force")
+    assert fidelity["blockers"] == ()
     delivery_card, report_pointer, report_data = pipeline.build_and_render(
         output_dir=report_out,
         title="Authentic Official Report",
@@ -230,6 +258,7 @@ def test_analysis_runner_require_production_full_causal_binding_and_delivery(tmp
         odb_path=run_res.odb_path,
         input_hash=run_res.provenance.input_hash,
         provenance=run_res.provenance,
+        condition_fidelity=fidelity,
     )
 
     assert delivery_card.deliverable is True
@@ -420,24 +449,43 @@ def test_agent_solve_requirement_require_production_full_closure_and_delivery(tm
 
     monkeypatch.setattr(rend_mod, "render_authentic_visualizations", _mock_render_vis)
 
-    # Mock extract_requirements to supply authentic extraction
-    req = ResultRequirement(
-        name="max_mises",
-        value_key="max_mises",
-        field="S",
-        component="mises",
-        region="Root",
-        step="Step-1",
-        frame=-1,
-        unit="MPa",
-    )
-    extraction = ResultExtraction(
-        requirement=req,
-        value=150.0,
-        locator={"step": "Step-1", "frame": -1, "field": "S", "component": "mises", "source": "odb"},
-    )
+    # Mock extract_requirements to supply authentic extraction.
+    #
+    # The static domain profile requires max_displacement, max_mises AND
+    # reaction_force, and that profile now really drives extraction. A substitute
+    # that answers only `max_mises` would be describing a different deck, so this
+    # stands in for all three metrics the run actually asks for.
+    _STATIC_METRIC_VALUES = {
+        "max_mises": 150.0,
+        "max_displacement": 0.42,
+        "reaction_force": 1000.0,
+    }
+
+    def _fake_extract(executor, path, crit):
+        extractions = []
+        for item in crit or ():
+            key = item.get("value_key") if isinstance(item, dict) else None
+            if key not in _STATIC_METRIC_VALUES:
+                continue
+            requirement = ResultRequirement(
+                name=key,
+                value_key=key,
+                field=item.get("field") or ("S" if key == "max_mises" else "U" if key == "max_displacement" else "RF"),
+                step=item.get("step") or "Step-1",
+                frame=-1,
+                unit=item.get("unit") or "",
+            )
+            extractions.append(
+                ResultExtraction(
+                    requirement=requirement,
+                    value=_STATIC_METRIC_VALUES[key],
+                    locator={"step": "Step-1", "frame": -1, "source": "odb", "value_key": key},
+                )
+            )
+        return extractions, ()
+
     import abaqus_ai_agent.execution.results as res_mod
-    monkeypatch.setattr(res_mod, "extract_requirements", lambda ex, path, crit: ([extraction], ()))
+    monkeypatch.setattr(res_mod, "extract_requirements", _fake_extract)
 
     # Pre-render dummy verified figures so Viewer dispatch is bypassed (Priority 1)
     img_mises = workdir / "mises_stress_hotspot.png"

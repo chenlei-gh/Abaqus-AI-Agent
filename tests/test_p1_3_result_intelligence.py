@@ -304,6 +304,28 @@ def test_solve_requirement_delivers_result_intelligence():
                         else:
                             with open(p, "w", encoding="utf-8") as f:
                                 f.write(f"Mock {ext}\n")
+            # The static profile requires the mesh gate, so a session substitute
+            # has to answer the quality action the way a real CAE session does.
+            if "verifyMeshQuality" in code:
+                return {
+                    "part": "Part-1",
+                    "node_count": 408,
+                    "element_count": 195,
+                    "metrics": {
+                        "max_aspect_ratio": 2.279,
+                        "min_angle": 26.971,
+                        "max_angle": 114.747,
+                    },
+                    "violations": [],
+                    "warnings": [],
+                    "evidence": ["native_verify:ASPECT_RATIO"],
+                    "status": "pass",
+                    "source": "native_abaqus_verifyMeshQuality",
+                    "failed_element_count": 0,
+                    "warning_element_count": 0,
+                    "unsupported_checks": [],
+                    "kind": "mesh_quality",
+                }
             if "rootAssembly" in code:
                 return {"steps": ["Step-1"], "instances": ["Part-1-1"], "step_frames": {"Step-1": 1}}
             if "fo=" in code:

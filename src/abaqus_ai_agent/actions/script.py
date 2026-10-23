@@ -683,6 +683,40 @@ def _contact_script(model, p):
     return script
 
 
+def _result_item_sidecar(job_name, payload_expr, result_dir=None):
+    """Atomically persist one structured result when the executor returns no object.
+
+    The file is a fallback, not a second authority. Callers still prefer the
+    value returned by the executor. A partial write cannot be read as evidence:
+    the payload is written to a sibling temporary file and then replaced.
+
+    `result_dir` must be the directory the reader will look in. Defaulting to the
+    CAE session's current directory was only correct when that happened to equal
+    the run workdir, so the location is now explicit or reported in the payload.
+    """
+    if result_dir:
+        target_expr = "%r" % str(result_dir)
+    else:
+        target_expr = "_os.getcwd()"
+    return (
+        "import json as _json, os as _os, tempfile as _tempfile\n"
+        "_payload = %s\n"
+        "_result_dir = %s\n"
+        "_target = _os.path.join(_result_dir, %s + '.result_items.json')\n"
+        "try:\n"
+        "    _fd, _tmp = _tempfile.mkstemp(prefix='.result_items.', dir=_os.path.dirname(_target) or '.')\n"
+        "    with _os.fdopen(_fd, 'w', encoding='utf-8') as _fh:\n"
+        "        _json.dump({'schema':'result_items_v1','job_name':%s,'items':[_payload]}, _fh, default=str)\n"
+        "        _fh.flush()\n"
+        "        _os.fsync(_fh.fileno())\n"
+        "    _os.replace(_tmp, _target)\n"
+        "except Exception:\n"
+        "    try: _os.remove(_tmp)\n"
+        "    except Exception: pass\n"
+        "    raise\n"
+    ) % (payload_expr, target_expr, repr(str(job_name or "job")), repr(str(job_name or "job")))
+
+
 def _mesh_quality_script(model, p):
     part = p["part"]
     criteria = []
@@ -703,7 +737,8 @@ part=model.parts[%r]
 result={'part':%r,'node_count':len(part.nodes),'element_count':len(part.elements),
         'metrics':{},'violations':[],'warnings':[],'evidence':[],
         'status':'unknown','source':'native_abaqus_verifyMeshQuality',
-        'failed_element_count':0,'warning_element_count':0}
+        'failed_element_count':0,'warning_element_count':0,
+        'unsupported_checks':[]}
 criteria=%r
 for criterion_name, threshold, output_name in criteria:
     try:
@@ -718,7 +753,7 @@ for criterion_name, threshold, output_name in criteria:
         if failed:
             result['violations'].append(output_name)
     except Exception as exc:
-        result['warnings'].append('unsupported_quality:%%s:%%s'%%(criterion_name, type(exc).__name__))
+        result['unsupported_checks'].append('%%s:%%s'%%(criterion_name, type(exc).__name__))
 if %r:
     try:
         data=part.verifyMeshQuality(criterion=ANALYSIS_CHECKS)
@@ -730,19 +765,32 @@ if %r:
         if data.get('warningElements'):
             result['warnings'].append('analysis_check_warnings')
     except Exception as exc:
-        result['warnings'].append('unsupported_quality:ANALYSIS_CHECKS:%%s'%%type(exc).__name__)
+        result['unsupported_checks'].append('ANALYSIS_CHECKS:%%s'%%type(exc).__name__)
 if %r is not None:
-    result['warnings'].append('min_jacobian_requires_native_analysis_check_or_element_specific_api')
+    result['unsupported_checks'].append('min_jacobian_not_mapped_to_native_criterion')
 if %r is not None:
-    result['warnings'].append('max_skew_not_mapped_to_native_verifyMeshQuality_criterion')
+    result['unsupported_checks'].append('max_skew_not_mapped_to_native_criterion')
+# An unmapped metric is not a passing metric. It is recorded separately so the
+# gate can tell "the mesh is bad" from "we could not measure this".
 if result['violations']:
     result['status']='fail'
 elif result['warnings']:
     result['status']='warning'
+elif result['unsupported_checks'] and not result['metrics']:
+    result['status']='unknown'
 elif result['metrics'] or result['evidence']:
     result['status']='pass'
+result['kind']='mesh_quality'
+result['job_name']=%r
+result['model_name']=%r
 print(result)
-""" % (model, part, part, criteria, analysis_checks, p.get("min_jacobian"), p.get("max_skew"))
+%s
+""" % (
+        model, part, part, criteria, analysis_checks, p.get("min_jacobian"), p.get("max_skew"),
+        p.get("job_name") or "",
+        model,
+        _result_item_sidecar(p.get("job_name"), "result", result_dir=p.get("result_dir")),
+    )
 
 def _assembly_inspection_script(model):
     return """a=mdb.models[%r].rootAssembly

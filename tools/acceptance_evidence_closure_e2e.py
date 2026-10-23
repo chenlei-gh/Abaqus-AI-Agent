@@ -56,6 +56,14 @@ def _sha256(path: Path) -> Optional[str]:
 def probe_static_domain() -> Dict[str, Any]:
     profile = get_physics_result_profile("static")
 
+    # The static profile requires the mesh gate, so a baseline pass needs a real
+    # mesh verdict. These are measured shape metrics from a healthy Abaqus 2025
+    # C3D10M mesh (see tests/test_mesh_quality_gate_reachability.py).
+    healthy_mesh = {
+        "status": "pass",
+        "metrics": {"max_aspect_ratio": 2.279, "min_angle": 26.971, "max_angle": 114.747},
+    }
+
     # Baseline: all required metrics extracted
     complete_values = {
         "max_displacement": 0.0804,
@@ -71,6 +79,7 @@ def probe_static_domain() -> Dict[str, Any]:
         physics_domain="static",
         values=complete_values,
         criteria=criteria,
+        mesh_quality=healthy_mesh,
     )
 
     # Negative Probe: U (max_displacement) missing
@@ -83,6 +92,7 @@ def probe_static_domain() -> Dict[str, Any]:
         physics_domain="static",
         values=missing_values,
         criteria=criteria,
+        mesh_quality=healthy_mesh,
     )
 
     return {

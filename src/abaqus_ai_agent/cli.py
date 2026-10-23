@@ -16,7 +16,7 @@ import sys
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
-from .contracts.provenance import AnalysisProvenance, verify_deliverable
+from .contracts.provenance import AnalysisProvenance, build_delivery_record, verify_deliverable
 from .diagnostics.solver_patterns import DiagnosticIssue, diagnose_inp_contract, diagnose_solver_artifacts
 from .golden_evidence import (
     load_and_normalize_evidence_file,
@@ -746,23 +746,31 @@ def handle_report(args: argparse.Namespace) -> int:
     acc_obj = raw.get("acceptance") or raw_unnormalized.get("acceptance") or raw_unnormalized.get("report", {}).get("acceptance")
     checks_obj = raw.get("verification") or raw_unnormalized.get("verification") or raw_unnormalized.get("report", {}).get("engineering_checks")
 
-    gate_record = dict(raw_unnormalized) if isinstance(raw_unnormalized, dict) else {}
-    if isinstance(raw, dict):
-        gate_record = dict(gate_record)
-        # Normalization may replace an issued provenance with launcher metadata.
-        # Keep the caller's stamped record when the envelope has no Agent stamp.
-        issued = gate_record.get("provenance")
-        normalized = raw.get("provenance")
-        issued_stamped = isinstance(issued, dict) and bool((issued.get("metadata") or {}).get("delivery_stamp"))
-        normalized_stamped = isinstance(normalized, dict) and bool((normalized.get("metadata") or {}).get("delivery_stamp"))
-        if normalized_stamped or not issued_stamped:
-            gate_record["provenance"] = normalized or issued
-        raw_results = gate_record.get("results") or gate_record.get("metrics")
-        envelope_results = raw.get("results") or raw.get("metrics") or raw.get("result_evidence")
-        if not raw_results and envelope_results:
-            gate_record["results"] = envelope_results
-        gate_record.setdefault("odb_path", raw.get("odb_path") or (raw.get("odb") or {}).get("path"))
-    gate = verify_deliverable(gate_record)
+    gate_record = build_delivery_record(
+        provenance=raw.get("provenance") or raw_unnormalized.get("provenance"),
+        results=raw.get("results") or raw.get("metrics") or raw.get("result_evidence")
+        or raw_unnormalized.get("results") or raw_unnormalized.get("metrics") or (),
+        odb_path=raw.get("odb_path") or (raw.get("odb") or {}).get("path"),
+        odb_sha256=raw.get("odb_sha256"),
+        acceptance=acc_obj,
+        condition_fidelity=raw.get("condition_fidelity")
+        or raw_unnormalized.get("condition_fidelity")
+        or (raw_unnormalized.get("report") or {}).get("condition_fidelity"),
+        figures=raw.get("figures") or raw_unnormalized.get("figures") or (),
+        # Keep the declared kinds intact; see reporting/delivery.py for why a bool
+        # here would demand every formal preprocessing figure.
+        require_preprocessing_figures=(
+            raw.get("required_preprocessing_figures")
+            or raw_unnormalized.get("required_preprocessing_figures")
+            or raw.get("require_preprocessing_figures")
+            or raw_unnormalized.get("require_preprocessing_figures")
+            or False
+        ),
+        model_contract_mismatch=raw.get("model_contract_mismatch")
+        or raw_unnormalized.get("model_contract_mismatch"),
+    )
+    # A caller who asks for a formal file must supply both engineering verdicts.
+    gate = verify_deliverable(gate_record, require_decision_inputs=bool(args.output))
     metadata = dict(raw.get("metadata") or {})
     metadata["deliverable_authorization"] = gate
 

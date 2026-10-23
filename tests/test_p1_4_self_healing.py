@@ -454,6 +454,143 @@ def test_orchestrator_success_on_first_remediation():
     assert result.attempts[0].post_run_id == "run_attempt_1"
 
 
+def test_healed_rerun_forwards_its_mesh_quality_evidence():
+    """A healed rerun must be at least as evidenced as the primary path.
+
+    The orchestrator used to call `agent.apply_plan()` and drop the results, so a
+    rerun whose mesh quality action ran still reached acceptance with no verdict.
+    """
+    agent = AbaqusAIAgent(executor=MockExecutor())
+    capability = resolve_capability("linear_static")
+
+    captured = {}
+
+    def mock_analysis_run(*args, **kwargs):
+        captured.update(kwargs)
+        acc = AcceptanceResult(
+            passed=True, criteria=(), status="PASS",
+            result_validity="VALID", evidence_status="VALID",
+        )
+        return AnalysisRun(
+            id="run_attempt_1",
+            model_name="TestModel",
+            job_name="TestJob",
+            state=AnalysisRunState.ACCEPTED,
+            engineering_status="RESULT_VALID",
+            acceptance_passed=True,
+            acceptance=acc,
+        )
+
+    agent.analysis_run = mock_analysis_run
+    agent.apply_plan_with_evidence = lambda plan: ({}, {"mesh_quality": ['{"status": "pass"}']})
+
+    initial_run = AnalysisRun(
+        id="run_init",
+        model_name="TestModel",
+        job_name="TestJob",
+        state=AnalysisRunState.FAILED,
+        engineering_status="SOLVER_SINGULARITY",
+        acceptance_passed=False,
+        diagnostics=(({"diagnosis_id": "NUMERICAL_SINGULARITY", "severity": "ERROR"},)),
+    )
+    geom = IntentGeometrySpec(shape="cantilever_box", length=120.0, width=12.0, height=8.0)
+    mat = MaterialDefinition(
+        name="Steel_Q235",
+        unit_system="MM_N_MPA",
+        elastic=ElasticProperties(youngs_modulus=210000.0, poisson_ratio=0.3),
+        density=7.85e-9,
+    )
+    intent = EngineeringIntent(
+        id="intent_mq_heal",
+        kind="linear_static",
+        description="Test requirement",
+        analysis_type="linear_static",
+        boundary_conditions=({"type": "displacement", "region": "FixedFace", "u1": 0.0},),
+        loads=({"type": "concentrated_force", "region": "TipFace", "magnitude": 1000.0, "direction": "-Y"},),
+        metadata={"dimensions": {"shape": "cantilever_box", "length": 120.0, "width": 12.0, "height": 8.0}},
+    )
+    plan = CompiledAgentPlan(
+        model_name="TestModel", part_name="TestPart", job_name="TestJob",
+        actions=(), cae_script="", intent_summary={},
+    )
+
+    SelfHealingOrchestrator.attempt_healing(
+        agent=agent,
+        failed_run=initial_run,
+        intent=intent,
+        capability=capability,
+        plan=plan,
+        geometry=geom,
+        material=mat,
+        max_attempts=1,
+        confirm_model_change=True,
+    )
+
+    forwarded = captured.get("mesh_quality")
+    assert forwarded is not None, "healed rerun dropped its mesh quality verdict"
+    assert forwarded.status == "pass"
+
+
+def test_healed_rerun_keeps_explicit_context_over_stale_kwargs():
+    """A popped context must not come back through **kwargs and replace the rerun context."""
+    agent = AbaqusAIAgent(executor=MockExecutor())
+    capability = resolve_capability("linear_static")
+    captured = {}
+
+    def mock_analysis_run(*args, **kwargs):
+        captured.update(kwargs)
+        raise RuntimeError("rerun failed after context was forwarded")
+
+    agent.analysis_run = mock_analysis_run
+    agent.apply_plan_with_evidence = lambda plan: ({}, {})
+    initial_run = AnalysisRun(
+        id="run_init",
+        model_name="TestModel",
+        job_name="TestJob",
+        state=AnalysisRunState.FAILED,
+        engineering_status="SOLVER_SINGULARITY",
+        acceptance_passed=False,
+        diagnostics=(({"diagnosis_id": "NUMERICAL_SINGULARITY", "severity": "ERROR"},)),
+    )
+    intent = EngineeringIntent(
+        id="intent_ctx",
+        kind="linear_static",
+        description="Test requirement",
+        analysis_type="linear_static",
+        boundary_conditions=({"type": "displacement", "region": "FixedFace", "u1": 0.0},),
+        loads=({"type": "concentrated_force", "region": "TipFace", "magnitude": 1000.0, "direction": "-Y"},),
+        metadata={"dimensions": {"shape": "cantilever_box", "length": 120.0, "width": 12.0, "height": 8.0}},
+    )
+    plan = CompiledAgentPlan(
+        model_name="TestModel", part_name="TestPart", job_name="TestJob",
+        actions=(), cae_script="", intent_summary={},
+    )
+    project = object()
+    _run, healing = SelfHealingOrchestrator.attempt_healing(
+        agent=agent,
+        failed_run=initial_run,
+        intent=intent,
+        capability=capability,
+        plan=plan,
+        geometry=IntentGeometrySpec(shape="cantilever_box", length=120.0, width=12.0, height=8.0),
+        material=MaterialDefinition(
+            name="Steel_Q235", unit_system="MM_N_MPA",
+            elastic=ElasticProperties(youngs_modulus=210000.0, poisson_ratio=0.3),
+        ),
+        max_attempts=1,
+        confirm_model_change=True,
+        workdir="explicit-workdir",
+        project_context=project,
+        require_production=True,
+        project_context_from_kwargs="stale",
+        require_production_from_kwargs=False,
+    )
+    assert captured["workdir"] == "explicit-workdir"
+    assert captured["project_context"] is project
+    assert captured["require_production"] is True
+    assert healing.metadata["healing_errors"]
+
+
 # ---------------------------------------------------------------------------
 # 4. solve_requirement integration with self-healing
 # ---------------------------------------------------------------------------

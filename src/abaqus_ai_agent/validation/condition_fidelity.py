@@ -24,6 +24,139 @@ from ..contracts.intent import EngineeringIntent
 _POINT_LOADS = {"concentrated_force", "point_force", "cf", "concentrated"}
 _FORMAL_FIGURE_KINDS = ("boundary_conditions", "contact_definition", "load_application")
 
+# Words that ask for an interface to open, slide, or release. They are a request
+# to examine the kinematics, not proof that the analysis must be Explicit.
+_SEPARATION_TERMS = (
+    "separation",
+    "separate",
+    "unclip",
+    "snap-fit",
+    "snap fit",
+    "snapfit",
+    "detent",
+    "pull-out",
+    "pull out",
+    "pullout",
+    "debond",
+    "\u8131\u6263",
+    "\u8131\u51fa",
+    "\u5361\u6263",
+    "\u5206\u79bb",
+    "\u8131\u5f00",
+)
+
+
+def _contact_state(contact: Any) -> str:
+    if isinstance(contact, dict):
+        return str(contact.get("expected_state") or contact.get("state") or "").strip().lower()
+    return str(getattr(contact, "expected_state", "") or "").strip().lower()
+
+
+def _contact_expected_separation(contact: Any) -> Any:
+    if isinstance(contact, dict):
+        return contact.get("expected_separation")
+    return getattr(contact, "expected_separation", None)
+
+
+def _action_type(action: Any) -> str:
+    if isinstance(action, dict):
+        return str(action.get("action_type") or action.get("type") or "").strip().lower()
+    return str(getattr(action, "action_type", "") or "").strip().lower()
+
+
+def separation_required(
+    intent: Optional[EngineeringIntent] = None,
+    *,
+    description: str = "",
+    contacts: Sequence[Any] = (),
+) -> bool:
+    """Whether the engineering question needs an interface to open or slide.
+
+    This is a requirement about the question, not about the solver. A model that
+    constrains the interface cannot answer it, whether the solver is Standard or
+    Explicit.
+    """
+    metadata = dict(getattr(intent, "metadata", None) or {})
+    flags = (
+        metadata.get("requires_separation"),
+        metadata.get("separation_required"),
+        (metadata.get("kinematic_requirement") or {}).get("separation")
+        if isinstance(metadata.get("kinematic_requirement"), dict)
+        else None,
+    )
+    if any(bool(flag) for flag in flags):
+        return True
+    blob = " ".join(
+        str(part).lower()
+        for part in (
+            description,
+            getattr(intent, "description", ""),
+            _intent_blob(intent) if intent is not None else "",
+        )
+        if part
+    )
+    if any(term in blob for term in _SEPARATION_TERMS):
+        return True
+    for contact in tuple(contacts or (getattr(intent, "contacts", ()) if intent is not None else ())):
+        if _contact_state(contact) == "open":
+            return True
+        if _contact_expected_separation(contact) is not None:
+            return True
+    return False
+
+
+def _interaction_type(interaction: Any) -> str:
+    if isinstance(interaction, dict):
+        return str(interaction.get("interaction_type") or interaction.get("type") or "").strip().lower()
+    return str(getattr(interaction, "interaction_type", "") or "").strip().lower()
+
+
+def audit_interface_kinematics(
+    intent: Optional[EngineeringIntent] = None,
+    *,
+    description: str = "",
+    contacts: Sequence[Any] = (),
+    plan_actions: Sequence[Any] = (),
+    interactions: Sequence[Any] = (),
+) -> Dict[str, Any]:
+    """Check whether the plan can represent the interface behaviour it claims.
+
+    Only one judgement is made, and it is deliberately narrow: when the question
+    needs an interface to open or slide and the plan contains no separation-
+    capable interaction at all, the model cannot answer that question. Tie makes
+    the two sides permanently coincident, so a tie-only plan is INVALID for such
+    a question. The blocker does not say the solve failed; it says the solve
+    answers a different question.
+    """
+    actions = tuple(plan_actions or ())
+    requires = separation_required(intent, description=description, contacts=contacts)
+    action_types = tuple(_action_type(action) for action in actions)
+    tie_count = action_types.count("tie")
+    contact_count = action_types.count("contact")
+    # Interaction specs are not always emitted as typed actions; a tie emitted as
+    # a raw python action must still count as a tie here.
+    for interaction in tuple(interactions or ()):
+        kind = _interaction_type(interaction)
+        if kind == "tie":
+            tie_count += 1
+        elif kind:
+            contact_count += 1
+    blockers = []
+    warnings = []
+    if requires and tie_count and not contact_count:
+        blockers.append("interface_modelled_as_tie_not_contact")
+    elif requires and tie_count and contact_count:
+        warnings.append("tie_present_alongside_separation_contact_interface_unmapped")
+    elif requires and actions and not tie_count and not contact_count:
+        warnings.append("separation_required_without_any_interface_interaction")
+    return {
+        "separation_required": requires,
+        "tie_count": tie_count,
+        "contact_count": contact_count,
+        "blockers": tuple(blockers),
+        "warnings": tuple(warnings),
+    }
+
 
 def _load_type(load: Any) -> str:
     if isinstance(load, dict):
@@ -78,6 +211,7 @@ def audit_condition_fidelity(
     contact_loadings: Any = None,
     figures: Sequence[Any] = (),
     require_preprocessing_figures: bool = False,
+    plan_actions: Sequence[Any] = (),
 ) -> Dict[str, Any]:
     """Return a deterministic fidelity verdict. It never fills missing physics."""
     metadata = dict(getattr(intent, "metadata", None) or {})
@@ -127,6 +261,15 @@ def audit_condition_fidelity(
     if require_preprocessing_figures and missing_figures:
         blockers.append("formal_report_missing_preprocessing_figures")
 
+    kinematics = audit_interface_kinematics(
+        intent,
+        description=blob,
+        contacts=contact_items,
+        plan_actions=plan_actions,
+    )
+    blockers.extend(kinematics["blockers"])
+    warnings.extend(kinematics["warnings"])
+
     unique_blockers = tuple(dict.fromkeys(blockers))
     return {
         "passed": not unique_blockers,
@@ -139,6 +282,7 @@ def audit_condition_fidelity(
         "contact_loadings": tuple(spec.to_dict() for spec in loadings),
         "point_load_count": len(point_loads),
         "contact_count": len(contact_items),
+        "separation_required": kinematics["separation_required"],
     }
 
 

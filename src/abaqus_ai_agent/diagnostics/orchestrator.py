@@ -122,6 +122,8 @@ class SelfHealingOrchestrator:
         criteria: Sequence[Any] = (),
         postprocess_profile: Optional[Any] = None,
         confirm_model_change: bool = False,
+        project_context: Optional[Any] = None,
+        require_production: Optional[bool] = None,
         **kwargs,
     ) -> Tuple[AnalysisRun, SelfHealingResult]:
         """Diagnose a failed run. Re-execute only after explicit model-change consent.
@@ -143,6 +145,15 @@ class SelfHealingOrchestrator:
         current_plan = plan
         healed = False
         final_diff = None
+        healing_errors: List[str] = []
+        # Explicit arguments win. A caller that already popped these names must
+        # not have them reintroduced by **kwargs and then overwrite the values
+        # passed positionally to analysis_run().
+        for reserved in (
+            "project_context", "require_production", "workdir", "confirm_model_change",
+            "project_context_from_kwargs", "require_production_from_kwargs",
+        ):
+            kwargs.pop(reserved, None)
 
         # Bound attempts strictly
         bounded_max_attempts = max(1, min(max_attempts, 3))
@@ -225,7 +236,7 @@ class SelfHealingOrchestrator:
                     submit_job=True,
                 )
             except Exception as comp_err:
-                # Compilation failed, cannot proceed
+                healing_errors.append("compile_failed:%s" % type(comp_err).__name__)
                 break
 
             preflight_res = preflight_plan(new_plan.actions)
@@ -233,21 +244,42 @@ class SelfHealingOrchestrator:
                 break
 
             # 6. Apply actions to CAE executor if present
+            #
+            # The results are kept: a rerun whose mesh quality action ran must
+            # hand that verdict to the candidate run, exactly like the primary
+            # path does. Discarding them here would make a healed rerun less
+            # evidenced than the run it replaces.
+            heal_mesh_quality = None
             if hasattr(agent, "apply_plan") and getattr(agent, "executor", None) is not None:
-                agent.apply_plan(new_plan)
+                if hasattr(agent, "apply_plan_with_evidence"):
+                    _, heal_results_by_type = agent.apply_plan_with_evidence(new_plan)
+                    if hasattr(agent, "_mesh_quality_from_plan"):
+                        heal_mesh_quality = agent._mesh_quality_from_plan(
+                            heal_results_by_type, plan=new_plan, workdir=kwargs.get("workdir")
+                        )
+                else:
+                    agent.apply_plan(new_plan)
 
             # 7. Execute candidate run
-            new_run = agent.analysis_run(
-                model_name=new_plan.model_name,
-                job_name=new_plan.job_name,
-                odb_path=None,
-                criteria=criteria,
-                engineering_intent=enriched_intent,
-                postprocess_profile=postprocess_profile or getattr(capability, "profile", None),
-                action_plan=new_plan.actions,
-                timeout=timeout,
-                **kwargs,
-            )
+            try:
+                new_run = agent.analysis_run(
+                    model_name=new_plan.model_name,
+                    job_name=new_plan.job_name,
+                    odb_path=None,
+                    criteria=criteria,
+                    engineering_intent=enriched_intent,
+                    postprocess_profile=postprocess_profile or getattr(capability, "profile", None),
+                    action_plan=new_plan.actions,
+                    timeout=timeout,
+                    workdir=workdir,
+                    project_context=project_context,
+                    require_production=require_production,
+                    mesh_quality=heal_mesh_quality,
+                    **kwargs,
+                )
+            except Exception as run_err:
+                healing_errors.append("analysis_run_failed:%s" % type(run_err).__name__)
+                break
 
             # 8. Compute inspectable RunDiff between failure and candidate
             diff = diff_analysis_runs(current_run, new_run)
@@ -307,6 +339,10 @@ class SelfHealingOrchestrator:
                 "model_change_applied": bool(confirm_model_change and attempts_records),
                 "awaiting_confirmation": bool(proposed),
                 "proposed_remediations": [r.to_dict() for r in proposed],
+                "healing_errors": list(healing_errors),
+                "project_context_forwarded": project_context is not None,
+                "require_production": require_production,
+                "workdir": workdir,
             },
         )
 

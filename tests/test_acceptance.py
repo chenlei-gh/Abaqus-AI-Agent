@@ -150,6 +150,85 @@ def test_reconcile_model_claims_flags_ms13l_fabrication():
     assert mm["plasticity"]["actual"] == "purely_elastic"
 
 
+def test_material_card_round_trip_blocks_the_five_m1fa_failures():
+    """The solved deck, not the planned material, decides the report table."""
+    from abaqus_ai_agent.contracts.deck_material import compare_material_claims, deck_material_table
+    from abaqus_ai_agent.reporting.pipeline import reconcile_material_cards
+
+    deck = (
+        "*MATERIAL, NAME=PCABS\n"
+        "*ELASTIC\n"
+        "1900., 0.38\n"
+        "*PLASTIC\n"
+        "215., 0.\n"
+    )
+    claimed = [{
+        "name": "PCABS",
+        "unit_system": "MM_N_MPA",
+        "elastic": {"youngs_modulus": 1900.0, "poisson_ratio": 0.38},
+        "plastic": {
+            "yield_stress": 190.0,
+            "plastic_strain": 0.0,
+            "hardening_table": [(200.0, 0.01), (210.0, 0.02), (220.0, 0.03), (230.0, 0.04)],
+        },
+    }]
+    mismatch = reconcile_material_cards(claimed, deck)
+    assert mismatch["code"] == "material_card_mismatch"
+    codes = {item["code"] for item in mismatch["mismatches"]}
+    assert "plastic_curve_mismatch" in codes
+
+    table = deck_material_table(deck, input_sha256="deck-v1")
+    assert table[0]["plastic"]["yield_stress"] == 215.0
+    assert table[0]["input_sha256"] == "deck-v1"
+    assert len(table[0]["plastic"]["hardening_table"]) == 0
+
+    missing_point = reconcile_material_cards(
+        [{"name": "PCABS", "plastic": {"yield_stress": 215.0, "hardening_table": []}}],
+        deck + "220., 0.01\n",
+    )
+    assert "plastic_curve_mismatch" in {item["code"] for item in missing_point["mismatches"]}
+
+    extra_point = reconcile_material_cards(
+        [{"name": "PCABS", "plastic": {"yield_stress": 215.0, "hardening_table": [(230.0, 0.02)]}}],
+        deck,
+    )
+    assert "plastic_curve_mismatch" in {item["code"] for item in extra_point["mismatches"]}
+
+    deck_row = deck_material_table(
+        "*MATERIAL, NAME=PCABS\n*ELASTIC\n1900., 0.38\n*PLASTIC\n215., 0.\n"
+    )[0]
+    deck_row = dict(deck_row)
+    deck_row["unit_system"] = "MM_N_MPA"
+    wrong_unit = compare_material_claims(
+        [{
+            "name": "PCABS",
+            "unit_system": "SI",
+            "elastic": {"youngs_modulus": 1900.0, "poisson_ratio": 0.38},
+            "plastic": {"yield_stress": 215.0, "hardening_table": []},
+        }],
+        [deck_row],
+    )
+    assert "material_unit_mismatch" in {item["code"] for item in wrong_unit["mismatches"]}
+    changed_value = reconcile_material_cards(
+        [{"name": "PCABS", "elastic": {"youngs_modulus": 1800.0, "poisson_ratio": 0.38}}],
+        "*MATERIAL, NAME=PCABS\n*ELASTIC\n1900., 0.38\n",
+    )
+    assert "material_value_mismatch" in {item["code"] for item in changed_value["mismatches"]}
+
+    same_name_other_curve = reconcile_material_cards(
+        [{"name": "PCABS", "plastic": {"yield_stress": 190.0, "hardening_table": [(200.0, 0.1)]}}],
+        deck,
+    )
+    assert "plastic_curve_mismatch" in {item["code"] for item in same_name_other_curve["mismatches"]}
+
+    stale = reconcile_material_cards(
+        [{"name": "PCABS", "input_sha256": "old-deck", "plastic": {"yield_stress": 215.0}}],
+        deck,
+        input_hash="new-deck",
+    )
+    assert "stale_material_evidence" in {item["code"] for item in stale["mismatches"]}
+
+
 def test_reconcile_model_claims_passes_honest_declaration():
     from abaqus_ai_agent.reporting.pipeline import _reconcile_model_claims
     inp = "*Element, type=C3D4\n*Material, name=PCABS\n*Elastic\n1900., 0.38\n"

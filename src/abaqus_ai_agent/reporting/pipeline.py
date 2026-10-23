@@ -16,8 +16,9 @@ import tempfile
 from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
 
 from ..contracts.artifact import ArtifactPointer
-from ..contracts.provenance import provenance_from_mapping, verify_deliverable
+from ..contracts.provenance import build_delivery_record, provenance_from_mapping, verify_deliverable
 from ..contracts.report import EngineeringReportData, ReportFigure
+from ..contracts.deck_material import compare_material_claims, deck_material_table, parse_deck_materials
 from ..diagnostics.solver_patterns import (
     extract_inp_element_types,
     extract_inp_has_plasticity,
@@ -72,6 +73,25 @@ def _reconcile_model_claims(model_info: Any, inp_text: str) -> Optional[Dict[str
     return mismatches or None
 
 
+def reconcile_material_cards(
+    materials_info: Sequence[Any],
+    inp_text: str,
+    *,
+    input_hash: Optional[str] = None,
+) -> Optional[Dict[str, Any]]:
+    """Compare a proposed material table with the cards in the solved deck.
+
+    The deck is authoritative. A matching material name is not enough: the
+    elastic values, the plastic points, the unit, and the deck hash must match.
+    """
+    if not inp_text:
+        return None
+    deck_cards = parse_deck_materials(inp_text)
+    if input_hash:
+        deck_cards = tuple(dict(card, input_sha256=input_hash) for card in deck_cards)
+    return compare_material_claims(materials_info, deck_cards, expected_input_sha256=input_hash)
+
+
 class DeterministicReportPipeline:
     """Executes deterministic report compilation and artifact registration."""
 
@@ -107,6 +127,7 @@ class DeterministicReportPipeline:
         include_keypoint_detail: bool = False,
         inp_text: Optional[str] = None,
         required_preprocessing_figures: Sequence[str] = (),
+        condition_fidelity: Any = None,
     ) -> Tuple[ReportDeliveryCard, ArtifactPointer, EngineeringReportData]:
         """Compile report, render HTML & Markdown, register artifacts, and produce LLM card."""
         # 0. Early Delivery Gate: Verify authorization BEFORE any file creation or disk I/O.
@@ -126,7 +147,6 @@ class DeterministicReportPipeline:
             is_deliverable = getattr(acceptance_info, "deliverable") is True
         elif isinstance(acceptance_info, dict) and "deliverable" in acceptance_info:
             is_deliverable = acceptance_info["deliverable"] is True
-
         # Model-claim reconciliation (MS13L lesson): when the inp deck text is
         # available, verify the caller-declared element_type / plasticity claims
         # against the actual deck. A contradiction (e.g. report claims C3D10M or
@@ -135,13 +155,29 @@ class DeterministicReportPipeline:
         # Fail closed: such a report must not be released as an official,
         # Abaqus-AI-Agent-attributed deliverable.
         model_contract_mismatch: Optional[Dict[str, Any]] = None
+        report_materials: Sequence[Dict[str, Any]] = tuple(materials_info)
         if inp_text:
             model_contract_mismatch = _reconcile_model_claims(model_info, inp_text)
+            # A deck with no material card cannot contradict a planned material.
+            # Blocking that case would reject fixtures and partial decks that
+            # have not carried a material definition at all. Once a card exists,
+            # the planned table must match it exactly.
+            if parse_deck_materials(inp_text):
+                material_mismatch = reconcile_material_cards(
+                    materials_info, inp_text, input_hash=input_hash,
+                )
+                if material_mismatch is not None:
+                    model_contract_mismatch = dict(model_contract_mismatch or {})
+                    model_contract_mismatch["materials"] = material_mismatch
             if model_contract_mismatch is not None:
                 is_deliverable = False
                 if isinstance(model_info, dict):
                     model_info = dict(model_info)
                     model_info["model_contract_mismatch"] = model_contract_mismatch
+            # The table printed in a report is parsed from the deck that was
+            # solved. The caller's table is evidence to be checked, not a second
+            # source the renderer may prefer.
+            report_materials = deck_material_table(inp_text, input_sha256=input_hash)
 
         if require_deliverable and not is_deliverable:
             raise PermissionError(
@@ -511,18 +547,34 @@ class DeterministicReportPipeline:
         issued = provenance_from_mapping(
             provenance.to_dict() if hasattr(provenance, "to_dict") else provenance
         ) if provenance is not None else None
-        gate_record = {
-            "provenance": issued.to_dict() if issued is not None else None,
-            "results": list(results_info or ()),
-            "odb_path": str(odb_path) if odb_path else None,
-            "odb_sha256": eff_odb_hash,
-        }
-        delivery_gate = verify_deliverable(gate_record)
+        # One constructor, one verdict: this record must mean the same thing here,
+        # in the CLI, and at the file-write gate. Building it ad hoc is what let a
+        # condition-fidelity blocker reach an official report unnoticed.
+        gate_record = build_delivery_record(
+            provenance=issued,
+            results=results_info,
+            odb_path=odb_path,
+            odb_sha256=eff_odb_hash,
+            acceptance=acceptance_info,
+            condition_fidelity=condition_fidelity,
+            figures=report_figures,
+            require_preprocessing_figures=tuple(required_preprocessing_figures or ()),
+            model_contract_mismatch=model_contract_mismatch,
+        )
+        # A formal file must carry both engineering verdicts. Absent evidence is
+        # not passing evidence, so the strict form applies only to official runs.
+        delivery_gate = verify_deliverable(gate_record, require_decision_inputs=is_official_delivery)
         if is_official_delivery and not delivery_gate.get("deliverable_file_allowed"):
             reasons = ", ".join(delivery_gate.get("reasons") or ["unspecified"])
+            hint = ""
+            if any(str(item).startswith("formal_report_missing_preprocessing_figures") for item in delivery_gate.get("reasons") or ()):
+                hint = (
+                    " Formal report is missing preprocessing evidence."
+                    " A stress contour is not a substitute for fixture, contact, and load figures."
+                )
             raise PermissionError(
                 "Official engineering delivery blocked: Agent run record refused "
-                f"({reasons}). No report artifacts were written. "
+                f"({reasons}).{hint} No report artifacts were written. "
                 "This gate checks an Agent-issued run record, not a keyed signature."
             )
         if is_official_delivery and issued is not None and eff_odb_hash:
@@ -556,7 +608,7 @@ class DeterministicReportPipeline:
             acceptance_info=acceptance_info,
             figures=report_figures,
             interpretation_card=interpretation_card,
-            materials_info=materials_info,
+            materials_info=report_materials,
             loads_info=loads_info,
             bcs_info=bcs_info,
             mesh_info=mesh_info,

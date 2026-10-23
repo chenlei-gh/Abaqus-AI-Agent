@@ -11,7 +11,14 @@ class WorkflowStep:
 
 @dataclass(frozen=True)
 class AnalysisWorkflow:
-    """Recipe layer for complete engineering analyses; actions remain explicit."""
+    """Declarative recipe for a complete analysis.
+
+    NOT CONSUMED BY THE EXECUTION ENGINE. A step name in this recipe, including
+    ``mesh_quality``, is not evidence that the step ran, that an action was
+    generated, or that acceptance consumed a result. The authoritative path is
+    the compiler action list plus the Agent execution loop. Keep this module as
+    an unused definition; do not treat it as an implemented workflow runtime.
+    """
     analysis_type: str
     steps: Tuple[WorkflowStep, ...]
 

@@ -1,5 +1,10 @@
 """P1.1 Multimodal Engineering Perception & Document Ingestion Package.
 
+NOT ENABLED ON THE SOLVE PATH. Image and document extractors in this package are
+not consumed by the Agent execution loop. A perception result is not solver
+evidence unless a later, explicit binding attaches it to a run. Do not delete
+the package because the current solve path does not import it.
+
 Exposes:
 - Ingestion pipeline for engineering PDFs (vector-first & raster fallback) and images.
 - Provider-neutral vision provider abstraction and deterministic test mocks.

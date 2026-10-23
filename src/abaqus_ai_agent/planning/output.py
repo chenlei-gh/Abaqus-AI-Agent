@@ -15,9 +15,21 @@ class OutputPlan:
 
 
 def criteria_from_postprocess_profile(profile):
-    """Convert deterministic post-processing requirements into ODB output criteria."""
+    """Convert deterministic post-processing requirements into ODB output criteria.
+
+    Two profile shapes reach this function. `PostProcessingProfile` names its
+    results `required_results`; `PhysicsResultProfile` (the domain profile the
+    agent and the acceptance gate share) names them `required_metrics`. Reading
+    only the first name silently planned no extraction for the second, which is
+    how a domain could require `reaction_force` while no ODB request ever asked
+    for it.
+    """
     criteria = []
-    for key in getattr(profile, "required_results", ()):
+    required = tuple(getattr(profile, "required_results", ()) or ())
+    for key in tuple(getattr(profile, "required_metrics", ()) or ()):
+        if key not in required:
+            required = required + (key,)
+    for key in required:
         if key == "buckling_factor":
             criteria.append({
                 "name": key,

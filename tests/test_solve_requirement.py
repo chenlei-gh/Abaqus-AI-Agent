@@ -33,6 +33,30 @@ class OdbBackedExecutor(AbaqusExecutor):
                     else:
                         with open(p, "w", encoding="utf-8") as f:
                             f.write(f"Mock {ext}\n")
+        # A real CAE session answers verifyMeshQuality with a structured payload.
+        # Returning a generic COMPLETED here would make the substitute describe a
+        # session that never ran the check, and the mandatory mesh gate would be
+        # exercised against a fiction rather than against the product's decoder.
+        if "verifyMeshQuality" in code:
+            return {
+                "part": "Part-1",
+                "node_count": 408,
+                "element_count": 195,
+                "metrics": {
+                    "max_aspect_ratio": 2.279,
+                    "min_angle": 26.971,
+                    "max_angle": 114.747,
+                },
+                "violations": [],
+                "warnings": [],
+                "evidence": ["native_verify:ASPECT_RATIO"],
+                "status": "pass",
+                "source": "native_abaqus_verifyMeshQuality",
+                "failed_element_count": 0,
+                "warning_element_count": 0,
+                "unsupported_checks": [],
+                "kind": "mesh_quality",
+            }
         if "rootAssembly" in code:
             return {"steps": ["Step-1"], "instances": ["Part-1-1"], "step_frames": {"Step-1": 1}}
         if "odb.steps.keys()" in code:

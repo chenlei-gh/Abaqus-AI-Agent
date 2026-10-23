@@ -740,8 +740,11 @@ class AnalysisRunner:
             action_plan=normalized_action_plan,
             environment=runtime_environment,
             metadata={
+                # A formal signature cannot cite a missing snapshot as if it were
+                # captured. "unavailable" is an explicit fingerprint of that fact;
+                # None would let the stamp exist without a verifiable scope.
                 "model_snapshot_hash": stable_hash(initial_snapshot)
-                if initial_snapshot is not None else None,
+                if initial_snapshot is not None else "unavailable",
                 "content_hash_scope": "not_captured",
                 "action_plan_scope": "caller" if normalized_action_plan else "none",
                 "agent_issued": True,
@@ -954,9 +957,30 @@ class AnalysisRunner:
                 jobs.create(job_name, model_name, **job_kwargs)
 
             from ..planning.output import plan_outputs, actions_from_output_plan, criteria_from_postprocess_profile
-            effective_criteria = tuple(criteria or ())
-            if postprocess_profile is not None:
-                profile_criteria = criteria_from_postprocess_profile(postprocess_profile)
+            # Two lists, because they answer different questions.
+            #
+            # `effective_criteria` describes what to EXTRACT from the ODB.
+            # `acceptance_criteria` describes what counts as a PASS and therefore
+            # always carries an operator and a limit. A profile requirement such as
+            # `reaction_force` says "this number must exist", not "it must be below
+            # X"; feeding it to the criteria evaluator used to surface as
+            # `unsupported operator: None` and turned a valid run into a failure.
+            acceptance_criteria = tuple(criteria or ())
+            effective_criteria = acceptance_criteria
+
+            # The domain profile is what the acceptance gate will hold this run to.
+            # Planning extraction from a different profile let a gate require a
+            # metric that no ODB request ever asked for, which blocks a valid run
+            # for a bookkeeping mismatch instead of a missing result.
+            domain_profile = None
+            if physics_domain:
+                from ..contracts.results import get_physics_result_profile
+                domain_profile = get_physics_result_profile(physics_domain)
+
+            for source_profile in (postprocess_profile, domain_profile):
+                if source_profile is None:
+                    continue
+                profile_criteria = criteria_from_postprocess_profile(source_profile)
                 existing_keys = {item.get("value_key") for item in effective_criteria if isinstance(item, dict)}
                 effective_criteria = effective_criteria + tuple(
                     item for item in profile_criteria
@@ -1431,6 +1455,7 @@ class AnalysisRunner:
                     })
                 if added_crit:
                     effective_criteria = tuple(effective_criteria) + tuple(added_crit)
+                    acceptance_criteria = tuple(acceptance_criteria) + tuple(added_crit)
 
             run_manifest = None
             if result_source == "odb":
@@ -1545,7 +1570,7 @@ class AnalysisRunner:
                     connector_kinematics=connector_kinematics,
                     fmbd_dynamics=fmbd_dynamics,
                     values=result_values,
-                    criteria=effective_criteria,
+                    criteria=acceptance_criteria,
                     evidence_manifest=run_manifest,
                     expected_run_id=run_id,
                     base_dir=art_dir if result_source == "odb" else None,
@@ -1574,7 +1599,7 @@ class AnalysisRunner:
                     connector_kinematics=connector_kinematics,
                     fmbd_dynamics=fmbd_dynamics,
                     values=result_values,
-                    criteria=effective_criteria,
+                    criteria=acceptance_criteria,
                     evidence=result_evidence,
                     evidence_manifest=run_manifest,
                     base_dir=art_dir if result_source == "odb" else None,
@@ -1670,7 +1695,9 @@ class AnalysisRunner:
             if engineering_checks is not None:
                 verification_map["engineering_checks"] = getattr(engineering_checks, "to_dict", lambda: str(engineering_checks))()
             if mesh_quality is not None:
-                verification_map["mesh_quality"] = getattr(mesh_quality, "to_dict", lambda: str(mesh_quality))()
+                # A dict must not fall through to str(dict): the consumer reads
+                # structured keys, and a repr string silently loses them.
+                verification_map["mesh_quality"] = _structured_result_payload(mesh_quality)
             if locals().get("odb_check") and isinstance(odb_check, dict) and odb_check.get("mesh_metrics"):
                 verification_map["mesh_metrics"] = odb_check["mesh_metrics"]
             if mesh_convergence is not None:
@@ -1835,6 +1862,29 @@ def _collect_diagnostics(executor, job_name, workdir=None):
         return inspect_job_diagnostics(executor, job_name, workdir=workdir)
     except Exception:
         return {}
+
+def _structured_result_payload(item):
+    """Return a verification payload that is always a mapping.
+
+    `verification` is consumed by key, so a repr string is worse than useless:
+    it looks like evidence and parses as none. Dicts and dataclasses both keep
+    their fields; anything else is recorded as a typed, clearly unusable value.
+    """
+    import dataclasses as _dc
+
+    if isinstance(item, dict):
+        return dict(item)
+    if hasattr(item, "to_dict"):
+        try:
+            payload = item.to_dict()
+        except Exception as exc:
+            return {"status": "not_run", "execution_error": "to_dict_failed:%s" % exc}
+        if isinstance(payload, dict):
+            return payload
+    if _dc.is_dataclass(item):
+        return _dc.asdict(item)
+    return {"status": "not_run", "execution_error": "unsupported_result_type:%s" % type(item).__name__}
+
 
 def _collect_artifacts(executor, job_name, workdir=None):
     try:
