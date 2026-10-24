@@ -73,7 +73,12 @@ print(json.dumps({'job_name':job,'workdir':workdir,'items':items}))
 
 
 def inspect_job_diagnostics(executor, job_name, workdir=None, tail_lines=80):
-    """Read bounded solver diagnostics from .msg/.sta/.dat without treating them as proof of success."""
+    """Read bounded tails plus full-file terminal markers from solver artifacts.
+
+    The tail remains the human-readable diagnostic payload. Completion, non-
+    completion and error markers are evaluated over the whole file so an early
+    ``***ERROR`` cannot be hidden by a later completion marker.
+    """
     workdir = workdir or "."
     code = """import os, json
 job=%r
@@ -87,7 +92,14 @@ for suffix in ('.msg', '.sta', '.dat', '.log'):
     try:
         with open(path, 'rb') as fh:
             lines = [l.decode('latin-1', 'replace') for l in fh.readlines()]
-        result[suffix]={'path':path, 'tail':''.join(lines[-tail:])}
+        result[suffix]={
+            'path':path,
+            'tail':''.join(lines[-tail:]),
+            'has_completed':any('THE ANALYSIS HAS COMPLETED SUCCESSFULLY' in l.upper() for l in lines),
+            'has_not_completed':any('THE ANALYSIS HAS NOT BEEN COMPLETED' in l.upper() for l in lines),
+            'has_error':any('***ERROR' in l.upper() or '***FATAL' in l.upper() for l in lines),
+            'error_sample':next((l.strip() for l in lines if '***ERROR' in l.upper() or '***FATAL' in l.upper()), ''),
+        }
     except Exception as exc:
         result[suffix]={'path':path, 'error':str(exc)}
 print(json.dumps(result))

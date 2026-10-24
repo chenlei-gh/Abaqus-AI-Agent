@@ -16,8 +16,9 @@ import shutil
 import subprocess
 import tempfile
 from dataclasses import dataclass, field
+from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Sequence, Union
+from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
 
 
 @dataclass(frozen=True)
@@ -43,9 +44,19 @@ class AbaqusBatchJob:
 
 @dataclass(frozen=True)
 class AbaqusJobResult:
-    """Outcome of an authentic Abaqus batch job execution."""
+    """Outcome of an authentic Abaqus batch job execution.
+
+    ``state`` is a solver terminal state only for ``COMPLETED``, ``ABORTED``
+    and ``UNKNOWN``. ``DRY_RUN`` and ``ERROR`` are infrastructure outcomes:
+    the solver never ran or the host invocation failed. ``is_success`` is the
+    compound evidence check; neither a zero process exit code nor an existing
+    ODB is sufficient by itself.
+    """
     job_name: str
-    state: str  # "COMPLETED", "ABORTED", "ERROR", "TIMEOUT", "DRY_RUN"
+    # Terminal states follow the unified T-P3 contract: COMPLETED / ABORTED /
+    # UNKNOWN. "ERROR" and "DRY_RUN" are infrastructure outcomes (the solve
+    # never ran), not solver terminal states.
+    state: str
     returncode: int
     workdir: Path
     is_live: bool
@@ -59,6 +70,7 @@ class AbaqusJobResult:
 
     @property
     def is_success(self) -> bool:
+        """True only for a completed, live run with a valid ODB artifact."""
         return self.state == "COMPLETED" and self.is_live and self.odb_path is not None and self.odb_path.is_file()
 
 
@@ -105,6 +117,100 @@ def parse_solver_diagnostics(workdir: Path, job_name: str) -> List[str]:
                     diags.append("STA: Analysis completed successfully")
 
     return diags
+
+
+class SolverTerminalState(str, Enum):
+    """Unified solver terminal state (T-P3).
+
+    COMPLETED: sufficient positive evidence that the solve finished normally.
+    ABORTED:   clear evidence of abnormal termination, abort, or failure.
+    UNKNOWN:   insufficient, contradictory, or incomplete evidence.
+    """
+    COMPLETED = "COMPLETED"
+    ABORTED = "ABORTED"
+    UNKNOWN = "UNKNOWN"
+
+
+@dataclass(frozen=True)
+class TerminalStateVerdict:
+    """A terminal-state classification plus the evidence that drove it."""
+    state: SolverTerminalState
+    evidence: Tuple[str, ...] = ()
+
+
+def classify_solver_terminal_state(
+    *,
+    process_killed: bool = False,
+    returncode: Optional[int] = None,
+    kernel_completed: bool = False,
+    kernel_aborted: bool = False,
+    sta_completed: bool = False,
+    sta_not_completed: bool = False,
+    msg_not_completed: bool = False,
+    msg_error: bool = False,
+    odb_present: Optional[bool] = None,
+    odb_valid: Optional[bool] = None,
+) -> TerminalStateVerdict:
+    """Classify the solver terminal state from independent evidence channels.
+
+    Hard rules (T-P3):
+    - exit code 0 never proves success on its own;
+    - ODB existence never proves success on its own;
+    - both are auxiliary evidence only.
+
+    Positive evidence is solver-authored: the Abaqus kernel reporting COMPLETED
+    or the .sta completion marker. Negative evidence: kernel ABORTED/TERMINATED/
+    ERROR, .sta/.msg "not completed" markers, .msg ***ERROR/***FATAL, or a
+    non-zero returncode. Contradiction between positive and negative evidence is
+    UNKNOWN, never a coin flip. A watchdog kill (stall or hard timeout) is
+    decisive abort evidence for the process it terminated.
+    """
+    if process_killed:
+        return TerminalStateVerdict(
+            SolverTerminalState.ABORTED,
+            ("watchdog terminated the solver process (stall or hard timeout)",),
+        )
+
+    positive = []
+    if sta_completed:
+        positive.append("sta completion marker: THE ANALYSIS HAS COMPLETED SUCCESSFULLY")
+    if kernel_completed:
+        positive.append("Abaqus kernel reports job status COMPLETED")
+    negative = []
+    if sta_not_completed:
+        negative.append("sta marker: THE ANALYSIS HAS NOT BEEN COMPLETED")
+    if msg_not_completed:
+        negative.append("msg marker: THE ANALYSIS HAS NOT BEEN COMPLETED")
+    if msg_error:
+        negative.append("msg contains ***ERROR/***FATAL")
+    if kernel_aborted:
+        negative.append("Abaqus kernel reports ABORTED/TERMINATED/ERROR")
+    if returncode is not None and returncode != 0:
+        negative.append(f"process exited with non-zero returncode {returncode}")
+
+    if positive and negative:
+        return TerminalStateVerdict(
+            SolverTerminalState.UNKNOWN,
+            ("contradictory evidence: " + " | ".join(positive + negative),),
+        )
+    if negative:
+        return TerminalStateVerdict(SolverTerminalState.ABORTED, tuple(negative))
+    if positive:
+        if odb_valid is False:
+            return TerminalStateVerdict(
+                SolverTerminalState.UNKNOWN,
+                tuple(positive) + ("solver claims completion but the ODB failed the authenticity pre-filter",),
+            )
+        if odb_present is False:
+            return TerminalStateVerdict(
+                SolverTerminalState.UNKNOWN,
+                tuple(positive) + ("solver claims completion but no ODB was produced",),
+            )
+        return TerminalStateVerdict(SolverTerminalState.COMPLETED, tuple(positive))
+    return TerminalStateVerdict(
+        SolverTerminalState.UNKNOWN,
+        ("no solver-authored completion evidence; exit code 0 and ODB existence are auxiliary only",),
+    )
 
 
 def _is_uniform_fill(path: Path, window: int = 512) -> bool:
@@ -836,11 +942,14 @@ def execute_abaqus_batch_job(
             diagnostics=diags,
         )
     except subprocess.TimeoutExpired:
-        diags = [f"Solver execution timed out after {job.timeout_seconds}s"]
+        # A watchdog hard-timeout kill is decisive abort evidence: under the
+        # unified T-P3 contract it classifies as ABORTED, with the timeout
+        # recorded as the evidence.
+        diags = [f"SOLVER_TIMEOUT_KILL: watchdog killed the process tree after {job.timeout_seconds}s"]
         diags.append(_release_locks_after_kill(job))
         return AbaqusJobResult(
             job_name=job.job_name,
-            state="TIMEOUT",
+            state="ABORTED",
             returncode=-1,
             workdir=job.workdir,
             is_live=True,
@@ -876,17 +985,22 @@ def execute_abaqus_batch_job(
         if p.is_file():
             artifacts[name] = p
 
-    # Evaluate authentic job outcome
-    if proc.returncode != 0:
-        state = "ABORTED"
-        diags.append(f"Solver process exited with non-zero returncode {proc.returncode}")
-    elif not odb_path.is_file() or not is_authentic_binary_odb(odb_path):
-        state = "ERROR"
-        diags.append("Solver completed returncode 0 but did not produce a valid binary .odb artifact")
-    elif any("MSG: Analysis not completed" in d or "STA: Analysis not completed" in d for d in diags):
-        state = "ABORTED"
-    else:
-        state = "COMPLETED"
+    # Evaluate the authentic job outcome through the unified terminal-state
+    # contract (T-P3): exit code 0 and ODB existence are auxiliary evidence
+    # only; COMPLETED requires solver-authored completion evidence.
+    odb_present = odb_path.is_file()
+    odb_valid = is_authentic_binary_odb(odb_path) if odb_present else None
+    verdict = classify_solver_terminal_state(
+        returncode=proc.returncode,
+        sta_completed=any("STA: Analysis completed successfully" in d for d in diags),
+        sta_not_completed=any("STA: Analysis not completed" in d for d in diags),
+        msg_not_completed=any("MSG: Analysis not completed" in d for d in diags),
+        msg_error=any(d.startswith("MSG_ERROR:") for d in diags),
+        odb_present=odb_present,
+        odb_valid=odb_valid,
+    )
+    state = verdict.state.value
+    diags.extend(f"TERMINAL_EVIDENCE: {e}" for e in verdict.evidence)
 
     return AbaqusJobResult(
         job_name=job.job_name,
@@ -894,7 +1008,7 @@ def execute_abaqus_batch_job(
         returncode=proc.returncode,
         workdir=job.workdir,
         is_live=True,
-        odb_path=odb_path if (odb_path.is_file() and is_authentic_binary_odb(odb_path)) else None,
+        odb_path=odb_path if (odb_present and odb_valid) else None,
         sta_path=sta_path if sta_path.is_file() else None,
         msg_path=msg_path if msg_path.is_file() else None,
         dat_path=dat_path if dat_path.is_file() else None,

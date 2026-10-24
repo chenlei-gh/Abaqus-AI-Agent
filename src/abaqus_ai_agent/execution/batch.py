@@ -31,6 +31,12 @@ def resolve_default_launcher(launcher: str = "abaqus") -> str:
 
 @dataclass(frozen=True)
 class BatchResult:
+    """Host process result for a batch command.
+
+    This object carries process execution facts only. ``succeeded`` describes
+    the host process, not an Abaqus solve; callers must use solver terminal
+    evidence before treating a job as completed or its ODB as valid.
+    """
     command: Tuple[str, ...]
     return_code: int
     stdout: str = ""
@@ -45,6 +51,7 @@ class BatchResult:
 
     @property
     def succeeded(self) -> bool:
+        """Process-level success only (exit code zero); never solver success."""
         return self.return_code == 0
 
     @property

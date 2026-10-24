@@ -1567,8 +1567,15 @@ def evaluate_production_acceptance(
     # 2. Solver status determination (Strict: Never assume completed if missing)
     eff_status = result_status
     if analysis_run is not None:
+        # T-P3: the unified terminal classifier records a contradictory or
+        # failed verdict in engineering_status. That verdict outranks the raw
+        # kernel status string, so a kernel COMPLETED cannot be re-read here as
+        # solver success when the classifier found failure or UNKNOWN evidence.
+        eng_status = str(getattr(analysis_run, "engineering_status", "") or "").upper()
         job_st = getattr(analysis_run, "job_status", None)
-        if job_st is not None:
+        if eng_status in ("TERMINAL_UNKNOWN", "SOLVER_FAILED"):
+            eff_status = eng_status.lower()
+        elif job_st is not None:
             st = getattr(job_st, "state", None)
             eff_status = st.value.lower() if hasattr(st, "value") else str(st or "").lower()
         elif getattr(analysis_run, "state", None) is not None:

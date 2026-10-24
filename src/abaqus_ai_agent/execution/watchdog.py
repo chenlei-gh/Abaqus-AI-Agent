@@ -109,6 +109,12 @@ class WatchedProcessResult:
 
     @property
     def succeeded(self) -> bool:
+        """Process-level success only: exit code 0 without a watchdog kill.
+
+        This is NOT solver terminal success. Per the unified T-P3 contract,
+        exit code 0 and ODB existence are auxiliary evidence; a solver task
+        state must come from ``solver.classify_solver_terminal_state``.
+        """
         return self.returncode == 0 and not self.stalled and not self.timed_out
 
 

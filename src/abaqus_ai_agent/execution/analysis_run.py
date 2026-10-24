@@ -88,6 +88,18 @@ class AnalysisRun:
 
     @property
     def solver_completed(self):
+        """Whether solver-authored evidence proves the solve completed.
+
+        T-P3: a kernel COMPLETED string contradicted by the solver's own
+        .sta/.msg evidence is classified UNKNOWN/SOLVER_FAILED and recorded in
+        engineering_status. The raw kernel status must never override that
+        verdict in this public view.
+        """
+        if self.engineering_status in (
+            EngineeringStatus.TERMINAL_UNKNOWN.value,
+            EngineeringStatus.SOLVER_FAILED.value,
+        ):
+            return False
         return self.job_status is not None and self.job_status.state == JobState.COMPLETED
 
     def get_metric(self, name: str) -> Optional[Any]:
@@ -1159,28 +1171,54 @@ class AnalysisRunner:
                 provenance=_provenance_with_artifacts(run.provenance, artifacts),
             )
             _persist_ledger("SOLVING", run)
+            # Unified terminal-state classification (T-P3). The kernel status is
+            # cross-checked against the solver's own .sta/.msg markers, so a
+            # kernel "COMPLETED" contradicted by the solver log can no longer
+            # pass as success, and contradictory evidence lands on UNKNOWN
+            # instead of being rescued or trusted.
+            from .solver import SolverTerminalState, classify_solver_terminal_state
+            solver_diagnostics = _collect_diagnostics(self.executor, job_name, workdir=workdir)
+            terminal = classify_solver_terminal_state(
+                kernel_completed=(status.state == JobState.COMPLETED),
+                kernel_aborted=(status.state in (JobState.ABORTED, JobState.TERMINATED, JobState.ERROR)),
+                sta_completed=_diagnostic_marker(
+                    solver_diagnostics, ".sta", "has_completed",
+                    ("THE ANALYSIS HAS COMPLETED SUCCESSFULLY",)),
+                sta_not_completed=_diagnostic_marker(
+                    solver_diagnostics, ".sta", "has_not_completed",
+                    ("THE ANALYSIS HAS NOT BEEN COMPLETED",)),
+                msg_not_completed=_diagnostic_marker(
+                    solver_diagnostics, ".msg", "has_not_completed",
+                    ("THE ANALYSIS HAS NOT BEEN COMPLETED",)),
+                msg_error=_diagnostic_marker(
+                    solver_diagnostics, ".msg", "has_error",
+                    ("***ERROR", "***FATAL")),
+            )
+            if terminal.state is not SolverTerminalState.COMPLETED:
+                engineering = (
+                    EngineeringStatus.SOLVER_FAILED
+                    if terminal.state is SolverTerminalState.ABORTED
+                    else EngineeringStatus.TERMINAL_UNKNOWN)
+                failed_run = run.with_state(
+                    AnalysisRunState.FAILED,
+                    job_status=status,
+                    engineering_status=engineering.value,
+                    artifacts=artifacts,
+                    diagnostics=({"reason": "job_terminal_not_completed",
+                                  "terminal_state": terminal.state.value,
+                                  "terminal_evidence": list(terminal.evidence),
+                                  "state": status.state.value,
+                                  "solver_artifacts": solver_diagnostics},))
+                _persist_ledger("FAILED", failed_run)
+                return failed_run
+
+            # When solver-authored evidence proves completion while the kernel
+            # status string did not parse as COMPLETED, the verdict promotes the
+            # job status: downstream layers (acceptance, reporting) read
+            # job_status.state, and a proven-complete solve must not arrive
+            # there wearing a non-COMPLETED status.
             if status.state != JobState.COMPLETED:
-                solver_diagnostics = _collect_diagnostics(self.executor, job_name, workdir=workdir)
-                sta_tail = solver_diagnostics.get(".sta", {}).get("tail", "")
-                log_tail = solver_diagnostics.get(".log", {}).get("tail", "")
-                if "THE ANALYSIS HAS COMPLETED SUCCESSFULLY" in sta_tail and "COMPLETED" in log_tail:
-                    status = JobStatus(job_name, JobState.COMPLETED, status.raw)
-                else:
-                    engineering = (
-                        EngineeringStatus.SOLVER_FAILED
-                        if status.state in (JobState.ABORTED, JobState.TERMINATED,
-                                             JobState.ERROR, JobState.TIMEOUT)
-                        else EngineeringStatus.EXECUTION_FAILED)
-                    failed_run = run.with_state(
-                        AnalysisRunState.FAILED,
-                        job_status=status,
-                        engineering_status=engineering.value,
-                        artifacts=artifacts,
-                        diagnostics=({"reason": "job_not_completed",
-                                      "state": status.state.value,
-                                      "solver_artifacts": solver_diagnostics},))
-                    _persist_ledger("FAILED", failed_run)
-                    return failed_run
+                status = JobStatus(job_name, JobState.COMPLETED, status.raw)
 
             run = run.with_state(
                 AnalysisRunState.COMPLETED,
@@ -1885,6 +1923,15 @@ def _collect_diagnostics(executor, job_name, workdir=None):
         return inspect_job_diagnostics(executor, job_name, workdir=workdir)
     except Exception:
         return {}
+
+
+def _diagnostic_marker(diagnostics, suffix, key, tail_tokens):
+    """Prefer a full-file terminal marker, falling back to the bounded tail."""
+    payload = diagnostics.get(suffix) or {}
+    if key in payload:
+        return bool(payload.get(key))
+    tail = str(payload.get("tail") or "").upper()
+    return any(token in tail for token in tail_tokens)
 
 def _structured_result_payload(item):
     """Return a verification payload that is always a mapping.

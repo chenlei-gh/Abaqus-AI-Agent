@@ -267,6 +267,7 @@ def test_production_delivery_launcher_missing_fails_closed(tmp_path: Path):
     not bool(find_abaqus_executable()),
     reason="Authentic SIMULIA Abaqus launcher required on host for live production delivery e2e",
 )
+@pytest.mark.live
 def test_production_delivery_live_e2e_gate():
     """Live full-chain acceptance gate running against authentic Abaqus 2025."""
     report = run_production_delivery_e2e(timeout=1800)
