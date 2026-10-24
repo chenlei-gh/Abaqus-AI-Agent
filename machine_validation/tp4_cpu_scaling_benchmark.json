@@ -1,0 +1,634 @@
+{
+  "topic": "T-P4 CPU adaptive scaling benchmark",
+  "generated_on": "2026-10-24",
+  "machine": {
+    "cpu": "Intel(R) Core(TM) Ultra 9 285K",
+    "physical_cores": 24,
+    "logical_cores": 24,
+    "memory_bytes": 136854630400,
+    "abaqus_release": "Abaqus 2025",
+    "os": "Windows"
+  },
+  "method": {
+    "model": "structured C3D8/C3D8R cantilever beam, nx:ny:nz = 10:1:1",
+    "timing_metric": "solver phase wall time parsed from .log by execution.solver_timing",
+    "completion_contract": "T-P3 classify_solver_terminal_state",
+    "cpus": [
+      1,
+      2,
+      4,
+      8
+    ],
+    "repeats": "2 for primary matrices, 1 for boundary spot checks; median reported",
+    "warmup": "one discarded warm-up at 1 CPU per matrix"
+  },
+  "cases": [
+    {
+      "label": "std_small",
+      "solver": "standard",
+      "elements": 3430,
+      "increments": 40,
+      "step_time": 0.001,
+      "summary": [
+        {
+          "cpus": 1,
+          "samples": 1,
+          "median_solver_phase_seconds": 12.0,
+          "min_solver_phase_seconds": 12.0,
+          "max_solver_phase_seconds": 12.0,
+          "speedup_vs_1cpu": 1.0,
+          "parallel_efficiency": 1.0
+        },
+        {
+          "cpus": 2,
+          "samples": 1,
+          "median_solver_phase_seconds": 12.0,
+          "min_solver_phase_seconds": 12.0,
+          "max_solver_phase_seconds": 12.0,
+          "speedup_vs_1cpu": 1.0,
+          "parallel_efficiency": 0.5
+        },
+        {
+          "cpus": 4,
+          "samples": 1,
+          "median_solver_phase_seconds": 11.0,
+          "min_solver_phase_seconds": 11.0,
+          "max_solver_phase_seconds": 11.0,
+          "speedup_vs_1cpu": 1.091,
+          "parallel_efficiency": 0.273
+        },
+        {
+          "cpus": 8,
+          "samples": 1,
+          "median_solver_phase_seconds": 11.0,
+          "min_solver_phase_seconds": 11.0,
+          "max_solver_phase_seconds": 11.0,
+          "speedup_vs_1cpu": 1.091,
+          "parallel_efficiency": 0.136
+        }
+      ],
+      "runs": [
+        {
+          "cpus": 1,
+          "repeat": 1,
+          "solver_phase_seconds": 12.0,
+          "wall_seconds": 21.54,
+          "terminal_state": "COMPLETED",
+          "timing_status": "measured"
+        },
+        {
+          "cpus": 2,
+          "repeat": 1,
+          "solver_phase_seconds": 12.0,
+          "wall_seconds": 21.748,
+          "terminal_state": "COMPLETED",
+          "timing_status": "measured"
+        },
+        {
+          "cpus": 4,
+          "repeat": 1,
+          "solver_phase_seconds": 11.0,
+          "wall_seconds": 19.708,
+          "terminal_state": "COMPLETED",
+          "timing_status": "measured"
+        },
+        {
+          "cpus": 8,
+          "repeat": 1,
+          "solver_phase_seconds": 11.0,
+          "wall_seconds": 19.582,
+          "terminal_state": "COMPLETED",
+          "timing_status": "measured"
+        }
+      ]
+    },
+    {
+      "label": "std_main",
+      "solver": "standard",
+      "elements": 21970,
+      "increments": 10,
+      "step_time": 0.001,
+      "summary": [
+        {
+          "cpus": 1,
+          "samples": 2,
+          "median_solver_phase_seconds": 16.5,
+          "min_solver_phase_seconds": 16.0,
+          "max_solver_phase_seconds": 17.0,
+          "speedup_vs_1cpu": 1.0,
+          "parallel_efficiency": 1.0
+        },
+        {
+          "cpus": 2,
+          "samples": 2,
+          "median_solver_phase_seconds": 12.0,
+          "min_solver_phase_seconds": 12.0,
+          "max_solver_phase_seconds": 12.0,
+          "speedup_vs_1cpu": 1.375,
+          "parallel_efficiency": 0.688
+        },
+        {
+          "cpus": 4,
+          "samples": 2,
+          "median_solver_phase_seconds": 10.5,
+          "min_solver_phase_seconds": 10.0,
+          "max_solver_phase_seconds": 11.0,
+          "speedup_vs_1cpu": 1.571,
+          "parallel_efficiency": 0.393
+        },
+        {
+          "cpus": 8,
+          "samples": 2,
+          "median_solver_phase_seconds": 9.5,
+          "min_solver_phase_seconds": 9.0,
+          "max_solver_phase_seconds": 10.0,
+          "speedup_vs_1cpu": 1.737,
+          "parallel_efficiency": 0.217
+        }
+      ],
+      "runs": [
+        {
+          "cpus": 1,
+          "repeat": 1,
+          "solver_phase_seconds": 16.0,
+          "wall_seconds": 25.702,
+          "terminal_state": "COMPLETED",
+          "timing_status": "measured"
+        },
+        {
+          "cpus": 1,
+          "repeat": 2,
+          "solver_phase_seconds": 17.0,
+          "wall_seconds": 25.653,
+          "terminal_state": "COMPLETED",
+          "timing_status": "measured"
+        },
+        {
+          "cpus": 2,
+          "repeat": 1,
+          "solver_phase_seconds": 12.0,
+          "wall_seconds": 22.216,
+          "terminal_state": "COMPLETED",
+          "timing_status": "measured"
+        },
+        {
+          "cpus": 2,
+          "repeat": 2,
+          "solver_phase_seconds": 12.0,
+          "wall_seconds": 21.751,
+          "terminal_state": "COMPLETED",
+          "timing_status": "measured"
+        },
+        {
+          "cpus": 4,
+          "repeat": 1,
+          "solver_phase_seconds": 11.0,
+          "wall_seconds": 19.668,
+          "terminal_state": "COMPLETED",
+          "timing_status": "measured"
+        },
+        {
+          "cpus": 4,
+          "repeat": 2,
+          "solver_phase_seconds": 10.0,
+          "wall_seconds": 19.68,
+          "terminal_state": "COMPLETED",
+          "timing_status": "measured"
+        },
+        {
+          "cpus": 8,
+          "repeat": 1,
+          "solver_phase_seconds": 10.0,
+          "wall_seconds": 19.663,
+          "terminal_state": "COMPLETED",
+          "timing_status": "measured"
+        },
+        {
+          "cpus": 8,
+          "repeat": 2,
+          "solver_phase_seconds": 9.0,
+          "wall_seconds": 19.695,
+          "terminal_state": "COMPLETED",
+          "timing_status": "measured"
+        }
+      ]
+    },
+    {
+      "label": "std_final",
+      "solver": "standard",
+      "elements": 58320,
+      "increments": 16,
+      "step_time": 0.001,
+      "summary": [
+        {
+          "cpus": 1,
+          "samples": 2,
+          "median_solver_phase_seconds": 49.0,
+          "min_solver_phase_seconds": 49.0,
+          "max_solver_phase_seconds": 49.0,
+          "speedup_vs_1cpu": 1.0,
+          "parallel_efficiency": 1.0
+        },
+        {
+          "cpus": 2,
+          "samples": 2,
+          "median_solver_phase_seconds": 30.0,
+          "min_solver_phase_seconds": 30.0,
+          "max_solver_phase_seconds": 30.0,
+          "speedup_vs_1cpu": 1.633,
+          "parallel_efficiency": 0.817
+        },
+        {
+          "cpus": 4,
+          "samples": 2,
+          "median_solver_phase_seconds": 21.0,
+          "min_solver_phase_seconds": 21.0,
+          "max_solver_phase_seconds": 21.0,
+          "speedup_vs_1cpu": 2.333,
+          "parallel_efficiency": 0.583
+        },
+        {
+          "cpus": 8,
+          "samples": 2,
+          "median_solver_phase_seconds": 17.0,
+          "min_solver_phase_seconds": 17.0,
+          "max_solver_phase_seconds": 17.0,
+          "speedup_vs_1cpu": 2.882,
+          "parallel_efficiency": 0.36
+        }
+      ],
+      "runs": [
+        {
+          "cpus": 1,
+          "repeat": 1,
+          "solver_phase_seconds": 49.0,
+          "wall_seconds": 59.948,
+          "terminal_state": "COMPLETED",
+          "timing_status": "measured"
+        },
+        {
+          "cpus": 1,
+          "repeat": 2,
+          "solver_phase_seconds": 49.0,
+          "wall_seconds": 59.712,
+          "terminal_state": "COMPLETED",
+          "timing_status": "measured"
+        },
+        {
+          "cpus": 2,
+          "repeat": 1,
+          "solver_phase_seconds": 30.0,
+          "wall_seconds": 39.827,
+          "terminal_state": "COMPLETED",
+          "timing_status": "measured"
+        },
+        {
+          "cpus": 2,
+          "repeat": 2,
+          "solver_phase_seconds": 30.0,
+          "wall_seconds": 39.761,
+          "terminal_state": "COMPLETED",
+          "timing_status": "measured"
+        },
+        {
+          "cpus": 4,
+          "repeat": 1,
+          "solver_phase_seconds": 21.0,
+          "wall_seconds": 31.8,
+          "terminal_state": "COMPLETED",
+          "timing_status": "measured"
+        },
+        {
+          "cpus": 4,
+          "repeat": 2,
+          "solver_phase_seconds": 21.0,
+          "wall_seconds": 31.821,
+          "terminal_state": "COMPLETED",
+          "timing_status": "measured"
+        },
+        {
+          "cpus": 8,
+          "repeat": 1,
+          "solver_phase_seconds": 17.0,
+          "wall_seconds": 27.778,
+          "terminal_state": "COMPLETED",
+          "timing_status": "measured"
+        },
+        {
+          "cpus": 8,
+          "repeat": 2,
+          "solver_phase_seconds": 17.0,
+          "wall_seconds": 27.751,
+          "terminal_state": "COMPLETED",
+          "timing_status": "measured"
+        }
+      ]
+    },
+    {
+      "label": "exp_small",
+      "solver": "explicit",
+      "elements": 3430,
+      "increments": 10,
+      "step_time": 0.002,
+      "summary": [
+        {
+          "cpus": 1,
+          "samples": 1,
+          "median_solver_phase_seconds": 70.0,
+          "min_solver_phase_seconds": 70.0,
+          "max_solver_phase_seconds": 70.0,
+          "speedup_vs_1cpu": 1.0,
+          "parallel_efficiency": 1.0
+        },
+        {
+          "cpus": 2,
+          "samples": 1,
+          "median_solver_phase_seconds": 72.0,
+          "min_solver_phase_seconds": 72.0,
+          "max_solver_phase_seconds": 72.0,
+          "speedup_vs_1cpu": 0.972,
+          "parallel_efficiency": 0.486
+        },
+        {
+          "cpus": 4,
+          "samples": 1,
+          "median_solver_phase_seconds": 76.0,
+          "min_solver_phase_seconds": 76.0,
+          "max_solver_phase_seconds": 76.0,
+          "speedup_vs_1cpu": 0.921,
+          "parallel_efficiency": 0.23
+        },
+        {
+          "cpus": 8,
+          "samples": 1,
+          "median_solver_phase_seconds": 87.0,
+          "min_solver_phase_seconds": 87.0,
+          "max_solver_phase_seconds": 87.0,
+          "speedup_vs_1cpu": 0.805,
+          "parallel_efficiency": 0.101
+        }
+      ],
+      "runs": [
+        {
+          "cpus": 1,
+          "repeat": 1,
+          "solver_phase_seconds": 70.0,
+          "wall_seconds": 85.922,
+          "terminal_state": "COMPLETED",
+          "timing_status": "measured"
+        },
+        {
+          "cpus": 2,
+          "repeat": 1,
+          "solver_phase_seconds": 72.0,
+          "wall_seconds": 87.937,
+          "terminal_state": "COMPLETED",
+          "timing_status": "measured"
+        },
+        {
+          "cpus": 4,
+          "repeat": 1,
+          "solver_phase_seconds": 76.0,
+          "wall_seconds": 91.883,
+          "terminal_state": "COMPLETED",
+          "timing_status": "measured"
+        },
+        {
+          "cpus": 8,
+          "repeat": 1,
+          "solver_phase_seconds": 87.0,
+          "wall_seconds": 104.09,
+          "terminal_state": "COMPLETED",
+          "timing_status": "measured"
+        }
+      ]
+    },
+    {
+      "label": "exp_final",
+      "solver": "explicit",
+      "elements": 7290,
+      "increments": 10,
+      "step_time": 0.001,
+      "summary": [
+        {
+          "cpus": 1,
+          "samples": 2,
+          "median_solver_phase_seconds": 58.0,
+          "min_solver_phase_seconds": 58.0,
+          "max_solver_phase_seconds": 58.0,
+          "speedup_vs_1cpu": 1.0,
+          "parallel_efficiency": 1.0
+        },
+        {
+          "cpus": 2,
+          "samples": 2,
+          "median_solver_phase_seconds": 56.5,
+          "min_solver_phase_seconds": 56.0,
+          "max_solver_phase_seconds": 57.0,
+          "speedup_vs_1cpu": 1.027,
+          "parallel_efficiency": 0.513
+        },
+        {
+          "cpus": 4,
+          "samples": 2,
+          "median_solver_phase_seconds": 54.0,
+          "min_solver_phase_seconds": 52.0,
+          "max_solver_phase_seconds": 56.0,
+          "speedup_vs_1cpu": 1.074,
+          "parallel_efficiency": 0.269
+        },
+        {
+          "cpus": 8,
+          "samples": 2,
+          "median_solver_phase_seconds": 56.5,
+          "min_solver_phase_seconds": 56.0,
+          "max_solver_phase_seconds": 57.0,
+          "speedup_vs_1cpu": 1.027,
+          "parallel_efficiency": 0.128
+        }
+      ],
+      "runs": [
+        {
+          "cpus": 1,
+          "repeat": 1,
+          "solver_phase_seconds": 58.0,
+          "wall_seconds": 73.736,
+          "terminal_state": "COMPLETED",
+          "timing_status": "measured"
+        },
+        {
+          "cpus": 1,
+          "repeat": 2,
+          "solver_phase_seconds": 58.0,
+          "wall_seconds": 73.781,
+          "terminal_state": "COMPLETED",
+          "timing_status": "measured"
+        },
+        {
+          "cpus": 2,
+          "repeat": 1,
+          "solver_phase_seconds": 57.0,
+          "wall_seconds": 73.916,
+          "terminal_state": "COMPLETED",
+          "timing_status": "measured"
+        },
+        {
+          "cpus": 2,
+          "repeat": 2,
+          "solver_phase_seconds": 56.0,
+          "wall_seconds": 71.823,
+          "terminal_state": "COMPLETED",
+          "timing_status": "measured"
+        },
+        {
+          "cpus": 4,
+          "repeat": 1,
+          "solver_phase_seconds": 56.0,
+          "wall_seconds": 71.831,
+          "terminal_state": "COMPLETED",
+          "timing_status": "measured"
+        },
+        {
+          "cpus": 4,
+          "repeat": 2,
+          "solver_phase_seconds": 52.0,
+          "wall_seconds": 67.82,
+          "terminal_state": "COMPLETED",
+          "timing_status": "measured"
+        },
+        {
+          "cpus": 8,
+          "repeat": 1,
+          "solver_phase_seconds": 57.0,
+          "wall_seconds": 73.8,
+          "terminal_state": "COMPLETED",
+          "timing_status": "measured"
+        },
+        {
+          "cpus": 8,
+          "repeat": 2,
+          "solver_phase_seconds": 56.0,
+          "wall_seconds": 71.839,
+          "terminal_state": "COMPLETED",
+          "timing_status": "measured"
+        }
+      ]
+    },
+    {
+      "label": "exp_large_final",
+      "solver": "explicit",
+      "elements": 58320,
+      "increments": 10,
+      "step_time": 0.00025,
+      "summary": [
+        {
+          "cpus": 1,
+          "samples": 2,
+          "median_solver_phase_seconds": 52.5,
+          "min_solver_phase_seconds": 52.0,
+          "max_solver_phase_seconds": 53.0,
+          "speedup_vs_1cpu": 1.0,
+          "parallel_efficiency": 1.0
+        },
+        {
+          "cpus": 2,
+          "samples": 2,
+          "median_solver_phase_seconds": 63.0,
+          "min_solver_phase_seconds": 63.0,
+          "max_solver_phase_seconds": 63.0,
+          "speedup_vs_1cpu": 0.833,
+          "parallel_efficiency": 0.417
+        },
+        {
+          "cpus": 4,
+          "samples": 2,
+          "median_solver_phase_seconds": 60.5,
+          "min_solver_phase_seconds": 59.0,
+          "max_solver_phase_seconds": 62.0,
+          "speedup_vs_1cpu": 0.868,
+          "parallel_efficiency": 0.217
+        },
+        {
+          "cpus": 8,
+          "samples": 2,
+          "median_solver_phase_seconds": 61.5,
+          "min_solver_phase_seconds": 58.0,
+          "max_solver_phase_seconds": 65.0,
+          "speedup_vs_1cpu": 0.854,
+          "parallel_efficiency": 0.107
+        }
+      ],
+      "runs": [
+        {
+          "cpus": 1,
+          "repeat": 1,
+          "solver_phase_seconds": 52.0,
+          "wall_seconds": 69.685,
+          "terminal_state": "COMPLETED",
+          "timing_status": "measured"
+        },
+        {
+          "cpus": 1,
+          "repeat": 2,
+          "solver_phase_seconds": 53.0,
+          "wall_seconds": 69.861,
+          "terminal_state": "COMPLETED",
+          "timing_status": "measured"
+        },
+        {
+          "cpus": 2,
+          "repeat": 1,
+          "solver_phase_seconds": 63.0,
+          "wall_seconds": 79.879,
+          "terminal_state": "COMPLETED",
+          "timing_status": "measured"
+        },
+        {
+          "cpus": 2,
+          "repeat": 2,
+          "solver_phase_seconds": 63.0,
+          "wall_seconds": 79.865,
+          "terminal_state": "COMPLETED",
+          "timing_status": "measured"
+        },
+        {
+          "cpus": 4,
+          "repeat": 1,
+          "solver_phase_seconds": 62.0,
+          "wall_seconds": 80.021,
+          "terminal_state": "COMPLETED",
+          "timing_status": "measured"
+        },
+        {
+          "cpus": 4,
+          "repeat": 2,
+          "solver_phase_seconds": 59.0,
+          "wall_seconds": 75.965,
+          "terminal_state": "COMPLETED",
+          "timing_status": "measured"
+        },
+        {
+          "cpus": 8,
+          "repeat": 1,
+          "solver_phase_seconds": 58.0,
+          "wall_seconds": 73.837,
+          "terminal_state": "COMPLETED",
+          "timing_status": "measured"
+        },
+        {
+          "cpus": 8,
+          "repeat": 2,
+          "solver_phase_seconds": 65.0,
+          "wall_seconds": 81.883,
+          "terminal_state": "COMPLETED",
+          "timing_status": "measured"
+        }
+      ]
+    }
+  ],
+  "decision": {
+    "adaptive_default": "keep False (D4)",
+    "standard_tiering": "small->1, medium->4, large->8 supported by this benchmark",
+    "explicit_tiering": "more than 1 CPU is not supported by this benchmark; current 4/8-core recommendations need a separate solver-aware cap decision"
+  }
+}
