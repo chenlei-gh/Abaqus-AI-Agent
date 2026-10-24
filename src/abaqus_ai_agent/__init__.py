@@ -9,7 +9,7 @@ from .contracts.viewport import ViewportState
 from .contracts.session import SessionHealth
 from .contracts.results import ResultRequirement, ResultExtraction
 from .contracts.metrics import EngineeringMetric
-from .contracts.solver_selection import SolverSelection, select_solver
+from .contracts.solver_selection import SolverSelection, SolverSelectionBlocked, select_solver
 from .contracts.report import EngineeringReportData, ReportFigure
 from .contracts.postprocess import PostProcessingProfile, profile_for_solver_selection
 from .reporting.figures import figure_specs_for_profile, capture_viewport_report_figure

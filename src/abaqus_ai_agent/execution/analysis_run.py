@@ -8,6 +8,7 @@ from enum import Enum
 from typing import Any, Dict, Optional, Tuple
 
 from .jobs import JobController, JobState, JobStatus
+from ..contracts.solver_selection import SolverSelectionBlocked
 from ..engineering_status import EngineeringStatus
 from ..evidence.result import summarize_odb
 from ..evidence.model import Evidence, EvidenceBundle
@@ -990,6 +991,10 @@ class AnalysisRunner:
                 from ..contracts.solver_selection import select_solver
                 from ..contracts.postprocess import profile_for_solver_selection
                 selection = select_solver(engineering_intent)
+                # T-P1 / frozen contract D2: a hard-blocked selection is a
+                # pre-submission refusal, never a warning to continue past.
+                if getattr(selection, "blocked", False):
+                    raise SolverSelectionBlocked(selection)
                 postprocess_profile = postprocess_profile or profile_for_solver_selection(selection)
                 metadata = dict(run.metadata)
                 metadata["solver_selection"] = selection
@@ -1738,6 +1743,24 @@ class AnalysisRunner:
                 evidence=evidence, artifacts=artifacts, metrics=run_metrics,
                 metadata=dict(run.metadata, evidence_manifest=run_manifest) if run_manifest is not None else dict(run.metadata),
                 extractions=tuple(extractions if result_source == "odb" else ()))
+        except SolverSelectionBlocked as exc:
+            artifacts = _collect_artifacts(self.executor, job_name, workdir=workdir)
+            diagnostics = _collect_diagnostics(self.executor, job_name, workdir=workdir)
+            blocked_selection = exc.selection
+            failed_run = run.with_state(
+                AnalysisRunState.FAILED,
+                engineering_status=EngineeringStatus.SUBMISSION_BLOCKED.value,
+                artifacts=artifacts,
+                diagnostics=({
+                    "error": str(exc),
+                    "solver_selection_blocked": True,
+                    "blocking_reasons": list(getattr(blocked_selection, "blocking_reasons", ()) or ()),
+                    "solver": getattr(blocked_selection, "solver", ""),
+                    "strategy": getattr(blocked_selection, "strategy", ""),
+                    "solver_artifacts": diagnostics,
+                },))
+            _persist_ledger("FAILED", failed_run)
+            return failed_run
         except Exception as exc:
             artifacts = _collect_artifacts(self.executor, job_name, workdir=workdir)
             diagnostics = _collect_diagnostics(self.executor, job_name, workdir=workdir)

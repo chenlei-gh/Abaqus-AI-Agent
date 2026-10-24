@@ -105,6 +105,62 @@ def separation_required(
     return False
 
 
+def kinematic_evidence(
+    intent: Optional[EngineeringIntent] = None,
+    *,
+    description: str = "",
+    contacts: Sequence[Any] = (),
+) -> Dict[str, Dict[str, Any]]:
+    """Kinematic requirements of the question, split by evidence strength.
+
+    ``declared`` signals are explicit engineering statements: metadata flags
+    (``requires_separation`` / ``separation_required`` /
+    ``kinematic_requirement.separation``) or a contact whose expected state is
+    open or that carries an explicit ``expected_separation``. ``keyword``
+    signals are free-text matches only. Frozen contract D3: keyword matches
+    may trigger review, they may not force a solver decision on their own.
+
+    This function only reports evidence source and strength; it never decides.
+    The decision belongs to the consumer (e.g. solver selection), which must
+    also honour D2: a declared separation need conflicting with a user-chosen
+    solver blocks submission instead of silently switching the solver.
+    """
+    metadata = dict(getattr(intent, "metadata", None) or {})
+    declared = []
+    if metadata.get("requires_separation"):
+        declared.append("metadata.requires_separation")
+    if metadata.get("separation_required"):
+        declared.append("metadata.separation_required")
+    kinematic_req = metadata.get("kinematic_requirement")
+    if isinstance(kinematic_req, dict) and kinematic_req.get("separation"):
+        declared.append("metadata.kinematic_requirement.separation")
+    contact_items = tuple(
+        contacts or (getattr(intent, "contacts", ()) if intent is not None else ())
+    )
+    for contact in contact_items:
+        if _contact_state(contact) == "open":
+            declared.append("contact.expected_state=open")
+        if _contact_expected_separation(contact) is not None:
+            declared.append("contact.expected_separation")
+    blob = " ".join(
+        str(part).lower()
+        for part in (
+            description,
+            getattr(intent, "description", "") if intent is not None else "",
+            _intent_blob(intent) if intent is not None else "",
+        )
+        if part
+    )
+    keyword_hits = tuple(term for term in _SEPARATION_TERMS if term in blob)
+    return {
+        "separation": {
+            "declared": bool(declared),
+            "keyword": bool(keyword_hits),
+            "evidence": tuple(declared) + tuple("keyword:" + term for term in keyword_hits),
+        }
+    }
+
+
 class InvalidForQuestionError(ValueError):
     """模型约束与目标工程问题冲突：该模型无法回答当前问题。
 
@@ -191,9 +247,12 @@ def _as_dict(item: Any) -> Dict[str, Any]:
 
 
 def _intent_blob(intent: EngineeringIntent) -> str:
-    metadata = intent.metadata or {}
-    parts = [intent.description, intent.kind, intent.analysis_type, metadata.get("requirement")]
-    for load in intent.loads or ():
+    # getattr throughout: duck-typed intents in the execution layer may carry
+    # only a subset of the contract fields.
+    metadata = getattr(intent, "metadata", None) or {}
+    parts = [getattr(intent, "description", ""), getattr(intent, "kind", ""),
+             getattr(intent, "analysis_type", ""), metadata.get("requirement")]
+    for load in getattr(intent, "loads", None) or ():
         parts.append(_load_type(load))
         parts.append(_load_region(load))
         if isinstance(load, dict):

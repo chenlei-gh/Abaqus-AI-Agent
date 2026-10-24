@@ -1,2 +1,2 @@
-from .contracts.solver_selection import SolverSelection, select_solver
-__all__ = ["SolverSelection", "select_solver"]
+from .contracts.solver_selection import SolverSelection, SolverSelectionBlocked, select_solver
+__all__ = ["SolverSelection", "SolverSelectionBlocked", "select_solver"]

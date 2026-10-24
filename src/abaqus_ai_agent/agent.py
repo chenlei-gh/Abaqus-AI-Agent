@@ -1669,7 +1669,10 @@ class AbaqusAIAgent:
 
         healing_result = None
         original_failed_run = run
-        if not initial_ok and enable_self_healing and odb_path is None and result_values is None:
+        # A submission blocked by a solver-selection conflict (frozen contract
+        # D2) is a policy refusal, not a solver failure: the self-healing chain
+        # has nothing to diagnose and must never retry or re-parameterise it.
+        if not initial_ok and enable_self_healing and odb_path is None and result_values is None and initial_eng_status != "SUBMISSION_BLOCKED":
             from .diagnostics.orchestrator import SelfHealingOrchestrator
             heal_kwargs = dict(kwargs)
             # Consent is an explicit product flag. Do not let a leaked kwarg
