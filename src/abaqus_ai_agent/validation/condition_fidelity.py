@@ -105,6 +105,18 @@ def separation_required(
     return False
 
 
+class InvalidForQuestionError(ValueError):
+    """模型约束与目标工程问题冲突：该模型无法回答当前问题。
+
+    ValueError 子类，保证既有 except (ValueError, TypeError) 捕获链向后兼容。
+    携带 blockers 元组供报告阶段分类为 INVALID_FOR_QUESTION。
+    """
+
+    def __init__(self, blockers: tuple[dict, ...]):
+        self.blockers = blockers
+        super().__init__("; ".join(str(b.get("message", b)) for b in blockers))
+
+
 def _interaction_type(interaction: Any) -> str:
     if isinstance(interaction, dict):
         return str(interaction.get("interaction_type") or interaction.get("type") or "").strip().lower()

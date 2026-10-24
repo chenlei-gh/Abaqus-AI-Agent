@@ -2504,7 +2504,7 @@ def compile_engineering_intent(
     # The plan must be able to represent the behaviour the question asks about.
     # A tie makes two surfaces permanently coincident, so a tie-only plan cannot
     # answer a question that requires the interface to open or slide.
-    from ..validation.condition_fidelity import audit_interface_kinematics
+    from ..validation.condition_fidelity import InvalidForQuestionError, audit_interface_kinematics
     kinematics = audit_interface_kinematics(
         intent,
         description=intent.description or "",
@@ -2513,12 +2513,8 @@ def compile_engineering_intent(
         interactions=eff_interactions or (),
     )
     if kinematics["blockers"]:
-        raise ValueError(
-            "Cannot compile engineering intent: the plan cannot answer the requested "
-            "interface behaviour ("
-            + "; ".join(kinematics["blockers"])
-            + "). The interface is constrained to stay coincident, so a separation, "
-            "sliding, or pull-out question would be answered by a different model."
+        raise InvalidForQuestionError(
+            tuple({"type": blocker, "message": blocker} for blocker in kinematics["blockers"])
         )
     summary = dict(compiled.intent_summary)
     summary["interface_kinematics"] = {

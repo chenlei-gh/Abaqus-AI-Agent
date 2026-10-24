@@ -12,6 +12,7 @@ from .actions.runner import execute
 from .evidence.result import summarize_odb
 from .planning.planner import plan_from_intents
 from .validation.actions import validate_plan
+from .validation.condition_fidelity import InvalidForQuestionError
 
 
 @dataclass
@@ -333,6 +334,51 @@ def _analysis_scope_for_figures(plan, geometry):
         "fixture": _record_payload(getattr(scope, "fixture", None)),
         "fixture_record": _record_payload(getattr(scope, "fixture", None)),
     }
+
+
+def _merged_fidelity_verdict(intent, *, plan_actions, scope_contacts):
+    """Merge the full condition-fidelity audit with the kinematics audit.
+
+    The full audit does not receive interaction specs (intent.contacts); the
+    kinematics audit is authoritative for tie detection because it inspects
+    both compiled actions and raw interaction specs. The merged verdict is the
+    single source for report-stage fidelity decisions.
+    """
+    from .validation.condition_fidelity import (
+        audit_condition_fidelity,
+        audit_interface_kinematics,
+    )
+    fidelity_full = audit_condition_fidelity(
+        intent,
+        description=getattr(intent, "description", "") or "",
+        plan_actions=plan_actions,
+    )
+    kinematics = audit_interface_kinematics(
+        intent,
+        description=getattr(intent, "description", "") or "",
+        contacts=scope_contacts,
+        plan_actions=plan_actions,
+        interactions=getattr(intent, "contacts", ()) or (),
+    )
+    merged_blockers = tuple(dict.fromkeys(
+        tuple(fidelity_full["blockers"]) + tuple(kinematics["blockers"])
+    ))
+    merged_warnings = tuple(dict.fromkeys(
+        tuple(fidelity_full["warnings"]) + tuple(kinematics["warnings"])
+    ))
+    verdict = dict(fidelity_full)
+    verdict.update({
+        "passed": not merged_blockers,
+        "formal_model_allowed": not merged_blockers,
+        "formal_report_allowed": (
+            bool(fidelity_full["formal_report_allowed"]) and not merged_blockers
+        ),
+        "blockers": list(merged_blockers),
+        "warnings": list(merged_warnings),
+        "separation_required": kinematics["separation_required"],
+        "source": "plan_condition_fidelity",
+    })
+    return verdict
 
 
 def _boundary_evidence_for_figures(plan, intent):
@@ -1471,6 +1517,21 @@ class AbaqusAIAgent:
                 grounded_regions=grounded_regions,
                 submit_job=submit_job,
             )
+        except InvalidForQuestionError as exc:
+            # The model's constraints conflict with the engineering question.
+            # The solve itself may succeed, but it answers a different question.
+            return EngineeringTaskResult(
+                status=TaskStatus.BLOCKED,
+                intent=intent,
+                capability=capability,
+                errors=(str(exc),),
+                summary_card={
+                    "status": "INVALID_FOR_QUESTION",
+                    "engineering_status": "INVALID_FOR_QUESTION",
+                    "fidelity_blockers": [str(b) for b in exc.blockers],
+                    "error": str(exc),
+                },
+            )
         except (ValueError, TypeError) as exc:
             return EngineeringTaskResult(
                 status=TaskStatus.BLOCKED,
@@ -1846,6 +1907,26 @@ class AbaqusAIAgent:
                     eng_status = "RESULT_INVALID"
                     break
 
+        # Report-stage fidelity verdict. Runs even when the delivery is not
+        # official: a tie-only model cannot answer a separation question no
+        # matter which delivery path the caller requested. Only the kinematic
+        # blocker is reclassified as INVALID_FOR_QUESTION; non-kinematic
+        # blockers (e.g. coating) keep their own semantics.
+        fidelity_verdict = None
+        scope_payload = _analysis_scope_for_figures(plan, geometry) or {}
+        scope_contacts = tuple(
+            scope_payload.get("contact_records") or scope_payload.get("contacts") or ()
+        )
+        if eng_status in ("ACCEPTED", "RESULT_VALID"):
+            fidelity_verdict = _merged_fidelity_verdict(
+                intent,
+                plan_actions=getattr(plan, "actions", ()) or (),
+                scope_contacts=scope_contacts,
+            )
+            if "interface_modelled_as_tie_not_contact" in tuple(fidelity_verdict.get("blockers") or ()):
+                eng_status = "INVALID_FOR_QUESTION"
+                is_completed = False
+
         # Determine whether this run qualifies for official authoritative delivery
         is_official = bool(prod_req and is_completed and acceptance and getattr(acceptance, "deliverable", False))
 
@@ -1946,65 +2027,24 @@ class AbaqusAIAgent:
                         "Official HTML delivery requires the customer data/requirements directory."
                     )
                 out_dir = official_dir
-                scope_payload = _analysis_scope_for_figures(plan, geometry) or {}
-                from .validation.condition_fidelity import (
-                    audit_condition_fidelity,
-                    audit_interface_kinematics,
-                    required_preprocessing_figure_kinds,
-                )
+                if fidelity_verdict is None:
+                    # eng_status was not ACCEPTED/RESULT_VALID, so the merged
+                    # verdict was not computed above. Compute it now so the
+                    # delivery pipeline still sees the authoritative blockers.
+                    fidelity_verdict = _merged_fidelity_verdict(
+                        intent,
+                        plan_actions=getattr(plan, "actions", ()) or (),
+                        scope_contacts=scope_contacts,
+                    )
+                from .validation.condition_fidelity import required_preprocessing_figure_kinds
                 required_figures = required_preprocessing_figure_kinds(
                     boundary_evidence=boundary_for_figures,
                     loads=_report_loads(boundary_for_figures),
                     bcs=_report_bcs(boundary_for_figures),
-                    contacts=(scope_payload.get("contact_records") or scope_payload.get("contacts") or ()),
+                    contacts=scope_contacts,
                     description=getattr(intent, "description", "") or "",
                     intent=intent,
                 )
-                scope_contacts = tuple(
-                    scope_payload.get("contact_records") or scope_payload.get("contacts") or ()
-                )
-                # Re-run the full condition-fidelity audit against the same intent
-                # the compile gate saw (identical intent/description, no re-scoped
-                # loads/contacts) plus the plan that now exists. The compile gate
-                # normally rejects these blockers first; this report-stage verdict
-                # is the final barrier, so it must not go blind to non-kinematic
-                # fidelity failures if any earlier interception is bypassed.
-                fidelity_full = audit_condition_fidelity(
-                    intent,
-                    description=getattr(intent, "description", "") or "",
-                    plan_actions=getattr(plan, "actions", ()) or (),
-                )
-                # Report the interface kinematics verdict the plan actually supports.
-                # Without it the pipeline cannot tell a model that answers the
-                # separation question from one that answers a different question.
-                # This call stays authoritative for tie detection because it also
-                # inspects interaction specs (intent.contacts), which the full
-                # audit's internal kinematics check does not receive.
-                kinematics = audit_interface_kinematics(
-                    intent,
-                    description=getattr(intent, "description", "") or "",
-                    contacts=scope_contacts,
-                    plan_actions=getattr(plan, "actions", ()) or (),
-                    interactions=getattr(intent, "contacts", ()) or (),
-                )
-                merged_blockers = tuple(dict.fromkeys(
-                    tuple(fidelity_full["blockers"]) + tuple(kinematics["blockers"])
-                ))
-                merged_warnings = tuple(dict.fromkeys(
-                    tuple(fidelity_full["warnings"]) + tuple(kinematics["warnings"])
-                ))
-                fidelity_verdict = dict(fidelity_full)
-                fidelity_verdict.update({
-                    "passed": not merged_blockers,
-                    "formal_model_allowed": not merged_blockers,
-                    "formal_report_allowed": (
-                        bool(fidelity_full["formal_report_allowed"]) and not merged_blockers
-                    ),
-                    "blockers": list(merged_blockers),
-                    "warnings": list(merged_warnings),
-                    "separation_required": kinematics["separation_required"],
-                    "source": "plan_condition_fidelity",
-                })
                 deterministic_delivery_card, _, det_report_data = pipeline.build_and_render(
                     output_dir=Path(official_dir),
                     title=report_title,
@@ -2149,6 +2189,9 @@ class AbaqusAIAgent:
             diag_errs = []
             if not is_completed:
                 diag_errs.append(f"Engineering status: {eng_status}")
+            if fidelity_verdict is not None:
+                for blocker in tuple(fidelity_verdict.get("blockers") or ()):
+                    diag_errs.append(f"Condition fidelity blocker: {blocker}")
             if delivery_block_error:
                 diag_errs.append(delivery_block_error)
             if diag_errs:
