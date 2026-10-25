@@ -1009,6 +1009,51 @@ def _render_custom_table_for_section(heading, value, is_zh=False):
         if not has_content:
             pass
 
+    # 16b. Classified Engineering Facts -> group by evidentiary role
+    elif heading.startswith("16b. Classified Engineering Facts") and value:
+        groups = {}
+        for fact in value:
+            category = getattr(fact, "category", None)
+            if category is None and isinstance(fact, dict):
+                category = fact.get("category")
+            category = getattr(category, "value", category)
+            category_key = str(category or "UNCLASSIFIED").upper()
+            groups.setdefault(category_key, []).append(fact)
+        category_order = ["RESULT", "LIMITATION", "DEV_PROCESS"]
+        category_order += sorted(key for key in groups if key not in category_order)
+        titles = {
+            "RESULT": "实测结果事实 (Measured Results)" if is_zh else "Measured Results (RESULT)",
+            "LIMITATION": "适用范围与有效性限制 (Scope / Limitations)" if is_zh else "Scope / Limitations (LIMITATION)",
+            "DEV_PROCESS": "研发与求解过程事实 (Development Process)" if is_zh else "Development Process (DEV_PROCESS)",
+            "UNCLASSIFIED": "未分类事实 (Unclassified)" if is_zh else "Unclassified Facts",
+        }
+        for category_key in category_order:
+            items = groups.get(category_key) or []
+            if not items:
+                continue
+            lines += [f"### {titles.get(category_key, category_key)}", ""]
+            if category_key == "LIMITATION":
+                note = (
+                    "以下限制为强制保留项，不得为提高可读性而删除。"
+                    if is_zh else
+                    "The limitations below are mandatory-retention facts and must not be removed for readability."
+                )
+                lines += [f"> {note}", ""]
+            for fact in items:
+                if isinstance(fact, dict):
+                    statement = fact.get("statement", "")
+                    source = fact.get("source", "")
+                else:
+                    statement = getattr(fact, "statement", "")
+                    source = getattr(fact, "source", "")
+                statement = str(statement).strip()
+                source = str(source or "").strip()
+                if not statement:
+                    continue
+                source_note = f"（来源 / Source: {source}）" if is_zh and source else (f"(source: {source})" if source else "")
+                lines += [f"- **[{category_key}]** {statement}{source_note}"]
+            lines += [""]
+
     # 18. Provenance -> Model Provenance & Execution Audit Table
     elif heading.startswith("18. Provenance") and value is not None:
         prov_dict = value.to_dict() if hasattr(value, "to_dict") else (value if isinstance(value, dict) else {})
@@ -1067,6 +1112,7 @@ def render_markdown(report, language=None):
         ("14b. Solver Diagnostics & Self-Healing Audit", "求解器自愈生命周期审计", getattr(report, "self_healing", None)),
         ("15. Mechanism Kinematics & Topology", "机构运动学与拓扑参数", report.mechanism),
         ("16. Assumptions / Limitations", "基础工程假设与分析局限性", (report.assumptions, report.limitations)),
+        ("16b. Classified Engineering Facts", "工程事实分类（实测结果 / 限制 / 研发过程）", getattr(report, "classified_facts", ())),
         ("17. Evidence", "电子证据链与产物内容摘要", report.evidence),
         ("18. Provenance", "模型版本与运行出处追溯", report.provenance),
     ]
@@ -1392,6 +1438,7 @@ def render_html(report, language=None, base_dir=None):
         ("14b. Solver Diagnostics & Self-Healing Audit", "求解器自愈生命周期审计", getattr(report, "self_healing", None)),
         ("15. Mechanism Kinematics & Topology", "机构运动学与拓扑参数", report.mechanism),
         ("16. Assumptions / Limitations", "基础工程假设与分析局限性", (report.assumptions, report.limitations)),
+        ("16b. Classified Engineering Facts", "工程事实分类（实测结果 / 限制 / 研发过程）", getattr(report, "classified_facts", ())),
         ("17. Evidence", "电子证据链与产物内容摘要", report.evidence),
         ("18. Provenance", "模型版本与运行出处追溯", report.provenance),
     ]

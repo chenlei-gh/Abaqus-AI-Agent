@@ -15,7 +15,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Dict, List, Optional, Sequence, Set, Tuple
 
-from ..contracts.report import EngineeringReportData, ReportFigure
+from ..contracts.report import EngineeringReportData, ReportFigure, classify_report_facts
 from .interpretation_card import InterpretationCard
 from .visualization_spec import VisualizationSpec
 
@@ -182,6 +182,12 @@ class AdaptiveReportBuilder:
             "total_nodes": model_info.get("total_nodes", "未统计"),
             "element_type": model_info.get("element_type", "未指定"),
         }
+        classified_facts = classify_report_facts(
+            results_info,
+            limitations,
+            self_healing,
+            limitation_source="interpretation_card.risk_notes",
+        )
 
         report_data = EngineeringReportData(
             title=title,
@@ -199,6 +205,7 @@ class AdaptiveReportBuilder:
             fatigue=fatigue_diag,
             assumptions=tuple(assumptions),
             limitations=tuple(limitations),
+            classified_facts=classified_facts,
             result_intelligence=result_intelligence,
             self_healing=self_healing,
             provenance=provenance,

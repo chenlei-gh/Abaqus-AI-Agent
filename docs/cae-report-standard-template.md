@@ -17,7 +17,7 @@
 
 ---
 
-## 2. 标准报告结构体系 (15 核心章节)
+## 2. 标准报告结构体系 (核心章节)
 
 所有由 Agent 生成的最终交付报告均严格遵循以下 15 个层级的模块化工程结构：
 
@@ -37,6 +37,7 @@
 12b. Deep Engineering Mechanism Analysis (深度物理机理与失效诱因解析)
 13b. Design Recommendations & Countermeasures (工程设计改进方案与对策)
 16. Assumptions & Scope of Limitations (工程假设与适用局限性)
+16b. Classified Engineering Facts (RESULT / LIMITATION / DEV_PROCESS 事实分类)
 17. Evidence Manifest & Content Digests (SHA-256 工件摘要，不是身份签名)
 ```
 
@@ -125,6 +126,14 @@
 1. **外侧螺栓孔长圆孔/腰形孔设计**: 将外侧排气口法兰螺栓孔加工为轴向长圆孔，释放热膨胀自由度，降低螺栓弯剪应力；
 2. **汇流过渡倒角结构优化**: 增大两管交汇处过渡圆角半径（如 $R4 \rightarrow R6\,\text{mm}$），改善应力流过渡，预计可降低峰值应力 20%~30%；
 3. **分步扭矩-转角拧紧工艺**: 制定合理的螺栓拧紧顺序（由中心向外对称交替打紧），避免冷装配初期法兰翘曲。
+
+### 3.12b Classified Engineering Facts (报告事实分类)
+- 所有正文事实按证据角色分类：
+  - `RESULT`: 由求解结果或 ODB 直接测得、提取的数值事实；
+  - `LIMITATION`: 限制结果适用范围或有效性的工程陈述（如提前终止、材料外推、网格或边界近似）；
+  - `DEV_PROCESS`: 求解自愈、重试、诊断等研发过程事实，不得混入工程结论。
+- `LIMITATION` 为强制保留类别：渲染器不得因可读性、篇幅或摘要需要而删除、合并或截断。
+- Markdown 与 HTML 必须由同一 `classified_facts` 数据源渲染，保证分类标签、来源与内容一致。
 
 ### 3.13 Evidence Manifest & Content Digests
 - **工件指纹**: 输出每个生成文件（INP、ODB、MSG、DAT、SVG、MD、HTML）的字节大小与 SHA-256 内容摘要。摘要用于发现未同步修改和文件损坏，不能单独证明签署者身份，也不能称为不可伪造签名。

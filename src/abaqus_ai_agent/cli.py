@@ -28,7 +28,7 @@ from .golden_registry import (
 )
 from .reporting.delivery import write_gated_engineering_report
 from .reporting.renderer import render_html
-from .contracts.report import EngineeringReportData
+from .contracts.report import EngineeringReportData, classify_report_facts
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -784,6 +784,7 @@ def handle_report(args: argparse.Namespace) -> int:
         fatigue=raw.get("fatigue") or raw_unnormalized.get("fatigue") or raw_unnormalized.get("report", {}).get("fatigue"),
         mechanism=raw.get("mechanism_topology") or raw.get("kinematics") or raw_unnormalized.get("mechanism"),
         provenance=raw.get("provenance") or raw_unnormalized.get("provenance"),
+        classified_facts=classify_report_facts(results_list),
         metadata=metadata,
     )
 
