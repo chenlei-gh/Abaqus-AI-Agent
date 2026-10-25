@@ -1,0 +1,911 @@
+{
+  "topic": "T-P4 Abaqus/Explicit 500k contact/erosion parallel scaling benchmark",
+  "generated_on": "2026-10-25",
+  "machine": {
+    "cpu": "Intel(R) Core(TM) Ultra 9 285K",
+    "physical_cores": 24,
+    "logical_cores": 24,
+    "memory_bytes": 136854630400,
+    "os": "Windows"
+  },
+  "abaqus": {
+    "release": "2025",
+    "release_id": "RELr427",
+    "solver": "Abaqus/Explicit",
+    "launcher": "C:\\SIMULIA\\Commands\\abaqus.BAT"
+  },
+  "model": {
+    "name": "Abaqus Example Problems 2.1.4 erode_proj_and_plate, plate refined in x/y",
+    "elements": 503500,
+    "nodes": 531003,
+    "element_type": "C3D8R",
+    "projectile_elements": 17500,
+    "plate_elements": 486000,
+    "plate_mesh": "180x90x30",
+    "plate_mesh_original": "100x50x30",
+    "step_time_s": 6e-06,
+    "initial_stable_increment_s": 3.9642e-09,
+    "increments_across_configs": [
+      2100,
+      2109,
+      2116,
+      2131
+    ],
+    "input_files": {
+      "erode_500k.inp": {
+        "sha256": "42D8D57C0D58F815A682E1D861B3884F2CD4DB16C49E03BF83EE1080A4416D97",
+        "bytes": 63452768
+      },
+      "erode_material.inp": {
+        "sha256": "347980829BDD3441CDC9587B0FA46C6DEC3DCF4214A0C28B6803423E982E9462",
+        "bytes": 3364
+      },
+      "build_500k.py": {
+        "sha256": "E5B94A6BA3C717AEA7F495A5935A012535094A50EA38252425EBC479FAF13D67",
+        "bytes": 5621
+      }
+    }
+  },
+  "method": {
+    "commands": [
+      "abaqus job=<job> input=erode_500k.inp cpus=N",
+      "abaqus job=<job> input=erode_500k.inp cpus=N mp_mode=threads"
+    ],
+    "warmup": "one discarded 1 CPU run",
+    "repeats": "2 per timed configuration; median reported",
+    "timing_metric": "solver phase from .log via abaqus_ai_agent.execution.solver_timing.read_solver_timing",
+    "terminal_contract": "abaqus_ai_agent.execution.solver.classify_solver_terminal_state (T-P3)",
+    "odb_authenticity": "abaqus_ai_agent.execution.solver.is_authentic_binary_odb",
+    "baseline": "cpus=1 default resolves to THREADS; shared baseline for both mode tables"
+  },
+  "warmup": {
+    "name": "warmup_default_c1",
+    "job": "er500k_warm_c1",
+    "mode": "default",
+    "cpus": 1,
+    "repeat": 0,
+    "warmup": true,
+    "elapsed_s": 312.4,
+    "returncode": 0,
+    "terminal_state": "COMPLETED",
+    "terminal_evidence": [
+      "sta completion marker: THE ANALYSIS HAS COMPLETED SUCCESSFULLY"
+    ],
+    "solver_phase_s": 285.0,
+    "solver_timing_status": "measured",
+    "increments": 2131,
+    "sta_wall_s": 279.0,
+    "sta_user_s": 84.1,
+    "sta_system_s": 1.5,
+    "initial_stable_increment_s": null,
+    "mp_mode": "THREADS",
+    "domains": 1,
+    "odb_bytes": 591813416,
+    "odb_authentic": true,
+    "msg_bytes": 25,
+    "diagnostics": [
+      "STA: Analysis completed successfully"
+    ]
+  },
+  "configs": [
+    {
+      "mode": "default",
+      "cpus": 1,
+      "samples": 2,
+      "terminal_states": [
+        "COMPLETED",
+        "COMPLETED"
+      ],
+      "solver_phase_median_s": 290.5,
+      "elapsed_median_s": 316.65,
+      "sta_wall_median_s": 284.0,
+      "user_median_s": 87.3,
+      "increments": [
+        2131,
+        2131
+      ],
+      "odb_bytes": [
+        591813416,
+        591813416
+      ],
+      "mp_mode": [
+        "THREADS",
+        "THREADS"
+      ],
+      "domains": [
+        1,
+        1
+      ],
+      "runs": [
+        "default_c1_r1",
+        "default_c1_r2"
+      ],
+      "speedup_solver_phase": 1.0,
+      "speedup_elapsed": 1.0,
+      "speedup_sta_wall": 1.0,
+      "parallel_efficiency": 1.0,
+      "solver_s_per_increment": 0.1363209760675739,
+      "per_element_increment_us": 0.2707467250597297,
+      "increment_normalized_speedup": 1.0,
+      "increments_median": 2131.0,
+      "increments_min": 2131,
+      "increments_max": 2131,
+      "odb_bytes_median": 591813416.0
+    },
+    {
+      "mode": "default",
+      "cpus": 2,
+      "samples": 2,
+      "terminal_states": [
+        "COMPLETED",
+        "COMPLETED"
+      ],
+      "solver_phase_median_s": 171.5,
+      "elapsed_median_s": 200.3,
+      "sta_wall_median_s": 164.5,
+      "user_median_s": 72.55,
+      "increments": [
+        2100,
+        2100
+      ],
+      "odb_bytes": [
+        602614076,
+        602614076
+      ],
+      "mp_mode": [
+        "MPI",
+        "MPI"
+      ],
+      "domains": [
+        2,
+        2
+      ],
+      "runs": [
+        "default_c2_r1",
+        "default_c2_r2"
+      ],
+      "speedup_solver_phase": 1.694,
+      "speedup_elapsed": 1.581,
+      "speedup_sta_wall": 1.7264437689969605,
+      "parallel_efficiency": 0.847,
+      "solver_s_per_increment": 0.08166666666666667,
+      "per_element_increment_us": 0.16219794769943727,
+      "increment_normalized_speedup": 1.669,
+      "increments_median": 2100.0,
+      "increments_min": 2100,
+      "increments_max": 2100,
+      "odb_bytes_median": 602614076.0
+    },
+    {
+      "mode": "default",
+      "cpus": 4,
+      "samples": 2,
+      "terminal_states": [
+        "COMPLETED",
+        "COMPLETED"
+      ],
+      "solver_phase_median_s": 117.5,
+      "elapsed_median_s": 146.95,
+      "sta_wall_median_s": 111.5,
+      "user_median_s": 47.55,
+      "increments": [
+        2109,
+        2109
+      ],
+      "odb_bytes": [
+        602818912,
+        602818912
+      ],
+      "mp_mode": [
+        "MPI",
+        "MPI"
+      ],
+      "domains": [
+        4,
+        4
+      ],
+      "runs": [
+        "default_c4_r1",
+        "default_c4_r2"
+      ],
+      "speedup_solver_phase": 2.472,
+      "speedup_elapsed": 2.155,
+      "speedup_sta_wall": 2.5470852017937218,
+      "parallel_efficiency": 0.618,
+      "solver_s_per_increment": 0.05571360834518729,
+      "per_element_increment_us": 0.11065264815330147,
+      "increment_normalized_speedup": 2.447,
+      "increments_median": 2109.0,
+      "increments_min": 2109,
+      "increments_max": 2109,
+      "odb_bytes_median": 602818912.0
+    },
+    {
+      "mode": "default",
+      "cpus": 8,
+      "samples": 2,
+      "terminal_states": [
+        "COMPLETED",
+        "COMPLETED"
+      ],
+      "solver_phase_median_s": 90.5,
+      "elapsed_median_s": 117.69999999999999,
+      "sta_wall_median_s": 84.0,
+      "user_median_s": 61.55,
+      "increments": [
+        2116,
+        2116
+      ],
+      "odb_bytes": [
+        603213340,
+        603213340
+      ],
+      "mp_mode": [
+        "MPI",
+        "MPI"
+      ],
+      "domains": [
+        8,
+        8
+      ],
+      "runs": [
+        "default_c8_r1",
+        "default_c8_r2"
+      ],
+      "speedup_solver_phase": 3.21,
+      "speedup_elapsed": 2.69,
+      "speedup_sta_wall": 3.380952380952381,
+      "parallel_efficiency": 0.401,
+      "solver_s_per_increment": 0.04276937618147448,
+      "per_element_increment_us": 0.08494414335943293,
+      "increment_normalized_speedup": 3.187,
+      "increments_median": 2116.0,
+      "increments_min": 2116,
+      "increments_max": 2116,
+      "odb_bytes_median": 603213340.0
+    },
+    {
+      "mode": "threads",
+      "cpus": 2,
+      "samples": 2,
+      "terminal_states": [
+        "COMPLETED",
+        "COMPLETED"
+      ],
+      "solver_phase_median_s": 165.0,
+      "elapsed_median_s": 194.1,
+      "sta_wall_median_s": 158.0,
+      "user_median_s": 85.80000000000001,
+      "increments": [
+        2100,
+        2100
+      ],
+      "odb_bytes": [
+        602614076,
+        602614076
+      ],
+      "mp_mode": [
+        "THREADS",
+        "THREADS"
+      ],
+      "domains": [
+        2,
+        2
+      ],
+      "runs": [
+        "threads_c2_r1",
+        "threads_c2_r2"
+      ],
+      "speedup_solver_phase": 1.761,
+      "speedup_elapsed": 1.631,
+      "speedup_sta_wall": 1.7974683544303798,
+      "parallel_efficiency": 0.88,
+      "solver_s_per_increment": 0.07857142857142857,
+      "per_element_increment_us": 0.1560505036175344,
+      "increment_normalized_speedup": 1.735,
+      "increments_median": 2100.0,
+      "increments_min": 2100,
+      "increments_max": 2100,
+      "odb_bytes_median": 602614076.0
+    },
+    {
+      "mode": "threads",
+      "cpus": 4,
+      "samples": 2,
+      "terminal_states": [
+        "COMPLETED",
+        "COMPLETED"
+      ],
+      "solver_phase_median_s": 104.5,
+      "elapsed_median_s": 132.75,
+      "sta_wall_median_s": 97.5,
+      "user_median_s": 69.0,
+      "increments": [
+        2109,
+        2109
+      ],
+      "odb_bytes": [
+        602818912,
+        602818912
+      ],
+      "mp_mode": [
+        "THREADS",
+        "THREADS"
+      ],
+      "domains": [
+        4,
+        4
+      ],
+      "runs": [
+        "threads_c4_r1",
+        "threads_c4_r2"
+      ],
+      "speedup_solver_phase": 2.78,
+      "speedup_elapsed": 2.385,
+      "speedup_sta_wall": 2.9128205128205127,
+      "parallel_efficiency": 0.695,
+      "solver_s_per_increment": 0.04954954954954955,
+      "per_element_increment_us": 0.09841022750655323,
+      "increment_normalized_speedup": 2.751,
+      "increments_median": 2109.0,
+      "increments_min": 2109,
+      "increments_max": 2109,
+      "odb_bytes_median": 602818912.0
+    },
+    {
+      "mode": "threads",
+      "cpus": 8,
+      "samples": 2,
+      "terminal_states": [
+        "COMPLETED",
+        "COMPLETED"
+      ],
+      "solver_phase_median_s": 76.5,
+      "elapsed_median_s": 103.65,
+      "sta_wall_median_s": 69.5,
+      "user_median_s": 92.1,
+      "increments": [
+        2116,
+        2116
+      ],
+      "odb_bytes": [
+        603213340,
+        603213340
+      ],
+      "mp_mode": [
+        "THREADS",
+        "THREADS"
+      ],
+      "domains": [
+        8,
+        8
+      ],
+      "runs": [
+        "threads_c8_r1",
+        "threads_c8_r2"
+      ],
+      "speedup_solver_phase": 3.797,
+      "speedup_elapsed": 3.055,
+      "speedup_sta_wall": 4.086330935251799,
+      "parallel_efficiency": 0.475,
+      "solver_s_per_increment": 0.0361531190926276,
+      "per_element_increment_us": 0.07180361289499027,
+      "increment_normalized_speedup": 3.771,
+      "increments_median": 2116.0,
+      "increments_min": 2116,
+      "increments_max": 2116,
+      "odb_bytes_median": 603213340.0
+    }
+  ],
+  "runs": [
+    {
+      "name": "warmup_default_c1",
+      "job": "er500k_warm_c1",
+      "mode": "default",
+      "cpus": 1,
+      "repeat": 0,
+      "warmup": true,
+      "elapsed_s": 312.4,
+      "returncode": 0,
+      "terminal_state": "COMPLETED",
+      "terminal_evidence": [
+        "sta completion marker: THE ANALYSIS HAS COMPLETED SUCCESSFULLY"
+      ],
+      "solver_phase_s": 285.0,
+      "solver_timing_status": "measured",
+      "increments": 2131,
+      "sta_wall_s": 279.0,
+      "sta_user_s": 84.1,
+      "sta_system_s": 1.5,
+      "initial_stable_increment_s": null,
+      "mp_mode": "THREADS",
+      "domains": 1,
+      "odb_bytes": 591813416,
+      "odb_authentic": true,
+      "msg_bytes": 25,
+      "diagnostics": [
+        "STA: Analysis completed successfully"
+      ]
+    },
+    {
+      "name": "default_c1_r1",
+      "job": "er500k_d_c1_r1",
+      "mode": "default",
+      "cpus": 1,
+      "repeat": 1,
+      "warmup": false,
+      "elapsed_s": 316.7,
+      "returncode": 0,
+      "terminal_state": "COMPLETED",
+      "terminal_evidence": [
+        "sta completion marker: THE ANALYSIS HAS COMPLETED SUCCESSFULLY"
+      ],
+      "solver_phase_s": 291.0,
+      "solver_timing_status": "measured",
+      "increments": 2131,
+      "sta_wall_s": 284.0,
+      "sta_user_s": 85.8,
+      "sta_system_s": 2.0,
+      "initial_stable_increment_s": null,
+      "mp_mode": "THREADS",
+      "domains": 1,
+      "odb_bytes": 591813416,
+      "odb_authentic": true,
+      "msg_bytes": 25,
+      "diagnostics": [
+        "STA: Analysis completed successfully"
+      ]
+    },
+    {
+      "name": "default_c1_r2",
+      "job": "er500k_d_c1_r2",
+      "mode": "default",
+      "cpus": 1,
+      "repeat": 2,
+      "warmup": false,
+      "elapsed_s": 316.6,
+      "returncode": 0,
+      "terminal_state": "COMPLETED",
+      "terminal_evidence": [
+        "sta completion marker: THE ANALYSIS HAS COMPLETED SUCCESSFULLY"
+      ],
+      "solver_phase_s": 290.0,
+      "solver_timing_status": "measured",
+      "increments": 2131,
+      "sta_wall_s": 284.0,
+      "sta_user_s": 88.8,
+      "sta_system_s": 2.1,
+      "initial_stable_increment_s": null,
+      "mp_mode": "THREADS",
+      "domains": 1,
+      "odb_bytes": 591813416,
+      "odb_authentic": true,
+      "msg_bytes": 25,
+      "diagnostics": [
+        "STA: Analysis completed successfully"
+      ]
+    },
+    {
+      "name": "default_c2_r1",
+      "job": "er500k_d_c2_r1",
+      "mode": "default",
+      "cpus": 2,
+      "repeat": 1,
+      "warmup": false,
+      "elapsed_s": 200.4,
+      "returncode": 0,
+      "terminal_state": "COMPLETED",
+      "terminal_evidence": [
+        "sta completion marker: THE ANALYSIS HAS COMPLETED SUCCESSFULLY"
+      ],
+      "solver_phase_s": 171.0,
+      "solver_timing_status": "measured",
+      "increments": 2100,
+      "sta_wall_s": 164.0,
+      "sta_user_s": 71.3,
+      "sta_system_s": 3.7,
+      "initial_stable_increment_s": null,
+      "mp_mode": "MPI",
+      "domains": 2,
+      "odb_bytes": 602614076,
+      "odb_authentic": true,
+      "msg_bytes": 309,
+      "diagnostics": [
+        "STA: Analysis completed successfully"
+      ]
+    },
+    {
+      "name": "default_c2_r2",
+      "job": "er500k_d_c2_r2",
+      "mode": "default",
+      "cpus": 2,
+      "repeat": 2,
+      "warmup": false,
+      "elapsed_s": 200.2,
+      "returncode": 0,
+      "terminal_state": "COMPLETED",
+      "terminal_evidence": [
+        "sta completion marker: THE ANALYSIS HAS COMPLETED SUCCESSFULLY"
+      ],
+      "solver_phase_s": 172.0,
+      "solver_timing_status": "measured",
+      "increments": 2100,
+      "sta_wall_s": 165.0,
+      "sta_user_s": 73.8,
+      "sta_system_s": 4.0,
+      "initial_stable_increment_s": null,
+      "mp_mode": "MPI",
+      "domains": 2,
+      "odb_bytes": 602614076,
+      "odb_authentic": true,
+      "msg_bytes": 309,
+      "diagnostics": [
+        "STA: Analysis completed successfully"
+      ]
+    },
+    {
+      "name": "default_c4_r1",
+      "job": "er500k_d_c4_r1",
+      "mode": "default",
+      "cpus": 4,
+      "repeat": 1,
+      "warmup": false,
+      "elapsed_s": 147.9,
+      "returncode": 0,
+      "terminal_state": "COMPLETED",
+      "terminal_evidence": [
+        "sta completion marker: THE ANALYSIS HAS COMPLETED SUCCESSFULLY"
+      ],
+      "solver_phase_s": 118.0,
+      "solver_timing_status": "measured",
+      "increments": 2109,
+      "sta_wall_s": 112.0,
+      "sta_user_s": 49.0,
+      "sta_system_s": 5.5,
+      "initial_stable_increment_s": null,
+      "mp_mode": "MPI",
+      "domains": 4,
+      "odb_bytes": 602818912,
+      "odb_authentic": true,
+      "msg_bytes": 523,
+      "diagnostics": [
+        "STA: Analysis completed successfully"
+      ]
+    },
+    {
+      "name": "default_c4_r2",
+      "job": "er500k_d_c4_r2",
+      "mode": "default",
+      "cpus": 4,
+      "repeat": 2,
+      "warmup": false,
+      "elapsed_s": 146,
+      "returncode": 0,
+      "terminal_state": "COMPLETED",
+      "terminal_evidence": [
+        "sta completion marker: THE ANALYSIS HAS COMPLETED SUCCESSFULLY"
+      ],
+      "solver_phase_s": 117.0,
+      "solver_timing_status": "measured",
+      "increments": 2109,
+      "sta_wall_s": 111.0,
+      "sta_user_s": 46.1,
+      "sta_system_s": 6.5,
+      "initial_stable_increment_s": null,
+      "mp_mode": "MPI",
+      "domains": 4,
+      "odb_bytes": 602818912,
+      "odb_authentic": true,
+      "msg_bytes": 523,
+      "diagnostics": [
+        "STA: Analysis completed successfully"
+      ]
+    },
+    {
+      "name": "default_c8_r1",
+      "job": "er500k_d_c8_r1",
+      "mode": "default",
+      "cpus": 8,
+      "repeat": 1,
+      "warmup": false,
+      "elapsed_s": 117.6,
+      "returncode": 0,
+      "terminal_state": "COMPLETED",
+      "terminal_evidence": [
+        "sta completion marker: THE ANALYSIS HAS COMPLETED SUCCESSFULLY"
+      ],
+      "solver_phase_s": 90.0,
+      "solver_timing_status": "measured",
+      "increments": 2116,
+      "sta_wall_s": 84.0,
+      "sta_user_s": 56.0,
+      "sta_system_s": 8.6,
+      "initial_stable_increment_s": null,
+      "mp_mode": "MPI",
+      "domains": 8,
+      "odb_bytes": 603213340,
+      "odb_authentic": true,
+      "msg_bytes": 951,
+      "diagnostics": [
+        "STA: Analysis completed successfully"
+      ]
+    },
+    {
+      "name": "default_c8_r2",
+      "job": "er500k_d_c8_r2",
+      "mode": "default",
+      "cpus": 8,
+      "repeat": 2,
+      "warmup": false,
+      "elapsed_s": 117.8,
+      "returncode": 0,
+      "terminal_state": "COMPLETED",
+      "terminal_evidence": [
+        "sta completion marker: THE ANALYSIS HAS COMPLETED SUCCESSFULLY"
+      ],
+      "solver_phase_s": 91.0,
+      "solver_timing_status": "measured",
+      "increments": 2116,
+      "sta_wall_s": 84.0,
+      "sta_user_s": 67.1,
+      "sta_system_s": 10.6,
+      "initial_stable_increment_s": null,
+      "mp_mode": "MPI",
+      "domains": 8,
+      "odb_bytes": 603213340,
+      "odb_authentic": true,
+      "msg_bytes": 951,
+      "diagnostics": [
+        "STA: Analysis completed successfully"
+      ]
+    },
+    {
+      "name": "threads_c2_r1",
+      "job": "er500k_t_c2_r1",
+      "mode": "threads",
+      "cpus": 2,
+      "repeat": 1,
+      "warmup": false,
+      "elapsed_s": 194.2,
+      "returncode": 0,
+      "terminal_state": "COMPLETED",
+      "terminal_evidence": [
+        "sta completion marker: THE ANALYSIS HAS COMPLETED SUCCESSFULLY"
+      ],
+      "solver_phase_s": 165.0,
+      "solver_timing_status": "measured",
+      "increments": 2100,
+      "sta_wall_s": 158.0,
+      "sta_user_s": 86.9,
+      "sta_system_s": 2.0,
+      "initial_stable_increment_s": null,
+      "mp_mode": "THREADS",
+      "domains": 2,
+      "odb_bytes": 602614076,
+      "odb_authentic": true,
+      "msg_bytes": 25,
+      "diagnostics": [
+        "STA: Analysis completed successfully"
+      ]
+    },
+    {
+      "name": "threads_c2_r2",
+      "job": "er500k_t_c2_r2",
+      "mode": "threads",
+      "cpus": 2,
+      "repeat": 2,
+      "warmup": false,
+      "elapsed_s": 194,
+      "returncode": 0,
+      "terminal_state": "COMPLETED",
+      "terminal_evidence": [
+        "sta completion marker: THE ANALYSIS HAS COMPLETED SUCCESSFULLY"
+      ],
+      "solver_phase_s": 165.0,
+      "solver_timing_status": "measured",
+      "increments": 2100,
+      "sta_wall_s": 158.0,
+      "sta_user_s": 84.7,
+      "sta_system_s": 1.6,
+      "initial_stable_increment_s": null,
+      "mp_mode": "THREADS",
+      "domains": 2,
+      "odb_bytes": 602614076,
+      "odb_authentic": true,
+      "msg_bytes": 25,
+      "diagnostics": [
+        "STA: Analysis completed successfully"
+      ]
+    },
+    {
+      "name": "threads_c4_r1",
+      "job": "er500k_t_c4_r1",
+      "mode": "threads",
+      "cpus": 4,
+      "repeat": 1,
+      "warmup": false,
+      "elapsed_s": 133.7,
+      "returncode": 0,
+      "terminal_state": "COMPLETED",
+      "terminal_evidence": [
+        "sta completion marker: THE ANALYSIS HAS COMPLETED SUCCESSFULLY"
+      ],
+      "solver_phase_s": 105.0,
+      "solver_timing_status": "measured",
+      "increments": 2109,
+      "sta_wall_s": 97.0,
+      "sta_user_s": 56.1,
+      "sta_system_s": 0.3,
+      "initial_stable_increment_s": null,
+      "mp_mode": "THREADS",
+      "domains": 4,
+      "odb_bytes": 602818912,
+      "odb_authentic": true,
+      "msg_bytes": 25,
+      "diagnostics": [
+        "STA: Analysis completed successfully"
+      ]
+    },
+    {
+      "name": "threads_c4_r2",
+      "job": "er500k_t_c4_r2",
+      "mode": "threads",
+      "cpus": 4,
+      "repeat": 2,
+      "warmup": false,
+      "elapsed_s": 131.8,
+      "returncode": 0,
+      "terminal_state": "COMPLETED",
+      "terminal_evidence": [
+        "sta completion marker: THE ANALYSIS HAS COMPLETED SUCCESSFULLY"
+      ],
+      "solver_phase_s": 104.0,
+      "solver_timing_status": "measured",
+      "increments": 2109,
+      "sta_wall_s": 98.0,
+      "sta_user_s": 81.9,
+      "sta_system_s": 0.8,
+      "initial_stable_increment_s": null,
+      "mp_mode": "THREADS",
+      "domains": 4,
+      "odb_bytes": 602818912,
+      "odb_authentic": true,
+      "msg_bytes": 25,
+      "diagnostics": [
+        "STA: Analysis completed successfully"
+      ]
+    },
+    {
+      "name": "threads_c8_r1",
+      "job": "er500k_t_c8_r1",
+      "mode": "threads",
+      "cpus": 8,
+      "repeat": 1,
+      "warmup": false,
+      "elapsed_s": 103.6,
+      "returncode": 0,
+      "terminal_state": "COMPLETED",
+      "terminal_evidence": [
+        "sta completion marker: THE ANALYSIS HAS COMPLETED SUCCESSFULLY"
+      ],
+      "solver_phase_s": 76.0,
+      "solver_timing_status": "measured",
+      "increments": 2116,
+      "sta_wall_s": 70.0,
+      "sta_user_s": 97.7,
+      "sta_system_s": 0.5,
+      "initial_stable_increment_s": null,
+      "mp_mode": "THREADS",
+      "domains": 8,
+      "odb_bytes": 603213340,
+      "odb_authentic": true,
+      "msg_bytes": 25,
+      "diagnostics": [
+        "STA: Analysis completed successfully"
+      ]
+    },
+    {
+      "name": "threads_c8_r2",
+      "job": "er500k_t_c8_r2",
+      "mode": "threads",
+      "cpus": 8,
+      "repeat": 2,
+      "warmup": false,
+      "elapsed_s": 103.7,
+      "returncode": 0,
+      "terminal_state": "COMPLETED",
+      "terminal_evidence": [
+        "sta completion marker: THE ANALYSIS HAS COMPLETED SUCCESSFULLY"
+      ],
+      "solver_phase_s": 77.0,
+      "solver_timing_status": "measured",
+      "increments": 2116,
+      "sta_wall_s": 69.0,
+      "sta_user_s": 86.5,
+      "sta_system_s": 0.6,
+      "initial_stable_increment_s": null,
+      "mp_mode": "THREADS",
+      "domains": 8,
+      "odb_bytes": 603213340,
+      "odb_authentic": true,
+      "msg_bytes": 25,
+      "diagnostics": [
+        "STA: Analysis completed successfully"
+      ]
+    }
+  ],
+  "validation": {
+    "run_count": 15,
+    "timed_run_count": 14,
+    "all_terminal_states_completed": true,
+    "terminal_state_counts": {
+      "COMPLETED": 15
+    },
+    "all_odb_authentic": true,
+    "all_timing_measured": true
+  },
+  "scale_up_context": {
+    "stage1_167_5k": {
+      "model": "official erode_proj_and_plate.inp",
+      "elements": 167500,
+      "nodes": 180083,
+      "increments": 1595,
+      "solver_phase_s": 82.0,
+      "elapsed_s": 100.6,
+      "sta_wall_s": 75.0,
+      "odb_bytes": 200415752
+    },
+    "stage3_500k": {
+      "elements": 503500,
+      "nodes": 531003,
+      "increments": 2131,
+      "solver_phase_s": 290.5,
+      "elapsed_s": 316.65,
+      "sta_wall_s": 284.0,
+      "odb_bytes": 591813416
+    },
+    "ratios": {
+      "elements": 3.006,
+      "increments": 1.336,
+      "solver_phase": 3.543,
+      "elapsed": 3.148,
+      "sta_wall": 3.787,
+      "odb_bytes": 2.953
+    },
+    "per_element_increment_us": {
+      "stage1_167_5k": 0.307,
+      "stage3_500k": 0.271,
+      "ratio_500k_over_stage1": 0.882
+    },
+    "metadata_correction": {
+      "previous_increments": 10501,
+      "corrected_increments": 1595,
+      "reason": "10501 was a node ID in the .sta initial stable-increment table, not an increment count. The final .sta increment is 1595; mean stable increment = 6e-6/1595 = 3.762e-9 s. Timing values are unaffected."
+    }
+  },
+  "conclusions": [
+    "在这个 500k 接触/侵蚀模型上，Explicit 多核加速是真实的：默认 MPI 8 核求解阶段加速 3.210×、提交返回加速 2.690×；纯线程 8 核分别为 3.797× 和 3.055×。",
+    "在该模型上，2/4/8 核线程模式均快于默认 MPI；8 核时为 76.5s 对 90.5s（求解阶段）。",
+    "8 核并行效率：默认 MPI 40.1%，纯线程 47.5%；4 核分别为 61.8% 和 69.5%。",
+    "增量数随域数略有变化（2,100–2,131），因此同时报告增量归一化加速比：8 核默认 3.187×、线程 3.771×，结论不变。",
+    "早先无接触悬臂梁的结论必须限定在该模型，不能支持“Explicit 一律单核”的通用策略；当前未实施任何此类上限。",
+    "`adaptive` 默认仍为 `False`；本基准本身不授权修改生产自适应策略。"
+  ],
+  "limitations": [
+    "单机、单一 500k 模型、每档 2 次重复；只报告中位数，未做统计显著性检验。",
+    "模型是改变离散精度的放大：板 x/y 网格由 100×50 加密到 180×90（1.8×），不是纯单元数缩放。",
+    "计时包含求解器进程启动；`.log` 时间戳分辨率为 1 秒。",
+    "增量数随域分解变化，因此同时报告原始加速比和增量归一化加速比。",
+    "未测量内存峰值（环境未安装 psutil），也未采集域级通信计时。",
+    "只测试 1/2/4/8 核；未测试 16/24 核、域数扫描或 MPI/线程混合模式。",
+    "官方模型自带一般接触深穿透警告；`.msg` 无 `***ERROR`/`***FATAL`。"
+  ],
+  "production_code": {
+    "changed": false,
+    "adaptive_default": "False (unchanged)",
+    "explicit_single_core_cap_implemented": false,
+    "note": "Benchmark evidence only. Any production adaptive-policy change requires separate approval."
+  },
+  "artifact_root": "%TEMP%\\tp4_stage3\\matrix",
+  "raw_summary": "%TEMP%\\tp4_stage3\\matrix\\matrix_summary.json"
+}

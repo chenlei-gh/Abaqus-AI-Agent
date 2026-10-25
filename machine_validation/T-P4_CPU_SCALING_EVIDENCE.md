@@ -5,6 +5,8 @@
 求解器：Abaqus 2025（Windows）  
 原始数据：`machine_validation/tp4_cpu_scaling_benchmark.json`
 
+> **后续补充（2026-10-25）：** 本文件的 Explicit 结论仅来自无接触弹性悬臂梁，已被 500k 接触/侵蚀模型补充证据修正。见 `machine_validation/T-P4_EXPLICIT_500K_EVIDENCE.md`。不得再据此建议“Explicit 固定 1 核”。
+
 ## 计时口径
 
 - **主口径**：`execution.solver_timing.read_solver_timing()` 从 `.log` 解析的求解阶段墙钟（`Begin Abaqus/{Standard,Explicit} Analysis` → 求解器 `Run` 时间戳）。该口径包含求解器进程启动，故所有用例都按秒级分辨率设计为 12–87s；小模型结论只在该量级内解释。
@@ -48,10 +50,12 @@
 
 1. **`adaptive` 默认继续保持 `False`（D4）。** 本轮证据不支持把默认改为 `True`；对 Explicit，自适应多核甚至会变慢。
 2. **Standard 分档得到支持**：小模型 1 核、中模型 4 核、大模型 8 核。中模型 8 核仅比 4 核快约 10%，且并行效率 22%，维持 4 核上限合理；大模型 8 核有 19% 的额外收益。
-3. **Explicit 分档不被支持**：所有三档中，超过 1 核都没有达到 1.10× 阈值；小模型 8 核慢 19%，大模型 2 核慢 17%。当前 `calculate_adaptive_cpus()` 只把 `solver_type` 写进证据字符串，未参与分档决策。
-4. **建议（未实施，待单独批准）**：对 Explicit 的 adaptive 路径增加 1 核上限，或要求调用方显式 `numCpus` 覆盖；在完成接触/大变形类 Explicit 模型基准前，不宣称多核收益。该行为变更不在本轮默认值决策内。
+3. **本悬臂梁基准中的 Explicit 多核未被支持**：所有三档中，超过 1 核都没有达到 1.10× 阈值；小模型 8 核慢 19%，大模型 2 核慢 17%。该结论仅适用于无接触、无大变形、规模较小的悬臂梁，不能外推到接触/侵蚀类 Explicit。当前 `calculate_adaptive_cpus()` 只把 `solver_type` 写进证据字符串，未参与分档决策。
+4. **不建议据此实施 Explicit 单核上限**：500k 接触/侵蚀基准显示默认 MPI 8 核 3.210×、纯线程 8 核 3.797×（求解阶段）。因此“Explicit 一律 1 核”不是可接受的生产策略；任何自适应策略变更仍需在 500k 及后续代表性模型证据基础上单独批准。
 
 ## 限制
+
+- 本文件是 2026-10-24 的无接触悬臂梁历史基准；500k 接触/侵蚀补充证据见 `machine_validation/T-P4_EXPLICIT_500K_EVIDENCE.md`，两者不可混用。
 
 - 仅弹性悬臂梁，无接触、无大变形、无沙漏主导工况；结论不能外推到碰撞/接触类 Explicit 模型。
 - 求解阶段包含进程启动；日志时间戳分辨率为 1 秒。Standard 小模型 12s 中约 5s 为启动，但其「多核无收益」结论仍由 1 核与 4/8 核持平直接支持。

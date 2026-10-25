@@ -630,5 +630,7 @@
     "adaptive_default": "keep False (D4)",
     "standard_tiering": "small->1, medium->4, large->8 supported by this benchmark",
     "explicit_tiering": "more than 1 CPU is not supported by this benchmark; current 4/8-core recommendations need a separate solver-aware cap decision"
-  }
+  },
+  "scope_note": "Explicit conclusions in this file are limited to the no-contact cantilever beam. See tp4_explicit_500k_parallel_benchmark.json for the 500k contact/erosion result, which shows multi-core scaling and supersedes any general 'Explicit must use 1 CPU' recommendation.",
+  "superseded_for_explicit_multicore_conclusion_by": "machine_validation/tp4_explicit_500k_parallel_benchmark.json"
 }
