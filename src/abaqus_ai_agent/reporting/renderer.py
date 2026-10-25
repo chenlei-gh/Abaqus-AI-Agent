@@ -8,6 +8,8 @@ from pathlib import Path
 import re
 from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
 
+from .sections import REPORT_SECTION_BY_KEY, REPORT_SECTIONS, section_title
+
 def _plain(value):
     if value is None: return None
     if hasattr(value, "__dataclass_fields__"):
@@ -230,11 +232,11 @@ def _format_markdown_table(headers, rows):
     return "\n".join([header_line, separator_line] + data_lines)
 
 
-def _render_custom_table_for_section(heading, value, is_zh=False):
+def _render_custom_table_for_section(section_key, value, is_zh=False):
     lines = []
 
     # 2. Model Information
-    if heading.startswith("2. Model Information") and isinstance(value, dict) and value:
+    if section_key == "model_information" and isinstance(value, dict) and value:
         # 2a. Assembly Components if present
         components = value.get("assembly_components")
         if components and isinstance(components, (list, tuple)):
@@ -305,7 +307,7 @@ def _render_custom_table_for_section(heading, value, is_zh=False):
             lines += [sub_title, "", _format_markdown_table(th, param_rows), ""]
 
     # 3. Material
-    elif heading.startswith("3. Material") and value is not None:
+    elif section_key == "material" and value is not None:
         mat_list = []
         if isinstance(value, (list, tuple)):
             mat_list = list(value)
@@ -352,7 +354,7 @@ def _render_custom_table_for_section(heading, value, is_zh=False):
             lines += [sub_title, "", _format_markdown_table(th, m_rows), ""]
 
     # 4. Boundary Conditions
-    elif heading.startswith("4. Boundary Conditions") and isinstance(value, (tuple, list)) and value:
+    elif section_key == "boundary_conditions" and isinstance(value, (tuple, list)) and value:
         bc_rows = []
         for bc in value:
             if isinstance(bc, dict):
@@ -378,7 +380,7 @@ def _render_custom_table_for_section(heading, value, is_zh=False):
             lines += [sub_title, "", _format_markdown_table(th, bc_rows), ""]
 
     # 5. Loads
-    elif heading.startswith("5. Loads") and isinstance(value, (tuple, list)) and value:
+    elif section_key == "loads" and isinstance(value, (tuple, list)) and value:
         load_rows = []
         for ld in value:
             if isinstance(ld, dict):
@@ -402,7 +404,7 @@ def _render_custom_table_for_section(heading, value, is_zh=False):
             lines += [sub_title, "", _format_markdown_table(th, load_rows), ""]
 
     # 6. Solver / Analysis Procedure
-    elif heading.startswith("6. Solver / Analysis Procedure") and isinstance(value, dict) and value:
+    elif section_key == "solver" and isinstance(value, dict) and value:
         # Step sequence
         steps = value.get("step_sequence")
         if steps and isinstance(steps, (list, tuple)):
@@ -444,7 +446,7 @@ def _render_custom_table_for_section(heading, value, is_zh=False):
             lines += [sub_title, "", _format_markdown_table(th, cfg_rows), ""]
 
     # 7. Mesh
-    elif heading.startswith("7. Mesh") and isinstance(value, dict) and value:
+    elif section_key == "mesh" and isinstance(value, dict) and value:
         mesh_zh_map = {
             "element_type": "基础有限元单元类型 / Element Type",
             "seed_size": "网格全局布种尺寸 / Global Seed Size (mm)",
@@ -495,7 +497,7 @@ def _render_custom_table_for_section(heading, value, is_zh=False):
                 lines += [sub_title, "", _format_markdown_table(th, mesh_rows), ""]
 
     # 8. Results -> Metrics Table
-    elif heading.startswith("8. Results") and isinstance(value, (tuple, list)) and value:
+    elif section_key == "results" and isinstance(value, (tuple, list)) and value:
         rows = []
         for m in value:
             name = getattr(m, "name", None) or (m.get("name") or m.get("metric") if isinstance(m, dict) else str(m))
@@ -511,7 +513,7 @@ def _render_custom_table_for_section(heading, value, is_zh=False):
                 lines += [peak_note, ""]
 
     # 8b. Result Intelligence & Derived Metrics
-    elif heading.startswith("8b. Result Intelligence") and value is not None:
+    elif section_key == "result_intelligence" and value is not None:
         val_dict = value.to_dict() if hasattr(value, "to_dict") else (value if isinstance(value, dict) else {})
         # 8b-1. Spatial Hotspots
         hotspots = val_dict.get("hotspots") or ()
@@ -590,7 +592,7 @@ def _render_custom_table_for_section(heading, value, is_zh=False):
             lines += [sub_title, "", _format_markdown_table(th, c_rows), ""]
 
     # 11. Acceptance Criteria -> Integrity Audit & Criteria Table
-    elif heading.startswith("11. Acceptance") and value is not None:
+    elif section_key == "acceptance" and value is not None:
         gates = getattr(value, "gates", None) or (value.get("gates") if isinstance(value, dict) else None)
         raw_justs = getattr(value, "gate_justifications", None) or (value.get("gate_justifications") if isinstance(value, dict) else None)
         justs = raw_justs if isinstance(raw_justs, dict) else {}
@@ -670,7 +672,7 @@ def _render_custom_table_for_section(heading, value, is_zh=False):
                 lines += [sub_title, "", _format_markdown_table(th, rows), ""]
 
     # 12. Sensitivity / Uncertainty
-    elif heading.startswith("12. Sensitivity") and value is not None:
+    elif section_key == "sensitivity_uncertainty" and value is not None:
         sens_data, uncert_data = value if isinstance(value, (tuple, list)) and len(value) == 2 else (value, None)
         # Sensitivity table
         if sens_data:
@@ -715,7 +717,7 @@ def _render_custom_table_for_section(heading, value, is_zh=False):
                     lines += [sub_title, "", _format_markdown_table(th, u_rows), ""]
 
     # 13. Fatigue -> Key Fatigue Metrics Table
-    elif heading.startswith("13. Fatigue") and isinstance(value, dict) and value:
+    elif section_key == "fatigue" and isinstance(value, dict) and value:
         fatigue_zh_map = {
             "cycles_to_failure": "疲劳失效循环寿命 / Cycles to Failure",
             "damage_ratio": "累积损伤比率 / Cumulative Damage Ratio",
@@ -738,7 +740,7 @@ def _render_custom_table_for_section(heading, value, is_zh=False):
             lines += [sub_title, "", _format_markdown_table(th, rows), ""]
 
     # 14b. Solver Diagnostics & Self-Healing Audit
-    elif heading.startswith("14b. Solver Diagnostics") and value is not None:
+    elif section_key == "self_healing" and value is not None:
         sh_dict = value.to_dict() if hasattr(value, "to_dict") else (value if isinstance(value, dict) else {})
         sh_meta = sh_dict.get("metadata") if isinstance(sh_dict.get("metadata"), dict) else {}
         if sh_meta.get("awaiting_confirmation"):
@@ -831,14 +833,14 @@ def _render_custom_table_for_section(heading, value, is_zh=False):
             lines += [sub_title, "", _format_markdown_table(th, att_rows), ""]
 
     # 15. Mechanism Kinematics & Topology -> Mechanism Summary Table
-    elif heading.startswith("15. Mechanism") and isinstance(value, dict) and value:
+    elif section_key == "mechanism_kinematics" and isinstance(value, dict) and value:
         rows = [[k, str(v)] for k, v in value.items() if not isinstance(v, (dict, list, tuple))]
         if rows:
             th = ["机构拓扑参数 / Parameter", "设定与计算值 / Value"] if is_zh else ["Topological Parameter", "Value"]
             lines += [_format_markdown_table(th, rows), ""]
 
     # 17. Evidence -> Evidence Manifest V2 Table
-    elif heading.startswith("17. Evidence") and value is not None:
+    elif section_key == "evidence" and value is not None:
         manifest_data = None
         if hasattr(value, "schema_version") and getattr(value, "schema_version") == "evidence_manifest_v2":
             manifest_data = value.to_dict()
@@ -885,7 +887,7 @@ def _render_custom_table_for_section(heading, value, is_zh=False):
                     lines += [sub_title, "", _format_markdown_table(th, art_rows), ""]
 
     # 10. Engineering Checks -> Detailed Engineering Verification Checks Table
-    elif heading.startswith("10. Engineering Checks") and isinstance(value, (tuple, list)) and value:
+    elif section_key == "engineering_checks" and isinstance(value, (tuple, list)) and value:
         c_rows = []
         for chk in value:
             if isinstance(chk, dict):
@@ -906,7 +908,7 @@ def _render_custom_table_for_section(heading, value, is_zh=False):
             lines += [sub_title, "", _format_markdown_table(th, c_rows), ""]
 
     # 12b. Engineering Mechanism Analysis
-    elif heading.startswith("12b. Engineering Mechanism Analysis") and value:
+    elif section_key == "mechanism_analysis" and value:
         mech_zh_map = {
             # Case 3
             "differential_thermal_expansion_slip": "法兰差胀滑移与螺栓孔间隙机理 / Differential Thermal Expansion & Flange Slip Kinematics",
@@ -938,7 +940,7 @@ def _render_custom_table_for_section(heading, value, is_zh=False):
             lines += [value.strip(), ""]
 
     # 13b. Design Recommendations & Countermeasures
-    elif heading.startswith("13b. Design Recommendations") and value:
+    elif section_key == "design_recommendations" and value:
         rec_list = []
         if isinstance(value, (list, tuple)):
             rec_list = list(value)
@@ -971,7 +973,7 @@ def _render_custom_table_for_section(heading, value, is_zh=False):
             lines += [sub_title, ""] + detail_blocks
 
     # 14. Contact Diagnostics -> Contact Interface Audit Table
-    elif heading.startswith("14. Contact Diagnostics") and value is not None:
+    elif section_key == "contact_diagnostics" and value is not None:
         items = getattr(value, "diagnostics", None) or (value.get("diagnostics") if isinstance(value, dict) else None)
         if items is None and isinstance(value, (list, tuple)):
             items = value
@@ -989,7 +991,7 @@ def _render_custom_table_for_section(heading, value, is_zh=False):
                 lines += [sub_title, "", _format_markdown_table(th, diag_rows), ""]
 
     # 16. Assumptions / Limitations -> Bulleted Engineering Lists
-    elif heading.startswith("16. Assumptions") and isinstance(value, (tuple, list)):
+    elif section_key == "assumptions_limitations" and isinstance(value, (tuple, list)):
         assumptions, limitations = value if len(value) == 2 else (value, ())
         has_content = False
         if assumptions and isinstance(assumptions, (list, tuple)):
@@ -1010,7 +1012,7 @@ def _render_custom_table_for_section(heading, value, is_zh=False):
             pass
 
     # 16b. Classified Engineering Facts -> group by evidentiary role
-    elif heading.startswith("16b. Classified Engineering Facts") and value:
+    elif section_key == "classified_facts" and value:
         groups = {}
         for fact in value:
             category = getattr(fact, "category", None)
@@ -1055,7 +1057,7 @@ def _render_custom_table_for_section(heading, value, is_zh=False):
             lines += [""]
 
     # 18. Provenance -> Model Provenance & Execution Audit Table
-    elif heading.startswith("18. Provenance") and value is not None:
+    elif section_key == "provenance" and value is not None:
         prov_dict = value.to_dict() if hasattr(value, "to_dict") else (value if isinstance(value, dict) else {})
         if prov_dict:
             p_rows = []
@@ -1108,44 +1110,67 @@ def _figure_caption_for_report(figure, is_zh=False):
     return f"{base} — {coverage.animation_caption(is_zh=is_zh)}"
 
 
+def _section_is_empty(value):
+    if value in (None, {}, (), [], ""):
+        return True
+    return (
+        isinstance(value, (tuple, list))
+        and all(item in (None, {}, (), [], "") for item in value)
+    )
+
+
+def _report_section_values(report):
+    metadata = report.metadata if getattr(report, "metadata", None) else {}
+    return {
+        "model_information": report.model,
+        "material": report.materials,
+        "boundary_conditions": report.boundary_conditions,
+        "loads": report.loads,
+        "solver": report.solver,
+        "mesh": report.mesh,
+        "results": report.results,
+        "result_intelligence": getattr(report, "result_intelligence", None),
+        "figures": report.figures,
+        "engineering_checks": report.engineering_checks,
+        "acceptance": report.acceptance,
+        "sensitivity_uncertainty": (report.sensitivity, report.uncertainty),
+        "mechanism_analysis": metadata.get("mechanism_analysis"),
+        "fatigue": report.fatigue,
+        "design_recommendations": metadata.get("design_recommendations"),
+        "contact_diagnostics": report.contact_diagnostics,
+        "self_healing": getattr(report, "self_healing", None),
+        "mechanism_kinematics": report.mechanism,
+        "assumptions_limitations": (report.assumptions, report.limitations),
+        "classified_facts": getattr(report, "classified_facts", ()),
+        "evidence": report.evidence,
+        "provenance": report.provenance,
+    }
+
+
+def _iter_report_sections(report):
+    """Yield present sections in registry order without renumbering gaps."""
+    values = _report_section_values(report)
+    terminal_keys = {"executive_summary", "conclusion", "conclusion_binding"}
+    for spec in REPORT_SECTIONS:
+        if spec.key in terminal_keys:
+            continue
+        value = values.get(spec.key)
+        if _section_is_empty(value):
+            continue
+        yield spec, value
+
+
 def render_markdown(report, language=None):
     # Detect Chinese language preference
     is_zh = _is_chinese_report(report, language=language)
 
     lines = ["# %s" % report.title, ""]
     if report.objective:
-        exec_heading = "## 1. Executive Summary / 工程执行摘要" if is_zh else "## 1. Executive Summary"
-        lines += [exec_heading, "", report.objective, ""]
-    sections = [
-        ("2. Model Information", "几何模型与装配拓扑定义", report.model),
-        ("3. Material", "材料本构模型与物性温变定义", report.materials),
-        ("4. Boundary Conditions", "边界约束与位移固定条件", report.boundary_conditions),
-        ("5. Loads", "载荷工况与热流压力历程", report.loads),
-        ("6. Solver / Analysis Procedure", "求解器步序与算法控制策略", report.solver),
-        ("7. Mesh", "有限元网格离散与质量审计", report.mesh),
-        ("8. Results", "关键工程物理指标计算结果", report.results),
-        ("8b. Result Intelligence & Derived Metrics", "结果智能与空间热点衍生指标", getattr(report, "result_intelligence", None)),
-        ("9. Figures", "工程图纸与仿真云图资产", report.figures),
-        ("10. Engineering Checks", "工业工程准则合规性详细核验", report.engineering_checks),
-        ("11. Acceptance Criteria", "确定性工程设计准则验算与门禁", report.acceptance),
-        ("12. Sensitivity / Uncertainty", "参数敏感性与不确定度量化", (report.sensitivity, report.uncertainty)),
-        ("12b. Engineering Mechanism Analysis", "深层物理失效机理工程剖析", report.metadata.get("mechanism_analysis") if hasattr(report, "metadata") and isinstance(report.metadata, dict) else None),
-        ("13. Fatigue", "高低温疲劳与寿命损伤评估", report.fatigue),
-        ("13b. Design Recommendations & Countermeasures", "结构改型建议与对策方案", report.metadata.get("design_recommendations") if hasattr(report, "metadata") and isinstance(report.metadata, dict) else None),
-        ("14. Contact Diagnostics", "接触界面状态与穿透诊断", report.contact_diagnostics),
-        ("14b. Solver Diagnostics & Self-Healing Audit", "求解器自愈生命周期审计", getattr(report, "self_healing", None)),
-        ("15. Mechanism Kinematics & Topology", "机构运动学与拓扑参数", report.mechanism),
-        ("16. Assumptions / Limitations", "基础工程假设与分析局限性", (report.assumptions, report.limitations)),
-        ("16b. Classified Engineering Facts", "工程事实分类（实测结果 / 限制 / 研发过程）", getattr(report, "classified_facts", ())),
-        ("17. Evidence", "电子证据链与产物内容摘要", report.evidence),
-        ("18. Provenance", "模型版本与运行出处追溯", report.provenance),
-    ]
-    for heading, zh_heading, value in sections:
-        if value in (None, {}, (), [], ""): continue
-        if isinstance(value, (tuple, list)) and all(v in (None, {}, (), [], "") for v in value): continue
-        section_title = f"{heading} / {zh_heading}" if is_zh else heading
-        lines += ["## %s" % section_title, ""]
-        if heading == "9. Figures":
+        exec_heading = section_title(REPORT_SECTION_BY_KEY["executive_summary"], is_zh)
+        lines += [f"## {exec_heading}", "", report.objective, ""]
+    for spec, value in _iter_report_sections(report):
+        lines += ["## %s" % section_title(spec, is_zh), ""]
+        if spec.key == "figures":
             for figure in value:
                 lines += ["![%s](%s)" % (_figure_caption_for_report(figure, is_zh=is_zh), figure.path), ""]
                 meta = getattr(figure, "metadata", None) or {}
@@ -1154,10 +1179,10 @@ def render_markdown(report, language=None):
                     lead = "**图面工程技术解读 (Technical Figure Analysis)**:" if is_zh else "**Technical Figure Analysis**:"
                     lines += [f"> {lead} {interp}", ""]
         else:
-            tbl_lines = _render_custom_table_for_section(heading, value, is_zh=is_zh)
+            tbl_lines = _render_custom_table_for_section(spec.key, value, is_zh=is_zh)
             if tbl_lines:
                 lines += tbl_lines
-                if heading == "7. Mesh" and report.figures:
+                if spec.key == "mesh" and report.figures:
                     for figure in report.figures:
                         f_kind = getattr(figure, "kind", "") or ""
                         f_meta = getattr(figure, "metadata", {}) or {}
@@ -1188,7 +1213,7 @@ def render_markdown(report, language=None):
                 ]
             else:
                 lines += ["```json", json.dumps(_plain(value), indent=2, ensure_ascii=False, default=str), "```", ""]
-    conc_title = "## 19. Conclusion / 工程分析最终裁决结论" if is_zh else "## 19. Conclusion"
+    conc_title = f"## {section_title(REPORT_SECTION_BY_KEY['conclusion'], is_zh)}"
     conclusion_text = _conclusion(report, is_zh=is_zh)
     scope_note = _objective_scope_note(report, is_zh=is_zh)
     if scope_note:
@@ -1196,7 +1221,7 @@ def render_markdown(report, language=None):
     lines += [conc_title, "", conclusion_text, "", _attribution_note(report, is_zh=is_zh), ""]
     conclusion_lines = _render_conclusion_binding(report, is_zh=is_zh)
     if conclusion_lines:
-        bound_title = "## 19b. Conclusions & Evidence Binding / 结论与证据绑定" if is_zh else "## 19b. Conclusions & Evidence Binding"
+        bound_title = f"## {section_title(REPORT_SECTION_BY_KEY['conclusion_binding'], is_zh)}"
         lines += [bound_title, ""] + conclusion_lines
     return "\n".join(lines)
 
@@ -1469,46 +1494,16 @@ def render_html(report, language=None, base_dir=None):
 
     # 1. Executive Summary
     if report.objective:
-        exec_heading = "1. Executive Summary / 工程执行摘要" if is_zh else "1. Executive Summary"
+        exec_heading = section_title(REPORT_SECTION_BY_KEY["executive_summary"], is_zh)
         body_parts.append(f'<h2 class="section-heading">{html.escape(exec_heading)}</h2>')
         body_parts.append(_render_rich_text_to_html(report.objective, is_zh=is_zh))
 
-    # 2 - 18. Structured Sections
-    sections = [
-        ("2. Model Information", "几何模型与装配拓扑定义", report.model),
-        ("3. Material", "材料本构模型与物性温变定义", report.materials),
-        ("4. Boundary Conditions", "边界约束与位移固定条件", report.boundary_conditions),
-        ("5. Loads", "载荷工况与热流压力历程", report.loads),
-        ("6. Solver / Analysis Procedure", "求解器步序与算法控制策略", report.solver),
-        ("7. Mesh", "有限元网格离散与质量审计", report.mesh),
-        ("8. Results", "关键工程物理指标计算结果", report.results),
-        ("8b. Result Intelligence & Derived Metrics", "结果智能与空间热点衍生指标", getattr(report, "result_intelligence", None)),
-        ("9. Figures", "工程图纸与仿真云图资产", report.figures),
-        ("10. Engineering Checks", "工业工程准则合规性详细核验", report.engineering_checks),
-        ("11. Acceptance Criteria", "确定性工程设计准则验算与门禁", report.acceptance),
-        ("12. Sensitivity / Uncertainty", "参数敏感性与不确定度量化", (report.sensitivity, report.uncertainty)),
-        ("12b. Engineering Mechanism Analysis", "深层物理失效机理工程剖析", report.metadata.get("mechanism_analysis") if hasattr(report, "metadata") and isinstance(report.metadata, dict) else None),
-        ("13. Fatigue", "高低温疲劳与寿命损伤评估", report.fatigue),
-        ("13b. Design Recommendations & Countermeasures", "结构改型建议与对策方案", report.metadata.get("design_recommendations") if hasattr(report, "metadata") and isinstance(report.metadata, dict) else None),
-        ("14. Contact Diagnostics", "接触界面状态与穿透诊断", report.contact_diagnostics),
-        ("14b. Solver Diagnostics & Self-Healing Audit", "求解器自愈生命周期审计", getattr(report, "self_healing", None)),
-        ("15. Mechanism Kinematics & Topology", "机构运动学与拓扑参数", report.mechanism),
-        ("16. Assumptions / Limitations", "基础工程假设与分析局限性", (report.assumptions, report.limitations)),
-        ("16b. Classified Engineering Facts", "工程事实分类（实测结果 / 限制 / 研发过程）", getattr(report, "classified_facts", ())),
-        ("17. Evidence", "电子证据链与产物内容摘要", report.evidence),
-        ("18. Provenance", "模型版本与运行出处追溯", report.provenance),
-    ]
+    # 2 - 18. Structured sections, dispatched by stable semantic key.
+    for spec, value in _iter_report_sections(report):
+        section_title_text = section_title(spec, is_zh)
+        body_parts.append(f'<h2 class="section-heading">{html.escape(section_title_text)}</h2>')
 
-    for heading, zh_heading, value in sections:
-        if value in (None, {}, (), [], ""):
-            continue
-        if isinstance(value, (tuple, list)) and all(v in (None, {}, (), [], "") for v in value):
-            continue
-
-        section_title = f"{heading} / {zh_heading}" if is_zh else heading
-        body_parts.append(f'<h2 class="section-heading">{html.escape(section_title)}</h2>')
-
-        if heading == "9. Figures":
+        if spec.key == "figures":
             for figure in value:
                 body_parts.append(_render_html_figure(_figure_caption_for_report(figure, is_zh=is_zh), figure.path, is_zh=is_zh, base_dir=eff_base_dir))
                 meta = getattr(figure, "metadata", None) or {}
@@ -1517,10 +1512,10 @@ def render_html(report, language=None, base_dir=None):
                     lead = "图面工程技术解读 (Technical Figure Analysis):" if is_zh else "Technical Figure Analysis:"
                     body_parts.append(f'<blockquote class="report-quote"><strong>{html.escape(lead)}</strong> {_format_inline_markdown(interp)}</blockquote>')
         else:
-            tbl_lines = _render_custom_table_for_section(heading, value, is_zh=is_zh)
+            tbl_lines = _render_custom_table_for_section(spec.key, value, is_zh=is_zh)
             if tbl_lines:
                 body_parts.append(_render_section_lines_to_html(tbl_lines, is_zh=is_zh))
-                if heading == "7. Mesh" and report.figures:
+                if spec.key == "mesh" and report.figures:
                     for figure in report.figures:
                         f_kind = getattr(figure, "kind", "") or ""
                         f_meta = getattr(figure, "metadata", {}) or {}
@@ -1546,7 +1541,7 @@ def render_html(report, language=None, base_dir=None):
                 body_parts.append(f'<pre class="code-block"><code>{html.escape(json_data)}</code></pre>')
 
     # 19. Conclusion
-    conc_title = "19. Conclusion / 工程分析最终裁决结论" if is_zh else "19. Conclusion"
+    conc_title = section_title(REPORT_SECTION_BY_KEY["conclusion"], is_zh)
     body_parts.append(f'<h2 class="section-heading">{html.escape(conc_title)}</h2>')
     conclusion_text = _conclusion(report, is_zh=is_zh)
     scope_note = _objective_scope_note(report, is_zh=is_zh)
@@ -1556,7 +1551,7 @@ def render_html(report, language=None, base_dir=None):
     body_parts.append(f'<p class="report-quote">{html.escape(_attribution_note(report, is_zh=is_zh))}</p>')
     conclusion_lines = _render_conclusion_binding(report, is_zh=is_zh)
     if conclusion_lines:
-        bound_title = "19b. Conclusions & Evidence Binding / 结论与证据绑定" if is_zh else "19b. Conclusions & Evidence Binding"
+        bound_title = section_title(REPORT_SECTION_BY_KEY["conclusion_binding"], is_zh)
         body_parts.append(f'<h2 class="section-heading">{html.escape(bound_title)}</h2>')
         body_parts.append(_render_section_lines_to_html(conclusion_lines, is_zh=is_zh))
 
