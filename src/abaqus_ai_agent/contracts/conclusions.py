@@ -73,6 +73,14 @@ _MISSING_EVIDENCE_PREFIXES = (
 _UNVERIFIABLE_PREFIXES = (
     "criteria_evaluation_error:",
 )
+# These mesh-quality codes mean the check could not answer the question
+# (not run, unsupported, or no shape criterion). They are missing evidence,
+# not a contract or prerequisite-gate violation. Match the contract codes
+# exactly so a future code that merely shares a prefix stays REJECTED.
+_UNANSWERABLE_MESH_CODES = frozenset({
+    "mesh_quality_not_run",
+    "mesh_quality_no_shape_criterion",
+})
 _OBJECTIVE_CLAIMS = (
     {
         "id": "pull_out",
@@ -235,6 +243,13 @@ def _scope(run_id: str, model_name: str, physics_domain: str, extra: str = "") -
     return "; ".join(parts)
 
 
+def _is_unanswerable_mesh_blocker(item: str) -> bool:
+    code, separator, detail = item.partition(":")
+    if code in _UNANSWERABLE_MESH_CODES:
+        return not separator
+    return code == "mesh_quality_unsupported" and bool(separator and detail.strip())
+
+
 def _acceptance_status(view: Dict[str, Any]) -> ReportConclusionStatus:
     failures = tuple(str(item) for item in view["failures"])
     blocked = tuple(str(item) for item in view["blocked"])
@@ -249,6 +264,7 @@ def _acceptance_status(view: Dict[str, Any]) -> ReportConclusionStatus:
         item for item in blocked
         if not item.startswith(_MISSING_EVIDENCE_PREFIXES)
         and not item.startswith(_UNVERIFIABLE_PREFIXES)
+        and not _is_unanswerable_mesh_blocker(item)
     ]
     if non_missing_blocked:
         return ReportConclusionStatus.REJECTED
@@ -260,7 +276,8 @@ def _acceptance_status(view: Dict[str, Any]) -> ReportConclusionStatus:
     )
     missing_evidence = any(item.startswith(_MISSING_EVIDENCE_PREFIXES) for item in combined)
     unverifiable = any(item.startswith(_UNVERIFIABLE_PREFIXES) for item in combined)
-    if missing or missing_evidence or unverifiable:
+    unanswerable = any(_is_unanswerable_mesh_blocker(item) for item in combined)
+    if missing or missing_evidence or unverifiable or unanswerable:
         return ReportConclusionStatus.NOT_PROVEN
 
     result_validity = view["result_validity"].upper()

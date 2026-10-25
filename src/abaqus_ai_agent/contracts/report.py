@@ -191,12 +191,12 @@ class EngineeringReportData:
     assumptions: Tuple[str, ...] = ()
     limitations: Tuple[str, ...] = ()
     classified_facts: Tuple[ReportFact, ...] = ()
-    conclusions: Tuple[ReportConclusion, ...] = ()
     evidence: Tuple[Any, ...] = ()
     provenance: Any = None
     result_intelligence: Any = None
     self_healing: Any = None
     metadata: Dict[str, Any] = field(default_factory=dict)
+    conclusions: Tuple[ReportConclusion, ...] = ()
     @classmethod
     def from_analysis(cls, run, title=None, objective="", **sections):
         metadata = dict(getattr(run, "metadata", {}) or {})
@@ -279,5 +279,5 @@ class EngineeringReportData:
                    result_intelligence=sections.pop("result_intelligence", None),
                    self_healing=sections.pop("self_healing", None),
                    classified_facts=sections.pop("classified_facts", ()),
-                   conclusions=sections.pop("conclusions", ()),
-                   metadata=dict(metadata, **sections.pop("metadata", {})), **sections)
+                   metadata=dict(metadata, **sections.pop("metadata", {})),
+                   conclusions=sections.pop("conclusions", ()), **sections)

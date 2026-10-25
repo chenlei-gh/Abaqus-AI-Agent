@@ -1,6 +1,7 @@
 """T-P6 structured conclusion binding contract."""
 
-from abaqus_ai_agent.acceptance import AcceptanceResult, CriterionResult
+from abaqus_ai_agent.acceptance import AcceptanceResult, CriterionResult, evaluate_result_acceptance
+from abaqus_ai_agent.contracts.mesh_quality import MeshQualityResult
 from abaqus_ai_agent.contracts.conclusions import (
     ReportConclusionLayer,
     ReportConclusionStatus,
@@ -245,3 +246,225 @@ def test_legacy_blocked_dict_without_details_is_not_proven():
 def test_legacy_result_invalid_dict_without_details_is_rejected():
     conclusion = build_report_conclusions({"status": "RESULT_INVALID"})[0]
     assert conclusion.status == ReportConclusionStatus.REJECTED
+
+
+def _mesh_conclusion(mesh_quality):
+    acceptance = evaluate_result_acceptance(
+        result_status="completed",
+        mesh_quality=mesh_quality,
+        required_gates=("mesh_quality",),
+        values={},
+        criteria=(),
+    )
+    return build_report_conclusions(acceptance)[0]
+
+
+def test_mesh_quality_not_run_is_not_proven():
+    conclusion = _mesh_conclusion(MeshQualityResult(status="not_run"))
+    assert conclusion.status == ReportConclusionStatus.NOT_PROVEN
+    assert any("mesh_quality_not_run" in item for item in conclusion.evidence)
+
+
+def test_mesh_quality_unsupported_is_not_proven():
+    conclusion = _mesh_conclusion(
+        MeshQualityResult(status="unsupported", unsupported_checks=("aspect_ratio",))
+    )
+    assert conclusion.status == ReportConclusionStatus.NOT_PROVEN
+    assert any("mesh_quality_unsupported:aspect_ratio" in item for item in conclusion.evidence)
+
+
+def test_mesh_quality_no_shape_criterion_is_not_proven():
+    conclusion = _mesh_conclusion(MeshQualityResult(status="warning", severity="advisory"))
+    assert conclusion.status == ReportConclusionStatus.NOT_PROVEN
+    assert any("mesh_quality_no_shape_criterion" in item for item in conclusion.evidence)
+
+
+def test_mesh_quality_expired_remains_rejected():
+    conclusion = _mesh_conclusion(MeshQualityResult(status="expired"))
+    assert conclusion.status == ReportConclusionStatus.REJECTED
+
+
+def test_mesh_quality_blocking_warning_remains_rejected():
+    conclusion = _mesh_conclusion(MeshQualityResult(status="warning", severity="blocking"))
+    assert conclusion.status == ReportConclusionStatus.REJECTED
+
+
+def test_mesh_quality_fail_is_fail():
+    conclusion = _mesh_conclusion(MeshQualityResult(status="fail"))
+    assert conclusion.status == ReportConclusionStatus.FAIL
+
+
+def test_unknown_blocker_remains_rejected():
+    acceptance = AcceptanceResult(
+        passed=False,
+        criteria=(),
+        blocked=("new_unknown_gate:xyz",),
+        status="BLOCKED",
+        result_validity="VALID",
+    )
+    assert build_report_conclusions(acceptance)[0].status == ReportConclusionStatus.REJECTED
+
+def test_mesh_quality_prefix_near_miss_remains_rejected():
+    acceptance = AcceptanceResult(
+        passed=False,
+        criteria=(),
+        blocked=("mesh_quality_not_run_unexpected",),
+        status="BLOCKED",
+        result_validity="VALID",
+    )
+    assert build_report_conclusions(acceptance)[0].status == ReportConclusionStatus.REJECTED
+
+
+def _kpi_html(report):
+    html = render_html(report, language="en")
+    start = html.find('<div class="kpi-grid">')
+    end = html.find('<h2 class="section-heading">', start)
+    assert start >= 0 and end > start
+    return html[start:end]
+
+
+def _passing_pullout_report():
+    criterion = CriterionResult(
+        name="pullout_capacity_180N",
+        passed=True,
+        actual=220.0,
+        operator=">=",
+        limit=180.0,
+        unit="N",
+    )
+    acceptance = AcceptanceResult(
+        passed=True,
+        criteria=(criterion,),
+        status="PASS",
+        result_validity="VALID",
+        deliverable=True,
+    )
+    return AdaptiveReportBuilder(
+        physics_domain="structural",
+        objective=AnalysisObjective.STATIC_STRENGTH,
+    ).build_report_data(
+        title="180 N Pull-Out Conclusion Report",
+        case_id="case-180n",
+        run_id="RUN-180N",
+        model_info={"name": "PulloutSpecimen"},
+        results_info=acceptance.criteria,
+        acceptance_info=acceptance,
+        objective_context=PULLOUT_OBJECTIVE,
+        language="en",
+    )
+
+
+def _failing_pullout_report():
+    criterion = CriterionResult(
+        name="pullout_capacity_180N",
+        passed=False,
+        actual=150.0,
+        operator=">=",
+        limit=180.0,
+        unit="N",
+    )
+    acceptance = AcceptanceResult(
+        passed=False,
+        criteria=(criterion,),
+        status="FAIL",
+        result_validity="VALID",
+        deliverable=False,
+    )
+    return AdaptiveReportBuilder(
+        physics_domain="structural",
+        objective=AnalysisObjective.STATIC_STRENGTH,
+    ).build_report_data(
+        title="180 N Pull-Out Conclusion Report",
+        case_id="case-180n",
+        run_id="RUN-180N",
+        model_info={"name": "PulloutSpecimen"},
+        results_info=acceptance.criteria,
+        acceptance_info=acceptance,
+        objective_context=PULLOUT_OBJECTIVE,
+        language="en",
+    )
+
+
+def test_html_kpi_scopes_acceptance_and_surfaces_not_proven_objective():
+    kpi = _kpi_html(_pullout_report())
+    assert "Acceptance Criteria (listed)" in kpi
+    assert "Listed criteria and gates only" in kpi
+    assert "Engineering Objective" in kpi
+    assert "NOT_PROVEN" in kpi
+    assert "Overall Acceptance" not in kpi
+
+
+def test_html_kpi_omits_objective_card_when_objective_passes():
+    kpi = _kpi_html(_passing_pullout_report())
+    assert "Acceptance Criteria (listed)" in kpi
+    assert "Engineering Objective" not in kpi
+
+
+def test_legacy_report_without_conclusions_keeps_overall_acceptance_kpi():
+    report = EngineeringReportData(title="Legacy Report", acceptance=True)
+    kpi = _kpi_html(report)
+    assert "Overall Acceptance" in kpi
+    assert "Acceptance Criteria (listed)" not in kpi
+
+
+def test_markdown_section_19_scopes_acceptance_when_objective_not_proven():
+    markdown = render_markdown(_pullout_report(), language="en")
+    start = markdown.find("## 19. Conclusion")
+    end = markdown.find("## 19b.", start)
+    assert start >= 0 and end > start
+    section = markdown[start:end]
+    assert "Acceptance criteria passed" in section
+    assert "stated engineering objective is NOT_PROVEN" in section
+
+
+def test_html_section_19_scopes_acceptance_when_objective_not_proven():
+    html = render_html(_pullout_report(), language="en")
+    start = html.find('<h2 class="section-heading">19. Conclusion</h2>')
+    end = html.find('<h2 class="section-heading">19b.', start)
+    assert start >= 0 and end > start
+    section = html[start:end]
+    assert "Acceptance criteria passed" in section
+    assert "stated engineering objective is NOT_PROVEN" in section
+
+
+def test_html_kpi_reports_actual_failing_objective_status():
+    kpi = _kpi_html(_failing_pullout_report())
+    assert "Engineering Objective" in kpi
+    assert "contradicted by the listed evidence" in kpi
+
+
+def test_section_19_reports_actual_failing_objective_status():
+    report = _failing_pullout_report()
+    markdown = render_markdown(report, language="en")
+    start = markdown.find("## 19. Conclusion")
+    end = markdown.find("## 19b.", start)
+    assert start >= 0 and end > start
+    markdown_section = markdown[start:end]
+    assert "stated engineering objective is FAIL" in markdown_section
+    assert "NOT_PROVEN" not in markdown_section
+
+    html = render_html(report, language="en")
+    start = html.find('<h2 class="section-heading">19. Conclusion</h2>')
+    end = html.find('<h2 class="section-heading">19b.', start)
+    assert start >= 0 and end > start
+    html_section = html[start:end]
+    assert "stated engineering objective is FAIL" in html_section
+    assert "NOT_PROVEN" not in html_section
+
+
+def test_legacy_positional_construction_preserves_field_order():
+    evidence = ("legacy-evidence",)
+    provenance = {"source": "legacy"}
+    intelligence = {"summary": "legacy"}
+    healing = {"attempted": False}
+    metadata = {"run_id": "legacy"}
+    report = EngineeringReportData(
+        "Legacy", "", {}, {}, (), (), (), {}, (), (), (), None, None, None, None, None, None, (), (), (), evidence,
+        provenance, intelligence, healing, metadata,
+    )
+    assert report.evidence == evidence
+    assert report.provenance == provenance
+    assert report.result_intelligence == intelligence
+    assert report.self_healing == healing
+    assert report.metadata == metadata
+    assert report.conclusions == ()

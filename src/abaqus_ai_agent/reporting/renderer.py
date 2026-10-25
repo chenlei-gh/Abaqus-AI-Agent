@@ -1165,7 +1165,11 @@ def render_markdown(report, language=None):
             else:
                 lines += ["```json", json.dumps(_plain(value), indent=2, ensure_ascii=False, default=str), "```", ""]
     conc_title = "## 19. Conclusion / 工程分析最终裁决结论" if is_zh else "## 19. Conclusion"
-    lines += [conc_title, "", _conclusion(report, is_zh=is_zh), "", _attribution_note(report, is_zh=is_zh), ""]
+    conclusion_text = _conclusion(report, is_zh=is_zh)
+    scope_note = _objective_scope_note(report, is_zh=is_zh)
+    if scope_note:
+        conclusion_text = f"{conclusion_text} {scope_note}"
+    lines += [conc_title, "", conclusion_text, "", _attribution_note(report, is_zh=is_zh), ""]
     conclusion_lines = _render_conclusion_binding(report, is_zh=is_zh)
     if conclusion_lines:
         bound_title = "## 19b. Conclusions & Evidence Binding / 结论与证据绑定" if is_zh else "## 19b. Conclusions & Evidence Binding"
@@ -1377,12 +1381,36 @@ def render_html(report, language=None, base_dir=None):
     elif isinstance(acceptance, dict):
         acc_passed = bool(acceptance.get("passed"))
 
+    report_conclusions = tuple(getattr(report, "conclusions", ()) or ())
+    if report_conclusions:
+        acceptance_label = "已列验收准则 (Acceptance Criteria)" if is_zh else "Acceptance Criteria (listed)"
+        acceptance_sub = "仅覆盖已列验收准则与前置门禁" if is_zh else "Listed criteria and gates only"
+    else:
+        acceptance_label = "总体设计准则验收 (Overall Acceptance)" if is_zh else "Overall Acceptance"
+        acceptance_sub = "确定性工程门禁验算" if is_zh else "Deterministic Gate Verification"
+
     kpi_cards.append((
-        "总体设计准则验收 (Overall Acceptance)" if is_zh else "Overall Acceptance",
+        acceptance_label,
         ("PASS / 合格" if acc_passed else "FAIL / 未合格") if is_zh else ("PASS" if acc_passed else "FAIL"),
-        "确定性工程门禁验算" if is_zh else "Deterministic Gate Verification",
+        acceptance_sub,
         "badge-pass" if acc_passed else "badge-fail"
     ))
+
+    for objective_conclusion, objective_status in _non_pass_engineering_objectives(report):
+        conclusion_id = (
+            objective_conclusion.get("conclusion_id")
+            if isinstance(objective_conclusion, dict)
+            else getattr(objective_conclusion, "conclusion_id", "")
+        )
+        objective_sub = _objective_status_subtitle(objective_status, is_zh=is_zh)
+        if conclusion_id:
+            objective_sub = f"{conclusion_id}: {objective_sub}"
+        kpi_cards.append((
+            "工程目标 (Engineering Objective)" if is_zh else "Engineering Objective",
+            objective_status,
+            objective_sub,
+            "badge-warn" if objective_status == "NOT_PROVEN" else "badge-fail",
+        ))
 
     for m in (report.results or ())[:5]:
         m_name = getattr(m, "name", None) or (m.get("name") or m.get("metric") or m.get("label") if isinstance(m, dict) else str(m)) or "Metric"
@@ -1496,7 +1524,11 @@ def render_html(report, language=None, base_dir=None):
     # 19. Conclusion
     conc_title = "19. Conclusion / 工程分析最终裁决结论" if is_zh else "19. Conclusion"
     body_parts.append(f'<h2 class="section-heading">{html.escape(conc_title)}</h2>')
-    body_parts.append(_render_rich_text_to_html(_conclusion(report, is_zh=is_zh), is_zh=is_zh))
+    conclusion_text = _conclusion(report, is_zh=is_zh)
+    scope_note = _objective_scope_note(report, is_zh=is_zh)
+    if scope_note:
+        conclusion_text = f"{conclusion_text} {scope_note}"
+    body_parts.append(_render_rich_text_to_html(conclusion_text, is_zh=is_zh))
     body_parts.append(f'<p class="report-quote">{html.escape(_attribution_note(report, is_zh=is_zh))}</p>')
     conclusion_lines = _render_conclusion_binding(report, is_zh=is_zh)
     if conclusion_lines:
@@ -1612,6 +1644,10 @@ def render_html(report, language=None, base_dir=None):
       background: #fef2f2;
       border-color: #fca5a5;
     }
+    .kpi-card.badge-warn {
+      background: #fffbeb;
+      border-color: #fcd34d;
+    }
     .kpi-label {
       font-size: 11px;
       font-weight: 600;
@@ -1627,6 +1663,7 @@ def render_html(report, language=None, base_dir=None):
     }
     .badge-pass .kpi-value { color: #15803d; }
     .badge-fail .kpi-value { color: #b91c1c; }
+    .badge-warn .kpi-value { color: #b45309; }
     .kpi-sub {
       font-size: 11px;
       color: #94a3b8;
@@ -2059,6 +2096,76 @@ def _conclusion(report, is_zh=False):
     if is_zh:
         return f"{prefix}结构化验收准则核验未完全满足 (Acceptance criteria were not fully satisfied by the structured evidence supplied to this report)。{detail}"
     return f"{prefix}Acceptance criteria were not fully satisfied by the structured evidence supplied to this report.{detail}"
+
+def _non_pass_engineering_objectives(report):
+    objectives = []
+    for item in tuple(getattr(report, "conclusions", ()) or ()):
+        layer = item.get("layer") if isinstance(item, dict) else getattr(item, "layer", "")
+        layer_value = getattr(layer, "value", layer)
+        if str(layer_value) != "ENGINEERING_OBJECTIVE":
+            continue
+        status = item.get("status") if isinstance(item, dict) else getattr(item, "status", "")
+        status_value = getattr(status, "value", status)
+        status_text = str(status_value or "")
+        if not status_text or status_text == "PASS":
+            continue
+        objectives.append((item, status_text))
+    return tuple(objectives)
+
+
+def _objective_status_subtitle(status, is_zh=False):
+    if status == "NOT_PROVEN":
+        return (
+            "已列证据不足以证明所述工程目标"
+            if is_zh
+            else "Stated objective is not proven by the listed evidence"
+        )
+    if status == "FAIL":
+        return (
+            "已列证据表明所述工程目标未满足"
+            if is_zh
+            else "Stated objective is contradicted by the listed evidence"
+        )
+    if status == "REJECTED":
+        return (
+            "结果不可采纳，所述工程目标无法得出结论"
+            if is_zh
+            else "Stated objective cannot be concluded because the result is inadmissible"
+        )
+    return (
+        f"工程目标状态：{status}"
+        if is_zh
+        else f"Objective status: {status}"
+    )
+
+
+def _objective_scope_note(report, is_zh=False):
+    objectives = _non_pass_engineering_objectives(report)
+    if not objectives:
+        return ""
+    statuses = tuple(dict.fromkeys(status for _, status in objectives))
+    if len(statuses) == 1:
+        status = statuses[0]
+        if is_zh:
+            return (
+                "该裁决仅覆盖已列验收准则与前置门禁；"
+                f"所述工程目标为 {status}。"
+            )
+        return (
+            "This verdict covers only the listed acceptance criteria and gates; "
+            f"the stated engineering objective is {status}."
+        )
+    joined = ", ".join(statuses)
+    if is_zh:
+        return (
+            "该裁决仅覆盖已列验收准则与前置门禁；"
+            f"所述工程目标状态为 {joined}。"
+        )
+    return (
+        "This verdict covers only the listed acceptance criteria and gates; "
+        f"the stated engineering objectives are {joined}."
+    )
+
 
 def _render_conclusion_binding(report, is_zh=False):
     conclusions = tuple(getattr(report, "conclusions", ()) or ())
