@@ -116,3 +116,13 @@ def test_execute_b28_smoke_does_not_upgrade_process_success_without_markers():
 
     result = execute_b28_smoke(FakeExecutor())
     assert not result.passed
+
+
+def test_all_legacy_b28_aliases_are_merged_into_runtime_smoke():
+    from abaqus_ai_agent.execution import runtime_smoke
+
+    assert runtime_smoke.B28HarnessResult is runtime_smoke.RuntimeSmokeResult
+    assert runtime_smoke.build_b28_smoke_script is runtime_smoke.build_runtime_smoke_script
+    assert runtime_smoke.classify_b28_markers is runtime_smoke.classify_smoke_markers
+    assert runtime_smoke.execute_b28_smoke is runtime_smoke.execute_runtime_smoke
+    assert runtime_smoke.parse_b28_output is runtime_smoke.parse_smoke_output

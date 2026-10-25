@@ -3,6 +3,10 @@
 The generated script emits machine-readable markers and verifies API execution,
 input generation, job completion, ODB opening, and a minimal field/history probe
 independently.
+
+Legacy B28 names remain available as aliases in this module. The former
+``execution.b28_harness`` forwarding module was removed so there is one
+canonical implementation.
 """
 
 from dataclasses import dataclass

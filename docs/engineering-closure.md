@@ -33,7 +33,8 @@ A successful Python invocation is not treated as solver success, and solver comp
 - sensitivity, uncertainty, benchmark, numerical-verification and bounded-correction contracts;
 - explicit repair authorization when a repair candidate requires confirmation;
 - unit-system and dimensional consistency primitives;
-- conservative B28 smoke harness and executor integration.
+- conservative runtime smoke harness and executor integration; legacy B28
+  aliases live in `execution/runtime_smoke.py`.
 
 ## Current limitations
 
@@ -76,4 +77,4 @@ Remaining non-runtime work:
 
 ## Deferred runtime validation
 
-The B28 smoke harness must still be executed on an actual Abaqus V5 R2018/B28 installation. Until then, B28 compatibility remains unverified.
+The runtime smoke harness must still be executed on an actual Abaqus V5 R2018/B28 installation. Until then, B28 compatibility remains unverified. The former `execution/b28_harness.py` forwarding module has been removed; import the B28 aliases from `execution.runtime_smoke`.

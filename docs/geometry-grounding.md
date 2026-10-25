@@ -62,6 +62,11 @@ The probe is intentionally read-only. Abaqus documentation also shows
 session.printToFile with PNG and a viewport canvas object as a valid kernel-side
 pattern.
 
+The legacy `viewport_probe.snapshot` and `extract_geometry` helpers are merged
+into this module. `snapshot(session)` remains available when a caller needs
+the older per-object geometry shape; `collect(session)` remains the richer
+probe used by `run`.
+
 ---
 
 ## Feature & Physical Grounding (Track GA-2 Core)
