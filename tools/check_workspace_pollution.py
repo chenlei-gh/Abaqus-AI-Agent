@@ -1,9 +1,12 @@
 """Fail if tests or tool runs left protected repository paths dirty.
 
 Protected paths:
-- tracked machine_validation JSON
+- tracked machine_validation evidence
 - deliverables/
 - runs/
+- invalid/
+- validation_assets/
+- test_assets/
 
 Ignored solver artifacts that were never tracked are not a commit failure by
 themselves. This script checks git status, so an untracked diagnostic report

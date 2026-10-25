@@ -348,9 +348,19 @@ def _render_custom_table_for_section(section_key, value, is_zh=False):
                 alpha_str = f"{float(alpha):.2e} 1/K" if isinstance(alpha, (int, float)) else str(alpha)
                 k_cond = thermal.get("conductivity") or m.get("thermal_conductivity_w_m_k") or "-"
                 k_str = f"{float(k_cond):.1f} W/m·K" if isinstance(k_cond, (int, float)) else str(k_cond)
-                m_rows.append([display_name, e_str, str(nu), sy_str, uts_str, alpha_str, k_str])
+                region_values = m.get("applicable_regions") or m.get("regions") or []
+                if isinstance(region_values, (str, dict)):
+                    region_values = [region_values]
+                normalized_regions = []
+                for region in region_values:
+                    if isinstance(region, dict):
+                        region = region.get("elset") or region.get("region") or region.get("name")
+                    if region:
+                        normalized_regions.append(str(region))
+                region_str = ", ".join(normalized_regions) if normalized_regions else "-"
+                m_rows.append([display_name, region_str, e_str, str(nu), sy_str, uts_str, alpha_str, k_str])
             sub_title = "### 材料本构规范与高温温变物性 (Material Constitutive Specifications)" if is_zh else "### Material Constitutive Specifications & Temperature-Dependent Properties"
-            th = ["部件 / 材料牌号", "弹性模量 E", "泊松比 ν", "屈服强度 Sy", "抗拉强度 UTS", "热膨胀系数 α", "导热系数 k"] if is_zh else ["Component / Material Grade", "Young's Modulus E", "Poisson's ν", "Yield Strength Sy", "UTS", "Thermal Coeff α", "Conductivity k"]
+            th = ["部件 / 材料牌号", "适用区域 / Applicable Regions", "弹性模量 E", "泊松比 ν", "屈服强度 Sy", "抗拉强度 UTS", "热膨胀系数 α", "导热系数 k"] if is_zh else ["Component / Material Grade", "适用区域 / Applicable Regions", "Young's Modulus E", "Poisson's ν", "Yield Strength Sy", "UTS", "Thermal Coeff α", "Conductivity k"]
             lines += [sub_title, "", _format_markdown_table(th, m_rows), ""]
 
     # 4. Boundary Conditions

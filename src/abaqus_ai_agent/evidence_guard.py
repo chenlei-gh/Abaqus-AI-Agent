@@ -75,7 +75,14 @@ def tracked_evidence_dirty(repo_root: Optional[Path] = None) -> list[str]:
 
 def assert_workspace_unpolluted(
     repo_root: Optional[Path] = None,
-    extra_paths: Sequence[str] = ("deliverables", "runs"),
+    extra_paths: Sequence[str] = (
+        "deliverables",
+        "runs",
+        "invalid",
+        "machine_validation",
+        "validation_assets",
+        "test_assets",
+    ),
 ) -> list[str]:
     """Return violations. Empty means the protected paths are clean."""
     root = repo_root or _repo_root()

@@ -10,21 +10,8 @@ build/
 .vscode/
 .DS_Store
 
-# Local licensed-Abaqus runtime evidence
-machine_validation/*
-!machine_validation/*.json
-!machine_validation/*.md
-!machine_validation/*.html
-!machine_validation/legacy/
-!machine_validation/legacy/*.json
-!machine_validation/p2_cases/
-!machine_validation/p2_cases/**/
-!machine_validation/p2_cases/**/*.json
-!machine_validation/p2_cases/**/*.html
-!machine_validation/p2_cases/**/*.py
-!machine_validation/p2_cases/**/*.png
-!machine_validation/p2_cases/**/*.svg
-!machine_validation/p2_cases/**/*.gif
+# Local licensed-Abaqus solver artifacts are ignored by extension below.
+# machine_validation/ is controlled evidence and must never be ignored as a directory.
 *.odb
 *.sta
 *.msg
@@ -46,7 +33,13 @@ machine_validation/*
 *.lck
 *.fil
 *.sim
-runs/
+
+# Known transient outputs from repository-local development runs. Other run
+# reports, manifests, images, and evidence remain visible to Git governance.
+/runs/live_environment_gate.json
+/runs/h6_grounding_validation/h6_grounding_live_result.json
+/runs/**/*_script.py
+/runs/images/slide_*_img_*.png
 
 # Abaqus session scratch written into the launch directory.
 # Product runs must use an external workdir. These rules only stop

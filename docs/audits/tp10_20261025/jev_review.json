@@ -1,0 +1,401 @@
+﻿{
+    "schema_version":  "tp10_jev_disposition_advice_v1",
+    "generated_at":  "2026-10-25T15:43:29.2690468Z",
+    "request":  {
+                    "model":  "jev-latest",
+                    "state":  {
+                                  "policy":  {
+                                                 "principle":  "Zero direct production imports does not mean no value. Evidence counts are reliable, while value and disposition require judgment.",
+                                                 "deletion_rule":  "A delete candidate requires no meaningful consumers or evidence role and still needs separate approval before removal.",
+                                                 "p12_constraint":  "context, llm, and perception remain retained with B-level reachability conclusions; do not judge their availability or delete them from static-zero evidence."
+                                             },
+                                  "modules":  [
+                                                  {
+                                                      "id":  "mesh_audit",
+                                                      "path":  "src/abaqus_ai_agent/mesh_audit.py",
+                                                      "lines":  519,
+                                                      "evidence":  "No product import. Three test modules cover genuine INP parsing and quad/hex Jacobian audits. It wraps mesh_gate. Current production mesh_quality is a separate native Abaqus verifyMeshQuality action chain, so this module is offline INP audit coverage. C3D10M tetrahedra are unsupported by this parser."
+                                                  },
+                                                  {
+                                                      "id":  "benchmarks_catalog",
+                                                      "path":  "src/abaqus_ai_agent/contracts/benchmarks_catalog.py",
+                                                      "lines":  562,
+                                                      "evidence":  "No product import. Two test modules and three qualification tools use a 22-case official benchmark catalog with citations, reference values, tolerances, and parameter contracts. It supports reproducible benchmark qualification."
+                                                  },
+                                                  {
+                                                      "id":  "image_context",
+                                                      "path":  "src/abaqus_ai_agent/perception/image_context.py",
+                                                      "lines":  415,
+                                                      "evidence":  "No product import. One test module verifies image magic/CRC, metadata alignment, bounded slicing, and full-image blocking. Perception package is explicitly not enabled on solve path and is retained under P12."
+                                                  },
+                                                  {
+                                                      "id":  "query_protocol",
+                                                      "path":  "src/abaqus_ai_agent/results/query_protocol.py",
+                                                      "lines":  377,
+                                                      "evidence":  "Imported and re-exported by results/__init__.py. Importing results submodules from agent.py loads this module. Tests cover scalar/hotspot/evidence queries, raw-array blocking, budgets, and token reduction. It is a bounded result access contract."
+                                                  },
+                                                  {
+                                                      "id":  "contact_diagnostics",
+                                                      "path":  "src/abaqus_ai_agent/contact_diagnostics.py",
+                                                      "lines":  350,
+                                                      "evidence":  "No product import. Eight test files and five tools use it. Production acceptance has a mandatory contact_diagnostics gate and reports consume diagnostic objects. contracts/contact.py defines the result types, while this module computes diagnostics from evidence."
+                                                  },
+                                                  {
+                                                      "id":  "convergence_loop",
+                                                      "path":  "src/abaqus_ai_agent/execution/convergence_loop.py",
+                                                      "lines":  258,
+                                                      "evidence":  "No product import. One comprehensive test module exercises adaptive refinement, convergence, singularity stopping, budget exhaustion, and evidence fail-closed behavior. execution/convergence.py is product-used."
+                                                  },
+                                                  {
+                                                      "id":  "benchmark_evaluator",
+                                                      "path":  "src/abaqus_ai_agent/perception/benchmark_evaluator.py",
+                                                      "lines":  216,
+                                                      "evidence":  "No product import. One test module and one drawing-to-ODB qualification tool use it to compute perception precision/recall/F1 against ground truth. Perception is not enabled on solve path."
+                                                  },
+                                                  {
+                                                      "id":  "locator_validation",
+                                                      "path":  "src/abaqus_ai_agent/adapters/abaqus/locator_validation.py",
+                                                      "lines":  24,
+                                                      "evidence":  "No product import. One test module covers valid Face/Edge/Vertex resolution plus findAt failures, ambiguity, and instance mismatch. It is a small safety validator for Abaqus repository locators."
+                                                  },
+                                                  {
+                                                      "id":  "grounding_serialization",
+                                                      "path":  "src/abaqus_ai_agent/grounding/serialization.py",
+                                                      "lines":  20,
+                                                      "evidence":  "No import found in src, tests, tools, or docs. Its generic names caused false-positive text counts. It is a tiny dataclass-to-JSON helper duplicating standard serialization utilities."
+                                                  },
+                                                  {
+                                                      "id":  "grounding_scoring",
+                                                      "path":  "src/abaqus_ai_agent/grounding/scoring.py",
+                                                      "lines":  13,
+                                                      "evidence":  "No product import. One test module checks the weighted normalized score and validation. The formula is generic and may overlap grounding/ranking.py."
+                                                  },
+                                                  {
+                                                      "id":  "actions_raw",
+                                                      "path":  "src/abaqus_ai_agent/actions/raw.py",
+                                                      "lines":  10,
+                                                      "evidence":  "No import found. actions/builders.py already defines and package-re-exports python_action. The historical test/tool counts are text hits for the shared symbol, not consumers of this module."
+                                                  },
+                                                  {
+                                                      "id":  "contracts_input",
+                                                      "path":  "src/abaqus_ai_agent/contracts/input.py",
+                                                      "lines":  17,
+                                                      "evidence":  "No import found in src, tests, tools, or docs. ExperimentInput is a small frozen dataclass with no consumer. Historical test/tool counts are text hits, not module imports."
+                                                  }
+                                              ],
+                                  "scope_discrepancy":  {
+                                                            "path":  "src/abaqus_ai_agent/benchmark_catalog.py",
+                                                            "lines":  48,
+                                                            "evidence":  "Omitted from the 12-module table but marked TEST-ONLY in _ast_verify.txt. It defines three simple BenchmarkCase values and has one direct test import. contracts/benchmarks_catalog.py is a separate official 22-case catalog."
+                                                        }
+                              },
+                    "questions":  {
+                                      "locator_validation":  {
+                                                                 "type":  "choice",
+                                                                 "instructions":  "Choose the most appropriate governance disposition for module \u0027locator_validation\u0027 from the supplied evidence. Do not treat zero direct imports as sufficient reason for deletion.",
+                                                                 "criteria":  {
+                                                                                  "keep":  "Retain as valuable test, benchmark, tooling, or contract support even if the solve path does not call it directly.",
+                                                                                  "connect":  "The capability is useful and belongs on the production solve path, but the current evidence shows it is not yet connected.",
+                                                                                  "merge":  "The capability is useful but duplicates or belongs inside an existing production contract/module; consolidate it there.",
+                                                                                  "unsupported":  "The claimed capability is invalid or explicitly outside current support; preserve a clear boundary instead of implying availability.",
+                                                                                  "delete_candidate":  "Only when the module has no meaningful test, benchmark, tooling, documentation, dynamic-loading, re-export, or runtime value and deletion is technically justified."
+                                                                              }
+                                                             },
+                                      "query_protocol":  {
+                                                             "type":  "choice",
+                                                             "instructions":  "Choose the most appropriate governance disposition for module \u0027query_protocol\u0027 from the supplied evidence. Do not treat zero direct imports as sufficient reason for deletion.",
+                                                             "criteria":  {
+                                                                              "keep":  "Retain as valuable test, benchmark, tooling, or contract support even if the solve path does not call it directly.",
+                                                                              "connect":  "The capability is useful and belongs on the production solve path, but the current evidence shows it is not yet connected.",
+                                                                              "merge":  "The capability is useful but duplicates or belongs inside an existing production contract/module; consolidate it there.",
+                                                                              "unsupported":  "The claimed capability is invalid or explicitly outside current support; preserve a clear boundary instead of implying availability.",
+                                                                              "delete_candidate":  "Only when the module has no meaningful test, benchmark, tooling, documentation, dynamic-loading, re-export, or runtime value and deletion is technically justified."
+                                                                          }
+                                                         },
+                                      "grounding_serialization":  {
+                                                                      "type":  "choice",
+                                                                      "instructions":  "Choose the most appropriate governance disposition for module \u0027grounding_serialization\u0027 from the supplied evidence. Do not treat zero direct imports as sufficient reason for deletion.",
+                                                                      "criteria":  {
+                                                                                       "keep":  "Retain as valuable test, benchmark, tooling, or contract support even if the solve path does not call it directly.",
+                                                                                       "connect":  "The capability is useful and belongs on the production solve path, but the current evidence shows it is not yet connected.",
+                                                                                       "merge":  "The capability is useful but duplicates or belongs inside an existing production contract/module; consolidate it there.",
+                                                                                       "unsupported":  "The claimed capability is invalid or explicitly outside current support; preserve a clear boundary instead of implying availability.",
+                                                                                       "delete_candidate":  "Only when the module has no meaningful test, benchmark, tooling, documentation, dynamic-loading, re-export, or runtime value and deletion is technically justified."
+                                                                                   }
+                                                                  },
+                                      "benchmarks_catalog":  {
+                                                                 "type":  "choice",
+                                                                 "instructions":  "Choose the most appropriate governance disposition for module \u0027benchmarks_catalog\u0027 from the supplied evidence. Do not treat zero direct imports as sufficient reason for deletion.",
+                                                                 "criteria":  {
+                                                                                  "keep":  "Retain as valuable test, benchmark, tooling, or contract support even if the solve path does not call it directly.",
+                                                                                  "connect":  "The capability is useful and belongs on the production solve path, but the current evidence shows it is not yet connected.",
+                                                                                  "merge":  "The capability is useful but duplicates or belongs inside an existing production contract/module; consolidate it there.",
+                                                                                  "unsupported":  "The claimed capability is invalid or explicitly outside current support; preserve a clear boundary instead of implying availability.",
+                                                                                  "delete_candidate":  "Only when the module has no meaningful test, benchmark, tooling, documentation, dynamic-loading, re-export, or runtime value and deletion is technically justified."
+                                                                              }
+                                                             },
+                                      "contracts_input":  {
+                                                              "type":  "choice",
+                                                              "instructions":  "Choose the most appropriate governance disposition for module \u0027contracts_input\u0027 from the supplied evidence. Do not treat zero direct imports as sufficient reason for deletion.",
+                                                              "criteria":  {
+                                                                               "keep":  "Retain as valuable test, benchmark, tooling, or contract support even if the solve path does not call it directly.",
+                                                                               "connect":  "The capability is useful and belongs on the production solve path, but the current evidence shows it is not yet connected.",
+                                                                               "merge":  "The capability is useful but duplicates or belongs inside an existing production contract/module; consolidate it there.",
+                                                                               "unsupported":  "The claimed capability is invalid or explicitly outside current support; preserve a clear boundary instead of implying availability.",
+                                                                               "delete_candidate":  "Only when the module has no meaningful test, benchmark, tooling, documentation, dynamic-loading, re-export, or runtime value and deletion is technically justified."
+                                                                           }
+                                                          },
+                                      "benchmark_evaluator":  {
+                                                                  "type":  "choice",
+                                                                  "instructions":  "Choose the most appropriate governance disposition for module \u0027benchmark_evaluator\u0027 from the supplied evidence. Do not treat zero direct imports as sufficient reason for deletion.",
+                                                                  "criteria":  {
+                                                                                   "keep":  "Retain as valuable test, benchmark, tooling, or contract support even if the solve path does not call it directly.",
+                                                                                   "connect":  "The capability is useful and belongs on the production solve path, but the current evidence shows it is not yet connected.",
+                                                                                   "merge":  "The capability is useful but duplicates or belongs inside an existing production contract/module; consolidate it there.",
+                                                                                   "unsupported":  "The claimed capability is invalid or explicitly outside current support; preserve a clear boundary instead of implying availability.",
+                                                                                   "delete_candidate":  "Only when the module has no meaningful test, benchmark, tooling, documentation, dynamic-loading, re-export, or runtime value and deletion is technically justified."
+                                                                               }
+                                                              },
+                                      "scope_benchmark_catalog":  {
+                                                                      "type":  "choice",
+                                                                      "instructions":  "How should the omitted src/abaqus_ai_agent/benchmark_catalog.py be handled in the T-P10 inventory?",
+                                                                      "criteria":  {
+                                                                                       "include_as_13th":  "Add it to the formal disposition inventory as a separate 13th item.",
+                                                                                       "exclude_with_note":  "Keep the official 12-item scope but record this module in a scope-discrepancy note.",
+                                                                                       "merge_catalogs":  "Consolidate it with contracts/benchmarks_catalog.py because the catalogs overlap.",
+                                                                                       "delete_candidate":  "Treat it as a deletion candidate based on absence of value and consumers."
+                                                                                   }
+                                                                  },
+                                      "actions_raw":  {
+                                                          "type":  "choice",
+                                                          "instructions":  "Choose the most appropriate governance disposition for module \u0027actions_raw\u0027 from the supplied evidence. Do not treat zero direct imports as sufficient reason for deletion.",
+                                                          "criteria":  {
+                                                                           "keep":  "Retain as valuable test, benchmark, tooling, or contract support even if the solve path does not call it directly.",
+                                                                           "connect":  "The capability is useful and belongs on the production solve path, but the current evidence shows it is not yet connected.",
+                                                                           "merge":  "The capability is useful but duplicates or belongs inside an existing production contract/module; consolidate it there.",
+                                                                           "unsupported":  "The claimed capability is invalid or explicitly outside current support; preserve a clear boundary instead of implying availability.",
+                                                                           "delete_candidate":  "Only when the module has no meaningful test, benchmark, tooling, documentation, dynamic-loading, re-export, or runtime value and deletion is technically justified."
+                                                                       }
+                                                      },
+                                      "convergence_loop":  {
+                                                               "type":  "choice",
+                                                               "instructions":  "Choose the most appropriate governance disposition for module \u0027convergence_loop\u0027 from the supplied evidence. Do not treat zero direct imports as sufficient reason for deletion.",
+                                                               "criteria":  {
+                                                                                "keep":  "Retain as valuable test, benchmark, tooling, or contract support even if the solve path does not call it directly.",
+                                                                                "connect":  "The capability is useful and belongs on the production solve path, but the current evidence shows it is not yet connected.",
+                                                                                "merge":  "The capability is useful but duplicates or belongs inside an existing production contract/module; consolidate it there.",
+                                                                                "unsupported":  "The claimed capability is invalid or explicitly outside current support; preserve a clear boundary instead of implying availability.",
+                                                                                "delete_candidate":  "Only when the module has no meaningful test, benchmark, tooling, documentation, dynamic-loading, re-export, or runtime value and deletion is technically justified."
+                                                                            }
+                                                           },
+                                      "image_context":  {
+                                                            "type":  "choice",
+                                                            "instructions":  "Choose the most appropriate governance disposition for module \u0027image_context\u0027 from the supplied evidence. Do not treat zero direct imports as sufficient reason for deletion.",
+                                                            "criteria":  {
+                                                                             "keep":  "Retain as valuable test, benchmark, tooling, or contract support even if the solve path does not call it directly.",
+                                                                             "connect":  "The capability is useful and belongs on the production solve path, but the current evidence shows it is not yet connected.",
+                                                                             "merge":  "The capability is useful but duplicates or belongs inside an existing production contract/module; consolidate it there.",
+                                                                             "unsupported":  "The claimed capability is invalid or explicitly outside current support; preserve a clear boundary instead of implying availability.",
+                                                                             "delete_candidate":  "Only when the module has no meaningful test, benchmark, tooling, documentation, dynamic-loading, re-export, or runtime value and deletion is technically justified."
+                                                                         }
+                                                        },
+                                      "contact_diagnostics":  {
+                                                                  "type":  "choice",
+                                                                  "instructions":  "Choose the most appropriate governance disposition for module \u0027contact_diagnostics\u0027 from the supplied evidence. Do not treat zero direct imports as sufficient reason for deletion.",
+                                                                  "criteria":  {
+                                                                                   "keep":  "Retain as valuable test, benchmark, tooling, or contract support even if the solve path does not call it directly.",
+                                                                                   "connect":  "The capability is useful and belongs on the production solve path, but the current evidence shows it is not yet connected.",
+                                                                                   "merge":  "The capability is useful but duplicates or belongs inside an existing production contract/module; consolidate it there.",
+                                                                                   "unsupported":  "The claimed capability is invalid or explicitly outside current support; preserve a clear boundary instead of implying availability.",
+                                                                                   "delete_candidate":  "Only when the module has no meaningful test, benchmark, tooling, documentation, dynamic-loading, re-export, or runtime value and deletion is technically justified."
+                                                                               }
+                                                              },
+                                      "grounding_scoring":  {
+                                                                "type":  "choice",
+                                                                "instructions":  "Choose the most appropriate governance disposition for module \u0027grounding_scoring\u0027 from the supplied evidence. Do not treat zero direct imports as sufficient reason for deletion.",
+                                                                "criteria":  {
+                                                                                 "keep":  "Retain as valuable test, benchmark, tooling, or contract support even if the solve path does not call it directly.",
+                                                                                 "connect":  "The capability is useful and belongs on the production solve path, but the current evidence shows it is not yet connected.",
+                                                                                 "merge":  "The capability is useful but duplicates or belongs inside an existing production contract/module; consolidate it there.",
+                                                                                 "unsupported":  "The claimed capability is invalid or explicitly outside current support; preserve a clear boundary instead of implying availability.",
+                                                                                 "delete_candidate":  "Only when the module has no meaningful test, benchmark, tooling, documentation, dynamic-loading, re-export, or runtime value and deletion is technically justified."
+                                                                             }
+                                                            },
+                                      "mesh_audit":  {
+                                                         "type":  "choice",
+                                                         "instructions":  "Choose the most appropriate governance disposition for module \u0027mesh_audit\u0027 from the supplied evidence. Do not treat zero direct imports as sufficient reason for deletion.",
+                                                         "criteria":  {
+                                                                          "keep":  "Retain as valuable test, benchmark, tooling, or contract support even if the solve path does not call it directly.",
+                                                                          "connect":  "The capability is useful and belongs on the production solve path, but the current evidence shows it is not yet connected.",
+                                                                          "merge":  "The capability is useful but duplicates or belongs inside an existing production contract/module; consolidate it there.",
+                                                                          "unsupported":  "The claimed capability is invalid or explicitly outside current support; preserve a clear boundary instead of implying availability.",
+                                                                          "delete_candidate":  "Only when the module has no meaningful test, benchmark, tooling, documentation, dynamic-loading, re-export, or runtime value and deletion is technically justified."
+                                                                      }
+                                                     }
+                                  }
+                },
+    "response":  {
+                     "model":  "jev-1.14.0",
+                     "answers":  {
+                                     "locator_validation":  {
+                                                                "type":  "choice",
+                                                                "choice":  "keep",
+                                                                "confidence":  0.92,
+                                                                "probabilities":  {
+                                                                                      "keep":  0.94,
+                                                                                      "connect":  0.06,
+                                                                                      "merge":  0.0,
+                                                                                      "unsupported":  0.0,
+                                                                                      "delete_candidate":  0.0
+                                                                                  }
+                                                            },
+                                     "query_protocol":  {
+                                                            "type":  "choice",
+                                                            "choice":  "keep",
+                                                            "confidence":  1.0,
+                                                            "probabilities":  {
+                                                                                  "keep":  1.0,
+                                                                                  "connect":  0.0,
+                                                                                  "merge":  0.0,
+                                                                                  "unsupported":  0.0,
+                                                                                  "delete_candidate":  0.0
+                                                                              }
+                                                        },
+                                     "grounding_serialization":  {
+                                                                     "type":  "choice",
+                                                                     "choice":  "delete_candidate",
+                                                                     "confidence":  0.78,
+                                                                     "probabilities":  {
+                                                                                           "keep":  0.0,
+                                                                                           "connect":  0.0,
+                                                                                           "merge":  0.18,
+                                                                                           "unsupported":  0.0,
+                                                                                           "delete_candidate":  0.8200000000000001
+                                                                                       }
+                                                                 },
+                                     "benchmarks_catalog":  {
+                                                                "type":  "choice",
+                                                                "choice":  "keep",
+                                                                "confidence":  1.0,
+                                                                "probabilities":  {
+                                                                                      "keep":  1.0,
+                                                                                      "connect":  0.0,
+                                                                                      "merge":  0.0,
+                                                                                      "unsupported":  0.0,
+                                                                                      "delete_candidate":  0.0
+                                                                                  }
+                                                            },
+                                     "contracts_input":  {
+                                                             "type":  "choice",
+                                                             "choice":  "delete_candidate",
+                                                             "confidence":  0.89,
+                                                             "probabilities":  {
+                                                                                   "keep":  0.03,
+                                                                                   "connect":  0.01,
+                                                                                   "merge":  0.03,
+                                                                                   "unsupported":  0.02,
+                                                                                   "delete_candidate":  0.91
+                                                                               }
+                                                         },
+                                     "benchmark_evaluator":  {
+                                                                 "type":  "choice",
+                                                                 "choice":  "keep",
+                                                                 "confidence":  0.99,
+                                                                 "probabilities":  {
+                                                                                       "keep":  0.99,
+                                                                                       "connect":  0.0,
+                                                                                       "merge":  0.0,
+                                                                                       "unsupported":  0.01,
+                                                                                       "delete_candidate":  0.0
+                                                                                   }
+                                                             },
+                                     "scope_benchmark_catalog":  {
+                                                                     "type":  "choice",
+                                                                     "choice":  "exclude_with_note",
+                                                                     "confidence":  0.75,
+                                                                     "probabilities":  {
+                                                                                           "include_as_13th":  0.17,
+                                                                                           "exclude_with_note":  0.81,
+                                                                                           "merge_catalogs":  0.0,
+                                                                                           "delete_candidate":  0.02
+                                                                                       }
+                                                                 },
+                                     "actions_raw":  {
+                                                         "type":  "choice",
+                                                         "choice":  "delete_candidate",
+                                                         "confidence":  0.61,
+                                                         "probabilities":  {
+                                                                               "keep":  0.0,
+                                                                               "connect":  0.0,
+                                                                               "merge":  0.3,
+                                                                               "unsupported":  0.01,
+                                                                               "delete_candidate":  0.6900000000000001
+                                                                           }
+                                                     },
+                                     "convergence_loop":  {
+                                                              "type":  "choice",
+                                                              "choice":  "keep",
+                                                              "confidence":  0.92,
+                                                              "probabilities":  {
+                                                                                    "keep":  0.94,
+                                                                                    "connect":  0.05,
+                                                                                    "merge":  0.01,
+                                                                                    "unsupported":  0.0,
+                                                                                    "delete_candidate":  0.0
+                                                                                }
+                                                          },
+                                     "image_context":  {
+                                                           "type":  "choice",
+                                                           "choice":  "keep",
+                                                           "confidence":  0.9,
+                                                           "probabilities":  {
+                                                                                 "keep":  0.92,
+                                                                                 "connect":  0.0,
+                                                                                 "merge":  0.0,
+                                                                                 "unsupported":  0.08,
+                                                                                 "delete_candidate":  0.0
+                                                                             }
+                                                       },
+                                     "contact_diagnostics":  {
+                                                                 "type":  "choice",
+                                                                 "choice":  "keep",
+                                                                 "confidence":  0.99,
+                                                                 "probabilities":  {
+                                                                                       "keep":  0.99,
+                                                                                       "connect":  0.01,
+                                                                                       "merge":  0.0,
+                                                                                       "unsupported":  0.0,
+                                                                                       "delete_candidate":  0.0
+                                                                                   }
+                                                             },
+                                     "grounding_scoring":  {
+                                                               "type":  "choice",
+                                                               "choice":  "keep",
+                                                               "confidence":  0.36,
+                                                               "probabilities":  {
+                                                                                     "keep":  0.49,
+                                                                                     "connect":  0.01,
+                                                                                     "merge":  0.49,
+                                                                                     "unsupported":  0.0,
+                                                                                     "delete_candidate":  0.01
+                                                                                 }
+                                                           },
+                                     "mesh_audit":  {
+                                                        "type":  "choice",
+                                                        "choice":  "keep",
+                                                        "confidence":  0.96,
+                                                        "probabilities":  {
+                                                                              "keep":  0.97,
+                                                                              "connect":  0.01,
+                                                                              "merge":  0.0,
+                                                                              "unsupported":  0.02,
+                                                                              "delete_candidate":  0.0
+                                                                          }
+                                                    }
+                                 },
+                     "usage":  {
+                                   "input_tokens":  4418,
+                                   "output_tokens":  698
+                               }
+                 }
+}

@@ -7,3 +7,8 @@
 *.json text eol=lf
 *.md   text eol=lf
 *.csv  text eol=lf
+
+# Preserve audited snapshots byte-for-byte; their hashes are evidence inputs.
+docs/audits/tp10_20261025/jev_review.json -text whitespace=-trailing-space,-blank-at-eof,-space-before-tab
+docs/audits/tp10_20261025/ast_verify.py -text whitespace=-trailing-space,-blank-at-eof,-space-before-tab
+docs/audits/tp10_20261025/ast_verify.txt -text whitespace=-trailing-space,-blank-at-eof,-space-before-tab

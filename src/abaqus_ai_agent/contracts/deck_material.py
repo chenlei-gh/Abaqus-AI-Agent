@@ -14,8 +14,9 @@ import re
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 
-_CARD = re.compile(r"^\*([A-Za-z][A-Za-z0-9_]*)\b(.*)$")
+_CARD = re.compile(r"^\*([A-Za-z][A-Za-z0-9_]*(?:\s+[A-Za-z][A-Za-z0-9_]*)*)\b(.*)$")
 _NAME = re.compile(r"(?:^|,)\s*NAME\s*=\s*([^,\s]+)", re.IGNORECASE)
+_PARAM = re.compile(r"(?:^|,)\s*([A-Za-z][A-Za-z0-9_]*)\s*=\s*([^,]+)")
 _NUMBER = re.compile(r"[-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:[Ee][-+]?\d+)?")
 
 
@@ -23,7 +24,18 @@ def parse_deck_materials(inp_text: str) -> Tuple[Dict[str, Any], ...]:
     """Return one normalized card per ``*MATERIAL`` block in deck order."""
     if not inp_text or not str(inp_text).strip():
         return ()
-    cards = _material_cards(str(inp_text))
+    raw_text = str(inp_text)
+    cards = _material_cards(raw_text)
+    assignments = _section_assignments(raw_text)
+    for card in cards:
+        material_name = _key(card.get("name"))
+        card_assignments = tuple(
+            item for item in assignments if _key(item.get("material")) == material_name
+        )
+        card["section_assignments"] = card_assignments
+        card["applicable_regions"] = _applicable_regions(
+            item.get("elset") for item in card_assignments
+        )
     return tuple(_normalize_card(card) for card in cards)
 
 
@@ -47,6 +59,8 @@ def deck_material_table(inp_text: str, *, input_sha256: Optional[str] = None) ->
                 "plastic_strain": plastic.get("plastic_strain"),
                 "hardening_table": list(plastic.get("hardening_table") or ()),
             } if plastic else None,
+            "applicable_regions": list(card.get("applicable_regions") or ()),
+            "section_assignments": list(card.get("section_assignments") or ()),
             "source": "solved_deck",
             "input_sha256": digest,
             "line_start": card.get("line_start"),
@@ -99,6 +113,12 @@ def compare_material_claims(
             "code": "deck_material_missing_from_claim",
             "deck_names": sorted(deck_names - claimed_names),
         })
+    for deck in deck_cards:
+        if not _applicable_regions(deck.get("applicable_regions")):
+            mismatches.append({
+                "code": "material_unassigned_in_deck",
+                "name": deck.get("name"),
+            })
 
     for claim in claimed_cards:
         name = _key(claim.get("name"))
@@ -140,6 +160,21 @@ def compare_material_claims(
                 "name": claim.get("name"),
                 "claimed_points": _plastic_points(claim),
                 "deck_points": _plastic_points(deck),
+            })
+        claim_regions = _applicable_regions(claim.get("applicable_regions"))
+        deck_regions = _applicable_regions(deck.get("applicable_regions"))
+        if deck_regions and not claim_regions:
+            mismatches.append({
+                "code": "material_applicable_regions_missing",
+                "name": claim.get("name"),
+                "deck_regions": list(deck_regions),
+            })
+        elif claim_regions != deck_regions:
+            mismatches.append({
+                "code": "material_applicable_regions_mismatch",
+                "name": claim.get("name"),
+                "claimed_regions": list(claim_regions),
+                "deck_regions": list(deck_regions),
             })
 
     if not mismatches:
@@ -228,6 +263,8 @@ def _normalize_card(card: Dict[str, Any]) -> Dict[str, Any]:
         "elastic": elastic,
         "density": density_rows[0][0] if density_rows and density_rows[0] else None,
         "plastic": plastic,
+        "applicable_regions": _applicable_regions(card.get("applicable_regions")),
+        "section_assignments": tuple(card.get("section_assignments") or ()),
         "line_start": card.get("line_start"),
         "line_end": card.get("line_end"),
         "source": "solved_deck",
@@ -254,8 +291,57 @@ def _claim_card(item: Any) -> Optional[Dict[str, Any]]:
             "hardening_table": points[1:],
             "points": points,
         } if plastic or points else None,
+        "applicable_regions": _applicable_regions(item.get("applicable_regions")),
+        "section_assignments": tuple(item.get("section_assignments") or ()),
         "input_sha256": item.get("input_sha256") or (item.get("metadata") or {}).get("input_sha256"),
     }
+
+
+def _section_assignments(text: str) -> Tuple[Dict[str, Any], ...]:
+    '''Return section assignments carrying both a material and an ELSET.'''
+    assignments: List[Dict[str, Any]] = []
+    for index, raw in enumerate(str(text or "").splitlines(), start=1):
+        stripped = raw.strip()
+        match = _CARD.match(stripped)
+        if not match:
+            continue
+        keyword = match.group(1).upper().replace(" ", "_")
+        if not keyword.endswith("SECTION"):
+            continue
+        params = {
+            key.upper(): value.strip().strip('"').strip("'")
+            for key, value in _PARAM.findall(match.group(2) or "")
+        }
+        material = params.get("MATERIAL")
+        elset = params.get("ELSET")
+        if material and elset:
+            assignments.append({
+                "section_type": keyword,
+                "material": material,
+                "elset": elset,
+                "line_start": index,
+            })
+    return tuple(assignments)
+
+
+def _applicable_regions(value: Any) -> Tuple[str, ...]:
+    '''Normalize section ELSET names or claim region declarations.'''
+    if value is None:
+        return ()
+    if isinstance(value, str):
+        values: Sequence[Any] = (value,)
+    elif isinstance(value, dict):
+        values = (value.get("elset") or value.get("region") or value.get("name"),)
+    else:
+        values = tuple(value)
+    regions = []
+    for item in values:
+        if isinstance(item, dict):
+            item = item.get("elset") or item.get("region") or item.get("name")
+        name = str(item or "").strip()
+        if name:
+            regions.append(name)
+    return tuple(sorted(set(regions), key=lambda item: (item.upper(), item)))
 
 
 def _rows(lines: Sequence[str]) -> List[Tuple[float, ...]]:

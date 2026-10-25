@@ -1,0 +1,635 @@
+==============================================================================
+AST VERIFICATION PASS 2
+src=225  tests=202  tools=87
+==============================================================================
+
+==============================================================================
+A. SYMBOL USAGE SPLIT: src-product / tests / tools
+==============================================================================
+   'def' sites are excluded from the call-count; a symbol only used in
+   its own defining module is marked SELF-ONLY.
+
+  execute_verified
+    def site        : actions/runner.py:L24
+    src imports     : 1
+    src calls (all) : 2   outside def module: 2
+        SRC-CALL  agent.py                                       L547   through `execute_verified()` so the result carries a journal record and
+        SRC-CALL  agent.py                                       L567   outcome = execute_verified(self.executor, action)
+    tests           : 2
+        TEST      test_verification.py                           L33   
+        TEST      test_verification.py                           L42   
+    tools           : 0
+
+  preview
+    def site        : actions/runner.py:L10
+    src imports     : 1
+    src calls (all) : 6   outside def module: 6
+        SRC-CALL  cli.py                                         L8     5. report: render an HTML engineering report from evidence or AnalysisRun. Markdown is an 
+        SRC-CALL  cli.py                                         L85    "--allow-preview",
+        SRC-CALL  cli.py                                         L87    help="Print a non-deliverable preview even when the Agent run record is missing. Does not 
+        SRC-CALL  cli.py                                         L869   print("BLOCKED: refusing to print a deliverable. Pass --allow-preview for a non-deliverabl
+        SRC-CALL  cli.py                                         L869   print("BLOCKED: refusing to print a deliverable. Pass --allow-preview for a non-deliverabl
+        SRC-CALL  reporting/delivery.py                          L121   otherwise authorized one, writes nothing: no `report.md` and no `*.preview.md`.
+    tests           : 36
+        TEST      test_actions.py                                L11   
+        TEST      test_actions.py                                L16   
+        TEST      test_actions.py                                L23   
+        TEST      test_actions.py                                L24   
+        TEST      test_actions.py                                L29   
+        TEST      test_actions.py                                L30   
+    tools           : 0
+
+  action_to_script
+    def site        : actions/script.py:L16
+    src imports     : 4
+    src calls (all) : 5   outside def module: 5
+        SRC-CALL  actions/runner.py                              L11    return action_to_script(action)
+        SRC-CALL  actions/runner.py                              L21    return executor.execute(action_to_script(action))
+        SRC-CALL  actions/runner.py                              L35    result = executor.execute(action_to_script(action))
+        SRC-CALL  capability_boundary.py                         L55    script = action_to_script(action)
+        SRC-CALL  planning/compiler.py                           L1785  body = action_to_script(act, include_guard=False)
+    tests           : 55
+        TEST      test_actions.py                                L281  
+        TEST      test_actions.py                                L323  
+        TEST      test_actions.py                                L432  
+        TEST      test_actions.py                                L434  
+        TEST      test_analysis_architecture.py                  L7    
+        TEST      test_analysis_architecture.py                  L69   
+    tools           : 4
+        TOOL      connector_l4_golden_e2e.py                     L337  
+        TOOL      connector_l4_golden_e2e.py                     L338  
+        TOOL      fmbd_l4_golden_e2e.py                          L378  
+        TOOL      fmbd_l4_golden_e2e.py                          L379  
+
+  audit_inp_mesh_quality
+    def site        : mesh_audit.py:L373
+    src imports     : 0
+    src calls (all) : 0   outside def module: 0
+    tests           : 7
+        TEST      test_cae_authenticity_enforcement.py           L25   
+        TEST      test_cae_authenticity_enforcement.py           L214  
+        TEST      test_cae_authenticity_enforcement.py           L225  
+        TEST      test_result_evidence_binding.py                L325  
+        TEST      test_result_evidence_binding.py                L335  
+        TEST      test_result_evidence_binding.py                L346  
+    tools           : 0
+
+  parse_and_audit_inp_deck
+    def site        : mesh_audit.py:L280
+    src imports     : 0
+    src calls (all) : 1   outside def module: 0
+    tests           : 3
+        TEST      test_cae_authenticity_enforcement.py           L24   
+        TEST      test_cae_authenticity_enforcement.py           L189  
+        TEST      test_cae_authenticity_enforcement.py           L238  
+    tools           : 0
+
+  evaluate_mesh_quality_gate
+    def site        : mesh_gate.py:L86
+    src imports     : 0
+    src calls (all) : 2   outside def module: 2
+        SRC-CALL  mesh_audit.py                                  L29    evaluate_mesh_quality_gate,
+        SRC-CALL  mesh_audit.py                                  L500   gate_eval = evaluate_mesh_quality_gate(governing, policy=effective_policy)
+    tests           : 8
+        TEST      test_mesh_gate.py                              L6    
+        TEST      test_mesh_gate.py                              L40   
+        TEST      test_mesh_gate.py                              L54   
+        TEST      test_mesh_gate.py                              L68   
+        TEST      test_mesh_gate.py                              L81   
+        TEST      test_p2_package_b_cases.py                     L882  
+    tools           : 7
+        TOOL      ga14_real_machine_qualification.py             L79   
+        TOOL      ga14_real_machine_qualification.py             L304  
+        TOOL      ga14_real_machine_qualification.py             L553  
+        TOOL      ga14_real_machine_qualification.py             L783  
+        TOOL      ga14_real_machine_qualification.py             L1076 
+        TOOL      ga14_real_machine_qualification.py             L1319 
+
+  diagnose_contact
+    def site        : contact_diagnostics.py:L320
+    src imports     : 0
+    src calls (all) : 0   outside def module: 0
+    tests           : 14
+        TEST      test_engineering_credibility.py                L9    
+        TEST      test_engineering_credibility.py                L105  
+        TEST      test_engineering_credibility.py                L125  
+        TEST      test_engineering_credibility.py                L139  
+        TEST      test_engineering_credibility.py                L153  
+        TEST      test_engineering_credibility.py                L171  
+    tools           : 0
+
+  evaluate_contact_checks
+    def site        : contact_diagnostics.py:L336
+    src imports     : 0
+    src calls (all) : 0   outside def module: 0
+    tests           : 2
+        TEST      test_engineering_credibility.py                L10   
+        TEST      test_engineering_credibility.py                L71   
+    tools           : 0
+
+  contact_checks
+    def site        : NONE
+    src imports     : 0
+    src calls (all) : 0   outside def module: 0
+    tests           : 0
+    tools           : 0
+
+  assess_meshability
+    def site        : geometry/meshability.py:L248
+    src imports     : 0
+    src calls (all) : 2   outside def module: 2
+        SRC-CALL  geometry/__init__.py                           L64    assess_meshability,
+        SRC-CALL  geometry/__init__.py                           L116   "assess_meshability",
+    tests           : 15
+        TEST      test_meshability.py                            L28   
+        TEST      test_meshability.py                            L112  
+        TEST      test_meshability.py                            L146  
+        TEST      test_meshability.py                            L171  
+        TEST      test_meshability.py                            L196  
+        TEST      test_meshability.py                            L237  
+    tools           : 7
+        TOOL      ga14_real_machine_qualification.py             L63   
+        TOOL      ga14_real_machine_qualification.py             L179  
+        TOOL      ga14_real_machine_qualification.py             L386  
+        TOOL      ga14_real_machine_qualification.py             L618  
+        TOOL      ga14_real_machine_qualification.py             L832  
+        TOOL      ga14_real_machine_qualification.py             L915  
+
+  inspect_geometry_health
+    def site        : geometry/health.py:L124
+    src imports     : 0
+    src calls (all) : 6   outside def module: 6
+        SRC-CALL  __init__.py                                    L81    inspect_geometry_health,
+        SRC-CALL  geometry/__init__.py                           L28    inspect_geometry_health,
+        SRC-CALL  geometry/__init__.py                           L88    "inspect_geometry_health",
+        SRC-CALL  geometry/meshability.py                        L35    inspect_geometry_health,
+        SRC-CALL  geometry/meshability.py                        L269   resolved_health = health_report or inspect_geometry_health(model)
+        SRC-CALL  tools/registry.py                              L137   name="inspect_geometry_health",
+    tests           : 12
+        TEST      test_dynamic_tool_router.py                    L158  
+        TEST      test_geometry_health.py                        L18   
+        TEST      test_geometry_health.py                        L55   
+        TEST      test_geometry_health.py                        L73   
+        TEST      test_geometry_health.py                        L90   
+        TEST      test_geometry_health.py                        L110  
+    tools           : 7
+        TOOL      ga14_real_machine_qualification.py             L56   
+        TOOL      ga14_real_machine_qualification.py             L898  
+        TOOL      ga14_real_machine_qualification.py             L1131 
+        TOOL      ga2_e2e_golden_case.py                         L46   
+        TOOL      ga2_e2e_golden_case.py                         L103  
+        TOOL      p0_token_profiling_baseline.py                 L73   
+
+  plan_geometry_mesh
+    def site        : planning/mesh_strategy.py:L5
+    src imports     : 2
+    src calls (all) : 0   outside def module: 0
+    tests           : 11
+        TEST      test_geometry_cleanup_policy.py                L452  
+        TEST      test_geometry_cleanup_policy.py                L455  
+        TEST      test_mesh_pipeline_integration.py              L23   
+        TEST      test_mesh_pipeline_integration.py              L156  
+        TEST      test_mesh_pipeline_integration.py              L175  
+        TEST      test_mesh_strategy.py                          L5    
+    tools           : 0
+
+  evaluate_mesh_convergence
+    def site        : contracts/convergence.py:L56
+    src imports     : 1
+    src calls (all) : 2   outside def module: 2
+        SRC-CALL  execution/convergence.py                       L8     evaluate_mesh_convergence,
+        SRC-CALL  execution/convergence.py                       L15    return evaluate_mesh_convergence(points, policy)
+    tests           : 17
+        TEST      test_mesh_convergence_e2e.py                   L4    
+        TEST      test_mesh_convergence_e2e.py                   L19   
+        TEST      test_mesh_convergence_e2e.py                   L65   
+        TEST      test_mesh_convergence_e2e.py                   L85   
+        TEST      test_mesh_pipeline_integration.py              L606  
+        TEST      test_mesh_pipeline_integration.py              L612  
+    tools           : 5
+        TOOL      mesh_convergence_e2e.py                        L142  
+        TOOL      mesh_convergence_e2e.py                        L396  
+        TOOL      mesh_convergence_e2e.py                        L421  
+        TOOL      qualify_real_mesh_refinement.py                L99   
+        TOOL      qualify_real_mesh_refinement.py                L534  
+
+  evaluate_multi_level_mesh_convergence
+    def site        : contracts/convergence.py:L164
+    src imports     : 0
+    src calls (all) : 5   outside def module: 5
+        SRC-CALL  execution/convergence.py                       L9     evaluate_multi_level_mesh_convergence,
+        SRC-CALL  execution/convergence.py                       L28    return evaluate_multi_level_mesh_convergence(
+        SRC-CALL  execution/convergence_loop.py                  L11    evaluate_multi_level_mesh_convergence,
+        SRC-CALL  execution/convergence_loop.py                  L132   conv_result = evaluate_multi_level_mesh_convergence(
+        SRC-CALL  execution/convergence_loop.py                  L182   conv_result = evaluate_multi_level_mesh_convergence(
+    tests           : 40
+        TEST      test_mesh_convergence_loop.py                  L7    
+        TEST      test_mesh_convergence_loop.py                  L30   
+        TEST      test_mesh_convergence_loop.py                  L55   
+        TEST      test_mesh_convergence_loop.py                  L75   
+        TEST      test_mesh_convergence_loop.py                  L145  
+        TEST      test_mesh_convergence_loop.py                  L155  
+    tools           : 0
+
+  weighted_score
+    def site        : grounding/scoring.py:L5
+    src imports     : 0
+    src calls (all) : 0   outside def module: 0
+    tests           : 3
+        TEST      test_scoring.py                                L1    
+        TEST      test_scoring.py                                L5    
+        TEST      test_scoring.py                                L10   
+    tools           : 0
+
+  enforce_image_context_policy
+    def site        : perception/image_context.py:L402
+    src imports     : 0
+    src calls (all) : 0   outside def module: 0
+    tests           : 3
+        TEST      test_image_layered_verification.py             L28   
+        TEST      test_image_layered_verification.py             L159  
+        TEST      test_image_layered_verification.py             L165  
+    tools           : 0
+
+  validate_locator
+    def site        : adapters/abaqus/locator_validation.py:L8
+    src imports     : 0
+    src calls (all) : 0   outside def module: 0
+    tests           : 9
+        TEST      test_locator_validation.py                     L3    
+        TEST      test_locator_validation.py                     L40   
+        TEST      test_locator_validation.py                     L50   
+        TEST      test_locator_validation.py                     L51   
+        TEST      test_locator_validation.py                     L61   
+        TEST      test_locator_validation.py                     L69   
+    tools           : 0
+
+  to_plain_data
+    def site        : grounding/serialization.py:L5
+    src imports     : 0
+    src calls (all) : 4   outside def module: 0
+    tests           : 0
+    tools           : 0
+
+  dumps
+    def site        : grounding/serialization.py:L16
+    src imports     : 0
+    src calls (all) : 85   outside def module: 84
+        SRC-CALL  agent.py                                       L1139  payload = json.dumps(profile.to_dict(), ensure_ascii=False, indent=2)
+        SRC-CALL  cli.py                                         L262   print(json.dumps(data, indent=2, ensure_ascii=False))
+        SRC-CALL  cli.py                                         L309   print(json.dumps(routing_res.to_dict(), indent=2, ensure_ascii=False))
+        SRC-CALL  cli.py                                         L340   print(json.dumps(out, indent=2, ensure_ascii=False))
+        SRC-CALL  cli.py                                         L386   print(json.dumps(out, indent=2, ensure_ascii=False))
+        SRC-CALL  cli.py                                         L481   print(json.dumps({"all_passed": all_passed, "results": results}, indent=2, ensure_ascii=Fa
+        SRC-CALL  cli.py                                         L605   print(json.dumps(diff_report, indent=2, ensure_ascii=False))
+        SRC-CALL  cli.py                                         L692   print(json.dumps([iss.to_dict() for iss in issues], indent=2, ensure_ascii=False))
+        SRC-CALL  cli.py                                         L889   print(json.dumps(gate, indent=2, ensure_ascii=False))
+        SRC-CALL  cli.py                                         L1075  print(json.dumps({
+    tests           : 73
+        TEST      conftest.py                                    L173  
+        TEST      test_artifact_contract.py                      L93   
+        TEST      test_cae_authenticity_enforcement.py           L98   
+        TEST      test_cae_authenticity_enforcement.py           L249  
+        TEST      test_cae_authenticity_enforcement.py           L250  
+        TEST      test_cli.py                                    L92   
+    tools           : 130
+        TOOL      _probe_case07_convergence.py                   L66   
+        TOOL      _probe_case07_convergence.py                   L68   
+        TOOL      _probe_case07_physics.py                       L112  
+        TOOL      case_07_jounce_bumper_e2e.py                   L428  
+        TOOL      case_07_jounce_bumper_e2e.py                   L560  
+        TOOL      case_07_jounce_bumper_e2e.py                   L1163 
+
+  calculate_adaptive_cpus
+    def site        : execution/solver_config.py:L143
+    src imports     : 0
+    src calls (all) : 1   outside def module: 0
+    tests           : 8
+        TEST      test_adaptive_solver_config.py                 L7    
+        TEST      test_adaptive_solver_config.py                 L59   
+        TEST      test_adaptive_solver_config.py                 L64   
+        TEST      test_adaptive_solver_config.py                 L69   
+        TEST      test_adaptive_solver_config.py                 L77   
+        TEST      test_adaptive_solver_config.py                 L85   
+    tools           : 0
+
+  calculate_adaptive_memory
+    def site        : execution/solver_config.py:L219
+    src imports     : 0
+    src calls (all) : 1   outside def module: 0
+    tests           : 3
+        TEST      test_adaptive_solver_config.py                 L8    
+        TEST      test_adaptive_solver_config.py                 L117  
+        TEST      test_adaptive_solver_config.py                 L144  
+    tools           : 0
+
+  resolve_job_kwargs
+    def site        : execution/solver_config.py:L248
+    src imports     : 1
+    src calls (all) : 2   outside def module: 1
+        SRC-CALL  execution/analysis_run.py                      L965   job_kwargs, job_decisions = resolve_job_kwargs(
+    tests           : 5
+        TEST      test_adaptive_solver_config.py                 L11   
+        TEST      test_adaptive_solver_config.py                 L105  
+        TEST      test_adaptive_solver_config.py                 L122  
+        TEST      test_adaptive_solver_config.py                 L161  
+        TEST      test_adaptive_solver_config.py                 L187  
+    tools           : 0
+
+  run_with_watchdog
+    def site        : execution/watchdog.py:L198
+    src imports     : 2
+    src calls (all) : 4   outside def module: 4
+        SRC-CALL  execution/__init__.py                          L9     run_with_watchdog,
+        SRC-CALL  execution/batch.py                             L121   proc = run_with_watchdog(
+        SRC-CALL  execution/solver.py                            L40    # equilibrium iterations have begun; see `watchdog.run_with_watchdog`.
+        SRC-CALL  execution/solver.py                            L917   proc = run_with_watchdog(
+    tests           : 24
+        TEST      test_solver_watchdog.py                        L15   
+        TEST      test_solver_watchdog.py                        L26   
+        TEST      test_solver_watchdog.py                        L44   
+        TEST      test_solver_watchdog.py                        L76   
+        TEST      test_solver_watchdog.py                        L100  
+        TEST      test_solver_watchdog.py                        L128  
+    tools           : 0
+
+  detect_runtime
+    def site        : execution/runtime.py:L19
+    src imports     : 2
+    src calls (all) : 2   outside def module: 2
+        SRC-CALL  agent.py                                       L658   return detect_runtime(self.executor)
+        SRC-CALL  execution/client.py                            L41    return detect_runtime(self)
+    tests           : 0
+    tools           : 0
+
+  get_model_info
+    def site        : execution/inspection.py:L4
+    src imports     : 3
+    src calls (all) : 4   outside def module: 3
+        SRC-CALL  agent.py                                       L584   return get_model_info(self.executor)
+        SRC-CALL  execution/client.py                            L19    return get_model_info(self)
+        SRC-CALL  execution/input_modes.py                       L689   model_info = get_model_info(executor)
+    tests           : 0
+    tools           : 0
+
+  read_model_snapshot
+    def site        : execution/snapshot.py:L22
+    src imports     : 2
+    src calls (all) : 2   outside def module: 2
+        SRC-CALL  agent.py                                       L654   return read_model_snapshot(self.executor)
+        SRC-CALL  execution/client.py                            L37    return read_model_snapshot(self)
+    tests           : 0
+    tools           : 0
+
+  extract_spatial_hotspots
+    def site        : results/spatial_hotspots.py:L123
+    src imports     : 1
+    src calls (all) : 1   outside def module: 1
+        SRC-CALL  agent.py                                       L981   hotspots = extract_spatial_hotspots(
+    tests           : 0
+    tools           : 0
+
+  extract_history_curve
+    def site        : results/history_extraction.py:L75
+    src imports     : 1
+    src calls (all) : 1   outside def module: 1
+        SRC-CALL  agent.py                                       L1008  c = extract_history_curve(
+    tests           : 0
+    tools           : 0
+
+  calculate_derived_metrics
+    def site        : results/derived_metrics.py:L150
+    src imports     : 1
+    src calls (all) : 1   outside def module: 1
+        SRC-CALL  agent.py                                       L1034  derived_metrics = calculate_derived_metrics(
+    tests           : 3
+        TEST      test_p1_3_result_intelligence.py               L29   
+        TEST      test_p1_3_result_intelligence.py               L162  
+        TEST      test_p1_3_result_intelligence.py               L246  
+    tools           : 0
+
+==============================================================================
+B. ACTION TYPE MATRIX (factory / dispatch / consumer)
+==============================================================================
+
+  mesh_quality
+    factory(_action) : actions/builders.py:L216
+    dispatch(== str): actions/script.py:L223, agent.py:L140, contracts/report.py:L245, validation/actions.py:L125
+    consumers        : planning/compiler.py:L1691
+
+  inspect_mesh
+    factory(_action) : actions/builders.py:L215
+    dispatch(== str): actions/script.py:L221
+    consumers        : NONE
+    >> NO PRODUCER: this action is never requested by planning code
+
+  generate_mesh
+    factory(_action) : actions/builders.py:L34
+    dispatch(== str): actions/script.py:L192
+    consumers        : NONE
+    >> NO PRODUCER: this action is never requested by planning code
+
+  seed_part
+    factory(_action) : actions/builders.py:L33
+    dispatch(== str): actions/script.py:L190
+    consumers        : planning/compiler.py:L1618
+
+  element_type
+    factory(_action) : actions/builders.py:L37
+    dispatch(== str): actions/script.py:L203, validation/actions.py:L312
+    consumers        : NONE
+    >> NO PRODUCER: this action is never requested by planning code
+
+  mesh_controls
+    factory(_action) : actions/builders.py:L29
+    dispatch(== str): actions/script.py:L198, validation/actions.py:L123
+    consumers        : NONE
+    >> NO PRODUCER: this action is never requested by planning code
+
+  local_seed_size
+    factory(_action) : actions/builders.py:L198
+    dispatch(== str): actions/script.py:L194, validation/actions.py:L117
+    consumers        : planning/compiler.py:L1634
+
+  local_seed_number
+    factory(_action) : actions/builders.py:L209
+    dispatch(== str): actions/script.py:L196, validation/actions.py:L119
+    consumers        : planning/compiler.py:L1642
+
+  tie
+    factory(_action) : actions/builders.py:L187
+    dispatch(== str): actions/script.py:L225, validation/actions.py:L86, validation/condition_fidelity.py:L208, validation/preflight.py:L163
+    consumers        : NONE
+    >> NO PRODUCER: this action is never requested by planning code
+
+  contact
+    factory(_action) : actions/builders.py:L222
+    dispatch(== str): actions/script.py:L236, contact_diagnostics.py:L159, reporting/figure_selector.py:L553, validation/actions.py:L93, validation/actions.py:L171, validation/preflight.py:L168
+    consumers        : workflow/contact.py:L70
+
+  contact_property
+    factory(_action) : actions/builders.py:L217
+    dispatch(== str): actions/script.py:L234, validation/actions.py:L184
+    consumers        : workflow/contact.py:L63
+
+  submit_job
+    factory(_action) : actions/builders.py:L146
+    dispatch(== str): actions/script.py:L188
+    consumers        : NONE
+    >> NO PRODUCER: this action is never requested by planning code
+
+  create_job
+    factory(_action) : actions/builders.py:L145
+    dispatch(== str): actions/script.py:L183
+    consumers        : workflow/contact.py:L105, workflow/mbd.py:L104, workflow/mbd.py:L244, workflow/static.py:L56, workflow/thermal.py:L74
+
+==============================================================================
+C. PACKAGE-ROOT ORPHAN RE-CHECK (was it a parser artifact?)
+==============================================================================
+  context          REAL-ORPHAN
+  llm              REAL-ORPHAN
+  planning         USED(16)
+        __init__.py                                    L72
+        __init__.py                                    L73
+        agent.py                                       L13
+        agent.py                                       L1060
+  reporting        USED(7)
+        __init__.py                                    L16
+        agent.py                                       L1263
+        agent.py                                       L1778
+        agent.py                                       L1943
+  validation       USED(17)
+        actions/runner.py                              L3
+        agent.py                                       L14
+        agent.py                                       L15
+        agent.py                                       L347
+  perception       REAL-ORPHAN
+  telemetry        USED(10)
+        agent.py                                       L1072
+        context/manager.py                             L28
+        context/manager.py                             L29
+        context/state.py                               L23
+  visualization    USED(2)
+        agent.py                                       L850
+        execution/odb_rendering.py                     L611
+  annotations      USED(63)
+        agent.py                                       L1
+        context/manager.py                             L18
+        context/state.py                               L16
+        contracts/artifact.py                          L10
+  editing          USED(2)
+        execution/input_modes.py                       L333
+        execution/input_modes.py                       L737
+  materials        USED(6)
+        cli.py                                         L1227
+        reasoning/material_catalog.py                  L282
+        reasoning/material_catalog.py                  L481
+        reasoning/material_catalog.py                  L504
+  adapters         USED(2)
+        materials/provider.py                          L14
+        materials/provider.py                          L15
+  tools            REAL-ORPHAN
+
+==============================================================================
+D. CONFIRMED-ORPHAN MODULE RE-CHECK (any import anywhere?)
+==============================================================================
+  adapters/abaqus/grounding_probe          src=0 test=1 tool=0   TEST-ONLY
+  adapters/abaqus/viewport_probe           src=0 test=0 tool=0   DEAD (no consumer at all)
+  adapters/abaqus/region_lifecycle         src=0 test=0 tool=0   DEAD (no consumer at all)
+  adapters/abaqus/model_snapshot           src=6 test=3 tool=0   PRODUCT-USED
+  adapters/abaqus/locator_validation       src=0 test=1 tool=0   TEST-ONLY
+  execution/b28_harness                    src=0 test=0 tool=0   DEAD (no consumer at all)
+  execution/convergence                    src=1 test=11 tool=8   PRODUCT-USED
+  execution/convergence_loop               src=0 test=1 tool=0   TEST-ONLY
+  grounding/serialization                  src=0 test=9 tool=0   TEST-ONLY
+  grounding/scoring                        src=0 test=1 tool=0   TEST-ONLY
+  mesh_audit                               src=0 test=3 tool=0   TEST-ONLY
+  mesh_gate                                src=1 test=2 tool=2   PRODUCT-USED
+  contact_diagnostics                      src=0 test=8 tool=5   TEST-ONLY
+  contracts/benchmarks_catalog             src=0 test=2 tool=3   TEST-ONLY
+  benchmark_catalog                        src=0 test=1 tool=0   TEST-ONLY
+  perception/image_context                 src=0 test=1 tool=0   TEST-ONLY
+  perception/benchmark_evaluator           src=0 test=1 tool=1   TEST-ONLY
+  results/query_protocol                   src=1 test=1 tool=0   PRODUCT-USED
+  actions/raw                              src=0 test=16 tool=10   TEST-ONLY
+  contracts/input                          src=0 test=12 tool=10   TEST-ONLY
+
+==============================================================================
+E. mesh_quality END-TO-END TRACE
+==============================================================================
+
+  planning/compiler.py   hits=7
+      L110   # Quality thresholds passed to Part.verifyMeshQuality(). None means "no
+      L275   def _mesh_quality_targets(geometry, active_scope, part_name):
+      L1682  from ..contracts.mesh_quality import resolve_domain_mesh_quality_policy
+      L1682  from ..contracts.mesh_quality import resolve_domain_mesh_quality_policy
+      L1684  mq_policy = resolve_domain_mesh_quality_policy(physics_domain)
+      L1690  for _mq_part in _mesh_quality_targets(geometry, active_scope, part_name):
+      L1691  actions.append(builders.mesh_quality(
+
+  actions/builders.py   hits=2
+      L216   def mesh_quality(model, part, **params): return _action("mesh_quality", model, part=part
+      L216   def mesh_quality(model, part, **params): return _action("mesh_quality", model, part=part
+
+  actions/script.py   hits=7
+      L223   if k == "mesh_quality":
+      L224   return _mesh_quality_script(m, p)
+      L720   def _mesh_quality_script(model, p):
+      L739   'status':'unknown','source':'native_abaqus_verifyMeshQuality',
+      L746   data=part.verifyMeshQuality(criterion=criterion, threshold=threshold)
+      L759   data=part.verifyMeshQuality(criterion=ANALYSIS_CHECKS)
+      L783   result['kind']='mesh_quality'
+
+  execution/analysis_run.py   hits=19
+      L643   mesh_quality=None, mesh_convergence=None, fatigue=None, contact_diagnostics=None,
+      L876   if resolved_elements is None and mesh_quality:
+      L877   if isinstance(mesh_quality, dict):
+      L878   resolved_elements = mesh_quality.get("element_count") or mesh_quality.get("num_elements"
+      L878   resolved_elements = mesh_quality.get("element_count") or mesh_quality.get("num_elements"
+      L878   resolved_elements = mesh_quality.get("element_count") or mesh_quality.get("num_elements"
+      L880   resolved_elements = getattr(mesh_quality, "element_count", None) or getattr(mesh_quality
+      L880   resolved_elements = getattr(mesh_quality, "element_count", None) or getattr(mesh_quality
+      L1294  if not effective_criteria and numerical_verification is None and engineering_checks is N
+      L1626  mesh_quality=mesh_quality,
+      L1626  mesh_quality=mesh_quality,
+      L1655  mesh_quality=mesh_quality,
+      ... (+7)
+
+  acceptance.py   hits=40
+      L14    "mesh_quality",           # Gate 6
+      L58    def _mesh_quality_shape_metrics(mq: Any) -> tuple:
+      L67    from .contracts.mesh_quality import SHAPE_THRESHOLD_FIELDS
+      L73    def _normalize_mesh_quality(mesh_quality: Any):
+      L73    def _normalize_mesh_quality(mesh_quality: Any):
+      L75    from .contracts.mesh_quality import MeshQualityResult
+      L77    if isinstance(mesh_quality, MeshQualityResult):
+      L78    return mesh_quality
+      L79    if isinstance(mesh_quality, dict):
+      L80    return MeshQualityResult.from_mapping(mesh_quality)
+      L90    if hasattr(mesh_quality, key):
+      L91    payload[key] = getattr(mesh_quality, key)
+      ... (+28)
+
+  agent.py   hits=30
+      L116   _EVIDENCE_PRODUCING_ACTIONS = frozenset({"mesh_quality"})
+      L140   if isinstance(item, dict) and item.get("kind", "mesh_quality") == "mesh_quality":
+      L140   if isinstance(item, dict) and item.get("kind", "mesh_quality") == "mesh_quality":
+      L178   def _mesh_quality_rank(status):
+      L190   def _combine_mesh_quality_results(results):
+      L196   from .contracts.mesh_quality import MeshQualityResult
+      L202   worst = max(results, key=lambda item: _mesh_quality_rank(item.status))
+      L230   def _resolve_mesh_gate_status(mq_audit, acceptance):
+      L239   from .contracts.mesh_quality import MeshQualityResult, normalize_mesh_quality_status
+      L239   from .contracts.mesh_quality import MeshQualityResult, normalize_mesh_quality_status
+      L275   mq_gate_val = acc_gates.get("mesh_quality")
+      L277   canonical = normalize_mesh_quality_status(mq_gate_val)
+      ... (+18)
+
+  contracts/results.py   hits=5
+      L272   required_gates=("execution", "odb", "mesh_quality", "criteria"),
+      L444   from .mesh_quality import mesh_quality_gate_configuration_errors
+      L444   from .mesh_quality import mesh_quality_gate_configuration_errors
+      L446   configuration_errors = mesh_quality_gate_configuration_errors(prof.domain, prof.required
+      L451   "mesh_quality a required gate." % (d, "; ".join(configuration_errors))
+
+  validation/preflight.py   hits=0
