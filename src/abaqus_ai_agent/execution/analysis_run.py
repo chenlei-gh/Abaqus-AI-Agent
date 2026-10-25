@@ -13,6 +13,7 @@ from ..engineering_status import EngineeringStatus
 from ..evidence.result import summarize_odb
 from ..evidence.model import Evidence, EvidenceBundle
 from ..contracts.provenance import AnalysisProvenance, attach_delivery_stamp, provenance_from_mapping
+from ..contracts.time_coverage import TimeCoverage, build_time_coverage
 from ..provenance import stable_hash
 from ..acceptance import evaluate_production_acceptance, evaluate_result_acceptance
 
@@ -1257,6 +1258,18 @@ class AnalysisRunner:
                 odb_path=path,
                 engineering_status=EngineeringStatus.RESULT_SUSPICIOUS.value,
                 evidence=EvidenceBundle((Evidence(kind="odb_summary", source="odb", locator=path, value=odb),)), artifacts=artifacts)
+            time_coverage = _evaluate_run_time_coverage(
+                normalized_action_plan, odb, solver_diagnostics,
+            )
+            if time_coverage is not None:
+                run = run.with_state(
+                    run.state,
+                    metadata=dict(run.metadata, time_coverage=time_coverage.to_dict()),
+                    evidence=run.evidence.extend((Evidence(
+                        kind="time_coverage", source="analysis", locator=job_name,
+                        value=time_coverage.to_dict(),
+                    ),)),
+                )
 
             # Model-contract diagnosis (MS13L lesson): surface C3D4-only bending,
             # pin tie+fix overconstraint, oversized fixed sets, and elastic-only
@@ -1279,7 +1292,11 @@ class AnalysisRunner:
             )
 
             if not effective_criteria and numerical_verification is None and engineering_checks is None and mesh_quality is None and mesh_convergence is None and fatigue is None and fatigue_spec is None and contact_diagnostics is None and connector_kinematics is None and fmbd_dynamics is None and not getattr(engineering_intent, "connectors", None) and not getattr(engineering_intent, "fmbd", None) and sensitivity is None and uncertainty is None:
-                return run.with_state(AnalysisRunState.ODB_VALIDATED)
+                return run.with_state(
+                    AnalysisRunState.ODB_VALIDATED,
+                    verification=({"time_coverage": time_coverage.to_dict()}
+                                  if time_coverage is not None else None),
+                )
 
             extractions = ()
             art_dir = workdir or (os.path.dirname(os.path.abspath(path)) if path else ".")
@@ -1732,7 +1749,14 @@ class AnalysisRunner:
                 kind="acceptance", source="acceptance", locator=job_name,
                 value=accepted
             ))).extend(tuple(verification_evidence)).extend(result_evidence)
+            if time_coverage is not None:
+                evidence = evidence.extend((Evidence(
+                    kind="time_coverage", source="analysis", locator=job_name,
+                    value=time_coverage.to_dict(),
+                ),))
             verification_map = {}
+            if time_coverage is not None:
+                verification_map["time_coverage"] = time_coverage.to_dict()
             if numerical_verification is not None:
                 verification_map["numerical"] = getattr(numerical_verification, "to_dict", lambda: str(numerical_verification))()
             if engineering_checks is not None:
@@ -1915,6 +1939,86 @@ def _record_solver_timing(profiler, wait_seconds, job_name, workdir):
         note = getattr(profiler, "internal_errors", None)
         if isinstance(note, list):
             note.append(f"solver timing not recorded: {exc!r}")
+
+
+def _target_time_from_action_plan(action_plan):
+    """Read the final time-based step's target from the compiled step contract."""
+    step_action_types = {
+        "static_step", "implicit_dynamic_step", "dynamic_explicit_step",
+        "heat_transfer_step", "coupled_temp_displacement_step",
+    }
+    for action in reversed(tuple(action_plan or ())):
+        action_type = str(action.get("action_type") or "")
+        if action_type not in step_action_types:
+            continue
+        params = action.get("parameters") if isinstance(action.get("parameters"), dict) else {}
+        value = params.get("time_period")
+        if isinstance(value, (int, float)) and not isinstance(value, bool) and value > 0:
+            name = params.get("name") or action.get("target") or action_type
+            return float(value), f"step_contract:action_plan[{name}].time_period"
+    return None, "step_contract:time_period_unavailable"
+
+
+def _latest_odb_time(odb):
+    """Return the final/initial non-Initial frame times and their ODB locators."""
+    if not isinstance(odb, dict):
+        return None, "unavailable", None, "unavailable"
+    steps = list(odb.get("steps") or ())
+    step_times = odb.get("step_times") if isinstance(odb.get("step_times"), dict) else {}
+    non_initial = [s for s in steps if str(s).strip().lower() != "initial"]
+    ordered = non_initial or steps
+    if not ordered:
+        return None, "unavailable", None, "unavailable"
+    step_name = ordered[-1]
+    entry = step_times.get(step_name)
+    if not isinstance(entry, dict):
+        return None, "unavailable", None, "unavailable"
+    last = entry.get("last_frame_value")
+    first = entry.get("first_frame_value")
+    last_value = (
+        float(last) if isinstance(last, (int, float)) and not isinstance(last, bool) else None
+    )
+    first_value = (
+        float(first) if isinstance(first, (int, float)) and not isinstance(first, bool) else None
+    )
+    last_source = f"odb:{step_name}.frames[-1].frameValue" if last_value is not None else "unavailable"
+    first_source = f"odb:{step_name}.frames[0].frameValue" if first_value is not None else "unavailable"
+    return last_value, last_source, first_value, first_source
+
+
+def _sta_time_evidence(diagnostics):
+    payload = (diagnostics or {}).get(".sta") or {}
+    if not isinstance(payload, dict):
+        return None, "unavailable", False
+    value = payload.get("coverage_time")
+    source = str(payload.get("coverage_time_source") or ".sta")
+    ambiguous = bool(payload.get("time_ambiguous"))
+    if isinstance(value, (int, float)) and not isinstance(value, bool):
+        return float(value), source, ambiguous
+    total = payload.get("total_time")
+    if isinstance(total, (int, float)) and not isinstance(total, bool):
+        return float(total), source, ambiguous
+    return None, "unavailable", ambiguous
+
+
+def _evaluate_run_time_coverage(action_plan, odb, diagnostics):
+    """Build coverage evidence, or return None when no coverage question exists."""
+    target, target_source = _target_time_from_action_plan(action_plan)
+    odb_time, odb_source, odb_start, odb_start_source = _latest_odb_time(odb)
+    sta_time, sta_source, sta_ambiguous = _sta_time_evidence(diagnostics)
+    if target is None and odb_time is None and sta_time is None:
+        return None
+    return build_time_coverage(
+        target_time=target,
+        target_source=target_source,
+        odb_time=odb_time,
+        odb_source=odb_source,
+        sta_time=sta_time,
+        sta_source=sta_source,
+        sta_ambiguous=sta_ambiguous,
+        start_time=odb_start,
+        start_source=odb_start_source,
+    )
 
 
 def _collect_diagnostics(executor, job_name, workdir=None):

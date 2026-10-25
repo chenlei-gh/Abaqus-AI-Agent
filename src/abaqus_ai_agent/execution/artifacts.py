@@ -92,14 +92,57 @@ for suffix in ('.msg', '.sta', '.dat', '.log'):
     try:
         with open(path, 'rb') as fh:
             lines = [l.decode('latin-1', 'replace') for l in fh.readlines()]
-        result[suffix]={
+        text=''.join(lines)
+        upper=text.upper()
+        entry={
             'path':path,
             'tail':''.join(lines[-tail:]),
             'has_completed':any('THE ANALYSIS HAS COMPLETED SUCCESSFULLY' in l.upper() for l in lines),
             'has_not_completed':any('THE ANALYSIS HAS NOT BEEN COMPLETED' in l.upper() for l in lines),
             'has_error':any('***ERROR' in l.upper() or '***FATAL' in l.upper() for l in lines),
             'error_sample':next((l.strip() for l in lines if '***ERROR' in l.upper() or '***FATAL' in l.upper()), ''),
+            'step_time':None,
+            'total_time':None,
+            'coverage_time':None,
+            'coverage_time_source':'unavailable',
+            'time_step_count':0,
+            'time_ambiguous':False,
         }
+        if suffix == '.sta':
+            import re
+            clean=text.replace('D','E').replace('d','e')
+            number=r'([-+]?[0-9]*[.]?[0-9]+(?:[eE][-+]?[0-9]+)?)'
+            labeled_step=[float(x) for x in re.findall(r'(?im)[ 	]*STEP[ 	]+TIME[ 	]*[:=]?[ 	]*'+number, clean)]
+            labeled_total=[float(x) for x in re.findall(r'(?im)[ 	]*TOTAL[ 	]+TIME[ 	]*[:=]?[ 	]*'+number, clean)]
+            tabular_step=[]; tabular_total=[]; seen_steps=set()
+            for line in clean.splitlines():
+                tokens=line.split()
+                if len(tokens) < 5:
+                    continue
+                try:
+                    step_no=int(tokens[0]); int(tokens[1]); int(tokens[2])
+                    step_t=float(tokens[3]); total_t=float(tokens[4])
+                except Exception:
+                    continue
+                seen_steps.add(step_no)
+                tabular_step.append(step_t)
+                tabular_total.append(total_t)
+            step_values=labeled_step or tabular_step
+            total_values=labeled_total or tabular_total
+            entry['time_step_count']=len(seen_steps)
+            if step_values:
+                entry['step_time']=step_values[-1]
+                entry['coverage_time']=step_values[-1]
+                entry['coverage_time_source']='.sta:STEP TIME last value'
+            if total_values:
+                entry['total_time']=total_values[-1]
+            if not step_values and total_values:
+                if entry['time_step_count'] > 1:
+                    entry['time_ambiguous']=True
+                else:
+                    entry['coverage_time']=total_values[-1]
+                    entry['coverage_time_source']='.sta:TOTAL TIME (single-step fallback)'
+        result[suffix]=entry
     except Exception as exc:
         result[suffix]={'path':path, 'error':str(exc)}
 print(json.dumps(result))

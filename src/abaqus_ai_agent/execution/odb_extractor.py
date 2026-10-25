@@ -578,6 +578,19 @@ def _extract_single_requirement_in_process(
     return ResultExtraction(requirement, float(value), locator, (evidence,))
 
 
+def _odb_step_times(odb: Any) -> Dict[str, Dict[str, Any]]:
+    """Capture first/last frame times as auditable ODB coverage evidence."""
+    step_times = {}
+    for name, step in odb.steps.items():
+        frames = list(getattr(step, "frames", ()) or ())
+        step_times[name] = {
+            "first_frame_value": getattr(frames[0], "frameValue", None) if frames else None,
+            "last_frame_value": getattr(frames[-1], "frameValue", None) if frames else None,
+            "frame_count": len(frames),
+        }
+    return step_times
+
+
 def _extract_odb_in_process(
     odb_path: Union[str, Path],
     requirements: Sequence[ResultRequirement],
@@ -600,6 +613,7 @@ def _extract_odb_in_process(
                 "steps": list(odb.steps.keys()),
                 "instances": list(odb.rootAssembly.instances.keys()),
                 "step_frames": {k: len(v.frames) for k, v in odb.steps.items()},
+                "step_times": _odb_step_times(odb),
             }
         energy = None
         if energy_spec:
@@ -706,11 +720,20 @@ if {extract_metadata!r}:
         steps_list = list(odb.steps.keys())
         instances_list = list(odb.rootAssembly.instances.keys())
         step_frames = {{k: len(v.frames) for k, v in odb.steps.items()}}
+        step_times = {{}}
+        for _name, _step in odb.steps.items():
+            _frames = list(getattr(_step, "frames", ()) or ())
+            step_times[_name] = {{
+                "first_frame_value": getattr(_frames[0], "frameValue", None) if _frames else None,
+                "last_frame_value": getattr(_frames[-1], "frameValue", None) if _frames else None,
+                "frame_count": len(_frames),
+            }}
         payload["metadata"] = {{
             "status": "available",
             "steps": steps_list,
             "instances": instances_list,
             "step_frames": step_frames,
+            "step_times": step_times,
         }}
     except Exception as exc:
         payload["errors"]["metadata"] = str(exc)

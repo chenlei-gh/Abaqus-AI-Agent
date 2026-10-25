@@ -2092,6 +2092,7 @@ class AbaqusAIAgent:
                     required_preprocessing_figures=required_figures,
                     condition_fidelity=fidelity_verdict,
                     objective_context=getattr(intent, "description", "") or "",
+                    time_coverage=(getattr(run, "metadata", {}) or {}).get("time_coverage"),
                 )
                 report_md = render_markdown(det_report_data)
                 report_html_str = render_html(det_report_data, base_dir=out_dir)
@@ -2125,6 +2126,15 @@ class AbaqusAIAgent:
                 f"- **ODB Path**: {getattr(run, 'odb_path', 'UNAVAILABLE')}\n",
                 "## 2. 关键工程指标与验证维度 (Key Metrics & Verification Dimension)",
             ]
+            _run_coverage = (getattr(run, "metadata", {}) or {}).get("time_coverage")
+            if isinstance(_run_coverage, dict):
+                from .contracts.time_coverage import TimeCoverage
+                _coverage = TimeCoverage.from_dict(_run_coverage)
+                if _coverage is not None:
+                    diag_lines.append(f"- **Time Coverage Evidence**: `{_coverage.evidence_statement()}`")
+                    _coverage_limitation = _coverage.limitation_statement()
+                    if _coverage_limitation:
+                        diag_lines.append(f"- **Time Coverage Limitation**: {_coverage_limitation}")
             if metric_dict:
                 diag_lines.append("| 指标名称 (Metric) | 数值 (Value) |")
                 diag_lines.append("| :--- | :--- |")

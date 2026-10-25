@@ -74,6 +74,13 @@ def inspect_odb(executor, path):
             "result={'steps':list(odb.steps.keys()),"
             "'instances':list(odb.rootAssembly.instances.keys())}\n"
             "result['step_frames']={k:len(v.frames) for k,v in odb.steps.items()}\n"
+            "step_times={}\n"
+            "for _name,_step in odb.steps.items():\n"
+            "    _frames=list(getattr(_step,'frames',()) or ())\n"
+            "    _first=getattr(_frames[0],'frameValue',None) if _frames else None\n"
+            "    _last=getattr(_frames[-1],'frameValue',None) if _frames else None\n"
+            "    step_times[_name]={'first_frame_value':_first,'last_frame_value':_last,'frame_count':len(_frames)}\n"
+            "result['step_times']=step_times\n"
             "odb.close()\nprint(result)") % path
     return _decode_payload(executor.execute(code))
 

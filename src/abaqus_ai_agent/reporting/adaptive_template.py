@@ -16,7 +16,8 @@ from enum import Enum
 from typing import Any, Dict, List, Optional, Sequence, Set, Tuple
 
 from ..contracts.conclusions import build_report_conclusions
-from ..contracts.report import EngineeringReportData, ReportFigure, classify_report_facts
+from ..contracts.report import EngineeringReportData, ReportFigure, ReportFact, ReportFactClass, classify_report_facts
+from ..contracts.time_coverage import TimeCoverage
 from .interpretation_card import InterpretationCard
 from .visualization_spec import VisualizationSpec
 
@@ -97,6 +98,7 @@ class AdaptiveReportBuilder:
         provenance: Any = None,
         extra_metadata: Optional[Dict[str, Any]] = None,
         objective_context: str = "",
+        time_coverage: Optional[Any] = None,
     ) -> EngineeringReportData:
         """Deterministically assemble the polymorphic EngineeringReportData."""
         active_sections = self.determine_active_sections()
@@ -113,6 +115,18 @@ class AdaptiveReportBuilder:
         }
         if extra_metadata:
             meta.update(dict(extra_metadata))
+        coverage = None
+        if time_coverage is not None:
+            coverage = (
+                time_coverage if isinstance(time_coverage, TimeCoverage)
+                else TimeCoverage.from_dict(time_coverage)
+            )
+        elif isinstance(meta.get("time_coverage"), dict):
+            coverage = TimeCoverage.from_dict(meta.get("time_coverage"))
+        coverage_limitation = None
+        if coverage is not None:
+            meta["time_coverage"] = coverage.to_dict()
+            coverage_limitation = coverage.limitation_statement()
 
         # Embed Interpretation Card if provided (read-only for LLM thoughts)
         assumptions: List[str] = []
@@ -128,6 +142,20 @@ class AdaptiveReportBuilder:
                 for idx, rec in enumerate(interpretation_card.recommendations)
             ]
             limitations.extend(interpretation_card.risk_notes)
+        base_limitations = list(limitations)
+        if coverage_limitation and coverage_limitation not in limitations:
+            limitations.append(coverage_limitation)
+        if coverage is not None:
+            coverage_payload = coverage.to_dict()
+            for figure in figures:
+                f_meta = getattr(figure, "metadata", None)
+                if not isinstance(f_meta, dict):
+                    continue
+                is_animation = bool(f_meta.get("is_animation"))
+                if not is_animation:
+                    is_animation = str(getattr(figure, "kind", "")).lower() == "animation" or str(getattr(figure, "path", "")).lower().endswith(".gif")
+                if is_animation:
+                    f_meta.setdefault("time_coverage", coverage_payload)
 
         # Objective description with embedded bilingual engineering interpretation
         objective_text = f"Evaluation of {self.physics_domain} performance against {self.objective.value} requirements."
@@ -186,10 +214,15 @@ class AdaptiveReportBuilder:
         }
         classified_facts = classify_report_facts(
             results_info,
-            limitations,
+            base_limitations,
             self_healing,
             limitation_source="interpretation_card.risk_notes",
         )
+        if coverage_limitation:
+            classified_facts = tuple(classified_facts) + (ReportFact(
+                ReportFactClass.LIMITATION, coverage_limitation,
+                "run.metadata.time_coverage",
+            ),)
         conclusions = build_report_conclusions(
             acceptance_info,
             objective_context=objective_context,

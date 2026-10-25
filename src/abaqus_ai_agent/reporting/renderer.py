@@ -1084,6 +1084,30 @@ def _render_custom_table_for_section(heading, value, is_zh=False):
 
     return lines
 
+def _figure_caption_for_report(figure, is_zh=False):
+    """Append evidence-bound time coverage to animation captions only."""
+    base = getattr(figure, "caption", None) or getattr(figure, "kind", None) or "figure"
+    meta = getattr(figure, "metadata", None) or {}
+    if not isinstance(meta, dict):
+        return str(base)
+    is_animation = bool(meta.get("is_animation"))
+    if not is_animation:
+        is_animation = (
+            str(getattr(figure, "kind", "")).lower() == "animation"
+            or str(getattr(figure, "path", "")).lower().endswith(".gif")
+        )
+    if not is_animation:
+        return str(base)
+    payload = meta.get("time_coverage")
+    if not isinstance(payload, dict):
+        return str(base)
+    from ..contracts.time_coverage import TimeCoverage
+    coverage = TimeCoverage.from_dict(payload)
+    if coverage is None:
+        return str(base)
+    return f"{base} — {coverage.animation_caption(is_zh=is_zh)}"
+
+
 def render_markdown(report, language=None):
     # Detect Chinese language preference
     is_zh = _is_chinese_report(report, language=language)
@@ -1123,7 +1147,7 @@ def render_markdown(report, language=None):
         lines += ["## %s" % section_title, ""]
         if heading == "9. Figures":
             for figure in value:
-                lines += ["![%s](%s)" % (figure.caption or figure.kind, figure.path), ""]
+                lines += ["![%s](%s)" % (_figure_caption_for_report(figure, is_zh=is_zh), figure.path), ""]
                 meta = getattr(figure, "metadata", None) or {}
                 interp = meta.get("description") or meta.get("interpretation") or meta.get("engineering_notes")
                 if interp:
@@ -1143,7 +1167,7 @@ def render_markdown(report, language=None):
                             lines += [
                                 sub_m_t,
                                 "",
-                                "![%s](%s)" % (figure.caption or "有限元网格划分拓扑图", figure.path),
+                                "![%s](%s)" % (_figure_caption_for_report(figure, is_zh=is_zh), figure.path),
                                 "",
                             ]
                             interp = f_meta.get("description") or f_meta.get("interpretation") or f_meta.get("engineering_notes")
@@ -1486,7 +1510,7 @@ def render_html(report, language=None, base_dir=None):
 
         if heading == "9. Figures":
             for figure in value:
-                body_parts.append(_render_html_figure(figure.caption or figure.kind, figure.path, is_zh=is_zh, base_dir=eff_base_dir))
+                body_parts.append(_render_html_figure(_figure_caption_for_report(figure, is_zh=is_zh), figure.path, is_zh=is_zh, base_dir=eff_base_dir))
                 meta = getattr(figure, "metadata", None) or {}
                 interp = meta.get("description") or meta.get("interpretation") or meta.get("engineering_notes")
                 if interp:
