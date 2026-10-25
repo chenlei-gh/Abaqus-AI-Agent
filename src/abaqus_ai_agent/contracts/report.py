@@ -2,6 +2,13 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Dict, Tuple
 
+from .conclusions import (
+    ReportConclusion,
+    ReportConclusionLayer,
+    ReportConclusionStatus,
+    build_report_conclusions,
+)
+
 @dataclass(frozen=True)
 class ReportFigure:
     kind: str
@@ -184,6 +191,7 @@ class EngineeringReportData:
     assumptions: Tuple[str, ...] = ()
     limitations: Tuple[str, ...] = ()
     classified_facts: Tuple[ReportFact, ...] = ()
+    conclusions: Tuple[ReportConclusion, ...] = ()
     evidence: Tuple[Any, ...] = ()
     provenance: Any = None
     result_intelligence: Any = None
@@ -250,6 +258,17 @@ class EngineeringReportData:
                 sections.get("self_healing"),
             ),
         )
+        run_metadata = getattr(run, "metadata", {}) or {}
+        sections.setdefault(
+            "conclusions",
+            build_report_conclusions(
+                sections.get("acceptance"),
+                objective_context=objective,
+                run_id=getattr(run, "id", ""),
+                model_name=getattr(run, "model_name", ""),
+                physics_domain=run_metadata.get("physics_domain") or run_metadata.get("domain") or "",
+            ),
+        )
         return cls(title or "Abaqus Engineering Analysis Report", objective=objective,
                    results=tuple(sections.pop("results", ()) or ()),
                    figures=tuple(sections.pop("figures", ()) or ()),
@@ -260,4 +279,5 @@ class EngineeringReportData:
                    result_intelligence=sections.pop("result_intelligence", None),
                    self_healing=sections.pop("self_healing", None),
                    classified_facts=sections.pop("classified_facts", ()),
+                   conclusions=sections.pop("conclusions", ()),
                    metadata=dict(metadata, **sections.pop("metadata", {})), **sections)

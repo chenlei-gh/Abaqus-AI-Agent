@@ -128,6 +128,7 @@ class DeterministicReportPipeline:
         inp_text: Optional[str] = None,
         required_preprocessing_figures: Sequence[str] = (),
         condition_fidelity: Any = None,
+        objective_context: str = "",
     ) -> Tuple[ReportDeliveryCard, ArtifactPointer, EngineeringReportData]:
         """Compile report, render HTML & Markdown, register artifacts, and produce LLM card."""
         # 0. Early Delivery Gate: Verify authorization BEFORE any file creation or disk I/O.
@@ -617,6 +618,7 @@ class DeterministicReportPipeline:
             self_healing=self_healing,
             provenance=report_provenance,
             extra_metadata={"deliverable_authorization": delivery_gate},
+            objective_context=objective_context,
         )
 
         # 3. Deterministically render Semantic HTML (Single authoritative deliverable, atomic publication).

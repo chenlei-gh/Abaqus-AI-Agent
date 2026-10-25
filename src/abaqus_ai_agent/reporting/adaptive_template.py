@@ -15,6 +15,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Dict, List, Optional, Sequence, Set, Tuple
 
+from ..contracts.conclusions import build_report_conclusions
 from ..contracts.report import EngineeringReportData, ReportFigure, classify_report_facts
 from .interpretation_card import InterpretationCard
 from .visualization_spec import VisualizationSpec
@@ -95,6 +96,7 @@ class AdaptiveReportBuilder:
         self_healing: Optional[Any] = None,
         provenance: Any = None,
         extra_metadata: Optional[Dict[str, Any]] = None,
+        objective_context: str = "",
     ) -> EngineeringReportData:
         """Deterministically assemble the polymorphic EngineeringReportData."""
         active_sections = self.determine_active_sections()
@@ -188,6 +190,13 @@ class AdaptiveReportBuilder:
             self_healing,
             limitation_source="interpretation_card.risk_notes",
         )
+        conclusions = build_report_conclusions(
+            acceptance_info,
+            objective_context=objective_context,
+            run_id=run_id,
+            model_name=str(model_info.get("name") or ""),
+            physics_domain=self.physics_domain,
+        )
 
         report_data = EngineeringReportData(
             title=title,
@@ -206,6 +215,7 @@ class AdaptiveReportBuilder:
             assumptions=tuple(assumptions),
             limitations=tuple(limitations),
             classified_facts=classified_facts,
+            conclusions=conclusions,
             result_intelligence=result_intelligence,
             self_healing=self_healing,
             provenance=provenance,

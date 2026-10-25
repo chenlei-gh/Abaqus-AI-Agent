@@ -11,6 +11,7 @@ from .contracts.results import ResultRequirement, ResultExtraction
 from .contracts.metrics import EngineeringMetric
 from .contracts.solver_selection import SolverSelection, SolverSelectionBlocked, select_solver
 from .contracts.report import EngineeringReportData, ReportFigure
+from .contracts.conclusions import ReportConclusion, ReportConclusionLayer, ReportConclusionStatus
 from .contracts.postprocess import PostProcessingProfile, profile_for_solver_selection
 from .reporting.figures import figure_specs_for_profile, capture_viewport_report_figure
 from .contracts.fatigue import FatigueAnalysisIntent, FatigueWorkflow, FatigueResult

@@ -1,6 +1,7 @@
 """Stable contracts between planning, grounding, execution and evidence."""
 
 from .engineering_checks import EngineeringCheck, EngineeringCheckReport
+from .conclusions import ReportConclusion, ReportConclusionLayer, ReportConclusionStatus
 from .provenance import AnalysisProvenance
 from .sensitivity import SensitivityCase, SensitivityResult, SensitivityReport
 from .uncertainty import UncertaintyParameter, UncertaintyScenario, UncertaintyReport

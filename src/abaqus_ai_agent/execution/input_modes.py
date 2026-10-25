@@ -1051,6 +1051,7 @@ def _attach_delivery_report_if_requested(
             include_animation=include_animation,
             provenance=issued,
             inp_text=inp_text,
+            objective_context=title,
         )
         html_path = eff_delivery_dir / "report.html"
         if not html_path.is_file():

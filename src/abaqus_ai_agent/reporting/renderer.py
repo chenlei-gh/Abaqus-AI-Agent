@@ -1166,6 +1166,10 @@ def render_markdown(report, language=None):
                 lines += ["```json", json.dumps(_plain(value), indent=2, ensure_ascii=False, default=str), "```", ""]
     conc_title = "## 19. Conclusion / 工程分析最终裁决结论" if is_zh else "## 19. Conclusion"
     lines += [conc_title, "", _conclusion(report, is_zh=is_zh), "", _attribution_note(report, is_zh=is_zh), ""]
+    conclusion_lines = _render_conclusion_binding(report, is_zh=is_zh)
+    if conclusion_lines:
+        bound_title = "## 19b. Conclusions & Evidence Binding / 结论与证据绑定" if is_zh else "## 19b. Conclusions & Evidence Binding"
+        lines += [bound_title, ""] + conclusion_lines
     return "\n".join(lines)
 
 
@@ -1494,6 +1498,11 @@ def render_html(report, language=None, base_dir=None):
     body_parts.append(f'<h2 class="section-heading">{html.escape(conc_title)}</h2>')
     body_parts.append(_render_rich_text_to_html(_conclusion(report, is_zh=is_zh), is_zh=is_zh))
     body_parts.append(f'<p class="report-quote">{html.escape(_attribution_note(report, is_zh=is_zh))}</p>')
+    conclusion_lines = _render_conclusion_binding(report, is_zh=is_zh)
+    if conclusion_lines:
+        bound_title = "19b. Conclusions & Evidence Binding / 结论与证据绑定" if is_zh else "19b. Conclusions & Evidence Binding"
+        body_parts.append(f'<h2 class="section-heading">{html.escape(bound_title)}</h2>')
+        body_parts.append(_render_section_lines_to_html(conclusion_lines, is_zh=is_zh))
 
     content_html = "\n".join(body_parts)
 
@@ -2050,3 +2059,40 @@ def _conclusion(report, is_zh=False):
     if is_zh:
         return f"{prefix}结构化验收准则核验未完全满足 (Acceptance criteria were not fully satisfied by the structured evidence supplied to this report)。{detail}"
     return f"{prefix}Acceptance criteria were not fully satisfied by the structured evidence supplied to this report.{detail}"
+
+def _render_conclusion_binding(report, is_zh=False):
+    conclusions = tuple(getattr(report, "conclusions", ()) or ())
+    if not conclusions:
+        return []
+
+    def field(item, name, default=""):
+        if isinstance(item, dict):
+            return item.get(name, default)
+        return getattr(item, name, default)
+
+    rows = []
+    for item in conclusions:
+        layer = field(item, "layer", "")
+        status = field(item, "status", "")
+        evidence = field(item, "evidence", ())
+        if isinstance(evidence, (list, tuple)):
+            evidence = "; ".join(str(value) for value in evidence)
+        rows.append([
+            str(field(item, "conclusion_id", "")),
+            str(getattr(layer, "value", layer)),
+            str(getattr(status, "value", status)),
+            str(field(item, "statement", "")),
+            str(evidence),
+            str(field(item, "scope", "")),
+            str(field(item, "source", "")),
+        ])
+    if is_zh:
+        headers = ["结论ID / ID", "层级 / Layer", "状态 / Status", "结论 / Conclusion", "证据 / Evidence", "适用范围 / Scope", "来源 / Source"]
+        note = "验收层 PASS 仅表示已列验收准则与前置门禁通过，不会把未匹配的工程目标升级为 PASS。"
+    else:
+        headers = ["ID", "Layer", "Status", "Conclusion", "Evidence", "Scope", "Source"]
+        note = (
+            "An ACCEPTANCE PASS covers only the listed criteria and gates. "
+            "It does not upgrade an ENGINEERING_OBJECTIVE that is NOT_PROVEN."
+        )
+    return [f"> {note}", "", _format_markdown_table(headers, rows), ""]

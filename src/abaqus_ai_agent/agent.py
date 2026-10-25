@@ -2091,6 +2091,7 @@ class AbaqusAIAgent:
                     self_healing=healing_result,
                     required_preprocessing_figures=required_figures,
                     condition_fidelity=fidelity_verdict,
+                    objective_context=getattr(intent, "description", "") or "",
                 )
                 report_md = render_markdown(det_report_data)
                 report_html_str = render_html(det_report_data, base_dir=out_dir)

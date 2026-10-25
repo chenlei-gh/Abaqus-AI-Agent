@@ -28,6 +28,7 @@ from .golden_registry import (
 )
 from .reporting.delivery import write_gated_engineering_report
 from .reporting.renderer import render_html
+from .contracts.conclusions import build_report_conclusions
 from .contracts.report import EngineeringReportData, classify_report_facts
 
 
@@ -785,6 +786,13 @@ def handle_report(args: argparse.Namespace) -> int:
         mechanism=raw.get("mechanism_topology") or raw.get("kinematics") or raw_unnormalized.get("mechanism"),
         provenance=raw.get("provenance") or raw_unnormalized.get("provenance"),
         classified_facts=classify_report_facts(results_list),
+        conclusions=build_report_conclusions(
+            acc_obj,
+            objective_context=objective,
+            run_id=str(raw.get("run_id") or raw_unnormalized.get("run_id") or ""),
+            model_name=str(raw.get("model_name") or title),
+            physics_domain=str(raw.get("physics_type") or raw.get("physics_domain") or ""),
+        ),
         metadata=metadata,
     )
 
