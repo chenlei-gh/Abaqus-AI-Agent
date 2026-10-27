@@ -1602,7 +1602,12 @@ class AbaqusAIAgent:
                 material=effective_mat_def or effective_material,
                 mesh=effective_mesh,
                 grounded_regions=grounded_regions,
-                submit_job=submit_job,
+                # Never embed a raw mdb.jobs[...].submit() in the compiled plan:
+                # plan actions execute through the executor and would bypass the
+                # pre-solve approval gate. The single canonical production
+                # outlet is AnalysisRunner (step 6 below), which performs the
+                # gated submission itself when submit_job=True.
+                submit_job=False,
             )
         except InvalidForQuestionError as exc:
             # The model's constraints conflict with the engineering question.

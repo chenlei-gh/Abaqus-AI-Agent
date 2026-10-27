@@ -1,0 +1,311 @@
+{
+  "schema_version": "live_report_gate_v2",
+  "timestamp": "2026-10-27T15:53:03.128038",
+  "run_id": "e2cfb7006e28",
+  "launcher": "C:\\SIMULIA\\Commands\\abaqus.bat",
+  "solver_version": "Abaqus 2025 Standard Implicit",
+  "nl_prompt": "Cantilever beam 100mm x 10mm x 10mm, structural steel Q235 (E=210000MPa, nu=0.3, yield=235MPa). Boundary condition: one end face fully fixed (encastre). Load: 200N downward concentrated force at the free end tip. Compute von Mises stress and displacement, and deliver the engineering report.",
+  "model_name": "Model_Live_Execution",
+  "job_name": "Job_Live_Execution",
+  "facts_source": "summary file (fresh, run-id matched)",
+  "process": {
+    "return_code": 0,
+    "settled": true,
+    "settle_note": null,
+    "stdout_tail": "",
+    "stderr_tail": "Abaqus License Manager checked out the following license:\n\"cae\" from Flexnet server DESKTOP-9EAL2I4\n<9998 out of 9999 licenses remain available>.\n"
+  },
+  "facts": {
+    "run_id": "e2cfb7006e28",
+    "task_status": "FAILED",
+    "summary_card_status": "FAILED",
+    "approval_workdir": null,
+    "candidate_id": null,
+    "execution_manifest_hash": null,
+    "engineering_status": "RESULT_VALID",
+    "run_state": "accepted",
+    "acceptance_passed": true,
+    "solver_completed": true,
+    "odb_path": "D:\\AbaqusProjects\\live_gate_kn4\\solver\\10224938-5932-4663-ab18-688b039cf418\\Job_Live_Execution.odb",
+    "errors": [
+      "Engineering status: DELIVERY_BLOCKED",
+      "Official delivery blocked: Official engineering delivery blocked: deliverable is False (acceptance_status=PASS). Only runs with verified evidence and valid PASS acceptance can be released as official deliverables. No report artifacts were written to disk."
+    ],
+    "delivery": {
+      "attempted": false,
+      "filed": false,
+      "error": null
+    },
+    "report_html_length": 0,
+    "metrics": {
+      "max_displacement": 0.0,
+      "max_mises": 0.0,
+      "reaction_force": 210435.0
+    },
+    "has_delivery_card": false,
+    "delivery_card": null,
+    "hotspot_count": 5,
+    "hotspots": [
+      {
+        "rank": 1,
+        "value": 0.0,
+        "field_name": "S",
+        "component": "Mises",
+        "unit": "MPa",
+        "coordinates": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "instance": "MAINPART-1",
+        "element_label": 1,
+        "node_label": null,
+        "description": "Peak S Mises concentration #1",
+        "metadata": {}
+      },
+      {
+        "rank": 2,
+        "value": 0.0,
+        "field_name": "S",
+        "component": "Mises",
+        "unit": "MPa",
+        "coordinates": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "instance": "MAINPART-1",
+        "element_label": 2,
+        "node_label": null,
+        "description": "Peak S Mises concentration #2",
+        "metadata": {}
+      },
+      {
+        "rank": 3,
+        "value": 0.0,
+        "field_name": "S",
+        "component": "Mises",
+        "unit": "MPa",
+        "coordinates": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "instance": "MAINPART-1",
+        "element_label": 3,
+        "node_label": null,
+        "description": "Peak S Mises concentration #3",
+        "metadata": {}
+      },
+      {
+        "rank": 4,
+        "value": 0.0,
+        "field_name": "S",
+        "component": "Mises",
+        "unit": "MPa",
+        "coordinates": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "instance": "MAINPART-1",
+        "element_label": 4,
+        "node_label": null,
+        "description": "Peak S Mises concentration #4",
+        "metadata": {}
+      },
+      {
+        "rank": 5,
+        "value": 0.0,
+        "field_name": "S",
+        "component": "Mises",
+        "unit": "MPa",
+        "coordinates": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "instance": "MAINPART-1",
+        "element_label": 5,
+        "node_label": null,
+        "description": "Peak S Mises concentration #5",
+        "metadata": {}
+      }
+    ],
+    "curve_count": 4,
+    "curves": [
+      {
+        "curve_name": "ALLSE_History",
+        "x_label": "Time",
+        "y_label": "ALLSE",
+        "x_unit": "s",
+        "y_unit": "",
+        "point_count": 2,
+        "min_y": 0.0,
+        "max_y": 0.0,
+        "peak_abs_y": 0.0,
+        "points": [
+          [
+            0.0,
+            0.0
+          ],
+          [
+            1.0,
+            0.0
+          ]
+        ],
+        "metadata": {
+          "step": "Step-1",
+          "region": "Assembly ASSEMBLY",
+          "variable": "ALLSE",
+          "odb_path": "D:\\AbaqusProjects\\live_gate_kn4\\solver\\10224938-5932-4663-ab18-688b039cf418\\Job_Live_Execution.odb"
+        }
+      },
+      {
+        "curve_name": "ALLIE_History",
+        "x_label": "Time",
+        "y_label": "ALLIE",
+        "x_unit": "s",
+        "y_unit": "",
+        "point_count": 2,
+        "min_y": 0.0,
+        "max_y": 0.0,
+        "peak_abs_y": 0.0,
+        "points": [
+          [
+            0.0,
+            0.0
+          ],
+          [
+            1.0,
+            0.0
+          ]
+        ],
+        "metadata": {
+          "step": "Step-1",
+          "region": "Assembly ASSEMBLY",
+          "variable": "ALLIE",
+          "odb_path": "D:\\AbaqusProjects\\live_gate_kn4\\solver\\10224938-5932-4663-ab18-688b039cf418\\Job_Live_Execution.odb"
+        }
+      },
+      {
+        "curve_name": "ETOTAL_History",
+        "x_label": "Time",
+        "y_label": "ETOTAL",
+        "x_unit": "s",
+        "y_unit": "",
+        "point_count": 2,
+        "min_y": 0.0,
+        "max_y": 0.0,
+        "peak_abs_y": 0.0,
+        "points": [
+          [
+            0.0,
+            0.0
+          ],
+          [
+            1.0,
+            0.0
+          ]
+        ],
+        "metadata": {
+          "step": "Step-1",
+          "region": "Assembly ASSEMBLY",
+          "variable": "ETOTAL",
+          "odb_path": "D:\\AbaqusProjects\\live_gate_kn4\\solver\\10224938-5932-4663-ab18-688b039cf418\\Job_Live_Execution.odb"
+        }
+      },
+      {
+        "curve_name": "ALLKE_History",
+        "x_label": "Time",
+        "y_label": "ALLKE",
+        "x_unit": "s",
+        "y_unit": "",
+        "point_count": 2,
+        "min_y": 0.0,
+        "max_y": 0.0,
+        "peak_abs_y": 0.0,
+        "points": [
+          [
+            0.0,
+            0.0
+          ],
+          [
+            1.0,
+            0.0
+          ]
+        ],
+        "metadata": {
+          "step": "Step-1",
+          "region": "Assembly ASSEMBLY",
+          "variable": "ALLKE",
+          "odb_path": "D:\\AbaqusProjects\\live_gate_kn4\\solver\\10224938-5932-4663-ab18-688b039cf418\\Job_Live_Execution.odb"
+        }
+      }
+    ],
+    "figure_paths": [
+      "D:\\AbaqusProjects\\live_gate_kn4\\solver\\10224938-5932-4663-ab18-688b039cf418\\Job_Live_Execution_hotspots.svg",
+      "D:\\AbaqusProjects\\live_gate_kn4\\solver\\10224938-5932-4663-ab18-688b039cf418\\Job_Live_Execution_ALLSE.svg",
+      "D:\\AbaqusProjects\\live_gate_kn4\\solver\\10224938-5932-4663-ab18-688b039cf418\\Job_Live_Execution_ALLIE.svg",
+      "D:\\AbaqusProjects\\live_gate_kn4\\solver\\10224938-5932-4663-ab18-688b039cf418\\Job_Live_Execution_ETOTAL.svg",
+      "D:\\AbaqusProjects\\live_gate_kn4\\solver\\10224938-5932-4663-ab18-688b039cf418\\Job_Live_Execution_ALLKE.svg"
+    ],
+    "derived_metrics": {
+      "force_balance": {
+        "applied_magnitude": 210435.0,
+        "reaction_magnitude": 210435.0,
+        "balance_error_percent": 0.0,
+        "is_balanced": true,
+        "applied_components": [
+          0.0,
+          210435.0,
+          0.0
+        ],
+        "reaction_components": [
+          0.0,
+          210435.0,
+          0.0
+        ],
+        "unit": "N"
+      },
+      "energy_stability": {
+        "total_energy_drift_ratio": 0.0,
+        "kinetic_energy_ratio": null,
+        "is_stable": true,
+        "notes": "ETOTAL drift ratio is 0.0000% (tolerance: 5.0%)."
+      },
+      "safety_factor": {
+        "max_stress": 0.0,
+        "yield_strength": 250.0,
+        "factor_of_safety": 249999999999.99997,
+        "margin_of_safety": 249999999998.99997,
+        "stress_component": "Mises",
+        "material_name": "Structural_Steel",
+        "unit": "MPa"
+      },
+      "metadata": {}
+    }
+  },
+  "verdict": {
+    "verdict": "FAIL",
+    "reasons": [
+      "gate failed: task_status==COMPLETED",
+      "gate failed: report_filed",
+      "required artifact missing or unverified: engineering_report.html"
+    ]
+  },
+  "artifacts": {
+    "Job_Live_Execution.odb": {
+      "sha256": "12c7ddf95d18777bbe35dc85ccb0d13c82c44ad2595bd7f5c19aa997e67a9b26",
+      "size_bytes": 459132,
+      "exists": true
+    },
+    "engineering_report.html": {
+      "exists": false
+    }
+  },
+  "required_artifacts": [
+    "Job_Live_Execution.odb",
+    "engineering_report.html"
+  ]
+}

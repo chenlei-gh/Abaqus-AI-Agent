@@ -270,3 +270,49 @@ def test_solve_requirement_natural_language_completed():
     assert result.report_html is not None
     assert "diagnostic-banner" in result.report_html
     assert result.metadata.get("formal_report_written") is False
+def test_solve_requirement_never_embeds_submit_in_plan_actions():
+    """Regression for the pilot-2 live finding (2026-10-27): with
+    submit_job=True the plan compiler used to embed
+    ``mdb.jobs[...].submit()`` inside the job-creation python action, which
+    executes through the executor *before* the gated AnalysisRunner ran --
+    the solve completed while the task simultaneously reported
+    AWAITING_APPROVAL. Submission must only happen through the gated runner.
+    """
+    executor = OdbBackedExecutor()
+    agent = AbaqusAIAgent(executor)
+
+    geom = IntentGeometrySpec(shape="cantilever_box", length=120.0, width=12.0, height=8.0)
+    mat = MaterialDefinition(
+        name="Steel_Q235",
+        unit_system="MM_N_MPA",
+        elastic=ElasticProperties(youngs_modulus=210000.0, poisson_ratio=0.3),
+        density=7.85e-9,
+    )
+    intent = EngineeringIntent(
+        id="REQ-NO-EMBEDDED-SUBMIT",
+        kind="linear_static",
+        description="Cantilever beam under vertical 1kN tip load",
+        material={"name": "Steel_Q235", "elastic_modulus": 210000.0,
+                  "poisson_ratio": 0.3, "unit": "MPa"},
+        boundary_conditions=({"type": "encastre", "region": "RootFace"},),
+        loads=({"type": "concentrated_force", "region": "TipFace",
+               "magnitude": 1000.0, "direction": "-Y"},),
+        metadata={"dimensions": {"shape": "cantilever_box", "length": 120.0,
+                                 "width": 12.0, "height": 8.0}},
+    )
+    result = agent.solve_requirement(
+        requirement=intent, geometry=geom, material=mat, submit_job=True,
+    )
+
+    # No script that creates a job may also submit it in the same fragment.
+    for script in executor.executed_scripts:
+        if "mdb.Job(name=" in script:
+            assert ".submit(" not in script, (
+                "plan action embeds a solver submission that bypasses the "
+                "approval gate"
+            )
+    # Same invariant on the rendered plan script.
+    job_block = result.plan.cae_script.split("mdb.Job(name=", 1)
+    if len(job_block) > 1:
+        creation_segment = job_block[1].split("print(", 1)[0]
+        assert ".submit(" not in creation_segment

@@ -246,6 +246,60 @@ def approve_current_candidate(
     return approved
 
 
+def _import_project_approval(workdir: Path, candidate: "ExecutionCandidate") -> Optional["ExecutionCandidate"]:
+    """Adopt an approval recorded for identical candidate content in a sibling
+    run directory of the same project.
+
+    Candidate ids are content-addressed (job name + manifest hash), so an
+    approval recorded for the same candidate id in a sibling ``solver/<run>``
+    dir is an approval of byte-identical content. The search is deliberately
+    restricted to the ExternalProjectContext layout (parent dir named
+    ``solver``) so arbitrary neighbouring directories are never scanned.
+    Submission still has to pass ``assert_submittable`` against the deck bytes
+    in THIS workdir, so a drifted deck cannot ride on an imported approval.
+    """
+    from dataclasses import replace as _dc_replace
+
+    from ..contracts.approval import (
+        CandidateStatus,
+        load_candidate,
+        write_candidate,
+    )
+
+    solver_root = workdir.parent
+    if solver_root.name != "solver" or not solver_root.is_dir():
+        return None
+    for sibling_file in sorted(solver_root.glob("*/execution_candidate.json")):
+        try:
+            if sibling_file.parent.resolve() == workdir.resolve():
+                continue
+            other = load_candidate(sibling_file.parent)
+        except Exception:
+            continue
+        if other is None:
+            continue
+        if other.candidate_id != candidate.candidate_id:
+            continue
+        if other.status is not CandidateStatus.APPROVED or other.approval is None:
+            continue
+        record = _dc_replace(
+            other.approval,
+            note=(
+                (other.approval.note + " | " if other.approval.note else "")
+                + f"approval adopted from sibling run dir: {sibling_file.parent.name}"
+            ),
+        )
+        adopted = _dc_replace(
+            candidate,
+            status=CandidateStatus.APPROVED,
+            approval=record,
+            review_report_hash=record.review_report_hash,
+        )
+        write_candidate(workdir, adopted)
+        return adopted
+    return None
+
+
 def enforce_pre_solve_approval(
     *,
     workdir: Any,
@@ -284,6 +338,10 @@ def enforce_pre_solve_approval(
         action_plan_hash=action_plan_hash,
         run_id=run_id,
     )
+    if candidate.status is not CandidateStatus.APPROVED:
+        imported = _import_project_approval(workdir, candidate)
+        if imported is not None:
+            candidate = imported
     if candidate.status is not CandidateStatus.APPROVED:
         raise PreSolveApprovalRequired(candidate, workdir)
     return assert_submittable(

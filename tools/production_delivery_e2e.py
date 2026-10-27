@@ -143,6 +143,7 @@ from abaqus_ai_agent.actions.builders import (
 from abaqus_ai_agent.actions.runner import execute
 from abaqus_ai_agent.workflow.static import build_static_plan
 from abaqus_ai_agent.execution.client import InProcessExecutor
+from abaqus_ai_agent.execution.kernel_namespace import KernelNamespace, build_cae_seed
 from abaqus_ai_agent.execution.analysis_run import AnalysisRunner
 from abaqus_ai_agent.execution.odb import extract_field
 from abaqus_ai_agent.contracts.intent import EngineeringIntent
@@ -167,28 +168,10 @@ project_ctx = ExternalProjectContext.create(
     enforce_outside_repo=True,
 )
 
+_NS = KernelNamespace(seed_code=build_cae_seed())
+
 def _run_code(code):
-    buf = io.StringIO()
-    old_stdout = sys.stdout
-    sys.stdout = buf
-    try:
-        exec(compile(code, '<AIAgent-ProdDelivery>', 'exec'), globals(), globals())
-    finally:
-        sys.stdout = old_stdout
-    out = buf.getvalue().strip()
-    res = globals().get('result')
-    if isinstance(res, dict):
-        return res
-    if out:
-        last_line = out.splitlines()[-1].strip()
-        try:
-            val = ast.literal_eval(last_line)
-            if isinstance(val, dict):
-                return val
-        except Exception:
-            pass
-        return {'status': 'COMPLETED', 'stdout': out, 'output': out}
-    return {'status': 'COMPLETED'}
+    return _NS.execute(code, '<AIAgent-ProdDelivery>')
 
 class CAEInProcessExecutor(InProcessExecutor):
     launcher = "abaqus"
@@ -320,7 +303,10 @@ run = runner.run(
 )
 
 if not run.odb_path:
-    print("RUN_FAILED_DIAGNOSTICS:", getattr(run, "diagnostics", None), getattr(run, "engineering_status", None), getattr(run, "state", None))
+    eng = getattr(run, "engineering_status", None)
+    if eng == 'SUBMISSION_BLOCKED':
+        print('AIAgent_PROD_DELIVERY_BLOCKED:AWAITING_APPROVAL')
+    print("RUN_FAILED_DIAGNOSTICS:", getattr(run, "diagnostics", None), eng, getattr(run, "state", None))
     raise RuntimeError('Production delivery run did not produce an authentic ODB path')
 
 reaction_field = extract_field(
@@ -486,6 +472,7 @@ def run_production_delivery_e2e(
     timeout: int = 3600,
     keep_temp: bool = False,
     output_path: Optional[Path] = None,
+    project_dir: Optional[Path] = None,
 ) -> Dict[str, Any]:
     if launcher:
         resolved_launcher = find_abaqus_executable(launcher)
@@ -499,14 +486,26 @@ def run_production_delivery_e2e(
     if not resolved_launcher:
         raise RuntimeError(f"Authentic Abaqus launcher not found on host machine (launcher={launcher!r}).")
 
-    # 1. Create an isolated external project context outside the repository
-    temp_dir = Path(tempfile.mkdtemp(prefix="abaqus_prod_proj_")).resolve()
+    # 1. Create (or reuse, for an approved phase-B resume) an isolated external
+    # project context outside the repository.
+    temp_dir = Path(project_dir).resolve() if project_dir else Path(
+        tempfile.mkdtemp(prefix="abaqus_prod_proj_")
+    ).resolve()
     try:
         project_ctx = ExternalProjectContext.create(
             project_root=temp_dir,
             project_name="StaticProductionDelivery",
             enforce_outside_repo=True,
         )
+
+        # On a reused project dir, remove only the verdict artifacts this tool
+        # owns so a stale report or stale .rpy can never be mistaken for this
+        # run. The approval ledger (.state) and execution_candidate.json are
+        # deliberately preserved: phase B needs them.
+        for stale_name in ("production_delivery_report.json", "abaqus.rpy"):
+            stale = project_ctx.working_dir / stale_name
+            if stale.is_file():
+                stale.unlink()
 
         cae_script_path = project_ctx.working_dir / "production_delivery_cae_script.py"
         script_code = build_production_delivery_cae_script(
@@ -523,6 +522,26 @@ def run_production_delivery_e2e(
         )
         process = executor.run_nogui(str(cae_script_path), timeout=timeout)
         output_text = (process.stdout or "") + "\n" + (process.stderr or "")
+
+        # Host terminal-state gates (fail closed): a non-zero exit or
+        # still-changing artifacts invalidate any report we might read below.
+        blocked_marker = "AIAgent_PROD_DELIVERY_BLOCKED:AWAITING_APPROVAL" in output_text
+        if process.return_code != 0 and not blocked_marker:
+            raise RuntimeError(
+                f"CAE host process exited with return_code={process.return_code}; "
+                f"refusing to trust any report from a failed process.\n{output_text[-2000:]}"
+            )
+        if getattr(process, "settled", None) is not True and not blocked_marker:
+            raise RuntimeError(
+                f"artifacts not settled after launcher exit: "
+                f"{getattr(process, 'settle_note', None)!r}; refusing to read unstable outputs."
+            )
+        if blocked_marker:
+            raise RuntimeError(
+                "Production delivery blocked by the pre-solve approval gate "
+                "(AWAITING_APPROVAL). Approve the candidate in the project dir "
+                "and re-run with --project-dir pointing at the same directory."
+            )
 
         report = None
         report_file = project_ctx.working_dir / "production_delivery_report.json"
@@ -584,6 +603,7 @@ def main(argv=None):
     parser.add_argument("--launcher", default=None, help="Path to authentic Abaqus launcher")
     parser.add_argument("--timeout", type=int, default=3600, help="Process timeout in seconds")
     parser.add_argument("--keep-temp", action="store_true", help="Preserve external project sandbox")
+    parser.add_argument("--project-dir", default=None, help="Reuse an existing external project dir (phase-B resume after approval)")
     parser.add_argument("--output", default=None, help="Optional output JSON path for evidence record")
     args = parser.parse_args(argv)
 
@@ -595,8 +615,9 @@ def main(argv=None):
     report = run_production_delivery_e2e(
         launcher=args.launcher,
         timeout=args.timeout,
-        keep_temp=args.keep_temp,
+        keep_temp=args.keep_temp or bool(args.project_dir),
         output_path=out_path,
+        project_dir=Path(args.project_dir) if args.project_dir else None,
     )
 
     print("\n[ACCEPTANCE PROVENANCE SUMMARY]")

@@ -1,0 +1,61 @@
+{
+  "schema_version": "live_report_gate_v2",
+  "timestamp": "2026-10-27T15:44:27.054912",
+  "run_id": "96a52d105f8d",
+  "launcher": "C:\\SIMULIA\\Commands\\abaqus.bat",
+  "solver_version": "Abaqus 2025 Standard Implicit",
+  "nl_prompt": "Cantilever beam 100mm x 10mm x 10mm, structural steel Q235 (E=210000MPa, nu=0.3, yield=235MPa). Boundary condition: one end face fully fixed (encastre). Load: 200N downward concentrated force at the free end tip. Compute von Mises stress and displacement, and deliver the engineering report.",
+  "model_name": "Model_Live_Execution",
+  "job_name": "Job_Live_Execution",
+  "facts_source": "summary file (fresh, run-id matched)",
+  "process": {
+    "return_code": 0,
+    "settled": true,
+    "settle_note": null,
+    "stdout_tail": "",
+    "stderr_tail": "Abaqus License Manager checked out the following license:\n\"cae\" from Flexnet server DESKTOP-9EAL2I4\n<9998 out of 9999 licenses remain available>.\n"
+  },
+  "facts": {
+    "run_id": "96a52d105f8d",
+    "task_status": "BLOCKED",
+    "summary_card_status": "AWAITING_APPROVAL",
+    "approval_workdir": "D:\\AbaqusProjects\\live_gate_kn4\\solver\\96483171-867b-4ce4-9253-14cafb58638a",
+    "candidate_id": "Job_Live_Execution-76b4b383d001",
+    "execution_manifest_hash": "76b4b383d001e10ca48eda47c855a103920bfe44b83f612102a8f22c960b3723",
+    "engineering_status": null,
+    "run_state": null,
+    "acceptance_passed": false,
+    "solver_completed": false,
+    "odb_path": null,
+    "errors": [
+      "solver submission blocked: execution candidate 'Job_Live_Execution-76b4b383d001' is PROPOSED. Review 'pre_solve_review.html' in 'D:\\AbaqusProjects\\live_gate_kn4\\solver\\96483171-867b-4ce4-9253-14cafb58638a', then approve with: python -m abaqus_ai_agent approve --workdir \"D:\\AbaqusProjects\\live_gate_kn4\\solver\\96483171-867b-4ce4-9253-14cafb58638a\" --by <name>. Re-run with the same workdir afterwards; any content change supersedes the approval and forces a new review."
+    ],
+    "delivery": {
+      "attempted": false,
+      "filed": false,
+      "error": null
+    },
+    "report_html_length": 0,
+    "metrics": {},
+    "has_delivery_card": false,
+    "delivery_card": null
+  },
+  "verdict": {
+    "verdict": "AWAITING_APPROVAL",
+    "reasons": [],
+    "candidate_id": "Job_Live_Execution-76b4b383d001",
+    "execution_manifest_hash": "76b4b383d001e10ca48eda47c855a103920bfe44b83f612102a8f22c960b3723"
+  },
+  "artifacts": {
+    "Job_Live_Execution.odb": {
+      "exists": false
+    },
+    "engineering_report.html": {
+      "exists": false
+    }
+  },
+  "required_artifacts": [
+    "Job_Live_Execution.odb",
+    "engineering_report.html"
+  ]
+}

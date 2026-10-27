@@ -180,3 +180,64 @@ modified_time，1 个是 .msg 文件 1 字节宽度差（求解耗时字符串�
 
 结论：试点 1 通过。`static_golden_e2e` 的命名空间迁移保持行为不变，
 审批门拒绝与批准两条路径均独立取证。
+
+## 8. 集中整改与试点 2/3 验证结果（已完成）
+
+按集中审查意见整改了 5 组阻塞问题并补齐 T1-T8 测试缺口。
+**整改过程中发现一个审查清单之外的 P0 级真实缺陷**（试点 2 Phase A 真机暴露）：
+
+### 8.0 新发现：计划内嵌提交绕过审批门（已修复）
+
+试点 2 第一次 Phase A 运行中，审批门正确返回 BLOCKED/AWAITING_APPROVAL，
+但 `.sta` 显示求解已完成——`compile_engineering_intent(submit_job=True)`
+在 job 创建动作中内嵌 `mdb.jobs[...].submit()`（planning/compiler.py），
+该动作经 `apply_plan_with_evidence` 在门介入前就执行了求解。
+修复：`agent.py` 调用编译器时硬编码 `submit_job=False`（唯一规范出口
+AnalysisRunner 自行完成受门控的提交），并加回归测试
+`test_solve_requirement_never_embeds_submit_in_plan_actions`
+（已验证该测试在还原 bug 时失败）。修复后 Phase A 复跑：
+无 .sta/.odb，只有编译后的 INP——求解确实未被提交。
+
+### 8.1 试点 2（run_live_report_gate）整改项
+
+- P0-1：模板缩进 TabError 修复；模板从 f-string 改为 % 格式化（消除转义雷区）；
+  新增 T1 测试对渲染产物做 AST 解析（该 bug 意味着此工具此前从未成功运行过）。
+- P0-2：删除无条件 `AIAgent_LIVE_GATE_SUCCESS`；CAE 侧只序列化 facts
+  （BEGIN/END 标记包裹），verdict 由宿主侧 `compute_live_gate_verdict` 纯函数计算；
+  `[Audit PASS]` 不再无条件输出；退出码按 verdict 区分（PASS=0/AWAITING=2/FAIL=1）。
+- P0-3：非空 workdir 拒绝运行（`--reuse-workdir` 仅限 Phase B）；每次运行唯一
+  run_id 嵌入 facts 与摘要文件名；rpy/摘要回退均校验 run_id；产物 mtime 必须
+  晚于启动时刻。
+- P1-4：PASS 需要全部门禁（进程 rc、settled、run 身份、任务状态、求解终态、
+  验收、交付落盘、必需产物哈希）；DELIVERY_BLOCKED 单独分类。
+- 默认提示词修复（原文件中文已损坏为乱码；英文提示词需显式边界条件措辞才能
+  通过意图解析——`missing_boundary_constraints` 为实测结论）。
+- 顺带修复：solve_requirement(require_production=True) 需要 ExternalProjectContext
+  （REQ-ISO-003），模板已接入；求解异常时 facts 仍兜底输出（task_status=CRASHED）。
+- 跨运行批准引入：`approval_service._import_project_approval`——候选 ID 内容寻址，
+  仅限 `solver/<run_id>` 同级布局，漂移仍由 assert_submittable 拦截；5 个新测试覆盖。
+
+真机证据：Phase A `machine_validation/live_gate_kn_phase_a.json`
+（AWAITING_APPROVAL，无求解产物）；Phase B `live_gate_kn_phase_b.json`
+（批准被跨运行采用、求解完成、验收 PASS，终态 DELIVERY_BLOCKED——
+E1 已记录的正式交付子系统既有行为，与本次迁移无关，未做扩大处理）。
+遗留观察：Phase B 中 agent 对 200N 载荷的规划结果反力为 210435N、
+max_mises 提取为 0，属 agent 规划/提取质量问题，已如实记录在证据中。
+
+### 8.2 试点 3（production_delivery_e2e）整改项
+
+- P1-5：宿主终态门禁——`return_code != 0` 或 `settled is not True` 时失败关闭，
+  不再读取任何报告；审批拦截有专属标记与可操作错误信息。
+- 新增 `--project-dir` 支持两阶段（复用时仅清理本工具拥有的判定文件，
+  台账与候选保留）。
+- `_run_code` 迁移至 KernelNamespace；T5 伪内核异常注入测试通过
+  （异常传播、无陈旧 result、调用方隔离）。
+
+真机证据：Phase A 被拦截（无 ODB）；批准后 Phase B 全量严格契约通过：
+deliverable=True、acceptance PASS、RESULT_VALID、反力平衡 0.00% 误差、
+位移 2.0686mm（与 static golden 逐位一致）、manifest 签名与 ODB 哈希一致。
+证据：`machine_validation/production_delivery_kn.json`。
+
+### 8.3 离线门禁
+
+T1-T8 全部落实为自动化测试；全量离线回归 2478 passed。

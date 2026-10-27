@@ -369,3 +369,91 @@ def test_dead_prior_submission_allows_resubmit(tmp_path):
     diag = run.diagnostics[0]
     assert diag.get("pre_solve_approval_required") is True
     assert not diag.get("duplicate_submission_blocked")
+# --- cross-run approval adoption (solver/<run_id> sibling layout) ---------------
+
+
+def _register(workdir, job_name="Job-X"):
+    from abaqus_ai_agent.execution.approval_service import ensure_candidate
+
+    return ensure_candidate(
+        workdir,
+        job_name=job_name,
+        inp_path=workdir / f"{job_name}.inp",
+        solver_config={"solver": "standard"},
+    )
+
+
+def _enforce(workdir, job_name="Job-X"):
+    from abaqus_ai_agent.execution.approval_service import enforce_pre_solve_approval
+
+    return enforce_pre_solve_approval(
+        workdir=workdir,
+        job_name=job_name,
+        solver_config={"solver": "standard"},
+        policy="required",
+    )
+
+
+def test_approval_adopted_from_sibling_run_dir(tmp_path):
+    run_a = tmp_path / "solver" / "run-a"
+    run_b = tmp_path / "solver" / "run-b"
+    _plant_deck(run_a, "Job-X")
+    _plant_deck(run_b, "Job-X")
+    _register(run_a)
+    approve_current_candidate(run_a, approved_by="tester")
+
+    admitted = _enforce(run_b)
+    assert admitted.status is CandidateStatus.APPROVED
+    assert "adopted from sibling run dir: run-a" in (admitted.approval.note or "")
+    # adoption persisted: run-b now carries its own approved record
+    assert load_candidate(run_b).status is CandidateStatus.APPROVED
+
+
+def test_adoption_requires_identical_content(tmp_path):
+    run_a = tmp_path / "solver" / "run-a"
+    run_b = tmp_path / "solver" / "run-b"
+    _plant_deck(run_a, "Job-X", DECK_V1)
+    _plant_deck(run_b, "Job-X", DECK_V2)  # drifted content -> different candidate id
+    _register(run_a)
+    approve_current_candidate(run_a, approved_by="tester")
+
+    with pytest.raises(PreSolveApprovalRequired):
+        _enforce(run_b)
+
+
+def test_unapproved_sibling_is_not_adopted(tmp_path):
+    run_a = tmp_path / "solver" / "run-a"
+    run_b = tmp_path / "solver" / "run-b"
+    _plant_deck(run_a, "Job-X")
+    _plant_deck(run_b, "Job-X")
+
+    with pytest.raises(PreSolveApprovalRequired):
+        _enforce(run_b)
+
+
+def test_adoption_scoped_to_solver_layout(tmp_path):
+    # a flat workdir whose parent is NOT named "solver" must never scan siblings
+    proj_a = tmp_path / "projA"
+    proj_b = tmp_path / "projB"
+    _plant_deck(proj_a, "Job-X")
+    _plant_deck(proj_b, "Job-X")
+    _register(proj_a)
+    approve_current_candidate(proj_a, approved_by="tester")
+
+    with pytest.raises(PreSolveApprovalRequired):
+        _enforce(proj_b)
+
+
+def test_adopted_approval_still_requires_matching_deck(tmp_path):
+    run_a = tmp_path / "solver" / "run-a"
+    run_b = tmp_path / "solver" / "run-b"
+    _plant_deck(run_a, "Job-X")
+    _plant_deck(run_b, "Job-X")
+    _register(run_a)
+    approved = approve_current_candidate(run_a, approved_by="tester")
+    # adopt once, then drift the deck in run-b
+    admitted = _enforce(run_b)
+    assert admitted.status is CandidateStatus.APPROVED
+    (run_b / "Job-X.inp").write_text(DECK_V2, encoding="utf-8")
+    with pytest.raises(Exception):
+        _enforce(run_b)
