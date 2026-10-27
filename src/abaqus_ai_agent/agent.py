@@ -1102,7 +1102,8 @@ class AbaqusAIAgent:
                      engineering_intent=None, postprocess_profile=None,
                      action_plan=(), environment=None, timeout=3600, workdir=None,
                      require_production=None, project_context=None,
-                     license_wait_seconds=None, job_options=None, physics_domain=None):
+                     license_wait_seconds=None, job_options=None, physics_domain=None,
+                     approval_policy=None):
         from .execution.analysis_run import AnalysisRunner
         from .telemetry.phase_profile import PhaseProfiler
         cname = getattr(self.executor, "__class__", None).__name__ or ""
@@ -1129,7 +1130,8 @@ class AbaqusAIAgent:
             environment=environment, timeout=timeout, workdir=workdir,
             require_production=require_production, project_context=project_context,
             phase_profiler=profiler, license_wait_seconds=license_wait_seconds,
-            job_options=job_options, physics_domain=physics_domain)
+            job_options=job_options, physics_domain=physics_domain,
+            approval_policy=approval_policy)
         self._persist_phase_profile(profiler, run)
         return run
 
@@ -1184,7 +1186,24 @@ class AbaqusAIAgent:
             except Exception:
                 pass
 
-    def submit(self, job_name, wait=False):
+    def submit(self, job_name, wait=False, approval_policy=None):
+        # Bare job submission is still a production submission point: it must
+        # pass the same pre-solve approval gate as the canonical runner path
+        # (see docs/presolve-approval-entry-matrix.md, entry E4).
+        from .execution.approval_service import enforce_pre_solve_approval
+
+        workdir = getattr(self.executor, "workdir", None) or os.getcwd()
+        enforce_pre_solve_approval(
+            workdir=workdir,
+            job_name=job_name,
+            solver_config={"mode": "cae_session_submit", "job_name": job_name},
+            executor=self.executor,
+            policy=approval_policy,
+            ensure_deck=(
+                (lambda: self.executor.execute(f"mdb.jobs[{job_name!r}].writeInput(consistencyChecking=ON)"))
+                if hasattr(self.executor, "execute") else None
+            ),
+        )
         from .execution.jobs import JobController
         return JobController(self.executor).submit(job_name, wait=wait)
 
@@ -1307,7 +1326,7 @@ class AbaqusAIAgent:
         mesh=None,
         grounded_regions=None,
         timeout=3600,
-        submit_job=True,
+        submit_job=False,
         router_strict=False,
         odb_path=None,
         result_values=None,
@@ -1723,6 +1742,85 @@ class AbaqusAIAgent:
             physics_domain=getattr(capability, "physics_domain", None),
             **kwargs,
         )
+
+        # 6.4. Phase A stop: the runner refused submission pending human approval.
+        # Render the full pre-solve review report (richer than the runner's
+        # minimal fallback) into the run workdir and return a BLOCKED result.
+        # Self-healing below already skips SUBMISSION_BLOCKED runs.
+        approval_diag = next(
+            (d for d in (getattr(run, "diagnostics", ()) or ())
+             if isinstance(d, dict) and d.get("pre_solve_approval_required")),
+            None,
+        )
+        if approval_diag is not None:
+            from .contracts.approval import load_candidate
+            from .reporting.review import render_pre_solve_review
+
+            review_workdir = approval_diag.get("workdir") or target_workdir
+            candidate = None
+            try:
+                candidate = load_candidate(review_workdir)
+            except Exception:
+                candidate = None
+            if candidate is not None:
+                sel = (getattr(run, "metadata", {}) or {}).get("solver_selection")
+                loads = getattr(intent, "loads", ()) or ()
+                bcs = getattr(intent, "boundary_conditions", ()) or ()
+                criteria_preview = list(criteria or ())
+                sections = {
+                    "Model & mesh / 模型与网格": {
+                        "model_name": plan.model_name,
+                        "part_name": plan.part_name,
+                        "unit_system": getattr(intent, "unit_system", None),
+                        "mesh_requirements": str(getattr(intent, "mesh_requirements", "") or "") or None,
+                        "mesh_quality": str(mesh_quality_from_plan)[:400] if mesh_quality_from_plan else None,
+                    },
+                    "Material / 材料": {
+                        "material": str(effective_material)[:400] if effective_material else None,
+                    },
+                    "Analysis settings / 分析设置": {
+                        "solver": getattr(sel, "solver", None),
+                        "strategy": getattr(sel, "strategy", None),
+                        "requires_user_confirmation": getattr(sel, "requires_user_confirmation", None),
+                    },
+                    "Loads / 载荷": {
+                        f"load_{i}": str(item)[:300] for i, item in enumerate(loads)
+                    },
+                    "Boundary conditions / 边界条件": {
+                        f"bc_{i}": str(item)[:300] for i, item in enumerate(bcs)
+                    },
+                    "Acceptance preview / 验收预览": {
+                        f"criterion_{i}": str(item)[:300] for i, item in enumerate(criteria_preview)
+                    },
+                }
+                notes = [
+                    "Mesh quality, acceptance and any result-dependent checks are evaluated "
+                    "only after the solve; nothing on this page is a solved result.",
+                ]
+                if (getattr(run, "metadata", {}) or {}).get("solver_selection_confirmation_pending"):
+                    notes.append(
+                        "Solver selection was auto-derived and flagged as requiring user "
+                        "confirmation; approving this candidate IS that confirmation."
+                    )
+                try:
+                    render_pre_solve_review(review_workdir, candidate, sections=sections, notes=notes)
+                except Exception:
+                    pass
+            return EngineeringTaskResult(
+                status=TaskStatus.BLOCKED,
+                intent=intent,
+                capability=capability,
+                plan=plan,
+                errors=(str(approval_diag.get("error") or "pre-solve approval required"),),
+                summary_card={
+                    "status": "AWAITING_APPROVAL",
+                    "engineering_status": "SUBMISSION_BLOCKED",
+                    "candidate_id": approval_diag.get("candidate_id"),
+                    "execution_manifest_hash": approval_diag.get("execution_manifest_hash"),
+                    "workdir": str(review_workdir) if review_workdir else None,
+                    "review_report": approval_diag.get("review_report"),
+                },
+            )
 
         # 6.5. P1.4 Automated Solver Failure Diagnostics & Controlled Self-Healing
         run_state = getattr(run, "state", None)

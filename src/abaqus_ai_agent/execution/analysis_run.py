@@ -9,6 +9,7 @@ from typing import Any, Dict, Optional, Tuple
 
 from .jobs import JobController, JobState, JobStatus
 from ..contracts.solver_selection import SolverSelectionBlocked
+from .approval_service import PreSolveApprovalRequired
 from ..engineering_status import EngineeringStatus
 from ..evidence.result import summarize_odb
 from ..evidence.model import Evidence, EvidenceBundle
@@ -646,7 +647,7 @@ class AnalysisRunner:
             phase_profiler=None, license_wait_seconds=None,
             postprocess_profile=None, workdir=None, physics_domain=None, require_evidence=None,
             require_production=None, project_context=None, elastic_validity=None,
-            inp_text=None, job_options=None):
+            inp_text=None, job_options=None, approval_policy=None):
         if require_production is None:
             # Explicit test flag via environment or executor attribute takes precedence
             is_explicit_test = (
@@ -841,6 +842,52 @@ class AnalysisRunner:
             except Exception:
                 # Snapshotting is an index, never a gate on execution.
                 pass
+
+        # Duplicate-submission guard (production path): if this workdir's ledger
+        # still claims a live or finished submission for the same job, physical
+        # probes in reconciliation decide before we overwrite the ledger and
+        # resubmit. An approved candidate never authorizes a blind resubmit over
+        # a live or completed solver run. Runs on test doubles skip this, exactly
+        # like the approval gate.
+        from .approval_service import POLICY_REQUIRED, resolve_approval_policy
+
+        if (
+            resolve_approval_policy(explicit=approval_policy, executor=self.executor) == POLICY_REQUIRED
+            and _ledger_api is not None
+        ):
+            from .reconciliation import (
+                ReconciliationAction,
+                default_ledger_path,
+                load_snapshot,
+                reconcile_run_state,
+            )
+
+            _prior_snapshot = load_snapshot(default_ledger_path(workdir))
+            if (
+                _prior_snapshot is not None
+                and _prior_snapshot.job_name == job_name
+                and _prior_snapshot.phase in ("SOLVING", "RUNNING", "COMPLETED")
+            ):
+                _recon = reconcile_run_state(_prior_snapshot, allow_git_drift=True)
+                if _recon.action is not ReconciliationAction.CLEANUP_AND_RESUBMIT:
+                    return run.with_state(
+                        AnalysisRunState.FAILED,
+                        engineering_status=EngineeringStatus.SUBMISSION_BLOCKED.value,
+                        diagnostics=({
+                            "error": (
+                                "duplicate submission guard: workdir ledger phase="
+                                f"{_prior_snapshot.phase} for job '{job_name}', "
+                                f"reconciliation verdict={_recon.action.value}. "
+                                f"{_recon.recommended_action}"
+                            ),
+                            "duplicate_submission_blocked": True,
+                            "reconciliation_action": _recon.action.value,
+                            "prior_ledger_phase": _prior_snapshot.phase,
+                            "prior_run_id": _prior_snapshot.run_id,
+                        },))
+                    # The prior ledger stays untouched on purpose: it is the
+                    # evidence of the live/finished submission this run must
+                    # not erase.
 
         _persist_ledger("PREFLIGHTED", run)
         try:
@@ -1168,6 +1215,32 @@ class AnalysisRunner:
             # while recording is noted and swallowed; the job status and the run state
             # machine below are untouched. ``phase_profiler is None`` (the default)
             # skips all of this, so existing callers see no behaviour change.
+            # Pre-solve approval gate (Phase A/B boundary): the job may only be
+            # submitted against an APPROVED execution candidate bound to the exact
+            # solver deck on disk. Test doubles resolve to policy "disabled"; see
+            # docs/presolve-approval-entry-matrix.md.
+            from .approval_service import enforce_pre_solve_approval
+
+            _gate_selection = locals().get("selection")
+            enforce_pre_solve_approval(
+                workdir=workdir,
+                job_name=job_name,
+                run_id=run_id,
+                solver_config={
+                    "solver": getattr(_gate_selection, "solver", None),
+                    "strategy": getattr(_gate_selection, "strategy", None),
+                },
+                executor=self.executor,
+                policy=approval_policy,
+                model_hash=run.provenance.model_hash,
+                intent_hash=run.provenance.intent_hash,
+                action_plan_hash=run.provenance.action_plan_hash,
+                ensure_deck=(
+                    (lambda: self.executor.execute(
+                        f"mdb.jobs[{job_name!r}].writeInput(consistencyChecking=ON)"))
+                    if hasattr(self.executor, "execute") else None
+                ),
+            )
             status, _t4a_wait_s = _submit_and_time(jobs, job_name, timeout, phase_profiler)
             artifacts = _collect_artifacts(self.executor, job_name, workdir=workdir)
             if phase_profiler is not None:
@@ -1810,6 +1883,30 @@ class AnalysisRunner:
                 evidence=evidence, artifacts=artifacts, metrics=run_metrics,
                 metadata=dict(run.metadata, evidence_manifest=run_manifest) if run_manifest is not None else dict(run.metadata),
                 extractions=tuple(extractions if result_source == "odb" else ()))
+        except PreSolveApprovalRequired as exc:
+            # Phase A stop: no submission happened. The candidate and the review
+            # report in the workdir are the resumption contract; the ledger phase
+            # records that this run is waiting on a human, not on the solver.
+            _persist_ledger("AWAITING_APPROVAL", run)
+            try:
+                from ..reporting.review import render_pre_solve_review
+
+                render_pre_solve_review(exc.workdir, exc.candidate)
+            except Exception:
+                pass
+            blocked_run = run.with_state(
+                AnalysisRunState.FAILED,
+                engineering_status=EngineeringStatus.SUBMISSION_BLOCKED.value,
+                diagnostics=({
+                    "error": str(exc),
+                    "pre_solve_approval_required": True,
+                    "candidate_id": exc.candidate.candidate_id,
+                    "execution_manifest_hash": exc.candidate.execution_manifest_hash,
+                    "candidate_status": exc.candidate.status.value,
+                    "workdir": exc.workdir,
+                    "review_report": str(Path(exc.workdir) / "pre_solve_review.html"),
+                },))
+            return blocked_run
         except SolverSelectionBlocked as exc:
             artifacts = _collect_artifacts(self.executor, job_name, workdir=workdir)
             diagnostics = _collect_diagnostics(self.executor, job_name, workdir=workdir)

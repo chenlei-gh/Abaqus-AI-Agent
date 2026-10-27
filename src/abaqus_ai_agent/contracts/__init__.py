@@ -3,6 +3,19 @@
 from .engineering_checks import EngineeringCheck, EngineeringCheckReport
 from .conclusions import ReportConclusion, ReportConclusionLayer, ReportConclusionStatus
 from .provenance import AnalysisProvenance
+from .approval import (
+    ApprovalError,
+    ApprovalRecord,
+    CandidateDriftError,
+    CandidateNotApprovedError,
+    CandidateStateError,
+    CandidateStatus,
+    ExecutionCandidate,
+    approve_candidate,
+    assert_submittable,
+    propose_candidate,
+    supersede_candidate,
+)
 from .sensitivity import SensitivityCase, SensitivityResult, SensitivityReport
 from .uncertainty import UncertaintyParameter, UncertaintyScenario, UncertaintyReport
 from .correction import RepairCandidate, CorrectionAttempt, CorrectionPolicy

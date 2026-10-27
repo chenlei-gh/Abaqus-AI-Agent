@@ -383,6 +383,22 @@ def solve_user_inp(
         except OSError:
             pass
 
+    # Pre-solve approval gate (Phase A/B boundary): direct user-INP solves are
+    # a production submission point and must not bypass approval. The user deck
+    # itself is the frozen input (its integrity is re-verified after the run
+    # below); the candidate lives in the run workdir, or beside the deck when
+    # no project context exists, so Phase B reuses the same run_id/workdir.
+    from .approval_service import enforce_pre_solve_approval
+
+    enforce_pre_solve_approval(
+        workdir=effective_workdir if effective_workdir else inp_file.parent,
+        job_name=eff_job_name,
+        run_id=eff_run_id,
+        solver_config={"mode": "user_inp_batch", "job_name": eff_job_name},
+        executor=executor,
+        inp_path=inp_file,
+    )
+
     # Invoke solver directly via executor
     orig_workdir = getattr(executor, "workdir", None)
     res = None

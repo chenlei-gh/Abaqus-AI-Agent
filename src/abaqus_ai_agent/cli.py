@@ -125,6 +125,16 @@ def _build_parser() -> argparse.ArgumentParser:
     p_ask.add_argument("--json", action="store_true", help="Output typed intent and JEV decisions as JSON.")
     p_ask.add_argument("--dry-run", action="store_true", help="Synthesize plan and intent contracts without executing solver.")
 
+    # 8.5 approve (Phase A/B boundary: approve a pre-solve execution candidate)
+    p_approve = subparsers.add_parser(
+        "approve",
+        help="Approve the pre-solve execution candidate of a run workdir, permitting solver submission.",
+    )
+    p_approve.add_argument("--workdir", required=True, help="Run workdir containing execution_candidate.json and pre_solve_review.html.")
+    p_approve.add_argument("--by", required=True, dest="approved_by", help="Name of the approving reviewer (a label, not identity proof).")
+    p_approve.add_argument("--note", default=None, help="Optional approval note recorded with the decision.")
+    p_approve.add_argument("--json", action="store_true", help="Output the approval record as JSON.")
+
     # 9. assets (Canonical validation assets and case registry)
     p_assets = subparsers.add_parser("assets", help="Inspect and query canonical validation assets and Case 01-10 registry.")
     p_assets.add_argument("--list", action="store_true", help="List all registered cases (default).")
@@ -1459,9 +1469,37 @@ def handle_material(args: argparse.Namespace) -> int:
     return 1
 
 
+def handle_approve(args: argparse.Namespace) -> int:
+    """Approve the current execution candidate of a workdir (Phase A -> B)."""
+    from .execution.approval_service import approve_current_candidate
+
+    try:
+        approved = approve_current_candidate(
+            args.workdir, approved_by=args.approved_by, note=args.note
+        )
+    except Exception as exc:
+        print(f"APPROVAL FAILED: {exc}")
+        return 2
+    record = approved.approval.to_dict() if approved.approval else {}
+    if args.json:
+        print(json.dumps({"candidate": approved.to_dict()}, indent=2, ensure_ascii=False))
+    else:
+        print("=== Execution Candidate Approved ===")
+        print(f"Candidate:       {approved.candidate_id}")
+        print(f"Manifest SHA256: {approved.execution_manifest_hash}")
+        print(f"Approved by:     {record.get('approved_by')}")
+        print(f"Approved at:     {record.get('approved_at')}")
+        print(f"Report bound:    {record.get('review_report_hash') or '(no review report file found)'}")
+        print("Re-run the analysis with the same workdir to proceed to solver submission.")
+        print("Note: digests are tamper-evidence, not identity signatures.")
+    return 0
+
+
 def main(argv: Optional[Sequence[str]] = None) -> int:
     parser = _build_parser()
     args = parser.parse_args(argv)
+
+
 
     handlers = {
         "inspect": handle_inspect,
@@ -1473,6 +1511,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         "fmbd": handle_fmbd,
         "memory": handle_memory,
         "ask": handle_ask,
+        "approve": handle_approve,
         "assets": handle_assets,
         "material": handle_material,
     }

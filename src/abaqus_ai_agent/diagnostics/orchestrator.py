@@ -233,7 +233,7 @@ class SelfHealingOrchestrator:
                     material=material,
                     mesh=mesh,
                     grounded_regions=grounded_regions,
-                    submit_job=True,
+                    submit_job=False,
                 )
             except Exception as comp_err:
                 healing_errors.append("compile_failed:%s" % type(comp_err).__name__)
