@@ -388,16 +388,43 @@ def solve_user_inp(
     # itself is the frozen input (its integrity is re-verified after the run
     # below); the candidate lives in the run workdir, or beside the deck when
     # no project context exists, so Phase B reuses the same run_id/workdir.
-    from .approval_service import enforce_pre_solve_approval
+    from .approval_service import PreSolveApprovalRequired, enforce_pre_solve_approval
 
-    enforce_pre_solve_approval(
-        workdir=effective_workdir if effective_workdir else inp_file.parent,
-        job_name=eff_job_name,
-        run_id=eff_run_id,
-        solver_config={"mode": "user_inp_batch", "job_name": eff_job_name},
-        executor=executor,
-        inp_path=inp_file,
-    )
+    gate_workdir = effective_workdir if effective_workdir else inp_file.parent
+    try:
+        enforce_pre_solve_approval(
+            workdir=gate_workdir,
+            job_name=eff_job_name,
+            run_id=eff_run_id,
+            solver_config={"mode": "user_inp_batch", "job_name": eff_job_name},
+            executor=executor,
+            inp_path=inp_file,
+        )
+    except PreSolveApprovalRequired as exc:
+        # The direct-INP path has no runner to render for it: leave the Phase A
+        # review report here so every blocked submission point produces one.
+        try:
+            from ..reporting.review import render_pre_solve_review
+
+            render_pre_solve_review(
+                exc.workdir,
+                exc.candidate,
+                sections={
+                    "Input deck / 输入文件": {
+                        "inp_path": str(inp_file),
+                        "inp_sha256": exc.candidate.inp_sha256,
+                        "job_name": eff_job_name,
+                        "mode": "user_inp_batch",
+                    },
+                },
+                notes=(
+                    "Direct user-INP solve: the deck is solved as-is; the agent did not "
+                    "generate or modify it. Review the deck content itself before approval.",
+                ),
+            )
+        except Exception:
+            pass
+        raise
 
     # Invoke solver directly via executor
     orig_workdir = getattr(executor, "workdir", None)

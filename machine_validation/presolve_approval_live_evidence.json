@@ -1,0 +1,33 @@
+{
+  "check_id": "PRE-SOLVE-APPROVAL-LIVE",
+  "date": "2026-10-27",
+  "phases": {
+    "phase_b": {
+      "api_status": "FAILED",
+      "api_error": "Solver completed with code 0 but expected ODB output was not found: live_gate_case.odb",
+      "wall_s": 2.8,
+      "odb_exists": true,
+      "odb_bytes": 182376,
+      "odb_sha256": "edc1a876f3519ded518ddc67ce198964d0f3a8e4f221157da602117e15ddce67",
+      "sta_completed_marker": true,
+      "honesty_note": "The batch launcher returned rc=0 before the ODB was visible to the API check; physical .sta/.odb evidence is recorded alongside the API verdict."
+    },
+    "drift": {
+      "blocked": true,
+      "new_candidate_id": "live_gate_case-a8a44904d51e",
+      "new_candidate_status": "PROPOSED",
+      "old_candidate_archived_superseded": true
+    },
+    "cli_approval": {
+      "command": "python -m abaqus_ai_agent approve --workdir <run workdir> --by chenlei-cli-live --json",
+      "drifted_candidate_approved": "live_gate_case-a8a44904d51e",
+      "review_report_hash_bound": true
+    },
+    "double_approval_rejected": {
+      "command": "same approve command re-run",
+      "exit_code": 2,
+      "error": "candidate 'live_gate_case-a8a44904d51e' is APPROVED; only PROPOSED candidates can be approved"
+    }
+  },
+  "status": "PASS"
+}

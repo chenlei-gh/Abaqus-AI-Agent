@@ -56,3 +56,25 @@ CLI 现状：无任何求解子命令。`ask` 只路由意图、不求解（cli.
 4. E4 的处置：裸 `agent.submit()` 需接入审批或明确降级为诊断/测试接口。
 5. 恢复接入：新增 resume/approve CLI 时调用 `reconcile_run_state()`，不另建恢复逻辑；台账快照需扩展关联 candidate_id 与审批记录。
 6. "提交成功但台账未写入"窗口由 reconciliation 物理探针兜底，审批层不得仅凭台账状态决定重提。
+## 6. 实施状态（2026-10-27 更新）
+
+第 1 步矩阵中的缺口处置已落地：
+
+| 约束项 | 实施结果 |
+|--------|----------|
+| S2 内嵌提交 | 已移除：`solve_requirement` 默认 `submit_job=False`、自愈编排器同样改为 False；S1（AnalysisRunner）成为 intent 类求解的唯一提交点 |
+| S1 门禁 | `AnalysisRunner.run` 在 `JobController.submit` 前调用 `enforce_pre_solve_approval`；阻断时返回 SUBMISSION_BLOCKED，台账记 `AWAITING_APPROVAL`，并生成 `pre_solve_review.html` |
+| S3 门禁 | `input_modes.solve_user_inp` 在批处理提交前过同一门禁；阻断时同样落评审报告，重新执行需复用同一 `run_id`（workdir 由 run_id 决定） |
+| E4 门禁 | `agent.submit()` 已接入同一审批服务 |
+| 重复提交防护 | runner 在覆盖台账前先核对既有台账相位；SOLVING/RUNNING/COMPLETED 触发 `reconcile_run_state` 物理探针，仅 CLEANUP_AND_RESUBMIT 放行，且阻断时不改写原台账 |
+| 审批 CLI | 新增 `approve` 子命令，调用统一审批服务，绑定评审报告哈希 |
+| CI/Golden 豁免 | 策略解析顺序：显式参数 > `ABAQUS_AI_AGENT_APPROVAL` 环境变量 > 测试替身识别；真实执行器默认 required；tools/* 批处理通道与生产 agent 路径物理隔离 |
+| 审批契约 | `contracts/approval.py`：PROPOSED → APPROVED → SUPERSEDED，漂移即失效，摘要仅为防篡改证据而非身份签名 |
+
+真机验证（`machine_validation/presolve_approval_live_evidence.json`）：Phase A 阻断并产出候选与评审报告 → 审批 → Phase B 真实 Abaqus/Standard 2025 求解成功（.sta COMPLETED，ODB 182,376 字节，SHA-256 已记录）→ 修改 INP 后再次阻断且旧候选归档为 SUPERSEDED → CLI 审批生效 → 重复审批被拒（exit 2）。
+
+已知边界（诚实披露）：
+
+- 批处理启动器可能在求解器刷新产物前返回 rc=0，导致 `solve_user_inp` 的 API 判定与物理证据（.sta/ODB）短暂不一致；这是既有的 E2 通道行为，不是本门禁引入的问题。真机验证以 .sta/ODB 物理证据为准并已如实记录。
+- 候选文件按 workdir 持久化；Phase B 必须复用 Phase A 的 workdir（E1 由 `workdir=` 参数、E2 由同一 `run_id` 保证）。
+- 审批摘要证明"内容未被篡改"，不证明审批人身份；有写权限者可以重算摘要。
