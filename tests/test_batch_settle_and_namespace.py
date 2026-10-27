@@ -123,3 +123,66 @@ def test_stdout_dict_last_line_contract():
     ns = KernelNamespace()
     out = ns.execute('print({"status": "COMPLETED", "n": 7})')
     assert out == {"status": "COMPLETED", "n": 7}
+def test_star_import_stays_inside_namespace(tmp_path, monkeypatch):
+    """Reproduces the 2026-10-27 LOG incident mechanism with a fake
+    abaqusConstants module: a star import inside the namespace must not
+    clobber caller globals, and the star names must land in the namespace."""
+    import sys
+    import types
+
+    fake = types.ModuleType("abaqusConstants")
+    fake.LOG = "SymbolicConstant<LOG>"
+    fake.ON = "SymbolicConstant<ON>"
+    fake.__all__ = ["LOG", "ON"]
+    monkeypatch.setitem(sys.modules, "abaqusConstants", fake)
+
+    sentinel = object()
+    globals()["LOG"] = sentinel
+    try:
+        ns = KernelNamespace()
+        out = ns.execute(
+            "from abaqusConstants import *\n"
+            "result = {\"log_seen\": LOG, \"on_seen\": ON}"
+        )
+        assert out == {"log_seen": "SymbolicConstant<LOG>", "on_seen": "SymbolicConstant<ON>"}
+        assert globals()["LOG"] is sentinel
+        assert ns.namespace["LOG"] == "SymbolicConstant<LOG>"
+    finally:
+        globals().pop("LOG", None)
+
+
+def test_fragment_exception_propagates_and_restores_stdout(capsys):
+    import sys
+
+    ns = KernelNamespace()
+    ns.execute("kept = 1")
+    try:
+        ns.execute("raise ValueError('boom')")
+    except ValueError as exc:
+        assert str(exc) == "boom"
+    else:
+        raise AssertionError("fragment exception must propagate")
+    # stdout restored: this print must reach the real stdout, not a dead buffer
+    print("stdout-alive-marker")
+    assert "stdout-alive-marker" in capsys.readouterr().out
+    # namespace survived the failed fragment and remains usable
+    out = ns.execute("result = {\"kept\": kept}")
+    assert out == {"kept": 1}
+
+
+def test_failed_fragment_does_not_leave_stale_result():
+    ns = KernelNamespace()
+    assert ns.execute("result = {\"a\": 1}") == {"a": 1}
+    try:
+        ns.execute("undefined_name_boom")
+    except NameError:
+        pass
+    # result was cleared before the failing fragment; a later clean fragment
+    # must not observe the pre-failure value
+    assert ns.execute("y = 2") == {"status": "COMPLETED"}
+
+
+def test_seed_code_does_not_touch_caller_globals():
+    ns = KernelNamespace(seed_code=("SEEDED = 7",))
+    assert "SEEDED" not in globals()
+    assert ns.execute("result = {\"v\": SEEDED}") == {"v": 7}

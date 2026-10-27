@@ -1,0 +1,17 @@
+{
+  "case": "3d_cantilever_static",
+  "command": [
+    "C:\\SIMULIA\\Commands\\abaqus.bat",
+    "cae",
+    "noGUI=D:\\AbaqusProjects\\static_golden_kn\\static_golden_e2e_script.py"
+  ],
+  "launcher": "C:\\SIMULIA\\Commands\\abaqus.bat",
+  "process_succeeded": true,
+  "report": null,
+  "return_code": 0,
+  "script": "D:\\AbaqusProjects\\static_golden_kn\\static_golden_e2e_script.py",
+  "status": "fail",
+  "stderr": "Abaqus License Manager checked out the following license:\n\"cae\" from Flexnet server DESKTOP-9EAL2I4\n<9998 out of 9999 licenses remain available>.\nRuntimeError: Golden Case did not produce an ODB path\nFile \"D:/AbaqusProjects/static_golden_kn/static_golden_e2e_script.py\", line 176, in <module>\n    raise RuntimeError('Golden Case did not produce an ODB path')\n\n",
+  "stdout": "Abaqus Error: cae exited with an error.\n",
+  "workdir": "D:\\AbaqusProjects\\static_golden_kn"
+}

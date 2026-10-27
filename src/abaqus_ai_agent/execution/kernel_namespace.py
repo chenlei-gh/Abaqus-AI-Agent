@@ -2,7 +2,7 @@
 
 Golden/qualification scripts that run inside ``abaqus cae noGUI`` need to
 ``exec`` agent-compiled fragments while keeping their own bookkeeping safe.
-The historical pattern — ``exec(code, globals(), globals())`` — let
+The historical pattern -- ``exec(code, globals(), globals())`` -- let
 ``from abaqusConstants import *`` silently shadow harness variables (a
 ``SymbolicConstant`` named ``LOG`` destroyed a real validation log on
 2026-10-27) and forced scripts to hand-clean a leaked ``result`` between

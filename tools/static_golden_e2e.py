@@ -133,6 +133,7 @@ from abaqus_ai_agent.actions.builders import (
 from abaqus_ai_agent.actions.runner import execute
 from abaqus_ai_agent.workflow.static import build_static_plan
 from abaqus_ai_agent.execution.client import InProcessExecutor
+from abaqus_ai_agent.execution.kernel_namespace import KernelNamespace, build_cae_seed
 from abaqus_ai_agent.execution.analysis_run import AnalysisRunner
 from abaqus_ai_agent.execution.odb import extract_field
 from abaqus_ai_agent.contracts.intent import EngineeringIntent
@@ -151,28 +152,10 @@ mat_e=%r
 mat_nu=%r
 applied_force=%r
 
+_NS = KernelNamespace(seed_code=build_cae_seed())
+
 def _run_code(code):
-    buf = io.StringIO()
-    old_stdout = sys.stdout
-    sys.stdout = buf
-    try:
-        exec(compile(code, '<AIAgent-StaticGolden>', 'exec'), globals(), globals())
-    finally:
-        sys.stdout = old_stdout
-    out = buf.getvalue().strip()
-    res = globals().get('result')
-    if isinstance(res, dict):
-        return res
-    if out:
-        last_line = out.splitlines()[-1].strip()
-        try:
-            val = ast.literal_eval(last_line)
-            if isinstance(val, dict):
-                return val
-        except Exception:
-            pass
-        return {'status': 'COMPLETED', 'stdout': out, 'output': out}
-    return {'status': 'COMPLETED'}
+    return _NS.execute(code, '<AIAgent-StaticGolden>')
 
 class CAEInProcessExecutor(InProcessExecutor):
     def inspect_odb(self, path):

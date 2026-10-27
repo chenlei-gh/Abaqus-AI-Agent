@@ -148,3 +148,35 @@ test_static_golden_e2e.py 等离线用例做的是脚本装配的 AST/结构检�
 5. 迁移前后逐项对比：结果数值、退出状态、证据完整性、异常行为。
 6. 每个迁移文件配离线负例（片段异常 / result 隔离 / star-import 不污染）；
    需要真机的明确标记，不以静态检查冒充运行证据。
+
+## 7. 试点 1 验证结果（static_golden_e2e，已完成）
+
+前置条件补齐（按复核要求先于迁移完成）：
+
+- `KernelNamespace` 契约测试补齐 4 项：真实星号导入隔离（伪 abaqusConstants
+  模块复现 LOG 覆盖机制）、片段异常传播与 stdout 恢复、失败片段不留陈旧
+  `result`、seed 不污染调用方。全部通过。
+- 片段依赖审计：对 static 全部 13 个片段（11 个库生成 + 2 个字面量 payload）
+  做 AST 名称解析，残差名仅 `mdb` 与 abaqusConstants 符号，
+  `build_cae_seed()` 完全覆盖；无任何片段引用 harness 配置名。
+
+真机验证（Abaqus 2025，工作目录 D:\AbaqusProjects，仓库外）：
+
+| 阶段 | 结果 | 证据 |
+|------|------|------|
+| Phase A 拒绝 | 审批门拦截，INP 已编译但未提交求解（无 .sta/.odb），台账 AWAITING_APPROVAL | machine_validation/static_golden_e2e_kn_phase_a.json |
+| CLI 批准 | candidate `StaticGoldenJob-cf1c2465724e`，绑定评审报告哈希 | 台账 + execution_candidate.json |
+| Phase B 通过 | 真实求解完成，status=pass，验收 PASS | machine_validation/static_golden_e2e_kn.json |
+| A/B 对照（迁移前 `_run_code`，同代码库） | status=pass；候选 manifest 逐字节相同（`cf1c2465724e...`） | machine_validation/static_golden_e2e_pre_kn_ab.json |
+
+A/B 逐项对比（612 个报告键）：60 处差异全部为环境字段（run_id、时间戳、
+含时间戳的产物 SHA-256、工作目录路径）；18 个数值差异中 17 个是
+modified_time，1 个是 .msg 文件 1 字节宽度差（求解耗时字符串位数变化）。
+所有物理结果（位移、反力、网格指标、验收判据）逐位一致。
+
+附带验证：COMPLETED 台账下的重复提交防护在迁移前版本上意外触发并正确拦截
+（reconcile 物理探针判定作业已完成，拒绝重提）——这是设计的防重复提交行为，
+单独取证于本次 A/B 过程。
+
+结论：试点 1 通过。`static_golden_e2e` 的命名空间迁移保持行为不变，
+审批门拒绝与批准两条路径均独立取证。
