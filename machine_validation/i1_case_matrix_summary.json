@@ -9,7 +9,7 @@
       "category_id": "CASE-01",
       "physics_name": "Linear Static Stress & Deflection",
       "case_title": "Linear Static Stress & Deflection",
-      "evidence_file": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\machine_validation\\static_golden_e2e.json",
+      "evidence_file": "<REPO_ROOT>\\machine_validation\\static_golden_e2e.json",
       "solver_status": "completed",
       "odb_present": true,
       "metrics_count": 3,
@@ -23,7 +23,7 @@
             "items": [
               {
                 "kind": "odb_summary",
-                "locator": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\StaticGoldenJob.odb",
+                "locator": "<REPO_ROOT>\\StaticGoldenJob.odb",
                 "metadata": {},
                 "source": "odb",
                 "unit": "",
@@ -520,7 +520,7 @@
       "category_id": "CASE-02",
       "physics_name": "Thermal Conduction & Heat Flux",
       "case_title": "Thermal Conduction & Heat Flux",
-      "evidence_file": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\machine_validation\\thermal_golden_e2e.json",
+      "evidence_file": "<REPO_ROOT>\\machine_validation\\thermal_golden_e2e.json",
       "solver_status": "completed",
       "odb_present": true,
       "metrics_count": 5,
@@ -697,7 +697,7 @@
               {
                 "kind": "odb_summary",
                 "source": "odb",
-                "locator": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\machine_validation\\ThermalGoldenJob.odb",
+                "locator": "<REPO_ROOT>\\machine_validation\\ThermalGoldenJob.odb",
                 "value": {
                   "status": "available",
                   "step_count": 1,
@@ -1128,7 +1128,7 @@
       "category_id": "CASE-03",
       "physics_name": "Transient Dynamics & Modal Vibration",
       "case_title": "Transient Dynamics & Modal Vibration",
-      "evidence_file": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\machine_validation\\dynamic_golden_e2e.json",
+      "evidence_file": "<REPO_ROOT>\\machine_validation\\dynamic_golden_e2e.json",
       "solver_status": "completed",
       "odb_present": true,
       "metrics_count": 3,
@@ -1384,7 +1384,7 @@
       "category_id": "CASE-04",
       "physics_name": "Contact Mechanics & Frictional Interaction",
       "case_title": "Contact Mechanics & Frictional Interaction",
-      "evidence_file": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\machine_validation\\general_contact_e2e.json",
+      "evidence_file": "<REPO_ROOT>\\machine_validation\\general_contact_e2e.json",
       "solver_status": "completed",
       "odb_present": true,
       "metrics_count": 6,
@@ -1729,7 +1729,7 @@
       "category_id": "CASE-05",
       "physics_name": "ASTM E1049 Rainflow Fatigue Life & Damage",
       "case_title": "ASTM E1049 Rainflow Fatigue Life & Damage",
-      "evidence_file": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\machine_validation\\fatigue_odb_golden_e2e.json",
+      "evidence_file": "<REPO_ROOT>\\machine_validation\\fatigue_odb_golden_e2e.json",
       "solver_status": "completed",
       "odb_present": true,
       "metrics_count": 4,
@@ -1770,7 +1770,7 @@
           }
         },
         "provenance": {
-          "odb_source": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\machine_validation\\DynamicGoldenJob.odb",
+          "odb_source": "<REPO_ROOT>\\machine_validation\\DynamicGoldenJob.odb",
           "material_curve": [
             [
               100.0,
@@ -1808,7 +1808,7 @@
       "category_id": "CASE-06",
       "physics_name": "Rigid-Flexible Multibody Mechanism Dynamics",
       "case_title": "Rigid-Flexible Multibody Mechanism Dynamics",
-      "evidence_file": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\machine_validation\\fmbd4_rigid_flexible_golden_e2e.json",
+      "evidence_file": "<REPO_ROOT>\\machine_validation\\fmbd4_rigid_flexible_golden_e2e.json",
       "solver_status": "completed",
       "odb_present": true,
       "metrics_count": 8,
@@ -1904,7 +1904,7 @@
       "category_id": "CASE-07",
       "physics_name": "3-Level Mesh Refinement & Roache GCI",
       "case_title": "3-Level Mesh Refinement & Roache GCI",
-      "evidence_file": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\machine_validation\\mesh_convergence_e2e.json",
+      "evidence_file": "<REPO_ROOT>\\machine_validation\\mesh_convergence_e2e.json",
       "solver_status": "completed",
       "odb_present": true,
       "metrics_count": 1,
@@ -1994,8 +1994,8 @@
         },
         "provenance": {
           "launcher": "abaqus",
-          "script": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\machine_validation\\mesh_convergence_e2e_script.py",
-          "workdir": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent"
+          "script": "<REPO_ROOT>\\machine_validation\\mesh_convergence_e2e_script.py",
+          "workdir": "<REPO_ROOT>"
         }
       }
     },
@@ -2003,7 +2003,7 @@
       "category_id": "CASE-08",
       "physics_name": "Controlled Solver Diagnostics & Remediation",
       "case_title": "Controlled Solver Diagnostics & Remediation",
-      "evidence_file": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\machine_validation\\h5_solver_failure_diagnostics_evidence.json",
+      "evidence_file": "<REPO_ROOT>\\machine_validation\\h5_solver_failure_diagnostics_evidence.json",
       "solver_status": "completed",
       "odb_present": true,
       "metrics_count": 2,
@@ -2040,7 +2040,7 @@
       "category_id": "CASE-09",
       "physics_name": "Image / Intent Viewport Geometry Grounding",
       "case_title": "Image / Intent Viewport Geometry Grounding",
-      "evidence_file": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\machine_validation\\h6_image_intent_grounding_evidence.json",
+      "evidence_file": "<REPO_ROOT>\\machine_validation\\h6_image_intent_grounding_evidence.json",
       "solver_status": "completed",
       "odb_present": true,
       "metrics_count": 2,

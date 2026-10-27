@@ -1,13 +1,13 @@
 {
   "status": "pass",
   "launcher": "C:\\SIMULIA\\Commands\\abaqus.bat",
-  "workdir": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\machine_validation",
-  "script": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\machine_validation\\thermal_golden_e2e_script.py",
+  "workdir": "<REPO_ROOT>\\machine_validation",
+  "script": "<REPO_ROOT>\\machine_validation\\thermal_golden_e2e_script.py",
   "case": "1d_steady_state_heat_conduction",
   "command": [
     "C:\\SIMULIA\\Commands\\abaqus.bat",
     "cae",
-    "noGUI=D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\machine_validation\\thermal_golden_e2e_script.py"
+    "noGUI=<REPO_ROOT>\\machine_validation\\thermal_golden_e2e_script.py"
   ],
   "return_code": 0,
   "process_succeeded": true,
@@ -87,7 +87,7 @@
         },
         "diagnostics": []
       },
-      "odb_path": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\machine_validation\\ThermalGoldenJob.odb",
+      "odb_path": "<REPO_ROOT>\\machine_validation\\ThermalGoldenJob.odb",
       "artifacts": [],
       "diagnostics": []
     },
@@ -259,7 +259,7 @@
           {
             "kind": "odb_summary",
             "source": "odb",
-            "locator": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\machine_validation\\ThermalGoldenJob.odb",
+            "locator": "<REPO_ROOT>\\machine_validation\\ThermalGoldenJob.odb",
             "value": {
               "status": "available",
               "step_count": 1,

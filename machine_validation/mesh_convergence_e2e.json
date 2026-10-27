@@ -3,7 +3,7 @@
   "command": [
     "C:\\SIMULIA\\Commands\\abaqus.bat",
     "cae",
-    "noGUI=D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\machine_validation\\mesh_convergence_e2e_script.py"
+    "noGUI=<REPO_ROOT>\\machine_validation\\mesh_convergence_e2e_script.py"
   ],
   "launcher": "abaqus",
   "process_succeeded": true,
@@ -162,7 +162,7 @@
         "odb_element_count": 80,
         "odb_file_size": 237816,
         "odb_node_count": 189,
-        "odb_path": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\MeshConv_Coarse.odb",
+        "odb_path": "<REPO_ROOT>\\MeshConv_Coarse.odb",
         "reaction_report": {
           "checks": [
             {
@@ -219,7 +219,7 @@
         "odb_element_count": 640,
         "odb_file_size": 350360,
         "odb_node_count": 1025,
-        "odb_path": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\MeshConv_Medium.odb",
+        "odb_path": "<REPO_ROOT>\\MeshConv_Medium.odb",
         "reaction_report": {
           "checks": [
             {
@@ -276,7 +276,7 @@
         "odb_element_count": 5120,
         "odb_file_size": 1165080,
         "odb_node_count": 6561,
-        "odb_path": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\MeshConv_Fine.odb",
+        "odb_path": "<REPO_ROOT>\\MeshConv_Fine.odb",
         "reaction_report": {
           "checks": [
             {
@@ -332,9 +332,9 @@
     }
   },
   "return_code": 0,
-  "script": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\machine_validation\\mesh_convergence_e2e_script.py",
+  "script": "<REPO_ROOT>\\machine_validation\\mesh_convergence_e2e_script.py",
   "status": "pass",
   "stderr": "Abaqus License Manager checked out the following license:\n\"cae\" from Flexnet server DESKTOP-9EAL2I4\n<9998 out of 9999 licenses remain available>.\n",
   "stdout": "",
-  "workdir": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent"
+  "workdir": "<REPO_ROOT>"
 }

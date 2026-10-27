@@ -9,7 +9,7 @@
         "status": "DELIVERABLE",
         "deliverable": true,
         "report": {
-          "path": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\deliverables\\qualifications\\case_01\\report.html",
+          "path": "<REPO_ROOT>\\deliverables\\qualifications\\case_01\\report.html",
           "size_bytes": 68172,
           "sha256": "2a44c3dcedae9fe60a1ee8497c5b531800aaa7fdbd994b466644f57276493a0d"
         },

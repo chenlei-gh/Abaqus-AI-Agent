@@ -14,7 +14,7 @@
   "solver": "standard",
   "job": "GoldenJob",
   "odb": {
-    "path": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\FMBD6GoldenJob.odb",
+    "path": "<REPO_ROOT>\\FMBD6GoldenJob.odb",
     "exists": false
   },
   "solver_status": "completed",
@@ -60,7 +60,7 @@
   },
   "artifacts": [
     {
-      "path": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\FMBD6GoldenJob.odb",
+      "path": "<REPO_ROOT>\\FMBD6GoldenJob.odb",
       "kind": "odb"
     }
   ],

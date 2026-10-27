@@ -1,13 +1,13 @@
 {
   "status": "pass",
   "launcher": "C:\\SIMULIA\\Commands\\abaqus.bat",
-  "workdir": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\machine_validation",
-  "script": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\machine_validation\\explicit_golden_e2e_script.py",
+  "workdir": "<REPO_ROOT>\\machine_validation",
+  "script": "<REPO_ROOT>\\machine_validation\\explicit_golden_e2e_script.py",
   "case": "cantilever_transient_explicit_dynamic",
   "command": [
     "C:\\SIMULIA\\Commands\\abaqus.bat",
     "cae",
-    "noGUI=D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\machine_validation\\explicit_golden_e2e_script.py"
+    "noGUI=<REPO_ROOT>\\machine_validation\\explicit_golden_e2e_script.py"
   ],
   "return_code": 0,
   "process_succeeded": true,
@@ -410,7 +410,7 @@
         },
         "state": "COMPLETED"
       },
-      "odb_path": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\machine_validation\\ExplicitGoldenJob.odb"
+      "odb_path": "<REPO_ROOT>\\machine_validation\\ExplicitGoldenJob.odb"
     },
     "status": "pass",
     "strict_gate_verification": {

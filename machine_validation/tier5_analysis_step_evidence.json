@@ -33,7 +33,7 @@
   "host_mappings_verified": true,
   "provenance": {
     "launcher": "abaqus",
-    "workdir": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\machine_validation",
+    "workdir": "<REPO_ROOT>\\machine_validation",
     "return_code": 0,
     "solver": "Abaqus/Standard 2025",
     "procedures_verified": [

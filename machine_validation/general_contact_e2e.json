@@ -1,13 +1,13 @@
 {
   "status": "pass",
   "launcher": "abaqus",
-  "workdir": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\machine_validation",
-  "script": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\machine_validation\\general_contact_e2e_script.py",
+  "workdir": "<REPO_ROOT>\\machine_validation",
+  "script": "<REPO_ROOT>\\machine_validation\\general_contact_e2e_script.py",
   "case": "two_body_frictional_contact_sliding",
   "command": [
     "C:\\SIMULIA\\Commands\\abaqus.bat",
     "cae",
-    "noGUI=D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\machine_validation\\general_contact_e2e_script.py"
+    "noGUI=<REPO_ROOT>\\machine_validation\\general_contact_e2e_script.py"
   ],
   "return_code": 0,
   "process_succeeded": true,
@@ -239,7 +239,7 @@
         },
         "diagnostics": []
       },
-      "odb_path": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\machine_validation\\GeneralContactJob.odb",
+      "odb_path": "<REPO_ROOT>\\machine_validation\\GeneralContactJob.odb",
       "artifacts": [],
       "diagnostics": []
     },

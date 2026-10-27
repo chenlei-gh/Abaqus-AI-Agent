@@ -85,11 +85,11 @@
   "artifacts": [
     {
       "kind": "odb",
-      "path": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\machine_validation\\FMBD5GoldenJob.odb"
+      "path": "<REPO_ROOT>\\machine_validation\\FMBD5GoldenJob.odb"
     },
     {
       "kind": "script",
-      "path": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\machine_validation\\FMBD5GoldenJob_fmbd5_script.py"
+      "path": "<REPO_ROOT>\\machine_validation\\FMBD5GoldenJob_fmbd5_script.py"
     }
   ],
   "case_id": "fmbd5_crank_slider",
@@ -211,7 +211,7 @@
       "slider_initial_x_mm": 395.47404244018753,
       "width_mm": 20.0
     },
-    "odb_path": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\machine_validation\\FMBD5GoldenJob.odb",
+    "odb_path": "<REPO_ROOT>\\machine_validation\\FMBD5GoldenJob.odb",
     "procedure": "implicit_dynamic",
     "provenance": {
       "action_count": 45,
@@ -308,12 +308,12 @@
     "workflow": {
       "compiler_used": true,
       "job_status": "JobStatus(name='FMBD5GoldenJob', state=<JobState.COMPLETED: 'COMPLETED'>, raw={'models': ['FMBD5Golden', 'Model-1'], 'parts': ['CrankPart', 'FlexRodPart', 'SliderPart'], 'instances': ['Crank-1', 'FlexRod-1', 'Slider-1'], 'materials': ['Mat-crank', 'Mat-flex_rod', 'Mat-slider'], 'sections': ['Sec-Joint-PRISMATIC', 'Sec-Joint-REVOLUTE', 'Sec-Solid-Mat-crank', 'Sec-Solid-Mat-flex_rod', 'Sec-Solid-Mat-slider'], 'steps': ['Initial', 'FMBD5Step', 'Initial'], 'boundary_conditions': ['BC-Ground-RP_GROUND_J_Pivot', 'BC-Ground-RP_GROUND_J_SliderGuide'], 'loads': ['Gravity'], 'amplitudes': [], 'predefined_fields': [], 'interactions': [], 'output_requests': ['F-Output-1', 'F-Output-Mechanism'], 'jobs': ['FMBD5GoldenJob'], 'metadata': {'model_count': 2, 'job_count': 1, 'job_status': {'FMBD5GoldenJob': 'None'}}}, diagnostics=())",
-      "odb_path": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\machine_validation\\FMBD5GoldenJob.odb",
+      "odb_path": "<REPO_ROOT>\\machine_validation\\FMBD5GoldenJob.odb",
       "solver_completed": true
     }
   },
   "return_code": 0,
-  "script": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\machine_validation\\FMBD5GoldenJob_fmbd5_script.py",
+  "script": "<REPO_ROOT>\\machine_validation\\FMBD5GoldenJob_fmbd5_script.py",
   "simulation_results": {
     "algorithmic_damping_dissipation_ratio": 0.40470114390093476,
     "artificial_to_strain_energy_ratio": 0.003904334714571759,
@@ -352,5 +352,5 @@
     "stress_sanity_passed": true,
     "strict_acceptance_passed": false
   },
-  "workdir": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\machine_validation"
+  "workdir": "<REPO_ROOT>\\machine_validation"
 }

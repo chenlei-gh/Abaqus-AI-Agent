@@ -2,8 +2,8 @@
   "schema_version": "reproducibility_evidence_v1",
   "verified_at": "2026-10-04T05:59:35.543658+00:00",
   "case_id": "static_cantilever",
-  "run_a_source": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\machine_validation\\static_golden_e2e.json",
-  "run_b_source": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\machine_validation\\static_golden_run_b.json",
+  "run_a_source": "<REPO_ROOT>\\machine_validation\\static_golden_e2e.json",
+  "run_b_source": "<REPO_ROOT>\\machine_validation\\static_golden_run_b.json",
   "relative_tolerance_threshold": 0.0001,
   "structural_invariance": {
     "job_match": true,

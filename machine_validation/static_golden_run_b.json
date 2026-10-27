@@ -3,7 +3,7 @@
   "command": [
     "C:\\SIMULIA\\Commands\\abaqus.bat",
     "cae",
-    "noGUI=D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\machine_validation\\machine_validation\\static_golden_e2e_script.py"
+    "noGUI=<REPO_ROOT>\\machine_validation\\machine_validation\\static_golden_e2e_script.py"
   ],
   "launcher": "C:\\SIMULIA\\Commands\\abaqus.bat",
   "process_succeeded": true,
@@ -296,7 +296,7 @@
         "items": [
           {
             "kind": "odb_summary",
-            "locator": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\machine_validation\\StaticGoldenJob.odb",
+            "locator": "<REPO_ROOT>\\machine_validation\\StaticGoldenJob.odb",
             "metadata": {},
             "source": "odb",
             "unit": "",
@@ -611,7 +611,7 @@
         },
         "state": "COMPLETED"
       },
-      "odb_path": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\machine_validation\\StaticGoldenJob.odb"
+      "odb_path": "<REPO_ROOT>\\machine_validation\\StaticGoldenJob.odb"
     },
     "status": "pass",
     "theory": {
@@ -627,10 +627,10 @@
     }
   },
   "return_code": 0,
-  "script": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\machine_validation\\machine_validation\\static_golden_e2e_script.py",
+  "script": "<REPO_ROOT>\\machine_validation\\machine_validation\\static_golden_e2e_script.py",
   "status": "pass",
   "stderr": "Abaqus License Manager checked out the following license:\n\"cae\" from Flexnet server DESKTOP-9EAL2I4\n<9998 out of 9999 licenses remain available>.\n",
   "stdout": "",
-  "workdir": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\machine_validation",
+  "workdir": "<REPO_ROOT>\\machine_validation",
   "run_id": "run_static_golden_b_independent"
 }

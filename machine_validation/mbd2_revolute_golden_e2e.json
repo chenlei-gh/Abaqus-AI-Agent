@@ -2,12 +2,12 @@
   "status": "pass",
   "case": "mbd2_dual_rigid_body_revolute_connector",
   "launcher": "C:\\SIMULIA\\Commands\\abaqus.bat",
-  "workdir": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\machine_validation",
-  "script": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\machine_validation\\AIAgent_MBD2RevoluteGolden_script.py",
+  "workdir": "<REPO_ROOT>\\machine_validation",
+  "script": "<REPO_ROOT>\\machine_validation\\AIAgent_MBD2RevoluteGolden_script.py",
   "command": [
     "C:\\SIMULIA\\Commands\\abaqus.bat",
     "cae",
-    "noGUI=D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\machine_validation\\AIAgent_MBD2RevoluteGolden_script.py"
+    "noGUI=<REPO_ROOT>\\machine_validation\\AIAgent_MBD2RevoluteGolden_script.py"
   ],
   "return_code": 0,
   "process_succeeded": true,
@@ -42,7 +42,7 @@
     "workflow": {
       "solver_completed": true,
       "job_status": "JobStatus(name='MBD2GoldenJob', state=<JobState.COMPLETED: 'COMPLETED'>, raw={'models': ['MBD2Golden', 'Model-1'], 'parts': ['Arm1', 'Arm2'], 'instances': ['Arm1-1', 'Arm2-1'], 'materials': ['Steel'], 'sections': ['HingeSec', 'SolidSection'], 'steps': ['Initial', 'Step-1', 'Initial'], 'boundary_conditions': ['PivotBC'], 'loads': ['Gravity'], 'amplitudes': [], 'predefined_fields': [], 'interactions': [], 'output_requests': ['F-Output-1'], 'jobs': ['MBD2GoldenJob'], 'metadata': {'model_count': 2, 'job_count': 1, 'job_status': {'MBD2GoldenJob': 'None'}}}, diagnostics=())",
-      "odb_path": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\machine_validation\\MBD2GoldenJob.odb",
+      "odb_path": "<REPO_ROOT>\\machine_validation\\MBD2GoldenJob.odb",
       "mesh_quality_passed": true
     },
     "verification": {

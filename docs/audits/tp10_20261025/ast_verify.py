@@ -1,14 +1,17 @@
-﻿import ast
+import ast
 import io
 import os
 import re
 from collections import defaultdict
 
-SRC = r"D:\Vault\Abaqus\Abaqus-AI-Agent\src\abaqus_ai_agent"
-ROOT = r"D:\Vault\Abaqus\Abaqus-AI-Agent"
+# Paths are derived from the script location so no private machine layout
+# leaks into the repository. Run from anywhere; the repo root is three
+# levels up from this file (docs/audits/tp10_20261025/).
+ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+SRC = os.path.join(ROOT, "src", "abaqus_ai_agent")
 TESTS = os.path.join(ROOT, "tests")
 TOOLS = os.path.join(ROOT, "tools")
-OUT = r"D:\Vault\Abaqus\_ast_verify_20261025.txt"
+OUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "_ast_verify_output.txt")
 
 out = io.open(OUT, "w", encoding="utf-8")
 

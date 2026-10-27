@@ -20,19 +20,19 @@
       "analytical_reference": "Baseline solver execution, .sta/.log closure, ODB creation and field output inspection",
       "tool_script": "tools/runtime_smoke.py",
       "evidence_status": "PASS",
-      "evidence_file": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\machine_validation\\runtime_smoke.json",
+      "evidence_file": "<REPO_ROOT>\\machine_validation\\runtime_smoke.json",
       "error": null,
       "evidence_envelope": {
         "case_id": "smoke",
         "release": "Abaqus 2025",
         "runtime": {
           "launcher": "C:\\SIMULIA\\Commands\\abaqus.bat",
-          "workdir": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent",
-          "script": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\machine_validation\\AIAgent_B28Smoke_script.py",
+          "workdir": "<REPO_ROOT>",
+          "script": "<REPO_ROOT>\\machine_validation\\AIAgent_B28Smoke_script.py",
           "command": [
             "C:\\SIMULIA\\Commands\\abaqus.bat",
             "cae",
-            "noGUI=D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\machine_validation\\AIAgent_B28Smoke_script.py"
+            "noGUI=<REPO_ROOT>\\machine_validation\\AIAgent_B28Smoke_script.py"
           ],
           "return_code": 0,
           "process_succeeded": true,
@@ -42,7 +42,7 @@
         "solver": "standard",
         "job": "AIAgent_RuntimeSmoke",
         "odb": {
-          "path": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\AIAgent_RuntimeSmoke.odb",
+          "path": "<REPO_ROOT>\\AIAgent_RuntimeSmoke.odb",
           "exists": true
         },
         "solver_status": "completed",
@@ -83,18 +83,18 @@
         },
         "artifacts": [
           {
-            "path": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\machine_validation\\AIAgent_B28Smoke_script.py",
+            "path": "<REPO_ROOT>\\machine_validation\\AIAgent_B28Smoke_script.py",
             "kind": "script"
           },
           {
-            "path": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\AIAgent_RuntimeSmoke.odb",
+            "path": "<REPO_ROOT>\\AIAgent_RuntimeSmoke.odb",
             "kind": "odb"
           }
         ],
         "provenance": {
           "launcher": "C:\\SIMULIA\\Commands\\abaqus.bat",
-          "script": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\machine_validation\\AIAgent_B28Smoke_script.py",
-          "workdir": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent"
+          "script": "<REPO_ROOT>\\machine_validation\\AIAgent_B28Smoke_script.py",
+          "workdir": "<REPO_ROOT>"
         }
       }
     },
@@ -107,19 +107,19 @@
       "analytical_reference": "Euler-Bernoulli cantilever tip deflection PL^3/(3EI) = 1.9048 mm, root bending stress 600 MPa, reaction balance = 1000 N",
       "tool_script": "tools/static_golden_e2e.py",
       "evidence_status": "PASS",
-      "evidence_file": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\machine_validation\\static_golden_e2e.json",
+      "evidence_file": "<REPO_ROOT>\\machine_validation\\static_golden_e2e.json",
       "error": null,
       "evidence_envelope": {
         "case_id": "static_cantilever",
         "release": "Abaqus 2025",
         "runtime": {
           "launcher": "C:\\SIMULIA\\Commands\\abaqus.bat",
-          "workdir": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent",
-          "script": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\machine_validation\\static_golden_e2e_script.py",
+          "workdir": "<REPO_ROOT>",
+          "script": "<REPO_ROOT>\\machine_validation\\static_golden_e2e_script.py",
           "command": [
             "C:\\SIMULIA\\Commands\\abaqus.bat",
             "cae",
-            "noGUI=D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\machine_validation\\static_golden_e2e_script.py"
+            "noGUI=<REPO_ROOT>\\machine_validation\\static_golden_e2e_script.py"
           ],
           "return_code": 0,
           "process_succeeded": true,
@@ -129,7 +129,7 @@
         "solver": "standard",
         "job": "StaticGoldenJob",
         "odb": {
-          "path": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\StaticGoldenJob.odb",
+          "path": "<REPO_ROOT>\\StaticGoldenJob.odb",
           "exists": true,
           "size_bytes": 350360
         },
@@ -139,7 +139,7 @@
             "items": [
               {
                 "kind": "odb_summary",
-                "locator": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\StaticGoldenJob.odb",
+                "locator": "<REPO_ROOT>\\StaticGoldenJob.odb",
                 "metadata": {},
                 "source": "odb",
                 "unit": "",
@@ -645,19 +645,19 @@
       "analytical_reference": "Richardson extrapolation & Roache Grid Convergence Index (GCI)",
       "tool_script": "tools/mesh_convergence_e2e.py",
       "evidence_status": "PASS",
-      "evidence_file": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\machine_validation\\mesh_convergence_e2e.json",
+      "evidence_file": "<REPO_ROOT>\\machine_validation\\mesh_convergence_e2e.json",
       "error": null,
       "evidence_envelope": {
         "case_id": "mesh_convergence",
         "release": "Abaqus 2025",
         "runtime": {
           "launcher": "C:\\SIMULIA\\Commands\\abaqus.bat",
-          "workdir": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent",
-          "script": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\machine_validation\\mesh_convergence_e2e_script.py",
+          "workdir": "<REPO_ROOT>",
+          "script": "<REPO_ROOT>\\machine_validation\\mesh_convergence_e2e_script.py",
           "command": [
             "C:\\SIMULIA\\Commands\\abaqus.bat",
             "cae",
-            "noGUI=D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\machine_validation\\mesh_convergence_e2e_script.py"
+            "noGUI=<REPO_ROOT>\\machine_validation\\mesh_convergence_e2e_script.py"
           ],
           "return_code": 0,
           "process_succeeded": true,
@@ -667,7 +667,7 @@
         "solver": "standard",
         "job": "MeshConv_Fine",
         "odb": {
-          "path": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\MeshConv_Fine.odb",
+          "path": "<REPO_ROOT>\\MeshConv_Fine.odb",
           "exists": true,
           "size_bytes": 1165080
         },
@@ -788,18 +788,18 @@
         },
         "artifacts": [
           {
-            "path": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\machine_validation\\mesh_convergence_e2e_script.py",
+            "path": "<REPO_ROOT>\\machine_validation\\mesh_convergence_e2e_script.py",
             "kind": "script"
           },
           {
-            "path": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\MeshConv_Fine.odb",
+            "path": "<REPO_ROOT>\\MeshConv_Fine.odb",
             "kind": "odb"
           }
         ],
         "provenance": {
           "launcher": "C:\\SIMULIA\\Commands\\abaqus.bat",
-          "script": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\machine_validation\\mesh_convergence_e2e_script.py",
-          "workdir": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent"
+          "script": "<REPO_ROOT>\\machine_validation\\mesh_convergence_e2e_script.py",
+          "workdir": "<REPO_ROOT>"
         }
       }
     },
@@ -812,19 +812,19 @@
       "analytical_reference": "Kinematic continuity across tied interface (\u0394U = 0), reaction balance = 1000 N",
       "tool_script": "tools/tie_contact_e2e.py",
       "evidence_status": "PASS",
-      "evidence_file": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\machine_validation\\tie_contact_e2e.json",
+      "evidence_file": "<REPO_ROOT>\\machine_validation\\tie_contact_e2e.json",
       "error": null,
       "evidence_envelope": {
         "case_id": "tie_contact",
         "release": "Abaqus 2025",
         "runtime": {
           "launcher": "C:\\SIMULIA\\Commands\\abaqus.bat",
-          "workdir": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent",
-          "script": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\machine_validation\\tie_contact_e2e_script.py",
+          "workdir": "<REPO_ROOT>",
+          "script": "<REPO_ROOT>\\machine_validation\\tie_contact_e2e_script.py",
           "command": [
             "C:\\SIMULIA\\Commands\\abaqus.bat",
             "cae",
-            "noGUI=D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\machine_validation\\tie_contact_e2e_script.py"
+            "noGUI=<REPO_ROOT>\\machine_validation\\tie_contact_e2e_script.py"
           ],
           "return_code": 0,
           "process_succeeded": true,
@@ -834,7 +834,7 @@
         "solver": "standard",
         "job": "TieContactJob",
         "odb": {
-          "path": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\TieContactJob.odb",
+          "path": "<REPO_ROOT>\\TieContactJob.odb",
           "exists": true,
           "size_bytes": 449248
         },
@@ -844,7 +844,7 @@
             "items": [
               {
                 "kind": "odb_summary",
-                "locator": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\TieContactJob.odb",
+                "locator": "<REPO_ROOT>\\TieContactJob.odb",
                 "metadata": {},
                 "source": "odb",
                 "unit": "",
@@ -1420,19 +1420,19 @@
       "analytical_reference": "Dynamic load factor (DLF) for ramp loading, energy conservation (ALLKE, ALLSE, ALLWK, ALLIE)",
       "tool_script": "tools/dynamic_golden_e2e.py",
       "evidence_status": "PASS",
-      "evidence_file": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\machine_validation\\dynamic_golden_e2e.json",
+      "evidence_file": "<REPO_ROOT>\\machine_validation\\dynamic_golden_e2e.json",
       "error": null,
       "evidence_envelope": {
         "case_id": "implicit_dynamic",
         "release": "Abaqus 2025",
         "runtime": {
           "launcher": "C:/SIMULIA/Commands/abaqus.bat",
-          "workdir": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent",
-          "script": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\machine_validation\\dynamic_golden_e2e_script.py",
+          "workdir": "<REPO_ROOT>",
+          "script": "<REPO_ROOT>\\machine_validation\\dynamic_golden_e2e_script.py",
           "command": [
             "C:/SIMULIA/Commands/abaqus.bat",
             "cae",
-            "noGUI=D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\machine_validation\\dynamic_golden_e2e_script.py"
+            "noGUI=<REPO_ROOT>\\machine_validation\\dynamic_golden_e2e_script.py"
           ],
           "return_code": 0,
           "process_succeeded": true,
@@ -1442,7 +1442,7 @@
         "solver": "standard",
         "job": "DynamicGoldenJob",
         "odb": {
-          "path": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\DynamicGoldenJob.odb",
+          "path": "<REPO_ROOT>\\DynamicGoldenJob.odb",
           "exists": true,
           "size_bytes": 1414876
         },
@@ -1748,19 +1748,19 @@
       "analytical_reference": "Fourier 1D conduction T(x) = T_hot - (T_hot - T_cold)*(x/L), flux balance Q_in + Q_out = 0",
       "tool_script": "tools/thermal_golden_e2e.py",
       "evidence_status": "PASS",
-      "evidence_file": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\machine_validation\\thermal_golden_e2e.json",
+      "evidence_file": "<REPO_ROOT>\\machine_validation\\thermal_golden_e2e.json",
       "error": null,
       "evidence_envelope": {
         "case_id": "steady_thermal",
         "release": "Abaqus 2025",
         "runtime": {
           "launcher": "C:/SIMULIA/Commands/abaqus.bat",
-          "workdir": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\machine_validation",
-          "script": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\machine_validation\\thermal_golden_e2e_script.py",
+          "workdir": "<REPO_ROOT>\\machine_validation",
+          "script": "<REPO_ROOT>\\machine_validation\\thermal_golden_e2e_script.py",
           "command": [
             "C:/SIMULIA/Commands/abaqus.bat",
             "cae",
-            "noGUI=D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\machine_validation\\thermal_golden_e2e_script.py"
+            "noGUI=<REPO_ROOT>\\machine_validation\\thermal_golden_e2e_script.py"
           ],
           "return_code": 0,
           "process_succeeded": true,
@@ -1770,7 +1770,7 @@
         "solver": "standard",
         "job": "ThermalGoldenJob",
         "odb": {
-          "path": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\machine_validation\\ThermalGoldenJob.odb",
+          "path": "<REPO_ROOT>\\machine_validation\\ThermalGoldenJob.odb",
           "exists": true,
           "size_bytes": 493224
         },
@@ -1931,7 +1931,7 @@
               {
                 "kind": "odb_summary",
                 "source": "odb",
-                "locator": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\machine_validation\\ThermalGoldenJob.odb",
+                "locator": "<REPO_ROOT>\\machine_validation\\ThermalGoldenJob.odb",
                 "value": {
                   "status": "available",
                   "step_count": 1,
@@ -2378,19 +2378,19 @@
       "analytical_reference": "Coulomb friction law F_f = \u03bc F_N (\u03bc=0.25), normal & tangential equilibrium",
       "tool_script": "tools/general_contact_e2e.py",
       "evidence_status": "PASS",
-      "evidence_file": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\machine_validation\\general_contact_e2e.json",
+      "evidence_file": "<REPO_ROOT>\\machine_validation\\general_contact_e2e.json",
       "error": null,
       "evidence_envelope": {
         "case_id": "general_contact",
         "release": "Abaqus 2025",
         "runtime": {
           "launcher": "C:/SIMULIA/Commands/abaqus.bat",
-          "workdir": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\machine_validation",
-          "script": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\machine_validation\\general_contact_e2e_script.py",
+          "workdir": "<REPO_ROOT>\\machine_validation",
+          "script": "<REPO_ROOT>\\machine_validation\\general_contact_e2e_script.py",
           "command": [
             "C:/SIMULIA/Commands/abaqus.bat",
             "cae",
-            "noGUI=D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\machine_validation\\general_contact_e2e_script.py"
+            "noGUI=<REPO_ROOT>\\machine_validation\\general_contact_e2e_script.py"
           ],
           "return_code": 0,
           "process_succeeded": true,
@@ -2400,7 +2400,7 @@
         "solver": "standard",
         "job": "GeneralContactJob",
         "odb": {
-          "path": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\machine_validation\\GeneralContactJob.odb",
+          "path": "<REPO_ROOT>\\machine_validation\\GeneralContactJob.odb",
           "exists": true,
           "size_bytes": 445016
         },
@@ -2732,19 +2732,19 @@
       "analytical_reference": "Physical pendulum finite-amplitude period T = 1.2713 s (L=600 mm, \u03b8_0=10 deg), energy conservation",
       "tool_script": "tools/mbd_golden_e2e.py",
       "evidence_status": "PASS",
-      "evidence_file": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\machine_validation\\mbd_golden_e2e.json",
+      "evidence_file": "<REPO_ROOT>\\machine_validation\\mbd_golden_e2e.json",
       "error": null,
       "evidence_envelope": {
         "case_id": "mbd1_rigid_pendulum",
         "release": "Abaqus 2025",
         "runtime": {
           "launcher": "C:/SIMULIA/Commands/abaqus.bat",
-          "workdir": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent",
-          "script": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\machine_validation\\mbd_golden_e2e_script.py",
+          "workdir": "<REPO_ROOT>",
+          "script": "<REPO_ROOT>\\machine_validation\\mbd_golden_e2e_script.py",
           "command": [
             "C:/SIMULIA/Commands/abaqus.bat",
             "cae",
-            "noGUI=D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\machine_validation\\mbd_golden_e2e_script.py"
+            "noGUI=<REPO_ROOT>\\machine_validation\\mbd_golden_e2e_script.py"
           ],
           "return_code": 0,
           "process_succeeded": true,
@@ -2754,7 +2754,7 @@
         "solver": "standard",
         "job": "MBDGoldenJob",
         "odb": {
-          "path": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\MBDGoldenJob.odb",
+          "path": "<REPO_ROOT>\\MBDGoldenJob.odb",
           "exists": true,
           "size_bytes": 5092516
         },
@@ -3024,19 +3024,19 @@
       "analytical_reference": "Dual rigid pendulum linear mode period T_1 = 1.2843 s, kinematic joint drift limit <= 1e-3 mm",
       "tool_script": "tools/mbd2_revolute_golden_e2e.py",
       "evidence_status": "PASS",
-      "evidence_file": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\machine_validation\\mbd2_revolute_golden_e2e.json",
+      "evidence_file": "<REPO_ROOT>\\machine_validation\\mbd2_revolute_golden_e2e.json",
       "error": null,
       "evidence_envelope": {
         "case_id": "mbd2_double_pendulum",
         "release": "Abaqus 2025",
         "runtime": {
           "launcher": "C:/SIMULIA/Commands/abaqus.bat",
-          "workdir": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent",
-          "script": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\machine_validation\\AIAgent_MBD2RevoluteGolden_script.py",
+          "workdir": "<REPO_ROOT>",
+          "script": "<REPO_ROOT>\\machine_validation\\AIAgent_MBD2RevoluteGolden_script.py",
           "command": [
             "C:/SIMULIA/Commands/abaqus.bat",
             "cae",
-            "noGUI=D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\machine_validation\\AIAgent_MBD2RevoluteGolden_script.py"
+            "noGUI=<REPO_ROOT>\\machine_validation\\AIAgent_MBD2RevoluteGolden_script.py"
           ],
           "return_code": 0,
           "process_succeeded": true,
@@ -3046,7 +3046,7 @@
         "solver": "standard",
         "job": "MBD2GoldenJob",
         "odb": {
-          "path": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\machine_validation\\MBD2GoldenJob.odb",
+          "path": "<REPO_ROOT>\\machine_validation\\MBD2GoldenJob.odb",
           "exists": true,
           "size_bytes": 3911516
         },
@@ -3113,11 +3113,11 @@
         },
         "artifacts": [
           {
-            "path": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\machine_validation\\AIAgent_MBD2RevoluteGolden_script.py",
+            "path": "<REPO_ROOT>\\machine_validation\\AIAgent_MBD2RevoluteGolden_script.py",
             "kind": "script"
           },
           {
-            "path": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\machine_validation\\MBD2GoldenJob.odb",
+            "path": "<REPO_ROOT>\\machine_validation\\MBD2GoldenJob.odb",
             "kind": "odb"
           }
         ],
@@ -3136,15 +3136,15 @@
       "analytical_reference": "Coupled rigid crank and C3D8R flexible link under gravity, CONN3D2 Hinge drift <= 1e-3 mm, active elastic strain energy participation ALLSE/ALLIE >= 1%, dynamic stress sanity 0.01 <= Mises <= 100 MPa",
       "tool_script": "tools/fmbd4_rigid_flexible_golden_e2e.py",
       "evidence_status": "PASS",
-      "evidence_file": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\machine_validation\\fmbd4_rigid_flexible_golden_e2e.json",
+      "evidence_file": "<REPO_ROOT>\\machine_validation\\fmbd4_rigid_flexible_golden_e2e.json",
       "error": null,
       "evidence_envelope": {
         "case_id": "fmbd4_rigid_flexible",
         "release": "Abaqus 2025",
         "runtime": {
           "launcher": "C:\\SIMULIA\\Commands\\abaqus.bat",
-          "workdir": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent",
-          "script": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\machine_validation\\FMBD4GoldenJob_fmbd4_script.py",
+          "workdir": "<REPO_ROOT>",
+          "script": "<REPO_ROOT>\\machine_validation\\FMBD4GoldenJob_fmbd4_script.py",
           "command": [],
           "return_code": 0,
           "process_succeeded": true,
@@ -3154,7 +3154,7 @@
         "solver": "standard",
         "job": "FMBD4GoldenJob",
         "odb": {
-          "path": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\FMBD4GoldenJob.odb",
+          "path": "<REPO_ROOT>\\FMBD4GoldenJob.odb",
           "exists": true,
           "size_bytes": 15832452
         },
@@ -3232,11 +3232,11 @@
         "artifacts": [
           {
             "kind": "odb",
-            "path": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\FMBD4GoldenJob.odb"
+            "path": "<REPO_ROOT>\\FMBD4GoldenJob.odb"
           },
           {
             "kind": "script",
-            "path": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\machine_validation\\FMBD4GoldenJob_fmbd4_script.py"
+            "path": "<REPO_ROOT>\\machine_validation\\FMBD4GoldenJob_fmbd4_script.py"
           }
         ],
         "provenance": {
@@ -3255,15 +3255,15 @@
       "analytical_reference": "Closed-loop rigid crank, C3D8R flexible rod, and rigid slider mechanism compiled purely from MechanismGraph; kinematic loop closure <= 0.05, joint drift <= 1e-3 mm, slider transverse drift <= 1e-2 mm, dynamic stress sanity 0.01 <= Mises <= 150 MPa, internal energy composition ALLSE/ALLIE >= 0.5%, algorithmic numerical dissipation -ETOTAL_min/max(ALLWK, ALLKE) <= 50%",
       "tool_script": "tools/fmbd5_crank_slider_golden_e2e.py",
       "evidence_status": "PASS",
-      "evidence_file": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\machine_validation\\fmbd5_crank_slider_golden_e2e.json",
+      "evidence_file": "<REPO_ROOT>\\machine_validation\\fmbd5_crank_slider_golden_e2e.json",
       "error": null,
       "evidence_envelope": {
         "case_id": "fmbd5_crank_slider",
         "release": "Abaqus 2025",
         "runtime": {
           "launcher": "C:/SIMULIA/Commands/abaqus.bat",
-          "workdir": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\machine_validation",
-          "script": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\machine_validation\\FMBD5GoldenJob_fmbd5_script.py",
+          "workdir": "<REPO_ROOT>\\machine_validation",
+          "script": "<REPO_ROOT>\\machine_validation\\FMBD5GoldenJob_fmbd5_script.py",
           "command": [],
           "return_code": 0,
           "process_succeeded": true,
@@ -3273,7 +3273,7 @@
         "solver": "standard",
         "job": "FMBD5GoldenJob",
         "odb": {
-          "path": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\machine_validation\\FMBD5GoldenJob.odb",
+          "path": "<REPO_ROOT>\\machine_validation\\FMBD5GoldenJob.odb",
           "exists": true,
           "size_bytes": 6983120
         },
@@ -3385,11 +3385,11 @@
         "artifacts": [
           {
             "kind": "odb",
-            "path": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\machine_validation\\FMBD5GoldenJob.odb"
+            "path": "<REPO_ROOT>\\machine_validation\\FMBD5GoldenJob.odb"
           },
           {
             "kind": "script",
-            "path": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\machine_validation\\FMBD5GoldenJob_fmbd5_script.py"
+            "path": "<REPO_ROOT>\\machine_validation\\FMBD5GoldenJob_fmbd5_script.py"
           }
         ],
         "provenance": {
@@ -3409,19 +3409,19 @@
       "analytical_reference": "Abaqus/Explicit dynamic wave propagation, stable time increment dt <= Le/cd, total energy conservation (|ETOTAL|/E_ref <= 2%), and C3D8R hourglass energy control (ALLAE/ALLIE <= 5%)",
       "tool_script": "tools/explicit_golden_e2e.py",
       "evidence_status": "PASS",
-      "evidence_file": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\machine_validation\\explicit_golden_e2e.json",
+      "evidence_file": "<REPO_ROOT>\\machine_validation\\explicit_golden_e2e.json",
       "error": null,
       "evidence_envelope": {
         "case_id": "explicit_dynamic",
         "release": "Abaqus 2025",
         "runtime": {
           "launcher": "C:\\SIMULIA\\Commands\\abaqus.bat",
-          "workdir": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\machine_validation",
-          "script": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\machine_validation\\explicit_golden_e2e_script.py",
+          "workdir": "<REPO_ROOT>\\machine_validation",
+          "script": "<REPO_ROOT>\\machine_validation\\explicit_golden_e2e_script.py",
           "command": [
             "C:\\SIMULIA\\Commands\\abaqus.bat",
             "cae",
-            "noGUI=D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\machine_validation\\explicit_golden_e2e_script.py"
+            "noGUI=<REPO_ROOT>\\machine_validation\\explicit_golden_e2e_script.py"
           ],
           "return_code": 0,
           "process_succeeded": true,
@@ -3431,7 +3431,7 @@
         "solver": "explicit",
         "job": "ExplicitGoldenJob",
         "odb": {
-          "path": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\machine_validation\\ExplicitGoldenJob.odb",
+          "path": "<REPO_ROOT>\\machine_validation\\ExplicitGoldenJob.odb",
           "exists": true,
           "size_bytes": 1286332
         },
@@ -3737,14 +3737,14 @@
       "analytical_reference": "ASTM E1049-85 Rainflow cycle counting, Goodman mean-stress correction, log-log S-N interpolation, and Palmgren-Miner linear cumulative damage",
       "tool_script": "tools/fatigue_odb_golden_e2e.py",
       "evidence_status": "PASS",
-      "evidence_file": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\machine_validation\\fatigue_odb_golden_e2e.json",
+      "evidence_file": "<REPO_ROOT>\\machine_validation\\fatigue_odb_golden_e2e.json",
       "error": null,
       "evidence_envelope": {
         "case_id": "fatigue_real_odb",
         "release": "Abaqus 2025",
         "runtime": {
           "launcher": "C:\\SIMULIA\\Commands\\abaqus.bat",
-          "workdir": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\machine_validation",
+          "workdir": "<REPO_ROOT>\\machine_validation",
           "script": "",
           "command": [],
           "return_code": 0,
@@ -3755,7 +3755,7 @@
         "solver": "postprocess",
         "job": "DynamicGoldenJob",
         "odb": {
-          "path": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\DynamicGoldenJob.odb",
+          "path": "<REPO_ROOT>\\DynamicGoldenJob.odb",
           "exists": true,
           "size_bytes": 1414876
         },
@@ -3800,12 +3800,12 @@
         },
         "artifacts": [
           {
-            "path": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\DynamicGoldenJob.odb",
+            "path": "<REPO_ROOT>\\DynamicGoldenJob.odb",
             "kind": "odb"
           }
         ],
         "provenance": {
-          "odb_source": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\DynamicGoldenJob.odb",
+          "odb_source": "<REPO_ROOT>\\DynamicGoldenJob.odb",
           "material_curve": [
             [
               100.0,

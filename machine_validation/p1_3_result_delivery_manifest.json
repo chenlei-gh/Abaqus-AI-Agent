@@ -135,7 +135,7 @@
           "step": "Step-1",
           "region": "Assembly ASSEMBLY",
           "variable": "ALLSE",
-          "odb_path": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\legacy_job_artifacts\\P1_3_Result_Delivery_Golden\\Job_P1_3_Result_Delivery.odb"
+          "odb_path": "<REPO_ROOT>\\legacy_job_artifacts\\P1_3_Result_Delivery_Golden\\Job_P1_3_Result_Delivery.odb"
         }
       },
       {
@@ -162,7 +162,7 @@
           "step": "Step-1",
           "region": "Assembly ASSEMBLY",
           "variable": "ALLIE",
-          "odb_path": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\legacy_job_artifacts\\P1_3_Result_Delivery_Golden\\Job_P1_3_Result_Delivery.odb"
+          "odb_path": "<REPO_ROOT>\\legacy_job_artifacts\\P1_3_Result_Delivery_Golden\\Job_P1_3_Result_Delivery.odb"
         }
       },
       {
@@ -189,7 +189,7 @@
           "step": "Step-1",
           "region": "Assembly ASSEMBLY",
           "variable": "ETOTAL",
-          "odb_path": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\legacy_job_artifacts\\P1_3_Result_Delivery_Golden\\Job_P1_3_Result_Delivery.odb"
+          "odb_path": "<REPO_ROOT>\\legacy_job_artifacts\\P1_3_Result_Delivery_Golden\\Job_P1_3_Result_Delivery.odb"
         }
       },
       {
@@ -216,16 +216,16 @@
           "step": "Step-1",
           "region": "Assembly ASSEMBLY",
           "variable": "ALLKE",
-          "odb_path": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\legacy_job_artifacts\\P1_3_Result_Delivery_Golden\\Job_P1_3_Result_Delivery.odb"
+          "odb_path": "<REPO_ROOT>\\legacy_job_artifacts\\P1_3_Result_Delivery_Golden\\Job_P1_3_Result_Delivery.odb"
         }
       }
     ],
     "figure_paths": [
-      "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\legacy_job_artifacts\\P1_3_Result_Delivery_Golden\\Job_P1_3_Result_Delivery_hotspots.svg",
-      "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\legacy_job_artifacts\\P1_3_Result_Delivery_Golden\\Job_P1_3_Result_Delivery_ALLSE.svg",
-      "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\legacy_job_artifacts\\P1_3_Result_Delivery_Golden\\Job_P1_3_Result_Delivery_ALLIE.svg",
-      "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\legacy_job_artifacts\\P1_3_Result_Delivery_Golden\\Job_P1_3_Result_Delivery_ETOTAL.svg",
-      "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\legacy_job_artifacts\\P1_3_Result_Delivery_Golden\\Job_P1_3_Result_Delivery_ALLKE.svg"
+      "<REPO_ROOT>\\legacy_job_artifacts\\P1_3_Result_Delivery_Golden\\Job_P1_3_Result_Delivery_hotspots.svg",
+      "<REPO_ROOT>\\legacy_job_artifacts\\P1_3_Result_Delivery_Golden\\Job_P1_3_Result_Delivery_ALLSE.svg",
+      "<REPO_ROOT>\\legacy_job_artifacts\\P1_3_Result_Delivery_Golden\\Job_P1_3_Result_Delivery_ALLIE.svg",
+      "<REPO_ROOT>\\legacy_job_artifacts\\P1_3_Result_Delivery_Golden\\Job_P1_3_Result_Delivery_ETOTAL.svg",
+      "<REPO_ROOT>\\legacy_job_artifacts\\P1_3_Result_Delivery_Golden\\Job_P1_3_Result_Delivery_ALLKE.svg"
     ],
     "derived_metrics": {
       "force_balance": {
@@ -350,5 +350,5 @@
     "p9_report_html_rendered": "PASS",
     "p10_no_secondary_acceptance_leak": "PASS"
   },
-  "audit_signature": "05e84563c1c9112a83465f775755e3ea360c9751552cea798162b708d001e02a"
+  "audit_signature": "b36f6f7fb6ec57ddec1b79b2889682ccd9fc0da369099341b71299433babe026"
 }

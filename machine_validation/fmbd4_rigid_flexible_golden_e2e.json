@@ -67,11 +67,11 @@
   "artifacts": [
     {
       "kind": "odb",
-      "path": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\machine_validation\\FMBD4GoldenJob.odb"
+      "path": "<REPO_ROOT>\\machine_validation\\FMBD4GoldenJob.odb"
     },
     {
       "kind": "script",
-      "path": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\machine_validation\\FMBD4GoldenJob_fmbd4_script.py"
+      "path": "<REPO_ROOT>\\machine_validation\\FMBD4GoldenJob_fmbd4_script.py"
     }
   ],
   "case_id": "fmbd4_rigid_flexible",
@@ -166,7 +166,7 @@
       "link_length_mm": 300.0,
       "width_mm": 20.0
     },
-    "odb_path": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\machine_validation\\FMBD4GoldenJob.odb",
+    "odb_path": "<REPO_ROOT>\\machine_validation\\FMBD4GoldenJob.odb",
     "procedure": "implicit_dynamic",
     "provenance": {
       "action_count": 26,
@@ -229,12 +229,12 @@
     "workflow": {
       "job_status": "JobStatus(name='FMBD4GoldenJob', state=<JobState.COMPLETED: 'COMPLETED'>, raw={'models': ['FMBD4Golden', 'Model-1'], 'parts': ['Crank', 'FlexLink'], 'instances': ['Crank-1', 'FlexLink-1'], 'materials': ['Steel'], 'sections': ['Sec_Hinge', 'SolidSec'], 'steps': ['Initial', 'Step-1', 'Initial'], 'boundary_conditions': ['BC-GroundPivot'], 'loads': ['Gravity'], 'amplitudes': [], 'predefined_fields': [], 'interactions': [], 'output_requests': ['F-Output-1'], 'jobs': ['FMBD4GoldenJob'], 'metadata': {'model_count': 2, 'job_count': 1, 'job_status': {'FMBD4GoldenJob': 'None'}}}, diagnostics=())",
       "mesh_quality_passed": true,
-      "odb_path": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\machine_validation\\FMBD4GoldenJob.odb",
+      "odb_path": "<REPO_ROOT>\\machine_validation\\FMBD4GoldenJob.odb",
       "solver_completed": true
     }
   },
   "return_code": 0,
-  "script": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\machine_validation\\FMBD4GoldenJob_fmbd4_script.py",
+  "script": "<REPO_ROOT>\\machine_validation\\FMBD4GoldenJob_fmbd4_script.py",
   "simulation_results": {
     "energy_dissipation_ratio": 0.0055582571796292555,
     "max_joint_drift_mm": 3.134578470568233e-10,
@@ -257,5 +257,5 @@
     "stress_sanity_passed": true,
     "strict_acceptance_passed": false
   },
-  "workdir": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\machine_validation"
+  "workdir": "<REPO_ROOT>\\machine_validation"
 }

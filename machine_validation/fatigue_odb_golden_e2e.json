@@ -10,16 +10,16 @@
   "process_succeeded": true,
   "return_code": 0,
   "launcher": "C:\\SIMULIA\\Commands\\abaqus.bat",
-  "workdir": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent",
+  "workdir": "<REPO_ROOT>",
   "odb": {
-    "path": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\machine_validation\\DynamicGoldenJob.odb",
+    "path": "<REPO_ROOT>\\machine_validation\\DynamicGoldenJob.odb",
     "exists": true,
     "size_bytes": 1414876
   },
   "solver_status": "completed",
   "runtime": {
     "launcher": "C:\\SIMULIA\\Commands\\abaqus.bat",
-    "workdir": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent",
+    "workdir": "<REPO_ROOT>",
     "process_succeeded": true,
     "return_code": 0,
     "execution_time_s": 0.607328,
@@ -76,7 +76,7 @@
     }
   },
   "provenance": {
-    "odb_source": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\machine_validation\\DynamicGoldenJob.odb",
+    "odb_source": "<REPO_ROOT>\\machine_validation\\DynamicGoldenJob.odb",
     "material_curve": [
       [
         100.0,
