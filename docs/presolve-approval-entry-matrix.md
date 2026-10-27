@@ -71,7 +71,7 @@ CLI 现状：无任何求解子命令。`ask` 只路由意图、不求解（cli.
 | CI/Golden 豁免 | 策略解析顺序：显式参数 > `ABAQUS_AI_AGENT_APPROVAL` 环境变量 > 测试替身识别；真实执行器默认 required；tools/* 批处理通道与生产 agent 路径物理隔离 |
 | 审批契约 | `contracts/approval.py`：PROPOSED → APPROVED → SUPERSEDED，漂移即失效，摘要仅为防篡改证据而非身份签名 |
 
-真机验证（`machine_validation/presolve_approval_live_evidence.json`）：Phase A 阻断并产出候选与评审报告 → 审批 → Phase B 真实 Abaqus/Standard 2025 求解成功（.sta COMPLETED，ODB 182,376 字节，SHA-256 已记录）→ 修改 INP 后再次阻断且旧候选归档为 SUPERSEDED → CLI 审批生效 → 重复审批被拒（exit 2）。
+真机验证：E2 批处理路径（`machine_validation/presolve_approval_live_evidence.json`）与 E1 真实 CAE 会话路径（`machine_validation/e1_presolve_approval_live_evidence.json`）均已闭环。E1 结果：Phase A 阻断 → CLI 批准（绑定评审报告哈希）→ Phase B 哈希匹配放行 → Abaqus/Standard 2025 真实求解完成（.sta COMPLETED，ODB 1,739,244 字节）→ 验收 PASS、真实指标提取成功。正式交付层按既有规则 DELIVERY_BLOCKED（与审批门禁无关的独立子系统行为）。E2 细节：：Phase A 阻断并产出候选与评审报告 → 审批 → Phase B 真实 Abaqus/Standard 2025 求解成功（.sta COMPLETED，ODB 182,376 字节，SHA-256 已记录）→ 修改 INP 后再次阻断且旧候选归档为 SUPERSEDED → CLI 审批生效 → 重复审批被拒（exit 2）。
 
 已知边界（诚实披露）：
 
