@@ -1,0 +1,125 @@
+"""Batch settle (P1-4) and kernel namespace isolation (P1-5) tests."""
+
+import threading
+import time
+
+from abaqus_ai_agent.execution.batch import (
+    BatchExecutor,
+    BatchResult,
+    await_quiescence,
+)
+from abaqus_ai_agent.execution.kernel_namespace import KernelNamespace
+
+
+# --- await_quiescence ---------------------------------------------------------
+
+def test_quiescence_settles_on_idle_dir(tmp_path):
+    settled, note = await_quiescence(tmp_path, quiet_period=0.3, timeout=5.0, poll=0.1)
+    assert settled and note is None
+
+
+def test_quiescence_times_out_while_files_keep_changing(tmp_path):
+    stop = threading.Event()
+
+    def writer():
+        i = 0
+        while not stop.is_set():
+            (tmp_path / "active.dat").write_text(str(i), encoding="utf-8")
+            i += 1
+            time.sleep(0.05)
+
+    t = threading.Thread(target=writer, daemon=True)
+    t.start()
+    try:
+        settled, note = await_quiescence(tmp_path, quiet_period=0.4, timeout=0.8, poll=0.1)
+    finally:
+        stop.set()
+        t.join()
+    assert not settled
+    assert "still changing" in note
+
+
+def test_run_settles_artifacts_after_launcher_exit(tmp_path, monkeypatch):
+    from abaqus_ai_agent.execution import watchdog as watchdog_module
+
+    class _Proc:
+        returncode = 0
+        stdout = "ok"
+        stderr = ""
+        duration = 0.01
+
+    monkeypatch.setattr(watchdog_module, "run_with_watchdog", lambda *a, **k: _Proc())
+    executor = BatchExecutor(workdir=str(tmp_path), settle_timeout=5.0)
+    result = executor._run(["abaqus", "cae", "noGUI=x.py"])
+    assert result.succeeded
+    assert result.settled is True
+
+
+def test_run_flags_unsettled_artifacts(tmp_path, monkeypatch):
+    from abaqus_ai_agent.execution import watchdog as watchdog_module
+
+    class _Proc:
+        returncode = 0
+        stdout = ""
+        stderr = ""
+        duration = 0.01
+
+    monkeypatch.setattr(watchdog_module, "run_with_watchdog", lambda *a, **k: _Proc())
+    executor = BatchExecutor(workdir=str(tmp_path), settle_timeout=0.5)
+
+    stop = threading.Event()
+
+    def writer():
+        i = 0
+        while not stop.is_set():
+            (tmp_path / "growing.dat").write_text(str(i), encoding="utf-8")
+            i += 1
+            time.sleep(0.05)
+
+    t = threading.Thread(target=writer, daemon=True)
+    t.start()
+    try:
+        result = executor._run(["abaqus", "job=x"])
+    finally:
+        stop.set()
+        t.join()
+    assert result.succeeded  # process-level only
+    assert result.settled is False
+    assert result.settle_note
+
+
+# --- KernelNamespace ------------------------------------------------------------
+
+def test_namespace_persists_variables_across_fragments():
+    ns = KernelNamespace()
+    ns.execute("helper_value = 41")
+    out = ns.execute('print({"v": helper_value + 1})')
+    assert out == {"v": 42}
+
+
+def test_namespace_does_not_leak_into_caller_globals():
+    sentinel = object()
+    globals()["LOG"] = sentinel
+    try:
+        ns = KernelNamespace(seed_code=("LOG = 'kernel-value'",))
+        ns.execute('result = {"log_seen": LOG}')
+        # caller's LOG is untouched; the kernel value stayed in the namespace
+        assert globals()["LOG"] is sentinel
+        assert ns.namespace["LOG"] == "kernel-value"
+    finally:
+        globals().pop("LOG", None)
+
+
+def test_result_channel_is_cleared_between_fragments():
+    ns = KernelNamespace()
+    first = ns.execute('result = {"a": 1}')
+    assert first == {"a": 1}
+    # Second fragment sets no result: the previous one must not leak through.
+    second = ns.execute("x = 5")
+    assert second == {"status": "COMPLETED"}
+
+
+def test_stdout_dict_last_line_contract():
+    ns = KernelNamespace()
+    out = ns.execute('print({"status": "COMPLETED", "n": 7})')
+    assert out == {"status": "COMPLETED", "n": 7}

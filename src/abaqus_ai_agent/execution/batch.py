@@ -2,6 +2,7 @@ import os
 from pathlib import Path
 import shutil
 import subprocess
+import time
 import uuid
 from dataclasses import dataclass
 from typing import Any, Optional, Tuple
@@ -48,6 +49,14 @@ class BatchResult:
     #: positive duration, and a fast run still reports a small float. This is
     #: ``WatchedProcessResult.duration`` passed through, not a re-measurement.
     duration: Optional[float] = None
+    #: False when the launcher exited with rc=0 but the workdir kept changing
+    #: beyond the settle budget: on Windows the CAE kernel can outlive the
+    #: launcher, so an early rc=0 is not terminal evidence. Callers that gate
+    #: on real completion must require ``settled`` in addition to
+    #: ``succeeded``. Defaults to True so hand-built results in tests keep
+    #: their previous meaning.
+    settled: bool = True
+    settle_note: Optional[str] = None
 
     @property
     def succeeded(self) -> bool:
@@ -73,6 +82,47 @@ class BatchResult:
         return default
 
 
+def _dir_snapshot(path):
+    snap = {}
+    try:
+        with os.scandir(path) as entries:
+            for entry in entries:
+                try:
+                    st = entry.stat()
+                    snap[entry.name] = (st.st_mtime_ns, st.st_size)
+                except OSError:
+                    pass
+    except OSError:
+        pass
+    return snap
+
+
+def await_quiescence(workdir, quiet_period=1.5, timeout=30.0, poll=0.5):
+    """Wait until no file in ``workdir`` changes for ``quiet_period`` seconds.
+
+    The watched launcher process can exit before the detached CAE kernel has
+    flushed its artifacts. This bounded poll is the host-side terminal check
+    for that window: it returns ``(settled, note)`` where ``settled=False``
+    means the workdir was still changing when the budget expired, i.e. there
+    is no terminal evidence either way and callers must not treat the run as
+    finished.
+    """
+    start = time.monotonic()
+    last = _dir_snapshot(workdir)
+    last_change = start
+    while True:
+        time.sleep(poll)
+        current = _dir_snapshot(workdir)
+        now = time.monotonic()
+        if current != last:
+            last = current
+            last_change = now
+        if now - last_change >= quiet_period:
+            return True, None
+        if now - start >= timeout:
+            return False, "workdir still changing %.1fs after launcher exit" % (now - start)
+
+
 class BatchExecutor:
     """Thin host-side adapter for Abaqus batch/noGUI execution.
 
@@ -80,11 +130,14 @@ class BatchExecutor:
     live executor for model mutations that require a persistent CAE session.
     """
 
-    def __init__(self, launcher="abaqus", workdir=None, timeout=3600, stall_timeout=120):
+    def __init__(self, launcher="abaqus", workdir=None, timeout=3600, stall_timeout=120,
+                 settle_timeout=30.0):
         self.launcher = launcher
         self.workdir = workdir
         self.timeout = timeout
         self.stall_timeout = stall_timeout
+        # Post-exit artifact settling budget. 0 disables the quiescence wait.
+        self.settle_timeout = settle_timeout
 
     @property
     def resolved_launcher(self) -> str:
@@ -124,8 +177,14 @@ class BatchExecutor:
             timeout=timeout or self.timeout,
             stall_timeout=eff_stall,
         )
+        settled, settle_note = True, None
+        if proc.returncode == 0 and self.settle_timeout and self.settle_timeout > 0:
+            settled, settle_note = await_quiescence(
+                effective_workdir, timeout=self.settle_timeout
+            )
         return BatchResult(command, proc.returncode, proc.stdout, proc.stderr,
-                           effective_workdir, proc.duration)
+                           effective_workdir, proc.duration,
+                           settled=settled, settle_note=settle_note)
 
     def run_input(self, input_path, job_name=None, timeout=None, workdir=None):
         path = os.path.abspath(input_path)

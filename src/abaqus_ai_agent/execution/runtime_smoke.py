@@ -25,6 +25,13 @@ class RuntimeSmokeResult:
     required_outputs_present: bool = False
     error_class: Optional[str] = None
     error_message: Optional[str] = None
+    #: Strictness findings: duplicate/conflicting/contradictory/out-of-order
+    #: markers, or markers that do not belong to the expected run. Any entry
+    #: here makes the result fail closed regardless of the stage booleans.
+    invalid_reasons: tuple = ()
+    #: The run identity the accepted markers were bound to (None = unbound
+    #: legacy parsing; callers that need cross-run safety must pass one).
+    run_id: Optional[str] = None
 
     @property
     def passed(self):
@@ -37,19 +44,23 @@ class RuntimeSmokeResult:
             self.odb_exists,
             self.odb_opened,
             self.required_outputs_present,
-        ))
+        )) and not self.invalid_reasons
 
 
 # Backward compatibility alias
 B28HarnessResult = RuntimeSmokeResult
 
 
-def build_runtime_smoke_script(job_name="AIAgent_RuntimeSmoke", odb_path=None):
+def build_runtime_smoke_script(job_name="AIAgent_RuntimeSmoke", odb_path=None, run_id=None):
     """Build a deterministic Abaqus runtime smoke script.
 
     The model is deliberately tiny: one 3D deformable brick, one static step,
     one encastre face, and one concentrated load. The harness is an execution
     compatibility probe, not a solver benchmark.
+
+    ``run_id`` binds every marker to one specific invocation: parsers that are
+    given the same id reject markers from any other run, so a stale artifact
+    (e.g. an old abaqus.rpy) can never be mistaken for this run's evidence.
     """
     odb_path = odb_path or job_name + ".odb"
     return r'''# -*- coding: utf-8 -*-
@@ -61,9 +72,12 @@ import regionToolset
 
 JOB = %(job)r
 ODB = %(odb)r
+RUN_ID = %(run_id)r
 
 def marker(name, **data):
     payload = {"marker": name}
+    if RUN_ID:
+        payload["run_id"] = RUN_ID
     payload.update(data)
     print("AIA_SMOKE_MARKER " + json.dumps(payload, sort_keys=True))
 
@@ -166,20 +180,94 @@ except Exception as exc:
            error_message=str(exc))
     marker("script_completed", passed=False)
     raise
-''' % {"job": job_name, "odb": odb_path}
+''' % {"job": job_name, "odb": odb_path, "run_id": run_id}
 
 
 # Backward compatibility alias
 build_b28_smoke_script = build_runtime_smoke_script
 
 
-def classify_smoke_markers(markers):
-    """Convert parsed marker dictionaries into a conservative result."""
-    names = {x.get("marker"): x for x in markers}
+# Canonical stage order. Markers that appear out of order indicate replayed,
+# merged, or corrupted output and must never read as a clean pass.
+_STAGE_ORDER = (
+    "model_created",
+    "input_written",
+    "job_submitted",
+    "job_completed",
+    "odb_exists",
+    "odb_opened",
+    "required_outputs_present",
+    "script_completed",
+)
+
+
+def classify_smoke_markers(markers, expected_run_id=None):
+    """Convert parsed marker dictionaries into a conservative, strict result.
+
+    Strictness rules (fail closed on every ambiguity):
+
+    - When ``expected_run_id`` is given, only markers carrying that exact
+      ``run_id`` count. Anything else is foreign evidence (typically a stale
+      abaqus.rpy from a previous run) and is rejected, never merged.
+    - A marker name appearing twice is invalid, whether the payloads are
+      identical duplicates or conflicting values.
+    - An ``error`` marker alongside ``script_completed(passed=True)`` is a
+      contradiction and is invalid.
+    - Stage markers must appear in canonical order.
+    """
+    markers = list(markers or ())
+    invalid = []
+
+    bound = []
+    foreign = 0
+    unbound = 0
+    for m in markers:
+        if expected_run_id is None:
+            bound.append(m)
+            continue
+        marker_run = m.get("run_id")
+        if marker_run == expected_run_id:
+            bound.append(m)
+        elif marker_run:
+            foreign += 1
+        else:
+            unbound += 1
+    if expected_run_id is not None:
+        if foreign:
+            # Foreign markers are diagnostics only; they never enter `names`.
+            pass
+        if not bound and (foreign or unbound):
+            invalid = ["no_markers_for_run:%s" % expected_run_id]
+            if foreign:
+                invalid.append("foreign_markers_rejected:%d" % foreign)
+            if unbound:
+                invalid.append("unbound_markers_rejected:%d" % unbound)
+            return RuntimeSmokeResult(invalid_reasons=tuple(invalid), run_id=expected_run_id)
+
+    names = {}
+    order_positions = []
+    for m in bound:
+        name = m.get("marker")
+        if name in names:
+            if names[name] == m:
+                invalid.append("duplicate_marker:%s" % name)
+            else:
+                invalid.append("conflicting_marker:%s" % name)
+            continue
+        names[name] = m
+        if name in _STAGE_ORDER:
+            order_positions.append(_STAGE_ORDER.index(name))
+    if order_positions != sorted(order_positions):
+        invalid.append("out_of_order_markers")
+
     error = names.get("error") or {}
+    completed = names.get("script_completed", {})
+    if "error" in names and completed.get("passed") is True:
+        invalid.append("contradictory_markers:error_and_success")
+
     status = names.get("job_completed", {}).get("status")
     return RuntimeSmokeResult(
-        script_completed=names.get("script_completed", {}).get("passed") is True,
+        script_completed=completed.get("passed") is True,
         model_created="model_created" in names,
         input_written="input_written" in names,
         job_submitted="job_submitted" in names,
@@ -189,6 +277,8 @@ def classify_smoke_markers(markers):
         required_outputs_present="required_outputs_present" in names,
         error_class=error.get("error_class"),
         error_message=error.get("error_message"),
+        invalid_reasons=tuple(invalid),
+        run_id=expected_run_id,
     )
 
 
@@ -210,8 +300,13 @@ def execute_runtime_smoke(executor, job_name="AIAgent_RuntimeSmoke", odb_path=No
 execute_b28_smoke = execute_runtime_smoke
 
 
-def parse_smoke_output(output):
-    """Parse output for AIA_SMOKE_MARKER or legacy AIA_B28_MARKER lines."""
+def parse_smoke_output(output, expected_run_id=None):
+    """Parse output for AIA_SMOKE_MARKER or legacy AIA_B28_MARKER lines.
+
+    ``expected_run_id`` binds the parse to one invocation: markers from other
+    runs (or markers without any run identity) are rejected instead of being
+    silently absorbed.
+    """
     import json
     markers = []
     prefixes = ("AIA_SMOKE_MARKER ", "AIA_B28_MARKER ")
@@ -226,7 +321,7 @@ def parse_smoke_output(output):
                 except ValueError:
                     markers.append({"marker": "invalid_marker", "raw": line})
                 break
-    return classify_smoke_markers(markers)
+    return classify_smoke_markers(markers, expected_run_id=expected_run_id)
 
 
 parse_b28_output = parse_smoke_output

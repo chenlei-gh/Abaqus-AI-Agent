@@ -126,3 +126,79 @@ def test_all_legacy_b28_aliases_are_merged_into_runtime_smoke():
     assert runtime_smoke.classify_b28_markers is runtime_smoke.classify_smoke_markers
     assert runtime_smoke.execute_b28_smoke is runtime_smoke.execute_runtime_smoke
     assert runtime_smoke.parse_b28_output is runtime_smoke.parse_smoke_output
+def _passing_stream(run_id=None):
+    stages = [
+        {"marker": "model_created"},
+        {"marker": "input_written"},
+        {"marker": "job_submitted"},
+        {"marker": "job_completed", "status": "COMPLETED"},
+        {"marker": "odb_exists"},
+        {"marker": "odb_opened"},
+        {"marker": "required_outputs_present"},
+        {"marker": "script_completed", "passed": True},
+    ]
+    import json as _json
+    lines = []
+    for m in stages:
+        if run_id:
+            m = dict(m, run_id=run_id)
+        lines.append("AIA_SMOKE_MARKER " + _json.dumps(m, sort_keys=True))
+    return "\n".join(lines)
+
+
+def test_duplicate_identical_marker_is_invalid():
+    out = _passing_stream() + "\nAIA_SMOKE_MARKER {\"marker\":\"model_created\"}"
+    result = parse_smoke_output(out)
+    assert not result.passed
+    assert any(r.startswith("duplicate_marker:") for r in result.invalid_reasons)
+
+
+def test_conflicting_duplicate_marker_is_invalid():
+    out = (
+        _passing_stream()
+        + "\nAIA_SMOKE_MARKER {\"marker\":\"job_completed\",\"status\":\"ABORTED\"}"
+    )
+    result = parse_smoke_output(out)
+    assert not result.passed
+    assert any(r.startswith("conflicting_marker:") for r in result.invalid_reasons)
+
+
+def test_error_plus_success_is_contradiction():
+    out = _passing_stream() + "\nAIA_SMOKE_MARKER {\"marker\":\"error\",\"error_class\":\"x\"}"
+    result = parse_smoke_output(out)
+    assert not result.passed
+    assert "contradictory_markers:error_and_success" in result.invalid_reasons
+
+
+def test_out_of_order_markers_are_invalid():
+    out = (
+        "AIA_SMOKE_MARKER {\"marker\":\"input_written\"}\n"
+        "AIA_SMOKE_MARKER {\"marker\":\"model_created\"}\n"
+        "AIA_SMOKE_MARKER {\"marker\":\"job_submitted\"}\n"
+        "AIA_SMOKE_MARKER {\"marker\":\"job_completed\",\"status\":\"COMPLETED\"}\n"
+        "AIA_SMOKE_MARKER {\"marker\":\"odb_exists\"}\n"
+        "AIA_SMOKE_MARKER {\"marker\":\"odb_opened\"}\n"
+        "AIA_SMOKE_MARKER {\"marker\":\"required_outputs_present\"}\n"
+        "AIA_SMOKE_MARKER {\"marker\":\"script_completed\",\"passed\":true}"
+    )
+    result = parse_smoke_output(out)
+    assert not result.passed
+    assert "out_of_order_markers" in result.invalid_reasons
+
+
+def test_run_id_binding_accepts_only_the_expected_run():
+    assert parse_smoke_output(_passing_stream("run-a"), expected_run_id="run-a").passed
+    foreign = parse_smoke_output(_passing_stream("run-b"), expected_run_id="run-a")
+    assert not foreign.passed
+    assert "no_markers_for_run:run-a" in foreign.invalid_reasons
+    unbound = parse_smoke_output(_passing_stream(), expected_run_id="run-a")
+    assert not unbound.passed
+    assert "no_markers_for_run:run-a" in unbound.invalid_reasons
+
+
+def test_builder_embeds_run_id_in_markers():
+    script = build_runtime_smoke_script("SmokeJob", run_id="abc123")
+    assert "RUN_ID = 'abc123'" in script
+    assert "payload[\"run_id\"] = RUN_ID" in script
+    legacy = build_runtime_smoke_script("SmokeJob")
+    assert "RUN_ID = None" in legacy
