@@ -456,6 +456,7 @@ def select_engineering_figures(
 
     # If available_fields or step structure not explicitly provided, probe ODB directly
     resolved_actual_frame: Optional[int] = None
+    odb_max_frames = 0
     if odb_path and os.path.exists(str(odb_path)):
         try:
             from ..execution.solver import verify_authentic_odb_structure
@@ -471,6 +472,11 @@ def select_engineering_figures(
                             fld_set.add(str(fld).upper())
                     if fld_set:
                         available_fields = sorted(list(fld_set))
+                for _s_data in steps_data.values():
+                    if isinstance(_s_data, dict):
+                        _fr = _s_data.get("frames", 0)
+                        if isinstance(_fr, int) and not isinstance(_fr, bool) and _fr > odb_max_frames:
+                            odb_max_frames = _fr
                 if step in steps_data:
                     n_fr = steps_data[step].get("frames", 0)
                     if frame_index == -1 and n_fr > 0:
@@ -691,7 +697,10 @@ def select_engineering_figures(
             "Finite element mesh discretization and element topology",
             "ISOMETRIC",
         ))
-    if include_animation:
+    # The deformation animation is included whenever the ODB actually contains
+    # a time history to show (more than one frame), even for runs that did not
+    # explicitly request it. A single-frame ODB has nothing to animate.
+    if include_animation or odb_max_frames > 1:
         candidates.append((
             "deformation_animation",
             "ANIMATION",
@@ -883,16 +892,25 @@ def _boundary_markers(kind: str, boundary: Dict[str, Any]) -> List[Dict[str, Any
             if not isinstance(item, dict):
                 continue
             point = item.get("point") or item.get("application_point")
-            vector = _load_direction_vector(item.get("direction") or item.get("vector"))
+            load_type = str(item.get("load_type") or item.get("type") or "").lower()
+            is_pressure = "pressure" in load_type
+            # Pressure acts along the surface normal; the CF-token direction
+            # field does not describe it and must not become an arrow.
+            vector = None if is_pressure else _load_direction_vector(
+                item.get("direction_vector") or item.get("direction") or item.get("vector")
+            )
             # A direction without a point is not a location. Do not draw it at
-            # the origin or at a guessed centroid.
-            if not isinstance(point, (list, tuple)) or len(point) < 3 or vector is None:
+            # the origin or at a guessed centroid. Pressure acts along the
+            # surface normal, so a point-only marker is honest for it.
+            if not isinstance(point, (list, tuple)) or len(point) < 3:
+                continue
+            if vector is None and not is_pressure:
                 continue
             markers.append({
                 "kind": "load",
                 "name": str(item.get("name") or item.get("region") or "Load"),
                 "point": list(point),
-                "vector": list(vector),
+                "vector": list(vector) if vector is not None else None,
                 "label": _load_marker_label(item),
             })
     elif kind == "boundary_conditions":
@@ -968,12 +986,23 @@ def _load_direction_vector(raw):
 def _load_marker_label(item: Dict[str, Any]) -> str:
     name = str(item.get("name") or item.get("region") or "Load")
     magnitude = item.get("magnitude")
+    load_type = str(item.get("load_type") or item.get("type") or "").lower()
     direction = item.get("direction") or ""
+    is_pressure = "pressure" in load_type
     parts = [name]
     if magnitude is not None:
-        parts.append(str(magnitude))
-    if direction:
+        unit = "MPa" if is_pressure else ("N*m" if "moment" in load_type else "N")
+        parts.append(f"{magnitude} {unit}")
+    if direction and not is_pressure:
         parts.append(str(direction))
+    area = item.get("area")
+    if area:
+        try:
+            parts.append(f"area={float(area):g} mm^2")
+        except (TypeError, ValueError):
+            pass
+    if is_pressure:
+        parts.append("(normal to surface)")
     return " ".join(parts)
 
 

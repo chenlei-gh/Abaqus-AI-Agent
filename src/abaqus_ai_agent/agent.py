@@ -107,6 +107,7 @@ def _record_payload(item):
         "load_type", "magnitude", "direction", "master_surface", "slave_surface",
         "master_instance", "slave_instance", "friction_coefficient", "set_name",
         "point", "normal", "master_point", "slave_point", "gap", "face_id",
+        "step", "area", "direction_vector", "entity_type", "entity_ids",
     ):
         if hasattr(item, key):
             payload[key] = getattr(item, key)
@@ -381,6 +382,36 @@ def _merged_fidelity_verdict(intent, *, plan_actions, scope_contacts):
     return verdict
 
 
+def _merge_boundary_geometry(payloads, evidence_items):
+    """Attach compile-time spatial evidence (point, area, direction vector) to report rows.
+
+    The compiler records where each load/BC was actually applied; the intent
+    records alone do not carry coordinates, so the figure markers would
+    otherwise have nothing to draw.
+    """
+    by_name = {}
+    by_region = {}
+    for item in evidence_items or ():
+        if not isinstance(item, dict):
+            continue
+        name = str(item.get("name") or "")
+        region = str(item.get("region") or "")
+        if name:
+            by_name[name] = item
+        if region:
+            by_region[region] = item
+    merged = []
+    for payload in payloads or ():
+        row = dict(payload)
+        ev = by_name.get(str(row.get("name") or "")) or by_region.get(str(row.get("region") or ""))
+        if ev:
+            for key in ("point", "points", "direction_vector", "area", "entity_type", "entity_ids", "step"):
+                if row.get(key) is None and ev.get(key) is not None:
+                    row[key] = ev[key]
+        merged.append(row)
+    return merged
+
+
 def _boundary_evidence_for_figures(plan, intent):
     """Collect load, fixture, and contact records already accepted by the compiler."""
     summary = getattr(plan, "intent_summary", None) or {}
@@ -413,6 +444,10 @@ def _boundary_evidence_for_figures(plan, intent):
             ) if payload
         ]
         fixture = _record_payload(getattr(scope, "fixture", None))
+    geometry_evidence = summary.get("boundary_geometry") if isinstance(summary, dict) else None
+    if isinstance(geometry_evidence, dict):
+        loads = _merge_boundary_geometry(loads, geometry_evidence.get("loads"))
+        bcs = _merge_boundary_geometry(bcs, geometry_evidence.get("bcs"))
     if not any((loads, bcs, contacts, fixture)):
         return None
     return {
@@ -1157,14 +1192,47 @@ class AbaqusAIAgent:
         from .execution.odb import inspect_odb
         return summarize_odb(inspect_odb(self.executor, path))
 
-    def _render_diagnostic_html(self, title, diag_lines):
-        """Bannered HTML draft. Not a formal report.html."""
+    def _render_diagnostic_html(self, title, diag_lines, figures=()):
+        """Bannered HTML draft. Not a formal report.html.
+
+        A failed acceptance is exactly when the contours, boundary markers, and
+        animation are needed for troubleshooting, so verified figures that could
+        be produced are embedded as data-URI images.
+        """
+        import base64
         import html as html_lib
         body = "".join(
             "<p>%s</p>" % html_lib.escape(line)
             for line in diag_lines
             if line is not None
         )
+        fig_html = ""
+        for fig in figures or ():
+            path_str = str(getattr(fig, "path", "") or "")
+            fp = Path(path_str)
+            try:
+                if not fp.is_file() or fp.stat().st_size <= 0:
+                    continue
+                raw = fp.read_bytes()
+            except OSError:
+                continue
+            suffix = fp.suffix.lower()
+            if suffix == ".gif":
+                mime = "image/gif"
+            elif suffix == ".svg":
+                mime = "image/svg+xml"
+            else:
+                mime = "image/png"
+            caption = html_lib.escape(
+                str(getattr(fig, "caption", "") or getattr(fig, "kind", "") or fp.name)
+            )
+            b64 = base64.b64encode(raw).decode("ascii")
+            fig_html += (
+                '<figure><img src="data:%s;base64,%s" alt="%s"/>'
+                "<figcaption>%s</figcaption></figure>"
+            ) % (mime, b64, caption, caption)
+        if fig_html:
+            body += "<h2>CAE Figures (diagnostic)</h2>" + fig_html
         return (
             "<!DOCTYPE html><html><head><meta charset=\"utf-8\">"
             "<title>%s</title></head><body>"
@@ -2025,6 +2093,35 @@ class AbaqusAIAgent:
                 deck_text = (getattr(run, "metadata", None) or {}).get("inp_text")
                 if not deck_text:
                     deck_text = self._load_plan_inp_text(plan, target_workdir or getattr(run, "work_dir", None))
+
+                # Solver transparency: the report must state which solver ran and
+                # why the selection was made, so a wrong choice is visible at a
+                # glance rather than buried in defaults.
+                plan_summary = getattr(plan, "intent_summary", None) or {}
+                solver_sel = plan_summary.get("solver_selection") if isinstance(plan_summary, dict) else None
+                step_types = plan_summary.get("step_types") if isinstance(plan_summary, dict) else None
+                solver_transparency = {}
+                if step_types:
+                    solver_transparency["analysis_type"] = ", ".join(str(t) for t in step_types)
+                if isinstance(solver_sel, dict):
+                    solver_transparency["solver_type"] = (
+                        "Abaqus/Explicit" if solver_sel.get("solver") == "EXPLICIT" else "Abaqus/Standard"
+                    )
+                    solver_transparency["solver_selection_strategy"] = str(solver_sel.get("strategy") or "")
+                    if solver_sel.get("reasons"):
+                        solver_transparency["solver_selection_reasons"] = "; ".join(str(r) for r in solver_sel["reasons"])
+                    if solver_sel.get("warnings"):
+                        solver_transparency["solver_selection_warnings"] = "; ".join(str(w) for w in solver_sel["warnings"])
+                    solver_transparency["solver_selection_confidence"] = str(solver_sel.get("confidence") or "")
+                    if solver_sel.get("requires_user_confirmation"):
+                        solver_transparency["solver_selection_confirmation"] = (
+                            "REQUIRED - not human-confirmed in this batch run"
+                        )
+                _run_meta_for_solver = getattr(run, "metadata", None) or {}
+                if _run_meta_for_solver.get("solver_selection_confirmation_pending"):
+                    solver_transparency["solver_selection_confirmation"] = (
+                        "REQUIRED - not human-confirmed in this batch run"
+                    )
                 if official_dir is None:
                     raise ValueError(
                         "Official HTML delivery requires the customer data/requirements directory."
@@ -2057,6 +2154,7 @@ class AbaqusAIAgent:
                     inp_text=deck_text,
                     model_info={
                         "name": plan.model_name,
+                        **solver_transparency,
                         "material": final_mat_def.name if final_mat_def else "Steel",
                         "assembly_components": (
                             scope_payload.get("part_records") or scope_payload.get("parts") or []
@@ -2214,8 +2312,40 @@ class AbaqusAIAgent:
                     diag_lines.append(f"- ⚠️ {err}")
                 diag_lines.append("")
 
+            # Diagnostic drafts carry the same CAE figures as far as they can
+            # be rendered here: a blocked or failed run is exactly when the
+            # engineer needs to see the model state.
+            diag_figures = list(all_figures)
+            _diag_odb = getattr(run, "odb_path", None)
+            if _diag_odb and figure_selection.specs:
+                try:
+                    from .execution.odb_rendering import render_authentic_visualizations
+                    existing_names = {
+                        Path(str(getattr(f, "path", "") or "")).name for f in diag_figures
+                    }
+                    pending_specs = [
+                        s for s in figure_selection.specs
+                        if str(getattr(s, "target_filename", "") or "") not in existing_names
+                    ]
+                    if pending_specs:
+                        diag_figures.extend(render_authentic_visualizations(
+                            odb_path=_diag_odb,
+                            specs=pending_specs,
+                            output_dir=scratch_dir,
+                            launcher=getattr(self.executor, "launcher", None),
+                            run_id=getattr(run, "id", None),
+                            input_hash=(
+                                getattr(run.provenance, "input_hash", "")
+                                if getattr(run, "provenance", None) else ""
+                            ),
+                        ))
+                except Exception as diag_fig_err:
+                    diag_lines.append(
+                        f"- Figure rendering in diagnostic mode skipped: {diag_fig_err}"
+                    )
+
             report_md = "\n".join(diag_lines)
-            report_html_str = self._render_diagnostic_html(draft_title, diag_lines)
+            report_html_str = self._render_diagnostic_html(draft_title, diag_lines, figures=diag_figures)
             self._write_diagnostic_html(scratch_dir, report_html_str)
             out_dir = scratch_dir
 

@@ -62,16 +62,22 @@ def _text(intent):
 def _flags(intent):
     metadata = dict(getattr(intent, "metadata", {}) or {})
     text = _text(intent)
+    # Bilingual event cues: an engineering event named in Chinese is the same
+    # event. These map onto the exact same flags as the English terms so the
+    # decision table stays single-sourced.
     return {
-        "explicit_requested": str(metadata.get("solver", "")).lower() == "explicit" or "explicit" in text,
-        "standard_requested": str(metadata.get("solver", "")).lower() == "standard" or "implicit" in text,
-        "impact": bool(metadata.get("impact")) or any(x in text for x in ("impact", "drop test", "blast", "crash", "collision")),
-        "short_transient": bool(metadata.get("short_duration")) or any(x in text for x in ("short-duration", "short duration", "transient")),
-        "complex_contact": bool(metadata.get("complex_contact")) or any(x in text for x in ("complex contact", "many-body contact", "self-contact")),
-        "large_deformation": bool(metadata.get("large_deformation")) or any(x in text for x in ("large deformation", "large distortion", "large rotation")),
-        "severe_discontinuity": bool(metadata.get("severe_discontinuity")) or any(x in text for x in ("severe discontinuity", "severe convergence", "unstable", "postbuckling")),
-        "quasi_static": bool(metadata.get("quasi_static")) or any(x in text for x in ("quasi-static", "quasi static", "forming", "forging", "rolling")),
-        "failure": bool(metadata.get("material_failure")) or any(x in text for x in ("material failure", "element deletion", "degradation")),
+        "explicit_requested": str(metadata.get("solver", "")).lower() == "explicit" or any(x in text for x in ("explicit", "\u663e\u5f0f")),
+        "standard_requested": str(metadata.get("solver", "")).lower() == "standard" or any(x in text for x in ("implicit", "\u9690\u5f0f")),
+        "impact": bool(metadata.get("impact")) or any(x in text for x in ("impact", "drop test", "blast", "crash", "collision", "\u51b2\u51fb", "\u78b0\u649e", "\u8dcc\u843d", "\u7206\u70b8")),
+        "short_transient": bool(metadata.get("short_duration")) or any(x in text for x in ("short-duration", "short duration", "transient", "\u77ac\u6001", "\u77ed\u65f6")),
+        "complex_contact": bool(metadata.get("complex_contact")) or any(x in text for x in ("complex contact", "many-body contact", "self-contact", "\u590d\u6742\u63a5\u89e6", "\u81ea\u63a5\u89e6", "\u591a\u4f53\u63a5\u89e6", "\u63a5\u89e6\u5206\u79bb")),
+        "large_deformation": bool(metadata.get("large_deformation")) or any(x in text for x in ("large deformation", "large distortion", "large rotation", "\u5927\u53d8\u5f62", "\u5927\u4f4d\u79fb", "\u5927\u8f6c\u52a8")),
+        "severe_discontinuity": bool(metadata.get("severe_discontinuity")) or any(x in text for x in ("severe discontinuity", "severe convergence", "unstable", "postbuckling", "\u540e\u5c48\u66f2", "\u5931\u7a33", "\u4e0d\u6536\u655b")),
+        # Snap-fit / insertion / pull-out events are the canonical Explicit
+        # quasi-static use case: contact state changes abruptly and Standard
+        # struggles to converge, while Explicit has no convergence problem.
+        "quasi_static": bool(metadata.get("quasi_static")) or any(x in text for x in ("quasi-static", "quasi static", "forming", "forging", "rolling", "pull-out", "pull out", "pullout", "snap-fit", "snap fit", "snapfit", "insertion", "detent", "unclip", "\u51c6\u9759\u6001", "\u6210\u5f62", "\u953b\u9020", "\u8f8a\u538b", "\u538b\u88c5", "\u8131\u51fa", "\u62d4\u8131", "\u63d2\u62d4", "\u6ed1\u8131", "\u5361\u6263", "\u8131\u6263")),
+        "failure": bool(metadata.get("material_failure")) or any(x in text for x in ("material failure", "element deletion", "degradation", "\u6750\u6599\u5931\u6548", "\u65ad\u88c2", "\u5355\u5143\u5220\u9664")),
     }
 
 
@@ -126,10 +132,11 @@ def select_solver(intent):
     text = _text(intent)
     flags = _flags(intent)
     if not analysis:
-        if any(x in text for x in ("frequency", "modal", "eigenfrequency")): analysis = "frequency"
-        elif any(x in text for x in ("heat transfer", "thermal")): analysis = "thermal"
+        if any(x in text for x in ("frequency", "modal", "eigenfrequency", "\u9891\u7387", "\u6a21\u6001", "\u56fa\u6709\u9891\u7387")): analysis = "frequency"
+        elif any(x in text for x in ("heat transfer", "thermal", "\u70ed\u4f20\u5bfc", "\u4f20\u70ed", "\u70ed\u5206\u6790")): analysis = "thermal"
         elif "coupled" in text and "temperature" in text: analysis = "coupled"
-        elif any(x in text for x in ("dynamic", "transient", "impact")): analysis = "dynamic"
+        elif "\u8026\u5408" in text and ("\u6e29\u5ea6" in text or "\u70ed" in text): analysis = "coupled"
+        elif any(x in text for x in ("dynamic", "transient", "impact", "\u52a8\u529b", "\u77ac\u6001", "\u51b2\u51fb", "\u78b0\u649e")): analysis = "dynamic"
         else: analysis = "static"
     evidence = ({"source": "engineering_intent", "analysis_type": analysis},)
     kinematics = _kinematics(intent)
@@ -194,7 +201,11 @@ def select_solver(intent):
         if kinematics["declared"]: warnings.append(_DECLARED_SEPARATION_REVIEW)
         elif kinematics["keyword"]: warnings.append(_KEYWORD_SEPARATION_REVIEW)
         return SolverSelection("STANDARD", "dynamic", "DYNAMIC_IMPLICIT", reasons=("dynamic analysis with no deterministic Explicit trigger in the supplied intent",), warnings=tuple(warnings), assumptions=("no impact, severe discontinuity, or highly nonlinear contact event was declared",), confidence="low", requires_user_confirmation=True, evidence=evidence)
-    if flags["explicit_requested"] or any(flags[k] for k in ("impact", "complex_contact", "severe_discontinuity", "large_deformation", "failure", "quasi_static")):
+    event_cues = any(flags[k] for k in ("impact", "complex_contact", "severe_discontinuity", "large_deformation", "failure", "quasi_static"))
+    if flags["explicit_requested"] or (event_cues and not flags["standard_requested"]):
+        # Contract D3 boundary: keyword event cues may steer an unspecified
+        # solver choice towards Explicit (always with confirmation), but they
+        # must never override a solver the user explicitly requested.
         reasons = []
         for key, label in (("explicit_requested", "explicit solver/procedure was explicitly requested"), ("complex_contact", "complex contact interaction"), ("severe_discontinuity", "severe discontinuity or instability"), ("large_deformation", "large deformation/distortion"), ("failure", "material degradation/failure"), ("quasi_static", "highly nonlinear quasi-static process")):
             if flags[key]: reasons.append(label)

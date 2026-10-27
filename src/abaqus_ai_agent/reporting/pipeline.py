@@ -240,7 +240,9 @@ class DeterministicReportPipeline:
         # Match specs against provided figures using strict admit_figure_for_reuse
         from .figure_selector import admit_figure_for_reuse
 
-        spec_to_figure: Dict[VisualizationSpec, ReportFigure] = {}
+        # Keyed by id(): specs with boundary markers carry dict payloads, which
+        # are legitimately unhashable and must not break figure binding.
+        spec_to_figure: Dict[int, ReportFigure] = {}
         missing_specs: List[VisualizationSpec] = []
         used_figure_paths = set()
 
@@ -267,7 +269,7 @@ class DeterministicReportPipeline:
                     break
 
             if matched_fig is not None:
-                spec_to_figure[spec] = matched_fig
+                spec_to_figure[id(spec)] = matched_fig
                 used_figure_paths.add(matched_fig.path)
             else:
                 missing_specs.append(spec)
@@ -291,8 +293,8 @@ class DeterministicReportPipeline:
 
         for spec in effective_specs:
             fig_obj: Optional[ReportFigure] = None
-            if spec in spec_to_figure:
-                fig_obj = spec_to_figure[spec]
+            if id(spec) in spec_to_figure:
+                fig_obj = spec_to_figure[id(spec)]
             elif spec.target_filename in rendered_by_filename:
                 fig_obj = rendered_by_filename[spec.target_filename]
             else:
@@ -585,6 +587,7 @@ class DeterministicReportPipeline:
                     "Official engineering delivery blocked: run-record output_hash does not "
                     "match the ODB file on disk. No report artifacts were written."
                 )
+        boundary_marker_warnings: List[str] = []
         if is_official_delivery and required_preprocessing_figures:
             from ..validation.condition_fidelity import missing_preprocessing_figures
             missing_figures = missing_preprocessing_figures(
@@ -598,6 +601,42 @@ class DeterministicReportPipeline:
                     "No report artifacts were written."
                     % ", ".join(missing_figures)
                 )
+
+            # Missing markers on a preprocessing figure are a review-quality
+            # warning, not a delivery blocker: the native Abaqus load/BC symbols
+            # are still on the image. The warning is stamped onto the figure
+            # caption and recorded in the report metadata. A figure that is
+            # entirely absent is still blocked above. Body loads (gravity)
+            # legitimately have no single point and are not part of this check.
+            marker_expectations = {
+                "load_application": loads_info,
+                "boundary_conditions": bcs_info,
+            }
+            markerless = []
+            for spec in effective_specs:
+                kind = str(getattr(spec, "visualization_type", "") or "")
+                rows = marker_expectations.get(kind)
+                if kind not in tuple(required_preprocessing_figures) or not rows:
+                    continue
+                claimed_points = [
+                    row for row in rows
+                    if isinstance(row, dict) and row.get("point") is not None
+                ]
+                if claimed_points and not getattr(spec, "boundary_markers", ()):
+                    markerless.append((kind, str(getattr(spec, "target_filename", "") or "")))
+            from dataclasses import replace as _dc_replace
+            for kind, target_name in markerless:
+                warning = (
+                    f"[WARNING] {kind} figure has no location markers although the accepted "
+                    "loads/boundary conditions carry coordinates; only native Abaqus symbols are shown"
+                )
+                boundary_marker_warnings.append(warning)
+                for _fi, _fig in enumerate(report_figures):
+                    if Path(str(getattr(_fig, "path", "") or "")).name == target_name:
+                        report_figures[_fi] = _dc_replace(
+                            _fig, caption=f"{getattr(_fig, 'caption', '')} {warning}".strip()
+                        )
+                        break
 
         # 2. Build polymorphic EngineeringReportData
         report_provenance = issued.to_dict() if issued is not None else None
@@ -618,7 +657,10 @@ class DeterministicReportPipeline:
             result_intelligence=result_intelligence,
             self_healing=self_healing,
             provenance=report_provenance,
-            extra_metadata={"deliverable_authorization": delivery_gate},
+            extra_metadata={
+                "deliverable_authorization": delivery_gate,
+                "boundary_marker_warnings": list(boundary_marker_warnings),
+            },
             objective_context=objective_context,
             time_coverage=time_coverage,
         )

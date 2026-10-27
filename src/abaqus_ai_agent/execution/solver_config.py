@@ -177,8 +177,18 @@ def calculate_adaptive_cpus(
             physics_target = min(4, system_headroom)
             scale_desc = f"medium model ({element_count} elements), multi-core 2-4 optimal"
         else:
-            physics_target = min(8, system_headroom)
-            scale_desc = f"large model ({element_count} elements), 4-8 cores recommended"
+            if solver_upper == "EXPLICIT":
+                # Explicit domain parallelism keeps scaling while each domain
+                # holds a meaningful workload (~12k elements per domain); the
+                # implicit sparse solver flattens out much earlier.
+                physics_target = min(system_headroom, max(8, element_count // 12000))
+                scale_desc = (
+                    f"large model ({element_count} elements), explicit domain "
+                    "parallelism scaled by ~12k elements per domain"
+                )
+            else:
+                physics_target = min(8, system_headroom)
+                scale_desc = f"large model ({element_count} elements), 4-8 cores recommended"
     else:
         # Default engineering heuristic when mesh size is not provided prior to meshing
         physics_target = min(4, system_headroom)
@@ -204,8 +214,9 @@ def calculate_adaptive_cpus(
     chosen = min(candidates)
     if chosen <= 0:
         return 0, f"host_cpus({core_type}), license({license_desc}), solver={solver_upper}", "zero or negative CPU limit determined"
-    # Snap to standard engineering core candidates: 1, 2, 4, 8
-    standard_core_tiers = (1, 2, 4, 8)
+    # Snap to standard engineering core candidates: 1, 2, 4, 8. Explicit jobs
+    # may extend to 12/16 when the physics target justified it above.
+    standard_core_tiers = (1, 2, 4, 8, 12, 16) if solver_upper == "EXPLICIT" else (1, 2, 4, 8)
     chosen_core = 1
     for tier in standard_core_tiers:
         if tier <= chosen:

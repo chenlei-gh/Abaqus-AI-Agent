@@ -1011,6 +1011,11 @@ class AnalysisRunner:
                 postprocess_profile = postprocess_profile or profile_for_solver_selection(selection)
                 metadata = dict(run.metadata)
                 metadata["solver_selection"] = selection
+                if getattr(selection, "requires_user_confirmation", False):
+                    # Batch execution cannot pause for a human; the pending
+                    # confirmation is recorded so the report states the solver
+                    # choice was not human-confirmed.
+                    metadata["solver_selection_confirmation_pending"] = True
                 metadata["postprocess_profile"] = postprocess_profile
                 run = run.with_state(run.state, metadata=metadata)
             output_plan = plan_outputs(effective_criteria, postprocess_profile=None)

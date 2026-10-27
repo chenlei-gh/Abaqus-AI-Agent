@@ -92,10 +92,16 @@ def test_keyword_only_separation_never_blocks_user_standard():
 
 
 def test_keyword_only_separation_keeps_default_standard_with_review():
+    """Amended contract (2026-10): a keyword event cue such as snap-fit /
+    pull-out / slip-out no longer leaves an unspecified solver choice at
+    Standard. It steers the selection to the Explicit quasi-static procedure,
+    which always carries requires_user_confirmation=True, so the switch is
+    never silent. D3 still holds for user-declared solvers: keyword cues can
+    neither override nor block them (see the neighbouring tests)."""
     sel = select_solver(_intent(description="snap-fit unclip force"))
     assert sel.blocked is False
-    assert sel.solver == "STANDARD"
-    assert sel.strategy == "STATIC_GENERAL"
+    assert sel.solver == "EXPLICIT"
+    assert sel.strategy == "QUASI_STATIC_EXPLICIT"
     assert sel.requires_user_confirmation is True
 
 

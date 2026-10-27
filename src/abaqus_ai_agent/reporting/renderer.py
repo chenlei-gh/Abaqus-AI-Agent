@@ -404,6 +404,7 @@ def _render_custom_table_for_section(section_key, value, is_zh=False):
                 if "source" in ld: mag_parts.append(f"From {ld['source']}")
                 if ld.get("direction"): mag_parts.append(f"dir={ld['direction']}")
                 if ld.get("point"): mag_parts.append(f"point={ld['point']}")
+                if ld.get("area"): mag_parts.append(f"area={ld['area']} mm^2")
                 mag_str = "; ".join(mag_parts) if mag_parts else "-"
                 step_str = f"Step {ld.get('step')}" if "step" in ld else ("运行分析步" if is_zh else "Operational Step")
                 desc = ld.get("description") or ("主要运行激励" if is_zh else "Primary Operational Excitation")

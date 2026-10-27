@@ -202,10 +202,15 @@ class AdaptiveReportBuilder:
                     "safety_factor": model_info.get("safety_factor", "未计算 / 证据不足"),
                 }
 
+        selection_extras = (
+            {k: v for k, v in model_info.items() if k.startswith("solver_selection_")}
+            if isinstance(model_info, dict) else {}
+        )
         resolved_solver = solver_info or {
             "solver_type": model_info.get("solver_type", "Abaqus/Standard"),
             "version": model_info.get("solver_version", "未指定 / 运行时检测"),
             "analysis_type": model_info.get("analysis_type", "未指定"),
+            **selection_extras,
         }
         resolved_mesh = mesh_info or {
             "total_elements": model_info.get("total_elements", "未统计"),

@@ -1424,26 +1424,7 @@ def compile_intent_to_actions(
                 else:
                     entity_type = _extract_gr_entity_type(gr)
                     if entity_type.lower() == "face":
-                        if geometry.shape == "l_bracket":
-                            thick = geometry.thickness if geometry.thickness and geometry.thickness > 0 else 10.0
-                            wid = geometry.width if geometry.width and geometry.width > 0 else 20.0
-                            anch_pt = anch if anch else (0.0, 0.0, 0.0)
-                            if abs(anch_pt[1] - (geometry.height or 100.0)) < 1.0 or abs(anch_pt[0] - (geometry.length or 100.0)) < 1.0:
-                                face_area = thick * wid
-                            else:
-                                face_area = (geometry.length or 100.0) * wid
-                        elif geometry.shape == "plate_with_hole":
-                            p_width = geometry.width if geometry.width > 0 else 100.0
-                            p_height = geometry.height if geometry.height > 20.0 else (geometry.length if geometry.length > 20.0 else 100.0)
-                            p_depth = geometry.thickness if geometry.thickness is not None else 20.0
-                            p_radius = geometry.radius if geometry.radius is not None else 10.0
-                            face_area = (p_width * p_height) - (math.pi * p_radius**2)
-                        elif geometry.shape == "cantilever_box":
-                            face_area = (geometry.width if geometry.width > 0 else 10.0) * (geometry.height if geometry.height > 0 else 10.0)
-                        else:
-                            face_area = (geometry.width if geometry.width > 0 else 10.0) * (geometry.height if geometry.height > 0 else 10.0)
-                        if face_area <= 0:
-                            face_area = 1.0
+                        face_area = _total_force_face_area(geometry, anch)
                         eq_pressure = abs(ld.magnitude) / face_area
                         load_code = (
                             f"# Total force {ld.magnitude} N on face converted to equivalent surface pressure: {eq_pressure:.6f} MPa\n"
@@ -1818,6 +1799,7 @@ def compile_intent_to_actions(
         "material_name": material.name,
         "actions_count": len(actions),
         "grounded_regions_count": len(grounded_regions) if grounded_regions else 0,
+        "boundary_geometry": _boundary_geometry_evidence(geometry, bcs, loads, grounded_regions),
         "steps_count": len(defined_steps),
         "fields_count": len(fields) if fields else 0,
         "bolt_pretensions_count": len(bolt_pretensions) if bolt_pretensions else 0,
@@ -1896,6 +1878,178 @@ def _extract_gr_entity_type(gr: Any) -> str:
     if isinstance(gr, dict):
         return str(gr.get("entity_type", "face"))
     return str(getattr(gr, "entity_type", "face"))
+
+
+def _extract_gr_entity_ids(gr: Any) -> Tuple[str, ...]:
+    """Helper to extract CAD entity IDs from GroundedRegion or dict."""
+    if gr is None:
+        return ()
+    raw = gr.get("entity_ids") if isinstance(gr, dict) else getattr(gr, "entity_ids", None)
+    if not raw:
+        return ()
+    return tuple(str(item) for item in raw)
+
+
+# Mirrors reporting.figure_selector._load_direction_vector. Kept local so the
+# planning layer does not import from the reporting layer.
+_DIRECTION_TOKEN_VECTORS: Dict[str, Tuple[float, float, float]] = {
+    "CF1": (1.0, 0.0, 0.0),
+    "+X": (1.0, 0.0, 0.0),
+    "X+": (1.0, 0.0, 0.0),
+    "-CF1": (-1.0, 0.0, 0.0),
+    "-X": (-1.0, 0.0, 0.0),
+    "X-": (-1.0, 0.0, 0.0),
+    "CF2": (0.0, 1.0, 0.0),
+    "+Y": (0.0, 1.0, 0.0),
+    "Y+": (0.0, 1.0, 0.0),
+    "-CF2": (0.0, -1.0, 0.0),
+    "-Y": (0.0, -1.0, 0.0),
+    "Y-": (0.0, -1.0, 0.0),
+    "CF3": (0.0, 0.0, 1.0),
+    "+Z": (0.0, 0.0, 1.0),
+    "Z+": (0.0, 0.0, 1.0),
+    "-CF3": (0.0, 0.0, -1.0),
+    "-Z": (0.0, 0.0, -1.0),
+    "Z-": (0.0, 0.0, -1.0),
+}
+
+
+def _direction_token_vector(raw: Any) -> Optional[Tuple[float, float, float]]:
+    """Resolve a direction token (CF1/CF2/CF3, +/-X/Y/Z) or 3-vector to floats."""
+    if isinstance(raw, (list, tuple)) and len(raw) >= 3:
+        try:
+            vec = (float(raw[0]), float(raw[1]), float(raw[2]))
+        except (TypeError, ValueError):
+            return None
+        return vec if all(math.isfinite(c) for c in vec) else None
+    return _DIRECTION_TOKEN_VECTORS.get(str(raw or "").strip().upper())
+
+
+def _total_force_face_area(geometry: IntentGeometrySpec, anchor: Optional[Tuple[float, float, float]]) -> float:
+    """Area (mm^2) of the face a total concentrated force is distributed over."""
+    if geometry.shape == "l_bracket":
+        thick = geometry.thickness if geometry.thickness and geometry.thickness > 0 else 10.0
+        wid = geometry.width if geometry.width and geometry.width > 0 else 20.0
+        anch_pt = anchor if anchor else (0.0, 0.0, 0.0)
+        if abs(anch_pt[1] - (geometry.height or 100.0)) < 1.0 or abs(anch_pt[0] - (geometry.length or 100.0)) < 1.0:
+            face_area = thick * wid
+        else:
+            face_area = (geometry.length or 100.0) * wid
+    elif geometry.shape == "plate_with_hole":
+        p_width = geometry.width if geometry.width > 0 else 100.0
+        p_height = geometry.height if geometry.height > 20.0 else (geometry.length if geometry.length > 20.0 else 100.0)
+        p_radius = geometry.radius if geometry.radius is not None else 10.0
+        face_area = (p_width * p_height) - (math.pi * p_radius**2)
+    else:
+        face_area = (geometry.width if geometry.width > 0 else 10.0) * (geometry.height if geometry.height > 0 else 10.0)
+    return face_area if face_area > 0 else 1.0
+
+
+def _fallback_region_point(
+    geometry: IntentGeometrySpec,
+    region: Any,
+    *,
+    load_type: str = "",
+    bc_type: str = "",
+) -> Optional[Tuple[float, float, float]]:
+    """Model-space point used by the compile fallback branch for this region.
+
+    This is the same coordinate the generated CAE script passes to findAt when
+    no GroundedRegion mapping exists, so the evidence point always matches the
+    point the solver actually received.
+    """
+    if str(load_type or "").lower() in ("gravity", "body"):
+        # Body loads act everywhere; a single point would misrepresent them.
+        return None
+    width = geometry.width if geometry.width > 0 else 10.0
+    height = geometry.height if geometry.height > 0 else 10.0
+    length = geometry.length if geometry.length > 0 else 100.0
+    reg = str(region or "").upper()
+    if str(bc_type or "").upper() in ("SYMMETRY", "XSYMM", "YSYMM", "ZSYMM"):
+        return (0.0, height / 2.0, length / 2.0)
+    if str(load_type or "").lower() == "concentrated_force":
+        # Fallback applies the force at the tip vertex.
+        return (width, height, length)
+    z_loc = length if "TOP" in reg else 0.0
+    return (width / 2.0, height / 2.0, z_loc)
+
+
+def _boundary_geometry_evidence(
+    geometry: IntentGeometrySpec,
+    bcs: Sequence[IntentBoundarySpec],
+    loads: Sequence[IntentLoadSpec],
+    grounded_regions: Optional[Dict[str, GroundedRegion]],
+) -> Dict[str, Any]:
+    """Spatial evidence for each accepted load/BC: where it acts and which way it points.
+
+    Report figures and marker arrows consume this. Coordinates come from the
+    grounded region when available, otherwise from the same model-space point
+    the compile fallback branch applies the condition to.
+    """
+    regions = grounded_regions or {}
+    load_items = []
+    for ld in loads or ():
+        gr = regions.get(ld.region)
+        pts, anch = _extract_gr_pts_and_anchor(gr)
+        entity_type = _extract_gr_entity_type(gr) if gr is not None else ""
+        entity_ids = _extract_gr_entity_ids(gr)
+        if anch is None:
+            anch = _fallback_region_point(geometry, ld.region, load_type=ld.load_type)
+            if anch is not None:
+                pts = (anch,)
+        item: Dict[str, Any] = {
+            "name": ld.name,
+            "region": ld.region,
+            "load_type": ld.load_type,
+            "magnitude": ld.magnitude,
+            "direction": ld.direction,
+            "step": ld.step,
+        }
+        if anch is not None:
+            item["point"] = anch
+        if pts:
+            item["points"] = pts
+        if entity_type:
+            item["entity_type"] = entity_type
+        if entity_ids:
+            item["entity_ids"] = entity_ids
+        if ld.load_type == "pressure":
+            # Pressure acts along the surface normal; the CF-token direction
+            # field does not describe it and must not become an arrow.
+            pass
+        else:
+            vector = _direction_token_vector(ld.direction)
+            if vector is not None:
+                item["direction_vector"] = vector
+        if ld.load_type == "concentrated_force" and gr is not None and str(entity_type).lower() == "face":
+            item["area"] = _total_force_face_area(geometry, anch)
+        load_items.append(item)
+    bc_items = []
+    for bc in bcs or ():
+        gr = regions.get(bc.region)
+        pts, anch = _extract_gr_pts_and_anchor(gr)
+        entity_type = _extract_gr_entity_type(gr) if gr is not None else ""
+        entity_ids = _extract_gr_entity_ids(gr)
+        if anch is None:
+            anch = _fallback_region_point(geometry, bc.region, bc_type=bc.bc_type)
+            if anch is not None:
+                pts = (anch,)
+        item = {
+            "name": bc.name,
+            "region": bc.region,
+            "bc_type": bc.bc_type,
+            "step": bc.step,
+        }
+        if anch is not None:
+            item["point"] = anch
+        if pts:
+            item["points"] = pts
+        if entity_type:
+            item["entity_type"] = entity_type
+        if entity_ids:
+            item["entity_ids"] = entity_ids
+        bc_items.append(item)
+    return {"loads": tuple(load_items), "bcs": tuple(bc_items)}
 
 
 def _is_valid_3d_point(pt: Any) -> bool:
@@ -2189,6 +2343,7 @@ def compile_engineering_intent(
 
     # 4. Step & Procedure Resolution
     eff_step = None
+    solver_selection_record = None
     eff_steps = intent.metadata.get("steps")
     eff_procedure = intent.metadata.get("procedure")
 
@@ -2216,7 +2371,30 @@ def compile_engineering_intent(
             elif analysis in ("explicit_dynamic", "explicit"):
                 eff_step = IntentStepSpec(name="Step-1", step_type="explicit_dynamic", nlgeom=True)
             else:
-                eff_step = IntentStepSpec(name="Step-1", step_type="static_general", nlgeom=False)
+                # No explicit procedure declaration: let the deterministic solver
+                # selection decide the step type from the declared physics events
+                # (impact, pull-out/slip-out, large deformation, ...) instead of
+                # silently defaulting to Abaqus/Standard.
+                from ..contracts.solver_selection import select_solver
+                try:
+                    solver_selection_record = select_solver(intent)
+                except Exception:
+                    solver_selection_record = None
+                strategy = getattr(solver_selection_record, "strategy", "") if solver_selection_record else ""
+                blocked = bool(getattr(solver_selection_record, "blocked", False)) if solver_selection_record else False
+                if solver_selection_record is not None and not blocked:
+                    if strategy in ("DYNAMIC_EXPLICIT", "QUASI_STATIC_EXPLICIT"):
+                        eff_step = IntentStepSpec(name="Step-1", step_type="explicit_dynamic", nlgeom=True)
+                    elif strategy == "DYNAMIC_IMPLICIT":
+                        eff_step = IntentStepSpec(name="Step-1", step_type="implicit_dynamic", nlgeom=True)
+                    elif strategy == "FREQUENCY":
+                        eff_step = IntentStepSpec(name="Step-1", step_type="frequency", nlgeom=False)
+                    elif strategy == "HEAT_TRANSFER":
+                        eff_step = IntentStepSpec(name="Step-1", step_type="heat_transfer", nlgeom=False)
+                    else:
+                        eff_step = IntentStepSpec(name="Step-1", step_type="static_general", nlgeom=False)
+                else:
+                    eff_step = IntentStepSpec(name="Step-1", step_type="static_general", nlgeom=False)
 
         if eff_step is not None and intent.metadata.get("step_controls"):
             sc = intent.metadata["step_controls"]
@@ -2517,6 +2695,25 @@ def compile_engineering_intent(
             tuple({"type": blocker, "message": blocker} for blocker in kinematics["blockers"])
         )
     summary = dict(compiled.intent_summary)
+    _step_types = []
+    if eff_steps:
+        _step_types = [getattr(s, "step_type", "") for s in eff_steps]
+    elif eff_step is not None:
+        _step_types = [getattr(eff_step, "step_type", "")]
+    if _step_types:
+        summary["step_types"] = _step_types
+    if solver_selection_record is not None:
+        summary["solver_selection"] = {
+            "solver": solver_selection_record.solver,
+            "analysis_type": solver_selection_record.analysis_type,
+            "strategy": solver_selection_record.strategy,
+            "reasons": list(solver_selection_record.reasons),
+            "warnings": list(solver_selection_record.warnings),
+            "assumptions": list(solver_selection_record.assumptions),
+            "confidence": solver_selection_record.confidence,
+            "requires_user_confirmation": solver_selection_record.requires_user_confirmation,
+            "blocked": solver_selection_record.blocked,
+        }
     summary["interface_kinematics"] = {
         "separation_required": kinematics["separation_required"],
         "tie_count": kinematics["tie_count"],
