@@ -11,6 +11,7 @@ from abaqus_ai_agent.execution.input_modes import (
     UserInputKind,
     WorkspaceTransaction,
     _compute_file_sha256,
+    _job_from_input_file_code,
     _parse_returncode,
     _verify_solver_dependencies,
     edit_and_solve_user_inp,
@@ -57,6 +58,27 @@ class DummyCaeExecutor:
 def _make_dummy_project(tmp_path: Path) -> ExternalProjectContext:
     root = tmp_path / "ExternalDemo"
     return create_external_project_context(root)
+
+
+def test_session_fallback_uses_job_from_input_file_not_a_cli_string():
+    """Session transports execute Python, so ``abaqus job=...`` can only raise
+    SyntaxError there. The documented in-session equivalent is the
+    ``JobFromInputFile`` job object with a bounded wait."""
+    code = _job_from_input_file_code("DeckJob", Path("/tmp/deck.inp"), None, 120)
+    compile(code, "<test>", "exec")
+    assert "JobFromInputFile(name='DeckJob'" in code
+    assert "waitForCompletion(timeOut=120)" in code
+    assert "abaqus job=" not in code
+    assert "waitForCompletion()" not in code
+
+
+def test_session_fallback_restores_cwd_even_on_failure(tmp_path):
+    code = _job_from_input_file_code("DeckJob", Path("/tmp/deck.inp"), tmp_path, 60)
+    compile(code, "<test>", "exec")
+    assert "finally:" in code
+    assert "_ai_os.chdir(_ai_prev_cwd)" in code
+    # The restore must sit inside the finally block, after the wait.
+    assert code.index("waitForCompletion") < code.index("_ai_os.chdir(_ai_prev_cwd)")
 
 
 def test_solve_user_inp_direct_solver_preserves_source(tmp_path):

@@ -67,6 +67,7 @@
 | ID | 边界 | 状态 |
 | :--- | :--- | :--- |
 | P1-LAUNCHER-01 | 启动器提前返回后无法再取得真实内核进程树（`psutil` / Job Object 均要求父进程仍存活） | **未闭合·已登记**（详见 §6） |
+| P1-LAUNCHER-02 | CAE noGUI 路径没有 `interactive` 等价关键字，求解作业路径现已有 | **未闭合·已登记**（详见 §6.4） |
 
 > 该表登记的是**方法论边界**，不是待实施任务。除非将来必须先解决“启动器提前退出”本身，否则不单独立项。
 
@@ -485,7 +486,7 @@ A4 的审计结果比预期严重，必须单独记录（详见 `docs/phase-timi
 
 ## 6. 启动器进程树边界登记（P1-LAUNCHER-01）
 
-登记日期：2026-10-28。性质：外部证据复核后的边界记录，**不含代码变更**。
+登记日期：2026-10-28。性质：外部证据复核后的边界记录；§6.1–§6.3 为复核当时状态（**不含代码变更**），§6.4 为同日随后的脚本级修正。
 
 ### 6.1 事实与证据层级
 
@@ -513,6 +514,31 @@ A4 的审计结果比预期严重，必须单独记录（详见 `docs/phase-timi
 3. 只有在 1–2 均完不成时，才讨论新依赖；且必须证明修复能在**父进程已退出**的前提下生效，否则不予立项。
 
 不得以前置条件未满足为由，把 `settled=False` 降级为忽略。
+
+### 6.4 求解作业路径的修正（P1-LAUNCHER-02 登记）
+
+复核发现一处与官方执行过程不一致的实现，已修复：`BatchExecutor.run_input` 构造命令时**未传 `interactive`**，因此走官方默认的 `background` —— 作业被移交后启动器立即返回，watchdog 监督的实际上是一个已退出的进程。
+
+| 项 | 内容 |
+| :--- | :--- |
+| 官方依据 | 执行过程页：`background` 是默认；`interactive` 使作业前台运行，Standard 的 log、Explicit 的 sta+log 输出到屏幕（<https://docs.software.vt.edu/abaqusv2025/English/SIMACAEEXCRefMap/simaexc-c-analysisproc.htm>） |
+| 改动 | `run_input` 追加 `interactive`；与 `solver.execute_abaqus_batch_job` 已有的同名字段对齐，两条求解路径不再分歧 |
+| 配套改动 | 前台化后默认 120 s 静默窗口会误杀大型隐式算例，因此 `run_input` 同时启用既有的证据门控放宽（`adaptive_heartbeat=True` + `job_name`），沿用 `P1-LEFTOVER-01` 已真机验证的机制，不新造策略 |
+| 验证层级 | 单元测试覆盖命令元组与放宽开关；**未**做真机重跑，`interactive` 是否让本机 `SMALauncher` 等到求解结束仍需实测 |
+
+仍存在的边界（本项**不闭合**）：
+
+1. CAE noGUI 路径**没有** `interactive` 等价关键字，官方 CAE 执行过程页选项表已核实无此类选项，该路径仍依赖 `BatchResult.settled` 轮询。
+2. 官方文档只写 `interactive` 把输出送到屏幕，**没有**写“命令不返回直到分析结束”。前台等待属社区报告行为（Stack Overflow 采纳答案、第三方启动器文档），不得作为官方契约引用。
+3. 若真机实测显示本机 `interactive` 仍提前返回，则 §6.3 的关闭条件继续有效，`settled` 判定的地位不变。
+
+本轮**刻意未改**的范围（避免连带改变既有语义）：
+
+| 位置 | 内容 | 不改的理由 |
+| :--- | :--- | :--- |
+| `planning/compiler.py:1750` | 生成的 `mdb.jobs[...].waitForCompletion()` 仍无界 | 该分支仅在 `submit_job=True` 时触发，生产链路始终传 `False`（提交统一走已限界的 `JobController.submit`）；实际使用者是待批次迁移的 Golden 脚本，套上硬上限需先定下列脚本的超时契约 |
+| `tools/*.py` | 40+ 处 `waitForCompletion()` | 属 13 个待迁移 Golden 脚本，不在本轮范围 |
+| `batch.run_nogui` | 仍无前台选项 | 官方 CAE 执行过程页无 `interactive` 等价关键字，属 `P1-LAUNCHER-01` 能力边界 |
 
 ---
 
@@ -550,3 +576,4 @@ A4 的审计结果比预期严重，必须单独记录（详见 `docs/phase-timi
 | 2026-10-27 | 待办项大清退（对照代码与真机证据后处置）：(1) C1 与 MV-07 闭合——2026-10-24/25 T-P4 真机证据已完成 Standard/Explicit 1/2/4/8 核受控矩阵与 500k 接触模型并行基准，登记中的「待执行」系过时状态；(2) MV-09 闭合——TOKEN_VERIFIED 证据充分，宿主无并发许可场景；(3) P1-LEFTOVER-03 正式除名——主链路不经 watchdog，误杀风险在主链路不存在，MV-01 随转 PASS；(4) P2-LEFTOVER-04 挂起关闭——MV-04 BLOCKED 使收益不可测，按「真实证据优先」不立优化项；(5) P2-LEFTOVER-05 接受边界关闭；(6) P3-LEFTOVER-02 关闭——T-P4 与 MV-05/06/09 已证明 T4b 求解核占绝对主导，T1/T3/T5/T6 细分接线无决策价值，BASE 降格为部分基线并接受，T2 随之解除阻塞登记；(7) P3-LEFTOVER-04/A2 随 MV-10 定案；(8) D3 由 MV-01 承载闭合；(9) C2 随 MV-11 闭合。保留待办已全部消化：P3-LEFTOVER-05 与 Case 07 于 2026-10-27 闭合，MV-04 保持 BLOCKED（生产范围排除） |
 | 2026-10-27 | Case 07 与 P3-LEFTOVER-05 闭合：(1) Case 07 真机证据（2026-10-21 运行 `case07_live_e7301de3`）入库 `machine_validation/p2_cases/case_07_jounce_bumper/`，签名 manifest v1 六项判据全 PASS，registry 登记 QUALIFIED + REF_ABQ_JOUNCE_BUMPER（手册章节定位未核实已披露，数值基准保持 PENDING），守护测试由 absence 改为正向完整性校验；(2) P3-LEFTOVER-05 真机复验 PASS：冲击 cue 编译出 `*Dynamic, Explicit` 并在 Abaqus/Explicit 2025 完成求解（短周期变体 COMPLETED，5.0MB ODB；长周期变体 727s 后物理失稳，与步类型无关）。三项保留待办清零，仅余 MV-04（生产范围排除）。 |
 | 2026-10-28 | 外部证据复核后收窄两处外部事实表述（仅文档，无代码变更）：(1) `interactive` 的官方原文只写输出到屏幕，未写“命令不返回直到分析结束”，原“官方标准答案”表述改记为文档措辞 + 社区行为报告；(2) CAE noGUI 侧重述为“官方预期是脚本结束后 kernel 终止”，而非“官方无等效等待选项”。新增 §6 `P1-LAUNCHER-01`：登记 `psutil` / Job Object 在父进程已退出后均无法取得子进程树的方法论边界，并写明三段关闭条件。行为不变：`settled` 语义与调用方要求不变。 |
+| 2026-10-28 | 代码级复核后的脚本/命令修正（Exa 复核驱动）：(1) `BatchExecutor.run_input` 补 `interactive`——官方执行过程页明确 `background` 是默认，不显式覆盖则启动器移交后立即返回，watchdog 监督的是已退出的进程；同时启用既有的证据门控放宽（`adaptive_heartbeat=True` + `job_name`），避免前台化后 120 s 静默窗口误杀大型隐式算例，沿用 P1-LEFTOVER-01 已真机验证的机制；(2) `JobController.wait` / `AbaqusExecutor.monitor_job` / smoke 脚本改用 `waitForCompletion(timeOut=N)`——官方 Job 对象页记载无参即无限等待、超时抛 `AbaqusException`，只有界等待内的内核异常才会被映射为 `TIMEOUT`；(3) `solve_user_inp` 的 `execute` 回退分支不再把 `abaqus job=...` 当 Python 源码发送，改为官方 `mdb.JobFromInputFile()` + 有界等待 + `finally` 恢复 cwd；(4) `classify_job_status` 改为精确 token 匹配，`CHECK_COMPLETED`（datacheck）不再被子串匹配误提升为 `COMPLETED`。新增 §0.5 `P1-LAUNCHER-02` 与 §6.4。验证层级：定向与全量单元回归，**未**做真机重跑 |

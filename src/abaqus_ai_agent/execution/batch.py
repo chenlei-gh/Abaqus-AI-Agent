@@ -143,7 +143,7 @@ class BatchExecutor:
     def resolved_launcher(self) -> str:
         return resolve_default_launcher(self.launcher)
 
-    def _run(self, args, timeout=None):
+    def _run(self, args, timeout=None, job_name=None, adaptive_heartbeat=False):
         raw_cmd = [str(x) for x in args]
         if raw_cmd and raw_cmd[0] == self.launcher:
             raw_cmd[0] = self.resolved_launcher
@@ -176,6 +176,8 @@ class BatchExecutor:
             cwd=effective_workdir,
             timeout=timeout or self.timeout,
             stall_timeout=eff_stall,
+            adaptive_heartbeat=adaptive_heartbeat,
+            job_name=job_name,
         )
         settled, settle_note = True, None
         if proc.returncode == 0 and self.settle_timeout and self.settle_timeout > 0:
@@ -187,14 +189,26 @@ class BatchExecutor:
                            settled=settled, settle_note=settle_note)
 
     def run_input(self, input_path, job_name=None, timeout=None, workdir=None):
+        """Run a solve from an input deck.
+
+        ``interactive`` is passed explicitly: the Abaqus execution procedure runs
+        ``job=`` jobs in ``background`` by default, and a background submission
+        returns as soon as the job is handed off, leaving the watchdog watching a
+        launcher that already exited. ``interactive`` is what the execution
+        procedure documents as running the job in the foreground, with the log
+        (Standard) or status and log (Explicit) going to the screen. This is the
+        same option ``solver.execute_abaqus_batch_job`` already passes; the two
+        solve paths must not disagree about it.
+        """
         path = os.path.abspath(input_path)
         name = job_name or os.path.splitext(os.path.basename(path))[0]
         orig_workdir = self.workdir
         try:
             if workdir:
                 self.workdir = str(workdir)
-            return self._run((self.launcher, "job=%s" % name, "input=%s" % path),
-                             timeout=timeout)
+            return self._run((self.launcher, "job=%s" % name, "input=%s" % path,
+                              "interactive"),
+                             timeout=timeout, job_name=name, adaptive_heartbeat=True)
         finally:
             self.workdir = orig_workdir
 

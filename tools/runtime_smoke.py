@@ -44,7 +44,8 @@ def main(argv=None):
     run_id = uuid.uuid4().hex[:12]
     script_path = os.path.join(workdir, args.job_name + "_script.py")
     with open(script_path, "w", encoding="utf-8") as handle:
-        handle.write(build_runtime_smoke_script(args.job_name, run_id=run_id))
+        handle.write(build_runtime_smoke_script(
+            args.job_name, run_id=run_id, wait_timeout=args.timeout))
 
     evidence = {
         # Missing-evidence is itself a verdict: if this file is absent or this

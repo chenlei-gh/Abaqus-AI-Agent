@@ -45,8 +45,11 @@ class AbaqusExecutor(ABC):
         return viewport_state(self)
 
     def monitor_job(self, name, timeout=3600, poll_seconds=2.0):
-        # Native fallback: block until Abaqus reports job completion.
-        return self.execute("mdb.jobs[%r].waitForCompletion(); print(mdb.jobs[%r].status)" % (name, name), timeout=timeout)
+        # Native fallback: block until Abaqus reports job completion. The wait is
+        # bounded so a hung kernel surfaces as a TIMEOUT status rather than an
+        # indefinite hang; a host-side transport timeout cannot stop the kernel.
+        from .jobs import wait_for_completion_code
+        return self.execute(wait_for_completion_code(name, timeout), timeout=timeout)
 
 
 class BridgeExecutor(AbaqusExecutor):

@@ -51,7 +51,8 @@ class RuntimeSmokeResult:
 B28HarnessResult = RuntimeSmokeResult
 
 
-def build_runtime_smoke_script(job_name="AIAgent_RuntimeSmoke", odb_path=None, run_id=None):
+def build_runtime_smoke_script(job_name="AIAgent_RuntimeSmoke", odb_path=None, run_id=None,
+                               wait_timeout=3600):
     """Build a deterministic Abaqus runtime smoke script.
 
     The model is deliberately tiny: one 3D deformable brick, one static step,
@@ -61,6 +62,10 @@ def build_runtime_smoke_script(job_name="AIAgent_RuntimeSmoke", odb_path=None, r
     ``run_id`` binds every marker to one specific invocation: parsers that are
     given the same id reject markers from any other run, so a stale artifact
     (e.g. an old abaqus.rpy) can never be mistaken for this run's evidence.
+
+    ``wait_timeout`` bounds ``waitForCompletion``. Without a bound the generated
+    script waits indefinitely, and the host-side transport timeout that kills the
+    connection cannot stop the kernel job the way an in-kernel timeout does.
     """
     odb_path = odb_path or job_name + ".odb"
     return r'''# -*- coding: utf-8 -*-
@@ -73,6 +78,7 @@ import regionToolset
 JOB = %(job)r
 ODB = %(odb)r
 RUN_ID = %(run_id)r
+WAIT_TIMEOUT = %(wait_timeout)d
 
 def marker(name, **data):
     payload = {"marker": name}
@@ -120,7 +126,18 @@ try:
 
     job.submit(consistencyChecking=OFF)
     marker("job_submitted")
-    job.waitForCompletion()
+    try:
+        job.waitForCompletion(timeOut=WAIT_TIMEOUT)
+        wait_error = None
+    except Exception as exc:
+        # The documented behaviour: a bound that expires raises AbaqusException
+        # instead of the script hanging forever. Any other exception is a real
+        # kernel failure and must not be relabelled as a wait expiry.
+        if "timeOut" not in str(exc):
+            raise
+        wait_error = str(exc)
+    if wait_error is not None:
+        marker("job_wait_timed_out", error_message=wait_error)
 
     status = getattr(job, "status", None)
     completion_source = "job_status"
@@ -180,7 +197,8 @@ except Exception as exc:
            error_message=str(exc))
     marker("script_completed", passed=False)
     raise
-''' % {"job": job_name, "odb": odb_path, "run_id": run_id}
+''' % {"job": job_name, "odb": odb_path, "run_id": run_id,
+       "wait_timeout": int(wait_timeout)}
 
 
 # Backward compatibility alias
@@ -264,6 +282,12 @@ def classify_smoke_markers(markers, expected_run_id=None):
     completed = names.get("script_completed", {})
     if "error" in names and completed.get("passed") is True:
         invalid.append("contradictory_markers:error_and_success")
+    wait_timed_out = names.get("job_wait_timed_out")
+    if wait_timed_out is not None and completed.get("passed") is True:
+        # The wait bound expired yet the script reported a clean pass. That can
+        # only mean the artifact fallback rescued it, and a bounded wait must not
+        # silently become an unbounded one: surface the expiry either way.
+        invalid.append("job_wait_timed_out_with_success")
 
     status = names.get("job_completed", {}).get("status")
     return RuntimeSmokeResult(
@@ -276,7 +300,7 @@ def classify_smoke_markers(markers, expected_run_id=None):
         odb_opened="odb_opened" in names,
         required_outputs_present="required_outputs_present" in names,
         error_class=error.get("error_class"),
-        error_message=error.get("error_message"),
+        error_message=(wait_timed_out or {}).get("error_message") or error.get("error_message"),
         invalid_reasons=tuple(invalid),
         run_id=expected_run_id,
     )
@@ -288,7 +312,8 @@ classify_b28_markers = classify_smoke_markers
 def execute_runtime_smoke(executor, job_name="AIAgent_RuntimeSmoke", odb_path=None,
                            timeout=3600):
     """Execute the smoke script through an existing AbaqusExecutor."""
-    script = build_runtime_smoke_script(job_name=job_name, odb_path=odb_path)
+    script = build_runtime_smoke_script(job_name=job_name, odb_path=odb_path,
+                                        wait_timeout=timeout)
     raw = executor.execute(script, timeout=timeout)
     if isinstance(raw, dict):
         output = raw.get("stdout") or raw.get("output") or raw.get("message") or ""

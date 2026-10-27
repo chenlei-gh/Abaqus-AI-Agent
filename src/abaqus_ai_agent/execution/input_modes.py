@@ -273,6 +273,49 @@ def _verify_solver_dependencies(dependencies: Sequence[Dict[str, Any]]) -> None:
             )
 
 
+def _job_from_input_file_code(job_name: str, inp_path: Path, workdir: Optional[Path],
+                              timeout: Optional[int]) -> str:
+    """Render the in-session equivalent of ``abaqus job=... input=...``.
+
+    Official basis: the ``JobFromInputFile`` job object analyzes a model defined
+    by an input file, and ``waitForCompletion(timeOut=...)`` bounds the wait and
+    raises ``AbaqusException`` on timeout. This path is for session transports
+    only; it is not exercised by the host-side ``BatchExecutor``, and the CAE
+    side runs the job interactively by design when there is no GUI.
+    """
+    bound = max(1, int(timeout)) if timeout else 3600
+    lines = []
+    if workdir is not None:
+        lines += [
+            "import os as _ai_os",
+            "_ai_prev_cwd = _ai_os.getcwd()",
+            "_ai_os.chdir(%r)" % str(workdir),
+        ]
+    lines += [
+        "from abaqusConstants import OFF",
+        "_ai_status = 'UNKNOWN'",
+        "try:",
+        "    _ai_job = mdb.JobFromInputFile(name=%r, inputFileName=%r)" % (
+            job_name, str(inp_path)),
+        "    _ai_job.submit(consistencyChecking=OFF)",
+        "    try:",
+        "        _ai_job.waitForCompletion(timeOut=%d)" % bound,
+        "    except Exception as _ai_exc:",
+        "        if 'timeOut' not in str(_ai_exc):",
+        "            raise",
+        "        _ai_status = 'TIMEOUT'",
+        "    else:",
+        "        _ai_status = str(_ai_job.status)",
+        "finally:",
+    ]
+    if workdir is not None:
+        lines.append("    _ai_os.chdir(_ai_prev_cwd)")
+    else:
+        lines.append("    pass")
+    lines.append("print(_ai_status)")
+    return "\n".join(lines) + "\n"
+
+
 def solve_user_inp(
     executor: Any,
     inp_path: Union[str, Path],
@@ -447,8 +490,16 @@ def solve_user_inp(
                 **kwargs,
             )
         elif hasattr(executor, "execute"):
-            cmd = f"abaqus job={eff_job_name} input={inp_file}"
-            res = executor.execute(cmd)
+            # Session transports (bridge / in-process) have no host-side
+            # ``run_input``; the CLI string is Python source to them, so sending
+            # ``abaqus job=...`` there could only ever raise SyntaxError. The
+            # documented in-session equivalent is the ``JobFromInputFile`` job
+            # object, submitted and awaited with a bounded ``timeOut``.
+            res = executor.execute(
+                _job_from_input_file_code(
+                    eff_job_name, inp_file, effective_workdir, timeout
+                )
+            )
         else:
             raise TypeError(f"Executor {type(executor)} does not support run_input or execute interface.")
     except Exception as exc:

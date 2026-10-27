@@ -14,7 +14,10 @@ def test_runtime_smoke_script_uses_portable_markers_and_apis():
     script = build_runtime_smoke_script("SmokeJob")
     assert "AIA_SMOKE_MARKER" in script
     assert "job.writeInput" in script
-    assert "job.waitForCompletion()" in script
+    assert "job.waitForCompletion(timeOut=WAIT_TIMEOUT)" in script
+    # The unbounded form lets the script hang where a host transport timeout
+    # cannot stop the kernel job.
+    assert "job.waitForCompletion()" not in script
     assert "openOdb" in script
     assert 'f"' not in script
     assert "import regionToolset" in script
@@ -22,6 +25,47 @@ def test_runtime_smoke_script_uses_portable_markers_and_apis():
     assert "fieldOutputRequests" not in script
     assert "THE ANALYSIS HAS COMPLETED SUCCESSFULLY" in script
     assert "Abaqus JOB " in script
+
+
+def test_runtime_smoke_script_binds_wait_timeout():
+    script = build_runtime_smoke_script("SmokeJob", wait_timeout=42)
+    compile(script, "<smoke>", "exec")
+    assert "WAIT_TIMEOUT = 42" in script
+    assert "job.waitForCompletion(timeOut=WAIT_TIMEOUT)" in script
+
+
+def test_wait_expiry_alongside_a_clean_pass_is_invalid():
+    """A bounded wait that expired must not be silently absorbed by the
+    artifact fallback: the run has no timeout-free evidence."""
+    output = """
+AIA_SMOKE_MARKER {"marker":"model_created"}
+AIA_SMOKE_MARKER {"marker":"input_written"}
+AIA_SMOKE_MARKER {"marker":"job_submitted"}
+AIA_SMOKE_MARKER {"marker":"job_wait_timed_out","error_message":"AbaqusException: timeOut = 60"}
+AIA_SMOKE_MARKER {"marker":"job_completed","status":"COMPLETED"}
+AIA_SMOKE_MARKER {"marker":"odb_exists"}
+AIA_SMOKE_MARKER {"marker":"odb_opened"}
+AIA_SMOKE_MARKER {"marker":"required_outputs_present"}
+AIA_SMOKE_MARKER {"marker":"script_completed","passed":true}
+"""
+    result = parse_smoke_output(output)
+    assert not result.passed
+    assert "job_wait_timed_out_with_success" in result.invalid_reasons
+
+
+def test_wait_expiry_without_a_clean_pass_reports_the_timeout():
+    output = """
+AIA_SMOKE_MARKER {"marker":"model_created"}
+AIA_SMOKE_MARKER {"marker":"input_written"}
+AIA_SMOKE_MARKER {"marker":"job_submitted"}
+AIA_SMOKE_MARKER {"marker":"job_wait_timed_out","error_message":"AbaqusException: timeOut = 60"}
+AIA_SMOKE_MARKER {"marker":"error","error_class":"solver_job","error_message":"RUNNING"}
+"""
+    result = parse_smoke_output(output)
+    assert not result.passed
+    # The expiry is the more specific cause; it must not be masked by the
+    # generic job-status error.
+    assert "timeOut" in (result.error_message or "")
 
 
 def test_b28_script_backward_compatibility_alias():
