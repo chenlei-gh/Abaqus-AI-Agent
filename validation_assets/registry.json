@@ -132,13 +132,15 @@
       "case_id": "CASE_07_AUTOMOTIVE_JOUNCE_BUMPER",
       "case_name": "Automotive Suspension Hyperelastic Jounce Bumper Self-Contact",
       "physics_domain": "automotive_suspension_hyperelastic_contact",
-      "reference_source": "TBD",
-      "qualification_status": "PENDING",
+      "reference_source": "REF_ABQ_JOUNCE_BUMPER",
+      "qualification_status": "QUALIFIED",
       "input_assets": [
         "test_assets/engineering_cases/case_07_jounce_bumper_self_contact/problem_statement.json"
       ],
-      "evidence_manifest": "",
-      "report_assets": [],
+      "evidence_manifest": "machine_validation/p2_cases/case_07_jounce_bumper/case_07_jounce_bumper_manifest.json",
+      "report_assets": [
+        "machine_validation/p2_cases/case_07_jounce_bumper/Case_07_Jounce_Bumper_Report.html"
+      ],
       "case_dir": "validation_assets/cases/case_07",
       "acceptance_criteria": {
         "max_self_contact_penetration_mm": "<= 0.05",
@@ -147,7 +149,8 @@
         "min_effective_bulk_modulus_mpa": ">= 50.0",
         "max_kinetic_to_internal_energy_ratio": "<= 0.05",
         "max_reaction_equilibrium_error_percent": "<= 0.50"
-      }
+      },
+      "report_figures_dir": "machine_validation/p2_cases/case_07_jounce_bumper/assets"
     },
     {
       "case_id": "CASE_08_RESERVED",

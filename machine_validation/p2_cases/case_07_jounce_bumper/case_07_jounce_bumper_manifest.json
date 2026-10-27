@@ -1,0 +1,175 @@
+{
+  "schema_version": "case_manifest_v1",
+  "case_id": "CASE_07_AUTOMOTIVE_JOUNCE_BUMPER",
+  "title": "汽车悬架超弹性缓冲块自接触压缩 / Automotive Suspension Hyperelastic Jounce Bumper Self-Contact",
+  "domain": "automotive_suspension_hyperelastic_contact",
+  "qualification_level": "QUALIFIED",
+  "status": "ACCEPTED",
+  "source": "Abaqus 2025 Example Problems (rubber jounce bumper axial compression with self-contact). Exact manual section locator is not yet confirmed against the installed manual and is intentionally disclosed as unverified.",
+  "data_provenance": "Real Abaqus 2025 solver run on 2026-10-21 (run_id case07_live_e7301de3): C07SeatJob (Standard, 0.50 mm interference seating) and C07CompressJob (Explicit, 51.0 mm quasi-static stroke over 2.0 s). Two independent jobs; no solver state imported between them; strokes are never summed.",
+  "verified_at": "2026-10-21T08:13:41+00:00",
+  "summary": {
+    "status": "COMPLETED",
+    "engineering_status": "RESULT_VALID",
+    "acceptance_passed": true,
+    "report": {
+      "format": "html",
+      "path": "Case_07_Jounce_Bumper_Report.html",
+      "bytes": 74878,
+      "sha256": "3cc02b9f52379e909cb9685552af4e02b2a52d5912bbbd119233a9cf9dca3d59",
+      "self_contained": true
+    },
+    "report_html_bytes": 74878
+  },
+  "solver_evidence": {
+    "run_id": "case07_live_e7301de3",
+    "launcher": "C:/SIMULIA/Commands/abaqus.bat",
+    "seat_job": {
+      "solver": "Abaqus/Standard",
+      "step": "Step1Seating (0.50 mm interference seating)",
+      "odb_sha256": "b46166dbefed735da714b906a838e1d5d8c01802ceeee537cbabff191fe40bef",
+      "odb_bytes": 3087028,
+      "sta_completed": true,
+      "frames": 21
+    },
+    "compress_job": {
+      "solver": "Abaqus/Explicit",
+      "step": "Step2Compression (51.0 mm stroke, 2.0 s smooth ramp)",
+      "odb_sha256": "1566fa78bc40795708de37c4a874258a6afb9f4aebe69f690a296444a62ff179",
+      "odb_bytes": 7672716,
+      "sta_completed": true,
+      "frames": 61
+    }
+  },
+  "mesh_quality_audit": {
+    "status": "RECORDED",
+    "note": "Element composition recorded from the authentic ODBs; geometric quality metrics (Jacobian/aspect ratio) were not extracted in this run and are not claimed.",
+    "total_elements": 989,
+    "total_nodes": 1207,
+    "element_types": {
+      "CAX4R": 989
+    },
+    "instances": {
+      "BUMPER-1": 935,
+      "STRIKER-1": 30,
+      "TOPPLATE-1": 24
+    }
+  },
+  "physical_results": {
+    "max_self_contact_penetration_mm": 0.000166,
+    "reaction_force_kn": 0.062,
+    "striker_reaction_force_kn": 0.0622,
+    "reaction_equilibrium_error_percent": 0.197918,
+    "max_volumetric_strain": 2.59e-05,
+    "initial_volume_mm3": 149205.949753,
+    "final_volume_mm3": 149202.085287,
+    "effective_bulk_modulus_mpa": 501.1727,
+    "mean_hydrostatic_pressure_mpa": 0.01298,
+    "max_kinetic_to_internal_energy_ratio": 0.00513753,
+    "kinetic_internal_energy_ratio_mean": 0.00115901,
+    "kinetic_internal_energy_ratio_end": 1.7e-07,
+    "kinetic_energy_peak_mj": 0.693635,
+    "internal_energy_peak_mj": 1014.6747,
+    "max_contact_pressure_mpa": 0.17788784205913544,
+    "max_mises_mpa": 0.788718663083875,
+    "max_displacement_mm": 51.08695096629481,
+    "seat_job_metrics_summary": "empty: seat job is execution-verified (21 frames, .sta completed) but no seat metric summary was extracted in this run"
+  },
+  "geometry_fidelity": {
+    "honoured": {
+      "free_height_mm": 85.0,
+      "bore_diameter_mm": 16.0,
+      "outer_diameter_mm": 70.0,
+      "rib_count": 3,
+      "rib_root_thickness_mm": 9.0,
+      "rib_tip_thickness_mm": 4.5
+    },
+    "declared_wall_angle_deg": 18.0,
+    "achieved_max_wall_angle_deg": 65.993,
+    "wall_angle_honoured": false,
+    "deviation_note": "The declared 18 deg wall angle is not geometrically compatible with a 20.25 mm radial rise across the resulting 28.33 mm rib pitch: an 18 deg flank would need a 62.3 mm run. A continuous sinusoidal mid-surface was used and the achieved maximum flank angle is reported instead of claiming conformance."
+  },
+  "benchmark_comparison": {
+    "status": "PENDING",
+    "note": "No official numeric reference values are recorded: the Abaqus 2025 manual section locator has not been verified against the installed manual (not present in this installation). Acceptance below is judged solely against the declared engineering criteria in the problem statement."
+  },
+  "acceptance": {
+    "status": "PASS",
+    "passed": true,
+    "deliverable": true,
+    "criteria": [
+      {
+        "name": "max_self_contact_penetration",
+        "passed": true,
+        "actual": 0.000166,
+        "operator": "<=",
+        "limit": 0.05,
+        "unit": "mm"
+      },
+      {
+        "name": "max_reaction_force",
+        "passed": true,
+        "actual": 0.062,
+        "operator": "<=",
+        "limit": 25.0,
+        "unit": "kN"
+      },
+      {
+        "name": "max_volumetric_strain",
+        "passed": true,
+        "actual": 2.59e-05,
+        "operator": "<=",
+        "limit": 0.02,
+        "unit": "-"
+      },
+      {
+        "name": "min_effective_bulk_modulus",
+        "passed": true,
+        "actual": 501.1727,
+        "operator": ">=",
+        "limit": 50.0,
+        "unit": "MPa"
+      },
+      {
+        "name": "max_kinetic_internal_energy_ratio",
+        "passed": true,
+        "actual": 0.00513753,
+        "operator": "<=",
+        "limit": 0.05,
+        "unit": "-"
+      },
+      {
+        "name": "max_reaction_equilibrium_error",
+        "passed": true,
+        "actual": 0.197918,
+        "operator": "<=",
+        "limit": 0.5,
+        "unit": "%"
+      }
+    ],
+    "gates": {
+      "execution": "PASS",
+      "odb": "PASS",
+      "evidence_sufficiency": "SKIPPED",
+      "numerical_verification": "SKIPPED",
+      "engineering_checks": "SKIPPED",
+      "mesh_quality": "SKIPPED",
+      "convergence": "SKIPPED",
+      "fatigue": "SKIPPED",
+      "contact": "SKIPPED",
+      "procedure": "SKIPPED",
+      "thermal_balance": "SKIPPED",
+      "stabilization_energy": "SKIPPED",
+      "dynamic_energy": "SKIPPED",
+      "criteria": "PASS",
+      "connector_kinematics": "SKIPPED",
+      "fmbd_dynamics": "SKIPPED",
+      "required_results": "NOT_SPECIFIED"
+    },
+    "gate_justifications": {
+      "convergence": "Abaqus/Explicit Step-2 is displacement-controlled and advances by a stable time increment, so no iterative convergence residual exists. Solver completion is judged from the .sta success marker per job, and quasi-static quality is judged by the kinetic/internal energy criterion."
+    },
+    "failures": []
+  },
+  "audit_signature": "e22319a09487075ac490373c08207dcb1ffb689278cf5eb32d62ab895fe7e897"
+}

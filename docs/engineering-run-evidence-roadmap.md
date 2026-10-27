@@ -2665,13 +2665,13 @@ Abaqus-AI-Agent/
 
 **2. 交付与验证准则 (Exit Criteria)**：
 - [x] 产出 `test_assets/engineering_cases/case_07_jounce_bumper_self_contact/problem_statement.json`（几何、Mooney-Rivlin 参数、两步加载与验收阈值；`parameter_provenance` 明确标注为待官方核对的工程估计）。
-- [ ] 实现 E2E 执行驱动及无头 ODB 提取脚本。
-- [ ] 生成 SHA-256 内容摘要防意外篡改凭证 `case_07_jounce_bumper_manifest.json` 与 Evidence V2 审计摘要。摘要不能单独证明签署者身份。
-- [ ] 产出独立单文件 HTML 交付报告（嵌入矢量 SVG 与应力/接触云图）。
-- [ ] 在 `validation_assets/registry.json` 中更新资格状态为 `QUALIFIED`，并登记 official reference（当前 `reference_source` 仍为 `TBD`，`reference_benchmarks` 标注 `PENDING`）。
+- [x] 实现 E2E 执行驱动及无头 ODB 提取脚本（`tools/case_07_jounce_bumper_e2e.py`，2026-10-21 真机运行 `case07_live_e7301de3`）。
+- [x] 生成 SHA-256 内容摘要防意外篡改凭证 `case_07_jounce_bumper_manifest.json`（已入库 `machine_validation/p2_cases/case_07_jounce_bumper/`，`case_manifest_v1` + `audit_signature`）。摘要不能单独证明签署者身份。
+- [x] 产出独立单文件 HTML 交付报告（`Case_07_Jounce_Bumper_Report.html`，74,878 字节，含应力/位移/接触压力云图）。
+- [x] 在 `validation_assets/registry.json` 中更新资格状态为 `QUALIFIED`，并登记 `REF_ABQ_JOUNCE_BUMPER`；该参考条目的手册章节定位尚未对本机安装核实，已在目录条目中显式披露；`reference_benchmarks` 保持 `PENDING`（无官方数值基准，验收仅依据问题声明的工程判据）。
 - [x] 在 `tests/test_p2_package_b_cases.py` 补充问题定义规格断言与负向探针（自穿透超限、体积锁定/bulk 模量失配、超弹性参数不可容许、接触证据缺失与过度过盈）。
 
-> **当前诚实边界**：Registry 中 Case 07 的 `evidence_manifest` 为空、`report_assets` 为空，且 `machine_validation/p2_cases/` 下不得存在 `case_07*` 任何文件。守护测试 `test_case_07_evidence_is_honestly_absent` 会失败于任何伪造尝试。真实证据只能在拥有许可的 Abaqus 机器上完成 Step 1~2 后填入。
+> **证据状态（2026-10-27 更新）**：Case 07 已于 2026-10-21 在本机 Abaqus 2025 真机完成 Step 1~2 双作业求解（`case07_live_e7301de3`，六项验收判据全部 PASS），证据包已入库 `machine_validation/p2_cases/case_07_jounce_bumper/` 并完成 registry 登记；原守护测试 `test_case_07_evidence_is_honestly_absent` 已由正向完整性测试 `test_case_07_qualified_manifest_integrity` 替代（校验签名、判据与报告哈希）。仍未闭合的诚实边界：官方手册章节定位未核实，无官方数值基准（`reference_benchmarks: PENDING`），几何保真度已披露 18° 壁角不可同时满足的偏差说明。
 
 ### 31.3 后续未完成事项全景看板 (Pending Roadmap Matrix)
 

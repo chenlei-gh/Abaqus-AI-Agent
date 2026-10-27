@@ -24,9 +24,9 @@ def test_registry_json_integrity():
     cases = data["cases"]
     assert len(cases) == 10, "Must register Case 01 to Case 10"
 
-    # Verify qualified cases (01 to 06)
+    # Verify qualified cases (01 to 07)
     qualified = [c for c in cases if c.get("qualification_status") == "QUALIFIED"]
-    assert len(qualified) == 6
+    assert len(qualified) == 7
 
     for c in qualified:
         case_id = c["case_id"]

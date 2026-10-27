@@ -40,6 +40,9 @@ CASE_05_MANIFEST = CASE_05_SUB_DIR / "case_05_composite_buckling_manifest.json"
 CASE_06_PROBLEM = ROOT / "test_assets" / "engineering_cases" / "case_06_sheet_metal_submodeling" / "problem_statement.json"
 CASE_06_SUB_DIR = ROOT / "machine_validation" / "p2_cases" / "case_06_sheet_metal_submodeling"
 CASE_06_MANIFEST = CASE_06_SUB_DIR / "case_06_sheet_metal_manifest.json"
+CASE_07_SUB_DIR = ROOT / "machine_validation" / "p2_cases" / "case_07_jounce_bumper"
+CASE_07_MANIFEST = CASE_07_SUB_DIR / "case_07_jounce_bumper_manifest.json"
+CASE_07_REPORT = CASE_07_SUB_DIR / "Case_07_Jounce_Bumper_Report.html"
 
 
 def test_case_01_problem_statement_specification():
@@ -1140,27 +1143,59 @@ def test_case_07_problem_statement_specification():
     }
 
 
-def test_case_07_evidence_is_honestly_absent():
-    """Case 07 must not advertise evidence that no real solver run produced."""
+def test_case_07_qualified_manifest_integrity():
+    """Case 07 qualified on the 2026-10-21 real Abaqus 2025 run (case07_live_e7301de3).
+
+    Verifies the registered evidence: registry state, manifest schema and
+    SHA-256 audit signature, all six acceptance criteria PASS within the
+    declared limits, and the on-disk report asset matches the recorded
+    size and hash. Numeric official benchmarks remain honestly unrecorded
+    (the manual section locator is unverified on this installation).
+    """
     registry_file = ROOT / "validation_assets" / "registry.json"
     with open(registry_file, "r", encoding="utf-8") as f:
         registry = json.load(f)
-
     case = next(
         c for c in registry["cases"] if c["case_id"] == "CASE_07_AUTOMOTIVE_JOUNCE_BUMPER"
     )
-    assert case["qualification_status"] == "PENDING"
-    assert case["evidence_manifest"] == ""
-    assert case["report_assets"] == []
-    assert case["input_assets"] == [
-        "test_assets/engineering_cases/case_07_jounce_bumper_self_contact/problem_statement.json"
-    ]
-
-    # No stale manifest or report may exist on disk for a case with no solver run.
-    evidence_dir = ROOT / "machine_validation" / "p2_cases"
-    assert not list(evidence_dir.glob("case_07*")), (
-        "Case 07 has no real solver run, so no manifest or report may be committed"
+    assert case["qualification_status"] == "QUALIFIED"
+    assert case["evidence_manifest"] == (
+        "machine_validation/p2_cases/case_07_jounce_bumper/case_07_jounce_bumper_manifest.json"
     )
+    assert case["report_assets"]
+
+    assert CASE_07_MANIFEST.is_file()
+    with open(CASE_07_MANIFEST, "r", encoding="utf-8") as f:
+        manifest = json.load(f)
+    assert manifest["schema_version"] == "case_manifest_v1"
+    assert manifest["qualification_level"] == "QUALIFIED"
+    assert manifest["status"] == "ACCEPTED"
+
+    signature = manifest.get("audit_signature")
+    assert signature is not None and len(signature) == 64
+    manifest_copy = dict(manifest)
+    manifest_copy.pop("audit_signature", None)
+    expected_hash = hashlib.sha256(
+        json.dumps(manifest_copy, sort_keys=True).encode("utf-8")
+    ).hexdigest()
+    assert signature == expected_hash, "Cryptographic audit signature mismatch or manifest tampered!"
+
+    acceptance = manifest["acceptance"]
+    assert acceptance["status"] == "PASS" and acceptance["passed"] is True
+    for crit in acceptance["criteria"]:
+        assert crit["passed"] is True, crit["name"]
+        if crit["operator"] == "<=":
+            assert crit["actual"] <= crit["limit"]
+        elif crit["operator"] == ">=":
+            assert crit["actual"] >= crit["limit"]
+
+    assert manifest["solver_evidence"]["seat_job"]["sta_completed"] is True
+    assert manifest["solver_evidence"]["compress_job"]["sta_completed"] is True
+
+    assert CASE_07_REPORT.is_file()
+    report_bytes = CASE_07_REPORT.read_bytes()
+    assert len(report_bytes) == manifest["summary"]["report"]["bytes"]
+    assert hashlib.sha256(report_bytes).hexdigest() == manifest["summary"]["report"]["sha256"]
 
     problem = _case_07_problem()
     assert problem["reference_benchmarks"]["status"] == "PENDING"

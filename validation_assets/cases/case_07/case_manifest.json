@@ -2,6 +2,18 @@
   "case_id": "CASE_07_AUTOMOTIVE_JOUNCE_BUMPER",
   "name": "Automotive Suspension Hyperelastic Jounce Bumper Self-Contact",
   "category": "P2_PACKAGE_B",
-  "status": "PENDING",
-  "domain": "automotive_suspension_hyperelastic_contact"
+  "domain": "automotive_suspension_hyperelastic_contact",
+  "reference": "validation_assets/references/official_examples.json#REF_ABQ_JOUNCE_BUMPER",
+  "status": "QUALIFIED",
+  "source_input": "test_assets/engineering_cases/case_07_jounce_bumper_self_contact/problem_statement.json",
+  "primary_manifest": "machine_validation/p2_cases/case_07_jounce_bumper/case_07_jounce_bumper_manifest.json",
+  "primary_report": "machine_validation/p2_cases/case_07_jounce_bumper/Case_07_Jounce_Bumper_Report.html",
+  "verified_metrics": {
+    "max_self_contact_penetration_mm": 0.000166,
+    "max_reaction_force_kn": 0.062,
+    "max_volumetric_strain": 2.59e-05,
+    "min_effective_bulk_modulus_mpa": 501.1727,
+    "max_kinetic_to_internal_energy_ratio": 0.00513753,
+    "max_reaction_equilibrium_error_percent": 0.197918
+  }
 }
