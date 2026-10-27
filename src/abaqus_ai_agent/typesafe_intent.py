@@ -896,6 +896,31 @@ def _detect_entity_conflicts(
     return conflicts
 
 
+_CLAUSE_SPLIT_RE = re.compile(r"[,，;；。\n\t\r]+|\.[\)\]]*(?=\s|$)")
+
+
+def _split_prompt_clauses(text: str) -> List[str]:
+    """Split prompt text into clauses on punctuation and ASCII sentence periods.
+
+    An ASCII period counts as a clause boundary only when followed by
+    whitespace, a closing bracket, or the end of the text, so decimal
+    numbers such as ``2.5mm`` are never split mid-value. Without this,
+    a boundary-condition sentence and a load sentence merge into one
+    clause and the BC can be stolen onto the load region (e.g. TipFace).
+    """
+    return [c.strip() for c in _CLAUSE_SPLIT_RE.split(text) if c.strip()]
+
+
+def _enclosing_clause(text: str, pos: int) -> str:
+    """Return the clause (per _CLAUSE_SPLIT_RE boundaries) containing ``pos``."""
+    last = 0
+    for m in _CLAUSE_SPLIT_RE.finditer(text):
+        if m.start() >= pos:
+            return text[last:m.start()]
+        last = m.end()
+    return text[last:]
+
+
 def _extract_prompt_boundary_conditions(prompt: str) -> List[Dict[str, Any]]:
     """Extract explicit boundary condition entities and geometric regions from prompt text.
     Avoids arbitrary FixedFace/RootFace forgery by only binding regions that are explicitly specified.
@@ -914,7 +939,7 @@ def _extract_prompt_boundary_conditions(prompt: str) -> List[Dict[str, Any]]:
         return []
 
     # Partition prompt into distinct clauses by punctuation
-    clauses = [c.strip() for c in re.split(r'[,，;；。\n\t]+', p_lower) if c.strip()]
+    clauses = _split_prompt_clauses(p_lower)
     seen_regions = set()
 
     for c in clauses:
@@ -963,8 +988,7 @@ def _extract_prompt_load_region(prompt: str, load_type: str = "concentrated_forc
         return None
 
     # 1. Split prompt into clauses by punctuation and newlines
-    raw_clauses = re.split(r"[,，;；。\n\r]+", prompt)
-    clauses = [c.strip() for c in raw_clauses if c.strip()]
+    clauses = _split_prompt_clauses(prompt)
     if not clauses:
         return None
 
@@ -2131,6 +2155,12 @@ class EngineeringIntentRouter:
             all_loads_have_region = True
             for ld in p_load_norm:
                 ld_dict = dict(ld)
+                # Pressure-unit prompt loads are pressure loads, not forces:
+                # _extract_domain_quantities only admits MPA/kPa values when
+                # the enclosing clause carries pressure context, so the unit
+                # is authoritative for the type here.
+                if str(ld_dict.get("unit") or "").upper() in ("MPA", "KPA", "兆帕"):
+                    ld_dict["type"] = "pressure"
                 ld_type = ld_dict.get("type", "concentrated_force")
                 reg = ld_dict.get("region") or _extract_prompt_load_region(prompt, ld_type)
                 if reg:
@@ -2640,8 +2670,27 @@ class EngineeringIntentRouter:
             unit_str = m.group(2).upper()
             start_pos = max(0, m.start() - 25)
             prefix = prompt[start_pos:m.start()].lower()
-            if any(w in prefix for w in ("应力", "stress", "mises", "校核", "不超过", "小于", "<", "容许", "allowable", "模量", "modulus")):
+            # Material-property and strength prefixes are never loads: a value
+            # like "E=210000MPa" or "yield=235MPa" is an elastic modulus or a
+            # yield strength, and extracting it as a force silently fabricates
+            # a physically wrong load case.
+            if any(w in prefix for w in (
+                "应力", "stress", "mises", "校核", "不超过", "小于", "<", "容许", "allowable",
+                "模量", "modulus", "屈服", "yield", "强度", "strength",
+                "e=", "e =", "nu=", "nu =", "poisson", "泊松",
+                "density", "密度", "young", "杨氏",
+            )):
                 continue
+            # Pressure units (MPa/kPa/兆帕) are only loads when the enclosing
+            # clause actually talks about pressure; otherwise the value is
+            # almost certainly a stress limit or a material property and the
+            # safe behaviour is to drop it (fail-closed clarification).
+            if unit_str in ("MPA", "KPA", "兆帕"):
+                clause_low = _enclosing_clause(prompt, m.start()).lower()
+                if not any(w in clause_low for w in (
+                    "pressure", "压强", "压力", "均布", "distributed", "面载荷", "表面载荷",
+                )):
+                    continue
             loads.append({"magnitude": val, "unit": unit_str})
         if loads:
             params["loads"] = loads

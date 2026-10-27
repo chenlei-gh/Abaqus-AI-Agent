@@ -177,7 +177,7 @@ def test_headless_script_labels_markers_and_never_fakes_an_arrow_direction():
     )
     script = generate_headless_viewer_script("dummy.odb", [req], output_dir="dummy_out")
     compile(script, "<headless-viewer>", "exec")
-    assert "session.Text is unavailable" in script
+    assert "userData.Text is unavailable" in script
     assert "_text_api(name=_name + '_Label'" in script
     assert "_label_anchor = _tip" in script
     assert "_label_anchor = _origin" in script

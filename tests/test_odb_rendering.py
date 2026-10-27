@@ -914,5 +914,41 @@ def test_headless_script_hides_tree_and_draws_accepted_boundary_arrows():
     assert "(1.0, 2.0, 3.0)" in script
     assert "(10.0, 20.0, 30.0)" in script
     assert "(0.0, 1.0, 0.0)" in script
-    assert "startPoint=_tip, endPoint=_origin" in script
-    assert "session.Arrow is unavailable" in script
+    assert "startAnchor=_tip, endAnchor=_origin" in script
+    assert "session.odbs[odb.name].userData" in script
+    assert "userData.Arrow is unavailable" in script
+    assert "userData.Text is unavailable" in script
+    assert "vp.plotAnnotation(_ann)" in script
+    assert "vp.hideAnnotation(_plotted_ann)" in script
+
+
+def test_generated_script_defines_target_frame_without_explicit_step():
+    """Regression: requests without step_name hit the fallback branch, which
+    must define target_frame before the field-label resolution uses it
+    (2026-10-27 pilot-2 symbol-figure failure: NameError -> missing figures
+    -> delivery blocked)."""
+    from abaqus_ai_agent.execution.odb_rendering import (
+        ContourPlotRequest,
+        generate_headless_viewer_script,
+    )
+
+    req = ContourPlotRequest(
+        output_filename="load_application.png",
+        variable_label="U",
+        component_or_invariant="magnitude",
+        output_position="NODAL",
+        step_name=None,
+        frame_index=-1,
+        plot_state="CONTOURS_ON_DEF",
+        view_orientation="Iso",
+        plot_symbols="loads",
+    )
+    script = generate_headless_viewer_script(
+        odb_path="D:/x/model.odb", requests=[req], output_dir="D:/x/out"
+    )
+    # fallback branch assigns target_frame right after target_step
+    assert "target_step = odb.steps[last_step_key]" in script
+    assign_idx = script.index("target_step = odb.steps[last_step_key]")
+    use_idx = script.index("target_frame.fieldOutputs")
+    define_idx = script.index("target_frame = target_step.frames[", assign_idx)
+    assert define_idx < use_idx, "target_frame must be defined before first use"

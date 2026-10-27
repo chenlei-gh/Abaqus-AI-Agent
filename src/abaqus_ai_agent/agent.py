@@ -987,17 +987,34 @@ class AbaqusAIAgent:
             out_files = run.metadata.get("output_files") or {}
             odb_path = out_files.get("odb") or run.metadata.get("odb_path")
 
-        if reaction_force is None and odb_path and os.path.exists(odb_path):
+        # Reaction equilibrium must be evaluated on the vector sum of the
+        # per-node RF components, not on the scalar `reaction_force` metric
+        # (max per-node |RF|). Fixed supports legitimately carry large
+        # opposing nodal couples, so max|RF| can exceed the applied load
+        # while the resultant still closes exactly (2026-10-27 pilot-2
+        # phase-B: metric read 372 N against a 200 N load while the true
+        # component sum was -200.0 N).
+        reaction_components = None
+        if odb_path and os.path.exists(odb_path):
             try:
                 from odbAccess import openOdb
                 _odb = openOdb(path=odb_path, readOnly=True)
                 _frame = _odb.steps.values()[-1].frames[-1]
                 if 'RF' in _frame.fieldOutputs:
                     rf_fld = _frame.fieldOutputs['RF']
-                    tot_rf2 = sum(float(val.data[1]) for val in rf_fld.values if hasattr(val, 'data') and len(val.data) > 1)
+                    comp_sums = [0.0, 0.0, 0.0]
+                    for val in rf_fld.values:
+                        data = getattr(val, 'data', None)
+                        if data is None or len(data) < 3:
+                            continue
+                        for _ci in range(3):
+                            comp_sums[_ci] += float(data[_ci])
+                    reaction_components = tuple(comp_sums)
+                    tot_rf2 = comp_sums[1]
                     if abs(tot_rf2) > 1e-6:
-                        reaction_force = abs(tot_rf2)
-                        primary_metrics["RF2"] = tot_rf2
+                        if reaction_force is None:
+                            reaction_force = abs(tot_rf2)
+                            primary_metrics["RF2"] = tot_rf2
                         extraction_diagnostics["RF"] = "EXTRACTED"
                     else:
                         extraction_diagnostics["RF"] = "UNAVAILABLE: RF sum below 1e-6 threshold"
@@ -1068,7 +1085,7 @@ class AbaqusAIAgent:
 
         derived_metrics = calculate_derived_metrics(
             applied_load=applied_force,
-            reaction_load=reaction_force,
+            reaction_load=reaction_components if reaction_components is not None else reaction_force,
             etotal_data=etotal_curve,
             allie_data=allie_curve,
             allke_data=allke_curve,
@@ -2116,7 +2133,21 @@ class AbaqusAIAgent:
                 materials_payload = []
                 final_mat_def = getattr(plan, "material", None) or effective_mat_def
                 if final_mat_def is not None:
-                    materials_payload.append(final_mat_def.to_dict())
+                    mat_claim = final_mat_def.to_dict()
+                    # Declare the section-assignment regions recorded by the
+                    # compiler so the delivery gate can verify claim vs deck
+                    # (a claim without regions mismatches any assigned deck).
+                    plan_assignments = getattr(plan, "material_assignments", ()) or ()
+                    assigned_regions = sorted({
+                        str(a.get("region")).strip()
+                        for a in plan_assignments
+                        if isinstance(a, dict)
+                        and a.get("material") == final_mat_def.name
+                        and a.get("region")
+                    })
+                    if assigned_regions:
+                        mat_claim["applicable_regions"] = assigned_regions
+                    materials_payload.append(mat_claim)
 
                 # Build grounded mesh discretization and quality payload
                 mesh_extraction_error = None
@@ -2239,6 +2270,10 @@ class AbaqusAIAgent:
                         plan_actions=getattr(plan, "actions", ()) or (),
                         scope_contacts=scope_contacts,
                     )
+                # Persist the report-stage verdict on the run so every delivery
+                # path (CLI, live-gate tooling) can rebuild the exact same
+                # authorization record the deterministic pipeline verified.
+                run.metadata["condition_fidelity"] = dict(fidelity_verdict)
                 from .validation.condition_fidelity import required_preprocessing_figure_kinds
                 required_figures = required_preprocessing_figure_kinds(
                     boundary_evidence=boundary_for_figures,

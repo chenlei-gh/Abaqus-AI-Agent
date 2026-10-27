@@ -282,3 +282,51 @@ def test_production_delivery_live_e2e_gate():
     assert report["causal_run_id_bound"] is True
     assert bool(report.get("actual_odb_sha256") or report.get("odb_sha256"))
     assert bool(report.get("inp_hash"))
+
+
+# --- Remediation review: causal run-id binding is a mandatory PASS gate -------
+
+
+def _passing_delivery_report() -> dict:
+    return {
+        "status": "pass",
+        "run_state": "ACCEPTED",
+        "engineering_status": "RESULT_VALID",
+        "deliverable": True,
+        "acceptance_status": "PASS",
+        "result_validity": "VALID",
+        "reaction_balance_passed": True,
+        "manifest_integrity_verified": True,
+        "manifest_signature_verified": True,
+        "causal_run_id_bound": True,
+        "odb_hash_matches_manifest": True,
+        "actual_odb_sha256": "ab" * 32,
+        "manifest_odb_sha256": "ab" * 32,
+        "inp_hash": "cd" * 32,
+    }
+
+
+def test_delivery_contracts_accept_fully_bound_report():
+    from tools.production_delivery_e2e import assert_production_delivery_contracts
+
+    assert_production_delivery_contracts(_passing_delivery_report())
+
+
+def test_delivery_contracts_reject_foreign_run_manifest():
+    """A manifest belonging to a different run must fail closed even when its
+    signature and ODB hash are otherwise valid."""
+    from tools.production_delivery_e2e import assert_production_delivery_contracts
+
+    report = _passing_delivery_report()
+    report["causal_run_id_bound"] = False
+    with pytest.raises(AssertionError, match="run ID binding"):
+        assert_production_delivery_contracts(report)
+
+
+def test_cae_template_binds_run_id_into_pass_condition(tmp_path: Path):
+    """The CAE-side status computation must include causal_run_id_bound."""
+    code = build_production_delivery_cae_script(project_root=tmp_path / "mock_project_root2")
+    ast.parse(code)
+    status_idx = code.index("'status': 'pass' if (")
+    status_block = code[status_idx:status_idx + 800]
+    assert "causal_run_id_bound" in status_block

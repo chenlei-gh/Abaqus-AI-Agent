@@ -1,0 +1,69 @@
+{
+  "acceptance_status": "PASS",
+  "actual_odb_sha256": "80c710128495b82b9252d4543e2cc92270acb63cecbc1a872ce2b00187ce3c1c",
+  "artifacts": [
+    {
+      "path": "C:\\Users\\DELL\\AppData\\Local\\Temp\\abaqus_prod_proj_0d51jjqk\\solver\\7f4c9c59-bc1c-4409-8fc6-b6a58cf58c1e\\ProdDeliveryJob.inp",
+      "suffix": ".inp"
+    },
+    {
+      "path": "C:\\Users\\DELL\\AppData\\Local\\Temp\\abaqus_prod_proj_0d51jjqk\\solver\\7f4c9c59-bc1c-4409-8fc6-b6a58cf58c1e\\ProdDeliveryJob.odb",
+      "suffix": ".odb"
+    },
+    {
+      "path": "C:\\Users\\DELL\\AppData\\Local\\Temp\\abaqus_prod_proj_0d51jjqk\\solver\\7f4c9c59-bc1c-4409-8fc6-b6a58cf58c1e\\ProdDeliveryJob.sta",
+      "suffix": ".sta"
+    },
+    {
+      "path": "C:\\Users\\DELL\\AppData\\Local\\Temp\\abaqus_prod_proj_0d51jjqk\\solver\\7f4c9c59-bc1c-4409-8fc6-b6a58cf58c1e\\ProdDeliveryJob.msg",
+      "suffix": ".msg"
+    },
+    {
+      "path": "C:\\Users\\DELL\\AppData\\Local\\Temp\\abaqus_prod_proj_0d51jjqk\\solver\\7f4c9c59-bc1c-4409-8fc6-b6a58cf58c1e\\ProdDeliveryJob.dat",
+      "suffix": ".dat"
+    },
+    {
+      "path": "C:\\Users\\DELL\\AppData\\Local\\Temp\\abaqus_prod_proj_0d51jjqk\\solver\\7f4c9c59-bc1c-4409-8fc6-b6a58cf58c1e\\ProdDeliveryJob.log",
+      "suffix": ".log"
+    },
+    {
+      "path": "C:\\Users\\DELL\\AppData\\Local\\Temp\\abaqus_prod_proj_0d51jjqk\\solver\\7f4c9c59-bc1c-4409-8fc6-b6a58cf58c1e\\ProdDeliveryJob.com",
+      "suffix": ".com"
+    },
+    {
+      "path": "C:\\Users\\DELL\\AppData\\Local\\Temp\\abaqus_prod_proj_0d51jjqk\\solver\\7f4c9c59-bc1c-4409-8fc6-b6a58cf58c1e\\ProdDeliveryJob.prt",
+      "suffix": ".prt"
+    }
+  ],
+  "audit_summary": "Solver: PASS | ODB: PASS | Required Result: PASS | Engineering Acceptance: PASS",
+  "baseline_type": "static_cantilever_beam_linear_elastic",
+  "causal_run_id_bound": true,
+  "deliverable": true,
+  "engineering_status": "RESULT_VALID",
+  "inp_hash": "3615d60b7c7e4337da8d2522200fe60df7c7308b03fa046e51a14edfea506920",
+  "manifest_integrity_verified": true,
+  "manifest_odb_sha256": "80c710128495b82b9252d4543e2cc92270acb63cecbc1a872ce2b00187ce3c1c",
+  "manifest_signature_verified": true,
+  "metrics": {
+    "root_mises_sanity": 471.214080810547,
+    "tip_displacement_lower": 2.06864285469055,
+    "tip_displacement_upper": 2.06864285469055
+  },
+  "odb_hash_matches_manifest": true,
+  "odb_path": "C:\\Users\\DELL\\AppData\\Local\\Temp\\abaqus_prod_proj_0d51jjqk\\solver\\7f4c9c59-bc1c-4409-8fc6-b6a58cf58c1e\\ProdDeliveryJob.odb",
+  "odb_sha256": "80c710128495b82b9252d4543e2cc92270acb63cecbc1a872ce2b00187ce3c1c",
+  "persistence": "persisted",
+  "reaction_balance_passed": true,
+  "reaction_summary": {
+    "components": [
+      1.33809407998342e-10,
+      1000.00003,
+      -7.73070496506989e-11
+    ],
+    "count": 25
+  },
+  "result_validity": "VALID",
+  "run_id": "7f4c9c59-bc1c-4409-8fc6-b6a58cf58c1e",
+  "run_state": "accepted",
+  "status": "pass"
+}

@@ -180,6 +180,10 @@ class CompiledAgentPlan:
     cae_script: str
     intent_summary: Dict[str, Any]
     material: Optional[MaterialDefinition] = None
+    # Structured record of which region set each material section was
+    # assigned to. The delivery gate cross-checks this claim against the
+    # solved deck; without it the claim is silently incomplete.
+    material_assignments: Tuple[Dict[str, str], ...] = ()
 
 
 _STEP_TYPE_ALIASES = {
@@ -1820,6 +1824,13 @@ def compile_intent_to_actions(
         cae_script=full_script,
         intent_summary=intent_summary,
         material=material,
+        # All section-assignment templates in this compiler bind the single
+        # resolved material to the part-wide 'AllCells' set.
+        material_assignments=(
+            ({"material": material.name, "region": "AllCells"},)
+            if material is not None
+            else ()
+        ),
     )
 
 

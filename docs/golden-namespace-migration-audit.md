@@ -221,8 +221,9 @@ AnalysisRunner 自行完成受门控的提交），并加回归测试
 （AWAITING_APPROVAL，无求解产物）；Phase B `live_gate_kn_phase_b.json`
 （批准被跨运行采用、求解完成、验收 PASS，终态 DELIVERY_BLOCKED——
 E1 已记录的正式交付子系统既有行为，与本次迁移无关，未做扩大处理）。
-遗留观察：Phase B 中 agent 对 200N 载荷的规划结果反力为 210435N、
-max_mises 提取为 0，属 agent 规划/提取质量问题，已如实记录在证据中。
+遗留观察（已在第 9 节闭环）：Phase B 中 agent 对 200N 载荷的规划结果
+反力为 210435N、max_mises 提取为 0——根因链（路由器载荷误提取、句号分句、
+反力分量求和、材料区域声明）已全部修复并真机复验通过，见第 9 节。
 
 ### 8.2 试点 3（production_delivery_e2e）整改项
 
@@ -241,3 +242,73 @@ deliverable=True、acceptance PASS、RESULT_VALID、反力平衡 0.00% 误差、
 ### 8.3 离线门禁
 
 T1-T8 全部落实为自动化测试；全量离线回归 2478 passed。
+
+
+## 9. `32e7ce9` 集中终审整改与真机复验（已完成）
+
+终审提出 3 项阻塞（试点 2 Phase B 工程结果异常、异常路径与审批状态分类缺口、
+试点 3 manifest run 绑定未纳入 PASS），并禁止迁移剩余 13 个脚本直至闭环。
+本轮整改在真机复验中又发现并修复了 4 个审查清单之外的真实缺陷。
+
+### 9.1 试点 2 工程结果异常的根因链（全部修复并真机复验通过）
+
+Phase B 旧证据中"反力 210435N / max_mises=0 却验收通过"不是单点 bug，
+而是一条根因链：
+
+1. **意图路由器载荷误提取**（typesafe_intent.py）：提示词中的
+   `E=210000MPa`、`yield=235MPa` 被当成集中力捕获。修复：材料/强度类
+   排除前缀；MPa/kPa 数值必须出现在压力语境子句中，否则丢弃（fail-closed）。
+2. **子句切分不识别英文句号**：BC 子句与载荷子句合并，导致固定端被错配到
+   加载面（RootFace ENCASTRE 丢失）。修复：共享 `_split_prompt_clauses`，
+   ASCII 句点为分句边界、小数点永不切分。
+3. **反力提取取错量**：原取单节点 |RF| 最大值（372N，含固定端内力偶），
+   改为按分量求和 ΣRF1/2/3。ODB 实测 ΣRF2=-200.0000063N，
+   力平衡误差 0.000003%。
+4. **材料未声明适用区域**导致交付门 `material_applicable_regions_missing`：
+   编译计划新增 `material_assignments`，材料声明携带 `applicable_regions`。
+
+修复后 Phase B 真机复验：max_mises=101.0 MPa、max|U|=0.433mm
+（与梁理论解 ~120MPa/0.38mm 一致）、验收 PASS、正式报告落盘。
+证据：`machine_validation/live_gate_kn_phase_b_final.json`
+（verdict=PASS，delivery.filed=true，reasons 为空）。
+
+### 9.2 边界符号图箭头渲染：误诊修正（方案 B 修正版，网上核实）
+
+旧代码调用 `session.Arrow`/`session.Text` 并报"API unavailable"。
+网上核实（Abaqus 内核脚本参考 + abqpy 2025 分支源码）：该路径从未存在，
+文档记载的 ODB 会话路径是 `session.odbs[name].userData.Arrow/Text`，
+创建后经 `Viewport.plotAnnotation` 上屏。真机探针证实只读 ODB +
+`viewer -noGUI` 下可用（红色箭头像素级验证：with/without 对比图
+83,299 个红色像素差异）。修复 `_boundary_marker_lines` 走文档路径，
+并在每张图打印后 `hideAnnotation` 防止注解泄漏到后续图。
+`load_application.png` 可见红色载荷箭头与标签，`boundary_conditions.png`
+可见 FIXED 标签且无载荷箭头泄漏。
+
+### 9.3 交付记录重构（missing_acceptance_verdict / missing_condition_fidelity）
+
+工具此前把裸 provenance 对象传给文件交付门，必然缺验收裁决与
+condition-fidelity。修复：agent 把报告期 fidelity 裁决持久化到
+`run.metadata["condition_fidelity"]`；工具改用共享构造器
+`build_delivery_record(provenance, acceptance, condition_fidelity, ...)`
+重建与管线完全一致的授权记录，缺失输入必须失败而非默认值兜底。
+
+### 9.4 其余终审项
+
+- `compute_live_gate_verdict`：AWAITING_APPROVAL 分类以宿主 rc==0 且
+  settled 为前提，宿主失败优先（2 个新测试）。
+- 求解异常路径：`task_result is None` 保护，CRASHED facts 兜底
+  （含 exec 级测试）。
+- 试点 3：`causal_run_id_bound` 纳入 CAE 侧 PASS 条件
+  （含 manifest 归属他 run 必须失败关闭的反例测试）。
+
+### 9.5 本轮证据与门禁
+
+| 项目 | 证据 |
+| --- | --- |
+| 试点 2 Phase B 复验 PASS | `machine_validation/live_gate_kn_phase_b_final.json` |
+| 试点 3 Phase A 拦截 + 批准生命周期 | `machine_validation/prod_deliv_kn_phase_a_candidate.json` |
+| 试点 3 Phase B PASS（run_id 绑定） | `machine_validation/prod_deliv_kn_phase_b.json`（causal_run_id_bound=true，反力平衡 0.00%） |
+| 离线回归 | 2497 passed, 5 deselected（-m "not live"） |
+
+试点 1-3 全部通过。剩余 13 个 Golden 脚本的批次迁移仍待复审批准后启动；
+`mesh_convergence_e2e` 跨片段持久性回归为强制项。

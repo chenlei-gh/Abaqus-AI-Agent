@@ -383,6 +383,8 @@ odb_hash_matches_manifest = bool(
     and (actual_odb_sha256 == manifest_odb_sha256)
 )
 
+causal_run_id_bound = bool(manifest and getattr(manifest, 'run_id', None) == run.id)
+
 report = {
     'status': 'pass' if (
         run.solver_completed
@@ -392,6 +394,7 @@ report = {
         and getattr(accepted, 'acceptance_status', '') == 'PASS'
         and reaction_report.passed
         and manifest_verified
+        and causal_run_id_bound
         and bool(actual_odb_sha256)
         and odb_hash_matches_manifest
     ) else 'fail',
@@ -407,7 +410,7 @@ report = {
     'reaction_summary': reaction_summary,
     'manifest_integrity_verified': manifest_verified,
     'manifest_signature_verified': manifest_verified,
-    'causal_run_id_bound': bool(manifest and getattr(manifest, 'run_id', None) == run.id),
+    'causal_run_id_bound': causal_run_id_bound,
     'actual_odb_sha256': actual_odb_sha256,
     'manifest_odb_sha256': manifest_odb_sha256,
     'odb_hash_matches_manifest': odb_hash_matches_manifest,
@@ -465,6 +468,31 @@ def _extract_report(stdout: str) -> Optional[Dict[str, Any]]:
         if line:
             clean_lines.append(line)
     return json.loads("\n".join(clean_lines))
+
+
+def assert_production_delivery_contracts(report: Dict[str, Any]) -> None:
+    """Strict industrial acceptance contract for the production delivery report.
+
+    Fail-closed: any unmet gate raises AssertionError. The causal run-id
+    binding is mandatory so a manifest from a different run can never be
+    combined with otherwise-passing evidence into a PASS.
+    """
+    assert report["status"] == "pass", f"Expected status pass, got {report['status']}"
+    assert report["run_state"].lower() == "accepted", f"Expected state accepted, got {report['run_state']}"
+    assert report["engineering_status"] == "RESULT_VALID", f"Expected RESULT_VALID, got {report['engineering_status']}"
+    assert report["deliverable"] is True, "Production delivery gate rejected: deliverable is not True"
+    assert report["acceptance_status"] == "PASS", f"Expected acceptance PASS, got {report['acceptance_status']}"
+    assert report["result_validity"] == "VALID", f"Expected VALID result_validity, got {report['result_validity']}"
+    assert report["reaction_balance_passed"] is True, "Reaction balance gate failed"
+    assert (
+        report.get("manifest_integrity_verified") is True
+        or report.get("manifest_signature_verified") is True
+    ), "EvidenceManifest integrity verification failed"
+    assert report.get("causal_run_id_bound") is True, "Causal run ID binding failed between run and manifest"
+    assert report.get("odb_hash_matches_manifest") is True, "Live ODB hash does not match manifest entry"
+    assert report.get("actual_odb_sha256") == report.get("manifest_odb_sha256"), "Live ODB hash mismatch with manifest"
+    assert bool(report.get("actual_odb_sha256") or report.get("odb_sha256")), "Missing authentic ODB SHA-256 in report"
+    assert bool(report.get("inp_hash")), "Missing authentic INP input_hash in report"
 
 
 def run_production_delivery_e2e(
@@ -568,22 +596,7 @@ def run_production_delivery_e2e(
             )
 
         # 3. Strict Industrial Acceptance Contract Assertions
-        assert report["status"] == "pass", f"Expected status pass, got {report['status']}"
-        assert report["run_state"].lower() == "accepted", f"Expected state accepted, got {report['run_state']}"
-        assert report["engineering_status"] == "RESULT_VALID", f"Expected RESULT_VALID, got {report['engineering_status']}"
-        assert report["deliverable"] is True, "Production delivery gate rejected: deliverable is not True"
-        assert report["acceptance_status"] == "PASS", f"Expected acceptance PASS, got {report['acceptance_status']}"
-        assert report["result_validity"] == "VALID", f"Expected VALID result_validity, got {report['result_validity']}"
-        assert report["reaction_balance_passed"] is True, "Reaction balance gate failed"
-        assert (
-            report.get("manifest_integrity_verified") is True
-            or report.get("manifest_signature_verified") is True
-        ), "EvidenceManifest integrity verification failed"
-        assert report.get("causal_run_id_bound") is True, "Causal run ID binding failed between run and manifest"
-        assert report.get("odb_hash_matches_manifest") is True, "Live ODB hash does not match manifest entry"
-        assert report.get("actual_odb_sha256") == report.get("manifest_odb_sha256"), "Live ODB hash mismatch with manifest"
-        assert bool(report.get("actual_odb_sha256") or report.get("odb_sha256")), "Missing authentic ODB SHA-256 in report"
-        assert bool(report.get("inp_hash")), "Missing authentic INP input_hash in report"
+        assert_production_delivery_contracts(report)
 
         # 4. Evidence Persistence Handling
         report["persistence"] = "persisted" if output_path else "ephemeral_verified"

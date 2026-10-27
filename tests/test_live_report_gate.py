@@ -1,4 +1,4 @@
-"""Offline contract tests for tools/run_live_report_gate.py (pilot 2).
+﻿"""Offline contract tests for tools/run_live_report_gate.py (pilot 2).
 
 Covers the remediation review items:
 - T1: rendered CAE script parses; no tabs; no unconditional success marker.
@@ -136,6 +136,10 @@ def _pass_facts():
         "odb_path": "D:/x/wd/JobX.odb",
         "errors": [],
         "delivery": {"attempted": True, "filed": True, "error": None},
+        # physically sane results for the 200 N cantilever baseline
+        "metrics": {"max_mises": 120.0, "max_displacement": 0.43, "reaction_force": 372.1},
+        # equilibrium evidence from RF component sums (resultant closes with the load)
+        "derived_metrics": {"force_balance": {"is_balanced": True, "balance_error_percent": 0.0}},
     }
 
 
@@ -313,3 +317,134 @@ def test_delivery_blocked_via_task_error_text():
     )
     assert verdict["verdict"] == "DELIVERY_BLOCKED"
     assert verdict["verdict"] != "PASS"
+
+# --- host-failure precedence over AWAITING_APPROVAL (remediation review) -------
+
+
+def test_awaiting_classification_refused_when_host_failed():
+    """A crashed host must never be re-labelled as a routine approval wait."""
+    verdict = compute_live_gate_verdict(
+        _blocked_facts(), process_returncode=1, process_settled=True,
+        artifacts={}, expected_run_id=RUN_ID,
+        required_artifacts=["JobX.odb"],
+    )
+    assert verdict["verdict"] == "FAIL"
+    assert any("return_code" in r for r in verdict["reasons"])
+    assert any("approval-pending classification refused" in r for r in verdict["reasons"])
+
+
+def test_awaiting_classification_refused_when_unsettled():
+    verdict = compute_live_gate_verdict(
+        _blocked_facts(), process_returncode=0, process_settled=False,
+        artifacts={}, expected_run_id=RUN_ID,
+        required_artifacts=["JobX.odb"],
+    )
+    assert verdict["verdict"] == "FAIL"
+    assert any("settled" in r for r in verdict["reasons"])
+    assert any("approval-pending classification refused" in r for r in verdict["reasons"])
+
+
+# --- physics sanity gates (pilot-2 phase-B regression: zero-stress / wrong-reaction)
+
+
+def test_zero_mises_after_completed_solve_fails():
+    """S=0 / U=0 after a 'completed' cantilever solve means the model was wrong."""
+    facts = _pass_facts()
+    facts["metrics"] = {"max_mises": 0.0, "max_displacement": 0.0, "reaction_force": -200.0}
+    verdict = compute_live_gate_verdict(
+        facts, process_returncode=0, process_settled=True,
+        artifacts=_pass_artifacts(), expected_run_id=RUN_ID,
+        required_artifacts=["JobX.odb", "engineering_report.html"],
+    )
+    assert verdict["verdict"] == "FAIL"
+    assert any("max_mises" in r for r in verdict["reasons"])
+
+
+def test_unbalanced_force_balance_evidence_fails():
+    """Equilibrium evidence that does not close must fail even when the scalar
+    reaction metric exists (per-node |RF| can exceed the applied load)."""
+    facts = _pass_facts()
+    facts["derived_metrics"] = {"force_balance": {"is_balanced": False, "balance_error_percent": 46.2}}
+    verdict = compute_live_gate_verdict(
+        facts, process_returncode=0, process_settled=True,
+        artifacts=_pass_artifacts(), expected_run_id=RUN_ID,
+        required_artifacts=["JobX.odb", "engineering_report.html"],
+    )
+    assert verdict["verdict"] == "FAIL"
+    assert any("force balance" in r for r in verdict["reasons"])
+
+
+def test_missing_force_balance_evidence_fails_closed():
+    facts = _pass_facts()
+    facts.pop("derived_metrics", None)
+    verdict = compute_live_gate_verdict(
+        facts, process_returncode=0, process_settled=True,
+        artifacts=_pass_artifacts(), expected_run_id=RUN_ID,
+        required_artifacts=["JobX.odb", "engineering_report.html"],
+    )
+    assert verdict["verdict"] == "FAIL"
+    assert any("force balance" in r for r in verdict["reasons"])
+
+
+# --- crash-path facts contract (remediation review: AttributeError masked the crash)
+
+
+def test_rendered_script_files_report_with_full_delivery_record():
+    """Regression: filing with the bare provenance object was refused by the
+    delivery gate (missing_acceptance_verdict / missing_condition_fidelity).
+    The script must rebuild the full authorization record from the run via
+    the shared build_delivery_record constructor instead."""
+    rendered = _render()
+    assert "build_delivery_record(" in rendered
+    assert "acceptance=_acceptance_obj" in rendered
+    assert "condition_fidelity=_fidelity_obj" in rendered
+    assert "record=record_payload" in rendered
+    assert "record=issued" not in rendered
+
+
+def test_rendered_script_guards_none_task_result_before_report_delivery():
+    rendered = _render()
+    assert "if task_result is not None and task_result.report_html:" in rendered
+
+
+def test_solve_exception_emits_crashed_facts_without_masking(tmp_path, monkeypatch, capsys):
+    """Execute the whole rendered script with an exploding solve entry: the
+    original exception must land in the facts payload as CRASHED, and no
+    secondary AttributeError may mask it."""
+    _fake_cae_modules(monkeypatch)
+
+    class _ExplodingAgent:
+        def __init__(self, executor):
+            self.executor = executor
+
+        def solve_requirement(self, *args, **kwargs):
+            raise RuntimeError("kernel exploded mid-solve")
+
+    import abaqus_ai_agent
+    monkeypatch.setattr(abaqus_ai_agent, "AbaqusAIAgent", _ExplodingAgent)
+
+    rendered = build_live_gate_cae_script(
+        workdir=tmp_path,
+        launcher="abaqus",
+        prompt="demo prompt",
+        job_name="JobX",
+        model_name="ModelX",
+        run_id=RUN_ID,
+    )
+    exec(compile(rendered, "<live_gate_cae_script>", "exec"), {})
+
+    import json
+    facts_file = tmp_path / f"live_gate_summary_{RUN_ID}.json"
+    assert facts_file.is_file(), "crash path must still write the facts payload"
+    facts = json.loads(facts_file.read_text(encoding="utf-8"))
+    assert facts["task_status"] == "CRASHED"
+    assert facts["run_id"] == RUN_ID
+    assert any("kernel exploded mid-solve" in str(e) for e in facts["errors"])
+    assert facts["delivery"] == {"attempted": False, "filed": False, "error": None}
+    # the crash must surface as FAIL, never as PASS/AWAITING
+    verdict = compute_live_gate_verdict(
+        facts, process_returncode=0, process_settled=True,
+        artifacts={}, expected_run_id=RUN_ID,
+        required_artifacts=["JobX.odb"],
+    )
+    assert verdict["verdict"] == "FAIL"

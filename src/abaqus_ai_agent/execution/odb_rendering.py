@@ -529,8 +529,13 @@ def _boundary_marker_lines(markers, request_index: int) -> List[str]:
     """Draw accepted fixture and load arrows on the whole model.
 
     A marker without a point is omitted. The script does not invent a location
-    from the part centroid, and a missing arrow API is a render error rather
-    than a silent contour-only image.
+    from the part centroid, and a missing annotation API is a render error
+    rather than a silent contour-only image. Annotations go through the
+    documented ``session.odbs[odb.name].userData`` repository (the only
+    Arrow/Text path available in an ODB viewer session; ``session.Arrow``
+    does not exist) and are plotted via ``Viewport.plotAnnotation``. The
+    caller hides them again after the figure prints so they cannot leak
+    into subsequent figures.
     """
     usable = []
     for item in markers or ():
@@ -563,19 +568,19 @@ def _boundary_marker_lines(markers, request_index: int) -> List[str]:
         "    # Explicit fixture / load / contact markers. These coordinates come",
         "    # from the compiled model, not from a visual guess.",
         f"    boundary_markers_{request_index} = {usable!r}",
-        "    try:",
-        "        from abaqus import session as _marker_session",
-        "    except Exception:",
-        "        _marker_session = session",
-        "    _arrow_api = getattr(_marker_session, 'Arrow', None)",
-        "    _text_api = getattr(_marker_session, 'Text', None)",
+        f"    _ann_ud_{request_index} = session.odbs[odb.name].userData",
+        f"    _arrow_api = getattr(_ann_ud_{request_index}, 'Arrow', None)",
+        f"    _text_api = getattr(_ann_ud_{request_index}, 'Text', None)",
         "    if _arrow_api is None:",
-        "        raise RuntimeError('Abaqus session.Arrow is unavailable; refusing a boundary figure without load/fixture arrows')",
+        "        raise RuntimeError('Abaqus ODB userData.Arrow is unavailable; refusing a boundary figure without load/fixture arrows')",
         "    if _text_api is None:",
-        "        raise RuntimeError('Abaqus session.Text is unavailable; refusing a boundary figure without load/fixture labels')",
+        "        raise RuntimeError('Abaqus ODB userData.Text is unavailable; refusing a boundary figure without load/fixture labels')",
+        f"    plotted_annotations_{request_index} = []",
         f"    for _marker_i, _marker in enumerate(boundary_markers_{request_index}):",
         "        _origin = tuple(_marker['point'])",
         "        _vector = _marker.get('vector')",
+        "        _kind = str(_marker.get('kind') or 'boundary').lower()",
+        "        _color = 'Red' if 'load' in _kind else ('Green' if 'contact' in _kind else 'Yellow')",
         "        _name = 'BoundaryMarker_%d_%d' % (" + str(int(request_index)) + ", _marker_i)",
         "        if _vector is not None:",
         "            _scale = 12.0",
@@ -584,7 +589,9 @@ def _boundary_marker_lines(markers, request_index: int) -> List[str]:
         "                _origin[1] + float(_vector[1]) * _scale,",
         "                _origin[2] + float(_vector[2]) * _scale,",
         "            )",
-        "            _arrow_api(name=_name, startPoint=_tip, endPoint=_origin)",
+        "            _ann = _arrow_api(name=_name, startAnchor=_tip, endAnchor=_origin, endHeadStyle=FILLED_ARROW, lineThickness=MEDIUM, color=_color)",
+        "            vp.plotAnnotation(_ann)",
+        f"            plotted_annotations_{request_index}.append(_ann)",
         "            _label_anchor = _tip",
         "        else:",
         "            # Point-only marker (e.g. pressure acts along the surface",
@@ -592,7 +599,9 @@ def _boundary_marker_lines(markers, request_index: int) -> List[str]:
         "            _label_anchor = _origin",
         "        _label = str(_marker.get('label') or _marker.get('name') or '')",
         "        if _label:",
-        "            _text_api(name=_name + '_Label', text=_label, anchor=(_label_anchor[0], _label_anchor[1]))",
+        "            _ann_text = _text_api(name=_name + '_Label', text=_label, anchor=_label_anchor, offset=(2.0, 2.0), color=_color)",
+        "            vp.plotAnnotation(_ann_text)",
+        f"            plotted_annotations_{request_index}.append(_ann_text)",
         "        print('[HeadlessViewer] boundary marker %s %s at %s direction %s' % (_marker.get('kind'), _marker.get('label'), _origin, _vector))",
     ]
     return lines
@@ -640,6 +649,13 @@ def generate_headless_viewer_script(
         "vp.setValues(displayedObject=odb)",
         "",
         "# Publication-grade viewport settings: clean white background, shaded rendering",
+        # noGUI viewer swallows stdout, so every per-figure outcome is also
+        # mirrored to a render log file that the caller reads on failure.
+        "_vlog = open(os.path.join(out_dir, '_viewer_render_log.txt'), 'w')",
+        "def _vlog_write(msg):",
+        "    _vlog.write(str(msg) + chr(10))",
+        "    _vlog.flush()",
+        "_vlog_write('viewer script started')",
         "session.printOptions.setValues(vpBackground=OFF)",
         "try:",
         "    vp.viewportAnnotationOptions.setValues(",
@@ -725,6 +741,10 @@ def generate_headless_viewer_script(
             code_lines.append("        raise ValueError('Target ODB contains zero steps')")
             code_lines.append("    last_step_key = list(odb.steps.keys())[-1]")
             code_lines.append("    target_step = odb.steps[last_step_key]")
+            # The explicit-step branch above defines target_frame; this fallback
+            # branch must define it too or the field-label resolution below dies
+            # with NameError (2026-10-27 pilot-2 figure failure).
+            code_lines.append(f"    target_frame = target_step.frames[{int(req.frame_index)}]")
             code_lines.append(f"    vp.odbDisplay.setFrame(step=last_step_key, frame={int(req.frame_index)})")
 
         # General contact results are stored under a domain-suffixed label
@@ -834,7 +854,8 @@ def generate_headless_viewer_script(
                 "    except Exception as _sym_err:",
                 "        print('[HeadlessViewer] WARNING: symbol plot state unavailable, keeping contour: %s' % _sym_err)",
             ]
-            code_lines.extend(_boundary_marker_lines(getattr(req, "boundary_markers", ()) or (), idx))
+            marker_lines = _boundary_marker_lines(getattr(req, "boundary_markers", ()) or (), idx)
+            code_lines.extend(marker_lines)
 
         # Deformation scale factor
         if not is_mesh_plot:
@@ -985,10 +1006,19 @@ def generate_headless_viewer_script(
                 f"    out_img = {target_path_expr}",
                 "    session.printToFile(fileName=out_img, format=PNG, canvasObjects=(vp,))",
                 "    print('[HeadlessViewer] Successfully rendered: %s' % out_img)",
+                "    _vlog_write('RENDERED ' + out_img + ' exists=' + str(os.path.exists(out_img)))",
             ]
+            if symbol_kind and marker_lines:
+                code_lines += [
+                    "    # Hide this figure's annotations so they cannot leak into",
+                    "    # subsequently rendered figures in the same viewer session.",
+                    f"    for _plotted_ann in plotted_annotations_{idx}:",
+                    "        vp.hideAnnotation(_plotted_ann)",
+                ]
 
         code_lines += [
             "except Exception as err:",
+            f"    _vlog_write('RENDER ERROR {safe_fname}: ' + str(err))",
             f"    print('[HeadlessViewer] ERROR: Failed to render {safe_fname}: %s' % err)",
             "    sys.exit(4)",
             "",
@@ -996,6 +1026,8 @@ def generate_headless_viewer_script(
 
     code_lines += [
         "odb.close()",
+        "_vlog_write('postprocessing completed')",
+        "_vlog.close()",
         "print('[HeadlessViewer] Postprocessing completed successfully.')",
     ]
 
@@ -1138,9 +1170,17 @@ def render_odb_contours_headless(
                 for req in requests
                 if not (out_dir / Path(req.output_filename).name).exists()
             ]
+            # The viewer swallows its own stdout in noGUI mode and a failed
+            # figure does not propagate through the process exit code, so the
+            # per-figure render log is the only failure evidence that survives.
+            vlog_path = scratch_dir / '_viewer_render_log.txt'
+            vlog_tail = ''
+            if vlog_path.is_file():
+                vlog_tail = vlog_path.read_text(encoding='utf-8', errors='ignore')[-2000:]
             raise RuntimeError(
                 f"Headless Abaqus Viewer failed to produce all requested figures: "
-                f"expected {len(requests)}, got {len(produced)}. Missing: {missing_names}"
+                f"expected {len(requests)}, got {len(produced)}. Missing: {missing_names}. "
+                f"Viewer render log: {vlog_tail or '<empty>'}"
             )
 
         return produced

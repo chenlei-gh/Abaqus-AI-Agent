@@ -1,0 +1,27 @@
+{
+  "action_plan_hash": null,
+  "approval": {
+    "action": "approve",
+    "approved_at": "2026-10-27T11:50:44+00:00",
+    "approved_by": "chenlei",
+    "candidate_id": "ProdDeliveryJob-63e19d87907e",
+    "disclaimer": "SHA-256 digests identify content and detect drift; they are not keyed signatures and do not prove the identity of the approver.",
+    "execution_manifest_hash": "63e19d87907efca49cf180f0955ddc941f5c2fa7dbfa009446532ad806a016a5",
+    "note": null,
+    "review_report_hash": "d2e7323526aa70fda9b9545129fc6a9070045daa2cb46769166fc27fe02b231d"
+  },
+  "candidate_id": "ProdDeliveryJob-63e19d87907e",
+  "created_at": "2026-10-27T11:50:25+00:00",
+  "dependency_hashes": {},
+  "execution_manifest_hash": "63e19d87907efca49cf180f0955ddc941f5c2fa7dbfa009446532ad806a016a5",
+  "generator_version": "abaqus-ai-agent 0.2.2 (execution_candidate_v1)",
+  "inp_sha256": "3615d60b7c7e4337da8d2522200fe60df7c7308b03fa046e51a14edfea506920",
+  "intent_hash": null,
+  "model_hash": null,
+  "review_report_hash": "d2e7323526aa70fda9b9545129fc6a9070045daa2cb46769166fc27fe02b231d",
+  "run_id": "8ebe803c-dc51-4862-96f3-9b1cd39e399c",
+  "schema": "execution_candidate_v1",
+  "solver_config_hash": "2016acfd69542180436366e0fdb85c00956fe0d6a176a50f5826b6432d10c96d",
+  "status": "APPROVED",
+  "superseded_by": null
+}

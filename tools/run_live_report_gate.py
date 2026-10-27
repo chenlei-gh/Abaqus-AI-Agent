@@ -77,8 +77,9 @@ OPTIONAL_VISUALS = (
 DEFAULT_PROMPT = (
     "Cantilever beam 100mm x 10mm x 10mm, structural steel Q235 "
     "(E=210000MPa, nu=0.3, yield=235MPa). "
-    "Boundary condition: one end face fully fixed (encastre). "
+    "Boundary condition: the root end face fully fixed (encastre). "
     "Load: 200N downward concentrated force at the free end tip. "
+    "Verify that the max von Mises stress does not exceed 1500 MPa. "
     "Compute von Mises stress and displacement, and deliver the "
     "engineering report."
 )
@@ -181,17 +182,37 @@ else:
 # File the report only through the shared delivery gate; the outcome is
 # recorded honestly and the verdict is computed host-side, never asserted here.
 from abaqus_ai_agent.reporting.delivery import write_gated_engineering_report
+from abaqus_ai_agent.contracts.provenance import build_delivery_record
 target_dir = %r
 issued = getattr(run_obj, 'provenance', None) if run_obj else None
 odb_sha = getattr(issued, 'output_hash', None) if issued is not None else None
+# The bare provenance object is not a delivery record: the file gate requires
+# the same acceptance verdict and condition-fidelity audit the deterministic
+# pipeline verified. Rebuild the identical record from the run itself; nothing
+# is fabricated here, and missing inputs must fail the gate rather than be
+# defaulted.
+_acceptance_obj = getattr(run_obj, 'acceptance', None) if run_obj else None
+if _acceptance_obj is None and run_obj is not None:
+    for _ev in getattr(getattr(run_obj, 'evidence', None), 'entries', ()) or ():
+        if getattr(_ev, 'kind', None) == 'acceptance':
+            _acceptance_obj = getattr(_ev, 'value', None)
+            break
+_fidelity_obj = (getattr(run_obj, 'metadata', None) or {}).get('condition_fidelity') if run_obj else None
+record_payload = build_delivery_record(
+    provenance=issued,
+    odb_path=getattr(run_obj, 'odb_path', None) if run_obj else None,
+    odb_sha256=odb_sha,
+    acceptance=_acceptance_obj,
+    condition_fidelity=_fidelity_obj,
+)
 delivery = {'attempted': False, 'filed': False, 'error': None}
-if task_result.report_html:
+if task_result is not None and task_result.report_html:
     delivery['attempted'] = True
     try:
         write_gated_engineering_report(
             os.path.join(target_dir, 'engineering_report.html'),
             content=task_result.report_html,
-            record=issued,
+            record=record_payload,
             odb_sha256=odb_sha,
             allow_diagnostic_draft=False,
         )
@@ -294,12 +315,29 @@ def compute_live_gate_verdict(
     expected_run_id: str,
     required_artifacts: List[str],
 ) -> Dict[str, Any]:
-    """Pure verdict function. PASS requires every gate; rejection is explicit."""
+    """Pure verdict function. PASS requires every gate; rejection is explicit.
+
+    Host-failure precedence: an approval-pending (AWAITING_APPROVAL)
+    classification is only credible when the host process itself terminated
+    cleanly; a crashed or unsettled host can never be re-labelled as a
+    routine approval wait.
+
+    Physics sanity (fail-closed): a completed solve must produce a positive
+    peak von Mises stress, and static equilibrium must close via the
+    engineering force-balance evidence (applied load vs reaction resultant
+    computed from per-node RF component sums). Zero-stress or unbalanced
+    results are symptomatic of a wrongly built model (e.g. the load applied
+    on the constrained face) and must never pass, even if every procedural
+    gate succeeded.
+    """
     reasons: List[str] = []
+    host_ok = True
     if process_returncode != 0:
         reasons.append(f"host process return_code={process_returncode}")
+        host_ok = False
     if process_settled is not True:
         reasons.append("artifacts not settled after launcher exit")
+        host_ok = False
     if not facts:
         reasons.append("no facts payload emitted by the CAE script")
         return {"verdict": VERDICT_FAIL, "reasons": reasons}
@@ -309,12 +347,19 @@ def compute_live_gate_verdict(
             "reasons": reasons + ["run identity mismatch: facts do not belong to this run"],
         }
     if facts.get("task_status") == "BLOCKED" and facts.get("summary_card_status") == VERDICT_AWAITING:
+        if host_ok:
+            return {
+                "verdict": VERDICT_AWAITING,
+                "reasons": [],
+                "candidate_id": facts.get("candidate_id"),
+                "execution_manifest_hash": facts.get("execution_manifest_hash"),
+                "approval_workdir": facts.get("approval_workdir"),
+            }
         return {
-            "verdict": VERDICT_AWAITING,
-            "reasons": [],
-            "candidate_id": facts.get("candidate_id"),
-            "execution_manifest_hash": facts.get("execution_manifest_hash"),
-            "approval_workdir": facts.get("approval_workdir"),
+            "verdict": VERDICT_FAIL,
+            "reasons": reasons + [
+                "approval-pending classification refused: host process did not terminate cleanly"
+            ],
         }
 
     checks = {
@@ -332,6 +377,30 @@ def compute_live_gate_verdict(
         rec = artifacts.get(name) or {}
         if not rec.get("exists") or not rec.get("sha256"):
             reasons.append(f"required artifact missing or unverified: {name}")
+
+    # Physics sanity: only meaningful when every procedural gate passed.
+    if not reasons:
+        physics_reasons: List[str] = []
+        metrics = facts.get("metrics") or {}
+        mises = metrics.get("max_mises")
+        try:
+            mises_val = float(mises)
+        except (TypeError, ValueError):
+            mises_val = None
+        if mises_val is None or mises_val <= 0.0:
+            physics_reasons.append(
+                f"physics sanity failed: max_mises={mises!r} is missing or non-positive "
+                "after a completed solve"
+            )
+        derived = facts.get("derived_metrics") or {}
+        force_balance = derived.get("force_balance") or {}
+        if force_balance.get("is_balanced") is not True:
+            physics_reasons.append(
+                "static force balance not established: applied load and reaction "
+                "resultant do not close within tolerance"
+            )
+        if physics_reasons:
+            return {"verdict": VERDICT_FAIL, "reasons": reasons + physics_reasons}
 
     delivery = facts.get("delivery") or {}
     errors_text = " ".join(str(e) for e in facts.get("errors") or [])
