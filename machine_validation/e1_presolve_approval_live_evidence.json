@@ -1,0 +1,53 @@
+{
+  "check_id": "PRE-SOLVE-APPROVAL-E1-LIVE",
+  "date": "2026-10-27",
+  "scope": "E1 path (solve_requirement through a real CAE kernel session) two-phase approval loop",
+  "environment": {
+    "solver": "Abaqus/Standard 2025 (CAE noGUI in-process executor)",
+    "host": "local workstation"
+  },
+  "phase_a": {
+    "verdict": "BLOCKED_AS_DESIGNED",
+    "evidence": {
+      "candidate_id": "Job_intent_e1_live-c91473f94492",
+      "manifest": "c91473f944927e4a6433a5bb660e7edc40f44c450660f14adb21252cb096626a",
+      "inp_sha256_prefix": "292b1af45cc085e4",
+      "ledger_phase": "AWAITING_APPROVAL",
+      "review_report": "pre_solve_review.html rendered in run workdir",
+      "idempotency": "two independent CAE sessions produced a byte-identical deck; the candidate was not rewritten and its manifest matched both runs (candidate run_id 8063f5e8 vs ledger run_id 659e2812 is the designed content-addressed behavior, not an evidence gap)"
+    }
+  },
+  "approval": {
+    "via": "CLI: python -m abaqus_ai_agent approve --workdir <run workdir> --by chenlei-e1-live",
+    "exit_code": 0,
+    "review_report_hash_bound": "a6b348d78c6edfd7368d81c784d8b43b07460742f5d04541c3758b2bb3c22464"
+  },
+  "phase_b": {
+    "verdict": "SOLVED_AND_ACCEPTED",
+    "harness_wall_s": 18.3,
+    "run_state": "accepted",
+    "engineering_status": "RESULT_VALID",
+    "acceptance_passed": true,
+    "metrics": {
+      "max_mises_MPa": 250.0,
+      "max_displacement": 386.97,
+      "reaction_force_N": 2085.29
+    },
+    "physical_evidence": {
+      "sta_marker": "THE ANALYSIS HAS COMPLETED SUCCESSFULLY",
+      "odb_bytes": 1739244,
+      "odb_sha256_prefix": "556894a5df462ad5",
+      "ledger_phase_after": "COMPLETED"
+    },
+    "delivery_layer": "DELIVERY_BLOCKED by the pre-existing formal-delivery gate (deliverable=False despite acceptance PASS); no formal report was written. This is the existing delivery subsystem's fail-closed behavior, independent of the approval gate."
+  },
+  "harness_reliability": {
+    "fixes_applied": [
+      "status file written atomically in try/finally with builtins only (missing file == broken run)",
+      "agent code executes in an isolated persistent namespace; abaqus star-imports cannot shadow harness bookkeeping",
+      "E1_MODE=ping separates environment validation from the full run",
+      "staged validation: local py_compile + token checks, CAE ping (PING_OK at 13:50:03), then the full run"
+    ]
+  },
+  "status": "PASS"
+}
