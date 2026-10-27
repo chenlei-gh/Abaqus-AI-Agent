@@ -2675,7 +2675,7 @@ Abaqus-AI-Agent/
 
 ### 31.3 后续未完成事项全景看板 (Pending Roadmap Matrix)
 
-1. **Phase 2 Package B 剩余案例开发 (Case 07 ~ 10)** $\to$ 达成 10/10 QUALIFIED 并触发 **Engineering Kernel Freeze**。
+1. **Phase 2 Package B 剩余案例开发 (Case 08 ~ 10)** $\to$ 达成 10/10 QUALIFIED 并触发 **Engineering Kernel Freeze**。（Case 07 已于 2026-10-21 真机求解、2026-10-27 证据入库登记 QUALIFIED，达成 7/10。）
 2. **阶段 F-2：Abaqus 2025 真机实测与 Viewer 抓图验证 (Live Abaqus Gate)** $\to$ 在实验室物理机上作为常驻门禁持续验证。
 3. **空间拾取进阶演进 (Track GA-2A.5)** $\to$ 视口屏幕点击 $(u,v) \to$ 空间射线投射 $\to$ 物理几何全链路 Golden 闭环。
 4. **Phase 3 & Phase 4 远期产品化演进** $\to$ Agent 自主性需求澄清、求解故障自愈多轮编排及商业级工程工作台。

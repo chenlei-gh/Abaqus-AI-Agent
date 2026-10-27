@@ -1,0 +1,30 @@
+{
+  "check_id": "P3-LEFTOVER-05-LIVE",
+  "date": "2026-10-27",
+  "purpose": "Verify the step-type fix on a real Abaqus 2025 solver: explicit/implicit/heat_transfer intents must no longer silently compile to StaticStep.",
+  "compile_path": {
+    "intent_cue": "悬臂梁冲击分析 (impact cue, no solver declared)",
+    "solver_selection_strategy": "DYNAMIC_EXPLICIT",
+    "compiled_step_types": [
+      "explicit_dynamic"
+    ],
+    "cae_script_api": "ExplicitDynamicsStep",
+    "inp_keyword": "*Dynamic, Explicit",
+    "static_step_absent": true
+  },
+  "live_run_completed": {
+    "job": "Job_INTENT_P3L05B",
+    "time_period_s": 0.01,
+    "sta_last_line": "THE ANALYSIS HAS COMPLETED SUCCESSFULLY",
+    "odb_bytes": 5015180,
+    "odb_sha256": "a256507983e227fbf0c8a043298e5565cd1a34566dcd7a790cd4fc369c92e4dd",
+    "solver": "Abaqus/Explicit 2025"
+  },
+  "live_run_long_period_variant": {
+    "job": "Job_INTENT_P3L05",
+    "time_period_s": 1.0,
+    "outcome": "NOT COMPLETED - physical instability (undamped instantaneous 1000 N load drove deformation/wave-speed ratio > 1.0); Abaqus/Explicit executed 4,893,458 increments over 727 s wallclock before termination",
+    "relevance": "proves the real solver accepted and executed the compiled Explicit step; the failure is load-setup physics, not step typing"
+  },
+  "status": "PASS"
+}
