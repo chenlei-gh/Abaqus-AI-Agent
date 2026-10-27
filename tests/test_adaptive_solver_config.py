@@ -255,7 +255,15 @@ def test_runner_executes_with_adaptive_job_options(tmp_path):
         job_name="AdaptiveJob",
         workdir=workdir,
         require_production=False,
-        job_options={"adaptive": True},
+        job_options={
+            "adaptive": True,
+            # Deterministic host so this unit test does not depend on the runner machine's real core count or memory size.
+            "host_hardware": {
+                "logical_cpu_count": 16,
+                "physical_cpu_count": 16,
+                "total_memory_bytes": 64 * 1024**3,
+            },
+        },
     )
 
     created = [c for c in executor.commands if c.startswith("mdb.Job(")]
@@ -304,7 +312,15 @@ def test_runner_full_context_wiring_with_intent_and_mesh(tmp_path):
         engineering_intent=intent,
         mesh_quality={"element_count": 85000},
         environment={"available_tokens": 12},
-        job_options={"adaptive": True},
+        job_options={
+            "adaptive": True,
+            # Deterministic host: the 4/8-core expectation below assumes at least an 8-core machine; CI runners have fewer.
+            "host_hardware": {
+                "logical_cpu_count": 16,
+                "physical_cpu_count": 16,
+                "total_memory_bytes": 64 * 1024**3,
+            },
+        },
     )
 
     decisions = {d.name: d for d in run.metadata["solver_parameter_decisions"]}
