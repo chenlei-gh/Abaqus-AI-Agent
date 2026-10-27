@@ -76,5 +76,7 @@ CLI 现状：无任何求解子命令。`ask` 只路由意图、不求解（cli.
 已知边界（诚实披露）：
 
 - 批处理启动器可能在求解器刷新产物前返回 rc=0，导致 `solve_user_inp` 的 API 判定与物理证据（.sta/ODB）短暂不一致；这是既有的 E2 通道行为，不是本门禁引入的问题。真机验证以 .sta/ODB 物理证据为准并已如实记录。
+  - 证据层级：`rc=0 先于产物落盘` 为本机实测行为；官方 CAE 执行过程文档并未授权该行为（noGUI 文档预期是脚本结束后 kernel 才终止）。脱离发生在批处理、SMALauncher 还是内核内部尚未分离，登记为 `P1-LAUNCHER-01`，见 `phase-leftovers-tracking.md` §6。
+  - 该不一致的兜底是 `BatchResult.settled`（启动器退出后的有界静默判定），调用方必须同时要求 `succeeded` 与 `settled`，不得只看 rc。
 - 候选文件按 workdir 持久化；Phase B 必须复用 Phase A 的 workdir（E1 由 `workdir=` 参数、E2 由同一 `run_id` 保证）。
 - 审批摘要证明"内容未被篡改"，不证明审批人身份；有写权限者可以重算摘要。

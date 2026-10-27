@@ -62,6 +62,14 @@
 | 阶段 3.4（测试分级治理） | **规约与 conftest 自动化标记已落地**（注册四级 markers，自动分类，环境缺失显式 BLOCKED 阻断，2074 unit passed） |
 | 阶段 4（全部） | **不纳入本批次** |
 
+### 0.5 已知能力边界（外部复核登记）
+
+| ID | 边界 | 状态 |
+| :--- | :--- | :--- |
+| P1-LAUNCHER-01 | 启动器提前返回后无法再取得真实内核进程树（`psutil` / Job Object 均要求父进程仍存活） | **未闭合·已登记**（详见 §6） |
+
+> 该表登记的是**方法论边界**，不是待实施任务。除非将来必须先解决“启动器提前退出”本身，否则不单独立项。
+
 > 表中任一项被引用时，必须同时引用其状态。
 > 「已定义边界」「已实现字段」「已取得单砖证据」均**不等于**该项已闭合。
 
@@ -475,6 +483,39 @@ A4 的审计结果比预期严重，必须单独记录（详见 `docs/phase-timi
 
 ---
 
+## 6. 启动器进程树边界登记（P1-LAUNCHER-01）
+
+登记日期：2026-10-28。性质：外部证据复核后的边界记录，**不含代码变更**。
+
+### 6.1 事实与证据层级
+
+| 陈述 | 层级 | 依据 |
+| :--- | :--- | :--- |
+| `abaqus cae noGUI=...` 外层命令约 1.3 s 返回 rc=0，内核继续运行 | 本机实测（2026-10-27） | `runtime-harness-audit.md` P1-4 |
+| 求解作业加 `interactive` 使作业前台运行 | 官方文档（措辞收窄） | 分析过程页只写“log/sta 输出到屏幕”，**未写**“命令不返回直到分析结束” |
+| CAE 执行过程选项表中无 `interactive` / `wait` 类关键字 | 官方文档（已核实） | CAE 执行过程页选项全表 |
+| noGUI 脚本结束后 kernel 终止；无界面时作业总是 interactive | 官方文档（已核实） | Abaqus Scripting 文档「How does the Abaqus Scripting Interface interact with Abaqus/CAE」 |
+| `abaqus.bat` → `abq2025.bat` → `SMALauncher.exe %*`，批处理层无 `start` | 本机文件核实（2026-10-28） | `C:\SIMULIA\Commands\abaqus.bat`、`abq2025.bat` |
+| 分离发生在 `SMALauncher.exe` 内部 | **未核实（推断）** | 未做反汇编或调试级溯源 |
+
+### 6.2 为什么当前做法不改
+
+- 官方文档预期与本机观测不一致，说明本机行为要么实现偏差、要么文档未覆盖。在该分歧定位到具体进程之前，任何“更优雅的等待方式”都缺少可验证的对象。
+- 现有 `BatchResult.settled` 是**有界静默判定**，不是进程存活判定。它已经能阻止“rc=0 且产物仍在变”被判成功（E1、试点 1–3 真机通过）。
+- 社区做法与此一致：`.lck` / `.sta` / 产物轮询是主流完成判定手段（`MattE4/Abaqus_live_batch`、`daadaan/ABAQUS_Watcher_GUI`、SIMPAC-2025-315 的 `JobFinishChecker.m`）。未检索到声称解决该场景的成熟方案。
+
+### 6.3 关闭条件
+
+必须依次满足，缺一不可：
+
+1. 用真机分离出提前返回发生在 `abaqus.bat`、`SMALauncher.exe` 还是 CAE kernel（例如用进程创建审计或启动器退出时刻的进程快照）。
+2. 若确认是启动器内部脱离，评估官方路径（如 `createComOnly` + `SMAPython` 直接 `Popen().wait()`）是否能覆盖本仓库的 CAE noGUI 场景；该路径**仅适用于求解作业**，不适用于 CAE 会话。
+3. 只有在 1–2 均完不成时，才讨论新依赖；且必须证明修复能在**父进程已退出**的前提下生效，否则不予立项。
+
+不得以前置条件未满足为由，把 `settled=False` 降级为忽略。
+
+---
+
 ## 变更历史
 
 | 日期 | 变更 |
@@ -508,3 +549,4 @@ A4 的审计结果比预期严重，必须单独记录（详见 `docs/phase-timi
 | 2026-10-21 | 完善自适应配置引擎真实主链路接线与硬约束封闭：(1) `solver_config.py` 修复 License Token 下限处理（`< 5` tokens 严格判定为 0 核，记录 `source="refused"` 且从 `kwargs` 剔除，绝不强行推算为 1 核）；(2) 明确物理内存证据边界（无法探测物理内存时严格返回 None，记录 `source="safe_default"` 并剔除 `memory` / `memoryUnits`，绝不冒充 `evidence_adjusted`）；(3) `analysis_run.py` 完整接入网格规模（mesh_quality/convergence/intent/inp）、许可证 Token（job_options/environment/os）、物理大变形与接触特征，并在未创建 job 时完整记录决策元数据；(4) 文档与清单校准：P3-LEFTOVER-06 状态标记闭合，MV-04 明确排除在本次生产范围之外 |
 | 2026-10-27 | 待办项大清退（对照代码与真机证据后处置）：(1) C1 与 MV-07 闭合——2026-10-24/25 T-P4 真机证据已完成 Standard/Explicit 1/2/4/8 核受控矩阵与 500k 接触模型并行基准，登记中的「待执行」系过时状态；(2) MV-09 闭合——TOKEN_VERIFIED 证据充分，宿主无并发许可场景；(3) P1-LEFTOVER-03 正式除名——主链路不经 watchdog，误杀风险在主链路不存在，MV-01 随转 PASS；(4) P2-LEFTOVER-04 挂起关闭——MV-04 BLOCKED 使收益不可测，按「真实证据优先」不立优化项；(5) P2-LEFTOVER-05 接受边界关闭；(6) P3-LEFTOVER-02 关闭——T-P4 与 MV-05/06/09 已证明 T4b 求解核占绝对主导，T1/T3/T5/T6 细分接线无决策价值，BASE 降格为部分基线并接受，T2 随之解除阻塞登记；(7) P3-LEFTOVER-04/A2 随 MV-10 定案；(8) D3 由 MV-01 承载闭合；(9) C2 随 MV-11 闭合。保留待办已全部消化：P3-LEFTOVER-05 与 Case 07 于 2026-10-27 闭合，MV-04 保持 BLOCKED（生产范围排除） |
 | 2026-10-27 | Case 07 与 P3-LEFTOVER-05 闭合：(1) Case 07 真机证据（2026-10-21 运行 `case07_live_e7301de3`）入库 `machine_validation/p2_cases/case_07_jounce_bumper/`，签名 manifest v1 六项判据全 PASS，registry 登记 QUALIFIED + REF_ABQ_JOUNCE_BUMPER（手册章节定位未核实已披露，数值基准保持 PENDING），守护测试由 absence 改为正向完整性校验；(2) P3-LEFTOVER-05 真机复验 PASS：冲击 cue 编译出 `*Dynamic, Explicit` 并在 Abaqus/Explicit 2025 完成求解（短周期变体 COMPLETED，5.0MB ODB；长周期变体 727s 后物理失稳，与步类型无关）。三项保留待办清零，仅余 MV-04（生产范围排除）。 |
+| 2026-10-28 | 外部证据复核后收窄两处外部事实表述（仅文档，无代码变更）：(1) `interactive` 的官方原文只写输出到屏幕，未写“命令不返回直到分析结束”，原“官方标准答案”表述改记为文档措辞 + 社区行为报告；(2) CAE noGUI 侧重述为“官方预期是脚本结束后 kernel 终止”，而非“官方无等效等待选项”。新增 §6 `P1-LAUNCHER-01`：登记 `psutil` / Job Object 在父进程已退出后均无法取得子进程树的方法论边界，并写明三段关闭条件。行为不变：`settled` 语义与调用方要求不变。 |

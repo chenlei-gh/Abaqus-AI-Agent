@@ -32,7 +32,14 @@
 - 事实：`BatchExecutor._run` 经 `run_with_watchdog` 监控 `subprocess.Popen` 启动的进程；watchdog 以 `proc.poll()` 为终止依据（watchdog.py:328-330）。
 - 实测（本机，2026-10-27）：`abaqus cae noGUI=...` 外层命令约 1.3 秒返回 rc=0，而 CAE 内核继续运行数分钟；`abaqus job=...` 亦观察到 rc=0 先于 ODB 落盘。
 - 后果：watchdog 在启动器退出后停止监督，总超时不再约束真实 CAE 进程；调用方可能读到尚未落盘的产物并误判。
-- 最小修改：`BatchResult` 增加终态证据标记；`_run` 在启动器 rc=0 退出后轮询工作目录的终态证据（.sta 终态标记/锁文件消失），有界 settle 超时；未收敛则 `settled=False`，`succeeded` 不再仅凭 rc=0。不做 Windows Job Object 进程树追踪（需要新依赖），该限制写入文档。
+- 最小修改：`BatchResult` 增加终态证据标记；`_run` 在启动器 rc=0 退出后轮询工作目录的终态证据（.sta 终态标记/锁文件消失），有界 settle 超时；未收敛则 `settled=False`，`succeeded` 不再仅凭 rc=0。不做 Windows Job Object / psutil 进程树追踪，该限制写入文档。
+
+证据层级（2026-10-28 外部复核后修正，不得混用）：
+
+- **本机实测（已核实）**：`abaqus cae noGUI=...` 外层命令约 1.3 s 返回 rc=0，CAE 内核继续运行数分钟。这是行为观测，不是官方契约。
+- **官方文档预期（已核实）**：CAE 执行过程的选项表中没有 `interactive` / `wait` 类关键字；Abaqus Scripting 文档写「脚本跑完，CAE kernel 终止」且「无界面时作业总是 interactive」。即官方预期是 **noGUI 命令自身等到脚本结束**，与本机观测不一致。
+- **未核实**：脱离点在 `abaqus.bat`、`SMALauncher.exe` 还是 CAE kernel 内部。本机核实 `abaqus.bat` 仅转调 `abq2025.bat`，后者直接 `"...\SMALauncher.exe" %*`，两份批处理均无 `start`；因此「批处理层无分离」成立，但「SMALauncher 内部脱离」仍属推断。
+- **方法学限制**：`psutil` 的 `children(recursive=True)` 与 Windows Job Object 都要求父进程仍存活、且需在创建时或创建后尽早挂接。启动器一旦退出，其 PID 上已无可遍历的子进程树，事后补挂接无法找回内核。因此二者都不能作为「启动器已退出」场景的修复手段；这是能力边界，不是依赖成本问题。
 
 ### P1-5 Golden 脚本共享 globals 命名空间
 
