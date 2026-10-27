@@ -2597,7 +2597,7 @@ Abaqus-AI-Agent/
   4. **阶段 D（验证资产集中归档与体系搭建）**:
      - 建立规范骨架 `validation_assets/`（`references/`, `cases/`, `shared/`, `evidence/`, `archive/`）。
      - 登记官方与工业权威基准 `validation_assets/references/official_examples.json`（覆盖 Abaqus 2025 Example Problems, ASME BPVC, SAE, ASTM, NASA SP-8007, Numisheet）。
-     - 建立统一资产注册表 `validation_assets/registry.json` 与各案例清单（`case_01` 至 `case_06` 达到 QUALIFIED 闭环，`case_07` 至 `case_10` 完成统一 PRE_RESERVED 扩展预留）。
+     - 建立统一资产注册表 `validation_assets/registry.json` 与各案例清单（`case_01` 至 `case_07` 达到 QUALIFIED 闭环（Case 07 于 2026-10-27 登记），`case_08` 至 `case_10` 完成统一 PRE_RESERVED 扩展预留）。
   5. **阶段 E（CLI 工具与生态接入）**:
      - CLI 增强 `assets` 子命令（`python -m abaqus_ai_agent assets [--list|--case|--json]`），实现案例资产统一查询与验证。
      - `matrix` 子命令候选路径无缝兼容 `validation_assets`。
@@ -2651,7 +2651,7 @@ Abaqus-AI-Agent/
 | **Case 04** | 汽车副车架多轴耐久与疲劳 | 多轴时域时程谱、CONN3D2 衬套、雨流计数/Goodman | SAE Technical Papers & ASTM E1049 | 🟢 **QUALIFIED** | `case_04_subframe_manifest.json`<br>`tests/test_p2_package_b_cases.py` |
 | **Case 05** | 开孔复合材料圆柱壳屈曲 | 各向异性多层铺层、特征值屈曲、Riks 后屈曲 | NASA SP-8007 & Abaqus 2025 Example | 🟢 **QUALIFIED** | `case_05_composite_buckling_manifest.json`<br>`tests/test_p2_package_b_cases.py` |
 | **Case 06** | 多工序钣金装配与子模型 | 冲压回弹、焊点装配、局部子模型缺口应力 | Numisheet Benchmark & Abaqus 2025 Example | 🟢 **QUALIFIED** | `case_06_sheet_metal_manifest.json`<br>`tests/test_p2_package_b_cases.py` |
-| **Case 07** | **汽车悬架超弹性缓冲块大变形自接触** | Mooney-Rivlin/Ogden 超弹性本构、大变形折叠自接触、非线性刚度硬化曲线 | Abaqus 2025 Example Problems 1.1.X / Benchmarks | 🟡 **PENDING (输入资产已落地，求解证据待真机)** | `test_assets/engineering_cases/case_07_jounce_bumper_self_contact/problem_statement.json`<br>`tests/test_p2_package_b_cases.py`（6 项规格与负向探针） |
+| **Case 07** | **汽车悬架超弹性缓冲块大变形自接触** | Mooney-Rivlin/Ogden 超弹性本构、大变形折叠自接触、非线性刚度硬化曲线 | Abaqus 2025 Example Problems（章节定位未核实，已披露） | ✅ **QUALIFIED (2026-10-21 真机求解 PASS，2026-10-27 证据入库)** | `test_assets/engineering_cases/case_07_jounce_bumper_self_contact/problem_statement.json`<br>`tests/test_p2_package_b_cases.py`（6 项规格与负向探针） |
 | **Case 08** | **石油套管特殊螺纹接头弹塑性接触** | 螺纹高阶多牙微滑移接触、弹塑性过盈连接、高压密封压力渗透判据 | Abaqus 2025 Example Problems & ISO 13679 | ⚪ **PRE_RESERVED** | 待开发 |
 | **Case 09** | **内燃机气缸盖热机械低周疲劳评定** | 瞬态热传导、弹塑性蠕变循环、Coffin-Manson / Morrow 低周疲劳评定 | Abaqus 2025 Example Problems | ⚪ **PRE_RESERVED** | 待开发 |
 | **Case 10** | **薄壁管道弯头弹塑性失稳极限承载** | 几何与材料双重非线性、面内弯曲截面卵形化 (Brazier 效应)、弧长法 (Riks) 极限垮塌荷载 | Abaqus 2025 Example Problems | ⚪ **PRE_RESERVED** | 待开发 |
