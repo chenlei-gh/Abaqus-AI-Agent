@@ -296,6 +296,10 @@ def test_solve_requirement_phase_a_returns_review_report(tmp_path, monkeypatch):
         loads=(IntentLoadSpec(name="TipLoad", load_type="concentrated_force", region="TipFace", magnitude=-1000.0),),
     )
 
+    import webbrowser
+    opened_urls = []
+    monkeypatch.setattr(webbrowser, "open", lambda url: opened_urls.append(url))
+
     res = agent.solve_requirement(intent)
 
     assert res.status == TaskStatus.BLOCKED
@@ -308,6 +312,10 @@ def test_solve_requirement_phase_a_returns_review_report(tmp_path, monkeypatch):
     assert candidate.execution_manifest_hash in html_text
     # Rich sections from the product entry (not just the runner fallback).
     assert "Model &amp; mesh" in html_text
+
+    # REQ-4.5: Verify automatic browser launch with the local HTML report URI
+    assert len(opened_urls) == 1
+    assert opened_urls[0] == report.resolve().as_uri()
     assert "FixedRoot" in html_text
     assert "TipLoad" in html_text
 # --- duplicate-submission guard (crash window between submit and ledger write) ---

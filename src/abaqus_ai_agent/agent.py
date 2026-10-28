@@ -1828,6 +1828,20 @@ class AbaqusAIAgent:
                     render_pre_solve_review(review_workdir, candidate, sections=sections, notes=notes)
                 except Exception:
                     pass
+
+            # REQ-4.5: Automatically open the generated pre-solve review in the system default browser.
+            # Scope: Only opens the local static HTML file; strictly no web UI or server development.
+            report_path = approval_diag.get("review_report")
+            if report_path:
+                try:
+                    import webbrowser
+                    import pathlib
+                    p_obj = pathlib.Path(str(report_path)).resolve()
+                    if p_obj.is_file():
+                        webbrowser.open(p_obj.as_uri())
+                except Exception:
+                    pass
+
             return EngineeringTaskResult(
                 status=TaskStatus.BLOCKED,
                 intent=intent,
