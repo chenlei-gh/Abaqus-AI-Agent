@@ -1,87 +1,157 @@
 # Abaqus AI Agent
 
-把一条分析需求收成 Abaqus 模型、一次求解，以及一份能用证据答辩的报告。
+把一条分析需求编译成 Abaqus 模型。模型经过审阅才求解。只有求解产物能支撑声明的准则时，才发布报告。
 
 [English](README.md) | [需求与规划](docs/PROJECT_REQUIREMENTS_AND_PLAN.md)
 
 [![CI](https://github.com/chenlei-gh/Abaqus-AI-Agent/actions/workflows/ci.yml/badge.svg)](https://github.com/chenlei-gh/Abaqus-AI-Agent/actions/workflows/ci.yml)
-[![Python](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12%20%7C%203.14-blue.svg)](https://www.python.org/)
+[![Python](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12-blue.svg)](https://www.python.org/)
 [![Abaqus](https://img.shields.io/badge/Abaqus-2025-blue.svg)](https://www.3ds.com/products-services/simulia/products/abaqus/)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 
-求解器仍是 Abaqus。本仓库不提供许可证。生成的报告也不能代替分析人员签字。
+本包不安装 Abaqus，不附带许可证，也没有发布到 PyPI。生成的报告不是分析人员的签字。
 
-## 问题
+## 安装
 
-自动 CAE 流程里，大头时间通常不在求解器。时间花在发现脚本无法解析、区域是猜的、单位对不上、作业其实没跑完，或者报告里的结论 ODB 并不支持。
+两套运行时分开。代理装进普通 CPython。Abaqus 保留自己的解释器，通过 SIMULIA 启动器调用。不要把本包 `pip install` 进 Abaqus/CAE 自带的 Python。
 
-语言模型可以起草 Abaqus Python。它自己区分不了三件事：脚本跑过、分析做完、工程答案可接受。这个项目的存在，就是不让这三件事混成一句“完成了”。
+本包不在 PyPI 上。从这棵源码树安装。PyPA 的安装要求是使用虚拟环境，并用 `python -m pip` 调用 pip，这样装到的就是刚检查过的那个解释器。
 
-## 它是什么
+Windows，在仓库根目录：
 
-代理站在需求和 Abaqus/CAE 之间。它不替代前处理器，也不重新解释求解器。
+```bat
+py -3.12 -m venv .venv
+.venv\Scripts\activate.bat
+python -m pip install --upgrade pip
+python -m pip install -e ".[test]"
+python -m abaqus_ai_agent --help
+```
+
+`".[test]"` 的引号不能省。在 `cmd` 里，方括号是通配符。
+
+macOS 或 Linux：
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip
+python -m pip install -e ".[test]"
+python -m abaqus_ai_agent --help
+```
+
+这条命令实际装的是：
+
+| 项 | 值 |
+|---|---|
+| 分发包 | `abaqus-ai-agent` 0.2.2，setuptools `src` 布局 |
+| 声明的 Python | `pyproject.toml` 中 `>=3.9` |
+| CI 测过的解释器 | Ubuntu 与 Windows 上的 3.10、3.11、3.12 |
+| 运行依赖 | `Pillow>=9` |
+| 测试额外依赖 | `pytest>=7` |
+| 控制台脚本 | `abaqus-ai-agent`、`abaqus-agent` |
+| 安装方式 | 可编辑安装（`-e`），改源码后无需重装即可导入 |
+
+`-e ".[test]"` 是 CI 使用的开发安装。只运行代理、不跑测试时，去掉额外依赖：
+
+```bash
+python -m pip install -e .
+```
+
+可编辑安装跟踪 `src/` 里的 Python 改动。`pyproject.toml` 里的依赖或入口脚本变了，仍要再执行同一条安装命令。不要用 `python setup.py install`，那条路径已经废弃。
+
+离线检查不需要求解器：
+
+```bash
+python -m pytest tests -q -m unit
+abaqus-ai-agent inspect --json
+```
+
+`inspect` 报告有没有找到启动器。找不到启动器表示这台机器离线，不是本包装失败。
+
+### Abaqus：本包不安装它
+
+真机求解需要一套已经装好、并且有许可证的 Abaqus 2025。安装程序会创建命令目录；在 Windows 上还会把它加到 `PATH` 前面。默认目录是 `C:\SIMULIA\Commands` 和 `/var/DassaultSystemes/SIMULIA/Commands`。2025 的快捷命令是 `abq2025`；`abaqus` 是不带版本号的入口。
+
+本包按这个顺序找启动器：显式路径，`PATH` 上的 `abaqus`，然后是 Windows 上的 `C:\SIMULIA\Commands\abaqus.BAT`。许可证服务器、`custom_v6.env` 和 token 是否空闲，属于 Abaqus 安装本身。本仓库不配置这些。
+
+指望求解之前，先确认外部产品：
+
+```bat
+where abaqus
+abaqus information=release
+```
+
+`abaqus information=release` 打出版本字符串，只说明启动器能用。它不说明 token 有空闲。
+
+## 工程模型
+
+脚本跑过，不是分析做完。作业做完，不是答案可接受。代理把这三件事保持为不同状态。
 
 ```text
 需求
   -> 有类型的意图
-  -> 动作计划
-  -> Abaqus Python
+  -> 有序动作
+  -> 生成的 Abaqus Python
   -> CAE 内核
-  -> 求解器
-  -> ODB 与日志
+  -> 求解作业
+  -> ODB 与求解日志
   -> 按声明的准则验收
-  -> 一份报告，或一份诊断
+  -> report.html，或 report.diagnostic.html
 ```
 
-求解前，人要审模型、网格、边界和载荷。审的是默认浏览器打开的静态 HTML，不是另一套交互界面。审批只对这一份候选有效。模型一改，审批作废。
+代理不发明几何。边界或载荷只有在区域来自几何绑定或显式选择之后才可执行。视觉模型不许靠序号挑面。
 
-## 设计
+### 编译
 
-五条规则决定架构。
+`EngineeringIntent` 是这条分析的闭合陈述：几何、材料、边界、载荷、网格、过程和准则。编译器把它降成有序的 `AbaqusAction`。每个动作写明目标、参数、前置条件和期望状态。脚本从这张表渲染出来。脚本不是模型的来源。
 
-**语言不是权限。** 模型可以解释需求、提议建模选择、起草原生 Python。它不能绕过有类型的动作路径去改分析。模型能写出某项操作，不表示这项能力已被系统支持。
+编译器能渲染的动作是 `SUPPORTED`。绕过类型动作的原生 Python 是 `EXECUTABLE`：它可以跑，这次运行不是该工程操作已被验证的证据。没有执行路径的操作，不说成完成。
 
-**动作是建模单位。** 几何、材料、网格、分析步、边界、载荷和接触，都从有类型的动作编译出来。生成的脚本是计划的结果，不是计划本身。自由 Python 保留为显式逃生口，它的结果只是执行证据。
+求解器族是一条记录下来的决定，不是一次静默改写。选择只有 `STANDARD` 或 `EXPLICIT`。声明的运动学要求与请求的求解器冲突时，提交被阻断。频率和传热过程没有 Explicit 替代，那里的偏好不当成这种冲突。
 
-**证据分层。** 调了 API，不是模型状态。模型状态，不是作业完成。作业完成，不是 ODB。ODB，不是验收。上一层不成立，下一句结论不许出现。
+### 执行
 
-**失败保持失败。** 输入不全，停在澄清。计划非法，停在启动前。候选未审，停在求解前。验收不过，只出诊断报告。这些都不会被改写成一次完成的分析。
+生成片段在隔离的内核命名空间里跑，不进调用方的 globals。编译器发出的求解等待是有界的：`waitForCompletion(timeOut=...)`。裸等待会被拒绝。
 
-**求解器和代理都不被盲信。** 响应由 Abaqus 计算。代理检查的是：要求的问题是否真的跑了，产物是否属于这次运行，声明的准则是否满足。它不会给出一个比求解器返回值“更好”的物理答案。
+在 Windows 上，`abaqus cae noGUI` 不给宿主一个可以等待的进程。启动器拉起 `ABQcaeK.exe` 后就返回。完成标记由内核脚本自己写：`completed`、`blocked` 或 `failed`。工作目录变安静只是 `quiescence_only`。它表示目录不再变化，不表示脚本跑完。
 
-## 范围
+求解作业以前台 `interactive` 提交，因为默认批处理在启动器移交后就返回。退出码 0 不证明作业完成。磁盘上有 ODB 也不证明。正面证据是求解器自己的完成记录。
 
-目标分析面，是能写成闭合需求的结构与传热问题：线性和非线性静力、接触、连接器、隐式与显式动力、刚柔耦合、传热，以及这些分析依赖的网格和材料选择。
+### 证据与验收
 
-这是系统的方向，不是一份合格证书。不是每种过程、单元、接触公式和材料模型都已经鉴定过。一项能力要同时有类型动作、校验路径、结果语义和测试，才算被支持。真机证据只鉴定被点名的算例，不自动推广到相邻算例。
+每条提取结果都绑到产生它的那次运行：`run_id`、输入哈希、ODB 路径、ODB SHA256。同名、同大小的文件不是同一份结果。损坏、空文件或非二进制 ODB 会被拒绝。缺字段就报错，不用基准常数填上。
 
-已有的参照算例是 `machine_validation/` 下的官方悬臂梁：C3D20R，端部剪切，挠度与梁理论相差 1.05%，积分点应力与解析值相差 0.23%。同一主机上还跑过接触、审批阻断和损坏 ODB 拒绝。更宽的结论留在需求文档里，直到有同等证据。
+验收是固定的门序列，不是一个通过标志：
 
-## 时间实际耗在哪里
+| 门 | 必须成立的事 |
+|---|---|
+| execution | 作业确实以求解器自己写下的完成状态结束 |
+| odb | ODB 能作为这次运行的 ODB 打开 |
+| evidence | 要求的场和历史存在 |
+| numerical | 不是一份写满非有限值、却显示完成的作业 |
+| engineering | 声明的检查有证据 |
+| mesh | 要求网格质量时，用形状指标，而不是只看 `ANALYSIS_CHECKS` |
+| convergence | 要求时，有网格收敛证据 |
+| fatigue | 要求时，有疲劳证据 |
+| contact | 接触状态与所求接触问题一致 |
+| procedure | 要求的过程确实跑了 |
+| thermal / energy | 该物理在范围内时，热平衡、静力稳定化或瞬态能量成立 |
+| criteria | 声明的数值准则通过 |
+| connectors / FMBD | 该模型在范围内时，有运动学或刚柔耦合证据 |
 
-贵的失败并不神秘。
+未过的门写出 `report.diagnostic.html`。改文件名不会使它变成正式报告。
 
-| 失败 | 停在哪里 | 仍要人做什么 |
-|---|---|---|
-| 需求不闭合 | 计划形成前 | 补几何、材料、支承、载荷或准则 |
-| 模型结构非法 | 脚本启动前 | 改分析定义 |
-| Python 无法解析 | CAE 启动前 | 改生成源码；这不证明 Abaqus API 有效 |
-| 模型未经审阅 | 求解提交前 | 读求解前评审，并批准这一份候选 |
-| 作业并未真正完成 | 读取结果前 | 查内核和求解器产物 |
-| 结果不满足准则 | 正式交付前 | 接受诊断，或改模型后重跑 |
+### 人仍要决定的事
 
-语法拒绝只去掉一类白跑。它去不掉错误区域、错误单位和被误解的传力路径。这些是建模错误，要到验收路径才变得可见。目前没有前后对照，不能说总纠错时间已经下降。
+提交前，候选写入 `pre_solve_review.html`，并用默认浏览器打开。这份文件就是评审。没有另一套交互界面。审批只绑定这一份候选；改了模型，审批失效。
+
+代理能拦住明显会失败的启动。它不能决定传力路径、支承或准则是不是正确的工程问题。那仍是审阅者的决定。
+
+## 参照结果
+
+在带许可证的 Abaqus 2025 上，`machine_validation/` 中的官方悬臂梁用 C3D20R 和端部剪切跑过。挠度 6.3330 mm，梁理论 6.4000 mm，相差 1.05%。积分点应力 138.89 MPa，解析值 138.56 MPa，相差 0.23%。这鉴定的是这个算例。它不鉴定编译器里的每一种过程、单元或接触公式。
 
 ## 使用
-
-Python 3.10 及以上。只有真正求解时才需要带许可证的 Abaqus 2025。
-
-```bash
-git clone https://github.com/chenlei-gh/Abaqus-AI-Agent.git
-cd Abaqus-AI-Agent
-python -m pip install -e ".[test]"
-python -m pytest tests -q -m unit
-```
 
 ```python
 from abaqus_ai_agent import AbaqusAIAgent
@@ -93,7 +163,7 @@ result = agent.solve_requirement(
 )
 ```
 
-默认不提交作业。这一步生成并检查分析候选，不求解。评审文件批准后，同一工作目录可以继续跑。任务完成和准则验收是两件事。
+默认不提交作业。这一步生成并检查候选。该候选批准后，同一工作目录才可以求解。任务完成和准则验收是结果上的两个字段。
 
 ```bash
 abaqus-ai-agent ask "..." --dry-run
@@ -104,18 +174,16 @@ abaqus-ai-agent approve --workdir ./run_workdir --by "analyst name"
 
 ```text
 src/abaqus_ai_agent/
-  contracts/     意图、动作、证据、验收的类型
-  planning/      网格与分析规划
-  actions/       动作构造与脚本生成
-  execution/     CAE 内核、批处理作业、审批
+  contracts/     意图、动作、证据、验收
+  planning/      意图编译器，网格与过程规划
+  actions/       动作构造与脚本渲染
+  execution/     内核、批处理作业、审批、ODB 提取
   validation/    启动前的结构校验
-  evidence/      产物与 ODB 证据
+  grounding/     区域来自几何绑定，不来自猜的序号
   reporting/     正式报告与诊断报告
-  materials/     模型使用的材料记录
-  telemetry/     纠错与计时记录
 ```
 
-`docs/PROJECT_REQUIREMENTS_AND_PLAN.md` 是唯一规划文档。新需求写在那里。
+`docs/PROJECT_REQUIREMENTS_AND_PLAN.md` 是唯一规划文档。
 
 ## 许可证
 
