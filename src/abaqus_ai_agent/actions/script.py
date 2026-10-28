@@ -616,7 +616,30 @@ def _contact_property_script(model, p):
             raise ValueError("unsupported contact tangential formulation: %s" % formulation)
     return "; ".join(lines)
 
+def _reject_contact_adjust(p):
+    """Overlapping solids are not closed by moving nodes.
+
+    ``adjustMethod`` / ``adjustTolerance`` can hide an interference that should
+    go back to CAD. The compiler never emits those arguments, and a caller that
+    supplies them is rejected before a script exists.
+    """
+    forbidden = []
+    for key in (
+        "adjustMethod", "adjust_method", "adjustTolerance", "adjust_tolerance",
+        "adjust", "adjustmentZone",
+    ):
+        if p.get(key) not in (None, False, "", "NONE"):
+            forbidden.append(key)
+    if forbidden:
+        raise ValueError(
+            "contact adjustment cannot mask solid overlap: %s. "
+            "Return overlapping geometry to CAD; do not set adjustMethod or adjustTolerance."
+            % ", ".join(forbidden)
+        )
+
+
 def _contact_script(model, p):
+    _reject_contact_adjust(p)
     sliding = str(p.get("sliding", "FINITE")).upper()
     sliding_const = "SMALL_SLIDING" if sliding in ("SMALL", "SMALL_SLIDING") else "FINITE"
     step = p.get("step", "Initial")
@@ -730,6 +753,16 @@ def _mesh_quality_script(model, p):
         criteria.append(("LARGE_ANGLE", p["max_angle"], "max_angle"))
     if p.get("max_geometric_deviation_factor") is not None:
         criteria.append(("GEOM_DEVIATION_FACTOR", p["max_geometric_deviation_factor"], "max_geometric_deviation_factor"))
+    # Shape factor is documented for triangular and tetrahedral elements only.
+    # The CAE default floor is 0.0001 for tetrahedra and 0.01 for triangles.
+    # Hex, wedge, and line meshes must not be sent this criterion. This is a
+    # continuation check, not a convergence claim. ANALYSIS_CHECKS stays on,
+    # but it is not sufficient by itself.
+    element_family = str(p.get("element_type") or p.get("elem_shape") or "").upper()
+    if element_family.startswith(("C3D10", "C3D4")) or element_family == "TET":
+        criteria.append(("SHAPE_FACTOR", 0.0001, "shape_factor"))
+    elif element_family.startswith(("S3", "CPE3", "CPS3", "CAX3")) or element_family == "TRI":
+        criteria.append(("SHAPE_FACTOR", 0.01, "shape_factor"))
     analysis_checks = bool(p.get("analysis_checks", True))
     return """from abaqusConstants import *
 model=mdb.models[%r]

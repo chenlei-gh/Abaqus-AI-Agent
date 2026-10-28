@@ -49,10 +49,10 @@ def test_compile_intent_to_actions_end_to_end():
     assert "material_density" in action_types
     assert "solid_section" in action_types
     assert "static_step" in action_types
-    assert "seed_part" in action_types
 
     # Verify rendered Python CAE script content
     script = plan.cae_script
+    assert script.count("seedPart(") == 1
     assert "ConstrainedSketch" in script
     assert "BaseSolidExtrude" in script
     assert "Elastic(table=" in script

@@ -1203,11 +1203,18 @@ class AbaqusAIAgent:
             except Exception:
                 pass
 
-    def submit(self, job_name, wait=False, approval_policy=None):
+    def submit(self, job_name, wait=False, approval_policy=None, mesh_quality=None):
         # Bare job submission is still a production submission point: it must
         # pass the same pre-solve approval gate as the canonical runner path
         # (see docs/presolve-approval-entry-matrix.md, entry E4).
+        from .contracts.mesh_quality import mesh_submission_blockers
         from .execution.approval_service import enforce_pre_solve_approval
+
+        blockers = mesh_submission_blockers(mesh_quality)
+        if blockers and mesh_quality is not None:
+            raise RuntimeError(
+                "mesh continuation gate refused submission: " + "; ".join(blockers)
+            )
 
         workdir = getattr(self.executor, "workdir", None) or os.getcwd()
         enforce_pre_solve_approval(

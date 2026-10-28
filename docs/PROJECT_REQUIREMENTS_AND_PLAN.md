@@ -148,7 +148,8 @@ flowchart TD
   |-- Phase 4.3: 收敛失败诊断与受控自愈（代码已有，未全面验收） [PARTIAL]
   |-- Phase 4.6: 启动 CAE 前 compile() 语法门（离线负例已过，未做真机耗时） [IMPLEMENTED]
   |-- Phase 4.7: 纠错耗时结构化遥测（记录器已接，未验收前不得声称下降） [IMPLEMENTED]
-  |-- Phase 4.8: 材料非线性数据充分性门禁（离线负例已过，未做真机） [IMPLEMENTED]
+  |-- Phase 4.8: 材料非线性数据充分性门禁（deck 门禁有真机证据，非线性结论未鉴定） [IMPLEMENTED]
+  |-- Phase 4.9: 一次合格四面体剖分，失败即停（离线门禁已过，未做 M1FA 真机） [IMPLEMENTED]
   |-- Phase 4.4: 交互式工程工作台 (Web UI / IDE 插件扩展)          [BACKLOG]
   |-- Phase 4.5: 求解前评审报告自动浏览器展示                       [CLOSED]
 ========================================================================
@@ -270,7 +271,29 @@ flowchart TD
 | 交互式 CAE / Web 工作台来减少纠错 | 用户已明确拒绝交互式 UI；MCP 桥接是另一个产品形态 | 用户约束；REQ-4.4 仍为 BACKLOG |
 | psutil 进程树监督当作纠错方案 | 只能改进卡死检测，不减少语法、API 和理解偏差 | 本地既有可选依赖惯例；与本问题无关 |
 
-保留且与外部实践一致的方案：类型动作计划而不是自由脚本生成；提交前人工审批；`consistencyChecking=ON`；有界 `waitForCompletion(timeOut=...)`；失败后读 `.dat/.msg/.sta`；noGUI 完成用内核 Sentinel 而不是启动器退出码。官方 `datacheck` 只用于已生成的输入文件、正式求解之前，不替代脚本语法门，也不在本轮实施。
+保留且与外部实践一致的方案：类型动作计划而不是自由脚本生成；提交前人工审批；`consistencyChecking=ON`；有界 `waitForCompletion(timeOut=...)`；失败后读 `.dat/.msg/.sta`；noGUI 完成用内核 Sentinel 而不是启动器退出码。官方 `datacheck` 只用于已生成的输入文件、正式求解之前，不替代脚本语法门。同一 datacheck / 网格错误签名只允许一次重交，见 REQ-4.9。
+
+#### 需求 REQ-4.9：一次合格剖分，失败即停
+* **提出日期**：2026-10-28
+* **优先级**：P0
+* **背景**：M1FA 类型的坏网格会被反复提交，数小时后仍失败。最优解不是自动修几何，而是一次合格剖分、失败立即停止、只在求解通过后对关心区域做收敛。
+* **采纳的官方接口**：
+  * 四面体不传 `algorithm`。官方写明不传才使用默认四面体算法；`NON_DEFAULT` 是 6.4 之前的旧算法。
+  * `setMeshControls(..., sizeGrowth=MODERATE)` 只用于默认四面体算法。
+  * 先 `generateMesh(boundaryPreview=ON)`。边界预览失败或低于形状因子门槛，不生成内部网格。官方写明该选项只对四面体或 bottom-up 六面体/楔形有效。
+  * `verifyMeshQuality(criterion=SHAPE_FACTOR, threshold=0.0001, elemShape=TET)`。`0.0001` 是 CAE 对四面体的默认形状因子下限，0 表示退化单元。形状因子只适用于三角形和四面体；三角形默认下限是 `0.01`。
+  * 来源：[Part object](https://docs.software.vt.edu/abaqusv2025/English/SIMACAEKERRefMap/simaker-c-partedtpyc.htm)、[Verifying your mesh](https://docs.software.vt.edu/abaqusv2025/English/SIMACAECAERefMap/simacae-c-mgnconcpartitionverify.htm)、[Tetrahedral boundary mesh](https://docs.software.vt.edu/abaqusv2025/English/SIMACAECAERefMap/simacae-c-mgnconcmeshingfreepreview.htm)。
+* **已实现**：
+  * 剖分前只读 `geometryValidity` 与 `checkGeometry(detailed=ON, level=20)`。官方写明 `checkGeometry` 失败时更新存储的有效性状态，不保证抛异常；所以必须在调用后再读 `geometryValidity`。无效几何回 CAD，不打开 `allow_repair`，不打开虚拟拓扑。
+  * 四面体只剖分一次。禁止换种子循环，禁止 `algorithm=NON_DEFAULT`。
+  * 四面体体网格后同时检查 `ANALYSIS_CHECKS` 与 `SHAPE_FACTOR`。六面体不发 `SHAPE_FACTOR`。`ANALYSIS_CHECKS` 不能单独当门禁。非四面体路径只播种一次，不得在 `seed_part` 之后再调一次 `seedPart`。
+  * 失败、缺失质量结果、失败单元或形状因子低于 0.0001，在审批门之前返回 `SUBMISSION_BLOCKED`。
+  * 同一 datacheck / 网格错误签名只允许一次重交。
+  * 实体重叠不得自动建接触，也不得用 `adjustMethod` / `adjustTolerance` 掩盖。
+* **明确不做**：不自动去特征；不把细化种子当修复；不把通过质量门禁说成已收敛；不改 M1FA 项目外的手工脚本。
+* **验收门槛**：零/负体积单元 0、`ANALYSIS_CHECKS.failedElements` 0、四面体 shape factor 不低于 0.0001。这只表示可以继续检查，不能声称一次得到最终高质量网格。
+* **验证**：`tests/test_mesh_continuation_gate.py` 6 条通过；`tests/test_p1_4_self_healing.py` 22 条通过。未跑 M1FA 真机，不得声称该项目已验证。
+* **当前状态**：**IMPLEMENTED**（离线门禁已过；不是 CLOSED）
 
 ---
 

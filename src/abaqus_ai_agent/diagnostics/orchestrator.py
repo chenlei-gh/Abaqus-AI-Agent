@@ -16,6 +16,42 @@ from .remediator import SolverRemediator
 from .solver_patterns import DiagnosticIssue, diagnose_solver_artifacts
 
 
+_DATACHECK_IDS = frozenset({
+    "ZERO_PIVOT",
+    "EXCESSIVE_DISTORTION",
+    "SOLID_DISTORTION_CONVERGENCE",
+    "NEGATIVE_VOLUME",
+    "MESH_QUALITY_FAILED",
+})
+
+
+def _datacheck_signature(issues, texts):
+    """Stable identity of one datacheck or mesh failure.
+
+    The same distorted-element or zero-pivot evidence must not authorize a
+    second datacheck. Non-datacheck convergence issues return None so their
+    existing confirmation-gated path is unchanged.
+    """
+    ids = tuple(sorted(
+        iss.diagnosis_id for iss in issues
+        if getattr(iss, "diagnosis_id", "") in _DATACHECK_IDS
+    ))
+    blob = " ".join(str(texts.get(key) or "") for key in ("dat", "msg")).lower()
+    textual = []
+    for marker in (
+        "negative volume",
+        "zero volume",
+        "excessively distorted",
+        "zero pivot",
+        "datacheck completed with errors",
+    ):
+        if marker in blob:
+            textual.append(marker)
+    if not ids and not textual:
+        return None
+    return "|".join(ids + tuple(textual))
+
+
 class SelfHealingOrchestrator:
     """Coordinates solver failure diagnosis, remediation synthesis, and bounded re-execution."""
 
@@ -164,8 +200,10 @@ class SelfHealingOrchestrator:
         ):
             kwargs.pop(reserved, None)
 
-        # Bound attempts strictly
+        # Bound attempts strictly. A repeated datacheck or mesh-error signature
+        # is not a new failure mode and must not buy another submission.
         bounded_max_attempts = max(1, min(max_attempts, 3))
+        seen_datacheck_signatures = set()
 
         for attempt_idx in range(1, bounded_max_attempts + 1):
             # 1. Harvest artifacts and diagnose
@@ -237,6 +275,12 @@ class SelfHealingOrchestrator:
             # 2. Check for unhealable failure modes
             if any(iss.diagnosis_id == "LICENSE_DENIED" for iss in issues):
                 break
+            signature = _datacheck_signature(issues, texts)
+            if signature is not None:
+                if signature in seen_datacheck_signatures:
+                    healing_errors.append("repeated_datacheck_signature:%s" % signature)
+                    break
+                seen_datacheck_signatures.add(signature)
 
             # 3. Generate candidate remediations
             remediations = SolverRemediator.generate_remediations(issues, intent=current_intent, plan=current_plan)

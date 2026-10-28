@@ -385,6 +385,97 @@ def resolve_domain_mesh_quality_policy(
     return _DOMAIN_MESH_QUALITY_OVERRIDES.get(key, DEFAULT_DOMAIN_MESH_QUALITY_POLICY)
 
 
+# Official 2025 tetrahedron continuation floor. Shape factor is the ratio of
+# element volume to the optimal tetrahedron volume; 0 means a degenerate
+# element. The CAE default highlight limit for tetrahedra is 0.0001. Passing
+# this floor means "may continue to checks", not "the mesh is converged".
+# Source: Verifying your mesh, Abaqus/CAE 2025.
+TET_SHAPE_FACTOR_FLOOR = 0.0001
+
+
+def tet_partition_controls() -> Dict[str, Any]:
+    """Documented controls for one free tetrahedron partition.
+
+    ``algorithm`` is intentionally absent. For free tetrahedra the only
+    documented algorithm value is ``NON_DEFAULT``, which selects the pre-6.4
+    mesher. Omitting the argument is how the default algorithm is selected.
+    ``sizeGrowth=MODERATE`` applies only to that default mesher.
+    """
+    return {
+        "elem_shape": "TET",
+        "technique": "FREE",
+        "size_growth": "MODERATE",
+        "algorithm": None,
+        "boundary_preview": True,
+    }
+
+
+def tet_mesh_script(part_expr: str) -> str:
+    """One tetrahedron partition: default mesher, moderate growth, preview stop.
+
+    A failed boundary preview raises before the interior mesh is generated.
+    The caller must not wrap this in a seed-size retry loop.
+    """
+    return (
+        "{part}.setMeshControls(regions={part}.cells, elemShape=TET, "
+        "technique=FREE, sizeGrowth=MODERATE)\n"
+        "{part}.generateMesh(boundaryPreview=ON)\n"
+        "_abqai_boundary = {part}.verifyMeshQuality(criterion=SHAPE_FACTOR, "
+        "threshold={floor}, elemShape=TET)\n"
+        "_abqai_boundary_failed = len(_abqai_boundary.get('failedElements', ()))\n"
+        "if _abqai_boundary_failed:\n"
+        "    raise RuntimeError('tet_boundary_preview_rejected: ' + "
+        "str(_abqai_boundary_failed) + ' boundary elements below shape factor "
+        "{floor}; interior mesh not generated')\n"
+        "{part}.generateMesh()\n"
+    ).format(part=part_expr, floor=repr(TET_SHAPE_FACTOR_FLOOR))
+
+
+def mesh_submission_blockers(mesh_quality: Any) -> Tuple[str, ...]:
+    """Why this mesh must not be submitted.
+
+    ``ANALYSIS_CHECKS`` alone is not a gate: a measured bad C3D10M mesh can
+    report ``failedElements=0`` for that criterion. Zero or negative volume is
+    represented by the documented tetrahedron shape-factor floor. A missing
+    result is also a stop: absence of evidence is not permission to submit.
+    """
+    if mesh_quality is None:
+        return ("mesh_quality_missing",)
+    if isinstance(mesh_quality, dict):
+        result = MeshQualityResult.from_mapping(mesh_quality)
+    elif isinstance(mesh_quality, MeshQualityResult):
+        result = mesh_quality
+    else:
+        payload = {}
+        for key in (
+            "status", "metrics", "violations", "warnings", "evidence",
+            "failed_element_count", "unsupported_checks", "execution_error",
+        ):
+            if hasattr(mesh_quality, key):
+                payload[key] = getattr(mesh_quality, key)
+        if not payload:
+            return ("mesh_quality_unreadable",)
+        result = MeshQualityResult.from_mapping(payload)
+
+    blockers = []
+    if result.status in ("fail", "unsupported", "not_run", "expired"):
+        blockers.append("mesh_quality_%s" % result.status)
+    if result.failed_element_count > 0:
+        blockers.append("failed_elements:%d" % result.failed_element_count)
+    if any("analysis_checks" == item or item.endswith(":analysis_checks") for item in result.violations):
+        blockers.append("analysis_checks_failed")
+    shape = result.metrics.get("shape_factor")
+    if shape is not None and float(shape) < TET_SHAPE_FACTOR_FLOOR:
+        blockers.append("shape_factor_below_floor:%s" % shape)
+    if any("shape_factor" in item for item in result.violations):
+        blockers.append("shape_factor_failed")
+    if any("zero_volume" in item or "negative_volume" in item for item in result.violations):
+        blockers.append("nonpositive_volume")
+    if result.execution_error:
+        blockers.append("mesh_quality_execution_error")
+    return tuple(dict.fromkeys(blockers))
+
+
 def mesh_quality_gate_configuration_errors(
     domain: Optional[str],
     required_gates: Tuple[str, ...] = (),

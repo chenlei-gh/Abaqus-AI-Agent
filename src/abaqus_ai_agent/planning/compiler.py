@@ -909,6 +909,17 @@ def compile_intent_to_actions(
             extra = ""
             if binding is not None and not binding.requires_step_override:
                 extra = f", contactControls='{binding.control_name}'"
+            # Overlapping solids are returned to CAD. adjustMethod and
+            # adjustTolerance are never emitted: they move nodes to hide the
+            # interference instead of exposing it.
+            if any(
+                getattr(inter, attr, None) not in (None, False, "", "NONE")
+                for attr in ("adjust_method", "adjust_tolerance", "adjustMethod", "adjustTolerance")
+            ):
+                raise ValueError(
+                    "contact '%s' requested node adjustment; overlapping geometry must be returned to CAD"
+                    % inter.name
+                )
             inter_code += (
                 f"a = mdb.models['{model_name}'].rootAssembly\n"
                 f"m_surf = a.surfaces['{inter.master_region}']\n"
@@ -1656,49 +1667,83 @@ def compile_intent_to_actions(
                     bolt_method="FIX_LENGTH",
                 ))
 
+    # 10b. Read-only geometry diagnosis. Invalid geometry stops here.
+    # This does not repair, ignore, or delete entities. A failed checkGeometry
+    # or geometryValidity=0 raises before any seed or mesh call.
+    diagnosis_parts = _mesh_quality_targets(geometry, active_scope, part_name)
+    diagnosis_lines = ["from abaqusConstants import *\n"]
+    for _diag_part in diagnosis_parts:
+        diagnosis_lines.append(
+            "_abqai_part = mdb.models[{model!r}].parts[{part!r}]\n"
+            "try:\n"
+            "    _abqai_valid = bool(_abqai_part.geometryValidity)\n"
+            "except Exception as _abqai_exc:\n"
+            "    raise RuntimeError('geometry_diagnosis_unreadable:{part}:' + type(_abqai_exc).__name__)\n"
+            "if not _abqai_valid:\n"
+            "    raise RuntimeError('invalid_geometry:{part}: return the part to CAD; automatic repair is forbidden')\n"
+            "try:\n"
+            "    _abqai_part.checkGeometry(detailed=ON, level=20)\n"
+            "except Exception as _abqai_exc:\n"
+            "    raise RuntimeError('geometry_check_failed:{part}:' + repr(_abqai_exc) + '; return the part to CAD')\n"
+            "_abqai_valid = bool(_abqai_part.geometryValidity)\n"
+            "if not _abqai_valid:\n"
+            "    raise RuntimeError('geometry_check_failed:{part}: geometryValidity is false after checkGeometry; return the part to CAD')\n"
+            .format(model=model_name, part=_diag_part)
+        )
+    actions.append(builders.python_action(model_name, "".join(diagnosis_lines)))
+
     # 11. Mesh Generation Actions
+    # Tetrahedra get one partition: default algorithm, moderate interior growth,
+    # boundary preview, then stop. A bad boundary never generates an interior
+    # mesh, and a failed partition is not retried with a smaller seed.
+    from ..contracts.mesh_quality import tet_mesh_script
+
+    def _append_part_mesh(target_expr, *, tetrahedral):
+        lines = [
+            "import mesh\nfrom abaqusConstants import *\n",
+            "%s.seedPart(size=%s, deviationFactor=%s)\n" % (
+                target_expr, mesh.global_size, mesh.deviation_factor,
+            ),
+            "elemType1 = mesh.ElemType(elemCode=%s, elemLibrary=%s)\n" % (
+                mesh.element_type, mesh.element_library,
+            ),
+            "%s.setElementType(regions=(%s.cells,), elemTypes=(elemType1,))\n" % (
+                target_expr, target_expr,
+            ),
+        ]
+        if tetrahedral:
+            lines.append(tet_mesh_script(target_expr))
+        else:
+            lines.append("%s.generateMesh()\n" % target_expr)
+        actions.append(builders.python_action(model_name, "".join(lines)))
+
+    tetrahedral_mesh = mesh.element_type.startswith("C3D10") or mesh.element_type.startswith("C3D4")
     if geometry.shape == "step_assembly":
         if getattr(mesh, "local_seeds", None):
             raise ValueError(
                 "step_assembly does not accept part-local seeds until each seed names its solid; "
                 "refusing to apply them to one part only"
             )
-        mesh_lines = ["import mesh\nfrom abaqusConstants import *\n"]
-        for index, part in enumerate(active_scope.parts):
-            mesh_lines.append(
-                f"p_{index} = mdb.models['{model_name}'].parts['{part.name}']\n"
-                f"p_{index}.seedPart(size={mesh.global_size}, deviationFactor={mesh.deviation_factor})\n"
-                f"elemType1 = mesh.ElemType(elemCode={mesh.element_type}, elemLibrary={mesh.element_library})\n"
-                f"p_{index}.setElementType(regions=(p_{index}.cells,), elemTypes=(elemType1,))\n"
-                f"p_{index}.generateMesh()\n"
+        for part in active_scope.parts:
+            _append_part_mesh(
+                "mdb.models['%s'].parts['%s']" % (model_name, part.name),
+                tetrahedral=tetrahedral_mesh,
             )
-        actions.append(builders.python_action(model_name, "".join(mesh_lines)))
     elif geometry.shape == "two_blocks_contact":
         if getattr(mesh, "local_seeds", None):
             raise ValueError(
                 f"Geometry shape 'two_blocks_contact' does not currently support local_seeds; "
                 f"received {len(mesh.local_seeds)} local seed specification(s). Fail-closed to avoid silent omission."
             )
-        mesh_elem_code = (
-            f"import mesh\nfrom abaqusConstants import *\n"
-            f"p_base = mdb.models['{model_name}'].parts['Base']\n"
-            f"p_slider = mdb.models['{model_name}'].parts['Slider']\n"
-            f"p_base.seedPart(size={mesh.global_size}, deviationFactor={mesh.deviation_factor})\n"
-            f"elemType1 = mesh.ElemType(elemCode={mesh.element_type}, elemLibrary={mesh.element_library})\n"
-            f"p_base.setElementType(regions=(p_base.cells,), elemTypes=(elemType1,))\n"
-            f"p_base.generateMesh()\n"
-            f"p_slider.seedPart(size={mesh.global_size}, deviationFactor={mesh.deviation_factor})\n"
-            f"p_slider.setElementType(regions=(p_slider.cells,), elemTypes=(elemType1,))\n"
-            f"p_slider.generateMesh()\n"
+        _append_part_mesh(
+            "mdb.models['%s'].parts['Base']" % model_name,
+            tetrahedral=tetrahedral_mesh,
         )
-        actions.append(builders.python_action(model_name, mesh_elem_code))
+        _append_part_mesh(
+            "mdb.models['%s'].parts['Slider']" % model_name,
+            tetrahedral=tetrahedral_mesh,
+        )
     else:
-        actions.append(builders.seed_part(
-            model=model_name,
-            part=part_name,
-            size=mesh.global_size,
-            deviation_factor=mesh.deviation_factor,
-        ))
         if mesh.local_seeds:
             for ls in mesh.local_seeds:
                 reg_expr = getattr(ls, "region_expression", None)
@@ -1726,24 +1771,10 @@ def compile_intent_to_actions(
                     ))
                 else:
                     raise ValueError(f"Local seed requires either size or number: {ls}")
-        if mesh.element_type.startswith("C3D10") or mesh.element_type.startswith("C3D4"):
-            mesh_elem_code = (
-                f"import mesh\nfrom abaqusConstants import *\n"
-                f"p = mdb.models['{model_name}'].parts['{part_name}']\n"
-                f"p.setMeshControls(regions=p.cells, elemShape=TET, technique=FREE)\n"
-                f"elemType1 = mesh.ElemType(elemCode={mesh.element_type}, elemLibrary={mesh.element_library})\n"
-                f"p.setElementType(regions=(p.cells,), elemTypes=(elemType1,))\n"
-                f"p.generateMesh()\n"
-            )
-        else:
-            mesh_elem_code = (
-                f"import mesh\nfrom abaqusConstants import *\n"
-                f"p = mdb.models['{model_name}'].parts['{part_name}']\n"
-                f"elemType1 = mesh.ElemType(elemCode={mesh.element_type}, elemLibrary={mesh.element_library})\n"
-                f"p.setElementType(regions=(p.cells,), elemTypes=(elemType1,))\n"
-                f"p.generateMesh()\n"
-            )
-        actions.append(builders.python_action(model_name, mesh_elem_code))
+        _append_part_mesh(
+            "mdb.models['%s'].parts['%s']" % (model_name, part_name),
+            tetrahedral=tetrahedral_mesh,
+        )
 
     # 11b. Mesh Quality Verification Action
     #
@@ -1777,6 +1808,7 @@ def compile_intent_to_actions(
             min_jacobian=mesh.min_jacobian,
             max_skew=mesh.max_skew,
             analysis_checks=True,
+            element_type=mesh.element_type,
             job_name=job_name,
         ))
 

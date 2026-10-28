@@ -1223,6 +1223,28 @@ class AnalysisRunner:
             # while recording is noted and swallowed; the job status and the run state
             # machine below are untouched. ``phase_profiler is None`` (the default)
             # skips all of this, so existing callers see no behaviour change.
+            # Mesh continuation gate. A failed partition, a missing quality
+            # result, ANALYSIS_CHECKS failures, or a tetrahedron below the
+            # documented shape-factor floor stop here. Passing this gate only
+            # means the mesh may be reviewed; it is not mesh convergence.
+            from ..contracts.mesh_quality import mesh_submission_blockers
+
+            _mesh_blockers = mesh_submission_blockers(mesh_quality)
+            if _mesh_blockers and mesh_quality is not None:
+                blocked_mesh = run.with_state(
+                    AnalysisRunState.FAILED,
+                    engineering_status=EngineeringStatus.SUBMISSION_BLOCKED.value,
+                    diagnostics=({
+                        "error": "mesh continuation gate refused submission: " + "; ".join(_mesh_blockers),
+                        "mesh_submission_blocked": True,
+                        "mesh_blockers": list(_mesh_blockers),
+                        "continuation_only": True,
+                        "not_mesh_convergence": True,
+                    },),
+                )
+                _persist_ledger("FAILED", blocked_mesh)
+                return blocked_mesh
+
             # Pre-solve approval gate (Phase A/B boundary): the job may only be
             # submitted against an APPROVED execution candidate bound to the exact
             # solver deck on disk. Test doubles resolve to policy "disabled"; see
