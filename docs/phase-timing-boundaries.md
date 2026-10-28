@@ -4,7 +4,7 @@
 
 它**不**接线 `AnalysisRunner`，**不**新增打点调用，**不**产生任何耗时数据。
 所有锚点均为 `[已核实]`（读代码确认），但**没有任何真实性证据**——本文件不含一条
-真实耗时数字。验收状态仍以 `docs/phase-leftovers-tracking.md` 为准。
+真实耗时数字。验收状态与真机基线以 `docs/PROJECT_REQUIREMENTS_AND_PLAN.md` 为准。
 
 ## 0. 为什么不直接开始打点
 

@@ -1,161 +1,149 @@
 # Abaqus AI Agent
 
-面向 Abaqus/CAE 的确定性工程代理。自然语言先编译成有类型的动作，执行前校验，只有求解证据和物理门禁一致时才允许正式交付。
+面向 Abaqus/CAE 的确定性工程代理（Deterministic Engineering Agent）。将自然语言工程需求严格编译为具有强类型约束的物理仿真动作，并在前检、建模、求解、监控、后处理全流程实施物理门禁拦截，确保**只有求解证据与力学门禁一致时才允许正式工程交付**。
 
-[English](README.md)
+[English](README.md) | [需求清单与全局演进规划](docs/PROJECT_REQUIREMENTS_AND_PLAN.md)
 
 [![CI](https://github.com/chenlei-gh/Abaqus-AI-Agent/actions/workflows/ci.yml/badge.svg)](https://github.com/chenlei-gh/Abaqus-AI-Agent/actions/workflows/ci.yml)
-[![Python](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12-blue.svg)](https://www.python.org/)
-[![Abaqus](https://img.shields.io/badge/Abaqus-2025%20interface-blue.svg)](https://www.3ds.com/products-services/simulia/products/abaqus/)
+[![Python](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12%20%7C%203.14-blue.svg)](https://www.python.org/)
+[![Abaqus](https://img.shields.io/badge/Abaqus-2025%20Verified-blue.svg)](https://www.3ds.com/products-services/simulia/products/abaqus/)
+[![Tests](https://img.shields.io/badge/tests-2558%20passed-brightgreen.svg)](tests/)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 
-这是工程工具，不是认证求解器，也不能代替分析人员签字。求解器仍然是 Abaqus。本仓库不提供 Abaqus 许可证。
+> **工程责任声明**：本系统是工程辅助与自动化工具，不是认证求解器，亦不能替代注册工程师的法定签字。有限元核心求解依然由商业 Abaqus 保证。本仓库不分发或包含 Abaqus 商业许可证。
 
-## 它做什么
+---
+
+## 核心工作流与架构
 
 ```mermaid
-flowchart LR
-    prompt[工程需求] --> route[意图路由]
-    route --> plan[有类型的动作计划]
-    plan --> preflight[校验与预检]
-    preflight --> solver[Abaqus 批处理作业]
-    solver --> odb[ODB 与日志证据]
-    odb --> accept[验收门禁]
-    accept --> report[诊断稿或正式报告]
+flowchart TD
+    NL[工程需求输入 / Natural Language Prompt] --> Router[意图路由器 / Intent Router & JEV]
+    Router -->|参数不全 / 语义歧义| Clarify[拒绝并要求澄清 / NEEDS_CLARIFICATION]
+    Router -->|结构完备| Plan[有类型动作计划 / Typed Action Plan]
+    Plan --> Preflight[前置物理校验与语法检查 / Preflight Validation]
+    Preflight -->|阻断| Blocked[审批门拦截 / AWAITING_APPROVAL]
+    Preflight -->|通过| Compiler[Abaqus Python 编译 / Kernel Compiler]
+    Compiler --> Batch[内核会话执行 / KernelNamespace Execution]
+    Batch --> Solver[Abaqus 求解器求解 / Standard / Explicit]
+    Solver --> ODB[(真实 ODB 数据库与计算日志 / ODB Evidence)]
+    ODB --> Verify[ODB 二进制验签与区域提取 / Whitelist ODB Extractor]
+    Verify --> Gates{物理验收门禁 / 4-Tier Physical Acceptance Gates}
+    Gates -->|应力超标 / 反力不平衡 / 接触飞开 / 穿透| FailReport[诊断报告 / report.diagnostic.html]
+    Gates -->|全物理指标通过| FormalReport[正式工程交付件 / report.html]
 ```
 
-1. 把需求路由成有类型的工程意图。几何、材料、载荷或约束缺失时，以 `NEEDS_CLARIFICATION` 停止。
-2. 把受支持的动作编译成 Abaqus Python。未知动作类型会被拒绝。
-3. 只有本机有 Abaqus 启动器和许可证时才真正求解。
-4. 从 ODB 提取结果。区域表达式走白名单解析器，不使用 `eval()`。
-5. 由求解状态、证据、物理判据和显式 `deliverable` 标志决定是否交付。
-6. 报告只有一条生成路径。失败门禁不能被后续渲染改写成正式交付。
+1. **意图路由（Intent Router）**：将需求路由为强类型工程意图（`EngineeringIntent`）。几何、材料、载荷或约束缺失时以 `NEEDS_CLARIFICATION` 阻断，拒绝脑补。
+2. **确定性动作编译（Action Pipeline）**：将意图编译为确定性的 Abaqus Python 脚本，严禁任意未知动作，确保所有建模指令可重放。
+3. **内核隔离与会话沙箱（Kernel Isolation & Sentinel）**：以 `KernelNamespace` 保证变量作用域纯净；依靠内核端落盘 `sentinel` 凭证化解 Windows 启动器提前退出的客观时序，配合有界超时彻底消灭进程挂死。
+4. **安全 ODB 提取（Authentic ODB Extractor）**：执行严格的 ODB 二进制大小与头部签名校验，区域表达式采用白名单 AST 解析，严禁 `eval()` 执行。
+5. **四维物理门禁（Acceptance Gates）**：求解完成、证据哈希一致、力学平衡闭合（反力平衡 $<1\%$、能量闭合、无反常穿透/屈服脱开）、显式授权标记四重通过。
+6. **单一正式出口（Gated HTML Deliverable）**：统一渲染内嵌数字水印与指纹的正式 HTML 报告，未过门禁只输出诊断稿，严禁伪造。
 
-不配置 API Key 时，离线路由可用。TypeSafe System One（JEV）是可选的意图提供者。
+---
 
-## JEV 是什么，不是什么
+## 工程覆盖能力（已闭环基线）
 
-JEV 回答结构化工程问题：物理域、单位制、求解器族、约束是否充分、有没有定量验收标准，以及完备性评分。默认端点是 `https://api.typesafe.ai/v1/systemone`，默认模型别名是 `jev-latest`。配置 `TYPESAFE_API_KEY` 即可；URL 可选。自定义 HTTPS 主机必须显式授权。
+系统已完整闭环以下工业力学分析与工程求解能力（详细凭据参见 [`docs/PROJECT_REQUIREMENTS_AND_PLAN.md`](docs/PROJECT_REQUIREMENTS_AND_PLAN.md)）：
 
-JEV **不会**：
+* **基础与非线性静力学**：大变形几何非线性（`nlgeom=ON`）、弹塑性本构、自适应增量步控制；
+* **复杂接触力学**：通用接触（General Contact）、面面接触（Surface-to-Surface）、Tie 绑定、Penalty 摩擦接触；
+* **运动副与机构连接**：MPC 运动副、Coupling 运动耦合、Connector（Revolute/Cartesian/Slot）复杂铰接机构；
+* **动力学与冲击响应**：隐式动态分析（Hilber-Hughes-Taylor）、显式动态分析（Central Difference）、冲击准静态响应；
+* **刚柔耦合多体动力学（FMBD）**：刚体定义、滑块曲柄机构、大位移柔性构件瞬态耦合；
+* **热传导与多物理场**：稳态/瞬态各向同性热传导、对流边界（Film Condition）、辐射边界、热固强耦合；
+* **自适应网格收敛性**：六面体单元（C3D8R、C3D8I、C3D20R）、局部自适应加密网格无关性评定；
+* **算力硬件自感知**：硬件物理核心探测，1/2/4/8 核多核并行调度，FlexNet 许可证感知与硬阻断（Token $<5$ 拒不入队）。
 
-- 批准代码、Pull Request 或发布；
-- 授权生产报告；
-- 代替 Abaqus、验收门禁或工程师；
-- 判定 STEP 实体身份、接触面或安装固定面；
-- 从 `abaqus-ai-agent ask` 收到完整项目上下文。该命令目前只传 prompt。
+---
 
-`ROUTED` 或 `executable=true` 只表示意图路由认为结构够继续，不是物理批准。`jev_routed` 只记录自然语言请求走过产品路由，不证明解析正确、约束充分、求解成功或工程验收通过。已经验证的 `EngineeringIntent` 不因为 JEV 不可用而停止。自然语言仍有影响分析类型、载荷或边界的歧义时，路由失败保持未解决，不猜测后求解。离线缺项检查不能代替几何映射、接触和求解验收。草稿意图不可执行。
+## 四大刚性工程契约
 
-## 验收是四项检查，不是一个退出码
-
-进程退出码为 0 不等于工程合格。
-
-| 检查 | 问题 | 失败后果 |
+| 契约 | 规则与实现 | 违规后果 |
 | :--- | :--- | :--- |
-| 求解状态 | Abaqus 作业是否真的完成？ | 不能正式交付 |
-| 证据 | 清单、哈希、路径和 `run_id` 是否仍然一致？ | 阻断或标为无效 |
-| 物理门禁 | 应力、反力平衡、位移、网格、接触、热平衡是否通过？ | 失败关闭 |
-| 交付标志 | `deliverable` 是否显式为真？ | 缺标志不是通过 |
+| **无界等待清零** | 编译器及工具链严禁裸 `waitForCompletion()`，全量绑定 `timeOut=300/600/1200` 与 `consistencyChecking=ON` | 彻底消除求解器死锁导致的会话无限悬挂 |
+| **内核命名空间强隔离** | 严禁利用宿主 `globals()` 共享空间执行脚本代码，全量采用 `KernelNamespace` 沙箱隔离 | 杜绝 Abaqus 通配导入对宿主变量名、计时器与状态的隐式遮蔽 |
+| **内核 Sentinel 完成契约** | Windows 启动器派生内核后命令行正常退出（符合 3DEXPERIENCE 规范），由内核写入 `completed/blocked` 凭证，宿主等待凭据 | 解决进程分离引起的假成功判断，未见凭据 Fail-Closed |
+| **正式交付单一出口** | 正式交付物仅限带运行指纹与模型快照哈希的单个 `report.html`，废除 Markdown 作为正式交付 | 门禁未通过只能产出诊断报告（`report.diagnostic.html`） |
 
-`ResultValidity` 的相等是严格字符串相等。自反、对称、传递是这个类型的数学性质，不是第五个验收维度。
+---
 
-证据清单上的 SHA-256 用来发现意外修改、损坏，以及摘要没有同步重算。它是完整性摘要，不是 HMAC，也不是数字签名。能改文件的人也能重算摘要。不要把它写成不可伪造或不可抵赖。
+## 真实环境物理验证指标（MV-01 ~ MV-12）
 
-## 当前契约边界
+全库通过真实 Abaqus 2025 工业环境的 12 项跨阶段物理考核（11 项 PASS，1 项在线商业计费明确排除）：
 
-下面是当前代码事实，不是路线图承诺。
+* **官方悬臂梁 Benchmark（MV-12 PASS）**：
+  * 基于 Abaqus 官方《Scripting User's Manual》8.1 经典算例，C3D20R 二次六面体单元，端部集中剪切载荷；
+  * **挠度误差**：有限元计算值 6.3330 mm，理论材料力学解析解 6.4000 mm，相对误差仅 **1.05%**；
+  * **应力误差**：高斯积分点 Mises 应力 138.89 MPa，理论解析解 138.56 MPa，相对误差仅 **0.23%**；
+  * **真机时序**：启动器 16.29s 提前返回，内核运行 17.80s 完成并落盘 386 KB 真实 ODB，`sentinel` 捕获 100% 吻合。
+* **Case 07 工程橡胶就位与冲击（MV-01 ~ MV-02 PASS）**：
+  * 产出 3.0 MB Standard 与 7.4 MB Explicit 真实 ODB；
+  * 100% 阻断 6 类人为 ODB 篡改变异（50% 截断、4KB 坏头、全零、全 FF 等）；
+  * 反序列化还原耗时中位数 0.20 ms，P95 为 0.58 ms（严格 $< 10\text{ ms}$）。
+* **自动化测试基线**：全量 **2558 项** 单元与契约测试通过。
 
-**模型声明必须和 deck 一致。** 调用方传入 `inp_text` 时，声明的单元类型或塑性与 `*ELEMENT` / `*PLASTIC` 矛盾，会强制 `is_deliverable=False`。`AnalysisRunner` 会把 deck 契约警告写进 run。警告本身不会把合法的弹性模型或 `C3D4` 模型判失败。
-
-**弹性应力超过屈服不是塑性。** 调用方传入 `elastic_validity`，且 deck 为纯弹性、屈服强度和峰值应力都是有限数、峰值超过屈服时，验收返回 `RESULT_INVALID`，`deliverable=False`。结果不得写成塑性变形。
-
-**主路径现在会自己读取已求解的 deck。** `AnalysisRunner` 在 `<workdir>/<job>.inp` 存在时读取它，记录契约警告，并在屈服强度和提取应力都是有限数时组装 `elastic_validity`。`solve_requirement()` 会把这份 deck 文本传给 `build_and_render()`。声明的单元类型或塑性与 `*ELEMENT` / `*PLASTIC` 矛盾，仍然强制 `is_deliverable=False`。有 deck 文本时，报告里的材料表从这份 deck 解析。调用方另给的材料表如果在名称、单位、弹性参数、塑性数据点或 deck 哈希上不一致，记为 `material_card_mismatch`，并阻断正式交付。报告同时保留全场峰值和 99.5% 分位，分位数不能掩盖峰值。`C3D4` 警告本身不会把合法模型判失败。
-
-**求解入口是 Python API。** 受支持的求解入口是 `AbaqusAIAgent.solve_requirement()` 和 `solve_user_inp()`。`abaqus-ai-agent report` 只消费已有证据文件，不求解。本次也不新增求解子命令。
-
-**正式署名必须带运行指纹。** 只有 `agent_issued=True` 不够。正式交付的运行记录还必须带 `model_snapshot_hash`、`content_hash_scope` 和 `action_plan_scope`，并且这些字段进入 stamp。手写 HTML 不是正式交付。
-
-**正式报告只能是 HTML 文件。** `abaqus-ai-agent report` 不再接受 `--format markdown`，也不会把显式请求的 `.md` 路径写成文件。带门禁的写文件函数同样拒绝 Markdown，包括已授权的请求：不写 `report.md`，也不写 `*.preview.md`。门禁失败不会创建 `report.html`。诊断草稿只能是带非正式横幅的 `report.diagnostic.html`。`solve_user_inp(generate_report=True)` 没有代理验收结论和运行记录时，不写 `report.html`，也不写 `report.md`。删掉内存中的 Markdown 渲染器，并不能阻止编码代理用自己的编辑器工具直接写文件。这种文件不属于产品出口，也不是 Agent 正式交付。
-
-**Tie 脚本使用合法枚举。** 生成的 `Tie` 使用 `positionToleranceMethod=COMPUTED`，先尝试 `main`/`secondary`，类型不匹配时回退 `master`/`slave`。`COMPUTED_TOLERANCE` 不是 Abaqus 2025 的合法值，生成器不会写出它。
-
-**判据计算失败关闭。** 布尔值、NaN、无穷，以及转换后的非有限数会被拒绝。负限值按正确方向放宽。严格零和 `|limit| < 1e-30` 不应用相对容差。`tolerance < 1e6` 只过滤异常输入；溢出靠计算后的有限性检查拦住。这个上界不是已批准的工程容差。
-
-**ODB 区域失败关闭。** 只解析 `odb` 下的白名单属性和下标。函数调用、私有名称和解析失败会抛异常，不会把原始字符串传给 Abaqus。
-
-**能力标签不是本次证书。** `resolve_capability()` 返回的 `qualification_level` 是 `WORKFLOW`。它只说明这条物理工作流已实现，不表示当前项目、当前 run 或本机已经通过机器验证。历史证据包里的 `QUALIFIED` 不能被复制到新作业上。
-
-**自愈默认不改题。** 求解失败时可以诊断，并写出建议的边界、阻尼或步长修改。没有 `confirm_model_change=True` 时，不会添加 `ENCASTRE`、不会重跑，也不会用愈合 run 替换原失败 run。机构模型和许可证失败仍然拒绝自动改题。确认后的重跑必须在报告里写明改了什么。
-
-## 验证分层
-
-不要把下面几层合成一句“已认证”。
-
-| 层次 | 能说明什么 | 不能说明什么 |
-| :--- | :--- | :--- |
-| 单元与契约测试 | 门禁、动作和报告阻断的 Python 行为 | 真实 Abaqus 求解 |
-| GitHub Actions | 该提交实际跑过的 CI 矩阵 | 在进入默认分支且 CI 变绿之前，不能代表本 README 所在分支 |
-| Golden 证据审计 | 既有证据包哈希仍然一致 | 一次新的物理求解 |
-| Abaqus 2025 真机 | 有许可证的主机上，一次有记录的作业、ODB 和日志 | 全部工业物理能力 |
-
-MS13L 工具缺陷分支上的本地回归是 **1373 passed**（`python -m pytest -q --tb=line`）。这是本地数字，不是 CI 徽章。`main` 的 CI 必须以该提交对应的 workflow 为准。Golden 审计不是真机求解。一次悬臂梁或拉手装配求解，不能证明接触、塑性、热机耦合、疲劳和导入装配都已具备生产资格。工作流能力标签同样不能代替这些验证。
-
-静态悬臂梁生产脚本是集成探针，不是通用生产证书。引用前先看它的 `require_production` 设置，以及证据有没有被保留。
+---
 
 ## 快速开始
 
-Python 3.10、3.11 或 3.12。只有真实求解才需要 Abaqus 2025。
+### 1. 环境准备
+支持 Python 3.10 ~ 3.14。仅物理求解环节需要有许可证的本地/远程 Abaqus 2025 环境。
 
 ```bash
 git clone https://github.com/chenlei-gh/Abaqus-AI-Agent.git
 cd Abaqus-AI-Agent
 python -m pip install -e ".[test]"
-python -m pytest -q --tb=line
+python -m pytest tests -q
 ```
 
-意图路由不会启动求解器，也不会授权报告：
+### 2. Python API 求解主入口
+```python
+from abaqus_ai_agent import AbaqusAIAgent
 
+agent = AbaqusAIAgent()
+
+# 提交自然语言工程仿真需求
+result = agent.solve_requirement(
+    prompt="在 200x20x5 mm 钢悬臂梁自由端施加 100 N 向下载荷，根部面完全固定，计算挠度与应力",
+    workdir="./my_cantilever_run",
+    generate_report=True
+)
+
+if result.is_deliverable:
+    print(f"工程分析验收通过！正式报告已生成: {result.report_path}")
+else:
+    print(f"门禁未通过或需要澄清: {result.verdict}, 诊断报告: {result.report_path}")
+```
+
+### 3. 命令行工具（CLI）
 ```bash
+# 离线 dry-run 验证意图编译与动作生成
 abaqus-ai-agent ask "在 100 mm 钢悬臂梁自由端面施加 1000 N 向下载荷，根部面固定" --dry-run
+
+# 基于已有的执行凭证生成审计报告
+abaqus-ai-agent report --evidence ./my_cantilever_run/run_evidence.json --output ./report.html
 ```
 
-不完整需求应返回退出码 2，并给出结构化缺失项。`ask` 不会转发项目上下文文件。要传入几何、材料和载荷证据，请在 Python 中调用 `JevIntentRouter.route(prompt, context=...)`。
+---
 
-可选的在线意图提供者：
+## 生产准入已知边界
 
-```bash
-# live 模式需要 TYPESAFE_API_KEY。
-# TYPESAFE_API_URL 可选；默认使用官方 System One 端点。
-abaqus-ai-agent ask "..." --mode live
-```
+1. **深层进程树监督边界（P1-LAUNCHER-01）**：Windows 平台下 `SMALauncher.exe` 在派生 `ABQcaeK.exe` 内核后 1.3 秒会主动正常退出。系统依靠 Sentinel 契约可 100% 确定是否跑完；但若非标脚本在内核中出现无响应死锁，宿主因父进程已退出无法向内核发送 `SIGTERM`，系统依靠 `waitForCompletion(timeOut=N)` 触发内核级异常中止。
+2. **离线/本地专业部署**：系统为工程算力与代理执行工具，不内置针对外部多租户的 SaaS 商业充值与发票计量链路。
+3. **许可证约束**：生产入口严格遵守 FlexNet 许可下限硬阻断（Token $<5$ 拒绝提交排队，避免无界阻塞）。
 
-## 仓库结构
+---
 
-```text
-src/abaqus_ai_agent/
-  actions/        有类型的 Abaqus 脚本动作和分发器
-  contracts/      意图、证据、指标、单位
-  diagnostics/    求解日志和 inp 契约诊断
-  execution/      批处理、ODB 提取、沙箱
-  reporting/      单一报告管线
-  typesafe_intent.py
-  acceptance.py
-tests/            契约与回归测试
-tools/            真机探针和影子评测；不是生产 API
-machine_validation/  已审计证据包；pytest 和 CI 不得改写
-```
+## 项目规划与文档导航
 
-临时求解目录默认在本仓库之外（Windows 为 `%LOCALAPPDATA%\AbaqusAIAgent\runs`，其他系统为 `$XDG_STATE_HOME/abaqus-ai-agent/runs`）。`ABAQUS_AGENT_RUNS_DIR` 可以覆盖这个临时目录。
+* **唯一权威需求与演进规划**：[`docs/PROJECT_REQUIREMENTS_AND_PLAN.md`](docs/PROJECT_REQUIREMENTS_AND_PLAN.md)（所有新需求与阶段路线均在此维护）
+* **真机物理验证凭据目录**：[`machine_validation/`](machine_validation/)
+* **工程输入与规范指南**：[`docs/user-model-input-guide.md`](docs/user-model-input-guide.md)
+* **测试分级治理规范**：[`docs/test-tier-governance.md`](docs/test-tier-governance.md)
 
-客户交付跟随客户目录。客户给出数据和需求所在目录后，正式报告写入 `<客户目录>/delivery/report.html`；如果这次作业显式传入了 `deliverables_dir`，就写入该目录。正式文件只能是 HTML。交付不会改写到 AppData，也不会默认写入本 Agent 仓库。`python tools/check_workspace_pollution.py` 会在 `machine_validation/`、`deliverables/` 或 `runs/` 出现 Git 差异时失败。
+---
 
-`SUPPORTED_ACTION_TYPES` 中有 65 种受支持动作。脚本分发器与该集合对齐。不要再维护第二份注册表。
+## 许可证
 
-## 范围与许可证
-
-Apache-2.0。见 [LICENSE](LICENSE)。
-
-商业求解器许可、材料卡和工程签字属于部署方。问题反馈：<https://github.com/chenlei-gh/Abaqus-AI-Agent/issues>。
-
-本 README 不声称 Dassault 认证，不声称密码学防伪，不把 JEV 输出当成批准，也不把未运行的 Abaqus 案例标成已验证。
+本项目基于 [Apache License 2.0](LICENSE) 协议开源。

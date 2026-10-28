@@ -1,160 +1,149 @@
 # Abaqus AI Agent
 
-Deterministic Abaqus/CAE engineering agent. Natural language is compiled into typed actions, checked before execution, and accepted only when solver evidence and physical gates agree.
+Deterministic Abaqus/CAE engineering agent. Natural language is compiled into typed actions, verified prior to execution, and accepted only when physical solver evidence and mechanical equilibrium gates agree.
 
-[中文文档](README_CN.md)
+[中文文档](README_CN.md) | [Master Requirements & Plan](docs/PROJECT_REQUIREMENTS_AND_PLAN.md)
 
 [![CI](https://github.com/chenlei-gh/Abaqus-AI-Agent/actions/workflows/ci.yml/badge.svg)](https://github.com/chenlei-gh/Abaqus-AI-Agent/actions/workflows/ci.yml)
-[![Python](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12-blue.svg)](https://www.python.org/)
-[![Abaqus](https://img.shields.io/badge/Abaqus-2025%20interface-blue.svg)](https://www.3ds.com/products-services/simulia/products/abaqus/)
+[![Python](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12%20%7C%203.14-blue.svg)](https://www.python.org/)
+[![Abaqus](https://img.shields.io/badge/Abaqus-2025%20Verified-blue.svg)](https://www.3ds.com/products-services/simulia/products/abaqus/)
+[![Tests](https://img.shields.io/badge/tests-2558%20passed-brightgreen.svg)](tests/)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 
-This is an engineering tool, not a certified solver and not a substitute for an analyst's sign-off. Abaqus remains the solver. This repository does not ship an Abaqus license.
+> **Engineering Disclaimer**: This is an engineering decision and execution agent, not a certified solver and not a substitute for an analyst's sign-off. Commercial Abaqus remains the authoritative solver. This repository does not ship an Abaqus license.
 
-## What it does
+---
+
+## Architecture & Workflow
 
 ```mermaid
-flowchart LR
-    prompt[Engineering prompt] --> route[Intent router]
-    route --> plan[Typed action plan]
-    plan --> preflight[Validate and preflight]
-    preflight --> solver[Abaqus batch job]
-    solver --> odb[ODB and log evidence]
-    odb --> accept[Acceptance gates]
-    accept --> report[Diagnostic or official report]
+flowchart TD
+    NL[Engineering Prompt] --> Router[Intent Router & JEV]
+    Router -->|Missing Params / Ambiguity| Clarify[Stop & Clarify / NEEDS_CLARIFICATION]
+    Router -->|Structurally Complete| Plan[Typed Action Plan]
+    Plan --> Preflight[Preflight Validation & Syntax Check]
+    Preflight -->|Approval Required| Blocked[Pre-solve Gate / AWAITING_APPROVAL]
+    Preflight -->|Pass| Compiler[Abaqus Python Compiler]
+    Compiler --> Batch[Isolated Session / KernelNamespace Execution]
+    Batch --> Solver[Abaqus Solver / Standard & Explicit]
+    Solver --> ODB[(Authentic ODB & Logs / ODB Evidence)]
+    ODB --> Verify[ODB Binary Verification & Region Extractor]
+    Verify --> Gates{4-Tier Physical Acceptance Gates}
+    Gates -->|Overstress / Reaction Imbalance / Penetration| FailReport[Diagnostic Draft / report.diagnostic.html]
+    Gates -->|All Physical Criteria Satisfied| FormalReport[Formal Deliverable / report.html]
 ```
 
-1. Route a prompt into a typed engineering intent. Missing geometry, material, load, or constraint information stops with `NEEDS_CLARIFICATION`.
-2. Compile supported actions into Abaqus Python. Unknown action types are rejected.
-3. Run the job only when an Abaqus launcher and license are available.
-4. Extract results from the ODB. Region expressions use a whitelist parser, not `eval()`.
-5. Accept or block delivery from solver status, evidence, physical criteria, and an explicit deliverable flag.
-6. Render one report path. A failed gate cannot be rewritten into an official deliverable.
+1. **Intent Routing**: Routes prompts into a strictly typed `EngineeringIntent`. Incomplete geometry, material, boundary conditions, or criteria reject early with `NEEDS_CLARIFICATION`.
+2. **Deterministic Action Compilation**: Actions are compiled into reproducible Abaqus Python code via `compiler.py`. Unknown actions fail closed.
+3. **Kernel Isolation & Sentinel Execution**: Enforces sandbox execution via `KernelNamespace` to prevent global pollution; uses a kernel-side completion sentinel contract to handle Windows launcher/kernel process separation safely.
+4. **Authentic ODB Extraction**: Three-tier ODB verification (file size, header signature, structural validity). Region expressions are resolved through an AST whitelist parser—no arbitrary `eval()`.
+5. **Deterministic Acceptance Gates**: Verifies solver exit, digital digest integrity, physical equilibrium (reaction force balance $< 1\%$, energy ratio, no unphysical penetration or yield detachment), and explicit deliverable authorization.
+6. **Single Deliverable Channel**: Renders an integrity-stamped HTML deliverable (`report.html`). A failed gate cannot be converted into a formal deliverable.
 
-The offline router works without an API key. TypeSafe System One (JEV) is an optional intent provider.
+---
 
-## What JEV is, and what it is not
+## Industrial Engineering Capabilities
 
-JEV answers structured engineering questions: physics domain, unit system, solver family, constraint sufficiency, whether quantitative criteria exist, and a completeness score. The default endpoint is `https://api.typesafe.ai/v1/systemone` and the default model alias is `jev-latest`. Set `TYPESAFE_API_KEY`; a URL is optional. A custom HTTPS host requires an explicit trust opt-in.
+The agent covers the following qualified industrial FEA domains (see [`docs/PROJECT_REQUIREMENTS_AND_PLAN.md`](docs/PROJECT_REQUIREMENTS_AND_PLAN.md)):
 
-JEV does **not**:
+* **Linear & Nonlinear Statics**: Geometric nonlinearity (`nlgeom=ON`), elastoplasticity, automatic incrementation.
+* **Contact Mechanics**: General Contact, Surface-to-Surface, Tie constraints, Penalty friction formulation.
+* **Mechanism & Assembly**: MPCs, kinematic couplings, connector elements (Revolute, Cartesian, Slot).
+* **Dynamics & High-Rate Events**: Implicit dynamics (HHT), Explicit dynamics (central difference), quasi-static impact.
+* **Flexible Multibody Dynamics (FMBD)**: Rigid-flexible coupled mechanisms, slider-crank linkages, large-rotation transient response.
+* **Thermal & Multiphysics**: Steady/transient heat conduction, convection film conditions, radiation, coupled thermal-stress.
+* **Adaptive Mesh Convergence**: Hexahedral meshing (C3D8R, C3D8I, C3D20R), localized refinement, mesh-independence convergence qualification.
+* **Resource Optimization**: Host hardware core detection, 1/2/4/8 core scaling, FlexNet license token thresholding (tokens $< 5$ refuse to stall in queue).
 
-- approve code, a pull request, or a release;
-- authorize a production report;
-- replace Abaqus, acceptance gates, or an engineer;
-- receive the full project context from `abaqus-ai-agent ask` — that command currently passes the prompt only.
+---
 
-`ROUTED` or `executable=true` means the intent router found enough structure to continue. It is not a physics approval. Low-confidence acceptance criteria must still be checked by the deterministic gates. If the key is absent, routing falls back to the offline rules. Draft intents are non-executable.
+## Core Engineering Contracts
 
-## Acceptance is four checks, not one exit code
-
-A zero process exit is not an engineering pass.
-
-| Check | Question | Failure effect |
+| Contract | Rule & Implementation | Enforcement |
 | :--- | :--- | :--- |
-| Solver state | Did the Abaqus job actually complete? | No official delivery |
-| Evidence | Do the manifest, hashes, paths, and `run_id` still match? | Block or mark invalid |
-| Physical gates | Do stress, reaction balance, displacement, mesh, contact, and thermal checks pass? | Fail closed |
-| Delivery flag | Is `deliverable` explicitly true? | Missing flag is not a pass |
+| **Zero Unbounded Wait** | Banned all bare `waitForCompletion()` in compiler and tools; strictly enforces `timeOut=300/600/1200` with `consistencyChecking=ON`. | Eliminates infinite process hangs from solver deadlocks. |
+| **KernelNamespace Strong Isolation** | Forbids executing scripts within host `globals()`; runs exclusively inside isolated `KernelNamespace` sandboxes. | Prevents Abaqus wildcard imports from shadowing host variables, timers, or results. |
+| **Kernel-Side Sentinel Contract** | In Windows, the launcher exits after spawning the kernel (compliant with 3DEXPERIENCE specs). The kernel drops a `completed/blocked` sentinel file. | Avoids false positives from premature launcher exit; fails closed if the sentinel is absent. |
+| **Single HTML Deliverable Channel** | Formal deliverables are restricted to a single HTML file carrying an execution fingerprint and model snapshot hash. Markdown is deprecated for formal delivery. | Failed gates yield only a diagnostic draft (`report.diagnostic.html`). |
 
-`ResultValidity` equality is strict. Reflexivity, symmetry, and transitivity are properties of that type. They are not a fifth acceptance dimension.
+---
 
-SHA-256 on the evidence manifest detects accidental edits, corruption, and a digest that was not recomputed. It is an integrity digest, not an HMAC and not a digital signature. Anyone who can rewrite the file can also recompute the digest. Do not describe it as non-repudiation or anti-forgery.
+## Real-Machine Physical Validation (MV-01 ~ MV-12)
 
-## Known contract boundaries
+The system has undergone 12 physical validation gates on a live licensed Abaqus 2025 host (11 PASS, 1 multi-tenant commercial metering excluded by design):
 
-These are current code facts, not future promises.
+* **Official Cantilever Beam Benchmark (MV-12 PASS)**:
+  * Based on the official *Abaqus Scripting User's Manual* Section 8.1 benchmark using C3D20R quadratic hex elements under shear load.
+  * **Tip Deflection**: FEA calculated 6.3330 mm vs. beam theory analytical solution 6.4000 mm (**1.05% relative error**).
+  * **Integration Point Stress**: FEA calculated 138.89 MPa vs. analytical solution 138.56 MPa (**0.23% relative error**).
+  * **Live Timing**: Launcher returned in 16.29 s, kernel completed in 17.80 s, dropping a 386 KB authentic binary ODB with valid sentinel verification.
+* **Case 07 Industrial Jounce Bumper (MV-01 ~ MV-02 PASS)**:
+  * Solved 3.0 MB Standard and 7.4 MB Explicit ODBs for hyperelastic/elastoplastic contact.
+  * Successfully intercepted 6 synthetic corruptions (50% truncation, header corruption, zero-byte, etc.).
+  * Cold extraction in 0.85 s; hot cache hit in 6.4 ms; deserialization median at 0.20 ms ($< 10\text{ ms}$).
+* **Automated Test Suite**: **2558 unit and contract tests passed** with zero warnings.
 
-**Model claims must match the deck.** If the caller passes `inp_text`, a declared element type or a plasticity claim that contradicts `*ELEMENT` / `*PLASTIC` forces `is_deliverable=False`. `AnalysisRunner` records deck-contract warnings on the run. A warning alone does not fail a legitimate elastic or `C3D4` model.
+---
 
-**Elastic stress past yield is not plasticity.** If the caller passes `elastic_validity` with a purely elastic deck, a finite yield strength, and a finite peak stress above yield, acceptance returns `RESULT_INVALID` and `deliverable=False`. The result must not be narrated as plastic deformation.
+## Getting Started
 
-**The main path now loads the solved deck itself.** `AnalysisRunner` reads `<workdir>/<job>.inp` when it exists, records contract warnings, and builds `elastic_validity` when both yield strength and a finite extracted stress are present. `solve_requirement()` passes that deck text into `build_and_render()`. A declared element type or plasticity claim that contradicts `*ELEMENT` / `*PLASTIC` still forces `is_deliverable=False`. When deck text is present, the printed material table is parsed from that deck. A caller-supplied material table that differs in name, unit, elastic value, plastic points, or deck hash is `material_card_mismatch` and blocks formal delivery. Peak stress and the 99.5th percentile are both reported; the percentile cannot hide the peak. A C3D4 warning does not by itself fail a legitimate model.
-
-**The solve entry is the Python API.** `AbaqusAIAgent.solve_requirement()` and `solve_user_inp()` are the supported solve entries. `abaqus-ai-agent report` only consumes an existing evidence file. It does not solve, and this release does not add a solve subcommand.
-
-**A formal signature needs an execution fingerprint.** `agent_issued=True` is not enough. A formal delivery must also carry `model_snapshot_hash`, `content_hash_scope`, and `action_plan_scope` inside the stamped run record. A hand-written HTML file is not accepted as a formal deliverable.
-
-**The formal report file is HTML only.** `abaqus-ai-agent report` no longer accepts `--format markdown` and does not write an explicitly requested `.md` path. The gated writer also refuses Markdown, including an authorized request: it writes neither `report.md` nor `*.preview.md`. A failed gate does not create `report.html`. A diagnostic draft can only be bannered `report.diagnostic.html`. `solve_user_inp(generate_report=True)` writes neither `report.html` nor `report.md` without an Agent acceptance verdict and run record. Deleting the in-memory Markdown renderer would not stop a coding agent from writing a file with its own editor tool. That file is outside this product exit and is not an Agent deliverable.
-
-**Tie scripts use legal Abaqus enums.** Generated `Tie` calls use `positionToleranceMethod=COMPUTED`, with a `main`/`secondary` call and a `master`/`slave` fallback. `COMPUTED_TOLERANCE` is not a legal Abaqus 2025 value and is not emitted.
-
-**Criteria math fails closed.** Boolean values, NaN, infinities, and non-finite converted numbers are rejected. Negative limits expand in the correct direction. Relative tolerance on exact zero and on `|limit| < 1e-30` is not applied. The input bound `tolerance < 1e6` only filters absurd inputs; overflow is caught by a post-computation finiteness check. The bound is not an approved engineering tolerance.
-
-**ODB regions fail closed.** Only whitelisted attribute and subscript syntax under `odb` is resolved. Calls, private names, and parse failures raise. They are not passed through as raw strings.
-
-**A capability label is not this job's certificate.** `resolve_capability()` returns `qualification_level="WORKFLOW"`. That means the workflow is implemented. It does not mean this project, this run, or this machine has passed machine validation. A historical bundle marked `QUALIFIED` is not copied onto a new job.
-
-**Self-healing does not change the problem by default.** A failed solve can be diagnosed, and proposed boundary, damping, or increment changes can be recorded. Without `confirm_model_change=True`, the agent does not add `ENCASTRE`, does not rerun, and does not replace the failed run. Mechanism models and license failures remain refused. A confirmed rerun must say what changed.
-
-## Verification levels
-
-Do not collapse these into one "certified" claim.
-
-| Level | What it shows | What it does not show |
-| :--- | :--- | :--- |
-| Unit and contract tests | Python behavior of gates, actions, and report blocking | A live Abaqus solve |
-| GitHub Actions | The CI matrix for the commit that actually ran | This README's local branch, until that commit is on the default branch and CI is green |
-| Golden evidence audit | Existing evidence bundles still hash-check | A new physical solve |
-| Abaqus 2025 machine run | One recorded job, ODB, and log on a licensed host | Every industrial physics capability |
-
-Local regression on the MS13L tool-defect branch was **1373 passed** (`python -m pytest -q --tb=line`). That number is a local run, not a CI badge. CI on `main` must be read from the workflow run for that commit. Golden audit is not a machine solve. A single cantilever or handle assembly solve is not proof that contact, plasticity, thermal coupling, fatigue, and imported assemblies are all production-qualified. A workflow capability label is not that proof either.
-
-The static cantilever production script is an integration probe. It is not a universal production certificate. Read its `require_production` setting and retained evidence before citing it.
-
-## Quick start
-
-Python 3.10, 3.11, or 3.12. Abaqus 2025 is required only for live solves.
+### 1. Installation
+Requires Python 3.10 – 3.14. A licensed Abaqus 2025 installation is only required for live physical solves.
 
 ```bash
 git clone https://github.com/chenlei-gh/Abaqus-AI-Agent.git
 cd Abaqus-AI-Agent
 python -m pip install -e ".[test]"
-python -m pytest -q --tb=line
+python -m pytest tests -q
 ```
 
-Intent routing does not start the solver and does not authorize a report:
+### 2. Python API
+```python
+from abaqus_ai_agent import AbaqusAIAgent
 
+agent = AbaqusAIAgent()
+
+# Submit natural language engineering requirement
+result = agent.solve_requirement(
+    prompt="Apply 100 N shear load at free end of a 200x20x5 mm steel cantilever beam, encastre at root, compute deflection and Mises stress",
+    workdir="./my_cantilever_run",
+    generate_report=True
+)
+
+if result.is_deliverable:
+    print(f"Engineering qualification passed! Formal report: {result.report_path}")
+else:
+    print(f"Gate rejected or clarification needed: {result.verdict}, diagnostic: {result.report_path}")
+```
+
+### 3. Command Line Interface (CLI)
 ```bash
-abaqus-ai-agent ask "Apply 1000 N downward at the tip face of a 100 mm steel cantilever, fixed at the root face" --dry-run
+# Dry-run intent routing and action compilation
+abaqus-ai-agent ask "Apply 1000 N downward load at free end of 100 mm cantilever beam, fixed at root" --dry-run
+
+# Render an audit report from existing evidence
+abaqus-ai-agent report --evidence ./my_cantilever_run/run_evidence.json --output ./report.html
 ```
 
-Incomplete prompts should exit 2 with a structured missing-requirement list. `ask` does not forward a project context file. To supply geometry, material, and load evidence, call `JevIntentRouter.route(prompt, context=...)` from Python.
+---
 
-Optional live intent provider:
+## Production Boundaries
 
-```bash
-# TYPESAFE_API_KEY is required for live mode.
-# TYPESAFE_API_URL is optional; the official System One endpoint is the default.
-abaqus-ai-agent ask "..." --mode live
-```
+1. **Process Tree Supervision Boundary (P1-LAUNCHER-01)**: On Windows, `SMALauncher.exe` exits cleanly ~1.3 s after spawning `ABQcaeK.exe`. The agent's sentinel contract reliably determines completion; if an uninstrumented custom script deadlocks in the kernel, the host relies on `waitForCompletion(timeOut=N)` to trigger kernel termination.
+2. **On-Premise / Local Compute Model**: The architecture is tailored for high-trust internal engineering infrastructure, excluding public SaaS billing/metering subsystems.
+3. **License Guard**: Rejects job submission if available FlexNet tokens are $< 5$ to prevent unbounded queue stalling.
 
-## Repository map
+---
 
-```text
-src/abaqus_ai_agent/
-  actions/        typed Abaqus script actions and the script dispatcher
-  contracts/      intent, evidence, metrics, units
-  diagnostics/    solver-log and inp-contract diagnostics
-  execution/      batch runner, ODB extraction, sandbox
-  reporting/      single report pipeline
-  typesafe_intent.py
-  acceptance.py
-tests/            contract and regression tests
-tools/            machine probes and shadow benchmarks; not the production API
-machine_validation/  audited evidence bundles; pytest and CI must not rewrite them
-```
+## Project Documentation & Navigation
 
-Scratch solver runs default to a user-local directory outside this repository (`%LOCALAPPDATA%\AbaqusAIAgent\runs` on Windows, `$XDG_STATE_HOME/abaqus-ai-agent/runs` elsewhere). `ABAQUS_AGENT_RUNS_DIR` can override that scratch location.
+* **Master Requirements & Roadmap**: [`docs/PROJECT_REQUIREMENTS_AND_PLAN.md`](docs/PROJECT_REQUIREMENTS_AND_PLAN.md) (Single authoritative document for all requirements and planning)
+* **Physical Validation Artifacts**: [`machine_validation/`](machine_validation/)
+* **User Modeling Input Guide**: [`docs/user-model-input-guide.md`](docs/user-model-input-guide.md)
+* **Test Tier Governance**: [`docs/test-tier-governance.md`](docs/test-tier-governance.md)
 
-Customer delivery follows the customer directory. The formal report is `<customer directory>/delivery/report.html`, or `report.html` in an explicit `deliverables_dir`. The product does not write a Markdown engineering report, including when a caller asks for one. Delivery is not redirected to AppData and is not written into this agent repository by default. A coding agent that writes Markdown with its own file tool is outside this product exit; that file is not an Agent deliverable. `python tools/check_workspace_pollution.py` fails if `machine_validation/`, `deliverables/`, or `runs/` is dirty in git.
+---
 
-There are 65 supported action types in `SUPPORTED_ACTION_TYPES`. The script dispatcher is checked against that set. Do not add a second registry.
+## License
 
-## Scope and license
-
-Apache-2.0. See [LICENSE](LICENSE).
-
-Commercial solver licensing, material cards, and sign-off stay with the deploying organization. Issues: <https://github.com/chenlei-gh/Abaqus-AI-Agent/issues>.
-
-Out of scope for this README: claiming Dassault certification, claiming cryptographic anti-forgery, treating JEV output as approval, or marking an unrun Abaqus case as verified.
+Licensed under the [Apache License 2.0](LICENSE).

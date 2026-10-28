@@ -41,7 +41,7 @@
 - **未核实**：脱离点在 `abaqus.bat`、`SMALauncher.exe` 还是 CAE kernel 内部。本机核实 `abaqus.bat` 仅转调 `abq2025.bat`，后者直接 `"...\SMALauncher.exe" %*`，两份批处理均无 `start`；因此「批处理层无分离」成立，但「SMALauncher 内部脱离」仍属推断。
 - **方法学限制**：`psutil` 的 `children(recursive=True)` 与 Windows Job Object 都要求父进程仍存活、且需在创建时或创建后尽早挂接。启动器一旦退出，其 PID 上已无可遍历的子进程树，事后补挂接无法找回内核。因此二者都不能作为「启动器已退出」场景的修复手段；这是能力边界，不是依赖成本问题。
 
-后续修正（2026-10-28，详见 `phase-leftovers-tracking.md` §6.4、§6.5）：
+后续修正（2026-10-28，详见 `PROJECT_REQUIREMENTS_AND_PLAN.md`）：
 
 - 求解作业路径此前并未传 `interactive`，所以走的是默认 `background`，即**主动**制造了“启动器先退”这一幕。`BatchExecutor.run_input` 已补 `interactive`，并同步开启证据门控的静默窗口放宽（否则前台化后默认 120 s 会误杀大型隐式算例）。
 - CAE noGUI 路径没有 `interactive` 等价关键字，仍完全依赖 `settled` 轮询；`P1-LAUNCHER-01` 的关闭条件不变。

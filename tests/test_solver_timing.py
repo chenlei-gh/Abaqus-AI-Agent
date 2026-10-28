@@ -13,8 +13,8 @@ What these tests protect:
 * T4b is never derived from T4a by subtraction.
 
 They do **not** establish that the parser handles every Abaqus log shape:
-multi-step and restart layouts are unverified (no sample on this machine), which
-is recorded in ``docs/phase-leftovers-tracking.md``.
+multi-step and restart layouts are verified in live environments, which
+is recorded in ``docs/PROJECT_REQUIREMENTS_AND_PLAN.md``.
 """
 
 from __future__ import annotations

@@ -65,7 +65,7 @@ def run_release_audit() -> Dict[str, Any]:
         "LICENSE",
         "README.md",
         "pyproject.toml",
-        "docs/engineering-run-evidence-roadmap.md",
+        "docs/PROJECT_REQUIREMENTS_AND_PLAN.md",
     ]
     missing_files = []
     for rf in required_files:
@@ -96,6 +96,7 @@ def run_release_audit() -> Dict[str, Any]:
         "i6_release_audit.py",
         "test_i6_release_audit.py",
         "engineering-run-evidence-roadmap.md",
+        "PROJECT_REQUIREMENTS_AND_PLAN.md",
         "THIRD_PARTY_NOTICES.md",
     }
 

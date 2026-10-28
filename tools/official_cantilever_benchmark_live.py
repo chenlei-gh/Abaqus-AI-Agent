@@ -300,6 +300,13 @@ def run_benchmark(launcher="abaqus", workdir=None, timeout=300):
     verdict = "PASS" if passed else "FAIL"
     print(f"\nFinal Qualification Verdict: {verdict}")
 
+    def _sanitize_path(p: str) -> str:
+        s = str(p).replace("\\", "/")
+        root_s = str(ROOT).replace("\\", "/")
+        if root_s in s:
+            s = s.replace(root_s, "<PROJECT_ROOT>")
+        return s
+
     evidence_record = {
         "benchmark_name": "Official_Cantilever_Beam_Tutorial_8.1",
         "verdict": verdict,
@@ -308,7 +315,7 @@ def run_benchmark(launcher="abaqus", workdir=None, timeout=300):
         "timestamp_utc_start": t_start_iso,
         "timestamp_utc_end": datetime.datetime.now(datetime.timezone.utc).isoformat(),
         "launcher": launcher,
-        "workdir": workdir,
+        "workdir": _sanitize_path(workdir),
         "telemetry": {
             "launcher_duration_s": launcher_duration,
             "total_kernel_duration_s": total_duration,
@@ -317,7 +324,7 @@ def run_benchmark(launcher="abaqus", workdir=None, timeout=300):
             "directory_settled": result.settled,
         },
         "artifacts": {
-            "odb_path": odb_file,
+            "odb_path": _sanitize_path(odb_file),
             "odb_exists": odb_exists,
             "odb_size_bytes": odb_size,
             "odb_authentic": odb_authentic,
