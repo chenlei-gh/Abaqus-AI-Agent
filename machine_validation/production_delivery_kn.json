@@ -3,35 +3,35 @@
   "actual_odb_sha256": "ba9dd4c35e2f92e762a3b27393ef2b6ffc798f3817f7c3a8a7475476ed2e9189",
   "artifacts": [
     {
-      "path": "D:\\AbaqusProjects\\prod_delivery_kn\\solver\\f74df320-bbb6-43a0-86c2-fa55f1fe0296\\ProdDeliveryJob.inp",
+      "path": "<PROJECT_ROOT>/solver/f74df320-bbb6-43a0-86c2-fa55f1fe0296/ProdDeliveryJob.inp",
       "suffix": ".inp"
     },
     {
-      "path": "D:\\AbaqusProjects\\prod_delivery_kn\\solver\\f74df320-bbb6-43a0-86c2-fa55f1fe0296\\ProdDeliveryJob.odb",
+      "path": "<PROJECT_ROOT>/solver/f74df320-bbb6-43a0-86c2-fa55f1fe0296/ProdDeliveryJob.odb",
       "suffix": ".odb"
     },
     {
-      "path": "D:\\AbaqusProjects\\prod_delivery_kn\\solver\\f74df320-bbb6-43a0-86c2-fa55f1fe0296\\ProdDeliveryJob.sta",
+      "path": "<PROJECT_ROOT>/solver/f74df320-bbb6-43a0-86c2-fa55f1fe0296/ProdDeliveryJob.sta",
       "suffix": ".sta"
     },
     {
-      "path": "D:\\AbaqusProjects\\prod_delivery_kn\\solver\\f74df320-bbb6-43a0-86c2-fa55f1fe0296\\ProdDeliveryJob.msg",
+      "path": "<PROJECT_ROOT>/solver/f74df320-bbb6-43a0-86c2-fa55f1fe0296/ProdDeliveryJob.msg",
       "suffix": ".msg"
     },
     {
-      "path": "D:\\AbaqusProjects\\prod_delivery_kn\\solver\\f74df320-bbb6-43a0-86c2-fa55f1fe0296\\ProdDeliveryJob.dat",
+      "path": "<PROJECT_ROOT>/solver/f74df320-bbb6-43a0-86c2-fa55f1fe0296/ProdDeliveryJob.dat",
       "suffix": ".dat"
     },
     {
-      "path": "D:\\AbaqusProjects\\prod_delivery_kn\\solver\\f74df320-bbb6-43a0-86c2-fa55f1fe0296\\ProdDeliveryJob.log",
+      "path": "<PROJECT_ROOT>/solver/f74df320-bbb6-43a0-86c2-fa55f1fe0296/ProdDeliveryJob.log",
       "suffix": ".log"
     },
     {
-      "path": "D:\\AbaqusProjects\\prod_delivery_kn\\solver\\f74df320-bbb6-43a0-86c2-fa55f1fe0296\\ProdDeliveryJob.com",
+      "path": "<PROJECT_ROOT>/solver/f74df320-bbb6-43a0-86c2-fa55f1fe0296/ProdDeliveryJob.com",
       "suffix": ".com"
     },
     {
-      "path": "D:\\AbaqusProjects\\prod_delivery_kn\\solver\\f74df320-bbb6-43a0-86c2-fa55f1fe0296\\ProdDeliveryJob.prt",
+      "path": "<PROJECT_ROOT>/solver/f74df320-bbb6-43a0-86c2-fa55f1fe0296/ProdDeliveryJob.prt",
       "suffix": ".prt"
     }
   ],
@@ -50,7 +50,7 @@
     "tip_displacement_upper": 2.06864285469055
   },
   "odb_hash_matches_manifest": true,
-  "odb_path": "D:\\AbaqusProjects\\prod_delivery_kn\\solver\\f74df320-bbb6-43a0-86c2-fa55f1fe0296\\ProdDeliveryJob.odb",
+  "odb_path": "<PROJECT_ROOT>/solver/f74df320-bbb6-43a0-86c2-fa55f1fe0296/ProdDeliveryJob.odb",
   "odb_sha256": "ba9dd4c35e2f92e762a3b27393ef2b6ffc798f3817f7c3a8a7475476ed2e9189",
   "persistence": "persisted",
   "reaction_balance_passed": true,

@@ -11,6 +11,7 @@ from abaqus_ai_agent.execution.batch import (
 from abaqus_ai_agent.execution.jobs import (
     JobState,
     classify_job_status,
+    completion_wait_transport_timeout,
     wait_for_completion_code,
 )
 from abaqus_ai_agent.execution.kernel_namespace import KernelNamespace
@@ -84,6 +85,46 @@ def test_wait_snippet_is_bounded_and_compiles():
 
 def test_wait_snippet_bounds_missing_timeout():
     assert "timeOut=3600" in wait_for_completion_code("Job-1", None)
+
+
+def test_wait_snippet_binds_result_channel():
+    """Printing alone is not enough: the transport's own envelope carries a
+    ``status`` key, and reading that envelope would report every job as
+    ``COMPLETED`` no matter what the kernel said."""
+    code = wait_for_completion_code("Job-1", 60)
+    compile(code, "<test>", "exec")
+    assert "result = {'status': _ai_status}" in code
+
+
+def test_wait_snippet_status_survives_transport_envelope():
+    """End-to-end through the real kernel namespace and classifier.
+
+    ``KernelNamespace.execute`` returns ``{"status": "COMPLETED", "stdout": …}``
+    for a fragment that only prints. Classifying that envelope reported an
+    ABORTED job as COMPLETED; the snippet must win via the ``result`` channel.
+    """
+    class _Job:
+        def __init__(self, state):
+            self.status = state
+
+        def waitForCompletion(self, timeOut=None):
+            return None
+
+    class _Mdb:
+        def __init__(self, state):
+            self.jobs = {"Job-1": _Job(state)}
+
+    for state in ("ABORTED", "TERMINATED", "COMPLETED"):
+        namespace = KernelNamespace(seed_code="")
+        namespace.namespace["mdb"] = _Mdb(state)
+        envelope = namespace.execute(wait_for_completion_code("Job-1", 60), "<test>")
+        assert classify_job_status("Job-1", envelope).state.value == state
+
+
+def test_transport_timeout_exceeds_kernel_wait_bound():
+    """The kernel owns the documented timeout; the transport must not pre-empt it."""
+    assert completion_wait_transport_timeout(60) > 60
+    assert completion_wait_transport_timeout(None) > 3600
 
 
 # --- status classification ----------------------------------------------------

@@ -27,6 +27,7 @@ from abaqus_ai_agent.contracts.evidence import build_evidence_manifest_v2
 from tools.production_delivery_e2e import (
     build_production_delivery_cae_script,
     run_production_delivery_e2e,
+    sanitize_report_paths,
 )
 
 
@@ -330,3 +331,81 @@ def test_cae_template_binds_run_id_into_pass_condition(tmp_path: Path):
     status_idx = code.index("'status': 'pass' if (")
     status_block = code[status_idx:status_idx + 800]
     assert "causal_run_id_bound" in status_block
+
+
+# --- Published evidence must not carry host-absolute paths --------------------
+
+
+def _report_with_absolute_paths(project_root: Path) -> dict:
+    run_dir = project_root / "solver" / "run-1"
+    return {
+        "status": "pass",
+        "odb_path": str(run_dir / "Job.odb"),
+        "artifacts": [
+            {"suffix": ".inp", "path": str(run_dir / "Job.inp")},
+            {"suffix": ".odb", "path": str(run_dir / "Job.odb")},
+        ],
+        "metrics": {"root_mises_sanity": 471.214080810547},
+    }
+
+
+def test_sanitize_report_paths_strips_project_absolute_prefix(tmp_path: Path):
+    project_root = tmp_path / "external_project"
+    project_root.mkdir()
+    report = _report_with_absolute_paths(project_root)
+
+    sanitize_report_paths(report, project_root=project_root)
+
+    assert report["odb_path"] == "<PROJECT_ROOT>/solver/run-1/Job.odb"
+    assert [a["path"] for a in report["artifacts"]] == [
+        "<PROJECT_ROOT>/solver/run-1/Job.inp",
+        "<PROJECT_ROOT>/solver/run-1/Job.odb",
+    ]
+    for artifact in report["artifacts"]:
+        assert str(tmp_path) not in artifact["path"]
+
+
+def test_sanitize_report_paths_preserves_verdict_fields(tmp_path: Path):
+    project_root = tmp_path / "external_project"
+    project_root.mkdir()
+    report = _report_with_absolute_paths(project_root)
+
+    sanitize_report_paths(report, project_root=project_root)
+
+    assert report["status"] == "pass"
+    assert report["metrics"]["root_mises_sanity"] == 471.214080810547
+
+
+def test_sanitize_report_paths_leaves_foreign_paths_visible(tmp_path: Path):
+    """A path outside the project root is a containment violation, not a path to rewrite."""
+    project_root = tmp_path / "external_project"
+    project_root.mkdir()
+    outside = tmp_path / "elsewhere" / "Job.odb"
+    report = {"odb_path": str(outside), "artifacts": []}
+
+    sanitize_report_paths(report, project_root=project_root)
+
+    assert report["odb_path"] == str(outside)
+
+
+def test_sanitize_report_paths_handles_missing_and_null_paths(tmp_path: Path):
+    project_root = tmp_path / "external_project"
+    project_root.mkdir()
+    report = {"odb_path": None, "artifacts": [{"suffix": ".odb", "path": ""}]}
+
+    sanitize_report_paths(report, project_root=project_root)
+
+    assert report["odb_path"] is None
+    assert report["artifacts"][0]["path"] == ""
+
+
+def test_persisted_delivery_evidence_has_no_user_profile_path():
+    """Committed delivery evidence is published and must stay host-independent."""
+    import re
+
+    evidence = Path(__file__).resolve().parent.parent / "machine_validation" / "prod_deliv_kn_phase_b.json"
+    assert evidence.is_file()
+    text = evidence.read_text(encoding="utf-8")
+    assert re.search(r"[A-Za-z]:\\{1,2}Users\\{1,2}", text) is None
+    assert "AppData" not in text
+    assert "<PROJECT_ROOT>/solver/" in text

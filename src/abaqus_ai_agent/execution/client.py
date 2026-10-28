@@ -48,8 +48,13 @@ class AbaqusExecutor(ABC):
         # Native fallback: block until Abaqus reports job completion. The wait is
         # bounded so a hung kernel surfaces as a TIMEOUT status rather than an
         # indefinite hang; a host-side transport timeout cannot stop the kernel.
-        from .jobs import wait_for_completion_code
-        return self.execute(wait_for_completion_code(name, timeout), timeout=timeout)
+        # The transport bound is deliberately larger than the in-kernel one so
+        # the documented timeout wins the race instead of a socket failure.
+        from .jobs import completion_wait_transport_timeout, wait_for_completion_code
+        return self.execute(
+            wait_for_completion_code(name, timeout),
+            timeout=completion_wait_transport_timeout(timeout),
+        )
 
 
 class BridgeExecutor(AbaqusExecutor):

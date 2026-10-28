@@ -528,9 +528,26 @@ A4 的审计结果比预期严重，必须单独记录（详见 `docs/phase-timi
 
 仍存在的边界（本项**不闭合**）：
 
-1. CAE noGUI 路径**没有** `interactive` 等价关键字，官方 CAE 执行过程页选项表已核实无此类选项，该路径仍依赖 `BatchResult.settled` 轮询。
+1. CAE noGUI 路径**没有** `interactive` 等价关键字，官方 CAE 执行过程页选项表已核实无此类选项，该路径仍依赖 `BatchResult.settled` 轮询。官方另一处文档（Abaqus Scripting「How does the Abaqus Scripting Interface interact with Abaqus/CAE」）写「无界面时作业总是 interactive」、「脚本跑完 kernel 终止」，与本机 1.3 s 提前返回的观测不一致；该分歧未定位，不据此改变判定。
 2. 官方文档只写 `interactive` 把输出送到屏幕，**没有**写“命令不返回直到分析结束”。前台等待属社区报告行为（Stack Overflow 采纳答案、第三方启动器文档），不得作为官方契约引用。
 3. 若真机实测显示本机 `interactive` 仍提前返回，则 §6.3 的关闭条件继续有效，`settled` 判定的地位不变。
+
+### 6.5 复核中发现的两处真实缺陷（2026-10-28，已修复）
+
+这两项是 `0ecf582` 引入的回归，均由官方文档比对 + 本地探针复现确认，**不是**文档口径问题。
+
+| 缺陷 | 表现 | 根因 | 修复 |
+| :--- | :--- | :--- | :--- |
+| 作业状态被传输信封遮蔽 | `ABORTED` / `TERMINATED` 被判为 `COMPLETED` | 内核片段只 `print(status)`；`KernelNamespace.execute` 对“只打印”的片段返回 `{"status": "COMPLETED", "stdout": ...}`，`classify_job_status` 读到的 `status` 是信封的，不是作业的 | 片段改为绑定 `result = {'status': _ai_status}`；`JobController.status` 同步修正 |
+| 传输超时抢占内核超时 | 内核本该返回 `TIMEOUT`，可能先表现为连接失败 | `monitor_job` / `JobController.wait` 的传输超时与 `waitForCompletion(timeOut=N)` 相等，两者竞态 | 新增 `completion_wait_transport_timeout()`，传输侧加 30 s 余量，让文档化的内核超时先返回 |
+
+复现与验证：
+
+- 负例探针（修复前）：`real=ABORTED` → 信封 `{'status': 'COMPLETED', 'stdout': 'ABORTED'}` → 分类为 `COMPLETED`。
+- 回归测试 `test_wait_snippet_status_survives_transport_envelope` 覆盖三种状态，已在旧代码上确认会失败。
+- 另一处口径修正：`solve_user_inp` 的 session 回退分支原传 `consistencyChecking=OFF`，与官方“不建议关闭一致性检查”及 `JobController.submit` 的 `ON` 不一致，改为文档默认 `ON`。
+
+仍存的能力边界（不因本次修复而消失）：session 回退分支的 `JobFromInputFile` 片段只返回状态，不带 `returncode`，因此 `solve_user_inp` 在该分支仍会以 `missing required 'returncode' field` 判 `FAILED`。这是既有的契约落差，本次未改动其判定语义，登记待定。
 
 本轮**刻意未改**的范围（避免连带改变既有语义）：
 
@@ -576,4 +593,5 @@ A4 的审计结果比预期严重，必须单独记录（详见 `docs/phase-timi
 | 2026-10-27 | 待办项大清退（对照代码与真机证据后处置）：(1) C1 与 MV-07 闭合——2026-10-24/25 T-P4 真机证据已完成 Standard/Explicit 1/2/4/8 核受控矩阵与 500k 接触模型并行基准，登记中的「待执行」系过时状态；(2) MV-09 闭合——TOKEN_VERIFIED 证据充分，宿主无并发许可场景；(3) P1-LEFTOVER-03 正式除名——主链路不经 watchdog，误杀风险在主链路不存在，MV-01 随转 PASS；(4) P2-LEFTOVER-04 挂起关闭——MV-04 BLOCKED 使收益不可测，按「真实证据优先」不立优化项；(5) P2-LEFTOVER-05 接受边界关闭；(6) P3-LEFTOVER-02 关闭——T-P4 与 MV-05/06/09 已证明 T4b 求解核占绝对主导，T1/T3/T5/T6 细分接线无决策价值，BASE 降格为部分基线并接受，T2 随之解除阻塞登记；(7) P3-LEFTOVER-04/A2 随 MV-10 定案；(8) D3 由 MV-01 承载闭合；(9) C2 随 MV-11 闭合。保留待办已全部消化：P3-LEFTOVER-05 与 Case 07 于 2026-10-27 闭合，MV-04 保持 BLOCKED（生产范围排除） |
 | 2026-10-27 | Case 07 与 P3-LEFTOVER-05 闭合：(1) Case 07 真机证据（2026-10-21 运行 `case07_live_e7301de3`）入库 `machine_validation/p2_cases/case_07_jounce_bumper/`，签名 manifest v1 六项判据全 PASS，registry 登记 QUALIFIED + REF_ABQ_JOUNCE_BUMPER（手册章节定位未核实已披露，数值基准保持 PENDING），守护测试由 absence 改为正向完整性校验；(2) P3-LEFTOVER-05 真机复验 PASS：冲击 cue 编译出 `*Dynamic, Explicit` 并在 Abaqus/Explicit 2025 完成求解（短周期变体 COMPLETED，5.0MB ODB；长周期变体 727s 后物理失稳，与步类型无关）。三项保留待办清零，仅余 MV-04（生产范围排除）。 |
 | 2026-10-28 | 外部证据复核后收窄两处外部事实表述（仅文档，无代码变更）：(1) `interactive` 的官方原文只写输出到屏幕，未写“命令不返回直到分析结束”，原“官方标准答案”表述改记为文档措辞 + 社区行为报告；(2) CAE noGUI 侧重述为“官方预期是脚本结束后 kernel 终止”，而非“官方无等效等待选项”。新增 §6 `P1-LAUNCHER-01`：登记 `psutil` / Job Object 在父进程已退出后均无法取得子进程树的方法论边界，并写明三段关闭条件。行为不变：`settled` 语义与调用方要求不变。 |
-| 2026-10-28 | 代码级复核后的脚本/命令修正（Exa 复核驱动）：(1) `BatchExecutor.run_input` 补 `interactive`——官方执行过程页明确 `background` 是默认，不显式覆盖则启动器移交后立即返回，watchdog 监督的是已退出的进程；同时启用既有的证据门控放宽（`adaptive_heartbeat=True` + `job_name`），避免前台化后 120 s 静默窗口误杀大型隐式算例，沿用 P1-LEFTOVER-01 已真机验证的机制；(2) `JobController.wait` / `AbaqusExecutor.monitor_job` / smoke 脚本改用 `waitForCompletion(timeOut=N)`——官方 Job 对象页记载无参即无限等待、超时抛 `AbaqusException`，只有界等待内的内核异常才会被映射为 `TIMEOUT`；(3) `solve_user_inp` 的 `execute` 回退分支不再把 `abaqus job=...` 当 Python 源码发送，改为官方 `mdb.JobFromInputFile()` + 有界等待 + `finally` 恢复 cwd；(4) `classify_job_status` 改为精确 token 匹配，`CHECK_COMPLETED`（datacheck）不再被子串匹配误提升为 `COMPLETED`。新增 §0.5 `P1-LAUNCHER-02` 与 §6.4。验证层级：定向与全量单元回归，**未**做真机重跑 |
+| 2026-10-28 | 代码级复核后的脚本/命令修正（Exa 复核驱动）：(1) `BatchExecutor.run_input` 补 `interactive`——官方执行过程页明确 `background` 是默认，不显式覆盖则启动器移交后立即返回，watchdog 监督的是已退出的进程；同时启用既有的证据门控放宽（`adaptive_heartbeat=True` + `job_name`），避免前台化后 120 s 静默窗口误杀大型隐式算例，沿用 `P1-LEFTOVER-01` 已真机验证的机制；(2) `JobController.wait` / `AbaqusExecutor.monitor_job` / smoke 脚本改用 `waitForCompletion(timeOut=N)`——官方 Job 对象页记载无参即无限等待、超时抛 `AbaqusException`，只有界等待内的内核异常才会被映射为 `TIMEOUT`；(3) `solve_user_inp` 的 `execute` 回退分支不再把 `abaqus job=...` 当 Python 源码发送，改为官方 `mdb.JobFromInputFile()` + 有界等待 + `finally` 恢复 cwd；(4) `classify_job_status` 改为精确 token 匹配，`CHECK_COMPLETED`（datacheck）不再被子串匹配误提升为 `COMPLETED`。新增 §0.5 `P1-LAUNCHER-02` 与 §6.4。验证层级：定向与全量单元回归，**未**做真机重跑 |
+| 2026-10-28 | 二次 Exa 复核发现并修复 `0ecf582` 的两处回归（见 §6.5）：(1) 内核片段只 `print(status)`，而 `KernelNamespace.execute` 会为“只打印”返回自带 `status` 的信封，`classify_job_status` 因此把 `ABORTED`/`TERMINATED` 读成 `COMPLETED`；修复为绑定 `result` 通道（`JobController.status` 同步修正），负例探针已确认旧代码必失败；(2) 传输超时与 `waitForCompletion(timeOut=N)` 相等会竞态抢占内核超时，改为传输侧加 30 s 余量。另将 session 回退分支的 `consistencyChecking=OFF` 改回官方默认 `ON`，与 `JobController.submit` 一致。同轮将 `prod_deliv_kn_phase_b.json` 与 `production_delivery_kn.json` 的主机绝对路径归一为 `<PROJECT_ROOT>/...`，并在 `tools/production_delivery_e2e.py` 新增 `sanitize_report_paths` 于落盘前生效，修复 CHK-02 公共发布审计失败。全量 2522 passed |

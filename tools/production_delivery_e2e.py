@@ -454,6 +454,49 @@ print('AIAgent_PROD_DELIVERY_RESULT_END')
     )
 
 
+def _relativize_evidence_path(path: Any, project_root: Any) -> Any:
+    """Express an evidence path relative to the external project root.
+
+    Persisted delivery evidence is published outside the machine it was
+    produced on, so a host-specific absolute prefix (user profile, drive
+    layout, temp directory) must never be part of it. Only the part below the
+    project root identifies the artifact and is portable.
+    """
+    if not path:
+        return path
+    try:
+        resolved = Path(str(path)).resolve()
+        root = Path(str(project_root)).resolve()
+    except (OSError, ValueError, RuntimeError):
+        return path
+    # Windows path comparison is case-insensitive, Path.relative_to is not.
+    resolved_text = os.path.normcase(str(resolved))
+    root_text = os.path.normcase(str(root))
+    prefix = root_text if root_text.endswith(os.sep) else root_text + os.sep
+    if not resolved_text.startswith(prefix):
+        # Outside the project root: leave untouched rather than invent a path.
+        # A genuine containment violation should stay visible, not be masked.
+        return path
+    relative = Path(str(resolved)[len(str(root)) + 1:])
+    return "<PROJECT_ROOT>/" + relative.as_posix()
+
+
+def sanitize_report_paths(report: Dict[str, Any], project_root: Any) -> Dict[str, Any]:
+    """Replace absolute host paths in a delivery report with project-relative ones.
+
+    Only identity fields are touched: verdict fields (status, hashes, metrics)
+    are left byte-identical so the report stays a faithful record of the run.
+    """
+    if "odb_path" in report:
+        report["odb_path"] = _relativize_evidence_path(report["odb_path"], project_root)
+    artifacts = report.get("artifacts")
+    if isinstance(artifacts, (list, tuple)):
+        for artifact in artifacts:
+            if isinstance(artifact, dict) and "path" in artifact:
+                artifact["path"] = _relativize_evidence_path(artifact["path"], project_root)
+    return report
+
+
 def _extract_report(stdout: str) -> Optional[Dict[str, Any]]:
     begin = "AIAgent_PROD_DELIVERY_RESULT_BEGIN"
     end = "AIAgent_PROD_DELIVERY_RESULT_END"
@@ -598,7 +641,10 @@ def run_production_delivery_e2e(
         # 3. Strict Industrial Acceptance Contract Assertions
         assert_production_delivery_contracts(report)
 
-        # 4. Evidence Persistence Handling
+        # 4. Evidence Persistence Handling. Paths are normalized before the
+        # record can leave the machine: this JSON is published as public
+        # evidence and must not carry a host-specific absolute prefix.
+        sanitize_report_paths(report, project_root=project_ctx.project_root)
         report["persistence"] = "persisted" if output_path else "ephemeral_verified"
         if output_path:
             output_path.parent.mkdir(parents=True, exist_ok=True)

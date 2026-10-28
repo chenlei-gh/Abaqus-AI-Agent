@@ -22,6 +22,12 @@ class JobStatus:
     diagnostics: tuple = ()
 
 
+#: Seconds added to the transport timeout so the in-kernel ``timeOut`` expiry is
+#: reported by the kernel rather than pre-empted by the transport. Kept small:
+#: it only covers response transport, not the wait itself.
+COMPLETION_WAIT_TRANSPORT_MARGIN = 30
+
+
 #: Kernel status tokens mapped one-to-one. Matching these exactly keeps a
 #: longer token from being decided by a substring it happens to contain.
 _EXACT_STATUS = {
@@ -53,6 +59,18 @@ _LEGACY_SUBSTRING = (
 )
 
 
+def completion_wait_transport_timeout(kernel_timeout):
+    """Give the transport a margin over the in-kernel wait bound.
+
+    ``waitForCompletion(timeOut=N)`` expires inside the kernel and returns a
+    ``TIMEOUT`` status; the transport only sees a stalled call. If both bounds
+    were equal the transport would race the kernel and could report a connection
+    failure for a job that reported its timeout correctly. The margin lets the
+    documented in-kernel timeout win.
+    """
+    return max(1, int(kernel_timeout or 3600)) + COMPLETION_WAIT_TRANSPORT_MARGIN
+
+
 def wait_for_completion_code(name, timeout):
     """Build the kernel snippet that waits with a bound instead of forever.
 
@@ -64,6 +82,12 @@ def wait_for_completion_code(name, timeout):
     failure that says nothing about the job's state. Only the documented timeout
     message is mapped; any other exception propagates unchanged so a real kernel
     error is never relabelled as a timeout.
+
+    The status is also bound to ``result``, the kernel namespace's designated
+    result channel. Printing alone is not enough: the transport wraps a printed
+    fragment in its own ``{"status": "COMPLETED", "stdout": ...}`` envelope,
+    and that envelope's ``status`` would be read as the job's status, so an
+    ``ABORTED`` job surfaced as ``COMPLETED``.
     """
     bound = max(1, int(timeout)) if timeout else 3600
     return (
@@ -76,6 +100,7 @@ def wait_for_completion_code(name, timeout):
         "    _ai_status = 'TIMEOUT'\n"
         "else:\n"
         "    _ai_status = str(_ai_job.status)\n"
+        "result = {'status': _ai_status}\n"
         "print(_ai_status)" % (name, bound)
     )
 
@@ -121,14 +146,23 @@ class JobController:
         return self.wait(name, timeout=timeout)
 
     def status(self, name):
-        result = self.executor.execute("print(mdb.jobs[%r].status)" % name)
+        # Same result-channel contract as ``wait_for_completion_code``: printing
+        # only would let the transport envelope's own ``status`` shadow the
+        # job's real state.
+        result = self.executor.execute(
+            "result = {'status': str(mdb.jobs[%r].status)}\n"
+            "print(result['status'])" % name
+        )
         return classify_job_status(name, result)
 
     def wait(self, name, poll_seconds=2.0, timeout=3600):
         if hasattr(self.executor, "monitor_job"):
             raw = self.executor.monitor_job(name, timeout=timeout, poll_seconds=poll_seconds)
         else:
-            raw = self.executor.execute(wait_for_completion_code(name, timeout), timeout=timeout)
+            raw = self.executor.execute(
+                wait_for_completion_code(name, timeout),
+                timeout=completion_wait_transport_timeout(timeout),
+            )
         return classify_job_status(name, raw)
 
     def cancel(self, name):

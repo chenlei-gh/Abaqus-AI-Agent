@@ -3,35 +3,35 @@
   "actual_odb_sha256": "80c710128495b82b9252d4543e2cc92270acb63cecbc1a872ce2b00187ce3c1c",
   "artifacts": [
     {
-      "path": "C:\\Users\\DELL\\AppData\\Local\\Temp\\abaqus_prod_proj_0d51jjqk\\solver\\7f4c9c59-bc1c-4409-8fc6-b6a58cf58c1e\\ProdDeliveryJob.inp",
+      "path": "<PROJECT_ROOT>/solver/7f4c9c59-bc1c-4409-8fc6-b6a58cf58c1e/ProdDeliveryJob.inp",
       "suffix": ".inp"
     },
     {
-      "path": "C:\\Users\\DELL\\AppData\\Local\\Temp\\abaqus_prod_proj_0d51jjqk\\solver\\7f4c9c59-bc1c-4409-8fc6-b6a58cf58c1e\\ProdDeliveryJob.odb",
+      "path": "<PROJECT_ROOT>/solver/7f4c9c59-bc1c-4409-8fc6-b6a58cf58c1e/ProdDeliveryJob.odb",
       "suffix": ".odb"
     },
     {
-      "path": "C:\\Users\\DELL\\AppData\\Local\\Temp\\abaqus_prod_proj_0d51jjqk\\solver\\7f4c9c59-bc1c-4409-8fc6-b6a58cf58c1e\\ProdDeliveryJob.sta",
+      "path": "<PROJECT_ROOT>/solver/7f4c9c59-bc1c-4409-8fc6-b6a58cf58c1e/ProdDeliveryJob.sta",
       "suffix": ".sta"
     },
     {
-      "path": "C:\\Users\\DELL\\AppData\\Local\\Temp\\abaqus_prod_proj_0d51jjqk\\solver\\7f4c9c59-bc1c-4409-8fc6-b6a58cf58c1e\\ProdDeliveryJob.msg",
+      "path": "<PROJECT_ROOT>/solver/7f4c9c59-bc1c-4409-8fc6-b6a58cf58c1e/ProdDeliveryJob.msg",
       "suffix": ".msg"
     },
     {
-      "path": "C:\\Users\\DELL\\AppData\\Local\\Temp\\abaqus_prod_proj_0d51jjqk\\solver\\7f4c9c59-bc1c-4409-8fc6-b6a58cf58c1e\\ProdDeliveryJob.dat",
+      "path": "<PROJECT_ROOT>/solver/7f4c9c59-bc1c-4409-8fc6-b6a58cf58c1e/ProdDeliveryJob.dat",
       "suffix": ".dat"
     },
     {
-      "path": "C:\\Users\\DELL\\AppData\\Local\\Temp\\abaqus_prod_proj_0d51jjqk\\solver\\7f4c9c59-bc1c-4409-8fc6-b6a58cf58c1e\\ProdDeliveryJob.log",
+      "path": "<PROJECT_ROOT>/solver/7f4c9c59-bc1c-4409-8fc6-b6a58cf58c1e/ProdDeliveryJob.log",
       "suffix": ".log"
     },
     {
-      "path": "C:\\Users\\DELL\\AppData\\Local\\Temp\\abaqus_prod_proj_0d51jjqk\\solver\\7f4c9c59-bc1c-4409-8fc6-b6a58cf58c1e\\ProdDeliveryJob.com",
+      "path": "<PROJECT_ROOT>/solver/7f4c9c59-bc1c-4409-8fc6-b6a58cf58c1e/ProdDeliveryJob.com",
       "suffix": ".com"
     },
     {
-      "path": "C:\\Users\\DELL\\AppData\\Local\\Temp\\abaqus_prod_proj_0d51jjqk\\solver\\7f4c9c59-bc1c-4409-8fc6-b6a58cf58c1e\\ProdDeliveryJob.prt",
+      "path": "<PROJECT_ROOT>/solver/7f4c9c59-bc1c-4409-8fc6-b6a58cf58c1e/ProdDeliveryJob.prt",
       "suffix": ".prt"
     }
   ],
@@ -50,7 +50,7 @@
     "tip_displacement_upper": 2.06864285469055
   },
   "odb_hash_matches_manifest": true,
-  "odb_path": "C:\\Users\\DELL\\AppData\\Local\\Temp\\abaqus_prod_proj_0d51jjqk\\solver\\7f4c9c59-bc1c-4409-8fc6-b6a58cf58c1e\\ProdDeliveryJob.odb",
+  "odb_path": "<PROJECT_ROOT>/solver/7f4c9c59-bc1c-4409-8fc6-b6a58cf58c1e/ProdDeliveryJob.odb",
   "odb_sha256": "80c710128495b82b9252d4543e2cc92270acb63cecbc1a872ce2b00187ce3c1c",
   "persistence": "persisted",
   "reaction_balance_passed": true,

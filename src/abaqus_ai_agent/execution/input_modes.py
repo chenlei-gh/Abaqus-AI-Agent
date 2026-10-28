@@ -279,9 +279,11 @@ def _job_from_input_file_code(job_name: str, inp_path: Path, workdir: Optional[P
 
     Official basis: the ``JobFromInputFile`` job object analyzes a model defined
     by an input file, and ``waitForCompletion(timeOut=...)`` bounds the wait and
-    raises ``AbaqusException`` on timeout. This path is for session transports
-    only; it is not exercised by the host-side ``BatchExecutor``, and the CAE
-    side runs the job interactively by design when there is no GUI.
+    raises ``AbaqusException`` on timeout. Consistency checking is left at the
+    documented default (ON): the reference explicitly advises against turning it
+    off for a model that has not been proven consistent, and ``JobController``
+    submits with ON, so the two submission paths agree. This path is for session
+    transports only; it is not exercised by the host-side ``BatchExecutor``.
     """
     bound = max(1, int(timeout)) if timeout else 3600
     lines = []
@@ -292,12 +294,12 @@ def _job_from_input_file_code(job_name: str, inp_path: Path, workdir: Optional[P
             "_ai_os.chdir(%r)" % str(workdir),
         ]
     lines += [
-        "from abaqusConstants import OFF",
+        "from abaqusConstants import ON",
         "_ai_status = 'UNKNOWN'",
         "try:",
         "    _ai_job = mdb.JobFromInputFile(name=%r, inputFileName=%r)" % (
             job_name, str(inp_path)),
-        "    _ai_job.submit(consistencyChecking=OFF)",
+        "    _ai_job.submit(consistencyChecking=ON)",
         "    try:",
         "        _ai_job.waitForCompletion(timeOut=%d)" % bound,
         "    except Exception as _ai_exc:",
@@ -312,6 +314,10 @@ def _job_from_input_file_code(job_name: str, inp_path: Path, workdir: Optional[P
         lines.append("    _ai_os.chdir(_ai_prev_cwd)")
     else:
         lines.append("    pass")
+    # The transport wraps a printing fragment in its own ``{"status": ...}``
+    # envelope; binding ``result`` is what keeps the job's real status visible
+    # to ``classify_job_status``.
+    lines.append("result = {'status': _ai_status}")
     lines.append("print(_ai_status)")
     return "\n".join(lines) + "\n"
 
