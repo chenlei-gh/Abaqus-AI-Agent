@@ -7,6 +7,8 @@ from abaqus_ai_agent.execution.batch import (
     BatchExecutor,
     BatchResult,
     await_quiescence,
+    await_script_completion,
+    completion_sentinel_code,
 )
 from abaqus_ai_agent.execution.jobs import (
     JobState,
@@ -223,6 +225,87 @@ def test_run_flags_unsettled_artifacts(tmp_path, monkeypatch):
     assert result.succeeded  # process-level only
     assert result.settled is False
     assert result.settle_note
+
+
+# --- official noGUI completion semantics (P1-LAUNCHER-02) ----------------------
+
+class _OkProc:
+    returncode = 0
+    stdout = ""
+    stderr = ""
+    duration = 0.01
+
+
+def test_sentinel_is_a_valid_last_statement(tmp_path):
+    marker = tmp_path / "done.flag"
+    code = "x = 1\n" + completion_sentinel_code(marker)
+    compile(code, "<test>", "exec")
+    assert code.rstrip().endswith("_ai_done.close()")
+
+
+def test_sentinel_absent_means_no_completion_evidence(tmp_path, monkeypatch):
+    """The launcher exiting is not the documented completion event.
+
+    Regression guard for the old contract: a quiet workdir plus rc=0 was
+    treated as settled even though nothing proved the script reached its end.
+    """
+    from abaqus_ai_agent.execution import watchdog as watchdog_module
+
+    monkeypatch.setattr(watchdog_module, "run_with_watchdog", lambda *a, **k: _OkProc())
+    executor = BatchExecutor(workdir=str(tmp_path), settle_timeout=5.0)
+    result = executor.run_nogui(
+        str(tmp_path / "s.py"),
+        completion_sentinel=tmp_path / "never.flag",
+        timeout=0.3,
+    )
+    assert result.succeeded
+    assert result.settled is False
+    assert result.completion_evidence == "none"
+    assert "did not appear" in result.settle_note
+
+
+def test_sentinel_present_is_recorded_as_completion_evidence(tmp_path, monkeypatch):
+    from abaqus_ai_agent.execution import watchdog as watchdog_module
+
+    marker = tmp_path / "done.flag"
+    marker.write_text("completed", encoding="utf-8")
+    monkeypatch.setattr(watchdog_module, "run_with_watchdog", lambda *a, **k: _OkProc())
+    executor = BatchExecutor(workdir=str(tmp_path), settle_timeout=5.0)
+    result = executor.run_nogui(
+        str(tmp_path / "s.py"), completion_sentinel=marker, timeout=2)
+    assert result.settled is True
+    assert result.completion_evidence == "script_completed"
+
+
+def test_blocked_sentinel_is_not_reported_as_completed(tmp_path, monkeypatch):
+    """A deliberate early stop ends the script but did not complete it."""
+    from abaqus_ai_agent.execution import watchdog as watchdog_module
+
+    marker = tmp_path / "done.flag"
+    marker.write_text("blocked", encoding="utf-8")
+    monkeypatch.setattr(watchdog_module, "run_with_watchdog", lambda *a, **k: _OkProc())
+    result = BatchExecutor(workdir=str(tmp_path), settle_timeout=5.0).run_nogui(
+        str(tmp_path / "s.py"), completion_sentinel=marker, timeout=2)
+    assert result.completion_evidence == "script_blocked"
+
+
+def test_without_sentinel_evidence_is_only_quiescence(tmp_path, monkeypatch):
+    """Backwards compatibility: callers that pass no sentinel keep the old
+    behaviour, and the result says quiescence is all that was checked."""
+    from abaqus_ai_agent.execution import watchdog as watchdog_module
+
+    monkeypatch.setattr(watchdog_module, "run_with_watchdog", lambda *a, **k: _OkProc())
+    result = BatchExecutor(workdir=str(tmp_path), settle_timeout=5.0).run_nogui(
+        str(tmp_path / "s.py"))
+    assert result.settled is True
+    assert result.completion_evidence == "quiescence_only"
+
+
+def test_await_script_completion_reports_timeout(tmp_path):
+    state, note = await_script_completion(
+        tmp_path / "absent.flag", timeout=0.2, poll=0.05)
+    assert state is None
+    assert note
 
 
 # --- KernelNamespace ------------------------------------------------------------

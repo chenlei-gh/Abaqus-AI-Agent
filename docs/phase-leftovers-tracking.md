@@ -67,7 +67,7 @@
 | ID | 边界 | 状态 |
 | :--- | :--- | :--- |
 | P1-LAUNCHER-01 | 启动器提前返回后无法再取得真实内核进程树（`psutil` / Job Object 均要求父进程仍存活） | **未闭合·已登记**（详见 §6） |
-| P1-LAUNCHER-02 | CAE noGUI 路径没有 `interactive` 等价关键字，求解作业路径现已有 | **未闭合·已登记**（详见 §6.4） |
+| P1-LAUNCHER-02 | CAE noGUI 路径没有 `interactive` 等价关键字；官方完成事件是「脚本跑完」，已改为以内核侧脚本完成标记为终态证据（不依赖启动器退出） | **未闭合·已按官方语义实现，待真机确认**（详见 §6.4） |
 
 > 该表登记的是**方法论边界**，不是待实施任务。除非将来必须先解决“启动器提前退出”本身，否则不单独立项。
 
@@ -495,6 +495,8 @@ A4 的审计结果比预期严重，必须单独记录（详见 `docs/phase-timi
 | `abaqus cae noGUI=...` 外层命令约 1.3 s 返回 rc=0，内核继续运行 | 本机实测（2026-10-27） | `runtime-harness-audit.md` P1-4 |
 | 求解作业加 `interactive` 使作业前台运行 | 官方文档（措辞收窄） | 分析过程页只写“log/sta 输出到屏幕”，**未写**“命令不返回直到分析结束” |
 | CAE 执行过程选项表中无 `interactive` / `wait` 类关键字 | 官方文档（已核实） | CAE 执行过程页选项全表 |
+| **使用 `noGUI` 时 Abaqus/CAE 忽略你提供的任何其它命令行选项** | 官方文档（已核实，2026-10-28 补录） | CAE 执行过程页 `noGUI` 条目原文：「If you use the `noGUI` option, Abaqus/CAE ignores any other command line options that you provide.」——这是「外层命令不可能有等待开关」的决定性依据 |
+| 无界面脚本「不能与用户交互、**不能监控作业**、不能生成动画」 | 官方文档（已核实，2026-10-28 补录） | Abaqus Scripting「How does the Abaqus Scripting Interface interact with Abaqus/CAE」 |
 | noGUI 脚本结束后 kernel 终止；无界面时作业总是 interactive | 官方文档（已核实） | Abaqus Scripting 文档「How does the Abaqus Scripting Interface interact with Abaqus/CAE」 |
 | `abaqus.bat` → `abq2025.bat` → `SMALauncher.exe %*`，批处理层无 `start` | 本机文件核实（2026-10-28） | `C:\SIMULIA\Commands\abaqus.bat`、`abq2025.bat` |
 | 分离发生在 `SMALauncher.exe` 内部 | **未核实（推断）** | 未做反汇编或调试级溯源 |
@@ -528,9 +530,26 @@ A4 的审计结果比预期严重，必须单独记录（详见 `docs/phase-timi
 
 仍存在的边界（本项**不闭合**）：
 
-1. CAE noGUI 路径**没有** `interactive` 等价关键字，官方 CAE 执行过程页选项表已核实无此类选项，该路径仍依赖 `BatchResult.settled` 轮询。官方另一处文档（Abaqus Scripting「How does the Abaqus Scripting Interface interact with Abaqus/CAE」）写「无界面时作业总是 interactive」、「脚本跑完 kernel 终止」，与本机 1.3 s 提前返回的观测不一致；该分歧未定位，不据此改变判定。
-2. 官方文档只写 `interactive` 把输出送到屏幕，**没有**写“命令不返回直到分析结束”。前台等待属社区报告行为（Stack Overflow 采纳答案、第三方启动器文档），不得作为官方契约引用。
-3. 若真机实测显示本机 `interactive` 仍提前返回，则 §6.3 的关闭条件继续有效，`settled` 判定的地位不变。
+1. CAE noGUI 路径**没有** `interactive` 等价关键字，官方 CAE 执行过程页选项表已核实无此类选项，且同一页 `noGUI` 条目明确写出「使用 `noGUI` 时 Abaqus/CAE 忽略你提供的任何其它命令行选项」——这意味着**即使存在等待选项也无效**，外层命令不可能获得等待语义。
+2. 官方另一处文档（Abaqus Scripting「How does the Abaqus Scripting Interface interact with Abaqus/CAE」）写「无界面时作业总是 interactive」、「脚本跑完 kernel 终止」，与本机 1.3 s 提前返回的观测不一致；该分歧未定位，不据此改变判定。
+3. 官方文档只写 `interactive` 把输出送到屏幕，**没有**写“命令不返回直到分析结束”。前台等待属社区报告行为（Stack Overflow 采纳答案、第三方启动器文档），不得作为官方契约引用。
+4. 若真机实测显示本机 `interactive` 仍提前返回，则 §6.3 的关闭条件继续有效，`settled` 判定的地位不变。
+
+### 6.4.1 按官方语义实现 noGUI 完成判定（2026-10-28）
+
+官方语义是「脚本跑完 → kernel 终止」，而非「启动器退出」。既然外层选项被封死（见上表 `noGUI` 忽略其它选项），唯一可落地的官方落点就是**脚本内部**：让内核自己记录它跑到了最后一行。
+
+| 项 | 内容 |
+| :--- | :--- |
+| 新增 API | `completion_sentinel_code(path)` 生成尾部片段（脚本最后一条语句，写入 `completed`）；`blocked_sentinel_code(path)` 供脚本主动早停时写入 `blocked`；`await_script_completion(path, timeout)` 等待并返回内核记录的结果 |
+| `BatchExecutor.run_nogui` | 新增可选 `completion_sentinel=`。传入时以该标记为终态证据，等待预算跟调用方的求解预算（不是短的 settle 窗口）；未传入时保持旧契约 |
+| `BatchResult` | 新增 `completion_evidence` 字段：`script_completed` / `script_blocked` / `quiescence_only` / `none`。`quiescence_only` **不得**被读作“脚本已完成” |
+| 生产交付链路 | `production_delivery_e2e` 在生成脚本末尾追加 sentinel，并在审批门阻断处写 `blocked`；宿主侧新增一道门：`completion_evidence != "script_completed"` 则 fail closed |
+| 为何这不是“换一种轮询” | 静默轮询只能证明“目录最近没变化”，一个刚启动就挂掉的脚本同样会静默；sentinel 只有当脚本真的执行到最后一行时才存在，这是官方所记的完成事件本身 |
+
+验证层级：定向 59 passed；全量 **2529 passed**（基线 2522 + 新增 7）。负例已覆盖：sentinel 缺失 → `settled=False` 且 `completion_evidence="none"`；`blocked` 不被当作完成；未传 sentinel 时降级为 `quiescence_only`。**未**做真机重跑。
+
+保持不变的结论：本机 1.3 s 提前返回的**根因仍未定位**，`P1-LAUNCHER-01` 的关闭条件与原样保持不变。本次改动不声称分歧已解，只是让完成判定不再依赖那个不可靠的信号。
 
 ### 6.5 复核中发现的两处真实缺陷（2026-10-28，已修复）
 
@@ -555,7 +574,7 @@ A4 的审计结果比预期严重，必须单独记录（详见 `docs/phase-timi
 | :--- | :--- | :--- |
 | `planning/compiler.py:1750` | 生成的 `mdb.jobs[...].waitForCompletion()` 仍无界 | 该分支仅在 `submit_job=True` 时触发，生产链路始终传 `False`（提交统一走已限界的 `JobController.submit`）；实际使用者是待批次迁移的 Golden 脚本，套上硬上限需先定下列脚本的超时契约 |
 | `tools/*.py` | 40+ 处 `waitForCompletion()` | 属 13 个待迁移 Golden 脚本，不在本轮范围 |
-| `batch.run_nogui` | 仍无前台选项 | 官方 CAE 执行过程页无 `interactive` 等价关键字，属 `P1-LAUNCHER-01` 能力边界 |
+| `batch.run_nogui` | 仍无前台选项 | 官方 CAE 执行过程页无 `interactive` 等价关键字，且 `noGUI` 会忽略其它所有选项；完成判定改走 §6.4.1 的脚本内 sentinel，而非外层选项 |
 
 ---
 
@@ -594,4 +613,5 @@ A4 的审计结果比预期严重，必须单独记录（详见 `docs/phase-timi
 | 2026-10-27 | Case 07 与 P3-LEFTOVER-05 闭合：(1) Case 07 真机证据（2026-10-21 运行 `case07_live_e7301de3`）入库 `machine_validation/p2_cases/case_07_jounce_bumper/`，签名 manifest v1 六项判据全 PASS，registry 登记 QUALIFIED + REF_ABQ_JOUNCE_BUMPER（手册章节定位未核实已披露，数值基准保持 PENDING），守护测试由 absence 改为正向完整性校验；(2) P3-LEFTOVER-05 真机复验 PASS：冲击 cue 编译出 `*Dynamic, Explicit` 并在 Abaqus/Explicit 2025 完成求解（短周期变体 COMPLETED，5.0MB ODB；长周期变体 727s 后物理失稳，与步类型无关）。三项保留待办清零，仅余 MV-04（生产范围排除）。 |
 | 2026-10-28 | 外部证据复核后收窄两处外部事实表述（仅文档，无代码变更）：(1) `interactive` 的官方原文只写输出到屏幕，未写“命令不返回直到分析结束”，原“官方标准答案”表述改记为文档措辞 + 社区行为报告；(2) CAE noGUI 侧重述为“官方预期是脚本结束后 kernel 终止”，而非“官方无等效等待选项”。新增 §6 `P1-LAUNCHER-01`：登记 `psutil` / Job Object 在父进程已退出后均无法取得子进程树的方法论边界，并写明三段关闭条件。行为不变：`settled` 语义与调用方要求不变。 |
 | 2026-10-28 | 代码级复核后的脚本/命令修正（Exa 复核驱动）：(1) `BatchExecutor.run_input` 补 `interactive`——官方执行过程页明确 `background` 是默认，不显式覆盖则启动器移交后立即返回，watchdog 监督的是已退出的进程；同时启用既有的证据门控放宽（`adaptive_heartbeat=True` + `job_name`），避免前台化后 120 s 静默窗口误杀大型隐式算例，沿用 `P1-LEFTOVER-01` 已真机验证的机制；(2) `JobController.wait` / `AbaqusExecutor.monitor_job` / smoke 脚本改用 `waitForCompletion(timeOut=N)`——官方 Job 对象页记载无参即无限等待、超时抛 `AbaqusException`，只有界等待内的内核异常才会被映射为 `TIMEOUT`；(3) `solve_user_inp` 的 `execute` 回退分支不再把 `abaqus job=...` 当 Python 源码发送，改为官方 `mdb.JobFromInputFile()` + 有界等待 + `finally` 恢复 cwd；(4) `classify_job_status` 改为精确 token 匹配，`CHECK_COMPLETED`（datacheck）不再被子串匹配误提升为 `COMPLETED`。新增 §0.5 `P1-LAUNCHER-02` 与 §6.4。验证层级：定向与全量单元回归，**未**做真机重跑 |
-| 2026-10-28 | 二次 Exa 复核发现并修复 `0ecf582` 的两处回归（见 §6.5）：(1) 内核片段只 `print(status)`，而 `KernelNamespace.execute` 会为“只打印”返回自带 `status` 的信封，`classify_job_status` 因此把 `ABORTED`/`TERMINATED` 读成 `COMPLETED`；修复为绑定 `result` 通道（`JobController.status` 同步修正），负例探针已确认旧代码必失败；(2) 传输超时与 `waitForCompletion(timeOut=N)` 相等会竞态抢占内核超时，改为传输侧加 30 s 余量。另将 session 回退分支的 `consistencyChecking=OFF` 改回官方默认 `ON`，与 `JobController.submit` 一致。同轮将 `prod_deliv_kn_phase_b.json` 与 `production_delivery_kn.json` 的主机绝对路径归一为 `<PROJECT_ROOT>/...`，并在 `tools/production_delivery_e2e.py` 新增 `sanitize_report_paths` 于落盘前生效，修复 CHK-02 公共发布审计失败。全量 2522 passed |
+| 2026-10-28 | 按官方语义实现 CAE noGUI 完成判定（§6.4.1）：新核实 CAE 执行过程页 `noGUI` 条目的原文「使用 `noGUI` 时 Abaqus/CAE 忽略你提供的任何其它命令行选项」——外层等待开关从根上不可能实现，官方完成事件只可能是「脚本跑完」。新增 `completion_sentinel_code` / `blocked_sentinel_code` / `await_script_completion`，`run_nogui` 增加可选 `completion_sentinel=`，`BatchResult` 新增 `completion_evidence`（`script_completed` / `script_blocked` / `quiescence_only` / `none`）；`production_delivery_e2e` 在脚本尾部写入 sentinel、审批门阻断处写 `blocked`，并对非 `script_completed` fail closed。验证：定向 59 passed，全量 2529 passed；**未**做真机重跑。`P1-LAUNCHER-01` 关闭条件不变，1.3 s 提前返回根因仍未定位 |
+：(1) 内核片段只 `print(status)`，而 `KernelNamespace.execute` 会为“只打印”返回自带 `status` 的信封，`classify_job_status` 因此把 `ABORTED`/`TERMINATED` 读成 `COMPLETED`；修复为绑定 `result` 通道（`JobController.status` 同步修正），负例探针已确认旧代码必失败；(2) 传输超时与 `waitForCompletion(timeOut=N)` 相等会竞态抢占内核超时，改为传输侧加 30 s 余量。另将 session 回退分支的 `consistencyChecking=OFF` 改回官方默认 `ON`，与 `JobController.submit` 一致。同轮将 `prod_deliv_kn_phase_b.json` 与 `production_delivery_kn.json` 的主机绝对路径归一为 `<PROJECT_ROOT>/...`，并在 `tools/production_delivery_e2e.py` 新增 `sanitize_report_paths` 于落盘前生效，修复 CHK-02 公共发布审计失败。全量 2522 passed |

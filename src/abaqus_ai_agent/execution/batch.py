@@ -57,6 +57,15 @@ class BatchResult:
     #: their previous meaning.
     settled: bool = True
     settle_note: Optional[str] = None
+    #: Which evidence produced ``settled``. ``"script_completed"`` means the
+    #: kernel itself recorded that the noGUI script reached its end (the signal
+    #: the execution procedure documents); ``"script_blocked"`` means the script
+    #: stopped deliberately before finishing (pre-solve approval gate);
+    #: ``"quiescence_only"`` means no script-side signal was requested and only
+    #: workdir quiescence was checked; ``"none"`` means no post-exit check ran.
+    #: Callers must not read ``"quiescence_only"`` as proof that the script
+    #: completed.
+    completion_evidence: str = "none"
 
     @property
     def succeeded(self) -> bool:
@@ -123,6 +132,74 @@ def await_quiescence(workdir, quiet_period=1.5, timeout=30.0, poll=0.5):
             return False, "workdir still changing %.1fs after launcher exit" % (now - start)
 
 
+def await_script_completion(marker_path, timeout=3600.0, poll=1.0):
+    """Wait for the CAE kernel's own end-of-script evidence.
+
+    The execution procedure documents that ``noGUI`` "runs the commands in the
+    file and exits upon their completion" and that the kernel terminates when
+    the script finishes. On this host the launcher returns before the kernel
+    terminates, so the launcher's exit code is not that completion event. A
+    sentinel written by the kernel as its last action is: it exists only if the
+    script actually reached its end, and it survives the launcher's exit.
+
+    Returns ``(state, note)`` where ``state`` is the sentinel's recorded outcome
+    (``"completed"`` for a full run, ``"blocked"`` for a deliberate early stop
+    such as the pre-solve approval gate) or ``None`` when the budget expired.
+    ``None`` means there is no evidence the script finished, so callers must not
+    treat the run as finished. The outcome is read from the file rather than
+    assumed, because a blocked run also ends deliberately but is not a completed
+    delivery -- conflating the two would report an approval stop as a result.
+    """
+    path = Path(marker_path)
+    budget = float(timeout) if timeout and float(timeout) > 0 else 0.0
+    start = time.monotonic()
+    while True:
+        if path.is_file():
+            try:
+                return path.read_text(encoding="utf-8", errors="replace").strip(), None
+            except OSError:
+                pass
+        elapsed = time.monotonic() - start
+        if elapsed >= budget:
+            return None, ("script completion sentinel %r did not appear within "
+                          "%.1fs after launcher exit" % (path.name, elapsed))
+        time.sleep(poll)
+
+
+def completion_sentinel_code(marker_path):
+    """Return the trailing snippet that makes a noGUI script self-report.
+
+    Append this to the very end of a generated CAE script and pass the same
+    path as ``run_nogui(completion_sentinel=...)``. It must be last: the
+    documented contract is that the script runs to completion, so only reaching
+    this statement proves it did. A script that raises never writes it, which is
+    the intent -- an aborted script is not a completed one.
+    """
+    return (
+        "\n# AIAgent: kernel-side completion evidence. The launcher on this host\n"
+        "# returns before the kernel terminates, so this write -- not the exit\n"
+        "# code -- is the documented end-of-script signal.\n"
+        "_ai_done = open(%r, 'w')\n"
+        "_ai_done.write('completed')\n"
+        "_ai_done.close()\n" % str(marker_path)
+    )
+
+
+def blocked_sentinel_code(marker_path):
+    """Return a snippet recording a deliberate early stop before the tail.
+
+    Used by scripts that can stop on purpose (e.g. the pre-solve approval gate)
+    and then raise. Without this the command would look like an abnormal exit
+    and the caller would wait out the whole solve budget for a sentinel that by
+    design will never be written.
+    """
+    return (
+        "_ai_stop = open(%r, 'w')\n"
+        "_ai_stop.write('blocked')\n"
+        "_ai_stop.close()\n" % str(marker_path)
+    )
+
+
 class BatchExecutor:
     """Thin host-side adapter for Abaqus batch/noGUI execution.
 
@@ -143,7 +220,8 @@ class BatchExecutor:
     def resolved_launcher(self) -> str:
         return resolve_default_launcher(self.launcher)
 
-    def _run(self, args, timeout=None, job_name=None, adaptive_heartbeat=False):
+    def _run(self, args, timeout=None, job_name=None, adaptive_heartbeat=False,
+             completion_sentinel=None, completion_timeout=None):
         raw_cmd = [str(x) for x in args]
         if raw_cmd and raw_cmd[0] == self.launcher:
             raw_cmd[0] = self.resolved_launcher
@@ -180,13 +258,33 @@ class BatchExecutor:
             job_name=job_name,
         )
         settled, settle_note = True, None
-        if proc.returncode == 0 and self.settle_timeout and self.settle_timeout > 0:
-            settled, settle_note = await_quiescence(
+        evidence = "none"
+        if completion_sentinel and proc.returncode == 0:
+            # The script-side signal outlives the launcher, so it is waited for
+            # on the caller's solve budget (not the short quiescence window):
+            # a correct multi-minute run must not be reported as unsettled just
+            # because the launcher handed off early.
+            budget = completion_timeout if completion_timeout is not None else timeout
+            state, note = await_script_completion(
+                completion_sentinel,
+                timeout=budget if budget is not None else self.timeout,
+            )
+            if state is None:
+                settled, settle_note = False, note
+            else:
+                evidence = "script_" + state
+        if settled and proc.returncode == 0 and self.settle_timeout and self.settle_timeout > 0:
+            quiescent, quiescence_note = await_quiescence(
                 effective_workdir, timeout=self.settle_timeout
             )
+            if not quiescent:
+                settled, settle_note = False, quiescence_note
+            elif evidence == "none":
+                evidence = "quiescence_only"
         return BatchResult(command, proc.returncode, proc.stdout, proc.stderr,
                            effective_workdir, proc.duration,
-                           settled=settled, settle_note=settle_note)
+                           settled=settled, settle_note=settle_note,
+                           completion_evidence=evidence)
 
     def run_input(self, input_path, job_name=None, timeout=None, workdir=None):
         """Run a solve from an input deck.
@@ -212,10 +310,25 @@ class BatchExecutor:
         finally:
             self.workdir = orig_workdir
 
-    def run_nogui(self, script_path, timeout=None):
+    def run_nogui(self, script_path, timeout=None, completion_sentinel=None):
+        """Run a script without the CAE GUI.
+
+        ``noGUI`` is the one CAE path with no foreground option, and adding one
+        is not possible: the CAE execution procedure states that with ``noGUI``
+        "Abaqus/CAE ignores any other command line options that you provide".
+        The documented completion event is therefore the script finishing (the
+        kernel terminates afterwards), not the launcher exiting -- and on this
+        host the launcher can exit first.
+
+        Pass ``completion_sentinel`` (see ``completion_sentinel_code``) to wait
+        for the kernel's own end-of-script evidence, bounded by ``timeout``.
+        Without it the call keeps its previous contract: only workdir
+        quiescence is checked, and ``completion_evidence`` says so.
+        """
         path = os.path.abspath(script_path)
         return self._run((self.launcher, "cae", "noGUI=%s" % path),
-                         timeout=timeout)
+                         timeout=timeout,
+                         completion_sentinel=completion_sentinel)
 
     def run_python(self, script_path, timeout=None):
         path = os.path.abspath(script_path)

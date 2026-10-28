@@ -79,10 +79,11 @@ def test_fragment_exception_propagates_without_success_or_stale_result(tmp_path,
 # --- T7/P1-5: host terminal-state gates ------------------------------------------
 
 class _FakeProc:
-    def __init__(self, rc, settled, note=None):
+    def __init__(self, rc, settled, note=None, completion_evidence="script_completed"):
         self.return_code = rc
         self.settled = settled
         self.settle_note = note
+        self.completion_evidence = completion_evidence
         self.stdout = ""
         self.stderr = ""
         self.succeeded = rc == 0
@@ -97,7 +98,7 @@ def _run_with_fake_process(tmp_path, monkeypatch, proc):
         def __init__(self, *a, **k):
             pass
 
-        def run_nogui(self, script, timeout=None):
+        def run_nogui(self, script, timeout=None, completion_sentinel=None):
             return proc
 
     monkeypatch.setattr(mod, "BatchExecutor", _FakeBatch)
@@ -118,4 +119,16 @@ def test_approval_blocked_marker_raises_actionable_error(tmp_path, monkeypatch):
     proc = _FakeProc(rc=1, settled=True)
     proc.stderr = "AIAgent_PROD_DELIVERY_BLOCKED:AWAITING_APPROVAL"
     with pytest.raises(RuntimeError, match="AWAITING_APPROVAL"):
+        _run_with_fake_process(tmp_path, monkeypatch, proc)
+
+
+def test_missing_script_completion_evidence_fails_closed(tmp_path, monkeypatch):
+    """Quiescence is not the documented completion event.
+
+    The launcher can exit before the kernel finishes, so a quiet workdir only
+    proves nothing changed recently. Without the kernel's own end-of-script
+    marker the run must not be trusted.
+    """
+    proc = _FakeProc(rc=0, settled=True, completion_evidence="quiescence_only")
+    with pytest.raises(RuntimeError, match="script-completion evidence"):
         _run_with_fake_process(tmp_path, monkeypatch, proc)

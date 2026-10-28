@@ -47,10 +47,15 @@ E = 210000.0
 NU = 0.3
 FORCE = -1000.0
 
+#: Kernel-written sentinel proving the noGUI script reached its final statement.
+#: Must match the path handed to ``run_nogui(completion_sentinel=...)``.
+_COMPLETION_SENTINEL_NAME = "production_delivery_script_completed.flag"
+
 
 def build_production_delivery_cae_script(
     project_root: Path,
     src_dir: Optional[Path] = None,
+    completion_sentinel: Optional[Path] = None,
 ) -> str:
     src_dir_str = str(src_dir or SRC)
     project_root_str = str(project_root.resolve())
@@ -122,7 +127,7 @@ print('AIAgent_PROD_EVIDENCE_SETS_CREATED')
         MODEL, PART, INSTANCE, L, L,
     )
 
-    return """
+    code = """
 import sys
 _src_dir = %r
 if _src_dir not in sys.path:
@@ -161,6 +166,7 @@ mat_e = %r
 mat_nu = %r
 applied_force = %r
 project_root_path = %r
+_ai_sentinel_path = %r
 
 project_ctx = ExternalProjectContext.create(
     project_root=Path(project_root_path),
@@ -305,6 +311,10 @@ run = runner.run(
 if not run.odb_path:
     eng = getattr(run, "engineering_status", None)
     if eng == 'SUBMISSION_BLOCKED':
+        if _ai_sentinel_path:
+            _ai_gate_stop = open(_ai_sentinel_path, 'w')
+            _ai_gate_stop.write('blocked')
+            _ai_gate_stop.close()
         print('AIAgent_PROD_DELIVERY_BLOCKED:AWAITING_APPROVAL')
     print("RUN_FAILED_DIAGNOSTICS:", getattr(run, "diagnostics", None), eng, getattr(run, "state", None))
     raise RuntimeError('Production delivery run did not produce an authentic ODB path')
@@ -449,9 +459,18 @@ print('AIAgent_PROD_DELIVERY_RESULT_END')
         MODEL, PART, INSTANCE, JOB, STEP,
         L, B, H, E, NU, FORCE,
         project_root_str,
+        str(completion_sentinel) if completion_sentinel is not None else "",
         geometry_code,
         evidence_sets_code,
     )
+
+    # The kernel-side completion sentinel must be the script's last statement:
+    # reaching it is the documented "script finishes running" event, and an
+    # aborted script never writes it. See BatchExecutor.run_nogui.
+    if completion_sentinel is not None:
+        from abaqus_ai_agent.execution.batch import completion_sentinel_code
+        code += completion_sentinel_code(completion_sentinel)
+    return code
 
 
 def _relativize_evidence_path(path: Any, project_root: Any) -> Any:
@@ -573,15 +592,18 @@ def run_production_delivery_e2e(
         # owns so a stale report or stale .rpy can never be mistaken for this
         # run. The approval ledger (.state) and execution_candidate.json are
         # deliberately preserved: phase B needs them.
-        for stale_name in ("production_delivery_report.json", "abaqus.rpy"):
+        for stale_name in ("production_delivery_report.json", "abaqus.rpy",
+                           _COMPLETION_SENTINEL_NAME):
             stale = project_ctx.working_dir / stale_name
             if stale.is_file():
                 stale.unlink()
 
         cae_script_path = project_ctx.working_dir / "production_delivery_cae_script.py"
+        completion_sentinel = project_ctx.working_dir / _COMPLETION_SENTINEL_NAME
         script_code = build_production_delivery_cae_script(
             project_root=temp_dir,
             src_dir=SRC,
+            completion_sentinel=completion_sentinel,
         )
         cae_script_path.write_text(script_code, encoding="utf-8")
 
@@ -591,7 +613,10 @@ def run_production_delivery_e2e(
             workdir=str(project_ctx.working_dir),
             timeout=timeout,
         )
-        process = executor.run_nogui(str(cae_script_path), timeout=timeout)
+        process = executor.run_nogui(
+            str(cae_script_path), timeout=timeout,
+            completion_sentinel=completion_sentinel,
+        )
         output_text = (process.stdout or "") + "\n" + (process.stderr or "")
 
         # Host terminal-state gates (fail closed): a non-zero exit or
@@ -606,6 +631,13 @@ def run_production_delivery_e2e(
             raise RuntimeError(
                 f"artifacts not settled after launcher exit: "
                 f"{getattr(process, 'settle_note', None)!r}; refusing to read unstable outputs."
+            )
+        if not blocked_marker and getattr(process, "completion_evidence", None) != "script_completed":
+            raise RuntimeError(
+                "no kernel-side script-completion evidence: the noGUI script did not "
+                "reach its end (completion_evidence=%r); quiescence alone is not proof "
+                "that the documented completion event occurred."
+                % (getattr(process, "completion_evidence", None),)
             )
         if blocked_marker:
             raise RuntimeError(
