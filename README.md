@@ -1,21 +1,22 @@
 # Abaqus AI Agent
 
-An engineering agent that compiles a stated analysis requirement into an Abaqus model, runs that model only after review, and releases a report only when the solver artifacts support the stated criteria.
+An engineering agent between a stated analysis requirement and Abaqus. It compiles the requirement into a model a person can review, submits that model only after review, and writes a formal report only when solver evidence supports the stated criteria.
 
-[中文](README_CN.md) | [Requirements and plan](docs/PROJECT_REQUIREMENTS_AND_PLAN.md)
+[中文](README_CN.md)
 
 [![CI](https://github.com/chenlei-gh/Abaqus-AI-Agent/actions/workflows/ci.yml/badge.svg)](https://github.com/chenlei-gh/Abaqus-AI-Agent/actions/workflows/ci.yml)
-[![Python](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12-blue.svg)](https://www.python.org/)
-[![Abaqus](https://img.shields.io/badge/Abaqus-2025-blue.svg)](https://www.3ds.com/products-services/simulia/products/abaqus/)
+[![Python](https://img.shields.io/badge/CI-3.10%20%7C%203.11%20%7C%203.12-blue.svg)](https://www.python.org/)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 
-This package does not install Abaqus, does not ship a license, and is not published on PyPI. A generated report is not an analyst's sign-off.
+A script that ran, a job that finished, and an answer that was accepted are three separate claims. The package does not install Abaqus, does not ship a license, and is not on PyPI. A generated report is not an analyst's sign-off.
 
-## Installation
+It is for engineers who already have a licensed Abaqus installation and want that path kept separate. It is not a general chatbot, and it does not decide that the load path, the support, or the criterion was the right question.
 
-Two runtimes stay separate. The agent installs into a normal CPython environment. Abaqus keeps its own interpreter and is invoked through the SIMULIA launcher. Do not `pip install` this package into the Python that ships with Abaqus/CAE.
+## Install
 
-The package is not on PyPI. Install it from this source tree. PyPA's install guide is to use a virtual environment and invoke pip as `python -m pip`, so the install lands in the interpreter you just checked.
+Two interpreters stay separate. Install this package into a normal CPython virtual environment. Abaqus keeps its own Python and is called through the SIMULIA launcher. Do not install this package into the Python that ships with Abaqus/CAE.
+
+The package is not on PyPI. Install it from this source tree. Use a virtual environment and `python -m pip`, so the install lands in the interpreter you just checked. Do not use `python setup.py install`.
 
 Windows, from the repository root:
 
@@ -23,11 +24,9 @@ Windows, from the repository root:
 py -3.12 -m venv .venv
 .venv\Scripts\activate.bat
 python -m pip install --upgrade pip
-python -m pip install -e ".[test]"
+python -m pip install .
 python -m abaqus_ai_agent --help
 ```
-
-The quotes around `".[test]"` are required. In `cmd`, square brackets are wildcards.
 
 macOS or Linux:
 
@@ -35,155 +34,84 @@ macOS or Linux:
 python3 -m venv .venv
 source .venv/bin/activate
 python -m pip install --upgrade pip
-python -m pip install -e ".[test]"
+python -m pip install .
 python -m abaqus_ai_agent --help
 ```
 
-What that command does:
+That installs `abaqus-ai-agent` 0.2.2. `pyproject.toml` declares Python `>=3.9`. Continuous integration tests 3.10, 3.11, and 3.12 on Ubuntu and Windows. The runtime dependency is `Pillow>=9`. The console scripts are `abaqus-ai-agent` and `abaqus-agent`.
 
-| Item | Value |
-|---|---|
-| Distribution | `abaqus-ai-agent` 0.2.2, setuptools `src` layout |
-| Declared Python | `>=3.9` in `pyproject.toml` |
-| Interpreter tested by CI | 3.10, 3.11, 3.12, on Ubuntu and Windows |
-| Runtime dependency | `Pillow>=9` |
-| Test extra | `pytest>=7` |
-| Console scripts | `abaqus-ai-agent`, `abaqus-agent` |
-| Install mode | editable (`-e`), so source edits are imported without reinstall |
+To work on this repository, install the test extra in editable mode and run the offline suite:
 
-`-e ".[test]"` is the development install used by CI. For an environment that only runs the agent, omit the extra:
-
-```bash
-python -m pip install -e .
-```
-
-Editable install tracks Python changes in `src/`. A change to `pyproject.toml` dependencies or entry points still requires the same install command again. Do not use `python setup.py install`; that path is deprecated.
-
-Offline checks do not need a solver:
-
-```bash
+```bat
+python -m pip install -e ".[test]"
 python -m pytest tests -q -m unit
-abaqus-ai-agent inspect --json
 ```
 
-`inspect` reports whether a launcher was found. A missing launcher is an offline host, not a failed package install.
+In `cmd`, the quotes around `".[test]"` are required. Square brackets are wildcards. An editable install follows Python edits under `src/`. A change to dependencies or entry points in `pyproject.toml` needs the same install command again.
 
 ### Abaqus, which this package does not install
 
-A live solve needs an already installed, licensed Abaqus 2025. The installer creates the command directory and, on Windows, prepends it to `PATH`. The defaults are `C:\SIMULIA\Commands` and `/var/DassaultSystemes/SIMULIA/Commands`. The 2025 shortcut is `abq2025`; `abaqus` is the unversioned entry.
+A live solve needs an already installed, licensed Abaqus. This repository does not configure the license server, `custom_v6.env`, or token availability.
 
-This package resolves the launcher in that order: an explicit path, `abaqus` on `PATH`, then `C:\SIMULIA\Commands\abaqus.BAT` on Windows. License server, `custom_v6.env`, and token availability belong to the Abaqus installation. This repository does not configure them.
+The Abaqus installer creates the command directory: `C:\SIMULIA\Commands` on Windows, `/var/DassaultSystemes/SIMULIA/Commands` on Linux. The 2025 shortcut is `abq2025`. `abaqus` is the unversioned entry.
 
-Confirm the external product before expecting a solve:
+This package resolves the launcher in that order: an explicit path, `abaqus` on `PATH`, then `C:\SIMULIA\Commands\abaqus.BAT` on Windows.
 
 ```bat
 where abaqus
 abaqus information=release
+abaqus-ai-agent inspect --json
 ```
 
-`abaqus information=release` returning a release string means the launcher is usable. It does not mean a token is free.
+A release string means the launcher runs. It does not mean a license token is free. `inspect` with no launcher means an offline host, not a failed package install.
 
-## The engineering model
+## Try it
 
-A script that runs is not an analysis that finished, and a finished job is not an acceptable answer. The agent keeps those as separate states.
+This does not start Abaqus. It routes the requirement and stops. The same command is what continuous integration runs.
+
+```bat
+abaqus-ai-agent ask "Apply 1000N vertical load to the free end of a 100mm cantilever beam, material steel, fixed root, check deflection <= 2.5mm." --dry-run
+```
+
+A successful dry run exits 0. The command prints an intent-routing header, then:
 
 ```text
-requirement
-  -> typed intent
-  -> ordered actions
-  -> generated Abaqus Python
-  -> CAE kernel
-  -> solver job
-  -> ODB and solver logs
-  -> acceptance against declared criteria
-  -> report.html, or report.diagnostic.html
+[DRY-RUN] Intent and plan contracts verified successfully. No solver invoked.
+Solver invoked:     NO
+Report authorized:  NO
 ```
 
-The agent does not invent geometry. A boundary or load is executable only after its region comes from geometry grounding or an explicit selection. A vision model is not allowed to pick a face by index.
+The lines between those name the inferred physics, unit system, solver, and the counts of boundaries, loads, and criteria. They do not start a job and they do not authorize a report.
 
-### Compilation
+The same sentence without a place for the load exits 2 and names `missing_load_application_region`. That stop is intended. It is not a solver failure.
 
-`EngineeringIntent` is the closed statement of the analysis: geometry, material, boundaries, loads, mesh, procedure, and criteria. The compiler lowers that statement into an ordered list of `AbaqusAction` values. Each action names its target, parameters, preconditions, and expected state. The script is rendered from that list. It is not the source of the model.
+Building the model and submitting a job is `AbaqusAIAgent.solve_requirement`. The default does not submit. Before submission, the candidate is written to `pre_solve_review.html` and opened in the default browser. That file is the review. There is no separate interactive UI. Approval is recorded against that candidate:
 
-An action the compiler can render is `SUPPORTED`. Native Python that bypasses a typed action is `EXECUTABLE`: it may run, and that run is not evidence that the engineering operation was verified. An operation with no execution path is not described as complete.
-
-Solver family is a recorded decision, not a silent rewrite. The selection is `STANDARD` or `EXPLICIT`. A declared kinematic requirement that conflicts with the requested solver blocks submission. Frequency and thermal procedures have no Explicit alternative, so a preference there is not treated as that conflict.
-
-### Execution
-
-Generated fragments run in an isolated kernel namespace, not in the caller's globals. Solver waits emitted by the compiler are bounded: `waitForCompletion(timeOut=...)`. A bare wait is rejected.
-
-On Windows, `abaqus cae noGUI` does not give the host a process it can wait on. The launcher returns after starting `ABQcaeK.exe`. Completion is a marker written by the kernel script itself: `completed`, `blocked`, or `failed`. A quiet work directory is `quiescence_only`. That means the directory stopped changing. It does not mean the script finished.
-
-A solver job is submitted in the foreground with `interactive`, because the default batch mode returns as soon as the launcher hands the job off. Exit code 0 does not prove the job completed. An ODB existing on disk does not prove it either. The positive evidence is the solver's own completion record.
-
-### Evidence and acceptance
-
-Every extracted result is bound to the run that produced it: `run_id`, input hash, ODB path, and ODB SHA256. A file with the same name and size is not the same result. Corrupt, empty, or non-binary ODB inputs are rejected. Missing fields raise; they are not replaced with benchmark constants.
-
-Acceptance is a fixed gate sequence, not a single pass flag:
-
-| Gate | What must be true |
-|---|---|
-| execution | the job actually terminated in a solver-authored completed state |
-| odb | the ODB opens as the ODB from this run |
-| evidence | the requested fields and history exist |
-| numerical | the solution is not a completed job full of non-finite values |
-| engineering | declared checks have evidence |
-| mesh | shape metrics, not merely `ANALYSIS_CHECKS`, when mesh quality is required |
-| convergence | mesh-convergence evidence, when requested |
-| fatigue | fatigue evidence, when requested |
-| contact | contact state matches the requested contact problem |
-| procedure | the requested procedure actually ran |
-| thermal / energy | thermal balance, static stabilization, or transient energy, when that physics is in scope |
-| criteria | declared numeric criteria pass |
-| connectors / FMBD | kinematic or flexible-multibody evidence, when that model is in scope |
-
-A failed gate writes `report.diagnostic.html`. Renaming that file does not make it the formal report.
-
-### What a person still decides
-
-Before submission, the candidate is written to `pre_solve_review.html` and opened in the default browser. That file is the review. There is no separate interactive UI. Approval binds to that candidate; editing the deck invalidates it.
-
-The agent can stop a launch that will obviously fail. It cannot decide that the load path, the support, or the criterion was the right engineering question. Those remain the reviewer's decision.
-
-## Reference result
-
-On a licensed Abaqus 2025 host, the official cantilever benchmark in `machine_validation/` was run with C3D20R and tip shear. Deflection was 6.3330 mm against 6.4000 mm beam theory (1.05%). Integration-point stress was 138.89 MPa against 138.56 MPa analytical (0.23%). That qualifies that case. It does not qualify every procedure, element, or contact formulation in the compiler.
-
-## Use
-
-```python
-from abaqus_ai_agent import AbaqusAIAgent
-
-agent = AbaqusAIAgent(executor=None)
-result = agent.solve_requirement(
-    "200 x 20 x 5 mm steel cantilever, encastre at the root, 100 N shear at the free end",
-    submit_job=False,
-)
-```
-
-The default does not submit a job. It builds and checks the candidate. After that candidate is approved, the same work directory can be solved. Task completion and criterion acceptance are separate fields on the result.
-
-```bash
-abaqus-ai-agent ask "..." --dry-run
+```bat
 abaqus-ai-agent approve --workdir ./run_workdir --by "analyst name"
 ```
 
-## Layout
+Editing the candidate invalidates the approval.
 
-```text
-src/abaqus_ai_agent/
-  contracts/     intent, actions, evidence, acceptance
-  planning/      intent compiler, mesh and procedure planning
-  actions/       action builders and script rendering
-  execution/     kernel, batch jobs, approval, ODB extraction
-  validation/    structural checks before launch
-  grounding/     region binding from geometry, not from a guessed index
-  reporting/     formal report and diagnostic report
-```
+## How it is built
 
-`docs/PROJECT_REQUIREMENTS_AND_PLAN.md` is the only planning document.
+A requirement is compiled into a typed intent and an ordered action list. Abaqus Python is rendered from that list. The script is not the source of the model. Geometry is not invented. A boundary or a load is executable only after its region comes from geometry grounding or an explicit selection.
+
+The three claims stay separate through the run. A script that ran is not a job that finished. A finished job is not an accepted answer. The formal file is `report.html`, and only when solver-authored evidence supports the declared criteria. Otherwise the file is `report.diagnostic.html`. Renaming it does not make it the formal report.
+
+The agent can refuse a launch that will obviously fail. It cannot decide that the question itself was the right one.
+
+The gate sequence, completion markers, and solver-selection rules are in the [requirements and plan](docs/PROJECT_REQUIREMENTS_AND_PLAN.md). That file is the only planning document.
+
+## One qualified case
+
+On a licensed Abaqus 2025 host, the cantilever in [`machine_validation/`](machine_validation/) was run with C3D20R and tip shear. Deflection was 6.3330 mm against 6.4000 mm beam theory (1.05%). Integration-point stress was 138.89 MPa against 138.56 MPa analytical (0.23%). That qualifies that case. It does not qualify every procedure, element, or contact formulation.
+
+Record: [`official_cantilever_benchmark_evidence.json`](machine_validation/official_cantilever_benchmark_evidence.json).
+
+## Help
+
+Questions and defects: [GitHub issues](https://github.com/chenlei-gh/Abaqus-AI-Agent/issues).
 
 ## License
 
