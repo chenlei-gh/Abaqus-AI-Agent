@@ -1,0 +1,84 @@
+{
+  "requirement": "REQ-4.8",
+  "claim": "Classifier disposition matches the deck Abaqus/CAE 2025 writes. This is not a solved plasticity qualification and not a catalog identification.",
+  "launcher": "C:\\SIMULIA\\Commands\\abaqus.bat",
+  "solver_invoked": false,
+  "cases": [
+    {
+      "id": "linear_named",
+      "disposition": "LINEAR_ELASTIC",
+      "expected_disposition": "LINEAR_ELASTIC",
+      "disposition_ok": true,
+      "compile_ok": true,
+      "deck_ok": true,
+      "passed": true,
+      "job_name": "Job_linear_named",
+      "return_code": 0,
+      "settled": true,
+      "completion_evidence": "script_completed",
+      "duration_s": 2.0133714000003238,
+      "inp_exists": true,
+      "has_elastic": true,
+      "has_plastic": false,
+      "plastic_lines": []
+    },
+    {
+      "id": "blocked_family",
+      "disposition": "SCREENING",
+      "expected_disposition": "SCREENING",
+      "disposition_ok": true,
+      "compile_ok": true,
+      "deck_ok": true,
+      "passed": true,
+      "compile_error": "ValueError: material_disposition:SCREENING: '钢' is a material family, not a selected grade. Select one listed grade or attach a material card. Solving is refused. Candidates: Q235, Q345, Steel_45. Required: selected_grade_or_material_card."
+    },
+    {
+      "id": "ideal_explicit",
+      "disposition": "IDEAL_PLASTIC_ASSUMPTION",
+      "expected_disposition": "IDEAL_PLASTIC_ASSUMPTION",
+      "disposition_ok": true,
+      "compile_ok": true,
+      "deck_ok": true,
+      "passed": true,
+      "job_name": "Job_ideal_explicit",
+      "return_code": 0,
+      "settled": true,
+      "completion_evidence": "script_completed",
+      "duration_s": 1.2595142000027408,
+      "inp_exists": true,
+      "has_elastic": true,
+      "has_plastic": true,
+      "plastic_lines": [
+        "*Plastic",
+        "250.,0."
+      ]
+    },
+    {
+      "id": "hardening_user",
+      "disposition": "HARDENING_VERIFIED",
+      "expected_disposition": "HARDENING_VERIFIED",
+      "disposition_ok": true,
+      "compile_ok": true,
+      "deck_ok": true,
+      "passed": true,
+      "job_name": "Job_hardening_user",
+      "return_code": 0,
+      "settled": true,
+      "completion_evidence": "script_completed",
+      "duration_s": 1.2575079000016558,
+      "inp_exists": true,
+      "has_elastic": true,
+      "has_plastic": true,
+      "plastic_lines": [
+        "*Plastic",
+        "250.,   0.",
+        "300., 0.02"
+      ],
+      "plastic_strains": [
+        0.0,
+        0.02
+      ]
+    }
+  ],
+  "passed": true
+}

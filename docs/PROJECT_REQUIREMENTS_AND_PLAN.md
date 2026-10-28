@@ -238,8 +238,15 @@ flowchart TD
   * `solve_requirement`、`compile_engineering_intent`、`compile_intent_to_actions`、static/contact/mbd workflow 和 mechanism 编译都走同一分类器。
   * 验收层对材料非线性正式交付要求 `HARDENING_VERIFIED`。短玻纤、粘弹、蠕变、超弹、损伤缺对应数据时 `UNSUPPORTED`。
 * **明确不做**：不换外部材料平台；不把内置牌号升级为已鉴定的 CAMPUS / MMPDS 许用值；不把短玻纤压成各向同性 J2 并声称为材料鉴定；不把 `nlgeom` 当成材料非线性。
-* **未验证**：未做 Abaqus 真机。离线测试只证明分类和失败关闭，不证明材料非线性结论已合格。
-* **当前状态**：**IMPLEMENTED**（分类器已接入生产入口；未做真机前不得标 CLOSED，不得声称生产材料库已鉴定）
+* **真机证据（2026-10-28，Abaqus/CAE 2025，`C:\SIMULIA\Commands\abaqus.bat`）**：
+  * 探针 `tools/req48_material_gate_probe.py` 走 `compile_engineering_intent()` 产出的脚本，`cae noGUI` 只 `writeInput`，不求解。四条路径全部通过，证据 `machine_validation/req48_material_gate_evidence.json`。
+  * `Q235` + `linear_static` → `LINEAR_ELASTIC`；真机 deck 有 `*Elastic`，无 `*Plastic`。
+  * 只给“钢”并请求塑性 → `SCREENING`，编译拒绝，未启动 CAE，未自动选 Q235。
+  * 标量卡片加 `accept_ideal_plasticity=True` → `IDEAL_PLASTIC_ASSUMPTION`；真机 deck 为 `*Plastic` / `250.,0.`。
+  * 用户硬化表 `(250, 0)`、`(300, 0.02)` → `HARDENING_VERIFIED`；真机 deck 两点都在，含塑性应变 `0.02`。
+  * 三次写 deck 的宿主进程都是 `return_code=0`、`settled=true`、`completion_evidence=script_completed`。
+* **这次没有证明的**：没有求解，没有 ODB，没有屈服后变形或残余应变结论。牌号库仍是筛选值，不是 MMPDS/CAMPUS 鉴定值。粘弹、蠕变、超弹、短玻纤、损伤未跑真机。
+* **当前状态**：**IMPLEMENTED**（deck 门禁已有真机证据；不是 CLOSED，不得声称材料非线性结论或生产材料库已鉴定）
 
 #### 需求 REQ-4.7：纠错耗时遥测
 * **提出日期**：2026-10-28
