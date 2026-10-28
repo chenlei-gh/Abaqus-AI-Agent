@@ -17,7 +17,7 @@ flowchart TD
     NL[工程需求输入 / Natural Language Prompt] --> Router[意图路由器 / Intent Router & JEV]
     Router -->|参数不全 / 语义歧义| Clarify[拒绝并要求澄清 / NEEDS_CLARIFICATION]
     Router -->|结构完备| Plan[有类型动作计划 / Typed Action Plan]
-    Plan --> Preflight[前置物理校验与语法检查 / Preflight Validation]
+    Plan --> Preflight[前置动作结构校验 / preflight_plan，不是 Python 语法门]
     Preflight -->|阻断| Blocked[审批门拦截 / AWAITING_APPROVAL]
     Preflight -->|通过| Compiler[Abaqus Python 编译 / Kernel Compiler]
     Compiler --> Batch[内核会话执行 / KernelNamespace Execution]
@@ -145,7 +145,9 @@ flowchart TD
 [Phase 4: 工业产品化演进]                                         [CURRENT]
   |-- Phase 4.1: CAD 几何增强与装配语义直读 (STEP AP242/CATIA)    [PLANNING]
   |-- Phase 4.2: 自动化接触对识别与螺栓预紧力模式库               [PLANNING]
-  |-- Phase 4.3: 收敛失败智能诊断与自动重试自愈                   [PLANNING]
+  |-- Phase 4.3: 收敛失败诊断与受控自愈（代码已有，未全面验收） [PARTIAL]
+  |-- Phase 4.6: 启动 CAE 前 compile() 语法门（离线负例已过，未做真机耗时） [IMPLEMENTED]
+  |-- Phase 4.7: 纠错耗时结构化遥测（记录器已接，未验收前不得声称下降） [IMPLEMENTED]
   |-- Phase 4.4: 交互式工程工作台 (Web UI / IDE 插件扩展)          [BACKLOG]
   |-- Phase 4.5: 求解前评审报告自动浏览器展示                       [CLOSED]
 ========================================================================
@@ -167,13 +169,15 @@ flowchart TD
   * 针对螺栓联接自动识别螺栓杆面、建立预紧力截面（Bolt Load Section），自动编排“第一步拧紧预紧力 $\to$ 第二步固定螺栓长度承载”的两步分析法；
 * **验收条件**：螺栓预紧分析算例一次性通过收敛，且反力与预紧设定误差 $< 0.5\%$。
 
-#### 需求 REQ-4.3：收敛性失败深度诊断与自适应松弛自愈
-* **目标**：当 Abaqus 发生割步、收敛困难（`TOO MANY ATTEMPTS` / `1U` 严重不平衡）时，代理自主介入修复。
-* **技术方案**：
-  * 实时抓取 `.msg` 文件中的迭代残差与收敛曲线；
-  * 自动识别“刚体位移飞出”、“过约束奇异”、“接触刚度过大”等典型物理病态；
-  * 启用受控自愈策略：自动引入初始接触稳定阻尼（Contact Stabilization Damping）、放宽最小步长限制（`min_inc`）、切分加载工步；
-* **验收条件**：在预设的 5 种人造接触病态算例中，自愈机制能够挽救至少 3 个算例至成功求解收敛，且必须在报告中红字标明阻尼能比（ALLSD/ALLIE $< 5\%$）。
+#### 需求 REQ-4.3：收敛性失败深度诊断与受控自愈
+* **目标**：当 Abaqus 发生割步、收敛困难（`TOO MANY ATTEMPTS` / 严重不平衡）时，代理给出可审计的诊断与修复提案；只有用户明确同意改模型后才重算。
+* **已有实现（不得再写成未启动）**：
+  * `diagnostics/solver_patterns.py` 解析 `.msg/.sta/.dat/.log`；
+  * `diagnostics/orchestrator.py` 默认只提案；`confirm_model_change=True` 才改模型并重算，且最多 3 次；
+  * 许可证失败立即停止；`SUBMISSION_BLOCKED` 不进入自愈链。
+* **明确禁止**：不得默认自动加阻尼、放宽步长或改边界。这与旧文案“自动引入接触稳定阻尼”冲突，以代码契约为准。
+* **验收条件**：5 种人造接触病态算例中，用户确认后至少 3 个收敛；报告红字标明阻尼能比（ALLSD/ALLIE $< 5\%$）。未做这组真机对照前不得标为 CLOSED。
+* **当前状态**：**PARTIAL**（2026-10-28 Exa 复核：代码与部分真机证据已在，全面验收未做）
 
 #### 需求 REQ-4.4：工程交互工作台与开发者工具（Workbench）
 * **目标**：提供轻量可视化 UI 与命令行交互工具，降低非专家使用门槛。
@@ -202,6 +206,41 @@ flowchart TD
   2. 真实环境调用时默认浏览器能正确加载并显示评审报告；
   3. 单元回归测试全绿（2558+）。
 * **当前状态**：**CLOSED**
+
+#### 需求 REQ-4.6：启动 CAE 前的完整脚本语法门
+* **提出日期**：2026-10-28
+* **优先级**：P1
+* **背景**：`preflight_plan()` 只查动作结构。生成的完整 CAE 脚本在 `abaqus cae noGUI` 之前没有统一 `compile()`。语法错误会白启动一次 CAE。
+* **采纳方案**：宿主 Python 对待执行源码调用 `compile(source, filename, "exec")`。失败则不启动 Abaqus，返回文件、行号和片段。
+* **明确不做**：不引入 pyflakes/pylint/abqpy 作为运行时门；不把 `compile()` 当成 Abaqus API 或物理正确性检查。
+* **已实现**：`execution/script_syntax.py` 对已存在的 `.py` 调用 `compile(source, filename, "exec")`。`BatchExecutor.run_nogui` 失败时返回 `completion_evidence="syntax_blocked"` 且不调用 watchdog。动作入口 `execute` / `execute_verified` 在进入内核前同样检查片段。缺失路径不是语法失败，仍交给原来的启动器契约。
+* **验收**：语法错误负例在启动器调用前失败；合法脚本不被误拦。离线测试已覆盖这两条。
+* **未验证**：未做真机前后耗时对照。语法门不检查 Abaqus API 或物理正确性。
+* **当前状态**：**IMPLEMENTED**（离线负例已过；不是 CLOSED，不得声称纠错耗时已下降）
+
+#### 需求 REQ-4.7：纠错耗时遥测
+* **提出日期**：2026-10-28
+* **优先级**：P1
+* **背景**：防错与失败关闭已有代码，但没有首次通过率、返工次数、诊断/修复耗时的前后对照。测试通过不等于纠错时间下降。
+* **采纳指标**：首次通过、错误类别、诊断耗时、修复耗时、重试次数、额外求解时间。遥测失败不得改变求解或审批状态。
+* **已实现**：`telemetry/correction.py` 以 best-effort 写 JSONL。语法门、动作 preflight 失败、自愈诊断与重试会记一条。写盘失败只记日志，不改返回状态。
+* **验收**：语法错误、错误 API、空区域、载荷方向/单位误解、收敛失败各至少一条负例有结构化记录。离线 fixture 已覆盖分类与字段完整性；这不是真机前后对照。
+* **未验证**：没有生产样本的首次通过率或纠错耗时下降数据。
+* **当前状态**：**IMPLEMENTED**（记录器已接入；未验收前不得声称纠错耗时已下降）
+
+#### 2026-10-28 Exa 方案复核：拒绝的替代
+以下方案已对照官方文档或一手来源，**不采纳**，不得再当待办：
+
+| 方案 | 为何不采纳 | 来源 |
+| :--- | :--- | :--- |
+| `replay=.rpy` 替代生成脚本 | 官方写明遇错继续，且不能执行带控制流的脚本 | [Replaying an Abaqus/CAE session](https://docs.software.vt.edu/abaqusv2025/English/SIMACAECAERefMap/simacae-c-dbsfilesreplay.htm) |
+| 无参 `waitForCompletion()` 替代 Sentinel | 只能用在已经跑起来的内核脚本里；无参会无限等待，与契约 1 冲突 | [Waiting for a job to complete](https://docs.software.vt.edu/abaqusv2025/English/SIMACAECMDRefMap/simacmd-c-intaclwait.htm) |
+| 把 abqpy / pyflakes / pylint 当运行时门 | abqpy 是编写期类型提示，不能在 CAE 内核里执行；静态检查抓不住 API 和物理错误 | [abqpy 2025](https://hailin.wang/abqpy/en/2025/getting_started.html) |
+| 默认 LLM 自修循环直接改模型重算 | 文献支持有界反馈，但不支持未经同意就改边界/阻尼 | [LLMloop](https://arxiv.org/html/2603.23613v1)；[OpenAI approvals](https://developers.openai.com/api/docs/guides/agents/guardrails-approvals) |
+| 交互式 CAE / Web 工作台来减少纠错 | 用户已明确拒绝交互式 UI；MCP 桥接是另一个产品形态 | 用户约束；REQ-4.4 仍为 BACKLOG |
+| psutil 进程树监督当作纠错方案 | 只能改进卡死检测，不减少语法、API 和理解偏差 | 本地既有可选依赖惯例；与本问题无关 |
+
+保留且与外部实践一致的方案：类型动作计划而不是自由脚本生成；提交前人工审批；`consistencyChecking=ON`；有界 `waitForCompletion(timeOut=...)`；失败后读 `.dat/.msg/.sta`；noGUI 完成用内核 Sentinel 而不是启动器退出码。官方 `datacheck` 只用于已生成的输入文件、正式求解之前，不替代脚本语法门，也不在本轮实施。
 
 ---
 

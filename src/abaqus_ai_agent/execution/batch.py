@@ -324,11 +324,52 @@ class BatchExecutor:
         for the kernel's own end-of-script evidence, bounded by ``timeout``.
         Without it the call keeps its previous contract: only workdir
         quiescence is checked, and ``completion_evidence`` says so.
+
+        An existing ``.py`` that fails ``compile()`` is returned as a structured
+        syntax failure and does not start the launcher. A missing path is not a
+        syntax verdict: that contract stays with the watchdog.
         """
         path = os.path.abspath(script_path)
+        syntax_failure = self._syntax_gate(path)
+        if syntax_failure is not None:
+            return syntax_failure
         return self._run((self.launcher, "cae", "noGUI=%s" % path),
                          timeout=timeout,
                          completion_sentinel=completion_sentinel)
+
+    def _syntax_gate(self, path):
+        """Return a failed BatchResult, or None when the launcher may start."""
+        try:
+            from .script_syntax import check_script_file
+            from ..telemetry.correction import record_correction_event
+        except Exception:
+            return None
+        try:
+            error = check_script_file(path)
+        except Exception:
+            return None
+        if error is None:
+            return None
+        try:
+            record_correction_event(
+                "syntax", "script_syntax_gate",
+                message=error.format(), source=error.path, first_pass=False,
+                metadata=error.to_dict(), workdir=self.workdir,
+            )
+        except Exception:
+            pass
+        detail = error.format()
+        return BatchResult(
+            command=(self.launcher, "cae", "noGUI=%s" % path),
+            return_code=2,
+            stdout="",
+            stderr=detail,
+            workdir=self.workdir,
+            duration=0.0,
+            settled=True,
+            settle_note=detail,
+            completion_evidence="syntax_blocked",
+        )
 
     def run_python(self, script_path, timeout=None):
         path = os.path.abspath(script_path)

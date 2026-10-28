@@ -135,6 +135,15 @@ class SelfHealingOrchestrator:
         from ..planning.compiler import compile_engineering_intent
         from ..validation.preflight import preflight_plan
 
+        def _observe(category, stage, message="", **fields):
+            try:
+                from ..telemetry.correction import record_correction_event
+                record_correction_event(
+                    category, stage, message=message, workdir=workdir, **fields,
+                )
+            except Exception:
+                pass
+
         initial_status = getattr(failed_run, "engineering_status", "UNKNOWN")
         attempts_records: List[HealingAttempt] = []
         all_remediations: List[RemediationAction] = []
@@ -160,6 +169,12 @@ class SelfHealingOrchestrator:
 
         for attempt_idx in range(1, bounded_max_attempts + 1):
             # 1. Harvest artifacts and diagnose
+            diagnosis_started = None
+            try:
+                import time as _time
+                diagnosis_started = _time.monotonic()
+            except Exception:
+                diagnosis_started = None
             texts = cls.extract_solver_texts(current_run, executor=getattr(agent, "executor", None), workdir=workdir)
             issues = diagnose_solver_artifacts(
                 msg_text=texts["msg"],
@@ -199,6 +214,25 @@ class SelfHealingOrchestrator:
             for iss in issues:
                 if iss not in all_diagnosed_issues:
                     all_diagnosed_issues.append(iss)
+
+            diagnosis_s = None
+            try:
+                if diagnosis_started is not None:
+                    import time as _time
+                    diagnosis_s = _time.monotonic() - diagnosis_started
+            except Exception:
+                diagnosis_s = None
+            issue_ids = tuple(getattr(iss, "diagnosis_id", "") for iss in issues)
+            _observe(
+                "convergence" if issue_ids else "other",
+                "solver_diagnosis",
+                message=",".join(issue_ids),
+                source=getattr(current_run, "job_name", "") or "",
+                first_pass=False,
+                retry_count=attempt_idx - 1,
+                diagnosis_s=diagnosis_s,
+                metadata={"issue_ids": list(issue_ids), "confirm_model_change": bool(confirm_model_change)},
+            )
 
             # 2. Check for unhealable failure modes
             if any(iss.diagnosis_id == "LICENSE_DENIED" for iss in issues):
@@ -241,6 +275,11 @@ class SelfHealingOrchestrator:
 
             preflight_res = preflight_plan(new_plan.actions)
             if not preflight_res.passed:
+                _observe(
+                    "preflight", "healing_preflight",
+                    message=str(getattr(preflight_res, "blockers", "")),
+                    first_pass=False, retry_count=attempt_idx,
+                )
                 break
 
             # 6. Apply actions to CAE executor if present
@@ -310,6 +349,20 @@ class SelfHealingOrchestrator:
             current_run = new_run
             current_intent = enriched_intent
             current_plan = new_plan
+
+            extra_solve_s = getattr(new_run, "duration", None)
+            if not isinstance(extra_solve_s, (int, float)):
+                meta = getattr(new_run, "metadata", None)
+                extra_solve_s = meta.get("duration") if isinstance(meta, dict) else None
+            _observe(
+                "convergence", "healing_attempt",
+                message=str(eng_status),
+                source=getattr(new_plan, "job_name", "") or "",
+                first_pass=False,
+                retry_count=attempt_idx,
+                extra_solve_s=extra_solve_s if isinstance(extra_solve_s, (int, float)) else None,
+                metadata={"accepted": bool(is_accepted)},
+            )
 
             if is_accepted:
                 healed = True
