@@ -1,6 +1,6 @@
 # Abaqus AI Agent
 
-面向 Abaqus/CAE 2025 的确定性工程代理。需求先路由成有类型的动作计划，经过结构校验、语法检查和求解前审批后才允许提交。只有求解证据和验收门禁一致时，才写出正式报告。
+把一条分析需求收成 Abaqus 模型、一次求解，以及一份能用证据答辩的报告。
 
 [English](README.md) | [需求与规划](docs/PROJECT_REQUIREMENTS_AND_PLAN.md)
 
@@ -9,70 +9,72 @@
 [![Abaqus](https://img.shields.io/badge/Abaqus-2025-blue.svg)](https://www.3ds.com/products-services/simulia/products/abaqus/)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 
-本仓库不是认证求解器，也不能代替分析人员签字。求解器仍是 Abaqus。仓库不包含许可证。
+求解器仍是 Abaqus。本仓库不提供许可证。生成的报告也不能代替分析人员签字。
 
-## 流水线
+## 问题
 
-```mermaid
-flowchart TD
-    NL[工程需求] --> Router[意图路由]
-    Router -->|缺参| Clarify[NEEDS_CLARIFICATION]
-    Router -->|有类型意图| Plan[动作计划]
-    Plan --> Structure[preflight_plan 只查动作结构]
-    Structure -->|动作非法| Stop[失败关闭]
-    Structure -->|通过| Script[Abaqus Python 脚本]
-    Script --> Syntax["compile 只查 Python 语法"]
-    Syntax -->|SyntaxError| NoLaunch[不启动 CAE]
-    Syntax -->|通过| Approval[求解前评审]
-    Approval -->|未审批| Browser[打开 pre_solve_review.html]
-    Approval -->|已审批| Solver[Standard 或 Explicit]
-    Solver --> Evidence[ODB 与求解日志]
-    Evidence --> Gates[验收门禁]
-    Gates -->|失败| Draft[report.diagnostic.html]
-    Gates -->|通过| Formal[report.html]
+自动 CAE 流程里，大头时间通常不在求解器。时间花在发现脚本无法解析、区域是猜的、单位对不上、作业其实没跑完，或者报告里的结论 ODB 并不支持。
+
+语言模型可以起草 Abaqus Python。它自己区分不了三件事：脚本跑过、分析做完、工程答案可接受。这个项目的存在，就是不让这三件事混成一句“完成了”。
+
+## 它是什么
+
+代理站在需求和 Abaqus/CAE 之间。它不替代前处理器，也不重新解释求解器。
+
+```text
+需求
+  -> 有类型的意图
+  -> 动作计划
+  -> Abaqus Python
+  -> CAE 内核
+  -> 求解器
+  -> ODB 与日志
+  -> 按声明的准则验收
+  -> 一份报告，或一份诊断
 ```
 
-这几步不是同一个检查。`preflight_plan()` 不解析 Python。`compile()` 不检查 Abaqus API、区域、单位或物理是否正确。审批是人工门，不是语法门。
+求解前，人要审模型、网格、边界和载荷。审的是默认浏览器打开的静态 HTML，不是另一套交互界面。审批只对这一份候选有效。模型一改，审批作废。
 
-| 阶段 | 模块 | 拦住什么 | 不判断什么 |
-|---|---|---|---|
-| 意图 | `typesafe_intent.py` | 几何、材料、边界、载荷或验收标准缺失 | 网格质量、收敛 |
-| 动作结构 | `validation/preflight.py` | 动作类型或参数不完整 | Python 语法 |
-| 脚本语法 | `execution/script_syntax.py` | 启动前的 `SyntaxError` / 源码 `ValueError` | `mdb` 或区域是否存在 |
-| 审批 | `execution/approval_service.py` | 未审批就提交 | 结果是否可接受 |
-| 完成信号 | `execution/batch.py` | `noGUI` 没有内核 sentinel | 求解是否成功 |
-| 验收 | `acceptance.py` | ODB 证据缺失、反力不平衡、准则失败 | 这个问题本身是否提对 |
+## 设计
 
-`abaqus cae noGUI` 没有文档化的语法检查、interactive 或 wait 选项。使用 `noGUI` 时，其他命令行选项会被忽略。依据：[Abaqus/CAE Execution, 2025](https://docs.software.vt.edu/abaqusv2025/English/SIMACAEEXCRefMap/simaexc-c-caeproc.htm)。
+五条规则决定架构。
 
-## 执行契约
+**语言不是权限。** 模型可以解释需求、提议建模选择、起草原生 Python。它不能绕过有类型的动作路径去改分析。模型能写出某项操作，不表示这项能力已被系统支持。
 
-1. **禁止无界等待。** 生成的求解等待必须带 `waitForCompletion(timeOut=...)`。裸等待会被拒绝。
-2. **内核命名空间隔离。** 生成片段在 `KernelNamespace` 中执行，不进入调用方 globals。
-3. **完成看内核 sentinel，不看启动器退出码。** Windows 上启动器可以先于 `ABQcaeK.exe` 返回。`noGUI` 的完成信号是内核写下的 `completed` / `blocked`。只有工作目录静止时，证据是 `quiescence_only`，不是脚本完成。
-4. **正式文件只有一个。** 通过的运行写 `report.html`。门禁失败写 `report.diagnostic.html`，不能靠改名变成正式件。
-5. **改模型默认只提案。** 诊断可以给出修改提案。重算必须显式 `confirm_model_change=True`，最多 3 次；许可证失败立即停止。默认不加阻尼、不改边界。
+**动作是建模单位。** 几何、材料、网格、分析步、边界、载荷和接触，都从有类型的动作编译出来。生成的脚本是计划的结果，不是计划本身。自由 Python 保留为显式逃生口，它的结果只是执行证据。
 
-## 已核实与未核实
+**证据分层。** 调了 API，不是模型状态。模型状态，不是作业完成。作业完成，不是 ODB。ODB，不是验收。上一层不成立，下一句结论不许出现。
 
-已在带许可证的 Abaqus 2025 上核实，范围只限对应算例：
+**失败保持失败。** 输入不全，停在澄清。计划非法，停在启动前。候选未审，停在求解前。验收不过，只出诊断报告。这些都不会被改写成一次完成的分析。
 
-- 官方悬臂梁，C3D20R，端部剪切：挠度 6.3330 mm，梁理论 6.4000 mm，相对差 1.05%；积分点应力 138.89 MPa，解析 138.56 MPa，相对差 0.23%。证据在 `machine_validation/`。
-- Case 07 接触 ODB，以及同目录记录的损坏 ODB 拒绝集。
-- 求解前审批会阻止提交并写出 `pre_solve_review.html`。同一工作目录审批后可以继续。模型内容变化会使原审批失效。
+**求解器和代理都不被盲信。** 响应由 Abaqus 计算。代理检查的是：要求的问题是否真的跑了，产物是否属于这次运行，声明的准则是否满足。它不会给出一个比求解器返回值“更好”的物理答案。
 
-尚未成立：
+## 范围
 
-- 不能声称纠错耗时已经下降。`telemetry/correction.py` 只把错误类别、首次通过、诊断耗时、重试次数和额外求解时间写入 JSONL。记录不是前后对照。
-- 宿主 `compile()` 使用本环境 Python 3.14.6。Abaqus 2025 的 Python 是 3.10.5。语法门能拦非法 Python 3，不能证明 CAE 内核会接受该脚本。
-- `abaqus python script.py` 不能运行导入 CAE 模块的脚本。依据：[Executing scripts](https://docs.software.vt.edu/abaqusv2025/English/SIMACAECMDRefMap/simacmd-c-intpythonandaclexecute.htm)。
-- replay 不能替代生成脚本。`replay=` 遇错继续，且不能执行带控制流的脚本。依据：[Replaying an Abaqus/CAE session](https://docs.software.vt.edu/abaqusv2025/English/SIMACAECAERefMap/simacae-c-dbsfilesreplay.htm)。
+目标分析面，是能写成闭合需求的结构与传热问题：线性和非线性静力、接触、连接器、隐式与显式动力、刚柔耦合、传热，以及这些分析依赖的网格和材料选择。
 
-单元测试通过不等于真机求解通过。`pytest` 标记分为 `unit`、`smoke`、`acceptance`、`live`。
+这是系统的方向，不是一份合格证书。不是每种过程、单元、接触公式和材料模型都已经鉴定过。一项能力要同时有类型动作、校验路径、结果语义和测试，才算被支持。真机证据只鉴定被点名的算例，不自动推广到相邻算例。
 
-## 安装
+已有的参照算例是 `machine_validation/` 下的官方悬臂梁：C3D20R，端部剪切，挠度与梁理论相差 1.05%，积分点应力与解析值相差 0.23%。同一主机上还跑过接触、审批阻断和损坏 ODB 拒绝。更宽的结论留在需求文档里，直到有同等证据。
 
-Python 3.10 及以上。只有真机求解才需要带许可证的 Abaqus 2025。
+## 时间实际耗在哪里
+
+贵的失败并不神秘。
+
+| 失败 | 停在哪里 | 仍要人做什么 |
+|---|---|---|
+| 需求不闭合 | 计划形成前 | 补几何、材料、支承、载荷或准则 |
+| 模型结构非法 | 脚本启动前 | 改分析定义 |
+| Python 无法解析 | CAE 启动前 | 改生成源码；这不证明 Abaqus API 有效 |
+| 模型未经审阅 | 求解提交前 | 读求解前评审，并批准这一份候选 |
+| 作业并未真正完成 | 读取结果前 | 查内核和求解器产物 |
+| 结果不满足准则 | 正式交付前 | 接受诊断，或改模型后重跑 |
+
+语法拒绝只去掉一类白跑。它去不掉错误区域、错误单位和被误解的传力路径。这些是建模错误，要到验收路径才变得可见。目前没有前后对照，不能说总纠错时间已经下降。
+
+## 使用
+
+Python 3.10 及以上。只有真正求解时才需要带许可证的 Abaqus 2025。
 
 ```bash
 git clone https://github.com/chenlei-gh/Abaqus-AI-Agent.git
@@ -81,63 +83,39 @@ python -m pip install -e ".[test]"
 python -m pytest tests -q -m unit
 ```
 
-## API
-
-`solve_requirement()` 返回 `EngineeringTaskResult`。状态是 `COMPLETED`、`NEEDS_CLARIFICATION`、`BLOCKED`、`FAILED` 或 `UNSUPPORTED`。没有 `is_deliverable`，也没有 `verdict`。
-
 ```python
 from abaqus_ai_agent import AbaqusAIAgent
 
-agent = AbaqusAIAgent(executor=None)  # 真机执行时传入 live executor
+agent = AbaqusAIAgent(executor=None)
 result = agent.solve_requirement(
     "200 x 20 x 5 mm 钢悬臂梁，根部固定，自由端 100 N 剪切",
     submit_job=False,
 )
-
-print(result.status.value)
-print(result.summary_card.get("status"))
-print(result.summary_card.get("review_report"))
-print(result.errors)
 ```
 
-默认 `submit_job=False`。审批阻断不代表已经求解。先看 `pre_solve_review.html`，审批该候选，再在同一工作目录重跑。输入内容变化会使审批失效。
-
-```python
-if result.status.value == "BLOCKED":
-    raise SystemExit("提交被阻断；求解前必须审批该候选")
-
-accepted = (
-    result.status.value == "COMPLETED"
-    and bool(getattr(result.acceptance, "passed", False))
-)
-```
-
-渲染成功时 HTML 在 `result.report_html`。这个字符串为空不是求解失败；失败原因看 `result.errors` 和 `result.run.engineering_status`。
-
-## 命令行
+默认不提交作业。这一步生成并检查分析候选，不求解。评审文件批准后，同一工作目录可以继续跑。任务完成和准则验收是两件事。
 
 ```bash
-abaqus-ai-agent ask "100 mm 钢悬臂梁，自由端向下 1000 N，根部固定" --dry-run --json
+abaqus-ai-agent ask "..." --dry-run
 abaqus-ai-agent approve --workdir ./run_workdir --by "analyst name"
-abaqus-ai-agent diagnose ./job_workdir --job-name Job-1
-abaqus-ai-agent report ./run_evidence.json --output ./report.html
-abaqus-ai-agent verify-deliverable ./run_evidence.json
 ```
 
-`ask --dry-run` 只编译意图和计划，不提交作业。`approve --by` 记录的是审阅者标签，不是身份证明。
+## 布局
 
-其余子命令：`inspect`、`matrix`、`diff`、`fmbd`、`memory`、`assets`、`material`。
+```text
+src/abaqus_ai_agent/
+  contracts/     意图、动作、证据、验收的类型
+  planning/      网格与分析规划
+  actions/       动作构造与脚本生成
+  execution/     CAE 内核、批处理作业、审批
+  validation/    启动前的结构校验
+  evidence/      产物与 ODB 证据
+  reporting/     正式报告与诊断报告
+  materials/     模型使用的材料记录
+  telemetry/     纠错与计时记录
+```
 
-## 已知边界
-
-Windows 上 `SMALauncher.exe` 拉起 CAE 内核后可以先退出。sentinel 覆盖的是已经埋点的 `noGUI` 脚本。没有埋点、且产物不再变化的内核，当前不能靠进程树杀掉。`psutil` 进程树监督可以改进卡死检测；它是可选项，不减少语法、API 或建模理解错误。
-
-## 文档
-
-- [需求与规划](docs/PROJECT_REQUIREMENTS_AND_PLAN.md) 是唯一规划文档。新需求更新这一份，不再另建路线图。
-- [真机证据](machine_validation/)
-- [建模输入说明](docs/user-model-input-guide.md)
-- [测试分级](docs/test-tier-governance.md)
+`docs/PROJECT_REQUIREMENTS_AND_PLAN.md` 是唯一规划文档。新需求写在那里。
 
 ## 许可证
 
