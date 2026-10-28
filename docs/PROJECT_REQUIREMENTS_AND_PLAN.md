@@ -215,7 +215,8 @@ flowchart TD
 * **明确不做**：不引入 pyflakes/pylint/abqpy 作为运行时门；不把 `compile()` 当成 Abaqus API 或物理正确性检查。
 * **已实现**：`execution/script_syntax.py` 对已存在的 `.py` 调用 `compile(source, filename, "exec")`。`BatchExecutor.run_nogui` 失败时返回 `completion_evidence="syntax_blocked"` 且不调用 watchdog。动作入口 `execute` / `execute_verified` 在进入内核前同样检查片段。缺失路径不是语法失败，仍交给原来的启动器契约。
 * **验收**：语法错误负例在启动器调用前失败；合法脚本不被误拦。离线测试已覆盖这两条。
-* **未验证**：未做真机前后耗时对照。语法门不检查 Abaqus API 或物理正确性。
+* **未验证**：未做真机前后耗时对照。语法门不检查 Abaqus API 或物理正确性。宿主 `compile()` 用的是本机 Python 3.14.6，不是 Abaqus 2025 的 Python 3.10.5；它只能拦 Python 3 语法错误，不能证明脚本能在 CAE 内核解析。
+* **2026-10-28 Exa 复核**：官方没有只做语法检查的 `noGUI` 选项。`abaqus python script.py` 不能执行导入 `abaqus` / `mdb` 的 CAE 脚本。更贴近解释器的可选增强是用 Abaqus 自带解释器做 `py_compile`，仍不启动 CAE；本轮未改代码。
 * **当前状态**：**IMPLEMENTED**（离线负例已过；不是 CLOSED，不得声称纠错耗时已下降）
 
 #### 需求 REQ-4.7：纠错耗时遥测
