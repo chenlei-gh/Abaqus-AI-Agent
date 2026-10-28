@@ -14,7 +14,10 @@ from abaqus_ai_agent.reasoning.material_catalog import (
     STANDARD_MATERIALS,
     match_engineering_material,
 )
-from abaqus_ai_agent.reasoning.mesh_inference import infer_mesh_specification
+from abaqus_ai_agent.reasoning.mesh_inference import (
+    MeshBaselineBlocked,
+    infer_mesh_specification,
+)
 from abaqus_ai_agent.reasoning.plausibility import audit_engineering_plausibility
 
 
@@ -71,16 +74,11 @@ def test_mesh_inference_from_bounding_box():
         id="T1", kind="linear_static", analysis_type="linear_static",
         description="Bracket",
     )
-    # Bounding dimensions: 100 x 50 x 10 mm (smallest is 10mm)
+    # Bounding dimensions are not a production seed. 100 x 50 x 10 used to
+    # invent about 1.25 mm; that path is now blocked.
     geom = {"box": [100.0, 50.0, 10.0]}
-    spec, inf = infer_mesh_specification(intent, geometry=geom)
-    assert spec is not None
-    # h should be ~ 10 / 8 = 1.25 mm, bounded above 0.5 mm
-    assert 1.0 <= spec.global_size <= 2.0
-    assert spec.element_type == "C3D8R"
-    assert inf is not None
-    assert inf.risk_level == InferenceRiskLevel.MEDIUM
-    assert "Derived global mesh size" in inf.rationale
+    with pytest.raises(MeshBaselineBlocked, match="Refusing the 2.5 mm fallback"):
+        infer_mesh_specification(intent, geometry=geom)
 
 
 def test_mesh_inference_large_scale_refuses_dumb_2_5mm():
@@ -88,24 +86,38 @@ def test_mesh_inference_large_scale_refuses_dumb_2_5mm():
         id="T2", kind="linear_static", analysis_type="linear_static",
         description="Large Bridge Girder",
     )
-    # Bounding dimensions: 20000 x 2000 x 500 mm (smallest is 500mm)
+    # A large bounding box must not invent a scaled millimeter seed either.
     geom = {"box": [20000.0, 2000.0, 500.0]}
-    spec, inf = infer_mesh_specification(intent, geometry=geom)
-    # Should scale with dimensions instead of hardcoding 2.5mm
-    assert spec.global_size > 20.0
-    assert inf is not None
+    with pytest.raises(MeshBaselineBlocked, match="Refusing the 2.5 mm fallback"):
+        infer_mesh_specification(intent, geometry=geom)
 
 
 def test_mesh_inference_selects_c3d8i_for_contact():
+    """Contact no longer selects C3D8I when the size itself is missing.
+
+    Element-type inference used to ride on the bounding-box size path. That
+    path is blocked until a verified size exists; S1 does not restore it.
+    """
     intent = EngineeringIntent(
         id="T3", kind="contact", analysis_type="contact",
         description="Contact pair assembly",
         contacts=({"master": "SurfaceA", "slave": "SurfaceB"},),
     )
     geom = {"box": [100.0, 50.0, 20.0]}
-    spec, inf = infer_mesh_specification(intent, geometry=geom)
-    assert spec.element_type == "C3D8I"
-    assert "C3D8I" in inf.rationale
+    with pytest.raises(MeshBaselineBlocked, match="Refusing the 2.5 mm fallback"):
+        infer_mesh_specification(intent, geometry=geom)
+
+
+def test_mesh_inference_user_specified_size_keeps_source():
+    intent = EngineeringIntent(
+        id="T3b", kind="linear_static", analysis_type="linear_static",
+        description="Bracket with an explicit seed",
+        mesh_requirements={"global_size": 3.0, "element_type": "C3D8R"},
+    )
+    spec, inf = infer_mesh_specification(intent, geometry={"box": [100.0, 50.0, 10.0]})
+    assert spec.global_size == 3.0
+    assert spec.size_source == "USER_SPECIFIED"
+    assert inf is None
 
 
 # =====================================================================
@@ -163,27 +175,27 @@ def test_unit_system_consistency_flags_si_pascal_in_mm_model():
 # 4. Intent Reasoning Engine Orchestration & HITL Governance Tests
 # =====================================================================
 
-def test_engine_assists_incomplete_intent_safely():
-    """Valid problem with missing mesh and simplified material string -> ASSISTED."""
+def test_engine_blocks_missing_mesh_baseline():
+    """A resolved material does not make a missing mesh size executable."""
     intent = EngineeringIntent(
         id="T7", kind="linear_static", analysis_type="linear_static",
         description="Analyze bracket",
-        material=None,  # Not given in intent
+        material=None,
         boundary_conditions=({"type": "encastre", "region": "FixedFace"},),
         loads=({"type": "concentrated_force", "magnitude": 5000.0, "region": "TipFace"},),
         metadata={"dimensions": [{"value": 100.0, "unit": "mm"}, {"value": 20.0, "unit": "mm"}]},
     )
     result = IntentReasoningEngine.reason(
         intent=intent,
-        material="Q235B",  # Provided as string query
+        material="Q235B",
         geometry={"box": [100.0, 50.0, 20.0]},
     )
-    assert result.is_executable
-    assert result.status == ReasoningStatus.ASSISTED
+    assert not result.is_executable
+    assert result.status == ReasoningStatus.BLOCKED
     assert result.inferred_material is not None
     assert result.inferred_material["name"] == "Q235"
-    assert result.inferred_mesh is not None
-    assert len(result.inferences) >= 2
+    assert result.inferred_mesh is None
+    assert any("Refusing the 2.5 mm fallback" in b for b in result.blockers)
 
 
 def test_engine_blocks_rigid_body_mode():
@@ -273,8 +285,8 @@ def test_solve_requirement_enriches_and_solves_assisted_requirement(monkeypatch)
         submit_job=False,
         geometry={"box": [100.0, 20.0, 10.0]},
     )
-    # The requirement should pass through reasoning, enrich mesh, compile, and execute
+    # Material can still be inferred, but a missing mesh size blocks before compile.
+    assert res.status == TaskStatus.BLOCKED
     assert res.summary_card is not None
-    assert "reasoning_status" in res.summary_card
-    assert res.summary_card["reasoning_status"] in ("RESOLVED", "ASSISTED")
-    assert len(res.summary_card.get("inferences", [])) >= 1
+    assert res.summary_card["status"] == "BLOCKED"
+    assert any("Refusing the 2.5 mm fallback" in str(err) for err in res.errors)

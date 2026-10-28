@@ -15,7 +15,7 @@
 
 | 模块 | 当前行数 | 最终处置 | 证据与依赖结论 |
 |---|---:|---|---|
-| `mesh_audit.py` | 519 | 保留 | 3 个测试模块覆盖 INP 四边形/六面体 Jacobian 审计；它调用 `mesh_gate`，但当前生产 `mesh_quality` 是 `planning/compiler.py -> actions/builders.py -> actions/script.py -> analysis_run.py -> acceptance.py` 的原生 Abaqus 链，二者不可混同。`C3D10M` 四面体明确不受该审计器支持。 |
+| `mesh_audit.py` | 已删除 | 2026-10-28 删除 | 原“保留”处置已被综合网格链收口覆盖。它只审四边形/六面体，不审 C3D10M，且生产零调用。生产质量仍是原生 `verifyMeshQuality`。 |
 | `contracts/benchmarks_catalog.py` | 562 | 保留 | 2 个测试和 3 个资格工具使用 22 项官方基准、引用、容差和参数契约，承载基准可复现性。 |
 | `perception/image_context.py` | 415 | 保留 | 测试覆盖图片魔数/CRC、元数据对齐、有界切片和整图阻断；按 T-P12 保持感知包 B 级可达性，不据此判断产品已启用。 |
 | `results/query_protocol.py` | 377 | 保留 | `results/__init__.py` re-export，导入 `results` 子模块时会加载；测试覆盖标量/热点/证据查询、raw-array 阻断、预算和 token 压缩。`contracts/capability.py` 的 `.results` 是 `contracts.results`，不是根 `results` 包。 |
@@ -28,7 +28,7 @@
 | `actions/raw.py` | 10 | 删除候选 | 未发现模块导入；`actions/builders.py::python_action` 已承担该能力。历史 test/tool 计数是同名符号文本命中，不是模块消费者。 |
 | `contracts/input.py` | 17 | 删除候选 | 未发现模块消费者；`ExperimentInput` 无调用，历史计数是同名符号文本命中。 |
 
-“明确不支持”没有整模块归属；`mesh_audit` 保留的同时，`C3D10M` 路径必须写成明确能力边界，不能用该模块证明 C3D10M 网格质量。三个删除候选均未删除，后续必须逐文件单独批准。
+`mesh_audit.py` 已于 2026-10-28 删除。C3D10M 质量由原生 `verifyMeshQuality` 证明，不能由已删的手写 Jacobian 审计器证明。三个删除候选的后续审批不受这次网格收口影响。
 
 ### 名单口径差异
 

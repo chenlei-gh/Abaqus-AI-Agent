@@ -11,6 +11,9 @@ class LocalSeed:
     size: Optional[float] = None
     number: Optional[int] = None
     constraint: Optional[str] = None
+    feature: Optional[str] = None
+    analysis_intent: Optional[str] = None
+    evidence: Tuple[str, ...] = ()
 
     def __post_init__(self):
         if not self.region_expression:

@@ -185,7 +185,8 @@ class IntentStepSpec:
 @dataclass(frozen=True)
 class IntentMeshSpec:
     element_type: str = "C3D8R"
-    global_size: float = 2.5
+    global_size: Optional[float] = None
+    size_source: Optional[str] = None  # "USER_SPECIFIED" or "ABAQUS_DEFAULT_SIZE"
     deviation_factor: float = 0.1
     element_library: str = "STANDARD"  # "STANDARD", "EXPLICIT"
     local_seeds: Tuple[LocalSeed, ...] = ()
@@ -201,8 +202,21 @@ class IntentMeshSpec:
     max_skew: Optional[float] = None
 
     def __post_init__(self):
-        if self.global_size is None or float(self.global_size) <= 0:
-            raise ValueError(f"global_size must be positive, got {self.global_size!r}")
+        source = self.size_source
+        if self.global_size is None:
+            if source is not None:
+                raise ValueError("size_source requires a positive finite global_size")
+        else:
+            size = self.global_size
+            if isinstance(size, bool) or not isinstance(size, (int, float)) or not math.isfinite(float(size)) or float(size) <= 0:
+                raise ValueError(f"global_size must be a positive finite number, got {self.global_size!r}")
+            if source is None:
+                source = "USER_SPECIFIED"
+                object.__setattr__(self, "size_source", source)
+            if source not in ("USER_SPECIFIED", "ABAQUS_DEFAULT_SIZE"):
+                raise ValueError(
+                    "size_source must be USER_SPECIFIED or ABAQUS_DEFAULT_SIZE, got %r" % (source,)
+                )
         if self.deviation_factor is None or not (0.0 <= float(self.deviation_factor) <= 1.0):
             raise ValueError(f"deviation_factor must be in [0, 1], got {self.deviation_factor!r}")
         lib_str = str(self.element_library).upper()
@@ -221,6 +235,9 @@ class IntentMeshSpec:
                         size=s.get("size"),
                         number=s.get("number"),
                         constraint=s.get("constraint"),
+                        feature=s.get("feature"),
+                        analysis_intent=s.get("analysis_intent"),
+                        evidence=tuple(s.get("evidence") or ()),
                     ))
                 else:
                     raise TypeError(f"Invalid local seed item: {s!r}")
@@ -399,7 +416,7 @@ def compile_intent_to_actions(
     step: Optional[IntentStepSpec] = None,
     bcs: Sequence[IntentBoundarySpec] = (),
     loads: Sequence[IntentLoadSpec] = (),
-    mesh: IntentMeshSpec = IntentMeshSpec(),
+    mesh: Optional[IntentMeshSpec] = None,
     grounded_regions: Optional[Dict[str, GroundedRegion]] = None,
     steps: Optional[Sequence[IntentStepSpec]] = None,
     procedure: Optional[MultiStepProcedureSpec] = None,
@@ -417,6 +434,11 @@ def compile_intent_to_actions(
     physics_domain: Optional[str] = None,
 ) -> CompiledAgentPlan:
     """Compile declarative engineering specifications into canonical AbaqusActions and CAE script."""
+    if mesh is None or mesh.global_size is None:
+        raise ValueError(
+            "Mesh baseline is unspecified. Production meshing refuses the implicit 2.5 mm default. "
+            "Provide a positive USER_SPECIFIED global_size, or a verified per-part ABAQUS_DEFAULT_SIZE."
+        )
     from ..reasoning.material_catalog import enforce_material_disposition
     material = enforce_material_disposition(
         material,
@@ -1698,21 +1720,27 @@ def compile_intent_to_actions(
     # mesh, and a failed partition is not retried with a smaller seed.
     from ..contracts.mesh_quality import tet_mesh_script
 
-    def _append_part_mesh(target_expr, *, tetrahedral):
+    def _append_part_mesh(target_expr, *, tetrahedral, edge_seed_lines=(), readback=""):
         lines = [
             "import mesh\nfrom abaqusConstants import *\n",
-            "%s.seedPart(size=%s, deviationFactor=%s)\n" % (
+            "%s.seedPart(size=%s, deviationFactor=%s, minSizeFactor=0.1)\n" % (
                 target_expr, mesh.global_size, mesh.deviation_factor,
             ),
+        ]
+        lines.extend(edge_seed_lines)
+        if readback:
+            from ..reasoning.mesh_inference import edge_seed_readback_script
+            lines.append(edge_seed_readback_script(target_expr, ()))
+        lines.extend([
             "elemType1 = mesh.ElemType(elemCode=%s, elemLibrary=%s)\n" % (
                 mesh.element_type, mesh.element_library,
             ),
             "%s.setElementType(regions=(%s.cells,), elemTypes=(elemType1,))\n" % (
                 target_expr, target_expr,
             ),
-        ]
+        ])
         if tetrahedral:
-            lines.append(tet_mesh_script(target_expr))
+            lines.append(tet_mesh_script(target_expr, mesh.global_size))
         else:
             lines.append("%s.generateMesh()\n" % target_expr)
         actions.append(builders.python_action(model_name, "".join(lines)))
@@ -1744,6 +1772,10 @@ def compile_intent_to_actions(
             tetrahedral=tetrahedral_mesh,
         )
     else:
+        # Global seedPart is emitted inside the mesh script. Edge seeds must
+        # follow it and precede generateMesh; emitting them as earlier actions
+        # would run them before the global seed.
+        edge_seed_lines = []
         if mesh.local_seeds:
             for ls in mesh.local_seeds:
                 reg_expr = getattr(ls, "region_expression", None)
@@ -1754,26 +1786,29 @@ def compile_intent_to_actions(
                 c_map = {"SMOOTH": "FREE", "NONE": "FREE", "CONTROLLED": "FIXED"}
                 ls_c = c_map.get(ls_c_str, ls_c_str)
                 if ls_size is not None:
-                    actions.append(builders.local_seed_size(
+                    seed_action = builders.local_seed_size(
                         model=model_name,
                         part=part_name,
                         region_expression=reg_expr,
                         size=ls_size,
                         constraint=ls_c,
-                    ))
+                    )
                 elif ls_num is not None:
-                    actions.append(builders.local_seed_number(
+                    seed_action = builders.local_seed_number(
                         model=model_name,
                         part=part_name,
                         region_expression=reg_expr,
                         number=ls_num,
                         constraint=ls_c,
-                    ))
+                    )
                 else:
                     raise ValueError(f"Local seed requires either size or number: {ls}")
+                edge_seed_lines.append(action_to_script(seed_action) + "\n")
         _append_part_mesh(
             "mdb.models['%s'].parts['%s']" % (model_name, part_name),
             tetrahedral=tetrahedral_mesh,
+            edge_seed_lines=edge_seed_lines,
+            readback="required" if edge_seed_lines else "",
         )
 
     # 11b. Mesh Quality Verification Action
@@ -1889,10 +1924,23 @@ def compile_intent_to_actions(
     # The runtime geometry guard is emitted once, ahead of every action, so it is
     # in force before any geometry mutation can run. Per-action emission would
     # repeat the prelude dozens of times for no added protection.
+    from ..contracts.geometry_cleanup import GeometryCleanupPolicy
+
+    # The tetrahedron calls are screened by the runtime callback. The first may
+    # ignore short edges. The second may merge small faces only inside the
+    # region built after a failed shape-factor check. Repair and ignoreEntity
+    # stay denied.
+    tet_policy = GeometryCleanupPolicy(
+        part="*", allow_virtual_topology=True, allow_repair=False,
+    ) if tetrahedral_mesh else None
     render_bodies = []
     needs_guard = False
     for act in actions:
-        body = action_to_script(act, include_guard=False)
+        body = action_to_script(
+            act,
+            cleanup_policies=tet_policy if tetrahedral_mesh else None,
+            include_guard=False,
+        )
         if act.action_type == "python":
             needs_guard = True
         render_bodies.append((act.action_type, body))
@@ -1905,7 +1953,7 @@ def compile_intent_to_actions(
     ):
         needs_guard = True
     if needs_guard:
-        script_lines.append(render_geometry_guard(None, ""))
+        script_lines.append(render_geometry_guard(tet_policy, ""))
         script_lines.append("")
     for action_type, code_str in render_bodies:
         script_lines.append(f"# Action: {action_type}")
@@ -1939,6 +1987,7 @@ def compile_intent_to_actions(
         "fmbd_specs_count": (len(fmbd.rigid_bodies) + len(fmbd.flexible_interfaces)) if fmbd else 0,
         "fmbd": fmbd.to_dict() if fmbd else None,
         "fatigue": fatigue.to_dict() if fatigue else None,
+        "mesh_sizing": _mesh_sizing_evidence(mesh),
     }
 
     return CompiledAgentPlan(
@@ -1957,6 +2006,68 @@ def compile_intent_to_actions(
             else ()
         ),
     )
+
+
+def _mesh_sizing_decision(intent: EngineeringIntent, mesh: IntentMeshSpec):
+    from ..reasoning.mesh_inference import MeshSizeDecision, decide_mesh_sizing
+    """Apply S2-S6 to explicit feature requests. A bare baseline stays READY.
+
+    Callers that already located an edge and put it in ``local_seeds`` keep that
+    executable seed. Feature requests without an edge, intent, or proven
+    partition are blocked here, before any CAE script is emitted. S5 remains
+    ``NOT_SWITCHED`` and S6 never adds an action.
+    """
+    meta = getattr(intent, "metadata", None) or {}
+    features = list(meta.get("mesh_features") or ())
+    intents = list(meta.get("mesh_analysis_intents") or ())
+    if not features and not mesh.local_seeds:
+        return MeshSizeDecision(
+            baseline_size=mesh.global_size,
+            baseline_source=mesh.size_source,
+            status="READY",
+            adaptive_capability="EXCLUDED",
+        )
+    for seed in mesh.local_seeds:
+        feature = getattr(seed, "feature", None)
+        analysis_intent = getattr(seed, "analysis_intent", None)
+        if not feature and not analysis_intent:
+            continue
+        features.append({
+            "kind": feature or "hole",
+            "region_expression": seed.region_expression,
+            "size": seed.size,
+            "number": seed.number,
+            "constraint": seed.constraint,
+            "evidence": getattr(seed, "evidence", ()) or ("caller_located_edge",),
+        })
+        if analysis_intent:
+            intents.append(analysis_intent)
+    procedure = str(getattr(intent, "analysis_type", None) or getattr(intent, "kind", None) or "static")
+    solver = "EXPLICIT" if "explicit" in procedure.lower() or mesh.element_library == "EXPLICIT" else "STANDARD"
+    return decide_mesh_sizing(
+        baseline_size=mesh.global_size,
+        baseline_source=mesh.size_source,
+        analysis_intents=intents,
+        features=features,
+        element_family=mesh.element_type,
+        solver=solver,
+        procedure=procedure,
+        partition_proven=bool(meta.get("thickness_partition_proven")),
+    )
+
+
+def _mesh_sizing_evidence(mesh: IntentMeshSpec) -> Dict[str, Any]:
+    return {
+        "baseline_size": mesh.global_size,
+        "baseline_source": mesh.size_source,
+        "planned_edge_seeds": len(mesh.local_seeds),
+        "edge_coverage": "PLANNED_ONLY" if mesh.local_seeds else "NOT_REQUESTED",
+        "edge_coverage_note": "getEdgeSeeds readback is required before coverage can be claimed",
+        "production_default": "NOT_SWITCHED",
+        "adaptive_remeshing": "EXCLUDED",
+        "explicit_stable_increment": "ESTIMATED_ONLY_NOT_SOLVER_REPORTED",
+        "job_submitted_for_mesh_stage": False,
+    }
 
 
 def _extract_gr_pts_and_anchor(gr: Any) -> Tuple[Tuple[Tuple[float, float, float], ...], Optional[Tuple[float, float, float]]]:
@@ -2721,23 +2832,36 @@ def compile_engineering_intent(
                         size=item.get("size"),
                         number=item.get("number"),
                         constraint=item.get("constraint"),
+                        feature=item.get("feature"),
+                        analysis_intent=item.get("analysis_intent"),
+                        evidence=tuple(item.get("evidence") or ()),
                     ))
                 else:
                     raise TypeError(f"Invalid local seed item in dict: {item!r}")
-            raw_g_size = m_req.get("global_size", 2.5)
-            if raw_g_size is None or float(raw_g_size) <= 0:
-                raise ValueError(f"Explicit mesh requirement global_size must be positive, got {raw_g_size!r}")
+            raw_g_size = m_req.get("global_size")
+            if raw_g_size is None:
+                raise ValueError(
+                    "mesh_requirements.global_size is unspecified; refusing the 2.5 mm fallback. "
+                    "Provide USER_SPECIFIED size or a verified ABAQUS_DEFAULT_SIZE."
+                )
+            if isinstance(raw_g_size, bool) or not isinstance(raw_g_size, (int, float)) or not math.isfinite(float(raw_g_size)) or float(raw_g_size) <= 0:
+                raise ValueError(f"Explicit mesh requirement global_size must be a positive finite number, got {raw_g_size!r}")
+            raw_source = m_req.get("size_source") or "USER_SPECIFIED"
             eff_mesh = IntentMeshSpec(
                 element_type=m_req.get("element_type", "C3D8R"),
                 global_size=float(raw_g_size),
+                size_source=raw_source,
                 deviation_factor=float(m_req.get("deviation_factor", 0.1)),
                 element_library=m_req.get("element_library", "STANDARD"),
                 local_seeds=tuple(parsed_local_seeds),
             )
         else:
             raise TypeError(f"Unsupported mesh_requirements type: {type(intent.mesh_requirements)}")
-    if eff_mesh is None:
-        eff_mesh = IntentMeshSpec()
+    if eff_mesh is None or getattr(eff_mesh, "global_size", None) is None:
+        raise ValueError(
+            "Mesh baseline is unspecified. Production meshing refuses the implicit 2.5 mm default. "
+            "Provide a positive USER_SPECIFIED global_size, or a verified per-part ABAQUS_DEFAULT_SIZE."
+        )
 
     # Check unresolvable partition requirements in mesh metadata
     geom_plan = intent.metadata.get("geometry_mesh_plan")
@@ -2752,6 +2876,22 @@ def compile_engineering_intent(
                 f"Mesh refinement requires unexecuted geometric partitioning for targets: {targets}. "
                 "Fail-closed: cannot silently omit partition-dependent local mesh refinement."
             )
+
+    sizing_decision = _mesh_sizing_decision(intent, eff_mesh)
+    if sizing_decision.status != "READY":
+        from ..reasoning.mesh_inference import MeshConstraintBlocked
+        reasons = "; ".join(
+            "%s: %s" % (item.feature, item.reason) for item in sizing_decision.unsupported
+        ) or "mesh sizing decision is not READY"
+        raise MeshConstraintBlocked(
+            "Required mesh constraint is not executable (%s). "
+            "Refusing to emit a production mesh script." % reasons
+        )
+    if sizing_decision.edge_constraints:
+        eff_mesh = replace(
+            eff_mesh,
+            local_seeds=tuple(item.as_local_seed() for item in sizing_decision.edge_constraints),
+        )
 
     # 7.5. Topological Grounding Gate for non-primitive geometry
     is_step_or_external = (

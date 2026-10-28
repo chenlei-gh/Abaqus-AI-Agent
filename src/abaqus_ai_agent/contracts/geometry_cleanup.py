@@ -38,6 +38,12 @@ VIRTUAL_TOPOLOGY_API_TOKENS = (
     "restoreIgnoredEntity",
     "createVirtualTopology",
 )
+# The tetrahedron partition may call only this method. The first call ignores
+# short edges. The second call, emitted only after a failed shape-factor check,
+# may merge small faces inside a region built by the same script. Selecting an
+# edge or a face by hand remains denied.
+TET_VIRTUAL_TOPOLOGY_MARKER = "_abqai_vt = "
+TET_SECONDARY_VIRTUAL_TOPOLOGY_MARKER = "_abqai_vt2 = "
 
 # Geometry-preparation tolerances do not delete or merge topological entities,
 # so they are not repair-class denials. They do change how the mesh is built, so
@@ -142,6 +148,24 @@ def _abqai_install_geometry_guard():
             )
         _entry = _spec_for(_part)
         _allowed = bool(_entry.get(_kind, False)) if _entry is not None else False
+        if _allowed and _kind == "virtual_topology":
+            # Keyword form only. ignoreEntity and a positional call stay blocked.
+            if _name != "createVirtualTopology" or _args:
+                _allowed = False
+            elif not bool(_kargs.get("mergeShortEdges", False)):
+                _allowed = False
+            elif _kargs.get("shortEdgeThreshold") in (None, False):
+                _allowed = False
+            else:
+                _secondary = bool(_kargs.get("mergeSmallFaces", False))
+                if _secondary and _kargs.get("smallFaceAreaThreshold") in (None, False):
+                    _allowed = False
+                for _flag in (
+                    "mergeSliverFaces", "mergeSmallAngleFaces",
+                    "mergeThinStairFaces", "applyBlendControls",
+                ):
+                    if bool(_kargs.get(_flag, False)):
+                        _allowed = False
         if _allowed:
             return None
         _state["violations"].append({"part": _part, "method": _name, "kind": _kind})
@@ -233,9 +257,40 @@ def _action_denying_tokens(action_type, parameters, policy):
             denied.extend(token for token in REPAIR_API_TOKENS if token in code)
         if not policy.allow_virtual_topology:
             denied.extend(
-                token for token in VIRTUAL_TOPOLOGY_API_TOKENS if token in code
+                token for token in VIRTUAL_TOPOLOGY_API_TOKENS
+                if token in code and not _is_bounded_tet_virtual_topology(code, token)
             )
     return denied
+
+
+def _is_bounded_tet_virtual_topology(code, token):
+    """True only for the calls ``tet_mesh_script`` emits.
+
+    This is a text pre-check, not authorisation. The runtime guard still blocks
+    ``ignoreEntity`` and any ``createVirtualTopology`` that is not a marked
+    call. A snippet that copies a marker but also selects entities by hand is
+    still denied. The secondary small-face merge is allowed only together with
+    its own marker.
+    """
+    if token != "createVirtualTopology":
+        return False
+    if TET_VIRTUAL_TOPOLOGY_MARKER not in code:
+        return False
+    forbidden = (
+        "ignoreEntity",
+        "ignoreEntities",
+        "restoreIgnoredEntity",
+        "mergeSliverFaces=True",
+        "mergeSmallAngleFaces=True",
+        "mergeThinStairFaces=True",
+        "applyBlendControls=True",
+        ".repair(",
+    )
+    if any(item in code for item in forbidden):
+        return False
+    if "mergeSmallFaces=True" in code:
+        return TET_SECONDARY_VIRTUAL_TOPOLOGY_MARKER in code
+    return True
 
 
 def _policy_payload(policies):

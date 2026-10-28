@@ -69,8 +69,6 @@ from .golden_evidence import (
 from .engineering_evidence import reaction_balance_from_field_evidence, energy_ratio_from_history_evidence
 
 from .contracts.mesh_strategy import MeshRefinementRequest, GeometryMeshPlan
-from .planning.mesh_strategy import plan_geometry_mesh
-from .planning.mesh_strategy import local_seeds_from_geometry_plan, mesh_specification_from_geometry_plan
 from .contracts.geometry_features import GeometryFeature, GeometryFeatureEvidence, characterize_geometry
 from .capability_boundary import CapabilityBoundary, CapabilityStatus, classify_action
 from .fatigue import stress_range_and_amplitude, turning_points, rainflow_count, goodman_corrected_amplitude, miner_damage, fatigue_life_blocks, sn_life, reduce_multiaxial_history

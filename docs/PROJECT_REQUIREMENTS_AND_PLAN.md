@@ -149,7 +149,7 @@ flowchart TD
   |-- Phase 4.6: 启动 CAE 前 compile() 语法门（离线负例已过，未做真机耗时） [IMPLEMENTED]
   |-- Phase 4.7: 纠错耗时结构化遥测（记录器已接，未验收前不得声称下降） [IMPLEMENTED]
   |-- Phase 4.8: 材料非线性数据充分性门禁（deck 门禁有真机证据，非线性结论未鉴定） [IMPLEMENTED]
-  |-- Phase 4.9: 一次合格四面体剖分，失败即停（离线门禁已过，未做 M1FA 真机） [IMPLEMENTED]
+  |-- Phase 4.9: S2–S6 已接入网格链；生产默认未切换，真机边覆盖未验证，不是 CLOSED [IMPLEMENTED]
   |-- Phase 4.4: 交互式工程工作台 (Web UI / IDE 插件扩展)          [BACKLOG]
   |-- Phase 4.5: 求解前评审报告自动浏览器展示                       [CLOSED]
 ========================================================================
@@ -285,15 +285,44 @@ flowchart TD
   * 来源：[Part object](https://docs.software.vt.edu/abaqusv2025/English/SIMACAEKERRefMap/simaker-c-partedtpyc.htm)、[Verifying your mesh](https://docs.software.vt.edu/abaqusv2025/English/SIMACAECAERefMap/simacae-c-mgnconcpartitionverify.htm)、[Tetrahedral boundary mesh](https://docs.software.vt.edu/abaqusv2025/English/SIMACAECAERefMap/simacae-c-mgnconcmeshingfreepreview.htm)。
 * **已实现**：
   * 剖分前只读 `geometryValidity` 与 `checkGeometry(detailed=ON, level=20)`。官方写明 `checkGeometry` 失败时更新存储的有效性状态，不保证抛异常；所以必须在调用后再读 `geometryValidity`。无效几何回 CAD，不打开 `allow_repair`，不打开虚拟拓扑。
-  * 四面体只剖分一次。禁止换种子循环，禁止 `algorithm=NON_DEFAULT`。
+  * 四面体先剖分一次。剖分前调用一次 `createVirtualTopology(mergeShortEdges=True, shortEdgeThreshold=0.2*seed, ignoreRedundantEntities=True, cornerAngleTolerance=30)`。没有可忽略实体时记录后继续。禁止换种子循环，禁止 `algorithm=NON_DEFAULT`。
+  * 体网格低于形状因子门槛时，允许一次二次改进：用 `Face.getElementFaces()` 把失败单元及其 `getAdjacentElements()` 对到实际承载它们的小几何面，再用 `getFacesByFaceAngle(60)` 加入浅夹角相邻小面，只把这些面交给第二次 `createVirtualTopology(regions=..., mergeSmallFaces=True)`，然后删除网格并重新 `generateMesh`。不是把四面体互相合并，也不用单元节点 `findAt` 猜面。60° 是官方角度法的 0–90° 输入，对应文档建议的 120°–240° 夹角。找不到合格面、第二次仍失败，或面属于已有载荷/边界/接触 surface，都停止。不再做第三次。
   * 四面体体网格后同时检查 `ANALYSIS_CHECKS` 与 `SHAPE_FACTOR`。六面体不发 `SHAPE_FACTOR`。`ANALYSIS_CHECKS` 不能单独当门禁。非四面体路径只播种一次，不得在 `seed_part` 之后再调一次 `seedPart`。
   * 失败、缺失质量结果、失败单元或形状因子低于 0.0001，在审批门之前返回 `SUBMISSION_BLOCKED`。
   * 同一 datacheck / 网格错误签名只允许一次重交。
   * 实体重叠不得自动建接触，也不得用 `adjustMethod` / `adjustTolerance` 掩盖。
-* **明确不做**：不自动去特征；不把细化种子当修复；不把通过质量门禁说成已收敛；不改 M1FA 项目外的手工脚本。
+* **明确不做**：不调用 `repair()`；不手选 `ignoreEntity`；不合并细长面、台阶面或圆角；不把坏四面体直接粘成孤立网格。第一次剖分不合并小面。二次改进只合并失败单元相邻的小面，CAD 实体仍可恢复。不把细化种子当修复；不把通过质量门禁说成已收敛；不改 M1FA 项目外的手工脚本。
 * **验收门槛**：零/负体积单元 0、`ANALYSIS_CHECKS.failedElements` 0、四面体 shape factor 不低于 0.0001。这只表示可以继续检查，不能声称一次得到最终高质量网格。
-* **验证**：`tests/test_mesh_continuation_gate.py` 6 条通过；`tests/test_p1_4_self_healing.py` 22 条通过。未跑 M1FA 真机，不得声称该项目已验证。
-* **当前状态**：**IMPLEMENTED**（离线门禁已过；不是 CLOSED）
+* **真机证据（2026-10-28，Abaqus/CAE 2025，`C:\SIMULIA\Commands\abaqus.bat`）**：
+  * 几何 `D:/AbaqusProjects/M1FA/M1FA_VENT_ASM_CTR_20261025.stp`，种子 2.5 mm，不修几何，不换种子，不提交求解。证据 `machine_validation/m1fa_mesh_continuation_evidence.json`，原始日志 `D:/AbaqusProjects/M1FA/working/REQ49_MESH/probe.log`。
+  * STEP 有 6 个 body。门禁在 Body-1 失败后停止，总耗时 7.51 秒：导入 5.42 秒，边界预览 0.831 秒，内部网格 0.247 秒。
+  * Body-1 几何有效，723 面，21765 个四面体。`ANALYSIS_CHECKS` 失败单元为 0，但 30 个单元低于形状因子 0.0001，最差 `1.607e-09`，状态 `BLOCKED`。警告单元 2044。
+  * 旧基线来自 `diag_mesh.log` / `fixmesh.log` / `build.log`：6 体、C3D10、seed 2.5、97265 单元，43850 个坏单元，最差体积 `-1.093e+04`。一次剖分本来只要 19–24 秒；4.4 小时是坏网格被反复求解，不是一次剖分耗时。
+* **对照结论**：速度从反复求解数小时降到 Body-1 约 8 秒即停止。质量没有提升到可提交；`ANALYSIS_CHECKS` 通过不能当合格网格。Body 2–6 未剖分，不得把这次结果说成 6 体网格已验证，也不得声称网格已收敛。
+* **2026-10-28 短边复测**：同一 STEP、Body-1、种子 2.5 mm、阈值 0.5 mm，不修几何、不求解。`createVirtualTopology` 实际忽略 586 条边、520 个顶点，耗时 0.152 秒。单元 21765 降到 18494，形状因子失败单元 30 降到 6，警告单元 2044 降到 722，最差形状因子从 `1.607e-09` 升到 `4.090e-08`。门槛是 `0.0001`，仍差约 4 个数量级，状态 `BLOCKED`，总耗时 7.66 秒。证据 `machine_validation/m1fa_mesh_continuation_evidence.json`。来源：[Virtual Topology toolset](https://docs.software.vt.edu/abaqusv2025/English/SIMACAECAERefMap/simacae-c-vtoconceptswhatto.htm)。
+* **验证**：离线门禁见 `tests/test_mesh_continuation_gate.py`、`tests/test_p1_4_self_healing.py`。短边复测没有重跑这两组测试。
+* **2026-10-28 种子与特征线裁定**：2.5 mm 不是 M1FA 的计算种子，是 `IntentMeshSpec.global_size` 的代码默认值。官方没有“零件尺寸的百分之几”这种通用公式。CAE 对话框里的默认尺寸来自零件几何，脚本接口是 `getPartSeeds(attribute=DEFAULT_SIZE)`，返回“基于零件几何的建议全局尺寸”；没有原生几何时抛异常。它只是起点，不是合格证明。曲率由另外两个官方旋钮管：`deviationFactor` 是弦高偏差除以单元边长，默认随 `seedPart` 传入 0.1；`minSizeFactor` 默认 0.1，意思是高曲率处最小单元不得小于全局种子的 10%，用来挡住不关心的极小圆角和样条折点。来源：[Creating the mesh](https://docs.software.vt.edu/abaqusv2025/English/SIMACAEGSARefMap/simagsa-t-caebeammeshmodel.htm)、[curvature control](https://docs.software.vt.edu/abaqusv2025/English/SIMACAECAERefMap/simacae-c-mgnconcseedcurvature.htm)、[Part.getPartSeeds](http://abaqusdocs.eait.uq.edu.au/v6.11/books/ker/pt01ch30pyo02.html)。
+  * 可忽略的特征线只有三类，而且必须同时满足：短于 `0.2*seed`；夹角落在 120°–240°，也就是偏离 180° 不超过默认 30°；不是载荷、边界或接触面的边界。冗余边是官方定义的第四类：面内部边、本可连续的平面或曲面分界、以及不引入新边的顶点。这四类由 `createVirtualTopology` 的阈值决定，不由人工点选决定。
+  * 明确不能优化掉：尖角、台阶、细长面、圆角控制面、已用于边界条件或接触的面。官方写明超出 120°–240° 后网格会离开原表面。旧日志里 seed 1.8 有 150 个坏单元、seed 1.4 有 234 个，比 2.5 更差，所以不能用“再缩小种子”代替这套判定。M1FA Body-1 的 `DEFAULT_SIZE` 还没读过，2.5 mm 是否相对这个零件偏大仍是未验证项。
+* **2026-10-28 二次改进已按官方接口改正，未做真机**：第一版用 `Edge.getCurvature()['evalAngle']` 和节点 `findAt`。官方 `getCurvature` 返回键是 `evaluationPoint/curvature/radius/tangent`，没有 `evalAngle`；交点处 `findAt` 也不保证稳定。现在改为 `Face.getElementFaces()` 定位承载失败单元的小面，再用 `getFacesByFaceAngle(60)` 加入浅夹角相邻面。找不到合格面或第二次仍失败就停，不求解。来源：[Virtual Topology](https://docs.software.vt.edu/abaqusv2025/English/SIMACAECAERefMap/simacae-c-vtoconceptswhatto.htm)、[angle method](https://docs.software.vt.edu/abaqusv2025/English/SIMACAECAERefMap/simacae-c-picbyangle.htm)、[Face](https://docs.software.vt.edu/abaqusv2025/English/SIMACAEKERRefMap/simaker-c-facepyc.htm)、[MeshFace](https://docs.software.vt.edu/abaqusv2025/English/SIMACAEKERRefMap/simaker-c-meshfacepyc.htm)。这条还没有 M1FA 真机证据，不能声称那 6 个失败单元已被消除。
+* **2026-10-28 动态布种实施基线（S1–S6，不另建需求）**：全局基线与局部约束分开。没有用户尺寸时，只有读到并验证当前零件的 `getPartSeeds(attribute=DEFAULT_SIZE)` 才能形成基线，来源标为 `ABAQUS_DEFAULT_SIZE`。用户明确给出的正有限尺寸来源标为 `USER_SPECIFIED`。读不到、非正数或非有限数，状态是 `BLOCKED`，不生成带隐式尺寸的生产网格脚本。`DEFAULT_SIZE` 不是合格证明。
+  * 禁止进入生产自动路径的固定兜底：`IntentMeshSpec.global_size = 2.5`、`agent.py` 的 `getattr(..., 2.5)`、`compile_engineering_intent` 字典缺 `global_size` 时取 2.5、`tet_mesh_script(seed_size=None)` 用 `0.2*2.5`、`meshability.py` 的 `max(characteristic_length * 0.05, 1.0)`、`mesh_inference.py` 在无几何时回退 2.5。历史 2.5 与 5% 规则只能留在隔离对照测试。
+  * S1 只改尺寸来源和缺省状态。S2 才记录局部约束：孔、圆角、间隙没有分析意图就不生成强制局部种子；厚度层数只是实体单元的可配置工程起点，没有经过可网格化证明的分区就进 `unsupported` 并 `BLOCKED`。发出 `seedEdgeBySize` 不等于厚度分层已生成。
+  * S3 脚本顺序必须是 `seedPart`、已定位的边种子、`generateMesh`。真机证据记录实际作用到的边，不只记录计划边。`step_assembly` 与 `two_blocks_contact` 现有的局部种子拒绝逻辑保留，直到各自路径独立验证。
+  * S4 只记录网格生成、目标边覆盖、质量和由最小单元尺寸估算的 Explicit 稳定增量风险。不启动求解作业。估算风险不等于求解器报告的稳定增量。
+  * S5 才能决定是否替换生产默认。S6 不进入第一版：Standard adaptive remeshing 只在官方支持的过程和单元上研究；Explicit 不调用这套重划分，ALE 也不当初始离散误差修复。来源：[adaptive remeshing](https://docs.software.vt.edu/abaqusv2025/English/SIMACAEANLRefMap/simaanl-c-adpover.htm)、[supported procedures](https://docs.software.vt.edu/abaqusv2025/English/SIMACAECAERefMap/simacae-c-mgnconcadaptivitysteps.htm)、[ALE](https://docs.software.vt.edu/abaqusv2025/English/SIMACAEANLRefMap/simaanl-c-aleover.htm)。
+  * 曲率仍交给 `deviationFactor=0.1`、`minSizeFactor=0.1`。圆弧弦高公式只能用于已可靠识别的圆弧，且只是候选边尺寸。第一版不实现连续体尺寸场，也不把 M1FA 当分区算法验收件。
+* **2026-10-28 综合网格系统收口**：生产网格只保留一条链，不另建算法。顺序是：已验证尺寸 → `seedPart(deviationFactor=0.1, minSizeFactor=0.1)` → 已定位边种子 → 一次 `createVirtualTopology(mergeShortEdges, ignoreRedundantEntities, cornerAngleTolerance=30)` → 一次四面体剖分 → 原生 `verifyMeshQuality` → 至多一次小面二次改进 → 失败即停。这不是 S2 局部约束，也不是 S3 真机边覆盖证据。来源：[Virtual Topology](https://docs.software.vt.edu/abaqusv2025/English/SIMACAECAERefMap/simacae-c-vtoconceptswhatto.htm)、[curvature control](https://docs.software.vt.edu/abaqusv2025/English/SIMACAECAERefMap/simacae-c-mgnconcseedcurvature.htm)。
+  * 已删除生产零调用、且与这条链冲突或重复的模块：`mesh_audit.py`（只审四边形/六面体手写 Jacobian，不审 C3D10M）、`mesh_gate.py`（唯一生产消费者是 `mesh_audit.py`）、`geometry/meshability.py`（`max(characteristic_length * 0.05, 1.0)` 预网格启发式）、`planning/mesh_strategy.py`（`global_size * refinement_factor` 与 `max(..., global_size * 0.05)` 平行规划器）、`docs/geometry-mesh-strategy.md`、`tools/ga14_real_machine_qualification.py`（0.25D / 0.5R 离线演练，不是生产证据）。同步删除只服务这些模块的测试。
+  * 保留：`contracts/mesh.py`、`contracts/mesh_quality.py`、`contracts/mesh_strategy.py`、`reasoning/mesh_inference.py`、`contracts/convergence.py`、`geometry/features.py`、`geometry/health.py`、`geometry/topology.py`。`agent.py` 里 verification 字典的 `mesh_gate` 键不是已删模块，不删。
+  * 删除平行规划器不等于 S2 已验证。孔、圆角、间隙没有分析意图仍不生成强制局部种子；厚度分层仍未实现。缺尺寸仍不得变成 2.5 mm 或 5% 兜底。
+* **2026-10-28 S2–S6 接入现有网格链，未切换生产默认**：决策对象在 `reasoning/mesh_inference.py`，不另建规划器。`compile_engineering_intent` 在生成脚本前调用它；强制局部约束无法映射时抛 `MeshConstraintBlocked`，不写警告后继续。
+  * S2：无分析意图的孔、圆角、间隙不发种子。有意图且已定位边才生成 `seedEdgeBySize` 或 `seedEdgeByNumber`。厚度请求没有已证明的分区时进 `unsupported` 并 `BLOCKED`。边种子成功不等于厚度分层已生成。`seedEdgeByBias` 未启用。
+  * S3：单一零件脚本顺序是 `seedPart`、已定位边种子、`getEdgeSeeds` 回读、`generateMesh`。回读没有返回实际边时脚本会失败；这不是真机边覆盖证据。`step_assembly` 与 `two_blocks_contact` 仍拒绝局部种子。
+  * S4：网格阶段记录计划边数、覆盖状态和 Explicit 稳定增量风险估算。估算值标明不是求解器报告值，且不提交求解。
+  * S5：对照状态固定为 `NOT_SWITCHED`。没有对照证据，不替换生产默认。
+  * S6：只做能力判定。Standard 静力、准静力、热传导和官方支持的耦合过程，且单元形状为平面三角/四边、壳三角/四边或四面体时，状态是 `RESEARCH_ONLY`。Explicit、ALE 和不支持的六面体是 `EXCLUDED`。两者都不生成生产动作。
+* **当前状态**：**IMPLEMENTED**（S2–S6 代码已接入，生产默认未切换；真机边覆盖未验证，不是 CLOSED）。离线测试 `tests/test_s1_mesh_baseline.py`、`tests/test_s2_s6_mesh_constraints.py` 与 `tests/test_mesh_pipeline_integration.py` 合计 46 passed。通过只证明离线决策、脚本顺序和阻断行为；没有启动 Abaqus，不能声称真机边覆盖、网格质量合格或结果收敛。M1FA 的 `DEFAULT_SIZE` 仍未读取，M1FA 也不是分区算法验收件。
 
 ---
 

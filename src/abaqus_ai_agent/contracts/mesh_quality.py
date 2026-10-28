@@ -1,5 +1,6 @@
 """Executor-neutral mesh inspection and quality result contracts."""
 
+import math
 from dataclasses import dataclass, field
 from typing import Any, Dict, Optional, Tuple
 
@@ -392,6 +393,35 @@ def resolve_domain_mesh_quality_policy(
 # Source: Verifying your mesh, Abaqus/CAE 2025.
 TET_SHAPE_FACTOR_FLOOR = 0.0001
 
+# Edges shorter than 20% of the global seed force local element sizes far below
+# the requested seed. Official virtual topology ignores those edges during
+# meshing; it does not delete CAD geometry. Corner-angle tolerance stays at the
+# documented 30 degree default so nearly-flat feature lines can be ignored while
+# sharp product edges are retained. Small faces, slivers, stairs, and blends are
+# not enabled: those merges can remove a load or contact face.
+# Sources: Virtual Topology toolset and Part.createVirtualTopology, Abaqus/CAE 2025.
+TET_SHORT_EDGE_SEED_FRACTION = 0.2
+TET_CORNER_ANGLE_TOLERANCE_DEG = 30.0
+# One secondary pass only. Official virtual topology can merge the geometric
+# faces under failed tetrahedra with their neighbors, then the part is meshed
+# again. It cannot glue bad tetrahedra to adjacent tetrahedra and remesh that
+# pocket. The area limit is the square of the short-edge threshold, so a face
+# made of two sub-seed edges is eligible. The official angle method uses 0-90 degrees
+# and stops when adjacent faces must rotate by that amount or more. 60 degrees
+# is the rotation that still keeps the included angle inside the documented
+# 120-240 degree range (180 +/- 60). Faces already used by a load, boundary, or
+# interaction surface are excluded. A candidate may still merge with a face
+# outside ``regions``; that is a documented limitation, so the region stays small
+# and a second failure stops. Sources: Virtual Topology toolset,
+# Part.createVirtualTopology, Face.getElementFaces, Face.getFacesByFaceAngle,
+# and MeshFace, Abaqus/CAE 2025.
+TET_SMALL_FACE_SEED_FRACTION = TET_SHORT_EDGE_SEED_FRACTION ** 2
+TET_FACE_MERGE_ANGLE_MIN_DEG = 120.0
+TET_FACE_MERGE_ANGLE_MAX_DEG = 240.0
+TET_FACE_ANGLE_METHOD_DEG = (
+    TET_FACE_MERGE_ANGLE_MAX_DEG - TET_FACE_MERGE_ANGLE_MIN_DEG
+) / 2.0
+
 
 def tet_partition_controls() -> Dict[str, Any]:
     """Documented controls for one free tetrahedron partition.
@@ -407,16 +437,70 @@ def tet_partition_controls() -> Dict[str, Any]:
         "size_growth": "MODERATE",
         "algorithm": None,
         "boundary_preview": True,
+        "ignore_short_edges": True,
+        "short_edge_seed_fraction": TET_SHORT_EDGE_SEED_FRACTION,
+        "corner_angle_tolerance_deg": TET_CORNER_ANGLE_TOLERANCE_DEG,
+        "merge_small_faces": False,
+        "secondary_face_merge": True,
+        "small_face_seed_fraction": TET_SMALL_FACE_SEED_FRACTION,
+        "face_merge_angle_min_deg": TET_FACE_MERGE_ANGLE_MIN_DEG,
+        "face_merge_angle_max_deg": TET_FACE_MERGE_ANGLE_MAX_DEG,
+        "face_angle_method_deg": TET_FACE_ANGLE_METHOD_DEG,
+        "repair": False,
     }
 
 
-def tet_mesh_script(part_expr: str) -> str:
-    """One tetrahedron partition: default mesher, moderate growth, preview stop.
+def tet_mesh_script(part_expr: str, seed_size: Any = None) -> str:
+    """One tetrahedron partition, then at most one face-merge remesh.
 
-    A failed boundary preview raises before the interior mesh is generated.
-    The caller must not wrap this in a seed-size retry loop.
+    The first ``createVirtualTopology`` ignores short edges before seeding. A
+    part with no entity under the threshold raises inside Abaqus; that is
+    recorded and the original geometry is meshed. A failed boundary preview
+    raises before the interior mesh is generated.
+
+    If the interior mesh is below the shape-factor floor, one secondary pass
+    finds the geometric faces that actually carry those failed elements through
+    ``Face.getElementFaces()``. It does not probe element nodes with ``findAt``:
+    the official method is not reliable where faces meet. Adjacent faces are
+    added only by ``getFacesByFaceAngle`` at 60 degrees, which is the angle-method
+    equivalent of the documented 120-240 degree included-angle range. Faces
+    already used by a load, boundary, or interaction surface are excluded. The
+    part is then meshed once more. This is not an element-merge and not a seed
+    retry. A second failure stops.
+
+    ``seed_size`` is the same verified global seed passed to ``seedPart``.
+    Omitting it used to assume 2.5 mm. That fallback is rejected: a missing
+    size is not a mesh size.
     """
+    if seed_size is None or isinstance(seed_size, bool) or not isinstance(seed_size, (int, float)):
+        raise ValueError(
+            "tetrahedron seed_size is required; refusing the implicit 2.5 mm default, got %r" % seed_size
+        )
+    seed = float(seed_size)
+    if not math.isfinite(seed) or seed <= 0.0:
+        raise ValueError("tetrahedron seed must be a positive finite number, got %r" % seed_size)
+    threshold = seed * TET_SHORT_EDGE_SEED_FRACTION
+    face_area = threshold * threshold
+    threshold_text = ("%.12f" % threshold).rstrip("0").rstrip(".")
+    face_area_text = ("%.12f" % face_area).rstrip("0").rstrip(".")
     return (
+        "_abqai_vt_ignored = 0\n"
+        "_abqai_vt_status = 'not_attempted'\n"
+        "_abqai_vt2_status = 'not_needed'\n"
+        "_abqai_vt2_faces = 0\n"
+        "try:\n"
+        "    _abqai_vt = {part}.createVirtualTopology(\n"
+        "        mergeShortEdges=True, shortEdgeThreshold={threshold},\n"
+        "        ignoreRedundantEntities=True,\n"
+        "        cornerAngleTolerance={angle},\n"
+        "        mergeSmallFaces=False, mergeSliverFaces=False,\n"
+        "        mergeSmallAngleFaces=False, mergeThinStairFaces=False,\n"
+        "        applyBlendControls=False)\n"
+        "    _abqai_vt_ignored = len({part}.ignoredEdges)\n"
+        "    _abqai_vt_status = 'applied'\n"
+        "except Exception as _abqai_vt_exc:\n"
+        "    _abqai_vt_status = 'no_entity_or_rejected'\n"
+        "    print('virtual_topology_not_applied: ' + repr(_abqai_vt_exc))\n"
         "{part}.setMeshControls(regions={part}.cells, elemShape=TET, "
         "technique=FREE, sizeGrowth=MODERATE)\n"
         "{part}.generateMesh(boundaryPreview=ON)\n"
@@ -428,7 +512,89 @@ def tet_mesh_script(part_expr: str) -> str:
         "str(_abqai_boundary_failed) + ' boundary elements below shape factor "
         "{floor}; interior mesh not generated')\n"
         "{part}.generateMesh()\n"
-    ).format(part=part_expr, floor=repr(TET_SHAPE_FACTOR_FLOOR))
+        "_abqai_solid = {part}.verifyMeshQuality(criterion=SHAPE_FACTOR, "
+        "threshold={floor}, elemShape=TET)\n"
+        "_abqai_failed = list(_abqai_solid.get('failedElements', ()) or ())\n"
+        "_abqai_shape_worst = _abqai_solid.get('worst')\n"
+        "if _abqai_failed:\n"
+        "    _abqai_protected = set()\n"
+        "    _abqai_model = mdb.models[mdb.models.keys()[0]]\n"
+        "    _abqai_bags = [{part}.surfaces, {part}.sets]\n"
+        "    try:\n"
+        "        _abqai_bags.extend([_abqai_model.rootAssembly.surfaces, _abqai_model.rootAssembly.sets])\n"
+        "    except Exception:\n"
+        "        pass\n"
+        "    for _abqai_bag in _abqai_bags:\n"
+        "        for _abqai_name in _abqai_bag.keys():\n"
+        "            try:\n"
+        "                _abqai_protected.update(id(item) for item in _abqai_bag[_abqai_name].faces)\n"
+        "            except Exception:\n"
+        "                pass\n"
+        "    _abqai_labels = set()\n"
+        "    for _abqai_elem in _abqai_failed:\n"
+        "        _abqai_labels.add(int(_abqai_elem.label))\n"
+        "        for _abqai_near in _abqai_elem.getAdjacentElements():\n"
+        "            _abqai_labels.add(int(_abqai_near.label))\n"
+        "    _abqai_hosts = []\n"
+        "    for _abqai_face in {part}.faces:\n"
+        "        if id(_abqai_face) in _abqai_protected:\n"
+        "            continue\n"
+        "        _abqai_area = float(_abqai_face.getSize(printResults=False))\n"
+        "        if _abqai_area > {face_area}:\n"
+        "            continue\n"
+        "        _abqai_hit = False\n"
+        "        for _abqai_mesh_face in _abqai_face.getElementFaces():\n"
+        "            if int(_abqai_mesh_face.label) in _abqai_labels:\n"
+        "                _abqai_hit = True\n"
+        "                break\n"
+        "        if _abqai_hit:\n"
+        "            _abqai_hosts.append(_abqai_face)\n"
+        "    _abqai_region = []\n"
+        "    _abqai_seen = set()\n"
+        "    for _abqai_host in _abqai_hosts:\n"
+        "        for _abqai_candidate in _abqai_host.getFacesByFaceAngle({face_angle}):\n"
+        "            _abqai_key = id(_abqai_candidate)\n"
+        "            if _abqai_key in _abqai_seen or _abqai_key in _abqai_protected:\n"
+        "                continue\n"
+        "            _abqai_area = float(_abqai_candidate.getSize(printResults=False))\n"
+        "            if _abqai_area > {face_area}:\n"
+        "                continue\n"
+        "            _abqai_seen.add(_abqai_key)\n"
+        "            _abqai_region.append(_abqai_candidate)\n"
+        "    if not _abqai_region:\n"
+        "        raise RuntimeError('tet_secondary_face_merge_unavailable: ' + "
+        "str(len(_abqai_failed)) + ' elements below shape factor {floor}; worst=' + "
+        "str(_abqai_shape_worst) + '; no documented small host face')\n"
+        "    _abqai_vt2 = {part}.createVirtualTopology(\n"
+        "        regions=tuple(_abqai_region),\n"
+        "        mergeShortEdges=True, shortEdgeThreshold={threshold},\n"
+        "        mergeSmallFaces=True, smallFaceAreaThreshold={face_area},\n"
+        "        ignoreRedundantEntities=True, cornerAngleTolerance={angle},\n"
+        "        mergeSliverFaces=False, mergeSmallAngleFaces=False,\n"
+        "        mergeThinStairFaces=False, applyBlendControls=False)\n"
+        "    _abqai_vt2_status = 'applied'\n"
+        "    _abqai_vt2_faces = len(_abqai_region)\n"
+        "    {part}.deleteMesh()\n"
+        "    {part}.generateMesh(boundaryPreview=ON)\n"
+        "    _abqai_boundary = {part}.verifyMeshQuality(criterion=SHAPE_FACTOR, "
+        "threshold={floor}, elemShape=TET)\n"
+        "    if len(_abqai_boundary.get('failedElements', ())):\n"
+        "        raise RuntimeError('tet_secondary_boundary_rejected')\n"
+        "    {part}.generateMesh()\n"
+        "    _abqai_solid = {part}.verifyMeshQuality(criterion=SHAPE_FACTOR, "
+        "threshold={floor}, elemShape=TET)\n"
+        "    if len(_abqai_solid.get('failedElements', ())):\n"
+        "        raise RuntimeError('tet_secondary_face_merge_failed: ' + "
+        "str(len(_abqai_solid.get('failedElements', ()))) + ' elements remain below {floor}; worst=' + "
+        "str(_abqai_solid.get('worst')))\n"
+    ).format(
+        part=part_expr,
+        threshold=threshold_text,
+        angle=repr(TET_CORNER_ANGLE_TOLERANCE_DEG),
+        floor=repr(TET_SHAPE_FACTOR_FLOOR),
+        face_area=face_area_text,
+        face_angle=repr(TET_FACE_ANGLE_METHOD_DEG),
+    )
 
 
 def mesh_submission_blockers(mesh_quality: Any) -> Tuple[str, ...]:

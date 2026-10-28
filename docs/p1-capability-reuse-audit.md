@@ -21,7 +21,7 @@
 2. **参数推理与澄清 (P1.2 基础)**：
    - `typesafe_intent.py` 内的 `JevIntentRouter` 早已内建物理域分类、单位制判断、参数完整性检测与 `NEEDS_CLARIFICATION` 状态机制；
    - `contracts/material_resolver.py` 已具备严密的单位制转换、环境温度防外推拦截（超过 $50^\circ\text{C}$ 严格阻断 `BLOCKED`）；
-   - `contracts/mesh_strategy.py` 与 `mesh_gate.py` 已拥有几何特征网格划分策略与质量门禁，且通过 `tools/mesh_convergence_e2e.py` 拥有真实的 GCI 网格收敛凭证。
+   - `contracts/mesh_strategy.py` 仍是网格策略契约。`planning/mesh_strategy.py` 与 `mesh_gate.py` 已于 2026-10-28 删除：前者含固定比例兜底，后者不在生产链上。生产质量门禁是 `contracts/mesh_quality.py` 的原生 `verifyMeshQuality`。GCI 数学仍在 `contracts/convergence.py`。
 3. **成果交付与可视化 (P1.3 基础)**：
    - `reporting/renderer.py` 已经支持单文件独立 HTML 和 Markdown 交付报告的渲染，内嵌样式、图表与 Evidence V2 验签徽标；
    - 验证工件 `machine_validation/static_golden_engineering_report.html` 已是成熟可用的交付样板。
@@ -45,7 +45,7 @@
 | **REQ-P1-015** | 强制人机协同确认门禁 (HITL) | `MultimodalHITLWorkflow`<br>`HITLStatus`<br>`synthesize_specs` 已完全实现 | `ga2b_multimodal_manifest.json` 真实 Abaqus 闭环认证 | 缺乏轻量交互触发层（当前只能通过代码传决策，缺自动化交互接口） | 仅在工作流层暴露简易交互方法，供 CLI/测试使用 | 🛑 **绝对禁止重写 HITL 状态机与 Fail-Closed 门禁逻辑** |
 | **REQ-P1-016** | 视觉防伪与防幻觉红线 | `grounding/multimodal.py` 严格走 `GroundedRegion` 与 `RegionResolver` | `tools/h6_image_intent_grounding_e2e.py` (真实 Abaqus findAt 验证) | 架构已闭环，无物理缺口 | 保持当前架构不变 | 🛑 **绝对禁止允许 Vision 模型直接输出 Abaqus Python 脚本** |
 | **REQ-P1-020** | 材料牌号匹配与环境超限预警 | `contracts/material_resolver.py`<br>`adapters/materials/campus.py`<br>`manufacturer.py` | `tests/test_material_resolver.py`<br>`tests/test_campus_adapter.py` | 缺乏中文通用材料别名（如“Q235”、“45号钢”、“304”）快速映射字典 | 新增 `planning/material_alias.py`：补充中国常用材料别名与物性对照表 | 🛑 严禁重写 `MaterialResolver` 的单位转换与温度外推阻断逻辑 |
-| **REQ-P1-021** | 透明网格推荐与依据记录 | `contracts/mesh_strategy.py`<br>`planning/mesh_strategy.py`<br>`mesh_gate.py` | `tools/mesh_convergence_e2e.py`<br>`machine_validation/mesh_convergence_e2e.json` | 缺乏“几何壁厚/孔径 $\to$ 推荐网格尺寸并显式记录依据文本”的规则函数 | 新增 `planning/mesh_advisor.py`：实现启发式网格尺寸推荐与依据生成 | 🛑 严禁静默赋予默认网格，严禁重写网格质量检查与 GCI 算法 |
+| **REQ-P1-021** | 透明网格推荐与依据记录 | `contracts/mesh_strategy.py`<br>`contracts/mesh_quality.py`<br>`reasoning/mesh_inference.py` | `tests/test_s1_mesh_baseline.py` | 局部约束仍是 S2，未开工。不得用壁厚或孔径固定比例生成生产种子 | 不新增 `mesh_advisor.py`。S2 只记录有分析意图且能映射到 Abaqus 边种子的约束 | 严禁静默赋予 2.5 mm 或 5% 兜底，严禁恢复已删的平行规划器 |
 | **REQ-P1-022** | 载荷/约束边界歧义消除 | `typesafe_intent.py` 中已有基础约束完整性检查 | `test_p1_product_solve_golden.py` 中有缺约束拦截 | 缺乏静力学刚体自由度欠约束（Mechanisms）启发式拓扑检查 | 新增 `planning/mechanism_check.py`：检查平动与转动约束完整性 | 🛑 严禁重构主编译器或求解器本身的奇异检测，仅做前置检查 |
 | **REQ-P1-023** | 需求澄清标准协议 | `typesafe_intent.py` 中的 `NEEDS_CLARIFICATION` 已有框架 | `test_p1_product_entry_audit.py` (20/20 PASS) | 澄清信息目前多针对自然语言，需扩展支持图纸与参数推理层面的缺失项 | 在 `solve_requirement` 中统一收口缺失项提示信息 | 🛑 严禁抛出未捕获的裸 Python 异常，必须返回标准 `TaskResult` |
 | **REQ-P1-030** | 无头自动化 ODB 云图提取 | `contracts/report.py` 中有 `ReportFigure`<br>`machine_validation/` 中有现存云图 | `tools/h1_engineering_report_e2e.py` | 缺乏通用的批处理 Python 脚本，以在无头环境下驱动 Abaqus 导出 PNG | 新增 `reporting/figures.py`：编写无头 ODB 云图导出脚本 | 🛑 严禁使用虚假模拟云图，必须从真实 ODB 中渲染导出 |

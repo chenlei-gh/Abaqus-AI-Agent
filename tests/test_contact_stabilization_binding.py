@@ -69,7 +69,7 @@ def _compile(interactions, *, step=None, steps=None, procedure=None, contract=No
         step=step,
         steps=steps,
         procedure=procedure,
-        mesh=IntentMeshSpec(),
+        mesh=IntentMeshSpec(global_size=2.5, size_source="USER_SPECIFIED"),
         interactions=interactions,
         contact_stabilization=contract,
     )
@@ -327,6 +327,7 @@ def test_step_controls_reach_single_step_path():
     plan = compile_engineering_intent(
         intent,
         geometry=IntentGeometrySpec(shape="cantilever_box"),
+        mesh=IntentMeshSpec(global_size=2.5, size_source="USER_SPECIFIED"),
     )
     assert "initialInc=0.01" in plan.cae_script
     assert "minInc=1e-08" in plan.cae_script
@@ -344,6 +345,7 @@ def test_step_controls_reach_steps_list_path():
     plan = compile_engineering_intent(
         intent,
         geometry=IntentGeometrySpec(shape="cantilever_box"),
+        mesh=IntentMeshSpec(global_size=2.5, size_source="USER_SPECIFIED"),
     )
     script = plan.cae_script
     assert script.count("initialInc=0.02") == 2
@@ -366,6 +368,7 @@ def test_step_controls_reach_procedure_path():
     plan = compile_engineering_intent(
         intent,
         geometry=IntentGeometrySpec(shape="cantilever_box"),
+        mesh=IntentMeshSpec(global_size=2.5, size_source="USER_SPECIFIED"),
     )
     script = plan.cae_script
     assert script.count("initialInc=0.03") == 2

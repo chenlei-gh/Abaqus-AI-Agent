@@ -124,8 +124,9 @@ def test_connector_l4_intent_compilation_and_preflight():
         part_name="Part1",
         job_name="Job_Test",
         geometry=IntentGeometrySpec(shape="cantilever_box", length=100.0, width=10.0, height=10.0),
-        material=MaterialDefinition(name="Steel", elastic=ElasticProperties(youngs_modulus=210000.0, poisson_ratio=0.3)),
+        material=MaterialDefinition(name="Q235", elastic=ElasticProperties(youngs_modulus=210000.0, poisson_ratio=0.3)),
         connectors=intent.connectors,
+        mesh=IntentMeshSpec(global_size=3.0, size_source="USER_SPECIFIED"),
     )
 
     # Check plan actions contain wire_connector and connector_section

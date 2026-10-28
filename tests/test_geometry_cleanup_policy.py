@@ -446,19 +446,18 @@ def test_geometry_inspection_does_not_report_a_constant_validity():
 # --- Virtual topology stays a candidate, never an action -------------------
 
 
-def test_small_feature_virtual_topology_remains_review_only():
-    from abaqus_ai_agent.planning.mesh_strategy import (
-        local_seeds_from_geometry_plan,
-        plan_geometry_mesh,
-    )
+def test_small_feature_virtual_topology_is_the_official_pass_not_a_planner():
+    """Short edges are ignored by the documented virtual-topology call, not by a parallel planner."""
+    from abaqus_ai_agent.contracts.mesh_quality import tet_mesh_script
 
-    plan = plan_geometry_mesh(
-        {"edges": [{"index": 3, "size": 0.2}]}, global_size=5.0
-    )
-    assert [r.method for r in plan.feature_reviews] == ["virtual_topology_review"]
-    assert "small_geometry_requires_feature_classification_before_mutation" in plan.warnings
-    # Review candidates must never become an executed ignore_entity action.
-    assert local_seeds_from_geometry_plan(plan) == ()
+    script = tet_mesh_script("p", 5.0)
+    assert "createVirtualTopology" in script
+    assert "mergeShortEdges=True" in script
+    assert "shortEdgeThreshold=1" in script
+    assert "ignoreRedundantEntities=True" in script
+    assert "cornerAngleTolerance=30.0" in script
+    assert "ignoreEntity" not in script
+    assert "mergeSliverFaces=False" in script
 
 
 # --- Intent evaluation fail-closed contract --------------------------------

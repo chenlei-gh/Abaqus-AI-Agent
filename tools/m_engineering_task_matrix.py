@@ -27,7 +27,6 @@ from abaqus_ai_agent.contracts.material import MaterialDefinition, ElasticProper
 from abaqus_ai_agent.contracts.metrics import EngineeringMetric
 from abaqus_ai_agent.contracts.provenance import AnalysisProvenance
 from abaqus_ai_agent.acceptance import AcceptanceResult, CriterionResult
-from abaqus_ai_agent.mesh_gate import evaluate_mesh_quality_gate
 from abaqus_ai_agent.planning.compiler import (
     IntentGeometrySpec,
     IntentBoundarySpec,

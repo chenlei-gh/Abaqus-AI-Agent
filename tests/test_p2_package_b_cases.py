@@ -878,48 +878,21 @@ def test_case_06_negative_probes_springback_and_submodel_stress():
 
 
 def test_case_06_mesh_quality_gate_algorithm_integrity():
-    """Verify authentic mesh quality audit algorithm and fail-closed distorted element gate."""
-    from abaqus_ai_agent.mesh_audit import (
-        audit_quad_element,
-    )
-    from abaqus_ai_agent.mesh_gate import evaluate_mesh_quality_gate
+    """Production mesh quality is the native result, not a hand-written Jacobian."""
+    from abaqus_ai_agent.contracts.mesh_quality import mesh_submission_blockers
 
-    # 1. Authentic Quad element audit evaluates true geometry and Jacobian
-    quad = audit_quad_element(
-        1,
-        (0.0, 0.0, 0.0),
-        (10.0, 0.0, 0.0),
-        (10.0, 10.0, 0.0),
-        (0.0, 10.0, 0.0),
-    )
-    assert quad.aspect_ratio == 1.0
-    assert quad.jacobian_ratio >= 0.99
-    assert quad.min_angle_deg == 90.0
-    assert quad.max_angle_deg == 90.0
-
-    # 2. Negative Probe: Inverted element (negative Jacobian <= 0) must trigger BLOCKED
-    distorted_metrics_inverted = {
-        "min_jacobian": -0.05,  # Inverted
-        "max_aspect_ratio": 2.50,
-        "min_angle": 80.0,
-        "max_angle": 100.0,
-    }
-    gate_inv = evaluate_mesh_quality_gate(distorted_metrics_inverted)
-    assert gate_inv.passed is False
-    assert gate_inv.status == "BLOCKED"
-    assert any("Inverted element detected" in v for v in gate_inv.violations)
-
-    # 3. Negative Probe: Extreme aspect ratio (> 50.0) must trigger BLOCKED
-    distorted_metrics_ar = {
-        "min_jacobian": 0.85,
-        "max_aspect_ratio": 58.2,  # Extreme needle element
-        "min_angle": 80.0,
-        "max_angle": 100.0,
-    }
-    gate_ar = evaluate_mesh_quality_gate(distorted_metrics_ar)
-    assert gate_ar.passed is False
-    assert gate_ar.status == "BLOCKED"
-    assert any("Excessive aspect ratio" in v for v in gate_ar.violations)
+    assert mesh_submission_blockers(
+        {"status": "pass", "metrics": {"shape_factor": 0.2}, "failed_element_count": 0}
+    ) == ()
+    inverted = mesh_submission_blockers({
+        "status": "fail",
+        "failed_element_count": 1,
+        "violations": ("negative_volume",),
+        "metrics": {"shape_factor": 0.0},
+    })
+    assert "mesh_quality_fail" in inverted
+    assert "nonpositive_volume" in inverted
+    assert "shape_factor_below_floor:0.0" in inverted
 
 
 def test_case_06_negative_probe_anti_cheat_missing_solver_artifacts():

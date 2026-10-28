@@ -54,16 +54,6 @@ from .assembly_scope import (
     require_complete_assembly_scope,
     screen_assembly_requirement,
 )
-from .meshability import (
-    MeshabilityResult,
-    MeshabilityRisk,
-    MeshabilityRiskKind,
-    MeshabilitySeverity,
-    MeshRefinementCandidate,
-    RecommendedMeshStrategy,
-    assess_meshability,
-)
-
 __all__ = [
     "CadBoundingBox",
     "CadEdge",
@@ -107,11 +97,4 @@ __all__ = [
     "build_assembly_scope",
     "require_complete_assembly_scope",
     "screen_assembly_requirement",
-    "MeshabilityResult",
-    "MeshabilityRisk",
-    "MeshabilityRiskKind",
-    "MeshabilitySeverity",
-    "MeshRefinementCandidate",
-    "RecommendedMeshStrategy",
-    "assess_meshability",
 ]

@@ -151,7 +151,7 @@ def test_compile_multi_anchor_group_intent():
 
     geom = IntentGeometrySpec(shape="plate_with_hole", length=100.0, width=100.0, height=100.0)
     mat = MaterialDefinition(
-        name="Steel",
+        name="Q235",
         unit_system="MM_N_MPA",
         elastic=ElasticProperties(youngs_modulus=200000.0, poisson_ratio=0.3),
     )
@@ -210,7 +210,7 @@ def test_compile_multi_step_procedure_dag():
 
     geom = IntentGeometrySpec(shape="cantilever_box", length=100.0, width=10.0, height=10.0)
     mat = MaterialDefinition(
-        name="Steel",
+        name="Q235",
         unit_system="MM_N_MPA",
         elastic=ElasticProperties(youngs_modulus=210000.0, poisson_ratio=0.3),
     )
@@ -275,7 +275,7 @@ def test_compile_bolt_pretension_two_stage_lifecycle():
 
     geom = IntentGeometrySpec(shape="cantilever_box", length=100.0, width=10.0, height=10.0)
     mat = MaterialDefinition(
-        name="Steel",
+        name="Q235",
         unit_system="MM_N_MPA",
         elastic=ElasticProperties(youngs_modulus=210000.0, poisson_ratio=0.3),
     )
@@ -302,6 +302,7 @@ def test_compile_bolt_pretension_two_stage_lifecycle():
         steps=steps,
         bcs=bcs,
         bolt_pretensions=[bolt_spec],
+        mesh=IntentMeshSpec(global_size=3.0, size_source="USER_SPECIFIED"),
     )
 
     assert plan.intent_summary["bolt_pretensions_count"] == 1
@@ -328,7 +329,7 @@ def test_compile_moment_rp_coupling_strategy():
 
     geom = IntentGeometrySpec(shape="cantilever_box", length=100.0, width=10.0, height=10.0)
     mat = MaterialDefinition(
-        name="Steel",
+        name="Q235",
         unit_system="MM_N_MPA",
         elastic=ElasticProperties(youngs_modulus=210000.0, poisson_ratio=0.3),
     )
@@ -353,6 +354,7 @@ def test_compile_moment_rp_coupling_strategy():
         step=step,
         bcs=bcs,
         moments=[moment_spec],
+        mesh=IntentMeshSpec(global_size=3.0, size_source="USER_SPECIFIED"),
     )
 
     assert plan.intent_summary["moments_count"] == 1
@@ -380,7 +382,7 @@ def test_compile_spatial_load_field():
 
     geom = IntentGeometrySpec(shape="cantilever_box", length=50.0, width=20.0, height=10.0)
     mat = MaterialDefinition(
-        name="Steel",
+        name="Q235",
         unit_system="MM_N_MPA",
         elastic=ElasticProperties(youngs_modulus=210000.0, poisson_ratio=0.3),
     )
@@ -407,6 +409,7 @@ def test_compile_spatial_load_field():
         bcs=bcs,
         loads=loads,
         fields=[field_spec],
+        mesh=IntentMeshSpec(global_size=3.0, size_source="USER_SPECIFIED"),
     )
 
     assert plan.intent_summary["fields_count"] == 1
@@ -435,7 +438,7 @@ def test_compile_symmetry_bc_all_planes():
 
     geom = IntentGeometrySpec(shape="cantilever_box", length=100.0, width=50.0, height=20.0)
     mat = MaterialDefinition(
-        name="Steel",
+        name="Q235",
         unit_system="MM_N_MPA",
         elastic=ElasticProperties(youngs_modulus=210000.0, poisson_ratio=0.3),
     )
@@ -478,6 +481,7 @@ def test_compile_symmetry_bc_all_planes():
         step=step,
         bcs=bcs,
         grounded_regions=grounded,
+        mesh=IntentMeshSpec(global_size=3.0, size_source="USER_SPECIFIED"),
     )
 
     script = plan.cae_script
@@ -506,7 +510,7 @@ def test_compile_comprehensive_multi_physics_plan():
 
     geom = IntentGeometrySpec(shape="cantilever_box", length=120.0, width=20.0, height=20.0)
     mat = MaterialDefinition(
-        name="Titanium",
+        name="Titanium_TC4",
         unit_system="MM_N_MPA",
         elastic=ElasticProperties(youngs_modulus=110000.0, poisson_ratio=0.34),
         density=4.5e-9,
@@ -562,6 +566,7 @@ def test_compile_comprehensive_multi_physics_plan():
         fields=[field_spec],
         bolt_pretensions=[bolt_spec],
         moments=[moment_spec],
+        mesh=IntentMeshSpec(global_size=3.0, size_source="USER_SPECIFIED"),
     )
 
     # Summary asserts
@@ -613,7 +618,10 @@ def test_compile_engineering_intent_from_dict_intent():
         },
     )
 
-    plan = compile_engineering_intent(intent)
+    plan = compile_engineering_intent(
+        intent,
+        mesh=IntentMeshSpec(global_size=3.0, size_source="USER_SPECIFIED"),
+    )
     assert plan.model_name == "Model_INTENT_STATIC_001"
     assert plan.part_name == "MainPart"
     assert len(plan.actions) >= 8
@@ -650,7 +658,12 @@ def test_compile_engineering_intent_with_typed_specs():
         loads=loads,
     )
 
-    plan = compile_engineering_intent(intent, geometry=geom, material=mat)
+    plan = compile_engineering_intent(
+        intent,
+        geometry=geom,
+        material=mat,
+        mesh=IntentMeshSpec(global_size=3.0, size_source="USER_SPECIFIED"),
+    )
     assert "Pressure" in plan.cae_script
     assert "72000.0" in plan.cae_script
     pre = preflight_plan(plan.actions)
@@ -672,16 +685,19 @@ def test_compile_engineering_intent_advanced_l4_passthrough():
 
     intent = EngineeringIntent(
         id="INTENT-FATIGUE-003",
-        kind="fatigue_damage",
+        kind="linear_static",
         description="Fatigue evaluation",
-        material={"name": "Al6061", "elastic_modulus": 70000.0, "poisson_ratio": 0.33},
+        material={"name": "Aluminum_6061_T6", "elastic_modulus": 70000.0, "poisson_ratio": 0.33},
         boundary_conditions=({"type": "encastre", "region": "RootFace"},),
         loads=({"type": "concentrated_force", "region": "TipFace", "magnitude": 500.0, "direction": "-Y"},),
         metadata={"dimensions": {"shape": "cantilever_box", "length": 100.0, "width": 10.0, "height": 10.0}},
         fatigue=fatigue_spec,
     )
 
-    plan = compile_engineering_intent(intent)
+    plan = compile_engineering_intent(
+        intent,
+        mesh=IntentMeshSpec(global_size=3.0, size_source="USER_SPECIFIED"),
+    )
     # Compiler ensures S field output is enabled in CAE script and fatigue is in intent summary
     assert "fatigue" in plan.intent_summary
     assert plan.intent_summary["fatigue"] is not None
@@ -700,7 +716,10 @@ def test_compile_engineering_intent_fail_closed_missing_geometry():
     )
 
     with pytest.raises(ValueError, match="missing geometry specification"):
-        compile_engineering_intent(intent)
+        compile_engineering_intent(
+            intent,
+            mesh=IntentMeshSpec(global_size=3.0, size_source="USER_SPECIFIED"),
+        )
 
 
 def test_compile_engineering_intent_fail_closed_missing_material():
@@ -715,4 +734,7 @@ def test_compile_engineering_intent_fail_closed_missing_material():
     )
 
     with pytest.raises(ValueError, match="missing material specification"):
-        compile_engineering_intent(intent)
+        compile_engineering_intent(
+            intent,
+            mesh=IntentMeshSpec(global_size=3.0, size_source="USER_SPECIFIED"),
+        )

@@ -30,7 +30,7 @@ from abaqus_ai_agent.planning.compiler import (
 )
 
 MATERIAL = MaterialDefinition(
-    name="Steel",
+    name="Q235",
     unit_system="MM_N_MPA",
     elastic=ElasticProperties(youngs_modulus=210000.0, poisson_ratio=0.3),
 )
@@ -49,7 +49,7 @@ def _compile(*, interactions, step=None, steps=None, procedure=None,
         step=step,
         steps=steps,
         procedure=procedure,
-        mesh=IntentMeshSpec(),
+        mesh=IntentMeshSpec(global_size=2.5, size_source="USER_SPECIFIED"),
         interactions=interactions,
         contact_stabilization=STABILIZATION if contract is None else contract,
     )

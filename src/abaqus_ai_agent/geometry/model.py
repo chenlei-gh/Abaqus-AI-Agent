@@ -203,8 +203,9 @@ class GeometryModel:
     """Standardized canonical CAD geometry representation for GA-1.1.
 
     Acts as the single source of truth for downstream geometry health
-    inspection (GA-1.2), feature recognition (GA-1.3), and meshability
-    assessment (GA-1.4).
+    inspection (GA-1.2) and feature recognition (GA-1.3). Mesh size and
+    feature-line decisions are made by the production mesh chain, not by a
+    separate pre-mesh heuristic.
     """
     model_id: str
     provenance: CadProvenance

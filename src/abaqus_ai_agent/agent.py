@@ -2209,8 +2209,15 @@ class AbaqusAIAgent:
                         actual_mesh_metrics = {}
 
                 eff_mesh_spec = getattr(plan, "mesh", None) or effective_mesh
-                req_global_size = getattr(eff_mesh_spec, "global_size", 2.5) if eff_mesh_spec else 2.5
-                req_elem_type = getattr(eff_mesh_spec, "element_type", "C3D8R") if eff_mesh_spec else "C3D8R"
+                req_global_size = getattr(eff_mesh_spec, "global_size", None) if eff_mesh_spec else None
+                if req_global_size is None:
+                    raise ValueError(
+                        "Official delivery has no verified mesh baseline. "
+                        "Refusing to report the implicit 2.5 mm seed."
+                    )
+                req_elem_type = getattr(eff_mesh_spec, "element_type", None) if eff_mesh_spec else None
+                if not req_elem_type:
+                    raise ValueError("Official delivery has no element type; refusing the C3D8R fallback.")
                 local_seeds_tuple = getattr(eff_mesh_spec, "local_seeds", ()) or ()
 
                 actual_total_elements = actual_mesh_metrics.get("total_elements")

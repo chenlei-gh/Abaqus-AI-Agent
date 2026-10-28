@@ -1,7 +1,7 @@
 """Comprehensive Unit Tests for GA-1.1 STEP Minimal B-Rep Qualification (P1/P2).
 
 Verifies the pure-python deterministic B-Rep entity extractor across the full pipeline:
-STEP File -> GeometryModel -> NormalizedTopology -> FeatureCandidate -> Meshability -> GeometryMeshPlan.
+STEP File -> GeometryModel -> NormalizedTopology -> FeatureCandidate.
 
 CRITICAL DISCIPLINE:
 Zero FeatureCandidate fixtures or mock geometry models allowed.
@@ -19,7 +19,6 @@ from abaqus_ai_agent.geometry import (
     CadUnit,
     FeatureType,
     HoleSubType,
-    assess_meshability,
     classify_cad_model,
     detect_fastener_holes,
     detect_features,
@@ -119,26 +118,7 @@ def test_plate_with_hole_end_to_end_recognition_no_fixture():
     assert hole.geometry["is_fastener_hole"] is True
     assert 19.9 <= hole.geometry["diameter"] <= 20.1  # Exactly 20.0 mm
     assert hole.confidence >= 0.90
-
-    # Downstream GA-1.4 Meshability Assessment
-    mesh_res = assess_meshability(model, topo, features, target_mesh_size=10.0)
-    assert mesh_res.is_meshable is True
-    assert mesh_res.status == CapabilityStatus.SUPPORTED
-
-    # Hole candidate produces suggested_size = 0.25 * D = 5.0 mm
-    refinements = mesh_res.refinement_candidates
-    hole_ref = next((r for r in refinements if r.feature_type == FeatureType.FASTENER_HOLE), None)
-    assert hole_ref is not None
-    assert hole_ref.characteristic_value == 20.0
-    assert hole_ref.suggested_size == 5.0
-
-    # GeometryMeshPlan handoff
-    plan = mesh_res.to_geometry_mesh_plan(global_size=10.0)
-    assert plan.global_size == 10.0
-    assert len(plan.refinements) >= 1
-    hole_plan_ref = next((r for r in plan.refinements if r.target_size == 5.0), None)
-    assert hole_plan_ref is not None
-    assert hole_plan_ref.requires_partition is False
+    # Recognition stops here. A hole diameter is not a production seed.
 
 
 def test_stepped_fillet_bar_ingestion_and_recognition_no_fixture():
@@ -161,23 +141,7 @@ def test_stepped_fillet_bar_ingestion_and_recognition_no_fixture():
     assert fillet.status == CapabilityStatus.ASSISTED  # Honest no-synthetic-G1 rule
     assert fillet.geometry["is_constant_radius"] is True
     assert 4.9 <= fillet.geometry["radius"] <= 5.1  # R = 5.0 mm
-
-    # Downstream GA-1.4 Meshability Assessment
-    mesh_res = assess_meshability(model, topo, features, target_mesh_size=10.0)
-    assert mesh_res.is_meshable is True
-    assert mesh_res.status == CapabilityStatus.SUPPORTED
-
-    fillet_ref = next((r for r in mesh_res.refinement_candidates if r.feature_type == FeatureType.FILLET), None)
-    assert fillet_ref is not None
-    assert fillet_ref.characteristic_value == 5.0
-    assert fillet_ref.suggested_size == 2.5  # 0.5 * R
-
-    # GeometryMeshPlan handoff
-    plan = mesh_res.to_geometry_mesh_plan(global_size=10.0)
-    assert plan.global_size == 10.0
-    fillet_plan_ref = next((r for r in plan.refinements if r.target_size == 2.5), None)
-    assert fillet_plan_ref is not None
-    assert fillet_plan_ref.requires_partition is False
+    # Recognition stops here. 0.5R is not a production seed.
 
 
 def test_step_unit_resolution_contracts():

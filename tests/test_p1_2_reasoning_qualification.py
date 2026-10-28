@@ -31,7 +31,10 @@ from abaqus_ai_agent.reasoning.material_catalog import (
     STANDARD_MATERIALS,
     match_engineering_material,
 )
-from abaqus_ai_agent.reasoning.mesh_inference import infer_mesh_specification
+from abaqus_ai_agent.reasoning.mesh_inference import (
+    MeshBaselineBlocked,
+    infer_mesh_specification,
+)
 from abaqus_ai_agent.reasoning.plausibility import audit_engineering_plausibility
 from abaqus_ai_agent.reasoning.engine import IntentReasoningEngine
 
@@ -113,53 +116,36 @@ def test_g1_material_unrecognized_fails_closed():
 # =========================================================================
 
 def test_g2_mesh_inference_geometry_archetypes():
-    """Verify mesh sizing heuristics across thin plates, structural beams, and slender bars."""
-    # Thin plate: 100 x 100 x 2 mm -> size approx 1.0 mm (2 elements across thickness)
-    geom_plate = IntentGeometrySpec(shape="cantilever_box", length=100.0, width=100.0, height=2.0)
-    intent_plate = EngineeringIntent(
-        id="mesh-plate",
-        kind="linear_static",
-        description="Thin Plate",
-        analysis_type="linear_static",
-        unit_system="MM_N_MPA",
-        metadata={"geometry": geom_plate},
+    """Geometry archetypes no longer invent a seed from plate, beam, or bar size."""
+    cases = (
+        ("mesh-plate", "Thin Plate", IntentGeometrySpec(shape="cantilever_box", length=100.0, width=100.0, height=2.0)),
+        ("mesh-beam", "Structural Beam", IntentGeometrySpec(shape="cantilever_box", length=100.0, width=10.0, height=10.0)),
+        ("mesh-bar", "Slender Bar", IntentGeometrySpec(shape="cantilever_box", length=300.0, width=10.0, height=10.0)),
     )
-    mesh_plate, inf_plate = infer_mesh_specification(intent_plate, geometry=geom_plate)
-    assert mesh_plate is not None
-    assert mesh_plate.global_size == pytest.approx(1.0)
-    assert mesh_plate.element_type == "C3D8R"
-    assert inf_plate.risk_level == InferenceRiskLevel.MEDIUM
-    assert "heuristics" in inf_plate.rationale.lower()
+    for intent_id, description, geometry in cases:
+        intent = EngineeringIntent(
+            id=intent_id,
+            kind="linear_static",
+            description=description,
+            analysis_type="linear_static",
+            unit_system="MM_N_MPA",
+            metadata={"geometry": geometry},
+        )
+        with pytest.raises(MeshBaselineBlocked, match="Refusing the 2.5 mm fallback"):
+            infer_mesh_specification(intent, geometry=geometry)
 
-    # Structural beam: 100 x 10 x 10 mm -> size approx 2.5 mm (4 elements across thickness)
-    geom_beam = IntentGeometrySpec(shape="cantilever_box", length=100.0, width=10.0, height=10.0)
-    intent_beam = EngineeringIntent(
-        id="mesh-beam",
+    specified = EngineeringIntent(
+        id="mesh-user",
         kind="linear_static",
-        description="Structural Beam",
+        description="User sized beam",
         analysis_type="linear_static",
         unit_system="MM_N_MPA",
-        metadata={"geometry": geom_beam},
+        mesh_requirements={"global_size": 4.0},
     )
-    mesh_beam, inf_beam = infer_mesh_specification(intent_beam, geometry=geom_beam)
-    assert mesh_beam is not None
-    assert mesh_beam.global_size == pytest.approx(2.5)
-    assert mesh_beam.element_type == "C3D8R"
-
-    # Slender bar: 300 x 10 x 10 mm -> size approx 3.0 mm
-    geom_bar = IntentGeometrySpec(shape="cantilever_box", length=300.0, width=10.0, height=10.0)
-    intent_bar = EngineeringIntent(
-        id="mesh-bar",
-        kind="linear_static",
-        description="Slender Bar",
-        analysis_type="linear_static",
-        unit_system="MM_N_MPA",
-        metadata={"geometry": geom_bar},
-    )
-    mesh_bar, inf_bar = infer_mesh_specification(intent_bar, geometry=geom_bar)
-    assert mesh_bar is not None
-    assert mesh_bar.global_size == pytest.approx(3.0)
-    assert mesh_bar.element_type == "C3D8R"
+    spec, inf = infer_mesh_specification(specified)
+    assert spec.global_size == 4.0
+    assert spec.size_source == "USER_SPECIFIED"
+    assert inf is None
 
 
 # =========================================================================
@@ -265,8 +251,9 @@ def test_g3_plausibility_self_consistent_executable():
         boundary_conditions=(IntentBoundarySpec(name="BC1", bc_type="encastre", region="FixedFace"),),
     )
     res = IntentReasoningEngine.reason(intent, geometry=base_geom)
-    assert res.is_executable
-    assert len(res.blockers) == 0
+    assert not res.is_executable
+    assert res.status == ReasoningStatus.BLOCKED
+    assert any("Refusing the 2.5 mm fallback" in str(b) for b in res.blockers)
 
 
 # =========================================================================
@@ -290,14 +277,28 @@ def test_g4_tiered_hitl_governance_rules():
         boundary_conditions=(IntentBoundarySpec(name="BC1", bc_type="encastre", region="FixedFace"),),
     )
     res_low = IntentReasoningEngine.reason(intent_low, geometry=base_geom)
-    assert res_low.is_executable
-    assert res_low.status in (ReasoningStatus.ASSISTED, ReasoningStatus.RESOLVED)
+    assert not res_low.is_executable
+    assert res_low.status == ReasoningStatus.BLOCKED
+    assert any("Refusing the 2.5 mm fallback" in str(b) for b in res_low.blockers)
+    assert not any(inf.parameter_name == "mesh" for inf in res_low.inferences)
 
-    # Case 4.2: MEDIUM Risk mesh inference
-    mesh_inf = [inf for inf in res_low.inferences if inf.parameter_name == "mesh"]
-    assert len(mesh_inf) == 1
-    assert mesh_inf[0].risk_level == InferenceRiskLevel.MEDIUM
-    assert "heuristics" in mesh_inf[0].rationale.lower()
+    intent_sized = EngineeringIntent(
+        id="g4-sized",
+        kind="linear_static",
+        description="Bracket with an explicit seed",
+        analysis_type="linear_static",
+        unit_system="MM_N_MPA",
+        material="Q235",
+        metadata={"geometry": base_geom},
+        mesh_requirements={"global_size": 2.5},
+        loads=(IntentLoadSpec(name="L1", load_type="concentrated_force", region="TipFace", magnitude=1000.0),),
+        boundary_conditions=(IntentBoundarySpec(name="BC1", bc_type="encastre", region="FixedFace"),),
+    )
+    res_sized = IntentReasoningEngine.reason(intent_sized, geometry=base_geom)
+    assert res_sized.is_executable
+    assert res_sized.inferred_mesh is not None
+    assert res_sized.inferred_mesh.global_size == 2.5
+    assert res_sized.inferred_mesh.size_source == "USER_SPECIFIED"
 
     # Case 4.3: HIGH Risk strict interception
     intent_high = EngineeringIntent(

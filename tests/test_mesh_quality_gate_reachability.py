@@ -188,7 +188,11 @@ def test_same_warning_is_advisory_when_the_gate_is_not_required():
 
 def test_compiled_quality_action_carries_shape_thresholds():
     from abaqus_ai_agent.contracts.material import ElasticProperties, MaterialDefinition
-    from abaqus_ai_agent.planning.compiler import IntentGeometrySpec, compile_intent_to_actions
+    from abaqus_ai_agent.planning.compiler import (
+        IntentGeometrySpec,
+        IntentMeshSpec,
+        compile_intent_to_actions,
+    )
 
     actions = compile_intent_to_actions(
         model_name="M",
@@ -196,10 +200,11 @@ def test_compiled_quality_action_carries_shape_thresholds():
         job_name="J",
         geometry=IntentGeometrySpec(shape="cantilever_box", length=10.0, width=5.0, height=5.0),
         material=MaterialDefinition(
-            name="Steel",
+            name="Q235",
             unit_system="MM_N_MPA",
             elastic=ElasticProperties(youngs_modulus=210000.0, poisson_ratio=0.3),
         ),
+        mesh=IntentMeshSpec(global_size=3.0, size_source="USER_SPECIFIED"),
     ).actions
     params = next(a for a in actions if a.action_type == "mesh_quality").parameters
     configured = [name for name in SHAPE_THRESHOLD_FIELDS if params.get(name) is not None]
@@ -221,11 +226,17 @@ def test_explicit_mesh_thresholds_win_over_the_domain_default():
         job_name="J",
         geometry=IntentGeometrySpec(shape="cantilever_box", length=10.0, width=5.0, height=5.0),
         material=MaterialDefinition(
-            name="Steel",
+            name="Q235",
             unit_system="MM_N_MPA",
             elastic=ElasticProperties(youngs_modulus=210000.0, poisson_ratio=0.3),
         ),
-        mesh=IntentMeshSpec(max_aspect_ratio=3.0, min_angle=25.0, max_angle=150.0),
+        mesh=IntentMeshSpec(
+            global_size=3.0,
+            size_source="USER_SPECIFIED",
+            max_aspect_ratio=3.0,
+            min_angle=25.0,
+            max_angle=150.0,
+        ),
     ).actions
     params = next(a for a in actions if a.action_type == "mesh_quality").parameters
     assert params["max_aspect_ratio"] == 3.0

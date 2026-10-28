@@ -1,0 +1,110 @@
+{
+  "requirement": "REQ-4.9",
+  "claim": "M1FA Body-1 short-edge virtual topology was retested once and still blocked before any solver job. Ignored edges reduced bad elements, but the shape-factor floor was not met. This is not mesh convergence and not a 6-body qualification.",
+  "status": "IMPLEMENTED",
+  "closed": false,
+  "date": "2026-10-28",
+  "launcher": "C:\\SIMULIA\\Commands\\abaqus.bat",
+  "abaqus": "Abaqus/CAE 2025",
+  "step": "D:/AbaqusProjects/M1FA/M1FA_VENT_ASM_CTR_20261025.stp",
+  "workdir": "D:/AbaqusProjects/M1FA/working/REQ49_MESH",
+  "source_log": "D:/AbaqusProjects/M1FA/working/REQ49_MESH/probe.log",
+  "solver_submitted": false,
+  "repair": false,
+  "seed_retries": 0,
+  "import_combine": false,
+  "completion": {
+    "return_code": 0,
+    "settled": true,
+    "completion_evidence": "script_completed",
+    "stdout_tail": ""
+  },
+  "baseline": {
+    "source": [
+      "D:/AbaqusProjects/M1FA/working/diag_mesh.log",
+      "D:/AbaqusProjects/M1FA/working/fixmesh.log",
+      "D:/AbaqusProjects/M1FA/working/build.log"
+    ],
+    "seed_mm": 2.5,
+    "element_type": "C3D10",
+    "cells": 6,
+    "elements": 97265,
+    "nodes": 165616,
+    "bad_elements": 43850,
+    "worst_volume": -10930.0,
+    "one_partition_s": "19-24",
+    "wasted_time": "The historical 4.4 hour cost was repeated solver submission of a bad mesh, not one partition."
+  },
+  "probe": {
+    "schema": "m1fa_mesh_continuation_v1",
+    "seed_mm": 2.5,
+    "shape_factor_floor": 0.0001,
+    "step_bodies": 6,
+    "bodies_meshed": 1,
+    "stopped_after_first_failure": true,
+    "import_s": 5.42,
+    "elapsed_s": 7.51,
+    "element_count": 21765,
+    "shape_failed_elements": 30,
+    "analysis_failed_elements": 0,
+    "status": "BLOCKED",
+    "reason": "one_or_more_bodies_below_floor",
+    "not_mesh_convergence": true,
+    "bodies": [
+      {
+        "body": 1,
+        "cells": 1,
+        "faces": 723,
+        "geometry_valid": true,
+        "boundary_preview_s": 0.831,
+        "boundary_failed_elements": 0,
+        "interior_mesh_s": 0.247,
+        "elements": 21765,
+        "nodes": 5849,
+        "shape_failed_elements": 30,
+        "shape_worst": 1.60732815945863e-09,
+        "analysis_failed_elements": 0,
+        "analysis_warning_elements": 2044,
+        "status": "BLOCKED"
+      }
+    ]
+  },
+  "virtual_topology_retest": {
+    "date": "2026-10-28",
+    "source": "D:/AbaqusProjects/M1FA/working/REQ49_MESH/m1fa_vt_retest.json",
+    "completion_evidence": "script_completed",
+    "return_code": 0,
+    "settled": true,
+    "body": 1,
+    "seed_mm": 2.5,
+    "short_edge_threshold_mm": 0.5,
+    "virtual_topology": "applied",
+    "virtual_topology_s": 0.152,
+    "edges_before": 1785,
+    "ignored_edges": 586,
+    "ignored_vertices": 520,
+    "elements": 18494,
+    "nodes": 5170,
+    "shape_failed_elements": 6,
+    "shape_worst": 4.090135519163596e-08,
+    "analysis_failed_elements": 0,
+    "analysis_warning_elements": 722,
+    "elapsed_s": 7.66,
+    "status": "BLOCKED",
+    "reason": "quality_below_floor",
+    "solver_submitted": false,
+    "against_previous_body1": {
+      "elements": "21765 -> 18494",
+      "shape_failed_elements": "30 -> 6",
+      "shape_worst": "1.607e-09 -> 4.090e-08",
+      "analysis_warning_elements": "2044 -> 722",
+      "floor": 0.0001,
+      "floor_met": false
+    }
+  },
+  "comparison": {
+    "speed": "Stop moved from hours of repeated solving to 7.51 seconds on Body-1. One historical partition was already only 19-24 seconds; the gate removes the solver loop, it does not make tetrahedral generation itself faster.",
+    "quality": "Not improved to a submittable mesh. ANALYSIS_CHECKS failedElements is 0, but 30 elements are below the 0.0001 shape-factor floor and the worst value is 1.607e-09. ANALYSIS_CHECKS alone is not a pass.",
+    "unverified": "Bodies 2-6 were not meshed because the gate stops at the first failed body. Passing this floor would still not prove mesh convergence."
+  }
+}

@@ -56,8 +56,8 @@
 
 | 候选 | 位置 | 为什么不能用 |
 | :--- | :--- | :--- |
-| `audit_inp_mesh_quality(inp_path, policy)` | `mesh_audit.py:361` | 生产零调用（B1），只在测试里跑。拿它当 T2 等于测一个不存在的生产阶段 |
-| `evaluate_mesh_quality_gate(metrics, policy)` | `mesh_gate.py:86` | 纯规则评估，输入是已算好的指标；不含任何网格生成 |
+| `audit_inp_mesh_quality` / `mesh_audit.py` | 已于 2026-10-28 删除 | 手写 Jacobian 不审 C3D10M，且生产零调用。拿它当 T2 等于测一个不存在的生产阶段 |
+| `evaluate_mesh_quality_gate` / `mesh_gate.py` | 已于 2026-10-28 删除 | 唯一生产消费者是已删的 `mesh_audit.py`。纯规则评估不含网格生成，不能当 T2 |
 | `generate_mesh` action 的执行 | `actions/script.py:193` | 真实生成点，但混在 `apply_plan` 的循环里（B2），且该循环不返回耗时（B3） |
 | `writeInput` 段 | `analysis_run.py:901-912` | 这是**导出 inp 并做装配审计**，不是网格生成；且仅在 `assembly_scope is not None` 时执行 |
 

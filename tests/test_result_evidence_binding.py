@@ -228,15 +228,20 @@ def test_matching_binding_reports_nothing():
 
 def test_compiler_emits_a_mesh_quality_action_after_generate_mesh():
     from abaqus_ai_agent.contracts.material import ElasticProperties, MaterialDefinition
-    from abaqus_ai_agent.planning.compiler import IntentGeometrySpec, compile_intent_to_actions
+    from abaqus_ai_agent.planning.compiler import (
+        IntentGeometrySpec,
+        IntentMeshSpec,
+        compile_intent_to_actions,
+    )
 
     actions = compile_intent_to_actions(
         model_name="M",
         part_name="P",
         job_name="J",
         geometry=IntentGeometrySpec(shape="cantilever_box", length=10.0, width=5.0, height=5.0),
+        mesh=IntentMeshSpec(global_size=2.0, size_source="USER_SPECIFIED"),
         material=MaterialDefinition(
-            name="Steel",
+            name="Q235",
             unit_system="MM_N_MPA",
             elastic=ElasticProperties(youngs_modulus=210000.0, poisson_ratio=0.3),
         ),
@@ -321,35 +326,23 @@ def test_structured_result_payload_never_degrades_to_repr():
 # --- D9: unsupported element family is not an empty deck --------------------
 
 
-def test_tetrahedral_only_deck_reports_unsupported_not_zero_elements(tmp_path):
-    from abaqus_ai_agent.mesh_audit import audit_inp_mesh_quality
+def test_tetrahedral_quality_is_not_a_hand_written_inp_audit():
+    """C3D10M quality comes from native verifyMeshQuality, not a retired INP Jacobian auditor."""
+    from abaqus_ai_agent.contracts.mesh_quality import mesh_submission_blockers
 
-    deck = tmp_path / "tet.inp"
-    deck.write_text(
-        "*NODE\n"
-        "1, 0.0, 0.0, 0.0\n2, 1.0, 0.0, 0.0\n3, 0.0, 1.0, 0.0\n4, 0.0, 0.0, 1.0\n"
-        "*ELEMENT, TYPE=C3D10M\n"
-        "1, 1, 2, 3, 4, 1, 2, 3, 4, 1, 2\n",
-        encoding="utf-8",
-    )
-    gate, report = audit_inp_mesh_quality(deck)
-    assert gate.passed is False
-    assert report["status"] == "unsupported"
-    assert report["unsupported_checks"]
-    assert "element_type_not_supported" in report["unsupported_checks"][0]
-    assert "C3D10M" in report["unsupported_checks"][0]
-    # The misleading reason must not be used when the real cause is known.
-    assert "inp_contains_zero_auditable_finite_elements" not in report["violations"]
+    blockers = mesh_submission_blockers({
+        "status": "unsupported",
+        "unsupported_checks": ("element_type_not_supported:C3D10M",),
+        "violations": (),
+    })
+    assert "mesh_quality_unsupported" in blockers
+    assert "inp_contains_zero_auditable_finite_elements" not in blockers
 
 
-def test_genuinely_empty_deck_still_reports_zero_elements(tmp_path):
-    from abaqus_ai_agent.mesh_audit import audit_inp_mesh_quality
+def test_missing_mesh_quality_is_not_an_empty_deck_pass():
+    from abaqus_ai_agent.contracts.mesh_quality import mesh_submission_blockers
 
-    deck = tmp_path / "empty.inp"
-    deck.write_text("*NODE\n1, 0.0, 0.0, 0.0\n*STEP\nname=S\n*END STEP\n", encoding="utf-8")
-    gate, report = audit_inp_mesh_quality(deck)
-    assert gate.passed is False
-    assert "inp_contains_zero_auditable_finite_elements" in report["violations"]
+    assert "mesh_quality_missing" in mesh_submission_blockers(None)
 
 
 def test_native_script_records_unmapped_metrics_as_unsupported():

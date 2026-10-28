@@ -17,11 +17,6 @@ from abaqus_ai_agent.planning.compiler import (
     compile_engineering_intent,
     compile_intent_to_actions,
 )
-from abaqus_ai_agent.planning.mesh_strategy import (
-    local_seeds_from_geometry_plan,
-    mesh_specification_from_geometry_plan,
-    plan_geometry_mesh,
-)
 from abaqus_ai_agent.reporting.pipeline import DeterministicReportPipeline
 from abaqus_ai_agent.reporting.renderer import render_markdown, render_html
 
@@ -95,9 +90,9 @@ def test_local_seed_builders_fail_closed_validation():
 # ---------------------------------------------------------------------------
 
 def test_intent_mesh_spec_fail_closed():
-    with pytest.raises(ValueError, match="global_size must be positive"):
+    with pytest.raises(ValueError, match="global_size must be a positive finite number"):
         IntentMeshSpec(global_size=0.0)
-    with pytest.raises(ValueError, match="global_size must be positive"):
+    with pytest.raises(ValueError, match="global_size must be a positive finite number"):
         IntentMeshSpec(global_size=-1.0)
     with pytest.raises(ValueError, match="deviation_factor must be in"):
         IntentMeshSpec(deviation_factor=1.5)
@@ -133,64 +128,64 @@ def test_compile_intent_to_actions_integrates_local_seeds():
         part_name="P",
         job_name="J",
         geometry=geom,
-        material="Steel",
+        material={"name": "Q235", "elastic_modulus": 210000.0, "poisson_ratio": 0.3},
         mesh=mesh,
     )
-    act_types = [a.action_type for a in plan.actions]
-    assert "seed_part" in act_types
-    assert "local_seed_size" in act_types
-    assert "local_seed_number" in act_types
-    # Verify sequence: seed_part occurs before local_seed_*
-    idx_seed = act_types.index("seed_part")
-    idx_local_size = act_types.index("local_seed_size")
-    idx_local_num = act_types.index("local_seed_number")
-    assert idx_seed < idx_local_size
-    assert idx_seed < idx_local_num
+    mesh_script = "\n".join(
+        a.parameters.get("code", "")
+        for a in plan.actions
+        if a.action_type == "python"
+    )
+    assert "seedPart(" in mesh_script
+    assert "seedEdgeBySize(" in mesh_script
+    assert "seedEdgeByNumber(" in mesh_script
+    assert mesh_script.index("seedPart(") < mesh_script.index("seedEdgeBySize(")
+    assert mesh_script.index("seedEdgeBySize(") < mesh_script.index("generateMesh(")
+    assert mesh_script.index("seedEdgeByNumber(") < mesh_script.index("generateMesh(")
 
 
 # ---------------------------------------------------------------------------
 # 3. Fail-Closed on Unpartitioned Refinements
 # ---------------------------------------------------------------------------
 
-def test_local_seeds_from_geometry_plan_strict_mode():
-    plan = plan_geometry_mesh(
-        {"faces": [], "edges": []},
-        global_size=10.0,
-        critical_regions=(
-            {"target": "faces[0]", "entity_type": "Face", "target_size": 2.0},
+def test_unpartitioned_face_request_is_not_a_local_seed():
+    plan = GeometryMeshPlan(
+        10.0,
+        refinements=(
+            MeshRefinementRequest(
+                "faces[0]", "Face", 2.0, "contact_resolution",
+                method="partition_then_seed", requires_partition=True,
+            ),
         ),
     )
-    # Default non-strict returns empty tuple for compatibility
-    assert local_seeds_from_geometry_plan(plan, fail_on_unsupported=False) == ()
-
-    # Strict mode raises ValueError
-    with pytest.raises(ValueError, match="requires geometric partitioning"):
-        local_seeds_from_geometry_plan(plan, fail_on_unsupported=True)
-
-    with pytest.raises(ValueError, match="requires geometric partitioning"):
-        mesh_specification_from_geometry_plan("P", plan, fail_on_unsupported=True)
+    assert plan.requires_partition is True
 
 
 def test_compile_engineering_intent_blocks_unpartitioned_plan():
-    plan = plan_geometry_mesh(
-        {"faces": [], "edges": []},
-        global_size=10.0,
-        critical_regions=(
-            {"target": "faces[1]", "entity_type": "Face", "target_size": 2.0},
+    plan = GeometryMeshPlan(
+        10.0,
+        refinements=(
+            MeshRefinementRequest(
+                "faces[1]", "Face", 2.0, "contact_resolution",
+                method="partition_then_seed", requires_partition=True,
+            ),
         ),
     )
     intent = EngineeringIntent(
         id="INT-BLOCK-01",
         kind="stress_analysis",
         description="Block unpartitioned refinement",
-        material="Steel",
+        material={"name": "Q235", "elastic_modulus": 210000.0, "poisson_ratio": 0.3},
         metadata={
             "geometry": {"shape": "cantilever_box", "length": 100.0, "width": 10.0, "height": 10.0},
             "geometry_mesh_plan": plan,
         },
     )
     with pytest.raises(ValueError, match="requires unexecuted geometric partitioning"):
-        compile_engineering_intent(intent)
+        compile_engineering_intent(
+            intent,
+            mesh=IntentMeshSpec(global_size=3.0, size_source="USER_SPECIFIED"),
+        )
 
 
 def test_compile_engineering_intent_accepts_mesh_specification():
@@ -203,13 +198,18 @@ def test_compile_engineering_intent_accepts_mesh_specification():
         id="INT-MS-01",
         kind="stress_analysis",
         description="Test MeshSpecification input",
-        material="Steel",
+        material={"name": "Q235", "elastic_modulus": 210000.0, "poisson_ratio": 0.3},
         mesh_requirements=ms,
         metadata={"geometry": {"shape": "cantilever_box", "length": 100.0, "width": 10.0, "height": 10.0}},
     )
     compiled = compile_engineering_intent(intent)
-    act_types = [a.action_type for a in compiled.actions]
-    assert "local_seed_size" in act_types
+    mesh_script = "\n".join(
+        a.parameters.get("code", "")
+        for a in compiled.actions
+        if a.action_type == "python"
+    )
+    assert mesh_script.index("seedPart(") < mesh_script.index("seedEdgeBySize(")
+    assert mesh_script.index("seedEdgeBySize(") < mesh_script.index("generateMesh(")
 
 
 # ---------------------------------------------------------------------------
@@ -338,7 +338,7 @@ def test_two_blocks_contact_blocks_unsupported_local_seeds():
             part_name="P",
             job_name="J",
             geometry=geom,
-            material="Steel",
+            material={"name": "Q235", "elastic_modulus": 210000.0, "poisson_ratio": 0.3},
             mesh=mesh,
         )
 

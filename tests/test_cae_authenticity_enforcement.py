@@ -4,8 +4,8 @@ Verifies Universal Engineering Architecture Contracts:
 1. Universal Abaqus batch job solver never synthesizes fake solver logs (.sta, .msg, .dat, .log, .odb) when offline.
 2. Universal solver fails closed (RuntimeError) when require_live=True and no Abaqus executable is available.
 3. ODB authenticator strictly rejects plaintext JSON, XML, or undersized mock files.
-4. Universal mesh auditor performs genuine 3D isoparametric Jacobian determinants and INP deck parsing.
-5. Inverted/distorted elements parsed from real INP decks fail the pre-solver mesh gatekeeper.
+4. Production meshing does not fall back to the retired hand-written quad/hex Jacobian auditor.
+5. A missing native mesh-quality result blocks submission. A hand-computed Jacobian is not a substitute.
 6. Anti-Cheat scan: No code in the entire repository serializes JSON into an .odb file.
 7. Production acceptance kernel strictly rejects delivery if metrics lack authentic ResultExtraction lineage.
 8. Production acceptance kernel enforces exact unit consistency between Criteria and Extractions.
@@ -18,12 +18,7 @@ import json
 from pathlib import Path
 import pytest
 
-from abaqus_ai_agent.mesh_audit import (
-    audit_hex_element,
-    audit_quad_element,
-    parse_and_audit_inp_deck,
-    audit_inp_mesh_quality,
-)
+from abaqus_ai_agent.contracts.mesh_quality import mesh_submission_blockers
 from abaqus_ai_agent.execution.solver import (
     AbaqusBatchJob,
     execute_abaqus_batch_job,
@@ -138,104 +133,13 @@ def test_is_authentic_binary_odb_rejects_uniform_fill_and_accepts_structured(
     assert is_authentic_binary_odb(structured) is True
 
 
-def test_hex_mesh_audit_computes_genuine_3d_jacobian():
-    """Verify Hex element audit uses genuine isoparametric shape function derivatives and determinant."""
-    # Ideal unit cube [0, 1]^3: min_det == 1.0, AR == 1.0, Jacobian ratio == 1.0
-    pts_cube = (
-        (0.0, 0.0, 0.0), (1.0, 0.0, 0.0), (1.0, 1.0, 0.0), (0.0, 1.0, 0.0),
-        (0.0, 0.0, 1.0), (1.0, 0.0, 1.0), (1.0, 1.0, 1.0), (0.0, 1.0, 1.0),
-    )
-    res_cube = audit_hex_element(1, pts_cube)
-    assert res_cube.aspect_ratio == 1.0
-    assert res_cube.jacobian_ratio >= 0.99
-    assert res_cube.min_angle_deg == 90.0
-    assert res_cube.max_angle_deg == 90.0
-
-    # Stretched hex: 3x1x1 -> AR == 3.0
-    pts_stretched = (
-        (0.0, 0.0, 0.0), (3.0, 0.0, 0.0), (3.0, 1.0, 0.0), (0.0, 1.0, 0.0),
-        (0.0, 0.0, 1.0), (3.0, 0.0, 1.0), (3.0, 1.0, 1.0), (0.0, 1.0, 1.0),
-    )
-    res_str = audit_hex_element(2, pts_stretched)
-    assert res_str.aspect_ratio == 3.0
-    assert res_str.jacobian_ratio >= 0.99
-
-    # Inverted hex (top and bottom nodes swapped along Z -> negative volume)
-    pts_inverted = (
-        (0.0, 0.0, 1.0), (1.0, 0.0, 1.0), (1.0, 1.0, 1.0), (0.0, 1.0, 1.0),
-        (0.0, 0.0, 0.0), (1.0, 0.0, 0.0), (1.0, 1.0, 0.0), (0.0, 1.0, 0.0),
-    )
-    res_inv = audit_hex_element(3, pts_inverted)
-    assert res_inv.jacobian_ratio <= 0.0, "Inverted element must yield zero or negative Jacobian ratio"
-
-
-def test_parse_and_audit_inp_deck_detects_real_deck_topologies(tmp_path: Path):
-    """Verify INP parser reads *NODE and *ELEMENT lines and audits elements deterministically."""
-    inp_content = """*HEADING
-Test Deck
-*PART, NAME=Part-1
-*NODE
-1, 0.0, 0.0, 0.0
-2, 10.0, 0.0, 0.0
-3, 10.0, 10.0, 0.0
-4, 0.0, 10.0, 0.0
-*ELEMENT, TYPE=S4R, ELSET=ShellSet
-101, 1, 2, 3, 4
-*END PART
-"""
-    inp_file = tmp_path / "test_model.inp"
-    inp_file.write_text(inp_content, encoding="utf-8")
-
-    parsed = parse_and_audit_inp_deck(inp_file)
-    assert parsed["nodes_count"] == 4
-    assert parsed["quad_elements_count"] == 1
-    assert len(parsed["audited_quads"]) == 1
-    quad = parsed["audited_quads"][0]
-    assert quad.element_id == 101
-    assert quad.aspect_ratio == 1.0
-    assert quad.jacobian_ratio >= 0.99
-
-
-def test_audit_inp_mesh_quality_fails_closed_on_inverted_quad(tmp_path: Path):
-    """A generated INP deck containing distorted elements must fail the pre-solver mesh gate."""
-    # Quad with node 4 severely pulled inward creating a concave, inverted corner (non-convex inverted quad)
-    inverted_inp = tmp_path / "inverted.inp"
-    inverted_inp.write_text(
-        "*NODE\n"
-        "1, 0.0, 0.0, 0.0\n"
-        "2, 10.0, 0.0, 0.0\n"
-        "3, 10.0, 10.0, 0.0\n"
-        "4, 8.0, 1.0, 0.0\n"  # Concave interior angle > 180 degrees / inverted corner
-        "*ELEMENT, TYPE=S4R\n"
-        "1, 1, 2, 3, 4\n",
-        encoding="utf-8",
-    )
-
-    gate_eval, report = audit_inp_mesh_quality(inverted_inp)
-    assert gate_eval.passed is False
-    assert gate_eval.status == "BLOCKED"
-    assert any("Inverted element detected" in v for v in gate_eval.violations)
-
-
-def test_audit_inp_mesh_quality_fails_closed_on_undecodable_deck(tmp_path: Path):
-    """A non-UTF-8 deck must be BLOCKED, not silently replacement-decoded before auditing."""
-    bad_deck = tmp_path / "undecodable.inp"
-    bad_deck.write_bytes(b"*NODE\n1, 0.0, 0.0, 0.0\n** caf\xe9\n2, 1.0, 0.0, 0.0\n")
-
-    gate_eval, report = audit_inp_mesh_quality(bad_deck)
-    assert gate_eval.passed is False
-    assert gate_eval.status == "BLOCKED"
-    assert any(v.startswith("inp_not_valid_utf8") for v in gate_eval.violations)
-    assert report["total_elements_audited"] == 0
-
-
-def test_parse_and_audit_inp_deck_rejects_undecodable_bytes(tmp_path: Path):
-    """The raw deck parser must not audit replacement-decoded text."""
-    bad_deck = tmp_path / "undecodable_direct.inp"
-    bad_deck.write_bytes(b"*NODE\n1, 0.0, 0.0, 0.0\n\xff\xfe\n")
-
-    with pytest.raises(UnicodeDecodeError):
-        parse_and_audit_inp_deck(bad_deck)
+def test_missing_native_mesh_quality_blocks_submission():
+    """A hand-written Jacobian is not a production gate. Missing native evidence stops submission."""
+    assert "mesh_quality_missing" in mesh_submission_blockers(None)
+    assert "mesh_quality_not_run" in mesh_submission_blockers({"status": "not_run"})
+    assert mesh_submission_blockers(
+        {"status": "pass", "metrics": {"shape_factor": 0.2}, "failed_element_count": 0}
+    ) == ()
 
 
 def test_no_json_dumps_to_odb_across_entire_repo():

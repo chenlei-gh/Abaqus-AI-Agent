@@ -1,29 +1,126 @@
-"""Engineering Mesh Parameter Reasoning & Inference for P1.2."""
+"""Engineering Mesh Parameter Reasoning & Inference for P1.2.
+
+S1 blocks a missing size. S2 records only local constraints that have an
+analysis intent, geometric evidence, and an Abaqus edge-seed mapping. S5 does
+not switch the production default. S6 classifies adaptive remeshing but never
+emits a production action.
+"""
 
 from __future__ import annotations
 
 import math
-from typing import Any, Dict, Optional, Tuple
+from dataclasses import dataclass, field
+from typing import Any, Mapping, Optional, Sequence, Tuple
 
 from ..contracts.intent import EngineeringIntent
-from ..contracts.intent_reasoning import InferenceRiskLevel, InferredParameter
+from ..contracts.mesh import LocalSeed
 from ..planning.compiler import IntentMeshSpec
+
+
+class MeshBaselineBlocked(ValueError):
+    """Raised when automatic meshing has no verified size and must not invent one."""
+
+
+class MeshConstraintBlocked(ValueError):
+    """Raised when a required local constraint cannot be executed."""
+
+
+_EDGE_INTENTS = {
+    "hole": ("hole_resolution", "hole", "stress_concentration"),
+    "fillet": ("fillet_resolution", "fillet", "fatigue", "stress_concentration"),
+    "gap": ("gap_resolution", "contact_resolution", "contact"),
+}
+
+# Official 2025 adaptive remeshing is Standard-only and procedure-limited.
+# https://docs.software.vt.edu/abaqusv2025/English/SIMACAEANLRefMap/simaanl-c-adpover.htm
+# https://docs.software.vt.edu/abaqusv2025/English/SIMACAECAERefMap/simacae-c-mgnconcadaptivitysteps.htm
+_STANDARD_ADAPTIVE_PROCEDURES = frozenset({
+    "static",
+    "static_general",
+    "quasi_static",
+    "heat_transfer",
+    "fully_coupled_thermal_stress",
+    "coupled_temp_displacement",
+    "coupled_pore_fluid_diffusion_stress",
+    "coupled_thermal_electrical",
+})
+_STANDARD_ADAPTIVE_SHAPES = frozenset({
+    "TRI", "QUAD", "TET",
+    "CPE3", "CPE4", "CPS3", "CPS4", "CAX3", "CAX4",
+    "S3", "S4", "S4R", "C3D4", "C3D10", "C3D10M",
+})
+
+
+@dataclass(frozen=True)
+class UnsupportedConstraint:
+    feature: str
+    reason: str
+    code: str = "UNSUPPORTED_CONSTRAINT"
+
+
+@dataclass(frozen=True)
+class EdgeSeedConstraint:
+    feature: str
+    analysis_intent: str
+    region_expression: str
+    size: Optional[float] = None
+    number: Optional[int] = None
+    constraint: str = "FREE"
+    evidence: Tuple[str, ...] = ()
+    execution: str = "seedEdgeBySize"
+    executed: bool = False
+    observed_edges: Tuple[str, ...] = ()
+
+    def as_local_seed(self) -> LocalSeed:
+        return LocalSeed(
+            region_expression=self.region_expression,
+            size=self.size,
+            number=self.number,
+            constraint=self.constraint,
+        )
+
+
+@dataclass(frozen=True)
+class MeshSizeDecision:
+    """A traceable sizing decision. READY is not mesh-quality evidence."""
+
+    baseline_size: Optional[float]
+    baseline_source: Optional[str]
+    edge_constraints: Tuple[EdgeSeedConstraint, ...] = ()
+    unsupported: Tuple[UnsupportedConstraint, ...] = ()
+    status: str = "BLOCKED"
+    explicit_stable_increment_risk: Optional[Mapping[str, Any]] = None
+    production_default: str = "NOT_SWITCHED"
+    adaptive_capability: str = "EXCLUDED"
+
+    def __post_init__(self):
+        if self.status not in ("READY", "BLOCKED", "INVALID"):
+            raise ValueError("status must be READY, BLOCKED, or INVALID")
+        if self.production_default != "NOT_SWITCHED":
+            raise ValueError("S5 has no comparison evidence; production_default stays NOT_SWITCHED")
+        if self.status == "READY":
+            if self.baseline_size is None or self.baseline_source not in (
+                "USER_SPECIFIED", "ABAQUS_DEFAULT_SIZE",
+            ):
+                raise ValueError("READY requires a traced positive baseline")
+            if not _positive(self.baseline_size):
+                raise ValueError("READY baseline must be a positive finite number")
+            if self.unsupported:
+                raise ValueError("required unsupported constraints cannot be READY")
 
 
 def infer_mesh_specification(
     intent: EngineeringIntent,
     geometry: Any = None,
     explicit_mesh: Optional[IntentMeshSpec] = None,
-) -> Tuple[IntentMeshSpec, Optional[InferredParameter]]:
-    """Derive professional CAE mesh size and element type from geometry features and physics.
+) -> Tuple[IntentMeshSpec, Optional[Any]]:
+    """Return an explicit mesh spec, or block when no verified size exists.
 
-    Refuses dumb global hardcoding (e.g. 2.5mm for all scales). Instead:
-    1. Extracts characteristic dimensions from CAD BoundingBox, geometry dictionary, or prompt.
-    2. Calculates characteristic minimum thickness/span L_char.
-    3. Selects element size: h = max(L_char / 12.0, 0.2 mm) to guarantee at least 2~3 elements through thickness.
-    4. Selects element type based on physics (e.g. C3D10M/C3D8I for contact/bending, C3D8R with hourglass control for simple tension).
-    5. Emits auditable InferredParameter with MEDIUM risk tier.
+    A caller-supplied positive size is ``USER_SPECIFIED``. Bounding-box ratios are
+    not a production seed and are not substituted here. A missing size used to
+    become 2.5 mm; that path now raises ``MeshBaselineBlocked``.
     """
+    del geometry  # Bounding-box geometry is intentionally not a seed source.
     if explicit_mesh is not None:
         return explicit_mesh, None
 
@@ -40,164 +137,216 @@ def infer_mesh_specification(
                     deviation_factor=float(intent.mesh_requirements.get("deviation_factor", 0.1)),
                 ), None
 
-    # Step 1: Extract bounding box / dimensions
-    bbox = _extract_bounding_box(geometry, intent)
-    char_size: float
-    rationale: str
-    confidence: float
+    raise MeshBaselineBlocked(
+        "No USER_SPECIFIED mesh size. Bounding-box ratios are not a production seed, "
+        "and ABAQUS_DEFAULT_SIZE has not been read for this part. "
+        "Refusing the 2.5 mm fallback."
+    )
 
-    if bbox is not None:
-        dx, dy, dz = bbox
-        dims = sorted([d for d in (dx, dy, dz) if d > 0])
-        if dims:
-            min_dim = dims[0]
-            mid_dim = dims[1] if len(dims) > 1 else min_dim
-            max_dim = dims[-1]
-            if min_dim <= 2.0:
-                div = 2.0
-            elif mid_dim >= 2.5 * min_dim:
-                # Plate-like / bracket geometry: higher thickness resolution
-                div = 6.0
-            else:
-                # Beam / slender bar compact section: balance resolution and point load singularity
-                div = 4.0
-            suggested_size = max(min_dim / div, max_dim / 100.0)
-            # Bound within sensible engineering bounds
-            char_size = round(max(suggested_size, 0.5), 2)
-            rationale = (
-                f"Derived global mesh size {char_size} mm from geometry bounding dimensions "
-                f"({dx:.1f} x {dy:.1f} x {dz:.1f} mm), providing ~{div:.0f} elements across thickness "
-                f"({min_dim:.1f} mm) per standard solid structural discretization heuristics."
-            )
-            confidence = 0.92
+
+def decide_mesh_sizing(
+    *,
+    baseline_size: Optional[float],
+    baseline_source: Optional[str],
+    analysis_intents: Sequence[str] = (),
+    features: Sequence[Mapping[str, Any]] = (),
+    element_family: str = "C3D8R",
+    solver: str = "STANDARD",
+    procedure: str = "static",
+    partition_proven: bool = False,
+) -> MeshSizeDecision:
+    """Build the S2-S6 decision without emitting Abaqus actions.
+
+    Missing analysis intent does not create a seed. A thickness request without
+    a proven partition is ``BLOCKED``. Bias, volume size fields, and adaptive
+    remeshing are recorded as unsupported and do not become production actions.
+    """
+    intents = {_norm(item) for item in analysis_intents if _norm(item)}
+    unsupported = []
+    edges = []
+
+    if baseline_source not in (None, "USER_SPECIFIED", "ABAQUS_DEFAULT_SIZE"):
+        return MeshSizeDecision(
+            baseline_size=None,
+            baseline_source=None,
+            unsupported=(UnsupportedConstraint("baseline", "unrecognized size source", "INVALID"),),
+            status="INVALID",
+            adaptive_capability=_adaptive_status(solver, procedure, element_family),
+        )
+    if baseline_size is None or not _positive(baseline_size) or baseline_source is None:
+        unsupported.append(UnsupportedConstraint(
+            "baseline",
+            "no verified USER_SPECIFIED or ABAQUS_DEFAULT_SIZE baseline",
+            "MISSING_BASELINE",
+        ))
+
+    for feature in features:
+        kind = _norm(feature.get("kind") or feature.get("feature"))
+        if kind == "thickness":
+            unsupported.append(_thickness_constraint(feature, element_family, partition_proven))
+            continue
+        if kind in ("volume_size_field", "body_size_field"):
+            unsupported.append(UnsupportedConstraint(
+                kind,
+                "continuous body size field cannot be injected through seedPart or edge seeds",
+            ))
+            continue
+        if kind == "bias":
+            unsupported.append(UnsupportedConstraint(
+                "bias",
+                "seedEdgeByBias is not enabled until direction evidence and tests exist",
+            ))
+            continue
+        if kind not in _EDGE_INTENTS:
+            unsupported.append(UnsupportedConstraint(kind or "unknown", "feature kind has no executable mapping"))
+            continue
+        if not intents.intersection(_EDGE_INTENTS[kind]):
+            continue
+        edge = _edge_constraint(kind, feature, intents)
+        if isinstance(edge, UnsupportedConstraint):
+            unsupported.append(edge)
         else:
-            char_size = 2.5
-            rationale = "Fallback to standard 2.5 mm benchmark mesh size (geometry dimensions non-positive)."
-            confidence = 0.70
-    else:
-        # Check prompt dimensions
-        dims_from_meta = _extract_dims_from_metadata(intent)
-        if dims_from_meta:
-            dims = sorted([d for d in dims_from_meta if d > 0])
-            min_dim = dims[0]
-            mid_dim = dims[1] if len(dims) > 1 else min_dim
-            max_dim = dims[-1]
-            if min_dim <= 2.0:
-                div = 2.0
-            elif mid_dim >= 2.5 * min_dim:
-                div = 6.0
-            else:
-                div = 4.0
-            suggested_size = max(min_dim / div, max_dim / 100.0)
-            char_size = round(max(suggested_size, 0.5), 2)
-            rationale = (
-                f"Derived global mesh size {char_size} mm from intent prompt dimensions "
-                f"({min_dim:.1f} to {max_dim:.1f} mm), providing ~{div:.0f} elements across thickness "
-                f"per standard solid structural discretization heuristics."
-            )
-            confidence = 0.88
-        else:
-            char_size = 2.5
-            rationale = "No explicit geometry or dimensions provided; applied default engineering heuristic size 2.5 mm."
-            confidence = 0.65
+            edges.append(edge)
 
-    # Step 2: Select element formulation based on physics domain
-    analysis_type = (intent.analysis_type or intent.kind or "").lower()
-    has_contact = bool(intent.contacts) or "contact" in analysis_type
-    has_bending = any(
-        isinstance(ld, dict) and ld.get("type") in ("moment", "concentrated_force")
-        for ld in (intent.loads or ())
+    blocking = [item for item in unsupported if item.code != "NOT_REQUESTED"]
+    status = "READY" if not blocking and _positive(baseline_size) and baseline_source else "BLOCKED"
+    return MeshSizeDecision(
+        baseline_size=float(baseline_size) if _positive(baseline_size) else None,
+        baseline_source=baseline_source if _positive(baseline_size) else None,
+        edge_constraints=tuple(edges),
+        unsupported=tuple(blocking),
+        status=status,
+        explicit_stable_increment_risk=_explicit_risk(baseline_size, edges, solver),
+        production_default="NOT_SWITCHED",
+        adaptive_capability=_adaptive_status(solver, procedure, element_family),
     )
 
-    if has_contact:
-        # Contact benefits from second-order modified tet (C3D10M) or incompatible mode (C3D8I)
-        elem_type = "C3D8I"
-        elem_rationale = "Selected C3D8I incompatible mode hex elements to prevent shear locking in contact/bending."
-    elif "thermal" in analysis_type:
-        elem_type = "DC3D8"
-        elem_rationale = "Selected DC3D8 standard linear thermal brick elements."
-    else:
-        elem_type = "C3D8R"
-        elem_rationale = "Selected C3D8R reduced-integration brick elements with hourglass control."
 
-    mesh_spec = IntentMeshSpec(
-        element_type=elem_type,
-        global_size=char_size,
-        deviation_factor=0.1,
+def adaptive_remeshing_capability(
+    solver: str,
+    procedure: str,
+    element_shape: str,
+) -> str:
+    """S6 classification. Neither status authorizes a production action."""
+    return _adaptive_status(solver, procedure, element_shape)
+
+
+def edge_seed_readback_script(part_expr: str, planned: Sequence[EdgeSeedConstraint]) -> str:
+    """Emit getEdgeSeeds readback. Planned edges are not coverage evidence."""
+    del planned
+    return (
+        "_abqai_edge_coverage = []\n"
+        "for _abqai_edge in %s.edges:\n"
+        "    try:\n"
+        "        _abqai_seed = %s.getEdgeSeeds(_abqai_edge)\n"
+        "    except Exception as _abqai_exc:\n"
+        "        _abqai_seed = {'status': 'UNREAD', 'error': type(_abqai_exc).__name__}\n"
+        "    if _abqai_seed:\n"
+        "        _abqai_edge_coverage.append({\n"
+        "            'edge': getattr(_abqai_edge, 'index', None),\n"
+        "            'seed': _abqai_seed,\n"
+        "            'evidence': 'getEdgeSeeds',\n"
+        "            'coverage': 'OBSERVED_NOT_SOLVED',\n"
+        "        })\n"
+        "if not _abqai_edge_coverage:\n"
+        "    raise RuntimeError('edge_seed_coverage_missing: planned edge seeds have no getEdgeSeeds evidence')\n"
+        % (part_expr, part_expr)
     )
 
-    inference = InferredParameter(
-        parameter_name="mesh",
-        inferred_value=f"{elem_type} (size={char_size}mm)",
-        original_value=None,
-        source="geometry_feature_and_physics_reasoning",
-        confidence=confidence,
-        risk_level=InferenceRiskLevel.MEDIUM,
-        rationale=f"{rationale} {elem_rationale}",
+
+def _edge_constraint(kind, feature, intents):
+    region = feature.get("region_expression") or feature.get("edge")
+    if not region or not str(region).strip():
+        return UnsupportedConstraint(kind, "analysis intent is present but the target edge is not located")
+    size = feature.get("size")
+    number = feature.get("number")
+    if (size is None) == (number is None):
+        return UnsupportedConstraint(kind, "executable edge seed needs exactly one of size or number")
+    if size is not None and not _positive(size):
+        return UnsupportedConstraint(kind, "edge size is not a positive finite number", "INVALID")
+    if number is not None and (isinstance(number, bool) or not isinstance(number, int) or number < 1):
+        return UnsupportedConstraint(kind, "edge number is not an integer >= 1", "INVALID")
+    chosen = sorted(intents.intersection(_EDGE_INTENTS[kind]))[0]
+    evidence = tuple(str(item) for item in feature.get("evidence", ()) or ())
+    if not evidence:
+        evidence = ("geometric_reference:%s" % region,)
+    return EdgeSeedConstraint(
+        feature=kind,
+        analysis_intent=chosen,
+        region_expression=str(region),
+        size=float(size) if size is not None else None,
+        number=int(number) if number is not None else None,
+        constraint=str(feature.get("constraint") or "FREE").upper(),
+        evidence=evidence,
+        execution="seedEdgeByNumber" if number is not None else "seedEdgeBySize",
+        executed=False,
     )
-    return mesh_spec, inference
 
 
-def _extract_bounding_box(geometry: Any, intent: EngineeringIntent) -> Optional[Tuple[float, float, float]]:
-    """Extract (dx, dy, dz) from CadBoundingBox, GeometryModel, or dictionary."""
-    if geometry is None and intent.metadata and isinstance(intent.metadata, dict) and "geometry" in intent.metadata:
-        geometry = intent.metadata["geometry"]
+def _thickness_constraint(feature, element_family, partition_proven):
+    family = str(element_family or "").upper()
+    if family.startswith("S") or "SHELL" in family:
+        return UnsupportedConstraint(
+            "thickness",
+            "through-thickness layer counts do not apply to shell elements",
+        )
+    if not partition_proven or not feature.get("thickness_direction_edges"):
+        return UnsupportedConstraint(
+            "thickness",
+            "through-thickness layers require a proven partition; an edge seed is not layer evidence",
+        )
+    return UnsupportedConstraint(
+        "thickness",
+        "partition evidence was supplied but no verified thickness-direction mesh exists",
+    )
 
-    if geometry is None:
+
+def _explicit_risk(baseline_size, edges, solver):
+    if str(solver or "").upper() != "EXPLICIT":
         return None
-
-    # IntentGeometrySpec or object with length/width/height
-    if hasattr(geometry, "length") and hasattr(geometry, "width") and hasattr(geometry, "height"):
-        l = getattr(geometry, "length", None)
-        w = getattr(geometry, "width", None)
-        h = getattr(geometry, "height", None)
-        if l is not None and w is not None and h is not None:
-            return (float(l), float(w), float(h))
-
-    # CadBoundingBox or object with min/max attributes
-    if hasattr(geometry, "min_x") and hasattr(geometry, "max_x"):
-        dx = abs(geometry.max_x - geometry.min_x)
-        dy = abs(geometry.max_y - geometry.min_y)
-        dz = abs(geometry.max_z - geometry.min_z)
-        return (dx, dy, dz)
-
-    # GeometryModel with bounding_box attribute
-    if hasattr(geometry, "bounding_box"):
-        bbox = geometry.bounding_box
-        if hasattr(bbox, "min_x"):
-            return (
-                abs(bbox.max_x - bbox.min_x),
-                abs(bbox.max_y - bbox.min_y),
-                abs(bbox.max_z - bbox.min_z),
-            )
-
-    # Dictionary
-    if isinstance(geometry, dict):
-        if "box" in geometry and isinstance(geometry["box"], (list, tuple)) and len(geometry["box"]) >= 3:
-            return (float(geometry["box"][0]), float(geometry["box"][1]), float(geometry["box"][2]))
-        if "dimensions" in geometry and isinstance(geometry["dimensions"], (list, tuple)) and len(geometry["dimensions"]) >= 3:
-            return (float(geometry["dimensions"][0]), float(geometry["dimensions"][1]), float(geometry["dimensions"][2]))
-        if "bbox" in geometry and isinstance(geometry["bbox"], (list, tuple)) and len(geometry["bbox"]) >= 6:
-            b = geometry["bbox"]
-            return (abs(b[3] - b[0]), abs(b[4] - b[1]), abs(b[5] - b[2]))
-
-    return None
+    sizes = [float(baseline_size)] if _positive(baseline_size) else []
+    sizes.extend(edge.size for edge in edges if edge.size is not None)
+    if not sizes:
+        return {
+            "status": "NOT_ESTIMATED",
+            "source": "no positive element size",
+            "solver_reported_stable_increment": None,
+            "job_submitted": False,
+        }
+    return {
+        "status": "ESTIMATED_ONLY",
+        "minimum_element_size": min(sizes),
+        "minimum_element_size_source": "baseline_or_planned_edge_seed",
+        "note": "estimated from element size; not the solver-reported stable time increment",
+        "solver_reported_stable_increment": None,
+        "job_submitted": False,
+    }
 
 
-def _extract_dims_from_metadata(intent: EngineeringIntent) -> Tuple[float, ...]:
-    """Extract numeric dimensions found in metadata."""
-    if not intent.metadata or not isinstance(intent.metadata, dict):
-        return ()
-    dims_data = intent.metadata.get("dimensions")
-    if not dims_data or not isinstance(dims_data, list):
-        return ()
-    vals = []
-    for item in dims_data:
-        if isinstance(item, dict) and "value" in item:
-            try:
-                v = float(item["value"])
-                if v > 0:
-                    vals.append(v)
-            except (ValueError, TypeError):
-                pass
-    return tuple(vals)
+def _adaptive_status(solver, procedure, element_shape):
+    solver_name = str(solver or "").upper()
+    if "EXPLICIT" in solver_name or "ALE" in solver_name:
+        return "EXCLUDED"
+    procedure_name = _norm(procedure)
+    shape_name = str(element_shape or "").upper()
+    if (
+        solver_name == "STANDARD"
+        and procedure_name in _STANDARD_ADAPTIVE_PROCEDURES
+        and shape_name in _STANDARD_ADAPTIVE_SHAPES
+    ):
+        return "RESEARCH_ONLY"
+    return "EXCLUDED"
+
+
+def _positive(value):
+    return (
+        value is not None
+        and not isinstance(value, bool)
+        and isinstance(value, (int, float))
+        and math.isfinite(float(value))
+        and float(value) > 0
+    )
+
+
+def _norm(value):
+    return str(value or "").strip().lower().replace("-", "_").replace(" ", "_")

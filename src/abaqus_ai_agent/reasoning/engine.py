@@ -16,7 +16,7 @@ from ..contracts.intent_reasoning import (
 )
 from ..planning.compiler import IntentMeshSpec
 from .material_catalog import match_engineering_material
-from .mesh_inference import infer_mesh_specification
+from .mesh_inference import MeshBaselineBlocked, infer_mesh_specification
 from .plausibility import audit_engineering_plausibility
 from ..validation.condition_fidelity import audit_condition_fidelity
 
@@ -77,7 +77,13 @@ class IntentReasoningEngine:
         # -------------------------------------------------------------
         # 3. Geometric & Physics-Driven Mesh Specification Inference
         # -------------------------------------------------------------
-        resolved_mesh, mesh_inf = infer_mesh_specification(intent, geometry=geometry, explicit_mesh=mesh)
+        resolved_mesh = None
+        try:
+            resolved_mesh, mesh_inf = infer_mesh_specification(intent, geometry=geometry, explicit_mesh=mesh)
+        except MeshBaselineBlocked as exc:
+            blockers.append(str(exc))
+            clarifications.append(str(exc))
+            mesh_inf = None
         if mesh_inf is not None:
             inferences.append(mesh_inf)
 
