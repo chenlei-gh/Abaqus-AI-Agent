@@ -246,3 +246,24 @@ def test_builder_embeds_run_id_in_markers():
     assert "payload[\"run_id\"] = RUN_ID" in script
     legacy = build_runtime_smoke_script("SmokeJob")
     assert "RUN_ID = None" in legacy
+
+
+def test_builder_writes_completion_sentinel_on_both_paths(tmp_path):
+    """Stdout markers can be cut off when the launcher exits before the kernel;
+    the sentinel is a file, so it survives and records pass or fail."""
+    sentinel = tmp_path / "end.flag"
+    script = build_runtime_smoke_script(
+        "SmokeJob", run_id="abc123", completion_sentinel=sentinel)
+    compile(script, "<smoke>", "exec")
+    assert repr(str(sentinel)) in script
+    assert 'report_script_end("completed")' in script
+    assert 'report_script_end("failed")' in script
+
+
+def test_builder_without_sentinel_keeps_previous_contract():
+    script = build_runtime_smoke_script("SmokeJob")
+    compile(script, "<smoke>", "exec")
+    assert "SENTINEL = ''" in script
+    # With no sentinel configured the helper must be a no-op, not a file write
+    # to the empty path.
+    assert "if not SENTINEL:" in script

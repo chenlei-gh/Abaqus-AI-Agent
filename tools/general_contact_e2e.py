@@ -194,8 +194,6 @@ _src_dir = %r
 if _src_dir not in sys.path:
     sys.path.insert(0, _src_dir)
 
-import ast
-import io
 import json
 import os
 from dataclasses import asdict, is_dataclass
@@ -207,6 +205,7 @@ from abaqus_ai_agent.actions.builders import (
 )
 from abaqus_ai_agent.actions.runner import execute
 from abaqus_ai_agent.execution.client import InProcessExecutor
+from abaqus_ai_agent.execution.kernel_namespace import KernelNamespace, build_cae_seed
 from abaqus_ai_agent.execution.analysis_run import AnalysisRunner
 from abaqus_ai_agent.execution.odb import extract_field
 from abaqus_ai_agent.contracts.intent import EngineeringIntent
@@ -236,28 +235,10 @@ friction_mu = %r
 disp_comp = %r
 disp_slide = %r
 
+_NS = KernelNamespace(seed_code=build_cae_seed())
+
 def _run_code(code):
-    buf = io.StringIO()
-    old_stdout = sys.stdout
-    sys.stdout = buf
-    try:
-        exec(compile(code, '<AIAgent-GeneralContact>', 'exec'), globals(), globals())
-    finally:
-        sys.stdout = old_stdout
-    out = buf.getvalue().strip()
-    res = globals().get('result')
-    if isinstance(res, dict):
-        return res
-    if out:
-        last_line = out.splitlines()[-1].strip()
-        try:
-            val = ast.literal_eval(last_line)
-            if isinstance(val, dict):
-                return val
-        except Exception:
-            pass
-        return {'status': 'COMPLETED', 'stdout': out, 'output': out}
-    return {'status': 'COMPLETED'}
+    return _NS.execute(code, '<AIAgent-GeneralContact>')
 
 class CAEInProcessExecutor(InProcessExecutor):
     def inspect_odb(self, path):

@@ -33,7 +33,7 @@ class _FakeExecutor:
         self.workdir = workdir
         self.timeout = timeout
 
-    def run_nogui(self, script_path, timeout=None):
+    def run_nogui(self, script_path, timeout=None, completion_sentinel=None):
         return BatchResult(
             command=("abaqus", "cae", "noGUI=" + script_path),
             return_code=0,
@@ -83,7 +83,7 @@ def test_stall_exception_still_writes_classified_evidence(tmp_path, monkeypatch)
     from abaqus_ai_agent.execution.watchdog import SolverProcessStalledError
 
     class StallingExecutor(_FakeExecutor):
-        def run_nogui(self, script_path, timeout=None):
+        def run_nogui(self, script_path, timeout=None, completion_sentinel=None):
             raise SolverProcessStalledError("stalled", cmd=("abaqus",), workdir=str(tmp_path))
 
     monkeypatch.setattr(runtime_smoke, "BatchExecutor", StallingExecutor)
@@ -103,7 +103,7 @@ def test_stall_exception_still_writes_classified_evidence(tmp_path, monkeypatch)
 
 def test_unexpected_exception_still_writes_evidence(tmp_path, monkeypatch):
     class BrokenExecutor(_FakeExecutor):
-        def run_nogui(self, script_path, timeout=None):
+        def run_nogui(self, script_path, timeout=None, completion_sentinel=None):
             raise ValueError("unexpected defect")
 
     monkeypatch.setattr(runtime_smoke, "BatchExecutor", BrokenExecutor)
@@ -120,7 +120,7 @@ def test_stale_rpy_from_earlier_run_cannot_pass_current_run(tmp_path, monkeypatc
     """P0-3: an old abaqus.rpy without this run_id must not rescue a pass."""
 
     class SilentExecutor(_FakeExecutor):
-        def run_nogui(self, script_path, timeout=None):
+        def run_nogui(self, script_path, timeout=None, completion_sentinel=None):
             # CAE captured stdout: no markers on the stream at all.
             return BatchResult(
                 command=("abaqus", "cae", "noGUI=" + script_path),
@@ -160,7 +160,7 @@ def test_unsettled_artifacts_block_pass(tmp_path, monkeypatch):
     """P1-4: launcher rc=0 with still-changing artifacts is not a pass."""
 
     class EarlyExitExecutor(_FakeExecutor):
-        def run_nogui(self, script_path, timeout=None):
+        def run_nogui(self, script_path, timeout=None, completion_sentinel=None):
             return BatchResult(
                 command=("abaqus", "cae", "noGUI=" + script_path),
                 return_code=0,

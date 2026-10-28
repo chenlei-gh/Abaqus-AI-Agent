@@ -70,3 +70,14 @@ def test_p1_product_solve_manifest_integrity():
     summary_card = summary.get("summary_card", {})
     assert (summary_card.get("status") == "COMPLETED") == is_task_completed
     assert (summary_card.get("acceptance_passed") is True) == is_task_completed
+
+
+def test_p1_product_solve_golden_uses_isolated_kernel_namespace():
+    source = (ROOT / "tools" / "p1_product_solve_golden_e2e.py").read_text(encoding="utf-8")
+    assert "from abaqus_ai_agent.execution.kernel_namespace import KernelNamespace, build_cae_seed" in source
+    assert "_NS = KernelNamespace(seed_code=build_cae_seed())" in source
+    assert "return _NS.execute(code, '<AIAgent-P1-Solve>')" in source
+    assert "globals().pop('result', None)" not in source
+    assert "globals(), globals()" not in source
+    assert "from abaqus import mdb" not in source
+    assert "from abaqusConstants import *" not in source

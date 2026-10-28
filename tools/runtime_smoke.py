@@ -43,9 +43,15 @@ def main(argv=None):
     os.makedirs(workdir, exist_ok=True)
     run_id = uuid.uuid4().hex[:12]
     script_path = os.path.join(workdir, args.job_name + "_script.py")
+    sentinel_path = os.path.join(workdir, "runtime_smoke_script_end.flag")
+    # A leftover sentinel from an earlier run would be read as this run's
+    # completion evidence before the kernel even started.
+    if os.path.exists(sentinel_path):
+        os.remove(sentinel_path)
     with open(script_path, "w", encoding="utf-8") as handle:
         handle.write(build_runtime_smoke_script(
-            args.job_name, run_id=run_id, wait_timeout=args.timeout))
+            args.job_name, run_id=run_id, wait_timeout=args.timeout,
+            completion_sentinel=sentinel_path))
 
     evidence = {
         # Missing-evidence is itself a verdict: if this file is absent or this
@@ -63,7 +69,8 @@ def main(argv=None):
             workdir=workdir,
             timeout=args.timeout,
         )
-        process = executor.run_nogui(script_path, timeout=args.timeout)
+        process = executor.run_nogui(script_path, timeout=args.timeout,
+                                     completion_sentinel=sentinel_path)
         combined_output = (process.stdout or "") + "\n" + (process.stderr or "")
         parsed = parse_smoke_output(combined_output, expected_run_id=run_id)
         rpy_diagnostics = []
@@ -90,6 +97,7 @@ def main(argv=None):
             "return_code": process.return_code,
             "process_succeeded": process.succeeded,
             "artifacts_settled": getattr(process, "settled", None),
+            "completion_evidence": getattr(process, "completion_evidence", None),
             "harness": {
                 "passed": parsed.passed,
                 "script_completed": parsed.script_completed,
@@ -109,7 +117,9 @@ def main(argv=None):
             "stderr": process.stderr,
         })
         # Launcher exit is process-level evidence only. A run whose artifacts
-        # never settled after the launcher exited has no terminal proof.
+        # never settled after the launcher exited has no terminal proof, and
+        # stdout markers alone cannot stand in for the script having ended:
+        # the launcher may have stopped reading before the kernel finished.
         settled = getattr(process, "settled", True)
         evidence["status"] = "pass" if (process.succeeded and settled and parsed.passed) else "fail"
     except Exception as exc:

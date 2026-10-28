@@ -551,6 +551,21 @@ A4 的审计结果比预期严重，必须单独记录（详见 `docs/phase-timi
 
 保持不变的结论：本机 1.3 s 提前返回的**根因仍未定位**，`P1-LAUNCHER-01` 的关闭条件与原样保持不变。本次改动不声称分歧已解，只是让完成判定不再依赖那个不可靠的信号。
 
+### 6.4.2 sentinel 推广到其余 `settled` 消费方（2026-10-28）
+
+| 调用方 | 接入方式 |
+| :--- | :--- |
+| `tools/runtime_smoke.py` | `build_runtime_smoke_script` 新增 `completion_sentinel`；成功路径写 `completed`，异常路径写 `failed`（避免宿主为失败脚本空等整个求解预算）；证据 JSON 新增 `completion_evidence` |
+| `tools/run_live_report_gate.py` | `build_live_gate_cae_script` 新增 `completion_sentinel`，在 facts 落盘后写入；`compute_live_gate_verdict` 新增可选 `completion_evidence`，非 `script_completed` 一律不 PASS |
+
+两处都在启动前删除上一轮遗留的 sentinel，防止旧标记被当成本次证据。
+
+**刻意保留的兼容口径**：`compute_live_gate_verdict` 的 `completion_evidence=None` 表示「调用方未监督脚本完成」，此时不新增拒绝理由——否则所有现存离线契约测试与未改造调用方会被一次性改判。sentinel 是**加强**判定，不是把未改造路径改判为失败。
+
+### 6.4.3 更正一条此前记录的事实错误
+
+§6.5「刻意未改」表曾写「`tools/*.py` 40+ 处 `waitForCompletion()` 属 13 个待迁移 Golden 脚本」。本轮逐文件核实：**13 个迁移目标文件里没有任何裸 `waitForCompletion()`**，它们都走已限界的 `AnalysisRunner` / `JobController`。无界等待实际分布在 `tools/j_live_abaqus_matrix.py`（22 处）、`tools/l_agent_workflow_matrix.py`（5 处）、`tools/tier2_bc_load_equivalence_live.py`（4 处）等**另一批**工具中，与 P1-5 命名空间迁移无关，需单独立项。
+
 ### 6.5 复核中发现的两处真实缺陷（2026-10-28，已修复）
 
 这两项是 `0ecf582` 引入的回归，均由官方文档比对 + 本地探针复现确认，**不是**文档口径问题。
@@ -573,8 +588,49 @@ A4 的审计结果比预期严重，必须单独记录（详见 `docs/phase-timi
 | 位置 | 内容 | 不改的理由 |
 | :--- | :--- | :--- |
 | `planning/compiler.py:1750` | 生成的 `mdb.jobs[...].waitForCompletion()` 仍无界 | 该分支仅在 `submit_job=True` 时触发，生产链路始终传 `False`（提交统一走已限界的 `JobController.submit`）；实际使用者是待批次迁移的 Golden 脚本，套上硬上限需先定下列脚本的超时契约 |
-| `tools/*.py` | 40+ 处 `waitForCompletion()` | 属 13 个待迁移 Golden 脚本，不在本轮范围 |
+| `tools/*.py` | 40+ 处 `waitForCompletion()` | **记录已更正（见 §6.4.3）**：无界等待不在 13 个迁移目标中，而在另一批工具里，需单独立项 |
 | `batch.run_nogui` | 仍无前台选项 | 官方 CAE 执行过程页无 `interactive` 等价关键字，且 `noGUI` 会忽略其它所有选项；完成判定改走 §6.4.1 的脚本内 sentinel，而非外层选项 |
+
+---
+
+## 7. 第 5 步 Golden 脚本迁移收尾（2026-10-28）
+
+### 7.1 P1-5 命名空间迁移：13 个剩余脚本全部完成
+
+试点（`static_golden_e2e`、`run_live_report_gate`、`production_delivery_e2e`）之后剩余的 13 个脚本本轮全部迁移到 `KernelNamespace`：
+
+| 批次 | 文件 |
+| :--- | :--- |
+| 1 | `dynamic_golden_e2e`、`explicit_golden_e2e`、`thermal_golden_e2e` |
+| 2 | `mbd_golden_e2e`、`mbd2_revolute_golden_e2e`、`fmbd4_rigid_flexible_golden_e2e`、`fmbd5_crank_slider_golden_e2e` |
+| 3 | `general_contact_e2e`、`tie_contact_e2e`、`mesh_convergence_e2e` |
+| 4 | `p1_2_reasoning_qualification_e2e`、`p1_3_result_delivery_golden_e2e`、`p1_product_solve_golden_e2e` |
+
+统一改法：`_NS = KernelNamespace(seed_code=build_cae_seed())` + `_run_code` 改为 `_NS.execute(code, '<AIAgent-...>')`，删除共享 `globals()` 执行与手工 `result` 清理。物理建模、载荷、网格、验收判据、报告字段、命令行参数一律未改。
+
+逐文件做了生成脚本顶层的 abaqus 名称依赖检查（新命名空间只 seed `from abaqus import *` / `from abaqusConstants import *`，顶层若直接用 `mdb`/`ON` 会 NameError）。仅 `mesh_convergence_e2e` 的顶层网格循环直接用 `mdb`，已补 `from abaqus import mdb` 局部导入；其余 12 个无需改动。
+
+核实结果：`tools/` 下 `exec(compile(code, ...), globals(), globals())` 与 `globals().get('result')` / `globals().pop('result')` **零残留**；使用 `KernelNamespace` 的工具共 16 个（13 + 3 试点）。
+
+### 7.2 顺带修复的基线缺陷
+
+`p1_3_result_delivery_golden_e2e.py` 生成的 CAE 脚本在交付报告区有缩进错乱（Tab + 多余缩进的 `if task_result.report_html:`），导致生成脚本**根本无法编译**，该工具此前必然失败。已修复缩进，生成脚本现可 `compile()`。此缺陷在迁移前的基线上即存在，非迁移引入。
+
+### 7.3 Phase A time-to-gate 遥测
+
+新增 `telemetry/time_to_gate.py`（`GateTimer` / `GateTiming`），在 `AnalysisRunner.run` 起点打点，在 `PreSolveApprovalRequired` 捕获处记录耗时：
+
+- 写入 blocked run 的 `diagnostics[0]["time_to_gate"]`；
+- 经 `agent.py` 的 `AWAITING_APPROVAL` summary_card 透出，供审批 UI 与 live report gate 读取；
+- 契约与 `phase_profile` 一致：monotonic 时钟、未测量记 `None` 而非 `0`、永不为负、遥测故障不得改变运行结果（`stop()` 异常降级为 `None`）。
+
+**顺带修复的既有脆弱点**：`_submit_and_time` 的 `time.monotonic()` 提交前读取原本无保护，只在「提交后读取」做了降级。新增遥测使该调用点成为第二次时钟读取后，既有的「时钟故障不得使作业失败」契约被击穿。已为提交前读取补上同样的降级（提交仍恰好一次），与该函数自述契约一致。
+
+### 7.4 验证层级
+
+- 定向：`test_batch_settle_and_namespace`、`test_production_delivery_*`、`test_runtime_smoke*`、`test_live_report_gate`、`test_pre_solve_gate`、`test_analysis_runner_timing`、`test_time_to_gate` 及 13 个迁移脚本的定向测试全部通过。
+- 全量：`python -m pytest tests -q` → **2557 passed**。
+- **未做真机重跑**。生成脚本只做到 `compile()` 与 AST 级契约断言；CAE 内核内行为、sentinel 真机时序仍未验证。
 
 ---
 
@@ -613,5 +669,7 @@ A4 的审计结果比预期严重，必须单独记录（详见 `docs/phase-timi
 | 2026-10-27 | Case 07 与 P3-LEFTOVER-05 闭合：(1) Case 07 真机证据（2026-10-21 运行 `case07_live_e7301de3`）入库 `machine_validation/p2_cases/case_07_jounce_bumper/`，签名 manifest v1 六项判据全 PASS，registry 登记 QUALIFIED + REF_ABQ_JOUNCE_BUMPER（手册章节定位未核实已披露，数值基准保持 PENDING），守护测试由 absence 改为正向完整性校验；(2) P3-LEFTOVER-05 真机复验 PASS：冲击 cue 编译出 `*Dynamic, Explicit` 并在 Abaqus/Explicit 2025 完成求解（短周期变体 COMPLETED，5.0MB ODB；长周期变体 727s 后物理失稳，与步类型无关）。三项保留待办清零，仅余 MV-04（生产范围排除）。 |
 | 2026-10-28 | 外部证据复核后收窄两处外部事实表述（仅文档，无代码变更）：(1) `interactive` 的官方原文只写输出到屏幕，未写“命令不返回直到分析结束”，原“官方标准答案”表述改记为文档措辞 + 社区行为报告；(2) CAE noGUI 侧重述为“官方预期是脚本结束后 kernel 终止”，而非“官方无等效等待选项”。新增 §6 `P1-LAUNCHER-01`：登记 `psutil` / Job Object 在父进程已退出后均无法取得子进程树的方法论边界，并写明三段关闭条件。行为不变：`settled` 语义与调用方要求不变。 |
 | 2026-10-28 | 代码级复核后的脚本/命令修正（Exa 复核驱动）：(1) `BatchExecutor.run_input` 补 `interactive`——官方执行过程页明确 `background` 是默认，不显式覆盖则启动器移交后立即返回，watchdog 监督的是已退出的进程；同时启用既有的证据门控放宽（`adaptive_heartbeat=True` + `job_name`），避免前台化后 120 s 静默窗口误杀大型隐式算例，沿用 `P1-LEFTOVER-01` 已真机验证的机制；(2) `JobController.wait` / `AbaqusExecutor.monitor_job` / smoke 脚本改用 `waitForCompletion(timeOut=N)`——官方 Job 对象页记载无参即无限等待、超时抛 `AbaqusException`，只有界等待内的内核异常才会被映射为 `TIMEOUT`；(3) `solve_user_inp` 的 `execute` 回退分支不再把 `abaqus job=...` 当 Python 源码发送，改为官方 `mdb.JobFromInputFile()` + 有界等待 + `finally` 恢复 cwd；(4) `classify_job_status` 改为精确 token 匹配，`CHECK_COMPLETED`（datacheck）不再被子串匹配误提升为 `COMPLETED`。新增 §0.5 `P1-LAUNCHER-02` 与 §6.4。验证层级：定向与全量单元回归，**未**做真机重跑 |
-| 2026-10-28 | 按官方语义实现 CAE noGUI 完成判定（§6.4.1）：新核实 CAE 执行过程页 `noGUI` 条目的原文「使用 `noGUI` 时 Abaqus/CAE 忽略你提供的任何其它命令行选项」——外层等待开关从根上不可能实现，官方完成事件只可能是「脚本跑完」。新增 `completion_sentinel_code` / `blocked_sentinel_code` / `await_script_completion`，`run_nogui` 增加可选 `completion_sentinel=`，`BatchResult` 新增 `completion_evidence`（`script_completed` / `script_blocked` / `quiescence_only` / `none`）；`production_delivery_e2e` 在脚本尾部写入 sentinel、审批门阻断处写 `blocked`，并对非 `script_completed` fail closed。验证：定向 59 passed，全量 2529 passed；**未**做真机重跑。`P1-LAUNCHER-01` 关闭条件不变，1.3 s 提前返回根因仍未定位 |
+| 2026-10-28 | 按官方语义实现 CAE noGUI 完成判定（§6.4.1）：新核实 CAE 执行过程页 `noGUI` 条目的原文「使用 `noGUI` 时 Abaqus/CAE 忽略你提供的任何其它命令行选项」——外层等待开关从根上不可能实现，官方完成事件只可能是「脚本跑完」。新增 `completion_sentinel_code` / `blocked_sentinel_code` / `await_script_completion`，`run_nogui` 增加可选 `completion_sentinel=`，`BatchResult` 新增 `completion_evidence`；`production_delivery_e2e` 在脚本尾部写入 sentinel、审批门阻断处写 `blocked`，并对非 `script_completed` fail closed。验证：定向 59 passed，全量 2529 passed；未做真机重跑。`P1-LAUNCHER-01` 关闭条件不变 |
+| 2026-10-28 | 收尾三项（§6.4.2/§6.4.3/§7）：(1) sentinel 推广至 `runtime_smoke` 与 `run_live_report_gate`，后者对非 `script_completed` 不 PASS，旧 sentinel 启动前清除；(2) P1-5 剩余 13 个 Golden 脚本全部迁移到 `KernelNamespace`，`tools/` 下共享 globals 模式零残留，并修复 `p1_3_result_delivery` 生成脚本基线缩进错误（原本无法编译）；(3) 新增 Phase A time-to-gate 遥测（`telemetry/time_to_gate.py`），接入审批门诊断与 `AWAITING_APPROVAL` summary_card，同轮补上 `_submit_and_time` 提交前时钟读取的降级。另更正一条事实记录：无界 `waitForCompletion()` 不在 13 个迁移目标中，而在另一批工具里，需单独立项。全量 2557 passed，未做真机重跑 |
+：新核实 CAE 执行过程页 `noGUI` 条目的原文「使用 `noGUI` 时 Abaqus/CAE 忽略你提供的任何其它命令行选项」——外层等待开关从根上不可能实现，官方完成事件只可能是「脚本跑完」。新增 `completion_sentinel_code` / `blocked_sentinel_code` / `await_script_completion`，`run_nogui` 增加可选 `completion_sentinel=`，`BatchResult` 新增 `completion_evidence`（`script_completed` / `script_blocked` / `quiescence_only` / `none`）；`production_delivery_e2e` 在脚本尾部写入 sentinel、审批门阻断处写 `blocked`，并对非 `script_completed` fail closed。验证：定向 59 passed，全量 2529 passed；**未**做真机重跑。`P1-LAUNCHER-01` 关闭条件不变，1.3 s 提前返回根因仍未定位 |
 ：(1) 内核片段只 `print(status)`，而 `KernelNamespace.execute` 会为“只打印”返回自带 `status` 的信封，`classify_job_status` 因此把 `ABORTED`/`TERMINATED` 读成 `COMPLETED`；修复为绑定 `result` 通道（`JobController.status` 同步修正），负例探针已确认旧代码必失败；(2) 传输超时与 `waitForCompletion(timeOut=N)` 相等会竞态抢占内核超时，改为传输侧加 30 s 余量。另将 session 回退分支的 `consistencyChecking=OFF` 改回官方默认 `ON`，与 `JobController.submit` 一致。同轮将 `prod_deliv_kn_phase_b.json` 与 `production_delivery_kn.json` 的主机绝对路径归一为 `<PROJECT_ROOT>/...`，并在 `tools/production_delivery_e2e.py` 新增 `sanitize_report_paths` 于落盘前生效，修复 CHK-02 公共发布审计失败。全量 2522 passed |

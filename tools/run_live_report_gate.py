@@ -101,6 +101,7 @@ def build_live_gate_cae_script(
     job_name: str,
     model_name: str,
     run_id: str,
+    completion_sentinel: Optional[Path] = None,
 ) -> str:
     """Render the CAE-side driver script. Pure function: offline-testable."""
     return """# -*- coding: utf-8 -*-
@@ -279,6 +280,14 @@ print('[LiveGate] Facts written: ' + summary_path)
 print('AIAgent_LIVE_GATE_FACTS_BEGIN')
 print(json.dumps(facts, default=str, sort_keys=True))
 print('AIAgent_LIVE_GATE_FACTS_END')
+
+# Kernel-side completion evidence. Solve exceptions are caught above, so this
+# statement is reached on every path that produced a verdict; the host waits
+# for it instead of trusting the launcher's exit code.
+if %r:
+    _ai_done = open(%r, 'w')
+    _ai_done.write('completed')
+    _ai_done.close()
 """ % (
         str(SRC),
         launcher,
@@ -289,6 +298,8 @@ print('AIAgent_LIVE_GATE_FACTS_END')
         model_name,
         job_name,
         str(workdir),
+        str(completion_sentinel) if completion_sentinel else "",
+        str(completion_sentinel) if completion_sentinel else "",
     )
 
 
@@ -314,6 +325,7 @@ def compute_live_gate_verdict(
     artifacts: Dict[str, Any],
     expected_run_id: str,
     required_artifacts: List[str],
+    completion_evidence: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Pure verdict function. PASS requires every gate; rejection is explicit.
 
@@ -337,6 +349,15 @@ def compute_live_gate_verdict(
         host_ok = False
     if process_settled is not True:
         reasons.append("artifacts not settled after launcher exit")
+        host_ok = False
+    # ``None`` means the caller did not supervise script completion (legacy
+    # callers). When it is supervised, anything other than the kernel's own
+    # end-of-script record means the script may still be running, in which case
+    # neither the facts nor the artifacts are terminal evidence.
+    if completion_evidence is not None and completion_evidence != "script_completed":
+        reasons.append(
+            "no kernel-side script-completion evidence (completion_evidence=%r)"
+            % (completion_evidence,))
         host_ok = False
     if not facts:
         reasons.append("no facts payload emitted by the CAE script")
@@ -455,6 +476,11 @@ def run_live_report_gate(
     print("STEP 2: Construct Live CAE Driver Script (solve_requirement with production gate)")
     print("=" * 78)
 
+    cae_script_path = workdir / "run_live_gate_script.py"
+    sentinel_path = workdir / "live_gate_script_end.flag"
+    # A sentinel left by a previous run would be read as this run's evidence.
+    if sentinel_path.exists():
+        sentinel_path.unlink()
     cae_script_content = build_live_gate_cae_script(
         workdir=workdir,
         launcher=launcher,
@@ -462,8 +488,8 @@ def run_live_report_gate(
         job_name=job_name,
         model_name=model_name,
         run_id=run_id,
+        completion_sentinel=sentinel_path,
     )
-    cae_script_path = workdir / "run_live_gate_script.py"
     cae_script_path.write_text(cae_script_content, encoding="utf-8")
     print(f"  CAE script written to: {cae_script_path}")
 
@@ -472,7 +498,8 @@ def run_live_report_gate(
     print("=" * 78)
     launch_time = time.time()
     batch = BatchExecutor(launcher=launcher, workdir=str(workdir), timeout=3600)
-    proc_res = batch.run_nogui(str(cae_script_path), timeout=3600)
+    proc_res = batch.run_nogui(str(cae_script_path), timeout=3600,
+                               completion_sentinel=sentinel_path)
 
     stdout_text = proc_res.stdout or ""
     stderr_text = proc_res.stderr or ""
@@ -560,6 +587,7 @@ def run_live_report_gate(
         artifacts=artifacts,
         expected_run_id=run_id,
         required_artifacts=required,
+        completion_evidence=getattr(proc_res, "completion_evidence", None),
     )
 
     manifest = {
@@ -576,6 +604,7 @@ def run_live_report_gate(
             "return_code": proc_res.return_code,
             "settled": getattr(proc_res, "settled", None),
             "settle_note": getattr(proc_res, "settle_note", None),
+            "completion_evidence": getattr(proc_res, "completion_evidence", None),
             "stdout_tail": stdout_text[-4000:],
             "stderr_tail": stderr_text[-4000:],
         },

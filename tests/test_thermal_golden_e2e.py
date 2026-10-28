@@ -25,6 +25,18 @@ def test_thermal_golden_script_uses_architecture_pipeline():
     assert "STEADY_STATE" in script
 
 
+def test_thermal_golden_script_uses_kernel_namespace():
+    script = build_thermal_golden_script()
+    assert (
+        "from abaqus_ai_agent.execution.kernel_namespace import "
+        "KernelNamespace, build_cae_seed"
+    ) in script
+    assert "_NS = KernelNamespace(seed_code=build_cae_seed())" in script
+    assert "return _NS.execute(code, '<AIAgent-ThermalGolden>')" in script
+    assert "globals(), globals()" not in script
+    compile(script, "<AIAgent-ThermalGolden>", "exec")
+
+
 def test_thermal_golden_script_does_not_contain_bypass():
     script = build_thermal_golden_script()
     assert "subprocess" not in script

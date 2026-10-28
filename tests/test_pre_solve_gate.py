@@ -457,3 +457,49 @@ def test_adopted_approval_still_requires_matching_deck(tmp_path):
     (run_b / "Job-X.inp").write_text(DECK_V2, encoding="utf-8")
     with pytest.raises(Exception):
         _enforce(run_b)
+
+
+def test_approval_gate_records_time_to_gate(tmp_path):
+    """Phase A duration is recorded at the approval stop.
+
+    The measurement is telemetry: it must be present and non-negative, and it
+    must not change the blocked outcome or permit a submission.
+    """
+    executor = RecordingExecutor()
+    _plant_deck(tmp_path, "Job-Gate")
+
+    run = _run(AnalysisRunner(executor), tmp_path, "Job-Gate", "required")
+
+    diag = run.diagnostics[0]
+    timing = diag.get("time_to_gate")
+    assert timing is not None, "the approval stop must record how long Phase A took"
+    assert timing["outcome"] == "AWAITING_APPROVAL"
+    assert timing["elapsed_s"] is not None and timing["elapsed_s"] >= 0.0
+    assert timing["started_at"] and timing["stopped_at"]
+    assert timing["clock"] == "monotonic"
+    # Telemetry never relaxes the gate.
+    assert run.engineering_status == "SUBMISSION_BLOCKED"
+    assert not any(".submit(" in cmd for cmd in executor.commands)
+
+
+def test_time_to_gate_failure_does_not_mask_the_approval_stop(tmp_path, monkeypatch):
+    """A telemetry defect must not sink or reclassify the approval stop."""
+    import abaqus_ai_agent.telemetry.time_to_gate as ttg
+
+    class _BrokenTimer:
+        def start(self):
+            pass
+
+        def stop(self, outcome):
+            raise RuntimeError("timer broken")
+
+    monkeypatch.setattr(ttg, "GateTimer", _BrokenTimer)
+    executor = RecordingExecutor()
+    _plant_deck(tmp_path, "Job-Gate")
+
+    run = _run(AnalysisRunner(executor), tmp_path, "Job-Gate", "required")
+
+    diag = run.diagnostics[0]
+    assert diag["pre_solve_approval_required"] is True
+    assert diag["time_to_gate"] is None
+    assert run.engineering_status == "SUBMISSION_BLOCKED"

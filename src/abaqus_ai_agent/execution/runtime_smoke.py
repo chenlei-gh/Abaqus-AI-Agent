@@ -52,7 +52,7 @@ B28HarnessResult = RuntimeSmokeResult
 
 
 def build_runtime_smoke_script(job_name="AIAgent_RuntimeSmoke", odb_path=None, run_id=None,
-                               wait_timeout=3600):
+                               wait_timeout=3600, completion_sentinel=None):
     """Build a deterministic Abaqus runtime smoke script.
 
     The model is deliberately tiny: one 3D deformable brick, one static step,
@@ -66,6 +66,11 @@ def build_runtime_smoke_script(job_name="AIAgent_RuntimeSmoke", odb_path=None, r
     ``wait_timeout`` bounds ``waitForCompletion``. Without a bound the generated
     script waits indefinitely, and the host-side transport timeout that kills the
     connection cannot stop the kernel job the way an in-kernel timeout does.
+
+    ``completion_sentinel`` names a file the kernel writes when the script ends.
+    The markers below travel on stdout, which the launcher can cut short when it
+    exits before the kernel; the sentinel is a file, so the host can still learn
+    that the script reached its end and whether it passed.
     """
     odb_path = odb_path or job_name + ".odb"
     return r'''# -*- coding: utf-8 -*-
@@ -79,6 +84,14 @@ JOB = %(job)r
 ODB = %(odb)r
 RUN_ID = %(run_id)r
 WAIT_TIMEOUT = %(wait_timeout)d
+SENTINEL = %(sentinel)r
+
+def report_script_end(state):
+    if not SENTINEL:
+        return
+    handle = open(SENTINEL, "w")
+    handle.write(state)
+    handle.close()
 
 def marker(name, **data):
     payload = {"marker": name}
@@ -192,13 +205,16 @@ try:
     marker("required_outputs_present", outputs=list(required))
     odb.close()
     marker("script_completed", passed=True)
+    report_script_end("completed")
 except Exception as exc:
     marker("error", error_class="script_api_or_model",
            error_message=str(exc))
     marker("script_completed", passed=False)
+    report_script_end("failed")
     raise
 ''' % {"job": job_name, "odb": odb_path, "run_id": run_id,
-       "wait_timeout": int(wait_timeout)}
+       "wait_timeout": int(wait_timeout),
+       "sentinel": str(completion_sentinel) if completion_sentinel else ""}
 
 
 # Backward compatibility alias

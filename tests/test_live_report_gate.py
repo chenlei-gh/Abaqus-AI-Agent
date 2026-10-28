@@ -448,3 +448,54 @@ def test_solve_exception_emits_crashed_facts_without_masking(tmp_path, monkeypat
         required_artifacts=["JobX.odb"],
     )
     assert verdict["verdict"] == "FAIL"
+
+
+# --- completion sentinel: official noGUI completion semantics -------------------
+
+def test_rendered_script_writes_completion_sentinel_last(tmp_path):
+    sentinel = tmp_path / "end.flag"
+    rendered = build_live_gate_cae_script(
+        workdir=Path("D:/x/wd"), launcher="abaqus", prompt="demo",
+        job_name="JobX", model_name="ModelX", run_id=RUN_ID,
+        completion_sentinel=sentinel,
+    )
+    ast.parse(rendered)
+    assert rendered.rstrip().endswith("_ai_done.close()")
+    # The path is interpolated with %r, so it appears escaped in the source.
+    assert repr(str(sentinel)) in rendered
+
+
+def test_rendered_script_without_sentinel_still_parses():
+    # Callers that do not supervise completion keep the previous contract.
+    ast.parse(_render())
+
+
+def test_unsupervised_completion_does_not_block_legacy_callers():
+    facts = {"run_id": RUN_ID, "task_status": "CRASHED", "errors": ["x"]}
+    verdict = compute_live_gate_verdict(
+        facts, process_returncode=0, process_settled=True,
+        artifacts={}, expected_run_id=RUN_ID, required_artifacts=[],
+    )
+    assert not any("script-completion" in r for r in verdict["reasons"])
+
+
+def test_missing_completion_evidence_fails_closed():
+    facts = {"run_id": RUN_ID, "task_status": "CRASHED", "errors": ["x"]}
+    verdict = compute_live_gate_verdict(
+        facts, process_returncode=0, process_settled=True,
+        artifacts={}, expected_run_id=RUN_ID, required_artifacts=[],
+        completion_evidence="quiescence_only",
+    )
+    assert any("script-completion evidence" in r for r in verdict["reasons"])
+    assert verdict["verdict"] == "FAIL"
+
+
+def test_blocked_sentinel_is_not_completion():
+    """A deliberate early stop ends the script but did not complete it."""
+    facts = {"run_id": RUN_ID, "task_status": "CRASHED", "errors": ["x"]}
+    verdict = compute_live_gate_verdict(
+        facts, process_returncode=0, process_settled=True,
+        artifacts={}, expected_run_id=RUN_ID, required_artifacts=[],
+        completion_evidence="script_blocked",
+    )
+    assert any("script-completion evidence" in r for r in verdict["reasons"])

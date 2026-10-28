@@ -1841,6 +1841,10 @@ class AbaqusAIAgent:
                     "execution_manifest_hash": approval_diag.get("execution_manifest_hash"),
                     "workdir": str(review_workdir) if review_workdir else None,
                     "review_report": approval_diag.get("review_report"),
+                    # Phase A duration, measured up to the approval stop. Surfaced
+                    # here because this card is what the approval UI and the live
+                    # report gate read; it is telemetry, never a gate input.
+                    "time_to_gate": approval_diag.get("time_to_gate"),
                 },
             )
 

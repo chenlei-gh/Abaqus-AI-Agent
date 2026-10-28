@@ -21,6 +21,18 @@ def test_dynamic_golden_script_uses_existing_pipeline():
         assert marker in script
 
 
+def test_dynamic_golden_script_uses_kernel_namespace():
+    script = build_dynamic_golden_script()
+    assert (
+        "from abaqus_ai_agent.execution.kernel_namespace import "
+        "KernelNamespace, build_cae_seed"
+    ) in script
+    assert "_NS = KernelNamespace(seed_code=build_cae_seed())" in script
+    assert "return _NS.execute(code, '<AIAgent-DynamicGolden>')" in script
+    assert "globals(), globals()" not in script
+    compile(script, "<AIAgent-DynamicGolden>", "exec")
+
+
 def test_dynamic_golden_script_has_no_direct_process_solver_bypass():
     script = build_dynamic_golden_script()
     assert "subprocess" not in script

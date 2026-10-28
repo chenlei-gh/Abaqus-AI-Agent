@@ -96,3 +96,57 @@ def test_mesh_convergence_acceptance_sensitivity():
     assert acceptance_strict.passed is False
     assert "numerical_verification_failed" in acceptance_strict.failures
     assert "mesh_convergence_failed" in acceptance_strict.failures
+
+
+def _extract_migrated_harness(script):
+    """Extract the namespace harness for offline testing with a fake kernel."""
+    head, sep, rest = script.partition("_NS = KernelNamespace")
+    assert sep, "generated script must construct a KernelNamespace"
+    harness_src = sep + rest.split("class CAEInProcessExecutor", 1)[0]
+    return (
+        "from abaqus_ai_agent.execution.kernel_namespace import "
+        "KernelNamespace, build_cae_seed\n" + harness_src
+    )
+
+
+def _fake_cae_modules(monkeypatch):
+    import sys
+    import types
+
+    fake_abaqus = types.ModuleType("abaqus")
+    fake_abaqus.mdb = object()
+    fake_abaqus.__all__ = ["mdb"]
+    fake_const = types.ModuleType("abaqusConstants")
+    fake_const.LOG = "SymbolicConstant<LOG>"
+    fake_const.__all__ = ["LOG"]
+    monkeypatch.setitem(sys.modules, "abaqus", fake_abaqus)
+    monkeypatch.setitem(sys.modules, "abaqusConstants", fake_const)
+
+
+def test_migrated_run_code_runs_fragments_in_isolated_namespace(monkeypatch):
+    _fake_cae_modules(monkeypatch)
+    script = build_mesh_convergence_script()
+    env = {}
+    exec(_extract_migrated_harness(script), env)
+    run_code = env["_run_code"]
+
+    sentinel = object()
+    globals()["LOG"] = sentinel
+    try:
+        out = run_code("result = {\"log\": LOG}")
+        assert out == {"log": "SymbolicConstant<LOG>"}
+        assert globals()["LOG"] is sentinel
+
+        run_code("carried = 41")
+        assert run_code("result = {\"v\": carried + 1}") == {"v": 42}
+        assert run_code("other = 1") == {"status": "COMPLETED"}
+
+        import pytest
+
+        with pytest.raises(ValueError):
+            run_code("raise ValueError(\"fragment-boom\")")
+    finally:
+        globals().pop("LOG", None)
+
+    assert "carried" not in env
+    assert "result" not in env

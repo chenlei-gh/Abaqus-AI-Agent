@@ -405,6 +405,17 @@ def test_p1_2_manifest_g5_live_golden_artifacts_and_metrics(reasoning_manifest):
     assert abs(metrics["max_mises"] - theory["theory_stress_mpa"]) / theory["theory_stress_mpa"] < 0.20
 
 
+def test_g5_live_golden_uses_isolated_kernel_namespace():
+    source = (ROOT / "tools" / "p1_2_reasoning_qualification_e2e.py").read_text(encoding="utf-8")
+    assert "from abaqus_ai_agent.execution.kernel_namespace import KernelNamespace, build_cae_seed" in source
+    assert "_NS = KernelNamespace(seed_code=build_cae_seed())" in source
+    assert "return _NS.execute(code, '<AIAgent-P1_2-Golden>')" in source
+    assert "globals().pop('result', None)" not in source
+    assert "globals(), globals()" not in source
+    assert "from abaqus import mdb" not in source
+    assert "from abaqusConstants import *" not in source
+
+
 # =========================================================================
 # Fail-Closed Manifest Defense & Tampering Probes
 # =========================================================================

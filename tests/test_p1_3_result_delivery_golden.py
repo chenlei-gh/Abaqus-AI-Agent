@@ -77,3 +77,14 @@ def test_p1_3_manifest_anti_tamper_defense():
         json.dumps(manifest, sort_keys=True).encode("utf-8")
     ).hexdigest()
     assert sig != tampered_hash
+
+
+def test_p1_3_golden_uses_isolated_kernel_namespace():
+    source = (ROOT / "tools" / "p1_3_result_delivery_golden_e2e.py").read_text(encoding="utf-8")
+    assert "from abaqus_ai_agent.execution.kernel_namespace import KernelNamespace, build_cae_seed" in source
+    assert "_NS = KernelNamespace(seed_code=build_cae_seed())" in source
+    assert "return _NS.execute(code, '<AIAgent-P1-3-ResultDelivery>')" in source
+    assert "globals().pop('result', None)" not in source
+    assert "globals(), globals()" not in source
+    assert "from abaqus import mdb" not in source
+    assert "from abaqusConstants import *" not in source

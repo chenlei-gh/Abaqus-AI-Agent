@@ -86,42 +86,20 @@ _src = {repr(str(SRC))}
 if _src not in sys.path:
     sys.path.insert(0, _src)
 
-import ast
-import io
 import json
 import os
 from dataclasses import asdict, is_dataclass
-from abaqus import mdb
-from abaqusConstants import *
 
 from abaqus_ai_agent import AbaqusAIAgent
 from abaqus_ai_agent.execution.client import InProcessExecutor
 from abaqus_ai_agent.contracts.task import TaskStatus
 from abaqus_ai_agent.execution.analysis_run import AnalysisRunState
+from abaqus_ai_agent.execution.kernel_namespace import KernelNamespace, build_cae_seed
+
+_NS = KernelNamespace(seed_code=build_cae_seed())
 
 def _run_code(code):
-    buf = io.StringIO()
-    old_stdout = sys.stdout
-    sys.stdout = buf
-    globals().pop('result', None)
-    try:
-        exec(compile(code, '<AIAgent-P1-3-ResultDelivery>', 'exec'), globals(), globals())
-    finally:
-        sys.stdout = old_stdout
-    out = buf.getvalue().strip()
-    res = globals().get('result')
-    if isinstance(res, dict):
-        return res
-    if out:
-        last_line = out.splitlines()[-1].strip()
-        try:
-            val = ast.literal_eval(last_line)
-            if isinstance(val, dict):
-                return val
-        except Exception:
-            pass
-        return {{'status': 'COMPLETED', 'stdout': out, 'output': out}}
-    return {{'status': 'COMPLETED'}}
+    return _NS.execute(code, '<AIAgent-P1-3-ResultDelivery>')
 
 class CAEExecutor(InProcessExecutor):
     def inspect_odb(self, path):
@@ -180,8 +158,8 @@ from abaqus_ai_agent.reporting.delivery import write_gated_engineering_report
 work_dir = getattr(task_result.run, "work_dir", None) or os.getcwd()
 issued = getattr(task_result.run, "provenance", None) if task_result.run else None
 odb_sha = getattr(issued, "output_hash", None) if issued is not None else None
-	# Markdown stays in the task result for length checks. It is not filed.
-	if task_result.report_html:
+# Markdown stays in the task result for length checks. It is not filed.
+if task_result.report_html:
     write_gated_engineering_report(
         os.path.join(work_dir, "engineering_report.html"),
         content=task_result.report_html,

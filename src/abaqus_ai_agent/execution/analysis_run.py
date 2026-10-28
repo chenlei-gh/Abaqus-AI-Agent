@@ -683,6 +683,14 @@ class AnalysisRunner:
                         )
 
         run_id = str(uuid.uuid4())
+        # Time-to-gate telemetry (Phase A). Observation only: it must never be
+        # able to change or fail the run, so every use is guarded below.
+        try:
+            from ..telemetry.time_to_gate import GateTimer
+            _gate_timer = GateTimer()
+            _gate_timer.start()
+        except Exception:
+            _gate_timer = None
         orig_executor_workdir = getattr(self.executor, "workdir", None)
         run_evidence_dir = None
         if project_context is not None:
@@ -1888,6 +1896,14 @@ class AnalysisRunner:
             # report in the workdir are the resumption contract; the ledger phase
             # records that this run is waiting on a human, not on the solver.
             _persist_ledger("AWAITING_APPROVAL", run)
+            _time_to_gate = None
+            if _gate_timer is not None:
+                try:
+                    _time_to_gate = _gate_timer.stop("AWAITING_APPROVAL").to_dict()
+                except Exception:
+                    # Telemetry is advisory; a timing defect must not mask the
+                    # approval stop itself.
+                    _time_to_gate = None
             try:
                 from ..reporting.review import render_pre_solve_review
 
@@ -1905,6 +1921,7 @@ class AnalysisRunner:
                     "candidate_status": exc.candidate.status.value,
                     "workdir": exc.workdir,
                     "review_report": str(Path(exc.workdir) / "pre_solve_review.html"),
+                    "time_to_gate": _time_to_gate,
                 },))
             return blocked_run
         except SolverSelectionBlocked as exc:
@@ -1996,7 +2013,16 @@ def _submit_and_time(jobs, job_name, timeout, profiler):
     """
     if profiler is None:
         return jobs.submit(job_name, wait=True, timeout=timeout), None
-    started = time.monotonic()
+    try:
+        started = time.monotonic()
+    except Exception as exc:  # noqa: BLE001 - clock failure is not a job failure
+        # The pre-submit read is as fallible as the post-submit one: if it
+        # raises, the wait is simply unmeasured. Only the submit itself must
+        # still happen, exactly once.
+        note = getattr(profiler, "internal_errors", None)
+        if isinstance(note, list):
+            note.append(f"could not read clock before submit: {exc!r}")
+        return jobs.submit(job_name, wait=True, timeout=timeout), None
     status = jobs.submit(job_name, wait=True, timeout=timeout)
     try:
         elapsed = time.monotonic() - started
