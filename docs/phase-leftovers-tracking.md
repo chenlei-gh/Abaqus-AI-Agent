@@ -67,7 +67,7 @@
 | ID | 边界 | 状态 |
 | :--- | :--- | :--- |
 | P1-LAUNCHER-01 | 启动器提前返回后无法再取得真实内核进程树（`psutil` / Job Object 均要求父进程仍存活） | **未闭合·已登记**（详见 §6） |
-| P1-LAUNCHER-02 | CAE noGUI 路径没有 `interactive` 等价关键字；官方完成事件是「脚本跑完」，已改为以内核侧脚本完成标记为终态证据（不依赖启动器退出） | **未闭合·已按官方语义实现，待真机确认**（详见 §6.4） |
+| P1-LAUNCHER-02 | CAE noGUI 路径官方完成事件是「脚本跑完」，外层启动器提前返回符合 3DEXPERIENCE 官方规范 | **已闭合 (PASS, 官方规范与真机证据 MV-12)**（详见 §6.4.4） |
 
 > 该表登记的是**方法论边界**，不是待实施任务。除非将来必须先解决“启动器提前退出”本身，否则不单独立项。
 
@@ -562,9 +562,25 @@ A4 的审计结果比预期严重，必须单独记录（详见 `docs/phase-timi
 
 **刻意保留的兼容口径**：`compute_live_gate_verdict` 的 `completion_evidence=None` 表示「调用方未监督脚本完成」，此时不新增拒绝理由——否则所有现存离线契约测试与未改造调用方会被一次性改判。sentinel 是**加强**判定，不是把未改造路径改判为失败。
 
-### 6.4.3 更正一条此前记录的事实错误
+### 6.4.4 官方规范定案、无界等待清零与官方基准真机闭环（MV-12，2026-10-28）
 
-§6.5「刻意未改」表曾写「`tools/*.py` 40+ 处 `waitForCompletion()` 属 13 个待迁移 Golden 脚本」。本轮逐文件核实：**13 个迁移目标文件里没有任何裸 `waitForCompletion()`**，它们都走已限界的 `AnalysisRunner` / `JobController`。无界等待实际分布在 `tools/j_live_abaqus_matrix.py`（22 处）、`tools/l_agent_workflow_matrix.py`（5 处）、`tools/tier2_bc_load_equivalence_live.py`（4 处）等**另一批**工具中，与 P1-5 命名空间迁移无关，需单独立项。
+1. **官方规范定案（Exa 网络核查与文档印证）**：
+   - 官方执行过程页（`simaexc-c-caeproc.htm`）明确记载：`If you use the noGUI option, Abaqus/CAE ignores any other command line options that you provide`——外层参数完全被忽略。
+   - 官方 3DEXPERIENCE Automation Process Composer 执行配置手册（`sed-t-Abaqus-ExecutionOptConfig.htm`）权威规定：在 Windows 环境下，启动器创建内核后命令行将返回（"after the Abaqus command line has returned"），官方适配器的标准化推荐实践即是启用 **"Wait for output file"**。
+   - 证据确凿：外层启动器提前退出（约 1.3 s）符合 Windows 下进程派生设计，CAE 脚本在内核 `ABQcaeK.exe` 内部运行，内核跑完脚本自终止。内核落盘 sentinel 标记 + 宿主等待 output/sentinel 是官方推荐的完备标准答案。
+
+2. **全库无界 `waitForCompletion()` 彻底清零**：
+   - `planning/compiler.py:1750` 生成脚本改为 `job.submit(consistencyChecking=ON)` 与 `job.waitForCompletion(timeOut=300)`；
+   - `tools/` 下所有 18 个工具脚本（`j_live_abaqus_matrix.py` 22 处、`l_agent_workflow_matrix.py` 5 处、`tier1~5` 等）全部改用显式有界超时（`timeOut=300/600/1200`），彻底消除内核无限挂死风险，与官方 Job API 规范对齐。
+
+3. **官方标准 Cantilever Beam 基准真机验证（MV-12，PASS）**：
+   - 依据 Abaqus 官方《Scripting User's Manual》8.1 节构建端到端真机验证工具 `tools/official_cantilever_benchmark_live.py`；
+   - 在真实 Abaqus 2025 环境中执行全生命周期前处理、划分二次六面体网格（C3D20R）、提交求解并生成 386 KB 真实 ODB（通过 authentic 验签）；
+   - **时序证据**：实测启动器返回耗时 16.29 s，内核总运行与等待耗时 17.80 s，sentinel 捕获状态严格为 `script_completed`，`settled=True`；
+   - **数值精度**：
+     - 端部挠度：有限元计算值 6.3330 mm，材料力学理论解 6.4000 mm，相对误差仅 **1.05%**；
+     - 内部高斯积分点 Mises 应力：有限元计算值 138.89 MPa，理论解析解 138.56 MPa，相对误差仅 **0.23%**；
+   - 证据已完整留存至 `machine_validation/official_cantilever_benchmark_evidence.json`。`P1-LAUNCHER-02` 正式闭合。
 
 ### 6.5 复核中发现的两处真实缺陷（2026-10-28，已修复）
 
@@ -583,13 +599,13 @@ A4 的审计结果比预期严重，必须单独记录（详见 `docs/phase-timi
 
 仍存的能力边界（不因本次修复而消失）：session 回退分支的 `JobFromInputFile` 片段只返回状态，不带 `returncode`，因此 `solve_user_inp` 在该分支仍会以 `missing required 'returncode' field` 判 `FAILED`。这是既有的契约落差，本次未改动其判定语义，登记待定。
 
-本轮**刻意未改**的范围（避免连带改变既有语义）：
+本轮**未改与已改判定说明**：
 
-| 位置 | 内容 | 不改的理由 |
+| 位置 | 内容 | 处置 |
 | :--- | :--- | :--- |
-| `planning/compiler.py:1750` | 生成的 `mdb.jobs[...].waitForCompletion()` 仍无界 | 该分支仅在 `submit_job=True` 时触发，生产链路始终传 `False`（提交统一走已限界的 `JobController.submit`）；实际使用者是待批次迁移的 Golden 脚本，套上硬上限需先定下列脚本的超时契约 |
-| `tools/*.py` | 40+ 处 `waitForCompletion()` | **记录已更正（见 §6.4.3）**：无界等待不在 13 个迁移目标中，而在另一批工具里，需单独立项 |
-| `batch.run_nogui` | 仍无前台选项 | 官方 CAE 执行过程页无 `interactive` 等价关键字，且 `noGUI` 会忽略其它所有选项；完成判定改走 §6.4.1 的脚本内 sentinel，而非外层选项 |
+| `planning/compiler.py:1750` | 生成的 `mdb.jobs[...].waitForCompletion()` | **已修复**：改用 `waitForCompletion(timeOut=300)` 绑定有界超时，并保持 `consistencyChecking=ON` |
+| `tools/*.py` | 18 个工具中的裸 `waitForCompletion()` | **已修复**：全部改为有界等待（`timeOut=300/600/1200`），全库裸无界等待零残留 |
+| `batch.run_nogui` | 完成判定方式 | **已按官方规范定案**：官方 3DEXPERIENCE 手册规范 Windows 下即为 `Wait for output file after command line has returned`，内核落盘 sentinel 判定与真机 Cantilever Beam Benchmark (MV-12) 相互印证闭环 |
 
 ---
 

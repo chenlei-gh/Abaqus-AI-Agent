@@ -1747,7 +1747,7 @@ def compile_intent_to_actions(
         f"mdb.jobs['{job_name}'].writeInput()\n"
     )
     if submit_job:
-        job_code += f"mdb.jobs['{job_name}'].submit(consistencyChecking=OFF)\nmdb.jobs['{job_name}'].waitForCompletion()\n"
+        job_code += f"mdb.jobs['{job_name}'].submit(consistencyChecking=ON)\nmdb.jobs['{job_name}'].waitForCompletion(timeOut=300)\n"
     actions.append(builders.python_action(model_name, job_code))
 
     # Render entire action list to executable script

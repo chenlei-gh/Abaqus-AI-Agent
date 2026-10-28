@@ -120,8 +120,8 @@ try:
     has_static_card = "*STATIC" in inp_stat_content
     has_nlgeom = "NLGEOM" in inp_stat_content or "*STEP, NAME=CONTROLLEDSTATIC, NLGEOM" in inp_stat_content
 
-    job_stat.submit(consistencyChecking=OFF)
-    job_stat.waitForCompletion()
+    job_stat.submit(consistencyChecking=ON)
+    job_stat.waitForCompletion(timeOut=300)
 
     odb_stat = odbAccess.openOdb('Tier5_StaticJob.odb')
     step_stat = odb_stat.steps['ControlledStatic']
@@ -167,8 +167,8 @@ try:
         inp_ht_content = f.read().upper()
     has_steady_ht_card = "*HEAT TRANSFER, STEADY STATE" in inp_ht_content
 
-    job_ht.submit(consistencyChecking=OFF)
-    job_ht.waitForCompletion()
+    job_ht.submit(consistencyChecking=ON)
+    job_ht.waitForCompletion(timeOut=300)
 
     odb_ht = odbAccess.openOdb('Tier5_HeatJob.odb')
     step_ht = odb_ht.steps['SteadyHT']
@@ -206,8 +206,8 @@ try:
         inp_freq_content = f.read().upper()
     has_freq_card = "*FREQUENCY" in inp_freq_content
 
-    job_freq.submit(consistencyChecking=OFF)
-    job_freq.waitForCompletion()
+    job_freq.submit(consistencyChecking=ON)
+    job_freq.waitForCompletion(timeOut=300)
 
     odb_freq = odbAccess.openOdb('Tier5_FreqJob.odb')
     step_freq = odb_freq.steps['ModalFreq']

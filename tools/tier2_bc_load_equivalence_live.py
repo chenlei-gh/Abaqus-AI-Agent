@@ -94,8 +94,8 @@ try:
 
     job_a = mdb.Job(name='Tier2_CaseA_Job', model='Model-1', description='Case A CF Balance')
     job_a.writeInput()
-    job_a.submit(consistencyChecking=OFF)
-    job_a.waitForCompletion()
+    job_a.submit(consistencyChecking=ON)
+    job_a.waitForCompletion(timeOut=300)
 
     odb_a = odbAccess.openOdb('Tier2_CaseA_Job.odb')
     step_a = odb_a.steps['Step-1']
@@ -163,8 +163,8 @@ try:
 
     job_b = mdb.Job(name='Tier2_CaseB_Job', model='Model-1', description='Case B Pressure Balance')
     job_b.writeInput()
-    job_b.submit(consistencyChecking=OFF)
-    job_b.waitForCompletion()
+    job_b.submit(consistencyChecking=ON)
+    job_b.waitForCompletion(timeOut=300)
 
     odb_b = odbAccess.openOdb('Tier2_CaseB_Job.odb')
     step_b = odb_b.steps['Step-1']
@@ -236,8 +236,8 @@ try:
 
     job_c = mdb.Job(name='Tier2_CaseC_Job', model='Model-1', description='Case C Steady Thermal')
     job_c.writeInput()
-    job_c.submit(consistencyChecking=OFF)
-    job_c.waitForCompletion()
+    job_c.submit(consistencyChecking=ON)
+    job_c.waitForCompletion(timeOut=300)
 
     odb_c = odbAccess.openOdb('Tier2_CaseC_Job.odb')
     step_c = odb_c.steps['ThermalStep']
@@ -296,8 +296,8 @@ try:
 
     job_e = mdb.Job(name='Tier2_CaseE_Job', model='Model-1', description='Case E Singularity')
     job_e.writeInput()
-    job_e.submit(consistencyChecking=OFF)
-    job_e.waitForCompletion()
+    job_e.submit(consistencyChecking=ON)
+    job_e.waitForCompletion(timeOut=300)
 
     # Inspect .msg file for numerical singularity / zero pivot
     msg_path = 'Tier2_CaseE_Job.msg'

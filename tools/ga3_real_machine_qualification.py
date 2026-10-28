@@ -145,7 +145,7 @@ model.SurfaceTraction(name='Traction', createStepName='Step-1', region=surf_load
 
 j = mdb.Job(name='{job_name}', model=model_name)
 j.submit()
-j.waitForCompletion()
+j.waitForCompletion(timeOut=300)
 
 odb = odbAccess.openOdb(path='{job_name}.odb', readOnly=True)
 last_frame = odb.steps['Step-1'].frames[-1]
@@ -489,7 +489,7 @@ model.SurfaceTraction(name='Traction', createStepName='Step-1', region=surf_load
 
 j = mdb.Job(name='{job_name}', model=model_name)
 j.submit()
-j.waitForCompletion()
+j.waitForCompletion(timeOut=300)
 
 try:
     odb = odbAccess.openOdb(path='{job_name}.odb', readOnly=True)

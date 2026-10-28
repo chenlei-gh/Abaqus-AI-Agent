@@ -40,6 +40,7 @@ build/
 /runs/h6_grounding_validation/h6_grounding_live_result.json
 /runs/**/*_script.py
 /runs/images/slide_*_img_*.png
+/runs/cantilever_benchmark_*/
 
 # Abaqus session scratch written into the launch directory.
 # Product runs must use an external workdir. These rules only stop

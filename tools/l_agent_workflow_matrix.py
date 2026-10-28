@@ -161,7 +161,7 @@ model.ConcentratedForce(name='TipLoad', createStepName='Step-1', region=rp_regio
 
 job = mdb.Job(name='{job_name}', model='Model-1')
 job.submit()
-job.waitForCompletion()
+job.waitForCompletion(timeOut=300)
 
 # ODB Extraction
 odb = openOdb(path='{job_name}.odb', readOnly=True)
@@ -439,7 +439,7 @@ model.Pressure(name='Tension', createStepName='Step-1', region=pull_surf, magnit
 
 job = mdb.Job(name='{job_name}', model='Model-1')
 job.submit()
-job.waitForCompletion()
+job.waitForCompletion(timeOut=300)
 
 odb = openOdb(path='{job_name}.odb', readOnly=True)
 frame = odb.steps['Step-1'].frames[-1]
@@ -544,7 +544,7 @@ model.Pressure(name='Press', createStepName='Step-1', region=surf, magnitude=50.
 
 job = mdb.Job(name='{job_failed}', model='Model-1')
 job.submit()
-job.waitForCompletion()
+job.waitForCompletion(timeOut=300)
 '''
     _run_abaqus_cae_script(fail_script, l3_dir)
 
@@ -604,7 +604,7 @@ model.Pressure(name='Press', createStepName='Step-1', region=surf, magnitude=50.
 
 job = mdb.Job(name='{job_healed}', model='Model-1')
 job.submit()
-job.waitForCompletion()
+job.waitForCompletion(timeOut=300)
 
 # Verify healed ODB exists and has converged without singularity
 odb = openOdb(path='{job_healed}.odb', readOnly=True)
@@ -745,7 +745,7 @@ model.Pressure(name='Tension', createStepName='Step-1', region=model.rootAssembl
 
 job = mdb.Job(name='{job_name}', model='Model-1')
 job.submit()
-job.waitForCompletion()
+job.waitForCompletion(timeOut=300)
 
 odb = openOdb(path='{job_name}.odb', readOnly=True)
 frame = odb.steps['Step-1'].frames[-1]

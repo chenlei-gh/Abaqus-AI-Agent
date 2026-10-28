@@ -132,8 +132,8 @@ model.Pressure(name='TipPressure', createStepName='Step-1', region=a.surfaces['T
 
 job_obj = mdb.Job(name='{job_name}', model='Model-1', description='DualRun Verification')
 job_obj.writeInput()
-job_obj.submit(consistencyChecking=OFF)
-job_obj.waitForCompletion()
+job_obj.submit(consistencyChecking=ON)
+job_obj.waitForCompletion(timeOut=300)
 
 odb = odbAccess.openOdb(path='{job_name}.odb')
 frame = odb.steps['Step-1'].frames[-1]

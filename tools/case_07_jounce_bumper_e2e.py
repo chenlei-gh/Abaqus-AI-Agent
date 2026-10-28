@@ -398,7 +398,7 @@ job = mdb.Job(name=JOB, model=MODEL, type=ANALYSIS, numCpus=%(num_cpus)d, numDom
 job.writeInput(consistencyChecking=ON)
 print('C07_SEAT_INP_WRITTEN')
 job.submit(consistencyChecking=ON)
-job.waitForCompletion()
+job.waitForCompletion(timeOut=600)
 print('C07_SEAT_STATUS=%%s' %% job.status)
 
 # Mesh fidelity measurement: axisymmetric quad areas and wall angle.
@@ -541,7 +541,7 @@ job = mdb.Job(name=JOB, model=MODEL, type=ANALYSIS, numCpus=%(num_cpus)d, numDom
 job.writeInput(consistencyChecking=ON)
 print('C07_COMPRESS_INP_WRITTEN')
 job.submit(consistencyChecking=ON)
-job.waitForCompletion()
+job.waitForCompletion(timeOut=1200)
 print('C07_COMPRESS_STATUS=%%s' %% job.status)
 
 neg = 0

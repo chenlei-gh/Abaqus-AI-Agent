@@ -121,8 +121,8 @@ try:
 
     job1 = mdb.Job(name='Tier3_MM_Job', model='Model-1', description='Tier 3 MM_N_MPA')
     job1.writeInput()
-    job1.submit(consistencyChecking=OFF)
-    job1.waitForCompletion()
+    job1.submit(consistencyChecking=ON)
+    job1.waitForCompletion(timeOut=300)
 
     mises1, u1, e1 = extract_max_fields('Tier3_MM_Job.odb')
     report["model_mm_n_mpa"] = {
@@ -172,8 +172,8 @@ try:
 
     job2 = mdb.Job(name='Tier3_SI_Job', model='Model-1', description='Tier 3 SI')
     job2.writeInput()
-    job2.submit(consistencyChecking=OFF)
-    job2.waitForCompletion()
+    job2.submit(consistencyChecking=ON)
+    job2.waitForCompletion(timeOut=300)
 
     mises2, u2, e2 = extract_max_fields('Tier3_SI_Job.odb')
     report["model_si_m_n_pa"] = {

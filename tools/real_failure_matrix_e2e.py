@@ -81,7 +81,7 @@ model.Pressure(name='Press', createStepName='Step-1', region=surf, magnitude=100
 
 job = mdb.Job(name='{job_name}', model='Model-1')
 job.submit()
-job.waitForCompletion()
+job.waitForCompletion(timeOut=300)
 '''
     script_path = case_dir / "run_f1.py"
     script_path.write_text(script, encoding="utf-8")
@@ -184,7 +184,7 @@ model.DisplacementBC(name='TipDisp', createStepName='Step-1', region=(tip_face,)
 
 job = mdb.Job(name='{job_name}', model='Model-1')
 job.submit()
-job.waitForCompletion()
+job.waitForCompletion(timeOut=300)
 '''
     script_path = case_dir / "run_f2.py"
     script_path.write_text(script, encoding="utf-8")
@@ -359,7 +359,7 @@ model.fieldOutputRequests['F-Output-1'].setValues(variables=('S', ))
 
 job = mdb.Job(name='{job_name}', model='Model-1')
 job.submit()
-job.waitForCompletion()
+job.waitForCompletion(timeOut=300)
 '''
     script_path = case_dir / "run_f4.py"
     script_path.write_text(script, encoding="utf-8")

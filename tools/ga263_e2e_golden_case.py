@@ -247,9 +247,9 @@ def execute_ga263_golden_case(
     # Append job submission and explicit writeInput so .inp is guaranteed on disk
     solve_script = plan.cae_script + """
 job = mdb.Job(name='GA263_Job', model='GA263_Model', type=ANALYSIS, waitMinutes=0, waitHours=0)
-job.writeInput(consistencyChecking=OFF)
+job.writeInput(consistencyChecking=ON)
 job.submit()
-job.waitForCompletion()
+job.waitForCompletion(timeOut=300)
 print('AIAgent_GA263_SOLVE_COMPLETED')
 """
     solve_file = case_dir / "ga263_solve.py"

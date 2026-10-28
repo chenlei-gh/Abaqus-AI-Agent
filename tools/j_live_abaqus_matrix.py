@@ -138,7 +138,7 @@ try:
     
     job = mdb.Job(name=job_name, model=model_name)
     job.submit()
-    job.waitForCompletion()
+    job.waitForCompletion(timeOut=300)
     
     odb = openOdb(path=job_name + '.odb', readOnly=True)
     frame = odb.steps['Step-1'].frames[-1]
@@ -180,7 +180,7 @@ try:
     
     job = mdb.Job(name=job_name, model=model_name)
     job.submit()
-    job.waitForCompletion()
+    job.waitForCompletion(timeOut=300)
     
     odb = openOdb(path=job_name + '.odb', readOnly=True)
     frame = odb.steps['Step-1'].frames[-1]
@@ -221,7 +221,7 @@ try:
     
     job = mdb.Job(name=job_name, model=model_name)
     job.submit()
-    job.waitForCompletion()
+    job.waitForCompletion(timeOut=300)
     
     odb = openOdb(path=job_name + '.odb', readOnly=True)
     frame = odb.steps['Step-1'].frames[-1]
@@ -270,7 +270,7 @@ try:
 
     job = mdb.Job(name=job_name, model=model_name)
     job.submit()
-    job.waitForCompletion()
+    job.waitForCompletion(timeOut=300)
 
     odb = openOdb(path=job_name + '.odb', readOnly=True)
     frame = odb.steps['Step-1'].frames[-1]
@@ -318,7 +318,7 @@ try:
     
     job = mdb.Job(name=job_name, model=model_name)
     job.submit()
-    job.waitForCompletion()
+    job.waitForCompletion(timeOut=300)
     
     odb = openOdb(path=job_name + '.odb', readOnly=True)
     frame = odb.steps['Step-1'].frames[-1]
@@ -362,7 +362,7 @@ try:
 
     job = mdb.Job(name=job_name, model=model_name)
     job.submit()
-    job.waitForCompletion()
+    job.waitForCompletion(timeOut=300)
 
     odb = openOdb(path=job_name + '.odb', readOnly=True)
     # Extract plastic dissipation energy from closed cycle PEEQ accumulation (in mJ)
@@ -413,7 +413,7 @@ try:
 
     job = mdb.Job(name=job_name, model=model_name)
     job.submit()
-    job.waitForCompletion()
+    job.waitForCompletion(timeOut=300)
     
     odb = openOdb(path=job_name + '.odb', readOnly=True)
     frame = odb.steps['Step-1'].frames[-1]
@@ -459,7 +459,7 @@ try:
 
     job = mdb.Job(name=job_name, model=model_name)
     job.submit()
-    job.waitForCompletion()
+    job.waitForCompletion(timeOut=300)
 
     odb = openOdb(path=job_name + '.odb', readOnly=True)
     frame1 = odb.steps['Step-1'].frames[1]
@@ -514,7 +514,7 @@ try:
 
     job = mdb.Job(name=job_name, model=model_name)
     job.submit()
-    job.waitForCompletion()
+    job.waitForCompletion(timeOut=300)
 
     odb = openOdb(path=job_name + '.odb', readOnly=True)
     frame = odb.steps['Step-1'].frames[-1]
@@ -555,7 +555,7 @@ try:
     
     job = mdb.Job(name=job_name, model=model_name)
     job.submit()
-    job.waitForCompletion()
+    job.waitForCompletion(timeOut=300)
     
     odb = openOdb(path=job_name + '.odb', readOnly=True)
     step1 = odb.steps['Step-1']
@@ -604,7 +604,7 @@ try:
     
     job = mdb.Job(name=job_name, model=model_name)
     job.submit()
-    job.waitForCompletion()
+    job.waitForCompletion(timeOut=300)
     
     odb = openOdb(path=job_name + '.odb', readOnly=True)
     modal_step = odb.steps['Modal']
@@ -644,7 +644,7 @@ try:
     
     job = mdb.Job(name=job_name, model=model_name)
     job.submit()
-    job.waitForCompletion()
+    job.waitForCompletion(timeOut=300)
     
     odb = openOdb(path=job_name + '.odb', readOnly=True)
     frame = odb.steps['Step-1'].frames[-1]
@@ -689,7 +689,7 @@ try:
     
     job = mdb.Job(name=job_name, model=model_name)
     job.submit()
-    job.waitForCompletion()
+    job.waitForCompletion(timeOut=300)
     
     odb = openOdb(path=job_name + '.odb', readOnly=True)
     frame = odb.steps['Step-1'].frames[-1]
@@ -733,7 +733,7 @@ try:
 
     job = mdb.Job(name=job_name, model=model_name)
     job.submit()
-    job.waitForCompletion()
+    job.waitForCompletion(timeOut=300)
 
     odb = openOdb(path=job_name + '.odb', readOnly=True)
     frame = odb.steps['Step-1'].frames[-1]
@@ -781,7 +781,7 @@ try:
 
     job = mdb.Job(name=job_name, model=model_name)
     job.submit()
-    job.waitForCompletion()
+    job.waitForCompletion(timeOut=300)
 
     odb = openOdb(path=job_name + '.odb', readOnly=True)
     frame = odb.steps['Step-1'].frames[-1]
@@ -831,7 +831,7 @@ try:
 
     job = mdb.Job(name=job_name, model=model_name)
     job.submit()
-    job.waitForCompletion()
+    job.waitForCompletion(timeOut=300)
 
     odb = openOdb(path=job_name + '.odb', readOnly=True)
     frame = odb.steps['Step-1'].frames[-1]
@@ -899,7 +899,7 @@ try:
 
     job = mdb.Job(name=job_name, model=model_name)
     job.submit()
-    job.waitForCompletion()
+    job.waitForCompletion(timeOut=300)
 
     odb = openOdb(path=job_name + '.odb', readOnly=True)
     frame2 = odb.steps['Step-2'].frames[-1]
@@ -975,7 +975,7 @@ try:
 
     job = mdb.Job(name=job_name, model=model_name)
     job.submit()
-    job.waitForCompletion()
+    job.waitForCompletion(timeOut=300)
 
     odb = openOdb(path=job_name + '.odb', readOnly=True)
     frame = odb.steps['Step-2'].frames[-1]
@@ -1021,7 +1021,7 @@ try:
 
     job = mdb.Job(name=job_name, model=model_name)
     job.submit()
-    job.waitForCompletion()
+    job.waitForCompletion(timeOut=300)
 
     odb = openOdb(path=job_name + '.odb', readOnly=True)
     frame = odb.steps['Step-1'].frames[-1]
@@ -1058,7 +1058,7 @@ try:
     
     job = mdb.Job(name=job_name, model=model_name)
     job.submit()
-    job.waitForCompletion()
+    job.waitForCompletion(timeOut=300)
     
     odb = openOdb(path=job_name + '.odb', readOnly=True)
     frame = odb.steps['Step-1'].frames[-1]
@@ -1096,7 +1096,7 @@ try:
     
     job = mdb.Job(name=job_name, model=model_name, type=ANALYSIS)
     job.submit()
-    job.waitForCompletion()
+    job.waitForCompletion(timeOut=300)
     
     odb = openOdb(path=job_name + '.odb', readOnly=True)
     hist = odb.steps['ImpactStep'].historyRegions['Assembly ASSEMBLY'].historyOutputs
@@ -1146,7 +1146,7 @@ try:
     
     job = mdb.Job(name=job_name, model=model_name)
     job.submit()
-    job.waitForCompletion()
+    job.waitForCompletion(timeOut=300)
     
     odb = openOdb(path=job_name + '.odb', readOnly=True)
     frame = odb.steps['Step-1'].frames[-1]

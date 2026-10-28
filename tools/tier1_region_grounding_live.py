@@ -160,8 +160,8 @@ try:
     # Create Job and Submit
     job_obj = mdb.Job(name='%s', model='Model-1', description='Tier 1 Region Grounding')
     job_obj.writeInput()
-    job_obj.submit(consistencyChecking=OFF)
-    job_obj.waitForCompletion()
+    job_obj.submit(consistencyChecking=ON)
+    job_obj.waitForCompletion(timeOut=300)
     
     # Open ODB and Extract
     odb_path = '%s.odb'

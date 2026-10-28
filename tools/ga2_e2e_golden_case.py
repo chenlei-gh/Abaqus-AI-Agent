@@ -179,7 +179,7 @@ def execute_ga2_golden_case(
     solve_script = plan.cae_script + """
 job = mdb.Job(name='GA2_Golden_Job', model='GA2_Golden_Model', type=ANALYSIS, waitMinutes=0, waitHours=0)
 job.submit()
-job.waitForCompletion()
+job.waitForCompletion(timeOut=300)
 print('AIAgent_GA2_SOLVE_COMPLETED')
 """
     solve_file = case_dir / "ga2_solve.py"

@@ -264,7 +264,7 @@ import regionToolset
 # Submit Job
 j = mdb.jobs['{job_name}']
 j.submit()
-j.waitForCompletion()
+j.waitForCompletion(timeOut=300)
 """
     driver_path.write_text(driver_content, encoding="utf-8")
 

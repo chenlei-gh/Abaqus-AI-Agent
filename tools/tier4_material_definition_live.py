@@ -135,8 +135,8 @@ try:
     }
 
     # 2. Submit to solver and inspect ODB
-    job_obj.submit(consistencyChecking=OFF)
-    job_obj.waitForCompletion()
+    job_obj.submit(consistencyChecking=ON)
+    job_obj.waitForCompletion(timeOut=300)
 
     odb_path = '%s.odb'
     odb = odbAccess.openOdb(odb_path)

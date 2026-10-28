@@ -97,7 +97,7 @@ m.SurfaceTraction(name='Load2', createStepName='Step-2', region=end_surf,
 # 8. Submit Job
 j = mdb.Job(name='P0_Job', model='P0_Model', type=ANALYSIS)
 j.submit()
-j.waitForCompletion()
+j.waitForCompletion(timeOut=300)
 print('P0_SOLVE_COMPLETED')
 """
 
@@ -263,7 +263,7 @@ m.SurfaceTraction(name='ExternalTension', createStepName='Step-Service', region=
 
 j = mdb.Job(name='P1_Job', model='P1_Model', type=ANALYSIS)
 j.submit()
-j.waitForCompletion()
+j.waitForCompletion(timeOut=300)
 print('P1_SOLVE_COMPLETED')
 """
 
@@ -411,7 +411,7 @@ m.Pressure(name='SpatialPressure', createStepName='Step-1', region=top_surf,
 
 j = mdb.Job(name='P2_Job', model='P2_Model', type=ANALYSIS)
 j.submit()
-j.waitForCompletion()
+j.waitForCompletion(timeOut=300)
 print('P2_SOLVE_COMPLETED')
 """
 
@@ -540,7 +540,7 @@ m.Moment(name='TorqueLoad', createStepName='Step-1', region=rp_region, cm3=10000
 
 j = mdb.Job(name='P3_Job', model='P3_Model', type=ANALYSIS)
 j.submit()
-j.waitForCompletion()
+j.waitForCompletion(timeOut=300)
 print('P3_SOLVE_COMPLETED')
 """
 

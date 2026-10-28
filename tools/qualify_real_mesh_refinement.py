@@ -246,7 +246,7 @@ m.Pressure(name='Load-Tension', createStepName='Step-1', region=load_surf, magni
 
 j = mdb.Job(name='{job_name}', model='{model_name}', type=ANALYSIS)
 j.submit()
-j.waitForCompletion()
+j.waitForCompletion(timeOut=300)
 """
 
 

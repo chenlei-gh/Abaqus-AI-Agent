@@ -381,8 +381,8 @@ assembly.regenerate()
             driver_lines.append(code)
 
     driver_lines.extend([
-        f"mdb.jobs['{job_name}'].submit(consistencyChecking=OFF)",
-        f"mdb.jobs['{job_name}'].waitForCompletion()",
+        f"mdb.jobs['{job_name}'].submit(consistencyChecking=ON)",
+        f"mdb.jobs['{job_name}'].waitForCompletion(timeOut=300)",
     ])
     driver_path.write_text("\n".join(driver_lines) + "\n", encoding="utf-8")
 

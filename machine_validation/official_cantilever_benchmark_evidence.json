@@ -1,0 +1,47 @@
+{
+  "benchmark_name": "Official_Cantilever_Beam_Tutorial_8.1",
+  "verdict": "PASS",
+  "run_id": "7e7e7fb1504d",
+  "job_name": "Official_Cantilever_7e7e7f",
+  "timestamp_utc_start": "2026-10-28T02:48:42.110873+00:00",
+  "timestamp_utc_end": "2026-10-28T02:48:59.909475+00:00",
+  "launcher": "C:\\SIMULIA\\Commands\\abaqus.bat",
+  "workdir": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\runs\\cantilever_benchmark_7e7e7fb1",
+  "telemetry": {
+    "launcher_duration_s": 16.294901900000696,
+    "total_kernel_duration_s": 17.796998100000565,
+    "process_returncode": 0,
+    "completion_evidence": "script_completed",
+    "directory_settled": true
+  },
+  "artifacts": {
+    "odb_path": "D:\\Vault\\Abaqus\\Abaqus-AI-Agent\\runs\\cantilever_benchmark_7e7e7fb1\\Official_Cantilever_7e7e7f.odb",
+    "odb_exists": true,
+    "odb_size_bytes": 386836,
+    "odb_authentic": true
+  },
+  "numerical_comparison": {
+    "tip_deflection": {
+      "fem_value_mm": 6.333041667938232,
+      "theory_value_mm": 6.4,
+      "relative_error_pct": 1.046223938465124,
+      "acceptance_limit_pct": 5.0
+    },
+    "root_mises_stress": {
+      "fem_gauss_point_mpa": 138.88812255859375,
+      "theory_gauss_point_mpa": 138.5641,
+      "relative_error_pct": 0.23384307955217387,
+      "fem_nodal_surface_mpa": 254.12001037597656,
+      "theory_surface_mpa": 240.0,
+      "acceptance_limit_pct": 5.0
+    }
+  },
+  "in_kernel_results": {
+    "run_id": "7e7e7fb1504d",
+    "job_name": "Official_Cantilever_7e7e7f",
+    "max_deflection_mm": 6.333041667938232,
+    "max_nodal_mises_mpa": 254.12001037597656,
+    "max_int_mises_mpa": 138.88812255859375,
+    "status": "None"
+  }
+}
