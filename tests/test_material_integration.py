@@ -49,8 +49,9 @@ def test_resolve_material_string_profiles():
         assert mat_def.elastic is not None
         assert mat_def.elastic.youngs_modulus == pytest.approx(expected_e)
         assert mat_def.elastic.poisson_ratio == pytest.approx(expected_nu)
-        assert mat_def.plastic is not None
-        assert mat_def.plastic.yield_stress == pytest.approx(expected_sy)
+        assert mat_def.metadata.get("yield_strength_mpa") == pytest.approx(expected_sy)
+        assert mat_def.metadata.get("catalog_reference_only") is True
+        assert mat_def.plastic_table() == ()
         assert ref_keyword in mat_def.provenance
 
 
@@ -63,8 +64,8 @@ def test_resolve_material_incomplete_dict_enriched():
     assert mat_def.elastic is not None
     assert mat_def.elastic.youngs_modulus == 210000.0
     assert mat_def.density == pytest.approx(7.85e-9)
-    assert mat_def.plastic is not None
-    assert mat_def.plastic.yield_stress == 235.0
+    assert mat_def.metadata.get("yield_strength_mpa") == 235.0
+    assert mat_def.plastic_table() == ()
     assert "GB/T 700-2006" in mat_def.provenance
 
 
@@ -121,8 +122,9 @@ def test_compile_engineering_intent_with_string_material():
     assert plan.material.name == "Q235"
     assert plan.material.elastic is not None
     assert plan.material.elastic.youngs_modulus == 210000.0
-    assert plan.material.plastic is not None
-    assert plan.material.plastic.yield_stress == 235.0
+    assert plan.material.metadata.get("yield_strength_mpa") == 235.0
+    assert plan.material.metadata.get("material_disposition") == "LINEAR_ELASTIC"
+    assert "*Plastic" not in plan.cae_script
     assert "GB/T 700-2006" in plan.material.provenance
 
     # Verify CAE script contains generated Abaqus material commands

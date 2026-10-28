@@ -1601,12 +1601,32 @@ class AbaqusAIAgent:
                     },
                 )
 
-        from .reasoning.material_catalog import resolve_material_to_definition
-        effective_mat_def = resolve_material_to_definition(
+        from .reasoning.material_catalog import classify_material_input
+        material_disposition = classify_material_input(
             effective_material,
+            analysis=str(getattr(intent, "analysis_type", "") or getattr(intent, "kind", "") or ""),
+            description=str(getattr(intent, "description", "") or ""),
+            metadata=getattr(intent, "metadata", None) or {},
             unit_system=intent.unit_system or "MM_N_MPA",
-            fail_closed=False,
         )
+        if not material_disposition.allows_solve:
+            card_status = "MATERIAL_SCREENING" if material_disposition.status == "SCREENING" else "MATERIAL_BLOCKED"
+            task_status = TaskStatus.NEEDS_CLARIFICATION if material_disposition.status == "SCREENING" else TaskStatus.BLOCKED
+            if material_disposition.status == "UNSUPPORTED":
+                task_status = TaskStatus.UNSUPPORTED
+            return EngineeringTaskResult(
+                status=task_status,
+                intent=intent,
+                capability=capability,
+                clarification_prompt=material_disposition.reason,
+                errors=(material_disposition.reason,),
+                summary_card={
+                    "status": card_status,
+                    "material_disposition": material_disposition.to_dict(),
+                },
+                metadata={"material_disposition": material_disposition.to_dict()},
+            )
+        effective_mat_def = material_disposition.material
 
         # 3. Intent Compilation to Action Plan (Fail-closed on missing geometry/material)
         try:

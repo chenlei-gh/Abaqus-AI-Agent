@@ -338,7 +338,14 @@ def _render_custom_table_for_section(section_key, value, is_zh=False):
                 nu = elastic.get("poisson_ratio") or m.get("poisson_ratio") or "-"
                 # Strength
                 plastic = m.get("plastic") if isinstance(m.get("plastic"), dict) else {}
-                sy = plastic.get("yield_stress") or m.get("yield_strength_at_operating_temp_mpa") or m.get("yield_strength_mpa") or "-"
+                meta = m.get("metadata") if isinstance(m.get("metadata"), dict) else {}
+                sy = (
+                    plastic.get("yield_stress")
+                    or m.get("yield_strength_at_operating_temp_mpa")
+                    or m.get("yield_strength_mpa")
+                    or meta.get("yield_strength_mpa")
+                    or "-"
+                )
                 sy_str = f"{float(sy):,.1f} MPa" if isinstance(sy, (int, float)) else str(sy)
                 uts = m.get("ultimate_tensile_strength_mpa") or "-"
                 uts_str = f"{float(uts):,.1f} MPa" if isinstance(uts, (int, float)) else str(uts)

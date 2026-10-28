@@ -1325,18 +1325,25 @@ def handle_material(args: argparse.Namespace) -> int:
                 rho_val = prop_rho.value
 
         # Attempt resolving to Abaqus MaterialDefinition for calibrated *Plastic table
+        from .reasoning.material_catalog import classify_material_input
+        disposition = classify_material_input(rec, analysis="linear_elastic")
         res_result = MaterialResolver.resolve(
             rec,
-            constitutive_intent="elastoplastic",
+            constitutive_intent="linear_elastic",
             target_unit_system="MM_N_MPA",
-            allow_assisted_assumptions=True,
+            allow_assisted_assumptions=False,
         )
 
         plastic_table = []
-        if res_result.is_executable and res_result.material_definition and res_result.material_definition.plastic:
+        if (
+            disposition.status == "HARDENING_VERIFIED"
+            and res_result.material_definition
+            and res_result.material_definition.plastic
+        ):
             plastic_table = [
                 {"yield_stress_mpa": pt[0], "plastic_strain": pt[1]}
                 for pt in res_result.material_definition.plastic.hardening_table
+                if len(pt) >= 2 and pt[1] > 0.0
             ]
 
         curves_data = []

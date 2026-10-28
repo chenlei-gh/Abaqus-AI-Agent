@@ -148,6 +148,7 @@ flowchart TD
   |-- Phase 4.3: 收敛失败诊断与受控自愈（代码已有，未全面验收） [PARTIAL]
   |-- Phase 4.6: 启动 CAE 前 compile() 语法门（离线负例已过，未做真机耗时） [IMPLEMENTED]
   |-- Phase 4.7: 纠错耗时结构化遥测（记录器已接，未验收前不得声称下降） [IMPLEMENTED]
+  |-- Phase 4.8: 材料非线性数据充分性门禁（离线负例已过，未做真机） [IMPLEMENTED]
   |-- Phase 4.4: 交互式工程工作台 (Web UI / IDE 插件扩展)          [BACKLOG]
   |-- Phase 4.5: 求解前评审报告自动浏览器展示                       [CLOSED]
 ========================================================================
@@ -218,6 +219,27 @@ flowchart TD
 * **未验证**：未做真机前后耗时对照。语法门不检查 Abaqus API 或物理正确性。宿主 `compile()` 用的是本机 Python 3.14.6，不是 Abaqus 2025 的 Python 3.10.5；它只能拦 Python 3 语法错误，不能证明脚本能在 CAE 内核解析。
 * **2026-10-28 Exa 复核**：官方没有只做语法检查的 `noGUI` 选项。`abaqus python script.py` 不能执行导入 `abaqus` / `mdb` 的 CAE 脚本。更贴近解释器的可选增强是用 Abaqus 自带解释器做 `py_compile`，仍不启动 CAE；本轮未改代码。
 * **当前状态**：**IMPLEMENTED**（离线负例已过；不是 CLOSED，不得声称纠错耗时已下降）
+
+#### 需求 REQ-4.8：材料非线性数据充分性门禁
+* **提出日期**：2026-10-28
+* **优先级**：P0（生产阻断）
+* **背景**：用户给出的材料卡常常只有 E、ν 和屈服强度。旧路径把这些标量静默收成 `*PLASTIC (sy, 0)` 理想塑性，然后仍标成可执行。这不能支撑屈服后变形、硬化、残余应变或循环塑性结论。
+* **生产边界**：
+  1. 线弹性且应力低于屈服：E、ν 足够，可进求解。屈服值只作为是否屈服的门槛。
+  2. 只判断是否屈服：单点屈服可作门槛，不能给出屈服后变形。
+  3. 材料非线性（弹塑性、硬化、残余应变、循环塑性、聚合物非线性、蠕变、粘弹）：缺对应曲线必须 `BLOCKED` / `UNSUPPORTED`，不得静默理想塑性。
+  4. 几何非线性 `nlgeom` 不等于材料非线性。
+  5. 用户批准的材料卡只有包含本次分析所需曲线、条件和来源，并经 deck 回核后，才能正式交付。
+* **已实现**：
+  * `classify_material_input()` 是唯一分类入口，状态为 `SCREENING` / `LINEAR_ELASTIC` / `IDEAL_PLASTIC_ASSUMPTION` / `HARDENING_VERIFIED` / `UNSUPPORTED` / `BLOCKED`。
+  * 只给材料大类（如“钢”）返回候选牌号，不自动选 Q235，求解入口返回 `NEEDS_CLARIFICATION`。
+  * 已命名牌号或只有 E、ν、屈服的卡片可走线弹性。屈服只作门槛。材料非线性请求在没有回核硬化曲线时失败关闭，不得回退原始材料。
+  * 只有 metadata 明确 `accept_ideal_plasticity=True` 才允许单点 `*PLASTIC`，并标记为假设。默认不发。
+  * `solve_requirement`、`compile_engineering_intent`、`compile_intent_to_actions`、static/contact/mbd workflow 和 mechanism 编译都走同一分类器。
+  * 验收层对材料非线性正式交付要求 `HARDENING_VERIFIED`。短玻纤、粘弹、蠕变、超弹、损伤缺对应数据时 `UNSUPPORTED`。
+* **明确不做**：不换外部材料平台；不把内置牌号升级为已鉴定的 CAMPUS / MMPDS 许用值；不把短玻纤压成各向同性 J2 并声称为材料鉴定；不把 `nlgeom` 当成材料非线性。
+* **未验证**：未做 Abaqus 真机。离线测试只证明分类和失败关闭，不证明材料非线性结论已合格。
+* **当前状态**：**IMPLEMENTED**（分类器已接入生产入口；未做真机前不得标 CLOSED，不得声称生产材料库已鉴定）
 
 #### 需求 REQ-4.7：纠错耗时遥测
 * **提出日期**：2026-10-28

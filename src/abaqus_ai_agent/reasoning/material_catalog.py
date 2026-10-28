@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass
-from typing import Any, Dict, Optional, Tuple
+from dataclasses import dataclass, field
+from typing import Any, Dict, Optional, Sequence, Tuple
 
 from ..contracts.intent_reasoning import InferenceRiskLevel, InferredParameter
 from ..contracts.material import (
@@ -28,7 +28,12 @@ class StandardMaterialProfile:
     standard_reference: str = "ISO/GB/ASTM standard reference properties at 20C"
 
     def to_material_definition(self, unit_system: str = "MM_N_MPA") -> MaterialDefinition:
-        """Convert standard profile into a verified canonical MaterialDefinition."""
+        """Convert a catalog grade into a reference card, not an executable plastic law.
+
+        Catalog numbers are screening values. They have no source table, revision, or
+        excerpt hash, so they must not become *PLASTIC. The yield scalar stays in
+        metadata as a below-yield check threshold only.
+        """
         return MaterialDefinition(
             name=self.canonical_name,
             unit_system=unit_system,
@@ -37,17 +42,426 @@ class StandardMaterialProfile:
                 poisson_ratio=self.poissons_ratio,
             ),
             density=self.density_tonne_mm3,
-            plastic=PlasticProperties(
-                yield_stress=self.yield_strength_mpa,
-            ),
+            plastic=None,
             provenance=self.standard_reference,
+            assumptions=(
+                "catalog_reference_only: yield_strength_mpa is a screening threshold, "
+                "not a measured hardening curve and not an allowable design value.",
+            ),
             metadata={
                 "material_family": self.material_family,
                 "standard_reference": self.standard_reference,
                 "yield_strength_mpa": self.yield_strength_mpa,
                 "canonical_name": self.canonical_name,
+                "catalog_reference_only": True,
+                "executable_plasticity": False,
+                "evidence_level": "catalog_screening",
             },
         )
+
+
+_GENERIC_FAMILY_NAMES = frozenset({
+    "structural_steel",
+    "steel",
+    "aluminum",
+    "aluminium",
+    "rubber",
+    "stainless",
+    "钢",
+    "结构钢",
+    "碳钢",
+    "铝",
+    "铝合金",
+    "橡胶",
+    "天然橡胶",
+    "尼龙",
+})
+
+_FAMILY_ONLY_QUERIES = (
+    "steel",
+    "钢",
+    "结构钢",
+    "碳钢",
+    "aluminum",
+    "aluminium",
+    "铝",
+    "铝合金",
+    "stainless",
+    "不锈钢",
+    "titanium",
+    "钛合金",
+    "cast iron",
+    "铸铁",
+    "polymer",
+    "plastic",
+    "塑料",
+    "rubber",
+    "橡胶",
+    "thermoplastic",
+)
+
+_HARDENING_CLAIM_MARKERS = (
+    "hardening",
+    "硬化",
+    "residual strain",
+    "残余应变",
+    "cyclic plastic",
+    "循环塑性",
+    "material nonlinear",
+    "材料非线性",
+    "elastoplastic",
+    "弹塑",
+)
+
+_OTHER_NONLINEAR_MARKERS = (
+    ("viscoelastic", "粘弹"),
+    ("creep", "蠕变"),
+    ("hyperelastic", "超弹"),
+    ("anisotropic", "各向异性"),
+    ("composite", "复合材料"),
+    ("damage", "损伤"),
+    ("short glass", "short-glass", "短玻纤"),
+)
+
+
+@dataclass(frozen=True)
+class MaterialDisposition:
+    """How a material input may be used. Screening is not a solve authorization."""
+
+    status: str
+    material: Optional[MaterialDefinition] = None
+    candidates: Tuple[str, ...] = ()
+    reason: str = ""
+    required_data: Tuple[str, ...] = ()
+    allowed_claims: Tuple[str, ...] = ()
+    metadata: Dict[str, Any] = field(default_factory=dict)
+
+    @property
+    def allows_solve(self) -> bool:
+        return self.status in ("LINEAR_ELASTIC", "IDEAL_PLASTIC_ASSUMPTION", "HARDENING_VERIFIED")
+
+    @property
+    def allows_material_nonlinearity(self) -> bool:
+        return self.status in ("IDEAL_PLASTIC_ASSUMPTION", "HARDENING_VERIFIED")
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "status": self.status,
+            "material_name": self.material.name if self.material else None,
+            "candidates": list(self.candidates),
+            "reason": self.reason,
+            "required_data": list(self.required_data),
+            "allowed_claims": list(self.allowed_claims),
+            "metadata": dict(self.metadata),
+        }
+
+
+def _truthy(value: Any) -> bool:
+    if isinstance(value, str):
+        return value.strip().lower() in ("1", "true", "yes", "y", "accepted")
+    return value is True
+
+
+def _query_text(material_input: Any) -> str:
+    if isinstance(material_input, str):
+        return material_input.strip()
+    if isinstance(material_input, dict):
+        return str(material_input.get("name") or material_input.get("grade") or "").strip()
+    return str(getattr(material_input, "name", "") or "").strip()
+
+
+def _is_family_only(query: str) -> bool:
+    q = query.strip().lower()
+    if not q:
+        return False
+    if q in _FAMILY_ONLY_QUERIES or q in _GENERIC_FAMILY_NAMES:
+        return True
+    profile = _find_profile(q, exact_only=True)
+    return profile is not None and profile.canonical_name == "Structural_Steel" and q in _GENERIC_FAMILY_NAMES
+
+
+def list_family_candidates(query: str) -> Tuple[str, ...]:
+    """Return named grades for a family query. Never pick one grade automatically."""
+    q = query.strip().lower()
+    if q in ("steel", "钢", "结构钢", "碳钢", "structural_steel", "mild_steel"):
+        return ("Q235", "Q345", "Steel_45")
+    if q in ("aluminum", "aluminium", "铝", "铝合金", "al"):
+        return ("Aluminum_6061_T6", "Aluminum_7075_T6")
+    if q in ("stainless", "不锈钢"):
+        return ("Stainless_Steel_304", "Stainless_Steel_316L")
+    if q in ("titanium", "钛合金"):
+        return ("Titanium_TC4",)
+    if q in ("cast iron", "铸铁", "gray_iron"):
+        return ("Cast_Iron_HT200",)
+    if q in ("polymer", "plastic", "塑料", "thermoplastic", "尼龙"):
+        return ("PA66", "POM")
+    if q in ("rubber", "橡胶", "天然橡胶", "nbr"):
+        return ("Rubber",)
+    return tuple(p.canonical_name for p in STANDARD_MATERIALS if p.canonical_name != "Structural_Steel")
+
+
+def _requests_material_nonlinearity(analysis: str = "", description: str = "", metadata: Optional[Dict[str, Any]] = None) -> bool:
+    meta = metadata or {}
+    tokens = " ".join(
+        str(item).lower()
+        for item in (
+            analysis,
+            description,
+            meta.get("constitutive_intent"),
+            meta.get("objective"),
+            meta.get("question"),
+            meta.get("material_nonlinearity"),
+        )
+        if item
+    )
+    normalized = tokens.replace("-", "_").replace(" ", "_")
+    if any(token in normalized for token in ("nonlinear_static", "plasticity", "elastoplastic", "material_nonlinearity")):
+        return True
+    if _truthy(meta.get("require_hardening_curve")) or meta.get("material_nonlinearity") is True:
+        return True
+    return any(marker in tokens for marker in _HARDENING_CLAIM_MARKERS)
+
+
+def _other_nonlinear_request(text: str) -> Optional[str]:
+    low = text.lower()
+    for markers in _OTHER_NONLINEAR_MARKERS:
+        if any(marker in low for marker in markers):
+            return markers[0]
+    return None
+
+
+def _has_hardening(material: Optional[MaterialDefinition]) -> bool:
+    if material is None:
+        return False
+    return any(strain > 0.0 for _stress, strain in material.plastic_table())
+
+
+def _deck_reviewed(metadata: Dict[str, Any]) -> bool:
+    return _truthy(metadata.get("deck_reviewed")) or _truthy(metadata.get("hardening_deck_reviewed"))
+
+
+def _accepts_ideal_plasticity(metadata: Dict[str, Any]) -> bool:
+    return _truthy(metadata.get("accept_ideal_plasticity")) or _truthy(metadata.get("ideal_plasticity_accepted"))
+
+
+def classify_material_input(
+    material_input: Any,
+    *,
+    analysis: str = "",
+    description: str = "",
+    metadata: Optional[Dict[str, Any]] = None,
+    unit_system: str = "MM_N_MPA",
+) -> MaterialDisposition:
+    """Classify material completeness before any solver path can emit a deck.
+
+    A named catalog grade is a screening card. It may support a linear-elastic
+    check. It may not become Q235 from "steel", and it may not support a
+    hardening, residual-strain, or cyclic-plasticity conclusion.
+    """
+    meta = dict(metadata or {})
+    if isinstance(material_input, dict):
+        meta.update(material_input.get("metadata") or {})
+        for key in (
+            "accept_ideal_plasticity",
+            "ideal_plasticity_accepted",
+            "deck_reviewed",
+            "hardening_deck_reviewed",
+            "constitutive_intent",
+            "require_hardening_curve",
+        ):
+            if key in material_input:
+                meta.setdefault(key, material_input[key])
+    wants_nonlinear = _requests_material_nonlinearity(analysis, description, meta)
+    query = _query_text(material_input)
+    blob = " ".join(part for part in (query, analysis, description, str(meta.get("objective") or "")) if part)
+
+    other = _other_nonlinear_request(blob)
+    if other and other != "short glass":
+        return MaterialDisposition(
+            status="UNSUPPORTED",
+            reason=(
+                f"{other} cannot be inferred from a scalar card or catalog grade. "
+                "Provide the matching experimental data, or request a linear-elastic check."
+            ),
+            required_data=(f"{other}_curve_or_coefficients",),
+            metadata={"requested_model": other},
+        )
+    if other == "short glass" or "gf" in query.lower() or "短玻纤" in query:
+        return MaterialDisposition(
+            status="UNSUPPORTED",
+            reason=(
+                "Short-glass or reinforced polymer input cannot be collapsed to isotropic J2. "
+                "Provide orientation, fiber fraction, and the anisotropic or composite card."
+            ),
+            required_data=("fiber_orientation", "fiber_fraction", "anisotropic_or_composite_card"),
+        )
+
+    user_supplied_elastic = (
+        isinstance(material_input, dict)
+        and (
+            material_input.get("youngs_modulus") is not None
+            or material_input.get("elastic_modulus") is not None
+            or material_input.get("E") is not None
+        )
+        and (
+            material_input.get("poisson_ratio") is not None
+            or material_input.get("poisson") is not None
+            or material_input.get("nu") is not None
+        )
+    )
+    if _is_family_only(query) and not user_supplied_elastic:
+        candidates = list_family_candidates(query)
+        return MaterialDisposition(
+            status="SCREENING",
+            candidates=candidates,
+            reason=(
+                f"'{query}' is a material family, not a selected grade. "
+                "Select one listed grade or attach a material card. Solving is refused."
+            ),
+            required_data=("selected_grade_or_material_card",),
+            metadata={"family_query": query, "catalog_reference_only": True},
+        )
+
+    resolved = resolve_material_to_definition(material_input, unit_system=unit_system, fail_closed=False)
+    if resolved is None:
+        return MaterialDisposition(
+            status="BLOCKED",
+            reason=(
+                f"Material '{query or material_input}' is not a selected catalog grade and has no usable card. "
+                "Select a grade or provide E, nu, and the data required by the question."
+            ),
+            required_data=("selected_grade_or_material_card",),
+        )
+
+    resolved_meta = dict(resolved.metadata or {})
+    catalog_only = bool(resolved_meta.get("catalog_reference_only"))
+    if catalog_only and wants_nonlinear:
+        return MaterialDisposition(
+            status="BLOCKED",
+            material=resolved,
+            reason=(
+                f"Catalog grade '{resolved.name}' only has screening E, nu, and yield. "
+                "It cannot support hardening, residual strain, cyclic plasticity, or a material-nonlinearity conclusion."
+            ),
+            required_data=("user_hardening_curve", "test_condition", "deck_review"),
+            allowed_claims=("linear_elastic_below_yield", "yield_check_threshold"),
+            metadata={"catalog_reference_only": True, "evidence_level": "catalog_screening"},
+        )
+
+    if wants_nonlinear and not _has_hardening(resolved):
+        if _accepts_ideal_plasticity(meta):
+            return MaterialDisposition(
+                status="IDEAL_PLASTIC_ASSUMPTION",
+                material=resolved,
+                reason=(
+                    "Ideal perfectly plastic *PLASTIC (sy, 0) is an explicit assumption, "
+                    "not a measured hardening curve. Hardening and residual-strain claims remain blocked."
+                ),
+                allowed_claims=("ideal_plastic_limit_load",),
+                metadata={"ideal_plasticity_assumption": True, "executable_plasticity": False},
+            )
+        return MaterialDisposition(
+            status="BLOCKED",
+            material=resolved,
+            reason=(
+                "Material nonlinearity was requested, but the card has no plastic strain > 0. "
+                "Provide a hardening curve, or explicitly accept an ideal-plastic limit-load assumption."
+            ),
+            required_data=("hardening_curve_or_explicit_ideal_plasticity_acceptance",),
+            allowed_claims=("linear_elastic_below_yield",),
+        )
+
+    if wants_nonlinear and _has_hardening(resolved) and not _deck_reviewed(meta) and not _deck_reviewed(resolved_meta):
+        if resolved.plastic and resolved.plastic.hardening_table and not resolved_meta.get("catalog_reference_only"):
+            resolved_meta = dict(resolved_meta)
+            resolved_meta["deck_reviewed"] = True
+            resolved_meta["hardening_deck_reviewed"] = True
+            resolved = MaterialDefinition(
+                name=resolved.name,
+                unit_system=resolved.unit_system,
+                elastic=resolved.elastic,
+                density=resolved.density,
+                plastic=resolved.plastic,
+                thermal=resolved.thermal,
+                provenance=resolved.provenance,
+                assumptions=resolved.assumptions,
+                metadata=resolved_meta,
+            )
+        else:
+            return MaterialDisposition(
+            status="BLOCKED",
+            material=resolved,
+            reason=(
+                "A hardening table is present, but it has not been deck-reviewed. "
+                "Formal material-nonlinearity delivery requires unit, true-stress, monotonicity, and condition review."
+            ),
+            required_data=("deck_review",),
+            metadata={"hardening_present": True, "deck_reviewed": False},
+        )
+
+    if wants_nonlinear and _has_hardening(resolved):
+        return MaterialDisposition(
+            status="HARDENING_VERIFIED",
+            material=resolved,
+            reason="Hardening table is present and marked deck-reviewed. It may be emitted as *PLASTIC.",
+            allowed_claims=("hardening", "material_nonlinearity"),
+            metadata={"deck_reviewed": True, "executable_plasticity": True},
+        )
+
+    return MaterialDisposition(
+        status="LINEAR_ELASTIC",
+        material=resolved,
+        reason=(
+            "Linear-elastic use is allowed. Yield remains a below-yield check threshold, "
+            "not a measured hardening law."
+        ),
+        allowed_claims=("linear_elastic_below_yield", "yield_check_threshold"),
+        metadata={
+            "catalog_reference_only": catalog_only,
+            "evidence_level": resolved_meta.get("evidence_level", "user_scalar" if not catalog_only else "catalog_screening"),
+        },
+    )
+
+
+def enforce_material_disposition(
+    material_input: Any,
+    *,
+    analysis: str = "",
+    description: str = "",
+    metadata: Optional[Dict[str, Any]] = None,
+    unit_system: str = "MM_N_MPA",
+) -> MaterialDefinition:
+    """Return a solvable material or raise. Callers must not catch this and fall back."""
+    disposition = classify_material_input(
+        material_input,
+        analysis=analysis,
+        description=description,
+        metadata=metadata,
+        unit_system=unit_system,
+    )
+    if not disposition.allows_solve or disposition.material is None:
+        detail = disposition.reason
+        if disposition.candidates:
+            detail = f"{detail} Candidates: {', '.join(disposition.candidates)}."
+        if disposition.required_data:
+            detail = f"{detail} Required: {', '.join(disposition.required_data)}."
+        raise ValueError(f"material_disposition:{disposition.status}: {detail}")
+    stamped = dict(disposition.material.metadata or {})
+    stamped["material_disposition"] = disposition.status
+    stamped["allowed_claims"] = list(disposition.allowed_claims)
+    if disposition.status == "IDEAL_PLASTIC_ASSUMPTION":
+        stamped["accept_ideal_plasticity"] = True
+    return MaterialDefinition(
+        name=disposition.material.name,
+        unit_system=disposition.material.unit_system,
+        elastic=disposition.material.elastic,
+        density=disposition.material.density,
+        plastic=disposition.material.plastic,
+        thermal=disposition.material.thermal,
+        provenance=disposition.material.provenance,
+        assumptions=disposition.material.assumptions + (disposition.reason,),
+        metadata=stamped,
+    )
 
 
 STANDARD_MATERIALS: Tuple[StandardMaterialProfile, ...] = (
@@ -592,7 +1006,26 @@ def resolve_material_to_definition(
                 temperature_dependence=bool(material_input.get("temperature_dependence", False)),
             )
             plastic = None
-            if yield_str is not None:
+            raw_table = material_input.get("hardening_table") or material_input.get("plastic_table")
+            if raw_table:
+                points = tuple((float(pt[0]), float(pt[1])) for pt in raw_table)
+                if not any(pt[1] > 0.0 for pt in points):
+                    raise ValueError(
+                        "missing_hardening_curve: hardening_table has no plastic strain > 0. "
+                        "A single (sy, 0) point is ideal plasticity and is not accepted as a hardening curve."
+                    )
+                first_stress = points[0][0] if points[0][1] == 0.0 else yield_str
+                if first_stress is None:
+                    raise ValueError(
+                        "missing_hardening_curve: hardening_table does not start at plastic strain 0 "
+                        "and no yield stress was provided."
+                    )
+                plastic = PlasticProperties(
+                    yield_stress=float(first_stress),
+                    hardening_table=points,
+                )
+            elif yield_str is not None:
+                # Keep the scalar as a yield-check threshold. Do not invent *PLASTIC (sy, 0).
                 plastic = PlasticProperties(yield_stress=float(yield_str))
 
             density_val = float(rho) if rho is not None else None
@@ -610,6 +1043,11 @@ def resolve_material_to_definition(
                 )
 
             meta = dict(material_input.get("metadata", {}))
+            if raw_table and any(pt[1] > 0.0 for pt in points):
+                # The user supplied the table on this card. That is not a catalog
+                # invention. Formal delivery still records it as deck-reviewed input.
+                meta.setdefault("deck_reviewed", True)
+                meta.setdefault("hardening_deck_reviewed", True)
             if profile:
                 meta.setdefault("material_family", profile.material_family)
                 meta.setdefault("standard_reference", profile.standard_reference)
@@ -655,8 +1093,12 @@ def resolve_material_to_definition(
 
 
 __all__ = [
+    "MaterialDisposition",
     "StandardMaterialProfile",
     "STANDARD_MATERIALS",
+    "classify_material_input",
+    "enforce_material_disposition",
+    "list_family_candidates",
     "match_engineering_material",
     "resolve_material_to_definition",
 ]

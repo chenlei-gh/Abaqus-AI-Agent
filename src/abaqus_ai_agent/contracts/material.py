@@ -83,8 +83,35 @@ class MaterialDefinition:
             "metadata": dict(self.metadata),
         }
 
+    def plastic_table(self) -> Tuple[Tuple[float, float], ...]:
+        """Return a *PLASTIC table only when it contains a real hardening point.
+
+        A lone (sy, 0) point is an ideal-plasticity assumption, not a measured curve.
+        Callers that only need a yield check must keep the scalar and must not emit *PLASTIC.
+        """
+        if self.plastic is None:
+            return ()
+        points: list = []
+        if self.plastic.yield_stress is not None:
+            points.append((float(self.plastic.yield_stress), float(self.plastic.plastic_strain or 0.0)))
+        for pt in self.plastic.hardening_table or ():
+            if len(pt) >= 2:
+                points.append((float(pt[0]), float(pt[1])))
+        if not any(strain > 0.0 for _stress, strain in points):
+            return ()
+        deduped: list = []
+        for point in points:
+            if point not in deduped:
+                deduped.append(point)
+        return tuple(deduped)
+
     def to_actions(self, model_name: str) -> Tuple[AbaqusAction, ...]:
-        """Materialize MaterialDefinition into native Abaqus material actions."""
+        """Materialize MaterialDefinition into native Abaqus material actions.
+
+        Elastic, density, and thermal cards are always emitted when present. A plastic
+        card is emitted only when plastic_table() has a plastic strain > 0. Yield-only
+        definitions stay elastic and must not become ideal *PLASTIC (sy, 0).
+        """
         from ..actions.builders import (
             material_elastic,
             material_density,
@@ -114,13 +141,13 @@ class MaterialDefinition:
                     unit_system=self.unit_system,
                 )
             )
-        if self.plastic is not None:
+        plastic_table = self.plastic_table()
+        if plastic_table:
             actions.append(
                 material_plastic(
                     model=model_name,
                     name=self.name,
-                    table=((self.plastic.yield_stress, self.plastic.plastic_strain),)
-                    + tuple(self.plastic.hardening_table),
+                    table=plastic_table,
                     unit_system=self.unit_system,
                 )
             )

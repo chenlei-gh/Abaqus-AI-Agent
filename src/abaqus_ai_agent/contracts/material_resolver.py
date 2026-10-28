@@ -619,8 +619,21 @@ class MaterialResolver:
                         diagnostics=(f"Invalid yield stress sy={sy_val}; must be a finite positive number.",),
                         evidence_source=record.source.locator,
                     )
-                if not hardening:
-                    assumptions.append("Single-point yield stress used with ideal perfectly plastic assumption.")
+                if not hardening or not any(pt[1] > 0.0 for pt in hardening):
+                    # A single (sy, 0) point is an ideal-plasticity assumption, not a measured
+                    # hardening curve. It must not be marked executable for elastoplastic intent.
+                    return MaterialResolutionResult(
+                        status="BLOCKED",
+                        material_definition=None,
+                        diagnostics=(
+                            "missing_hardening_curve: constitutive intent 'elastoplastic' has only a "
+                            "single-point yield. Ideal perfectly plastic *PLASTIC (sy, 0) is not a measured "
+                            "hardening curve and cannot support a material-nonlinearity conclusion. "
+                            "Provide a true stress-plastic strain table with at least one plastic strain > 0, "
+                            "or request linear_elastic if only an elastic check below yield is required.",
+                        ),
+                        evidence_source=record.source.locator,
+                    )
                 else:
                     # Validate hardening table integrity: first point (sy, 0.0), monotonic ep, finite values
                     if hardening[0][1] != 0.0 or hardening[0][0] <= 0:

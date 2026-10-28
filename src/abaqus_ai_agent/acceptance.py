@@ -285,6 +285,7 @@ def _audit_material_and_stress_acceptance(
     explicit_requires_yield: Optional[bool] = None,
     explicit_material_mapping_complete: Optional[bool] = None,
     explicit_missing_regions: Optional[Sequence[str]] = None,
+    material_disposition: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     """Fail-closed engineering evaluation covering 5 specific stress & material scenarios.
 
@@ -408,6 +409,31 @@ def _audit_material_and_stress_acceptance(
 
     # Scenario 4: Non-stress check tasks with no yield data DO NOT fail or block by this alone.
 
+    # Scenario 6: a material-nonlinearity conclusion needs a deck-reviewed hardening curve.
+    disposition = material_disposition if isinstance(material_disposition, dict) else {}
+    if not disposition and isinstance(ev, dict):
+        disposition = ev.get("material_disposition") if isinstance(ev.get("material_disposition"), dict) else {}
+    disposition_status = str(disposition.get("status") or "").upper()
+    domain = str(physics_domain or "").lower()
+    claims_material_nonlinearity = disposition_status in ("BLOCKED", "SCREENING", "UNSUPPORTED") or domain in (
+        "nonlinear_static",
+        "plasticity",
+        "elastoplastic",
+        "material_nonlinearity",
+    )
+    hardening_verified = disposition_status == "HARDENING_VERIFIED" or (
+        isinstance(ev, dict) and ev.get("hardening_deck_reviewed") is True and ev.get("has_hardening_curve") is True
+    )
+    material_nonlinearity_unverified = False
+    if claims_material_nonlinearity and not hardening_verified:
+        material_nonlinearity_unverified = True
+        err = (
+            "material_nonlinearity:hardening_curve_not_deck_reviewed: formal material-nonlinearity "
+            "delivery requires a deck-reviewed hardening curve. A catalog yield or scalar card is not enough."
+        )
+        failures.append(err)
+        blocked.append(err)
+
     return {
         "requires_stress_check": req_stress,
         "requires_yield_check": req_yield,
@@ -417,6 +443,7 @@ def _audit_material_and_stress_acceptance(
         "yield_verification_failed": yield_verification_failed,
         "elastic_range_exceeded": elastic_range_exceeded,
         "material_mapping_failed": material_mapping_failed,
+        "material_nonlinearity_unverified": material_nonlinearity_unverified,
         "failures": tuple(failures),
         "blocked": tuple(blocked),
     }
@@ -704,6 +731,7 @@ def evaluate_result_acceptance(result_status, numerical=None, engineering=None,
                                max_age_seconds=None, mandatory_roles=None, elastic_validity=None,
                                explicit_requires_stress=None, explicit_requires_yield=None,
                                explicit_material_mapping_complete=None, explicit_missing_regions=None,
+                               material_disposition=None,
                                stabilization_energy=None, stabilization_threshold=None,
                                stabilization_threshold_source=None,
                                stabilization_enabled=None,
@@ -1173,6 +1201,7 @@ def evaluate_result_acceptance(result_status, numerical=None, engineering=None,
         explicit_requires_yield=explicit_requires_yield,
         explicit_material_mapping_complete=explicit_material_mapping_complete,
         explicit_missing_regions=explicit_missing_regions,
+        material_disposition=material_disposition,
     )
     for f in mat_audit.get("failures", ()):
         if f not in failures:
@@ -1187,6 +1216,7 @@ def evaluate_result_acceptance(result_status, numerical=None, engineering=None,
         or mat_audit.get("stress_extraction_failed")
         or mat_audit.get("yield_verification_failed")
         or mat_audit.get("material_mapping_failed")
+        or mat_audit.get("material_nonlinearity_unverified")
     ):
         gates["required_results"] = "BLOCKED"
     elif effective_required_metrics or effective_required_fields:
@@ -1523,6 +1553,7 @@ def evaluate_production_acceptance(
     explicit_requires_yield: Optional[bool] = None,
     explicit_material_mapping_complete: Optional[bool] = None,
     explicit_missing_regions: Optional[Sequence[str]] = None,
+    material_disposition: Optional[Dict[str, Any]] = None,
     stabilization_energy: Optional[Any] = None,
     stabilization_threshold: Optional[float] = None,
     stabilization_threshold_source: Optional[str] = None,
@@ -1792,6 +1823,7 @@ def evaluate_production_acceptance(
         explicit_requires_yield=explicit_requires_yield,
         explicit_material_mapping_complete=explicit_material_mapping_complete,
         explicit_missing_regions=explicit_missing_regions,
+        material_disposition=material_disposition,
         stabilization_energy=stabilization_energy,
         stabilization_threshold=stabilization_threshold,
         stabilization_threshold_source=stabilization_threshold_source,

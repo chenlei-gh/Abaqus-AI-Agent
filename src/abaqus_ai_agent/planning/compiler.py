@@ -48,6 +48,88 @@ from ..actions import builders
 from ..actions.script import action_to_script
 from ..grounding.feature_grounding import GroundedRegion
 
+_MATERIAL_NONLINEAR_ANALYSIS = frozenset({
+    "nonlinear_static",
+    "plasticity",
+    "elastoplastic",
+    "material_nonlinearity",
+})
+_MATERIAL_NONLINEAR_MARKERS = (
+    "plastic",
+    "\u5f39\u5851",
+    "hardening",
+    "\u786c\u5316",
+    "residual strain",
+    "\u6b8b\u4f59\u5e94\u53d8",
+    "cyclic plastic",
+    "\u5faa\u73af\u5851\u6027",
+)
+
+
+def _plastic_has_hardening(material: Any) -> bool:
+    """True only when the plastic table has a measured point past yield.
+
+    Abaqus *PLASTIC requires the first point at plastic strain 0. That point alone
+    is ideal plasticity, not a hardening curve.
+    """
+    plastic = getattr(material, "plastic", None)
+    if plastic is None:
+        return False
+    points = []
+    if getattr(plastic, "yield_stress", None) is not None:
+        points.append((float(plastic.yield_stress), float(getattr(plastic, "plastic_strain", 0.0) or 0.0)))
+    for pt in getattr(plastic, "hardening_table", ()) or ():
+        if len(pt) >= 2:
+            points.append((float(pt[0]), float(pt[1])))
+    return any(strain > 0.0 for _stress, strain in points)
+
+
+def _requests_material_nonlinearity(
+    *,
+    analysis: str = "",
+    description: str = "",
+    metadata: Optional[Dict[str, Any]] = None,
+    physics_domain: Optional[str] = None,
+) -> bool:
+    """Whether this compile must refuse a yield-only ideal-plastic card.
+
+    Geometric nonlinearity (nlgeom) is not material nonlinearity and does not trip this gate.
+    """
+    meta = metadata or {}
+    tokens = (
+        analysis,
+        str(meta.get("constitutive_intent") or ""),
+        str(meta.get("material_nonlinearity") or ""),
+        str(physics_domain or ""),
+    )
+    normalized = {token.strip().lower().replace("-", "_").replace(" ", "_") for token in tokens if token}
+    if normalized & _MATERIAL_NONLINEAR_ANALYSIS:
+        return True
+    if meta.get("require_hardening_curve") is True or meta.get("material_nonlinearity") is True:
+        return True
+    blob = " ".join(
+        str(item).lower()
+        for item in (description, meta.get("objective"), meta.get("question"))
+        if item
+    )
+    return any(marker in blob for marker in _MATERIAL_NONLINEAR_MARKERS)
+
+
+def _refuse_ideal_plasticity(material: Any, reason: str) -> None:
+    meta = getattr(material, "metadata", None) or {}
+    accepted = meta.get("accept_ideal_plasticity") is True or meta.get("material_disposition") == "IDEAL_PLASTIC_ASSUMPTION"
+    if _plastic_has_hardening(material) or accepted:
+        return
+    name = getattr(material, "name", "material")
+    raise ValueError(
+        "missing_hardening_curve: "
+        f"{reason} cannot be compiled from material '{name}'. "
+        "A yield stress alone, or a single *PLASTIC point (sy, 0), is an ideal perfectly plastic "
+        "assumption, not a measured hardening curve. Provide at least one plastic-strain point > 0, "
+        "or set metadata accept_ideal_plasticity=True for an explicit limit-load assumption. "
+        "Linear-elastic analysis below yield is unaffected."
+    )
+
 
 @dataclass(frozen=True)
 class IntentGeometrySpec:
@@ -335,9 +417,14 @@ def compile_intent_to_actions(
     physics_domain: Optional[str] = None,
 ) -> CompiledAgentPlan:
     """Compile declarative engineering specifications into canonical AbaqusActions and CAE script."""
-    from ..reasoning.material_catalog import resolve_material_to_definition
-    eff_material = resolve_material_to_definition(material, fail_closed=True)
-    material = eff_material
+    from ..reasoning.material_catalog import enforce_material_disposition
+    material = enforce_material_disposition(
+        material,
+        analysis=str(physics_domain or ""),
+        metadata=getattr(material, "metadata", None) if not isinstance(material, dict) else material.get("metadata"),
+    )
+    if _requests_material_nonlinearity(analysis=str(physics_domain or ""), physics_domain=physics_domain):
+        _refuse_ideal_plasticity(material, f"physics domain '{physics_domain}'")
 
     actions: List[AbaqusAction] = []
     active_scope = assembly_scope if assembly_scope is not None else getattr(geometry, "assembly_scope", None)
@@ -507,7 +594,13 @@ def compile_intent_to_actions(
                 plastic_table = ((float(material.plastic.yield_stress), 0.0),) + raw_table
             else:
                 plastic_table = raw_table
-        elif material.plastic.yield_stress is not None and material.plastic.yield_stress > 0:
+        elif (
+            material.plastic.yield_stress is not None
+            and material.plastic.yield_stress > 0
+            and (material.metadata or {}).get("accept_ideal_plasticity") is True
+        ):
+            # Only an explicit ideal-plasticity acceptance may emit the single point.
+            # A catalog yield remains a check threshold and stays out of *PLASTIC.
             plastic_table = ((float(material.plastic.yield_stress), 0.0),)
 
         if plastic_table:
@@ -2348,9 +2441,28 @@ def compile_engineering_intent(
             "Provide material via intent.material or explicit material parameter."
         )
 
-    from ..reasoning.material_catalog import resolve_material_to_definition
+    from ..reasoning.material_catalog import enforce_material_disposition
     u_sys = intent.unit_system or "MM_N_MPA"
-    eff_mat = resolve_material_to_definition(raw_mat, unit_system=u_sys, fail_closed=True)
+    analysis_token = str(intent.analysis_type or intent.kind or "").lower()
+    intent_meta = dict(getattr(intent, "metadata", None) or {})
+    if isinstance(raw_mat, dict):
+        intent_meta.update(raw_mat.get("metadata") or {})
+    eff_mat = enforce_material_disposition(
+        raw_mat,
+        analysis=analysis_token,
+        description=str(getattr(intent, "description", "") or ""),
+        metadata=intent_meta,
+        unit_system=u_sys,
+    )
+    if _requests_material_nonlinearity(
+        analysis=analysis_token,
+        description=str(getattr(intent, "description", "") or ""),
+        metadata=intent_meta,
+    ):
+        _refuse_ideal_plasticity(
+            eff_mat,
+            f"analysis '{analysis_token or 'material nonlinearity'}'",
+        )
 
     # 4. Step & Procedure Resolution
     eff_step = None

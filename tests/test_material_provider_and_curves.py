@@ -124,6 +124,104 @@ def test_material_resolver_deduces_yield_stress_from_curve():
     assert mat_def.plastic.hardening_table[0][1] == 0.0
 
 
+def _elastic_only_record():
+    cond = MaterialCondition(temperature=23.0, temperature_unit="C", humidity_state="dry")
+    return MaterialRecord(
+        identity=MaterialIdentity(polymer_family="Steel", manufacturer="User", grade="Yield-Only"),
+        source=MaterialSource(
+            provider="user_card",
+            source_type="scalar_card",
+            locator="user://yield-only",
+            retrieved_at="2026-10-28T00:00:00Z",
+        ),
+        properties=(
+            MaterialProperty(name="youngs_modulus", value=210000.0, unit="MPa", quantity="stress", condition=cond),
+            MaterialProperty(name="poissons_ratio", value=0.3, unit="ratio", quantity="dimensionless", condition=cond),
+            MaterialProperty(name="yield_stress", value=250.0, unit="MPa", quantity="stress", condition=cond),
+        ),
+        default_condition=cond,
+    )
+
+
+def test_elastoplastic_intent_blocks_yield_only_card():
+    """A yield scalar is not a hardening curve and must not stay executable."""
+    res = MaterialResolver.resolve(_elastic_only_record(), constitutive_intent="elastoplastic")
+    assert res.status == "BLOCKED"
+    assert res.is_executable is False
+    assert res.material_definition is None
+    assert any("missing_hardening_curve" in d for d in res.diagnostics)
+    assert not any("ideal perfectly plastic" in a.lower() for a in res.assumptions)
+
+
+def test_linear_elastic_intent_keeps_yield_only_card_executable():
+    """Elastic analysis below yield must not be blocked by the plasticity gate."""
+    res = MaterialResolver.resolve(_elastic_only_record(), constitutive_intent="linear_elastic")
+    assert res.is_executable
+    assert res.material_definition is not None
+    assert res.material_definition.elastic.youngs_modulus == pytest.approx(210000.0)
+    assert res.material_definition.plastic is None
+
+
+def test_compile_plasticity_refuses_single_point_yield_and_accepts_hardening():
+    from abaqus_ai_agent.contracts.intent import EngineeringIntent
+    from abaqus_ai_agent.contracts.material import ElasticProperties, PlasticProperties
+    from abaqus_ai_agent.planning.compiler import compile_engineering_intent
+
+    geometry = {"shape": "cantilever_box", "length": 100.0, "width": 10.0, "height": 10.0}
+    yield_only = MaterialDefinition(
+        name="YieldOnly",
+        unit_system="MM_N_MPA",
+        elastic=ElasticProperties(youngs_modulus=210000.0, poisson_ratio=0.3),
+        plastic=PlasticProperties(yield_stress=250.0),
+    )
+    intent = EngineeringIntent(
+        id="INTENT-PLASTIC-GATE",
+        kind="plasticity",
+        analysis_type="nonlinear_static",
+        description="弹塑性硬化分析，需要屈服后变形",
+        material=yield_only,
+        metadata={"geometry": geometry},
+    )
+    with pytest.raises(ValueError, match="missing_hardening_curve|material_disposition:BLOCKED"):
+        compile_engineering_intent(intent, geometry=geometry, material=yield_only)
+
+    hardened = MaterialDefinition(
+        name="Hardened",
+        unit_system="MM_N_MPA",
+        elastic=ElasticProperties(youngs_modulus=210000.0, poisson_ratio=0.3),
+        plastic=PlasticProperties(
+            yield_stress=250.0,
+            hardening_table=((250.0, 0.0), (300.0, 0.02)),
+        ),
+    )
+    plan = compile_engineering_intent(
+        EngineeringIntent(
+            id="INTENT-PLASTIC-OK",
+            kind="plasticity",
+            analysis_type="nonlinear_static",
+            description="弹塑性硬化分析",
+            material=hardened,
+            metadata={"geometry": geometry},
+        ),
+        geometry=geometry,
+        material=hardened,
+    )
+    assert "mat.Plastic(table=" in plan.cae_script
+    assert "300.0" in plan.cae_script
+
+    elastic_intent = EngineeringIntent(
+        id="INTENT-ELASTIC-OK",
+        kind="linear_static",
+        analysis_type="linear_static",
+        description="线弹性挠度校核",
+        material=yield_only,
+        metadata={"geometry": geometry},
+    )
+    elastic_plan = compile_engineering_intent(elastic_intent, geometry=geometry, material=yield_only)
+    assert "mat.Elastic" in elastic_plan.cae_script
+    assert "mat.Plastic" not in elastic_plan.cae_script
+
+
 def test_material_provider_fail_closed_on_unrecognized():
     provider = MaterialProvider.default()
     with pytest.raises(MaterialNotFoundError, match="not found in registered"):

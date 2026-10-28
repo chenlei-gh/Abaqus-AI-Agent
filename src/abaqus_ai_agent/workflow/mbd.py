@@ -26,22 +26,24 @@ def build_mbd_plan(  # ZERO-CALL CANDIDATE: no product caller found. Do not dele
     num_intervals=50,
 ):
     """Build an inspectable Multi-Body Dynamics analysis plan."""
+    from ..reasoning.material_catalog import enforce_material_disposition
+    mat_def = enforce_material_disposition(material, analysis="multibody")
     actions = [
         builders.material_elastic(
             model_name,
-            material["name"],
-            material["youngs_modulus"],
-            material["poisson"],
+            mat_def.name,
+            mat_def.elastic.youngs_modulus,
+            mat_def.elastic.poisson_ratio,
         ),
         builders.material_density(
             model_name,
-            material["name"],
-            material["density"],
+            mat_def.name,
+            mat_def.density,
         ),
         builders.solid_section(
             model_name,
             "SolidSection",
-            material=material["name"],
+            material=mat_def.name,
         ),
         builders.section_assignment(
             model_name,
@@ -130,22 +132,24 @@ def build_double_pendulum_plan(
     connector_orientation=None,
 ):
     """Build an inspectable Two-Body Revolute Connector (Double Pendulum) analysis plan."""
+    from ..reasoning.material_catalog import enforce_material_disposition
+    mat_def = enforce_material_disposition(material, analysis="multibody")
     actions = [
         builders.material_elastic(
             model_name,
-            material["name"],
-            material["youngs_modulus"],
-            material["poisson"],
+            mat_def.name,
+            mat_def.elastic.youngs_modulus,
+            mat_def.elastic.poisson_ratio,
         ),
         builders.material_density(
             model_name,
-            material["name"],
-            material["density"],
+            mat_def.name,
+            mat_def.density,
         ),
         builders.solid_section(
             model_name,
             "SolidSection",
-            material=material["name"],
+            material=mat_def.name,
         ),
         builders.section_assignment(
             model_name,

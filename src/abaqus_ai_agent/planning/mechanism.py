@@ -637,21 +637,29 @@ class MechanismGraph:
         created_materials: Set[str] = set()
         created_sections: Set[str] = set()
 
+        from ..reasoning.material_catalog import enforce_material_disposition
         for b in self.bodies.values():
-            if b.youngs_modulus is not None:
-                mat_name = b.material_name or ("Mat-" + b.name)
+            if b.youngs_modulus is not None or b.material_name:
+                card = {
+                    "name": b.material_name or ("Mat-" + b.name),
+                    "youngs_modulus": b.youngs_modulus,
+                    "poisson_ratio": b.poisson_ratio if b.poisson_ratio is not None else 0.3,
+                    "density": b.density,
+                }
+                mat_def = enforce_material_disposition(card, analysis="multibody")
+                mat_name = mat_def.name
                 if mat_name not in created_materials:
                     actions.append(material_elastic(
                         model_name,
                         mat_name,
-                        youngs_modulus=b.youngs_modulus,
-                        poisson=b.poisson_ratio if b.poisson_ratio is not None else 0.3,
+                        youngs_modulus=mat_def.elastic.youngs_modulus,
+                        poisson=mat_def.elastic.poisson_ratio,
                     ))
-                    if b.density is not None:
+                    if mat_def.density is not None:
                         actions.append(material_density(
                             model_name,
                             mat_name,
-                            density=b.density,
+                            density=mat_def.density,
                         ))
                     created_materials.add(mat_name)
 

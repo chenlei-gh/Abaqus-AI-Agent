@@ -29,24 +29,12 @@ def build_contact_plan(
     region_map must declare 'master_surface' and 'slave_surface', and optionally
     'fixed_base' and 'moving_slider'.
     """
-    from ..reasoning.material_catalog import resolve_material_to_definition
-    mat_def = resolve_material_to_definition(material, fail_closed=False)
-    if mat_def is not None:
-        mat_name = mat_def.name
-        mat_e = mat_def.elastic.youngs_modulus if mat_def.elastic else 210000.0
-        mat_nu = mat_def.elastic.poisson_ratio if mat_def.elastic else 0.3
-        mat_density = mat_def.density
-    elif isinstance(material, dict):
-        mat_name = material.get("name", "DefaultMaterial")
-        mat_e = material.get("youngs_modulus") or material.get("elastic_modulus") or 210000.0
-        mat_nu = (
-            material.get("poisson")
-            if material.get("poisson") is not None
-            else (material.get("poisson_ratio") if material.get("poisson_ratio") is not None else 0.3)
-        )
-        mat_density = material.get("density")
-    else:
-        raise ValueError(f"Cannot resolve material: {material}")
+    from ..reasoning.material_catalog import enforce_material_disposition
+    mat_def = enforce_material_disposition(material, analysis="contact")
+    mat_name = mat_def.name
+    mat_e = mat_def.elastic.youngs_modulus
+    mat_nu = mat_def.elastic.poisson_ratio
+    mat_density = mat_def.density
 
     tangential = (
         {"formulation": "PENALTY", "friction": float(friction_coefficient)}
