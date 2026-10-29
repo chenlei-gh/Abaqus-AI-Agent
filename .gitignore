@@ -42,9 +42,10 @@ build/
 /runs/images/slide_*_img_*.png
 /runs/cantilever_benchmark_*/
 
-# Abaqus session scratch written into the launch directory.
-# Product runs must use an external workdir. These rules only stop
-# an interactive CAE/noGUI session from showing up as repository changes.
+# Abaqus session scratch. Product launches must use <repo>/workdir,
+# never the agent parent directory. These rules only stop an interactive
+# CAE/noGUI session from showing up as repository changes.
+/workdir/
 abq.app_cache
 *.app_cache
 *.sat

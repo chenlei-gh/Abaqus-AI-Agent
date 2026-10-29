@@ -149,6 +149,26 @@ class ExternalProjectContext:
         return dest_path
 
 
+def resolve_project_workdir() -> Path:
+    """Return the checkout-owned directory for Abaqus session scratch.
+
+    Abaqus writes ``abaqus.rpy``, ``abaqusN.rec``, ``acis_tmp.dbg``, and
+    ``temp-*.sat`` into the process cwd. The agent directory is the parent of
+    this checkout. Launching CAE there drops those files beside the repository.
+    Session scratch belongs in ``<repo>/workdir``, not in that parent directory.
+    """
+    target = (get_repo_root() / "workdir").resolve()
+    target.mkdir(parents=True, exist_ok=True)
+    return target
+
+
+def is_agent_or_repo_launch_dir(path: Union[str, Path]) -> bool:
+    """True when a launch cwd is the agent parent directory or the checkout root."""
+    resolved = Path(path).resolve()
+    repo = get_repo_root().resolve()
+    return resolved == repo or resolved == get_core_workspace_root(repo)
+
+
 def get_core_workspace_root(repo_root: Optional[Path] = None) -> Path:
     """Return the core file tree that must not hold customer solver copies.
 

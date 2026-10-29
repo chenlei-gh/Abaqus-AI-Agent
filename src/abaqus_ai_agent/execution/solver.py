@@ -874,6 +874,13 @@ def execute_abaqus_batch_job(
        - If require_live is True, raises RuntimeError (Fail-Closed).
        - If require_live is False, returns state="DRY_RUN", is_live=False, without writing fake logs.
     """
+    from ..paths import is_agent_or_repo_launch_dir, resolve_project_workdir
+    if is_agent_or_repo_launch_dir(job.workdir):
+        raise PermissionError(
+            f"Refusing to launch Abaqus in '{job.workdir}'. "
+            "Session files must stay in the project workdir, not the agent directory "
+            f"or the repository root. Use {resolve_project_workdir()}."
+        )
     job.workdir.mkdir(parents=True, exist_ok=True)
 
     # Locate Abaqus CLI

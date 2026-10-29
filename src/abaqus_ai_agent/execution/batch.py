@@ -232,7 +232,10 @@ class BatchExecutor:
             should_isolate = True
         else:
             cand = os.path.abspath(effective_workdir)
-            if os.path.isfile(os.path.join(cand, "pyproject.toml")) and os.path.isdir(os.path.join(cand, "src")):
+            from ..paths import is_agent_or_repo_launch_dir
+            if is_agent_or_repo_launch_dir(cand):
+                should_isolate = True
+            elif os.path.isfile(os.path.join(cand, "pyproject.toml")) and os.path.isdir(os.path.join(cand, "src")):
                 should_isolate = True
             else:
                 norm_parts = os.path.normpath(cand).split(os.sep)
@@ -240,8 +243,8 @@ class BatchExecutor:
                     should_isolate = True
 
         if should_isolate:
-            from ..paths import resolve_runs_root
-            effective_workdir = os.path.abspath(os.path.join(str(resolve_runs_root()), f"batch_{uuid.uuid4().hex[:8]}"))
+            from ..paths import resolve_project_workdir
+            effective_workdir = os.path.abspath(os.path.join(str(resolve_project_workdir()), f"batch_{uuid.uuid4().hex[:8]}"))
             os.makedirs(effective_workdir, exist_ok=True)
             self.workdir = effective_workdir
         else:

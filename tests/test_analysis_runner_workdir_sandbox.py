@@ -100,7 +100,8 @@ def test_batch_executor_auto_sandbox_isolation():
 
     assigned_dir = Path(batch.workdir)
     assert assigned_dir.exists()
-    assert "runs" in assigned_dir.parts
+    assert assigned_dir.parent.name == "workdir"
+    assert assigned_dir.is_relative_to(Path(__file__).resolve().parent.parent)
 
     # Cleanup
     if assigned_dir.exists():
@@ -116,9 +117,25 @@ def test_batch_executor_redirects_explicit_repo_root_workdir():
     assigned_dir = Path(batch.workdir)
     assert assigned_dir.exists()
     assert assigned_dir != repo_root
-    assert "runs" in assigned_dir.parts
+    assert assigned_dir.parent.name == "workdir"
+    assert assigned_dir.is_relative_to(repo_root)
 
     # Cleanup
+    if assigned_dir.exists():
+        shutil.rmtree(assigned_dir)
+
+
+def test_batch_executor_redirects_agent_parent_directory():
+    repo_root = Path(__file__).resolve().parent.parent
+    agent_dir = repo_root.parent
+    batch = BatchExecutor(launcher="echo", workdir=str(agent_dir))
+    res = batch._run(["echo", "hello"])
+    assert res.succeeded
+    assigned_dir = Path(batch.workdir)
+    assert assigned_dir.exists()
+    assert assigned_dir != agent_dir
+    assert assigned_dir.parent.name == "workdir"
+    assert assigned_dir.is_relative_to(repo_root)
     if assigned_dir.exists():
         shutil.rmtree(assigned_dir)
 

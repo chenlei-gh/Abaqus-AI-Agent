@@ -20,36 +20,48 @@ Most automation collapses three different statements into one success signal. Th
 
 A formal report is `report.html`, and it exists only in the third case. Otherwise the deliverable is `report.diagnostic.html`. Renaming that file does not promote it.
 
-## Architecture
+## How a requirement becomes a report
+
+One object owns the path: `AbaqusAIAgent`. It does not invent geometry, and it does not treat a generated script as the model. A boundary or a load is executable only after its region comes from grounding or from an explicit selection. The script is rendered from the action list, so a hand edit cannot drift away from the plan that was reviewed.
 
 ```mermaid
 flowchart TD
-    R["Requirement<br/>prose, input deck, or geometry"] --> I["Intent and plan<br/>typed physics, units, criteria"]
-    I --> G["Pre-flight guard<br/>capability boundary, geometry grounding"]
-    G --> C["Execution candidate<br/>ordered action list becomes Abaqus Python"]
-    C --> V["Review document<br/>pre_solve_review.html opened in a browser"]
-    V --> A{"Human decision<br/>bound to candidate hash"}
+    R["Requirement<br/>prose, input deck, or geometry"] --> I["Intent and plan<br/>contracts plus reasoning"]
+    I --> G["Grounding<br/>named regions become real picks, or the run stops"]
+    G --> C["Actions<br/>ordered list rendered as Abaqus Python"]
+    C --> V["Review<br/>pre_solve_review.html"]
+    V --> A{"Human decision<br/>bound to the candidate hash"}
     A -- "edit or reject" --> C
-    A -- "approve" --> S["Submission<br/>SIMULIA launcher, then kernel"]
-    S --> O["Completion evidence<br/>ODB authenticity, directory settle"]
-    O --> K["Acceptance gates<br/>G1 to G14 plus the results gate"]
-    K --> P{"Solver evidence supports<br/>the declared criteria"}
-    P -- "yes" --> F["report.html"]
-    P -- "no" --> D["report.diagnostic.html"]
+    A -- "approve" --> S["Execution<br/>launcher, then kernel, then solver"]
+    S --> O["Evidence and results<br/>what the solver wrote, and what it did not"]
+    O --> K["Acceptance<br/>fixed gate order"]
+    K --> P{"Declared criteria<br/>are supported"}
+    P -- "yes" --> F["reporting: report.html"]
+    P -- "no" --> D["reporting: report.diagnostic.html"]
 ```
 
-The script is rendered from the action list. It is not the source of the model, and it is never a hand-edited artifact that drifts away from the plan.
+The core is the chain that makes those three claims distinguishable. Everything else in the tree is support, an experiment, or not on this path.
 
-| Package under `src/abaqus_ai_agent/` | Responsibility |
+### Core
+
+| Module | What it owns on this path |
 |---|---|
-| `contracts/` | Typed records for actions, conditions, approval, artifacts, criteria |
-| `reasoning/` | Requirement parsing, material and mesh inference, plausibility checks |
-| `grounding/` | Resolving named regions to real geometry picks, with a policy that refuses to invent them |
-| `actions/` | Turning the plan into a deterministic build script |
-| `execution/` | Launcher resolution, submission, completion evidence, approval service |
-| `evidence/`, `results/` | Reading what the solver actually produced, and what it did not |
-| `acceptance.py` | The canonical gate order and the verdict |
-| `reporting/` | Review document, formal report, diagnostic report |
+| `contracts/` | The typed records the rest of the chain is not allowed to replace with prose: intent, actions, conditions, materials, approval, artifacts, criteria, and the result contract. A later stage reads these records. It does not re-interpret the requirement. |
+| `reasoning/` | Turns a stated requirement into that intent: physics family, units, material, mesh inference, and a plausibility audit. A missing or ambiguous item stops here. It is not filled in downstream. |
+| `grounding/` | Resolves a named region to a real geometry pick. The policy refuses to invent a face, an edge, or a load application point. An ungrounded boundary or load never becomes an action. |
+| `actions/` | The plan as an ordered action list, and the only compiler from that list to Abaqus Python. Builders cover part, section, mesh, step, boundary, load, contact, connector, and job submission. The script is a rendering, not a second source of truth. |
+| `execution/` | How an approved candidate actually runs: launcher resolution, kernel submission, job control, completion evidence, ODB authenticity, and the approval service that binds a human decision to the candidate hash. Approval records which document was seen. It is not an identity proof. |
+| `evidence/`, `results/` | What the solver wrote, and the metrics and history extracted from it. Integrity, job status, and result queries live here. A file with the right name is not evidence. |
+| `acceptance.py` | The verdict. `CANONICAL_GATE_ORDER` is declared once and enforced by the evaluator, not by the reporter. A later gate is not consulted as if an earlier failure had not happened. |
+| `reporting/` | The last step, not a parallel one. It writes the review document, and then either `report.html` or `report.diagnostic.html`. It cannot promote a failed gate by choosing a different template. |
+
+`AbaqusAIAgent` in `agent.py` is the orchestrator over that chain. The CLI (`ask`, `approve`, `inspect`, and the evidence commands) is the same chain with a command line in front of it, not a second product.
+
+### Not on this path
+
+`tools/`, `workflow/`, `context/`, `llm/`, and `perception/` are present and are not part of the product path above. Adapters, editing helpers, diagnostics, telemetry, and the validation catalogs are the same kind of support: they exist so the core can be tested, inspected, or extended. They do not authorize a solve, and they do not authorize a formal report.
+
+Session scratch is an execution boundary, not a module. Customer solver copies, ODBs, and formal reports stay in the customer project (`input/`, `working/`, `solver/`, `evidence/`, `delivery/`). Abaqus session files are not model output and are not written beside this checkout.
 
 ## Acceptance gates
 
