@@ -27,6 +27,10 @@ _GAP_ABS = 0.5
 _GAP_REL = 0.002
 _NORMAL_ALIGN = 0.95
 _MIN_FACE_AREA = 1.0
+# Opposing parallel planes within tolerance are not necessarily touching.
+# Two faces only mate where they actually face each other, so the projected
+# area must agree on more than a sliver of a shared boundary.
+_MIN_OVERLAP_FRACTION = 0.01
 
 
 @dataclass(frozen=True)
@@ -248,6 +252,80 @@ def _face_point(face: CadFace, vertices: Dict[str, Tuple[float, float, float]], 
         sum(point[1] for point in points) / count,
         sum(point[2] for point in points) / count,
     )
+
+
+def _projected_overlap_fraction(
+    normal: Sequence[float],
+    left_points: Sequence[Sequence[float]],
+    right_points: Sequence[Sequence[float]],
+) -> float:
+    """Fraction of the smaller face that lies over the other once projected.
+
+    Both faces share a plane normal, so dropping the dominant axis keeps the
+    comparison two-dimensional. Coincident planes that only meet along a shared
+    edge project to zero overlap and must not be reported as contact.
+    """
+    if not left_points or not right_points:
+        return 0.0
+    axis = max(range(3), key=lambda i: abs(float(normal[i])))
+    others = [i for i in range(3) if i != axis]
+
+    left_lo = [min(float(p[i]) for p in left_points) for i in others]
+    left_hi = [max(float(p[i]) for p in left_points) for i in others]
+    right_lo = [min(float(p[i]) for p in right_points) for i in others]
+    right_hi = [max(float(p[i]) for p in right_points) for i in others]
+
+    overlap = 1.0
+    for i in range(2):
+        extent = min(left_hi[i], right_hi[i]) - max(left_lo[i], right_lo[i])
+        if extent <= 0.0:
+            return 0.0
+        overlap *= extent
+
+    left_area = (left_hi[0] - left_lo[0]) * (left_hi[1] - left_lo[1])
+    right_area = (right_hi[0] - right_lo[0]) * (right_hi[1] - right_lo[1])
+    smaller = min(left_area, right_area)
+    if smaller <= 0.0:
+        return 0.0
+    return overlap / smaller
+
+
+def _face_support_points(
+    face: CadFace,
+    vertices: Dict[str, Tuple[float, float, float]],
+    edges: Dict[str, Tuple[Optional[str], Optional[str]]],
+) -> List[Tuple[float, float, float]]:
+    """Every vertex the face boundary touches, used for its planar extent."""
+    points: List[Tuple[float, float, float]] = []
+    for edge_id in face.edge_ids:
+        start_id, end_id = edges.get(edge_id, (None, None))
+        for vertex_id in (start_id, end_id):
+            point = vertices.get(vertex_id or "")
+            if point is not None:
+                points.append(point)
+    return points
+
+
+def _faces_face_each_other(
+    left: CadFace,
+    right: CadFace,
+    vertices: Dict[str, Tuple[float, float, float]],
+    edges: Dict[str, Tuple[Optional[str], Optional[str]]],
+) -> bool:
+    """True when the two faces overlap across the area where they oppose.
+
+    Opposing coplanar faces that only touch at a corner or along a rim are not
+    a contact pair; they are two separate parts passing near each other.
+    """
+    normal = left.normal or right.normal
+    if normal is None:
+        return True
+    fraction = _projected_overlap_fraction(
+        normal,
+        _face_support_points(left, vertices, edges),
+        _face_support_points(right, vertices, edges),
+    )
+    return fraction >= _MIN_OVERLAP_FRACTION
 
 
 _TARGET_CUES = (
@@ -610,6 +688,8 @@ def build_assembly_scope(
             if model.bounding_box is not None:
                 span = max(model.bounding_box.dimensions)
             if gap > max(_GAP_ABS, _GAP_REL * span):
+                continue
+            if not _faces_face_each_other(left[1], right[1], vertices, edges):
                 continue
             candidates.append((gap, i, j))
 

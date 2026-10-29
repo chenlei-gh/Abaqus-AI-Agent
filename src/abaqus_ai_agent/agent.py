@@ -1590,11 +1590,11 @@ class AbaqusAIAgent:
 
         if isinstance(geometry, _IntentGeometrySpec):
             try:
-                from .planning.compiler import _screen_inputs_from_intent
+                from .planning.compiler import _explicit_assembly_inputs
                 geometry = _bind_step_assembly_scope(
                     geometry,
                     requirement=getattr(intent, "description", None),
-                    **_screen_inputs_from_intent(intent),
+                    **_explicit_assembly_inputs(intent),
                 )
             except (ValueError, TypeError) as exc:
                 return EngineeringTaskResult(

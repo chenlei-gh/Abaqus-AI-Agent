@@ -402,6 +402,230 @@ def test_unverified_exterior_fixture_fails_closed_without_semantics():
     assert scope_grounded.is_complete is True
 
 
+def test_explicit_fixture_face_reaches_the_product_entry_through_intent_metadata():
+    """A named fixture face must survive the intent-to-scope path, not only the direct call.
+
+    build_assembly_scope has accepted fixture_face_id for a while, but neither
+    compile_engineering_intent nor solve_requirement ever passed one, so any
+    model without a semantic face name could only fail closed.
+    """
+    from dataclasses import replace as _dc_replace
+
+    from abaqus_ai_agent.contracts.intent import EngineeringIntent
+    from abaqus_ai_agent.planning.compiler import compile_engineering_intent
+
+    model = _symmetrical_unlabelled_model()
+
+    intent = EngineeringIntent(
+        id="FIXTURE_ENTRY",
+        kind="linear_static",
+        description="Analyze both blocks",
+        analysis_type="linear_static",
+        unit_system="MM_N_MPA",
+        material={"name": "PA66", "elastic_modulus": 3000.0, "poisson_ratio": 0.35},
+        metadata={
+            "assembly_screen": screen_assembly_requirement(
+                model, {"include_solid_ids": ["SOLID_ALPHA", "SOLID_BETA"]},
+            ),
+            "assembly_fixture_face_id": "F_p1_1",
+        },
+    )
+
+    with tempfile.TemporaryDirectory() as tmp:
+        step_path = os.path.join(tmp, "blocks.stp")
+        with open(step_path, "w", encoding="utf-8") as handle:
+            handle.write("ISO-10303-21;\nEND-ISO-10303-21;\n")
+        plan = compile_engineering_intent(
+            intent,
+            geometry=IntentGeometrySpec(shape="step_file", step_file_path=step_path, assembly_scope=model),
+            mesh=IntentMeshSpec(
+                global_size=1.5,
+                primary_wall_thickness=1000.0,
+                primary_wall_thickness_source="MEASURED",
+            ),
+        )
+
+    script = plan.cae_script
+    assert "EncastreBC" in script
+    assert plan.intent_summary["geometry"]["assembly_scope"]["fixture_record"]["face_id"] == "F_p1_1"
+
+
+def test_explicit_body_index_maps_imported_body_numbers_and_refuses_bad_mappings():
+    """bodyNum is user-supplied; an unusable mapping must fail instead of guessing."""
+    from abaqus_ai_agent.planning.compiler import _apply_explicit_body_index
+
+    model = _mated_handle_model()
+    stripped = GeometryModel(
+        model_id=model.model_id,
+        provenance=model.provenance,
+        bounding_box=model.bounding_box,
+        solids=tuple(
+            CadSolid(solid.id, shell_ids=solid.shell_ids, step_body_index=None)
+            for solid in model.solids
+        ),
+        shells=model.shells,
+        faces=model.faces,
+        edges=model.edges,
+        vertices=model.vertices,
+    )
+
+    bound = _apply_explicit_body_index(stripped, {"S_HANDLE": 2, "S_PIN": 1})
+    assert {solid.id: solid.step_body_index for solid in bound.solids} == {"S_HANDLE": 2, "S_PIN": 1}
+    scope = build_assembly_scope(
+        bound,
+        requirement={"include_solid_ids": ["S_HANDLE", "S_PIN"]},
+    )
+    assert not any(gap.startswith("step_body_index_missing") for gap in scope.gaps)
+
+    with pytest.raises(ValueError, match="does not contain"):
+        _apply_explicit_body_index(stripped, {"S_MISSING": 1})
+
+    with pytest.raises(ValueError, match="both"):
+        _apply_explicit_body_index(stripped, {"S_HANDLE": 1, "S_PIN": 1})
+
+    with pytest.raises(ValueError, match="1-based"):
+        _apply_explicit_body_index(stripped, {"S_HANDLE": 0})
+
+    with pytest.raises(ValueError, match="must map solid id"):
+        _apply_explicit_body_index(stripped, [1, 2])
+
+
+def test_unmapped_body_index_still_refuses_to_compile_a_step_assembly():
+    """Without an explicit mapping the compiler must keep refusing, not infer order."""
+    from abaqus_ai_agent.contracts.intent import EngineeringIntent
+    from abaqus_ai_agent.planning.compiler import compile_engineering_intent
+
+    model = _mated_handle_model()
+    stripped = GeometryModel(
+        model_id=model.model_id,
+        provenance=model.provenance,
+        bounding_box=model.bounding_box,
+        solids=tuple(
+            CadSolid(solid.id, shell_ids=solid.shell_ids, step_body_index=None)
+            for solid in model.solids
+        ),
+        shells=model.shells,
+        faces=model.faces,
+        edges=model.edges,
+        vertices=model.vertices,
+    )
+    intent = EngineeringIntent(
+        id="NO_BODY_INDEX",
+        kind="linear_static",
+        description="Analyze the handle and pin",
+        analysis_type="linear_static",
+        unit_system="MM_N_MPA",
+        material={"name": "PA66", "elastic_modulus": 3000.0, "poisson_ratio": 0.35},
+        metadata={
+            "assembly_screen": screen_assembly_requirement(
+                stripped, {"include_solid_ids": ["S_HANDLE", "S_PIN"]},
+            ),
+        },
+    )
+    with tempfile.TemporaryDirectory() as tmp:
+        step_path = os.path.join(tmp, "handle.stp")
+        with open(step_path, "w", encoding="utf-8") as handle:
+            handle.write("ISO-10303-21;\nEND-ISO-10303-21;\n")
+        with pytest.raises(ValueError, match="cannot be solved until the analysis requirement"):
+            compile_engineering_intent(
+                intent,
+                geometry=IntentGeometrySpec(shape="step_file", step_file_path=step_path, assembly_scope=stripped),
+                mesh=IntentMeshSpec(
+                    global_size=1.5,
+                    primary_wall_thickness=1000.0,
+                    primary_wall_thickness_source="MEASURED",
+                ),
+            )
+
+
+def _symmetrical_unlabelled_model():
+    """Two mated blocks with no semantic face or part names."""
+    vertices = (
+        CadVertex("V1", (0.0, 0.0, 0.0)),
+        CadVertex("V2", (40.0, 20.0, 0.0)),
+        CadVertex("V3", (0.0, 0.0, 30.0)),
+        CadVertex("V4", (40.0, 20.0, 30.0)),
+        CadVertex("V5", (5.0, 2.0, 30.0)),
+        CadVertex("V6", (25.0, 16.0, 30.0)),
+        CadVertex("V7", (5.0, 2.0, 50.0)),
+        CadVertex("V8", (25.0, 16.0, 50.0)),
+    )
+    edges = (
+        CadEdge("E_base_bot", start_vertex_id="V1", end_vertex_id="V2"),
+        CadEdge("E_base_top", start_vertex_id="V3", end_vertex_id="V4"),
+        CadEdge("E_pin_bot", start_vertex_id="V5", end_vertex_id="V6"),
+        CadEdge("E_pin_top", start_vertex_id="V7", end_vertex_id="V8"),
+    )
+    faces = (
+        CadFace("F_p1_1", surface_type="PLANE", edge_ids=("E_base_bot",), normal=(0.0, 0.0, -1.0), is_planar=True, area=800.0),
+        CadFace("F_p1_2", surface_type="PLANE", edge_ids=("E_base_top",), normal=(0.0, 0.0, 1.0), is_planar=True, area=800.0),
+        CadFace("F_p2_1", surface_type="PLANE", edge_ids=("E_pin_bot",), normal=(0.0, 0.0, -1.0), is_planar=True, area=280.0),
+        CadFace("F_p2_2", surface_type="PLANE", edge_ids=("E_pin_top",), normal=(0.0, 0.0, 1.0), is_planar=True, area=280.0),
+    )
+    shells = (
+        CadShell("SH1", face_ids=("F_p1_1", "F_p1_2"), is_closed=True),
+        CadShell("SH2", face_ids=("F_p2_1", "F_p2_2"), is_closed=True),
+    )
+    solids = (
+        CadSolid("SOLID_ALPHA", shell_ids=("SH1",), step_body_index=1),
+        CadSolid("SOLID_BETA", shell_ids=("SH2",), step_body_index=2),
+    )
+    bbox = CadBoundingBox(0.0, 0.0, 0.0, 40.0, 20.0, 50.0)
+    return _model(solids, shells, faces, edges, vertices, bbox)
+
+
+def test_opposed_faces_without_projected_overlap_are_not_a_contact_pair():
+    """Parallel opposed faces are not touching just because they are close.
+
+    Two faces that only share a rim project to zero overlap. Pairing them would
+    invent a contact and a friction law where the parts merely pass each other.
+    """
+    vertices = (
+        CadVertex("V1", (0.0, 0.0, 30.0)),
+        CadVertex("V2", (40.0, 20.0, 30.0)),
+        CadVertex("V3", (0.0, 0.0, 30.4)),
+        CadVertex("V4", (40.0, 20.0, 30.4)),
+        CadVertex("V5", (80.0, 0.0, 30.2)),
+        CadVertex("V6", (120.0, 20.0, 30.2)),
+    )
+    edges = (
+        CadEdge("E_base_top", start_vertex_id="V1", end_vertex_id="V2"),
+        CadEdge("E_pin_bot", start_vertex_id="V3", end_vertex_id="V4"),
+        CadEdge("E_far_bot", start_vertex_id="V5", end_vertex_id="V6"),
+    )
+    faces = (
+        CadFace("F_base_top", surface_type="PLANE", edge_ids=("E_base_top",), normal=(0.0, 0.0, 1.0), is_planar=True, area=800.0),
+        CadFace("F_pin_bot", surface_type="PLANE", edge_ids=("E_pin_bot",), normal=(0.0, 0.0, -1.0), is_planar=True, area=800.0),
+        CadFace("F_far_bot", surface_type="PLANE", edge_ids=("E_far_bot",), normal=(0.0, 0.0, -1.0), is_planar=True, area=800.0),
+    )
+    shells = (
+        CadShell("SH_base", face_ids=("F_base_top",), is_closed=True),
+        CadShell("SH_pin", face_ids=("F_pin_bot",), is_closed=True),
+        CadShell("SH_far", face_ids=("F_far_bot",), is_closed=True),
+    )
+    solids = (
+        CadSolid("S_BASE", shell_ids=("SH_base",), step_body_index=1),
+        CadSolid("S_PIN", shell_ids=("SH_pin",), step_body_index=2),
+        CadSolid("S_FAR", shell_ids=("SH_far",), step_body_index=3),
+    )
+    model = _model(
+        solids, shells, faces, edges, vertices,
+        CadBoundingBox(0.0, 0.0, 30.0, 120.0, 20.0, 30.4),
+    )
+
+    scope = build_assembly_scope(
+        model,
+        requirement={"include_solid_ids": ["S_BASE", "S_PIN", "S_FAR"]},
+    )
+
+    paired = {frozenset((c.master_part, c.slave_part)) for c in scope.contacts}
+    # 0.4 mm apart, overlapping in-plane: a real mating pair.
+    assert frozenset(("S_BASE", "S_PIN")) in paired
+    # 0.2 mm apart with the same opposed normals, but the faces never face
+    # each other. Proximity alone must not invent this contact.
+    assert frozenset(("S_BASE", "S_FAR")) not in paired
+
+
 def _three_part_product():
     model = _mated_handle_model()
     screw_vertex = CadVertex("V9", (100.0, 100.0, 0.0))

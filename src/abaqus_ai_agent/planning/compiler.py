@@ -10,7 +10,7 @@ from __future__ import annotations
 import math
 import os
 from dataclasses import dataclass, field, replace
-from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
+from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple, Union
 
 from ..contracts.mesh import LocalSeed, MeshSpecification
 from ..contracts.action import AbaqusAction
@@ -263,6 +263,11 @@ class IntentInteractionSpec:
     interaction_type: str = "surface_to_surface_contact"
     master_region: str = ""
     slave_region: str = ""
+    # Script expressions, used when a surface has no stable name to look up.
+    # An analytical rigid part's surface is named by CAE, not by us, so the
+    # punch binds it through the variable it already holds.
+    master_expression: str = ""
+    slave_expression: str = ""
     friction_coefficient: float = 0.0
     normal_behavior: str = "HARD"
     step: str = "Initial"
@@ -388,12 +393,18 @@ def _step_action_for_type(step_type, model_name, *, name, previous, nlgeom=False
     )
 
 
-def _mesh_quality_targets(geometry, active_scope, part_name):
+def _mesh_quality_targets(geometry, active_scope, part_name, excluded=()):
     """Return the part names whose generated mesh must be quality-checked.
 
     Mirrors the parts that section 11 actually meshed. A check on a part that
     was never meshed would produce a verdict about a different model.
+
+    ``excluded`` holds parts that mesh themselves: the rigid punch is meshed as
+    a shell of R3D4 by ``planning.contact_loading`` before it is instanced, and
+    re-seeding it here with the deformable body's solid element type would
+    overwrite R3D4 with a continuum element on a shell.
     """
+    skip = set(excluded or ())
     shape = getattr(geometry, "shape", "")
     if shape in ("step_assembly", "two_blocks_contact") and active_scope is not None:
         names = []
@@ -401,8 +412,8 @@ def _mesh_quality_targets(geometry, active_scope, part_name):
             name = getattr(part, "name", None)
             if name and name not in names:
                 names.append(name)
-        return tuple(names)
-    return (part_name,)
+        return tuple(name for name in names if name not in skip)
+    return (part_name,) if part_name not in skip else ()
 
 
 def _resolve_physics_domain(intent: EngineeringIntent) -> Optional[str]:
@@ -418,6 +429,71 @@ def _resolve_physics_domain(intent: EngineeringIntent) -> Optional[str]:
         return resolve_capability(intent).physics_domain
     except Exception:
         return getattr(intent, "analysis_type", None) or getattr(intent, "kind", None)
+
+
+def _material_definition_actions(model_name: str, material: MaterialDefinition) -> List[AbaqusAction]:
+    """Emit the property actions for one material.
+
+    Kept separate from the section block so an assembly can declare several
+    materials without repeating this logic per part.
+    """
+    actions: List[AbaqusAction] = []
+    if material.elastic:
+        actions.append(builders.material_elastic(
+            model=model_name,
+            name=material.name,
+            youngs_modulus=material.elastic.youngs_modulus,
+            poisson=material.elastic.poisson_ratio,
+        ))
+    if material.density is not None:
+        actions.append(builders.material_density(
+            model=model_name,
+            name=material.name,
+            density=material.density,
+        ))
+    if material.plastic:
+        plastic_table: Tuple[Tuple[float, float], ...] = ()
+        if material.plastic.hardening_table:
+            raw_table = tuple(tuple(float(x) for x in pt) for pt in material.plastic.hardening_table)
+            if raw_table and raw_table[0][1] != 0.0 and material.plastic.yield_stress is not None:
+                plastic_table = ((float(material.plastic.yield_stress), 0.0),) + raw_table
+            else:
+                plastic_table = raw_table
+        elif (
+            material.plastic.yield_stress is not None
+            and material.plastic.yield_stress > 0
+            and (material.metadata or {}).get("accept_ideal_plasticity") is True
+        ):
+            # Only an explicit ideal-plasticity acceptance may emit the single point.
+            # A catalog yield remains a check threshold and stays out of *PLASTIC.
+            plastic_table = ((float(material.plastic.yield_stress), 0.0),)
+
+        if plastic_table:
+            actions.append(builders.material_plastic(
+                model=model_name,
+                name=material.name,
+                table=plastic_table,
+            ))
+    if material.thermal is not None:
+        if material.thermal.conductivity is not None:
+            actions.append(builders.material_conductivity(
+                model=model_name,
+                name=material.name,
+                table=((material.thermal.conductivity,),),
+            ))
+        if material.thermal.specific_heat is not None:
+            actions.append(builders.material_specific_heat(
+                model=model_name,
+                name=material.name,
+                table=((material.thermal.specific_heat,),),
+            ))
+        if material.thermal.expansion_coefficient is not None:
+            actions.append(builders.material_expansion(
+                model=model_name,
+                name=material.name,
+                table=((material.thermal.expansion_coefficient,),),
+            ))
+    return actions
 
 
 def compile_intent_to_actions(
@@ -445,6 +521,8 @@ def compile_intent_to_actions(
     contact_stabilization: Optional[Any] = None,
     submit_job: bool = False,
     physics_domain: Optional[str] = None,
+    part_materials: Optional[Mapping[str, Any]] = None,
+    contact_loadings: Optional[Sequence[Any]] = None,
 ) -> CompiledAgentPlan:
     """Compile declarative engineering specifications into canonical AbaqusActions and CAE script."""
     if mesh is None or mesh.global_size is None:
@@ -461,6 +539,28 @@ def compile_intent_to_actions(
     if _requests_material_nonlinearity(analysis=str(physics_domain or ""), physics_domain=physics_domain):
         _refuse_ideal_plasticity(material, f"physics domain '{physics_domain}'")
 
+    # Per-part materials pass the same gate as the primary one: a fibre grade in
+    # a second part is refused exactly like one in the first.
+    part_material_by_solid: Dict[str, MaterialDefinition] = {}
+    if part_materials:
+        if not isinstance(part_materials, Mapping):
+            raise ValueError(
+                "part_materials must map solid id to a material, "
+                f"got {type(part_materials).__name__}"
+            )
+        for solid_id, raw in part_materials.items():
+            if raw is None:
+                continue
+            part_material_by_solid[str(solid_id)] = enforce_material_disposition(
+                raw,
+                analysis=str(physics_domain or ""),
+                metadata=getattr(raw, "metadata", None) if not isinstance(raw, dict) else raw.get("metadata"),
+            )
+    all_materials: List[MaterialDefinition] = [material]
+    for extra in part_material_by_solid.values():
+        if all(extra.name != known.name for known in all_materials):
+            all_materials.append(extra)
+
     actions: List[AbaqusAction] = []
     active_scope = assembly_scope if assembly_scope is not None else getattr(geometry, "assembly_scope", None)
     if active_scope is not None and geometry.shape != "step_assembly":
@@ -468,6 +568,19 @@ def compile_intent_to_actions(
             "assembly_scope is only valid for shape='step_assembly'; refusing to attach "
             "multi-part contact and fixture data to a single-part template"
         )
+    if part_material_by_solid and geometry.shape != "step_assembly":
+        raise ValueError(
+            "part_materials is only valid for shape='step_assembly'; a single-part template "
+            "has one region and cannot carry a second material"
+        )
+    if part_material_by_solid and active_scope is not None:
+        retained = {str(getattr(part, "solid_id", "")) for part in getattr(active_scope, "parts", ())}
+        unknown = sorted(set(part_material_by_solid) - retained)
+        if unknown:
+            raise ValueError(
+                "part_materials names solids that are not retained in the assembly scope: "
+                f"{unknown}. Retained: {sorted(retained)}"
+            )
 
     # 1. Geometry Construction (Native Python CAE Action)
     model_init = (
@@ -608,73 +721,39 @@ def compile_intent_to_actions(
         actions.append(builders.python_action(model_name, part_partition_code))
 
     # 2. Material Definition Actions
-    if material.elastic:
-        actions.append(builders.material_elastic(
-            model=model_name,
-            name=material.name,
-            youngs_modulus=material.elastic.youngs_modulus,
-            poisson=material.elastic.poisson_ratio,
-        ))
-    if material.density is not None:
-        actions.append(builders.material_density(
-            model=model_name,
-            name=material.name,
-            density=material.density,
-        ))
-    if material.plastic:
-        plastic_table: Tuple[Tuple[float, float], ...] = ()
-        if material.plastic.hardening_table:
-            raw_table = tuple(tuple(float(x) for x in pt) for pt in material.plastic.hardening_table)
-            if raw_table and raw_table[0][1] != 0.0 and material.plastic.yield_stress is not None:
-                plastic_table = ((float(material.plastic.yield_stress), 0.0),) + raw_table
-            else:
-                plastic_table = raw_table
-        elif (
-            material.plastic.yield_stress is not None
-            and material.plastic.yield_stress > 0
-            and (material.metadata or {}).get("accept_ideal_plasticity") is True
-        ):
-            # Only an explicit ideal-plasticity acceptance may emit the single point.
-            # A catalog yield remains a check threshold and stays out of *PLASTIC.
-            plastic_table = ((float(material.plastic.yield_stress), 0.0),)
-
-        if plastic_table:
-            actions.append(builders.material_plastic(
-                model=model_name,
-                name=material.name,
-                table=plastic_table,
-            ))
-    if material.thermal is not None:
-        if material.thermal.conductivity is not None:
-            actions.append(builders.material_conductivity(
-                model=model_name,
-                name=material.name,
-                table=((material.thermal.conductivity,),),
-            ))
-        if material.thermal.specific_heat is not None:
-            actions.append(builders.material_specific_heat(
-                model=model_name,
-                name=material.name,
-                table=((material.thermal.specific_heat,),),
-            ))
-        if material.thermal.expansion_coefficient is not None:
-            actions.append(builders.material_expansion(
-                model=model_name,
-                name=material.name,
-                table=((material.thermal.expansion_coefficient,),),
-            ))
+    for _mat in all_materials:
+        actions.extend(_material_definition_actions(model_name, _mat))
 
     # 3. Section and Assignment
+    # One solid section per distinct material. A multi-part assembly may carry
+    # several materials (metal insert in a polymer housing), and binding one
+    # section to every part would silently give the insert the housing modulus.
+    sections_by_material = {}
+    for _mat in all_materials:
+        sections_by_material[_mat.name] = f"{_mat.name}_Section"
+    for _mat in all_materials:
+        actions.append(builders.solid_section(
+            model=model_name,
+            name=sections_by_material[_mat.name],
+            material=_mat.name,
+        ))
     sec_name = f"{material.name}_Section"
-    actions.append(builders.solid_section(model=model_name, name=sec_name, material=material.name))
+    used_assignments: List[Dict[str, str]] = []
     if geometry.shape == "step_assembly":
         assign_lines = []
         for index, part in enumerate(active_scope.parts):
+            part_material = part_material_by_solid.get(getattr(part, "solid_id", ""), material)
+            part_section = sections_by_material[part_material.name]
             assign_lines.append(
                 f"p_{index} = mdb.models['{model_name}'].parts['{part.name}']\n"
                 f"reg_{index} = p_{index}.Set(cells=p_{index}.cells, name='AllCells')\n"
-                f"p_{index}.SectionAssignment(region=reg_{index}, sectionName='{sec_name}')\n"
+                f"p_{index}.SectionAssignment(region=reg_{index}, sectionName='{part_section}')\n"
             )
+            used_assignments.append({
+                "material": part_material.name,
+                "part": getattr(part, "solid_id", ""),
+                "region": f"{part.instance_name}/AllCells",
+            })
         sec_assign_code = "".join(assign_lines)
     elif geometry.shape != "two_blocks_contact":
         sec_assign_code = (
@@ -683,6 +762,7 @@ def compile_intent_to_actions(
             f"region = p.Set(cells=c, name='AllCells')\n"
             f"p.SectionAssignment(region=region, sectionName='{sec_name}')\n"
         )
+        used_assignments.append({"material": material.name, "region": "AllCells"})
     else:
         sec_assign_code = (
             f"p_base = mdb.models['{model_name}'].parts['Base']\n"
@@ -692,6 +772,7 @@ def compile_intent_to_actions(
             f"reg_s = p_slider.Set(cells=p_slider.cells, name='AllCells')\n"
             f"p_slider.SectionAssignment(region=reg_s, sectionName='{sec_name}')\n"
         )
+        used_assignments.append({"material": material.name, "region": "AllCells"})
     actions.append(builders.python_action(model_name, sec_assign_code))
 
     # 4. Assembly Instance
@@ -772,6 +853,161 @@ def compile_intent_to_actions(
             f"a.Surface(side1Faces=f_slider_top, name='SliderTop_Surf')\n"
         )
     actions.append(builders.python_action(model_name, inst_code))
+
+    # 4b. Contact-driven loading (rigid punch)
+    #
+    # A punch is not a load on a surface: it is a body that touches the target
+    # across an area and is driven through a reference point. It therefore has
+    # to exist before the step and before the interaction, and the interaction
+    # itself is emitted through the same ``interactions`` channel as every
+    # other contact. Nothing here invents a size, a standoff, a stroke, or a
+    # friction coefficient; ``ContactLoadingSpec`` refuses to authorize when
+    # any of them is missing.
+    punch_interactions: List[IntentInteractionSpec] = []
+    punch_guided: List[Tuple[Any, str]] = []
+    punch_records: List[Dict[str, Any]] = []
+    for spec in tuple(contact_loadings or ()):
+        from ..contracts.condition import contact_loading_from_mapping
+        from ..planning.contact_loading import (
+            is_cylindrical,
+            punch_friction,
+            punch_master_variable,
+            punch_script_lines,
+            resolve_punch_axis,
+        )
+
+        resolved = contact_loading_from_mapping(spec)
+        if resolved is None:
+            continue
+        if resolved.application not in (
+            "rigid_indenter_contact", "displacement_controlled_contact",
+        ):
+            raise ValueError(
+                "contact_loadings entry %r declares application %r; only an independent "
+                "contact (rigid_indenter_contact / displacement_controlled_contact) can be "
+                "built as a punch. A concentrated force or a pressure is a different model "
+                "and must not be dressed up as contact."
+                % (resolved.name, resolved.application)
+            )
+        evidence_gaps = resolved.gaps()
+        if evidence_gaps:
+            raise ValueError(
+                "contact loading %r cannot authorize a formal model: %s. No indenter size, "
+                "source, direction, control, or friction value is assumed."
+                % (resolved.name, ", ".join(evidence_gaps))
+            )
+        placement_gaps = resolved.placement_gaps()
+        if placement_gaps:
+            raise ValueError(
+                "contact loading %r is missing placement inputs: %s. The punch is not "
+                "placed at a guessed standoff, size, or stroke."
+                % (resolved.name, ", ".join(placement_gaps))
+            )
+        if not resolved.target_region:
+            raise ValueError(
+                "contact loading %r has no target_region; the punch has nothing to bear on"
+                % (resolved.name,)
+            )
+
+        axis = resolve_punch_axis(resolved)
+        # Deliberately not ``part_name``: that name is the main part being
+        # analysed, and rebinding it here would make the punch the subject of
+        # every later mesh, diagnosis, and quality action.
+        punch_part = "%s_Punch" % resolved.name
+        target_instance = resolved.target_instance
+        if not target_instance:
+            if geometry.shape == "step_assembly":
+                raise ValueError(
+                    "contact loading %r must name target_instance in a multi-part assembly; "
+                    "a face id alone does not identify which instance owns it" % (resolved.name,)
+                )
+            target_instance = inst_name
+
+        actions.append(builders.python_action(model_name, "\n".join(
+            punch_script_lines(
+                resolved, axis, model_name=model_name, part_name=punch_part,
+            )
+        )))
+
+        # The target surface is resolved with the same guarded locator used by
+        # every other region, so a punch aimed at a point that is not on the
+        # named face fails here instead of silently binding the nearest face.
+        # It gets its own surface name: reusing the region name would collide
+        # with a surface the assembly scope already created for the same face.
+        target_surface = "%s_Target" % punch_part
+        target_point = resolved.metadata.get("target_point") or list(resolved.contact_point)
+        actions.append(builders.python_action(
+            model_name,
+            _guarded_find_at(
+                f"a.instances['{target_instance}'].faces",
+                f"(({target_point[0]}, {target_point[1]}, {target_point[2]}),)",
+                resolved.target_region,
+            )
+            + f"_punch_target = _abqai_bound\n"
+            f"a.Surface(side1Faces=_punch_target, name='{target_surface}')\n",
+        ))
+
+        punch_interactions.append(IntentInteractionSpec(
+            name="%s_Contact" % resolved.name,
+            master_region="%s_Master" % punch_part,
+            slave_region=target_surface,
+            # The analytical punch's surface is named by CAE, so it is bound
+            # through the variable the punch script already holds rather than
+            # looked up under a name this side would have to guess.
+            master_expression=punch_master_variable(punch_part),
+            slave_expression="a.surfaces[%r]" % (target_surface,),
+            friction_coefficient=punch_friction(resolved),
+            step="Initial",
+        ))
+        punch_guided.append((axis, punch_part))
+        punch_records.append({
+            "name": resolved.name,
+            "application": resolved.application,
+            "punch_part": punch_part,
+            "punch_instance": "%s-1" % punch_part,
+            "master_surface": "%s_Master" % punch_part,
+            "slave_surface": "%s_Target" % punch_part,
+            "target_region": resolved.target_region,
+            "target_instance": target_instance,
+            "contact_point": list(resolved.contact_point or ()),
+            "standoff": resolved.standoff,
+            "indenter_width": resolved.indenter_width,
+            "indenter_length": resolved.indenter_length,
+            "indenter_geometry": resolved.indenter_geometry,
+            "indenter_edge_radius": resolved.indenter_edge_radius,
+            # Which build route was taken, so a reviewer can tell whether the
+            # punch carries a mesh without re-reading the script.
+            "rigid_surface_type": (
+                "analytical_revolved" if is_cylindrical(resolved) else "discrete_shell"
+            ),
+            "punch_mesh_required": not is_cylindrical(resolved),
+            "dimension_unit": resolved.dimension_unit,
+            "direction": axis.token,
+            "control": axis.control,
+            "magnitude": axis.magnitude,
+            "magnitude_unit": resolved.magnitude_unit,
+            "friction_coefficient": punch_friction(resolved),
+            "friction_source": resolved.friction_source,
+            "source": resolved.source,
+            "evidence_status": resolved.evidence_status,
+        })
+
+    if punch_guided:
+        # The guide is created in the Initial step so the punch has a defined
+        # equilibrium before any load exists; the drive itself belongs in the
+        # analysis step and is emitted with the other loads further down.
+        from ..planning.contact_loading import punch_guide_lines
+        # Deliberately not ``part_name``: rebinding the caller's part name to
+        # each punch would re-target every later section, mesh, diagnosis, and
+        # quality action at the punch, which is a shell with no cells.
+        for _axis, _guided_part in punch_guided:
+            actions.append(builders.python_action(
+                model_name,
+                "\n".join(punch_guide_lines(
+                    _axis, model_name=model_name, part_name=_guided_part,
+                )),
+            ))
+    punch_drive_targets = list(punch_guided)
 
     # 5. Spatial Expression Fields
     if fields:
@@ -857,6 +1093,10 @@ def compile_intent_to_actions(
         default_step_name = active_step.name
 
     # 6b. Contact Interactions
+    # Punch contacts join the same channel as every other interaction rather
+    # than being emitted beside it, so preflight and fidelity see one list.
+    if punch_interactions:
+        interactions = tuple(interactions or ()) + tuple(punch_interactions)
     stabilized_target_steps: List[str] = []
     if geometry.shape == "step_assembly" and active_scope is not None:
         derived = [
@@ -974,10 +1214,12 @@ def compile_intent_to_actions(
                     "contact '%s' requested node adjustment; overlapping geometry must be returned to CAD"
                     % inter.name
                 )
+            master_expr = inter.master_expression or "a.surfaces[%r]" % (inter.master_region,)
+            slave_expr = inter.slave_expression or "a.surfaces[%r]" % (inter.slave_region,)
             inter_code += (
                 f"a = mdb.models['{model_name}'].rootAssembly\n"
-                f"m_surf = a.surfaces['{inter.master_region}']\n"
-                f"s_surf = a.surfaces['{inter.slave_region}']\n"
+                f"m_surf = {master_expr}\n"
+                f"s_surf = {slave_expr}\n"
                 f"try:\n"
                 f"    mdb.models['{model_name}'].SurfaceToSurfaceContactStd(name='{inter.name}', "
                 f"createStepName='{inter.step}', main=m_surf, secondary=s_surf, sliding=FINITE, "
@@ -1521,6 +1763,21 @@ def compile_intent_to_actions(
             actions.append(builders.python_action(model_name, mod_code))
 
     # 9. Standard Loads Actions
+    # The punch drive is a load like any other and is emitted here, after the
+    # step exists, so it lands in the declared analysis step rather than the
+    # Initial step.
+    if punch_drive_targets:
+        from ..planning.contact_loading import punch_load_lines
+        # Same reason as the guide loop: the loop variable must not be the
+        # part name, or the punch becomes the subject of the mesh section.
+        for _axis, _driven_part in punch_drive_targets:
+            actions.append(builders.python_action(
+                model_name,
+                "\n".join(punch_load_lines(
+                    _axis, model_name=model_name, part_name=_driven_part,
+                    step=default_step_name,
+                )),
+            ))
     for ld in loads:
         gr = grounded_regions.get(ld.region) if grounded_regions else None
         target_step = ld.step if ld.step else default_step_name
@@ -1741,7 +1998,10 @@ def compile_intent_to_actions(
     # 10b. Read-only geometry diagnosis. Invalid geometry stops here.
     # This does not repair, ignore, or delete entities. A failed checkGeometry
     # or geometryValidity=0 raises before any seed or mesh call.
-    diagnosis_parts = _mesh_quality_targets(geometry, active_scope, part_name)
+    diagnosis_parts = _mesh_quality_targets(
+        geometry, active_scope, part_name,
+        excluded=tuple(record["punch_part"] for record in punch_records),
+    )
     diagnosis_lines = ["from abaqusConstants import *\n"]
     for _diag_part in diagnosis_parts:
         diagnosis_lines.append(
@@ -1889,7 +2149,10 @@ def compile_intent_to_actions(
         "min_angle": mesh.min_angle if mesh.min_angle is not None else mq_policy.min_angle,
         "max_angle": mesh.max_angle if mesh.max_angle is not None else mq_policy.max_angle,
     }
-    for _mq_part in _mesh_quality_targets(geometry, active_scope, part_name):
+    for _mq_part in _mesh_quality_targets(
+        geometry, active_scope, part_name,
+        excluded=tuple(record["punch_part"] for record in punch_records),
+    ):
         actions.append(builders.mesh_quality(
             model=model_name,
             part=_mq_part,
@@ -2046,6 +2309,7 @@ def compile_intent_to_actions(
         "fmbd": fmbd.to_dict() if fmbd else None,
         "fatigue": fatigue.to_dict() if fatigue else None,
         "mesh_sizing": _mesh_sizing_evidence(mesh, wall_evidence),
+        "contact_loadings": [dict(record) for record in punch_records],
     }
 
     return CompiledAgentPlan(
@@ -2572,6 +2836,81 @@ def _screen_inputs_from_intent(intent: Optional[object]) -> dict:
     return {"screen": screen}
 
 
+def _explicit_assembly_inputs(intent: Optional[object]) -> dict:
+    """Read the screen plus the two facts only the user can supply.
+
+    Neither the fixture face nor an Abaqus bodyNum is derivable from the STEP
+    file. File order is not a body number, and no STEP attribute names the
+    clamped face. Both are therefore explicit inputs, passed through here and
+    validated in ``_bind_step_assembly_scope``; nothing is guessed.
+
+    * ``assembly_fixture_face_id``: CAD face id of the installation fixture.
+    * ``assembly_body_index``: mapping of solid id -> 1-based imported bodyNum.
+    """
+    inputs = dict(_screen_inputs_from_intent(intent))
+    if intent is None:
+        return inputs
+    metadata = getattr(intent, "metadata", None) or {}
+    if not isinstance(metadata, dict):
+        return inputs
+    fixture_face_id = metadata.get("assembly_fixture_face_id")
+    if fixture_face_id:
+        inputs["fixture_face_id"] = str(fixture_face_id)
+    body_index = metadata.get("assembly_body_index")
+    if body_index:
+        inputs["body_index"] = body_index
+    return inputs
+
+
+def _apply_explicit_body_index(model, body_index):
+    """Bind user-supplied Abaqus bodyNums onto the ingested solids.
+
+    Refuses an unknown solid id or a duplicate bodyNum: either one means the
+    mapping does not describe this file, and a partial bind would put the wrong
+    body in the wrong part silently.
+    """
+    from dataclasses import replace as _dc_replace
+
+    if not isinstance(body_index, Mapping):
+        raise ValueError(
+            "assembly_body_index must map solid id to a 1-based imported bodyNum, "
+            f"got {type(body_index).__name__}"
+        )
+    known = {solid.id for solid in model.solids}
+    unknown = sorted(str(key) for key in body_index if str(key) not in known)
+    if unknown:
+        raise ValueError(
+            "assembly_body_index names solids that this STEP file does not contain: "
+            f"{unknown}. Known solid ids: {sorted(known)}"
+        )
+    resolved = {}
+    for key, value in body_index.items():
+        try:
+            number = int(value)
+        except (TypeError, ValueError):
+            raise ValueError(
+                f"assembly_body_index[{key!r}] must be an integer bodyNum, got {value!r}"
+            ) from None
+        if number < 1:
+            raise ValueError(
+                f"assembly_body_index[{key!r}] must be 1-based and positive, got {number}"
+            )
+        resolved[str(key)] = number
+    seen = {}
+    for solid_id, number in resolved.items():
+        if number in seen:
+            raise ValueError(
+                f"assembly_body_index binds bodyNum {number} to both {seen[number]} and {solid_id}; "
+                "each imported body may back exactly one part"
+            )
+        seen[number] = solid_id
+    solids = tuple(
+        _dc_replace(solid, step_body_index=resolved[solid.id]) if solid.id in resolved else solid
+        for solid in model.solids
+    )
+    return _dc_replace(model, solids=solids)
+
+
 def _bind_step_assembly_scope(
     geometry: IntentGeometrySpec,
     *,
@@ -2579,6 +2918,8 @@ def _bind_step_assembly_scope(
     requirement: Optional[object] = None,
     screen: Optional[object] = None,
     judgments: Optional[object] = None,
+    fixture_face_id: Optional[str] = None,
+    body_index: Optional[Mapping[str, int]] = None,
 ) -> IntentGeometrySpec:
     """Attach the requirement-screened scope, or refuse an unresolved inventory.
 
@@ -2609,11 +2950,15 @@ def _bind_step_assembly_scope(
     if not isinstance(model, GeometryModel) or model.solid_count <= 1:
         return geometry
 
+    if body_index:
+        model = _apply_explicit_body_index(model, body_index)
+
     scope = build_assembly_scope(
         model,
         requirement=requirement,
         screen=screen,
         judgments=judgments,
+        fixture_face_id=fixture_face_id,
     )
     if not scope.is_complete:
         raise ValueError(
@@ -2726,7 +3071,7 @@ def compile_engineering_intent(
             "Cannot compile engineering intent: missing geometry specification. "
             "Provide geometry via intent.metadata['geometry'] or explicit geometry parameter."
         )
-    screen_inputs = _screen_inputs_from_intent(intent)
+    screen_inputs = _explicit_assembly_inputs(intent)
     eff_geom = _bind_step_assembly_scope(
         eff_geom,
         allow_missing_step_file=allow_missing_step_file,
@@ -3135,6 +3480,7 @@ def compile_engineering_intent(
         contact_stabilization=eff_contact_stabilization,
         submit_job=submit_job,
         physics_domain=_resolve_physics_domain(intent),
+        contact_loadings=tuple(getattr(intent, "contact_loadings", ()) or ()),
     )
 
     # The plan must be able to represent the behaviour the question asks about.

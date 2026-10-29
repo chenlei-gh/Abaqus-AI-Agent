@@ -123,6 +123,152 @@ _OTHER_NONLINEAR_MARKERS = (
     ("short glass", "short-glass", "短玻纤"),
 )
 
+# A glass-fibre grade token, not the letters anywhere inside a word.
+# PA6-GF50, PA6+GF50, PA6_GF50, GF50, PA6 50GF, PA66 GF30 all qualify.
+# MgF2, AGFA, and PGF are not glass-fibre grades and must not be refused by
+# a bare substring test on the two letters.
+_GLASS_FIBRE_TOKEN = re.compile(
+    r"(?:^|[^a-z0-9])(?:gf\s*\d{1,3}|\d{1,3}\s*gf|gf)(?=$|[^a-z0-9])",
+    re.IGNORECASE,
+)
+
+# Trade designations drop the F: PA6G50 and PA66G30 are the same filled grades
+# as PA6-GF50 and PA66-GF30. A bare "gf" test misses them, so renaming the card
+# used to walk straight through the fibre gate. The trailing weight fraction is
+# required, so unfilled grades such as PA6 or PA12 stay unaffected.
+_CONDENSED_GLASS_GRADE = re.compile(
+    r"(?:^|[^a-z0-9])pa\s*\d{0,2}\s*g\s*0*[1-9]\d{0,2}(?=$|[^a-z0-9])",
+    re.IGNORECASE,
+)
+
+
+# Reinforcement kinds that cannot be collapsed to an isotropic J2 card. A fibre
+# carries load along its axis, so a single E and nu from a tensile specimen
+# overestimates stiffness in every other direction.
+_FIBRE_REINFORCEMENT_TOKENS = (
+    "glass_fiber",
+    "glass_fibre",
+    "carbon_fiber",
+    "carbon_fibre",
+    "aramid_fiber",
+    "aramid_fibre",
+    "short_glass",
+    "short-glass",
+    "short_glass_fiber",
+    "fibre_reinforced",
+    "fiber_reinforced",
+)
+
+
+def _is_glass_fibre_grade(text: str) -> bool:
+    """True when the name marks a short-glass reinforced grade.
+
+    Name tokens are corroboration, not the primary source. The structured
+    ``reinforcement_type`` on a material identity decides when it is present;
+    this test only runs when no module declared one.
+    """
+    if not text:
+        return False
+    return (
+        _GLASS_FIBRE_TOKEN.search(text) is not None
+        or _CONDENSED_GLASS_GRADE.search(text) is not None
+    )
+
+
+def _provider_identity(query: str) -> Optional[Dict[str, Any]]:
+    """Identity the authentic material registry already holds for this query.
+
+    This keeps the reinforcement screen on the same module that owns grade
+    identity, instead of re-deriving it from the grade spelling.
+    """
+    if not query:
+        return None
+    from ..materials.provider import MaterialProvider
+
+    record = MaterialProvider.default().find_record(query)
+    return record.identity.to_dict() if record is not None else None
+
+
+def _identity_sources(material_input: Any, query: str) -> Tuple[Dict[str, Any], ...]:
+    """Identity mappings already published for this input, most specific first."""
+    sources: list = []
+
+    identity = getattr(material_input, "identity", None)
+    if identity is not None:
+        if hasattr(identity, "to_dict"):
+            sources.append(dict(identity.to_dict()))
+        elif isinstance(identity, dict):
+            sources.append(dict(identity))
+
+    if isinstance(material_input, dict):
+        if isinstance(material_input.get("identity"), dict):
+            sources.append(dict(material_input["identity"]))
+        sources.append(material_input)
+        meta = material_input.get("metadata")
+    else:
+        meta = getattr(material_input, "metadata", None)
+    if isinstance(meta, dict):
+        if isinstance(meta.get("identity"), dict):
+            sources.append(dict(meta["identity"]))
+        sources.append(meta)
+
+    if isinstance(material_input, str):
+        registered = _provider_identity(query)
+        if registered is not None:
+            sources.append(registered)
+    return tuple(sources)
+
+
+def _declared_reinforcement(
+    material_input: Any, query: str
+) -> Optional[Tuple[str, Optional[float]]]:
+    """Structured ``(reinforcement_type, content_wt%)``, or None when undeclared.
+
+    A declared type is authoritative even when it says the grade is unfilled.
+    Falling back to the grade spelling in that case would resurrect the string
+    heuristic as a second, competing decision.
+    """
+    for source in _identity_sources(material_input, query):
+        kind = source.get("reinforcement_type")
+        if not kind:
+            continue
+        content = source.get("reinforcement_content")
+        try:
+            content_value = float(content) if content is not None else None
+        except (TypeError, ValueError):
+            content_value = None
+        return str(kind).strip().lower(), content_value
+    # A bare ``{"name": "Ultramid A3WG6"}`` card names a registered grade even
+    # though it carries no identity block. The registry still knows it is GF30.
+    registered = _provider_identity(query)
+    if registered is not None:
+        kind = registered.get("reinforcement_type")
+        if kind:
+            content = registered.get("reinforcement_content")
+            try:
+                content_value = float(content) if content is not None else None
+            except (TypeError, ValueError):
+                content_value = None
+            return str(kind).strip().lower(), content_value
+    return None
+
+
+def _is_fibre_reinforced_input(material_input: Any, query: str) -> bool:
+    """Whether this input names a fibre-reinforced grade.
+
+    One screen for every input form: a ``MaterialRecord``, a card that came back
+    from ``MaterialResolver``, a plain dict, or a grade string that the
+    authentic registry can resolve. The structured identity wins; grade name
+    tokens only stand in when no module declared a reinforcement.
+    """
+    declared = _declared_reinforcement(material_input, query)
+    if declared is not None:
+        kind, content = declared
+        if content is not None and content <= 0.0:
+            return False
+        return any(token in kind for token in _FIBRE_REINFORCEMENT_TOKENS)
+    return _is_glass_fibre_grade(query)
+
 
 @dataclass(frozen=True)
 class MaterialDisposition:
@@ -167,6 +313,12 @@ def _query_text(material_input: Any) -> str:
         return material_input.strip()
     if isinstance(material_input, dict):
         return str(material_input.get("name") or material_input.get("grade") or "").strip()
+    # A MaterialRecord carries its grade on identity, not on a name attribute.
+    identity = getattr(material_input, "identity", None)
+    if identity is not None:
+        grade = getattr(identity, "grade", None)
+        if grade:
+            return str(grade).strip()
     return str(getattr(material_input, "name", "") or "").strip()
 
 
@@ -244,6 +396,14 @@ def _accepts_ideal_plasticity(metadata: Dict[str, Any]) -> bool:
     return _truthy(metadata.get("accept_ideal_plasticity")) or _truthy(metadata.get("ideal_plasticity_accepted"))
 
 
+def _accepts_isotropic_fibre_equivalent(metadata: Dict[str, Any]) -> bool:
+    """An explicit, user-owned acceptance of an isotropic reading of a fibre grade."""
+    return (
+        _truthy(metadata.get("accept_isotropic_fibre_equivalent"))
+        or _truthy(metadata.get("isotropic_fibre_equivalent_accepted"))
+    )
+
+
 def classify_material_input(
     material_input: Any,
     *,
@@ -264,6 +424,8 @@ def classify_material_input(
         for key in (
             "accept_ideal_plasticity",
             "ideal_plasticity_accepted",
+            "accept_isotropic_fibre_equivalent",
+            "isotropic_fibre_equivalent_accepted",
             "deck_reviewed",
             "hardening_deck_reviewed",
             "constitutive_intent",
@@ -286,14 +448,48 @@ def classify_material_input(
             required_data=(f"{other}_curve_or_coefficients",),
             metadata={"requested_model": other},
         )
-    if other == "short glass" or "gf" in query.lower() or "短玻纤" in query:
+    if _is_fibre_reinforced_input(material_input, query) or other == "short glass":
+        if not _accepts_isotropic_fibre_equivalent(meta):
+            return MaterialDisposition(
+                status="UNSUPPORTED",
+                reason=(
+                    "Short-glass or reinforced polymer input cannot be collapsed to isotropic J2. "
+                    "Provide orientation, fiber fraction, and the anisotropic or composite card."
+                ),
+                required_data=("fiber_orientation", "fiber_fraction", "anisotropic_or_composite_card"),
+            )
+        # An explicit acceptance is an assumption the user owns, not a finding
+        # of this module. It permits a stiffness and below-yield stress screen
+        # and nothing more: the datasheet modulus comes from a tensile specimen
+        # with strongly aligned fibres, so an isotropic model overestimates
+        # stiffness and no local stress or delamination claim survives it.
+        resolved_equivalent = resolve_material_to_definition(
+            material_input, unit_system=unit_system, fail_closed=False
+        )
+        if resolved_equivalent is None or resolved_equivalent.elastic is None:
+            return MaterialDisposition(
+                status="BLOCKED",
+                reason=(
+                    "An isotropic-equivalent reading of a glass-fibre grade was accepted, "
+                    "but no usable E and nu were supplied. Orientation data is the alternative."
+                ),
+                required_data=("youngs_modulus_and_poisson", "fiber_orientation"),
+                metadata={"isotropic_fibre_equivalent": True},
+            )
         return MaterialDisposition(
-            status="UNSUPPORTED",
+            status="LINEAR_ELASTIC",
+            material=resolved_equivalent,
             reason=(
-                "Short-glass or reinforced polymer input cannot be collapsed to isotropic J2. "
-                "Provide orientation, fiber fraction, and the anisotropic or composite card."
+                "Linear-elastic use is allowed under an explicit isotropic-equivalent "
+                "assumption for a glass-fibre grade. Stiffness tends to be overestimated and "
+                "local fibre-sensitive stresses are not resolved."
             ),
-            required_data=("fiber_orientation", "fiber_fraction", "anisotropic_or_composite_card"),
+            allowed_claims=("linear_elastic_below_yield", "yield_check_threshold"),
+            metadata={
+                "isotropic_fibre_equivalent": True,
+                "fibre_orientation_not_modelled": True,
+                "evidence_level": "user_declared_isotropic_equivalent",
+            },
         )
 
     user_supplied_elastic = (

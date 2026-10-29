@@ -36,10 +36,10 @@ DATA;
 #25 = CARTESIAN_POINT('P5',(100.0, 0.0, 20.0));
 #26 = CARTESIAN_POINT('P6',(100.0, 50.0, 20.0));
 #27 = CARTESIAN_POINT('P7',(0.0, 50.0, 20.0));
-#30 = LINE('L1', #20, #21);
-#31 = LINE('L2', #21, #22);
-#32 = EDGE_CURVE('E1', #20, #21, #30, .T.);
-#33 = EDGE_CURVE('E2', #21, #22, #31, .T.);
+#30 = LINE('L1', #20, #24);
+#31 = LINE('L2', #22, #26);
+#32 = EDGE_CURVE('E1', #20, #24, #30, .T.);
+#33 = EDGE_CURVE('E2', #22, #26, #31, .T.);
 #40 = ADVANCED_FACE('F1', (#32), #20, .T.);
 #41 = ADVANCED_FACE('F2', (#33), #21, .T.);
 #50 = CLOSED_SHELL('SHELL_1', (#40, #41));
@@ -180,6 +180,33 @@ def test_multi_solid_assembly_is_not_silently_reduced_to_one_part():
         assert cap.status != CapabilityStatus.SUPPORTED
         assert "No analysis requirement" in cap.reason
         assert "S_60" not in cap.reason
+
+
+def test_unreferenced_points_do_not_inflate_the_model_envelope():
+    """A stray point the topology never reaches must not set the model scale.
+
+    The assembly contact gap tolerance is relative to the bounding box span. A
+    single unattached CARTESIAN_POINT millions of units away would otherwise
+    make every face pair look coincident.
+    """
+    polluted = MINIMAL_STEP_SOLID.replace(
+        "ENDSEC;",
+        "#90 = CARTESIAN_POINT('STRAY',(2400000.0, 4900000.0, 2500000.0));\nENDSEC;",
+    )
+    with tempfile.TemporaryDirectory() as tmpdir:
+        step_path = os.path.join(tmpdir, "stray.stp")
+        with open(step_path, "w", encoding="utf-8") as f:
+            f.write(polluted)
+
+        model = ingest_cad_file(step_path)
+
+    # The stray point is still ingested as a vertex; it just must not be the
+    # envelope that every relative tolerance is measured against.
+    assert model.vertex_count == 9
+    assert model.bounding_box is not None
+    assert model.bounding_box.max_x == 100.0
+    assert model.bounding_box.max_y == 50.0
+    assert model.bounding_box.max_z == 20.0
 
 
 def test_iges_ingestion():

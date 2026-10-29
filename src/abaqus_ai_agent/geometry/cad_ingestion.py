@@ -12,7 +12,7 @@ import io
 import os
 import re
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 from ..capability_boundary import CapabilityBoundary, CapabilityStatus
 from .model import (
@@ -157,6 +157,54 @@ def _parse_step_args(s: str) -> List[Any]:
             except ValueError:
                 result.append(tok)
     return result
+
+
+def _bare_id(entity_id: Any) -> str:
+    """Strip the shell/face/edge/vertex prefix the model carries but the index does not."""
+    text = str(entity_id or "")
+    for prefix in ("SH_", "F_", "E_", "V_"):
+        if text.startswith(prefix):
+            return text[len(prefix):]
+    return text
+
+
+def _topology_reachable_points(
+    solids: Sequence[CadSolid],
+    shells_by_id: Dict[str, CadShell],
+    faces_by_id: Dict[str, CadFace],
+    edges_by_id: Dict[str, CadEdge],
+    points_by_id: Dict[str, Tuple[float, float, float]],
+) -> List[Tuple[float, float, float]]:
+    """Collect the points a retained solid's topology actually references.
+
+    Only points reached through solid -> shell -> face -> edge are the part's
+    envelope. Everything else in the file is unattached, and letting it define
+    the bounding box changes the scale every relative tolerance is measured
+    against.
+    """
+    seen_points: List[Tuple[float, float, float]] = []
+    seen_ids = set()
+    for solid in solids:
+        for shell_id in solid.shell_ids:
+            shell = shells_by_id.get(_bare_id(shell_id))
+            if shell is None:
+                continue
+            for face_id in shell.face_ids:
+                face = faces_by_id.get(_bare_id(face_id))
+                if face is None:
+                    continue
+                for edge_id in face.edge_ids:
+                    edge = edges_by_id.get(_bare_id(edge_id))
+                    if edge is None:
+                        continue
+                    for vertex_id in (edge.start_vertex_id, edge.end_vertex_id):
+                        if not vertex_id or vertex_id in seen_ids:
+                            continue
+                        seen_ids.add(vertex_id)
+                        point = points_by_id.get(_bare_id(vertex_id))
+                        if point is not None:
+                            seen_points.append(point)
+    return seen_points
 
 
 def _read_cad_text(file_path: str, fmt: str) -> str:
@@ -528,15 +576,25 @@ def _parse_step_file(file_path: str, provenance: CadProvenance) -> GeometryModel
                 source_name=source_name,
             ))
 
-    # Compute bounding box from vertices
+    # Compute bounding box from vertices that the topology actually uses.
+    # A STEP file can carry CARTESIAN_POINTs that no retained solid reaches
+    # (converter residue, construction geometry, or a stray solid far outside
+    # the part). Folding those into the envelope inflates it by orders of
+    # magnitude, and the assembly contact gap tolerance is relative to that
+    # span (_GAP_REL * span), so every face pair then looks coincident.
+    bbox_points = _topology_reachable_points(
+        solids, shells_by_id, faces_by_id, edges_by_id, points_by_id
+    )
+    if not bbox_points:
+        bbox_points = points_coords
     bbox = None
-    if points_coords:
-        min_x = min(p[0] for p in points_coords)
-        max_x = max(p[0] for p in points_coords)
-        min_y = min(p[1] for p in points_coords)
-        max_y = max(p[1] for p in points_coords)
-        min_z = min(p[2] for p in points_coords)
-        max_z = max(p[2] for p in points_coords)
+    if bbox_points:
+        min_x = min(p[0] for p in bbox_points)
+        max_x = max(p[0] for p in bbox_points)
+        min_y = min(p[1] for p in bbox_points)
+        max_y = max(p[1] for p in bbox_points)
+        min_z = min(p[2] for p in bbox_points)
+        max_z = max(p[2] for p in bbox_points)
         if min_x <= max_x and min_y <= max_y and min_z <= max_z:
             bbox = CadBoundingBox(
                 min_x=min_x,

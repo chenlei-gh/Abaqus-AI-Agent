@@ -25,6 +25,15 @@ INDEPENDENT_CONTACT_APPLICATIONS = (
     "rigid_indenter_contact",
     "displacement_controlled_contact",
 )
+# Punch motion is applied at a reference point along one global axis. A skewed
+# axis is not refused here; it is refused where the punch is built, because
+# nothing in this contract carries a direction vector.
+_UNIT_DIRECTIONS = (
+    "X", "Y", "Z", "-X", "-Y", "-Z",
+    "+X", "+Y", "+Z",
+    "CF1", "CF2", "CF3",
+    "-CF1", "-CF2", "-CF3",
+)
 
 # Words that make a physical loading claim. They do not by themselves prove
 # that a rigid indenter, a bonded patch, or a verified coating exists.
@@ -232,6 +241,24 @@ class ContactLoadingSpec:
     dimension_unit: str = ""
     direction: str = ""
     control: str = ""
+    # Placement and actuation. Evidence (source, region, friction provenance) is
+    # validated by ``authorizes_formal_model``; these fields describe *where* and
+    # *how much*, and are validated where the punch is actually built. Both stay
+    # unset until supplied: no standoff, size, or stroke is ever inferred.
+    contact_point: Optional[Tuple[float, float, float]] = None
+    standoff: Optional[float] = None
+    magnitude: Optional[float] = None
+    magnitude_unit: str = ""
+    mesh_size: Optional[float] = None
+    # Analytic-profile punches (a revolved cylindrical flat-bottom) are the only
+    # rigid shapes CAE can build without any mesh at all. Their profile is
+    # smooth except at the rim, so the rim radius has to be declared when it
+    # exists; it is never invented, because it changes the contact area.
+    indenter_edge_radius: Optional[float] = None
+    # Which assembly instance owns ``target_region``. A face id alone does not
+    # say, and picking an instance from list order would put the punch on the
+    # wrong part silently.
+    target_instance: str = ""
     friction_coefficient: Optional[float] = None
     friction_source: str = ""
     regulation_mapping: str = ""
@@ -249,8 +276,28 @@ class ContactLoadingSpec:
         object.__setattr__(self, "name", _clean(self.name) or "contact_loading")
         object.__setattr__(self, "source", _clean(self.source))
         object.__setattr__(self, "target_region", _clean(self.target_region))
+        object.__setattr__(self, "target_instance", _clean(self.target_instance))
         object.__setattr__(self, "indenter_width", _positive("indenter_width", self.indenter_width))
         object.__setattr__(self, "indenter_length", _positive("indenter_length", self.indenter_length))
+        object.__setattr__(self, "standoff", _positive("standoff", self.standoff))
+        object.__setattr__(self, "magnitude", _positive("magnitude", self.magnitude))
+        object.__setattr__(self, "mesh_size", _positive("mesh_size", self.mesh_size))
+        object.__setattr__(
+            self, "indenter_edge_radius", _positive("indenter_edge_radius", self.indenter_edge_radius)
+        )
+        point = self.contact_point
+        if point is not None:
+            try:
+                coords = tuple(float(value) for value in point)
+            except (TypeError, ValueError):
+                raise ConditionContractError(
+                    "contact_point must be three finite numbers, got %r" % (point,)
+                ) from None
+            if len(coords) != 3:
+                raise ConditionContractError(
+                    "contact_point must have three components, got %d" % len(coords)
+                )
+            object.__setattr__(self, "contact_point", coords)
         if self.friction_coefficient is not None and float(self.friction_coefficient) < 0:
             raise ConditionContractError("friction_coefficient must be non-negative")
         if status in AUTHORIZING_STATUSES and not self.source:
@@ -302,6 +349,33 @@ class ContactLoadingSpec:
             gaps.append("contact_loading_regulation_unverified")
         return tuple(gaps)
 
+    def placement_gaps(self) -> Tuple[str, ...]:
+        """Inputs needed to actually build the punch, separate from evidence.
+
+        Evidence asks "is this claim traceable?". Placement asks "where is the
+        punch and how is it driven?". A spec can be fully traceable and still be
+        unbuildable, so the compiler checks both and neither fills a default.
+        """
+        gaps = []
+        if self.contact_point is None:
+            gaps.append("contact_loading_contact_point_missing")
+        if self.standoff is None:
+            gaps.append("contact_loading_standoff_missing")
+        if not str(self.magnitude_unit).strip():
+            gaps.append("contact_loading_magnitude_unit_missing")
+        control = str(self.control or "").strip().lower()
+        if control in ("force", "load"):
+            if self.magnitude is None:
+                gaps.append("contact_loading_force_magnitude_missing")
+        elif control in ("displacement", "displacement_controlled", "stroke"):
+            if self.magnitude is None:
+                gaps.append("contact_loading_stroke_missing")
+        else:
+            gaps.append("contact_loading_control_unknown")
+        if str(self.direction or "").strip().upper() not in _UNIT_DIRECTIONS:
+            gaps.append("contact_loading_direction_not_axis_aligned")
+        return tuple(gaps)
+
     def to_dict(self) -> Dict[str, Any]:
         return {
             "name": self.name,
@@ -316,6 +390,13 @@ class ContactLoadingSpec:
             "dimension_unit": self.dimension_unit,
             "direction": self.direction,
             "control": self.control,
+            "contact_point": list(self.contact_point) if self.contact_point is not None else None,
+            "standoff": self.standoff,
+            "magnitude": self.magnitude,
+            "magnitude_unit": self.magnitude_unit,
+            "mesh_size": self.mesh_size,
+            "indenter_edge_radius": self.indenter_edge_radius,
+            "target_instance": self.target_instance,
             "friction_coefficient": self.friction_coefficient,
             "friction_source": self.friction_source,
             "regulation_mapping": self.regulation_mapping,
@@ -374,6 +455,13 @@ def contact_loading_from_mapping(raw: Any) -> Optional[ContactLoadingSpec]:
         dimension_unit=str(raw.get("dimension_unit") or ""),
         direction=str(raw.get("direction") or ""),
         control=str(raw.get("control") or ""),
+        contact_point=raw.get("contact_point"),
+        standoff=raw.get("standoff"),
+        magnitude=raw.get("magnitude"),
+        magnitude_unit=str(raw.get("magnitude_unit") or ""),
+        mesh_size=raw.get("mesh_size"),
+        indenter_edge_radius=raw.get("indenter_edge_radius"),
+        target_instance=str(raw.get("target_instance") or ""),
         friction_coefficient=raw.get("friction_coefficient"),
         friction_source=str(raw.get("friction_source") or ""),
         regulation_mapping=str(raw.get("regulation_mapping") or ""),
