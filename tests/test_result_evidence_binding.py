@@ -301,6 +301,53 @@ def test_no_mesh_quality_action_returns_no_verdict():
     assert agent._mesh_quality_from_plan({}, plan=None) is None
 
 
+def test_review_page_keeps_fixture_and_every_part_metric():
+    from abaqus_ai_agent.agent import (
+        _boundary_evidence_for_figures,
+        _report_bcs,
+        _review_bc_row,
+        _review_mesh_rows,
+    )
+
+    class _Intent:
+        loads = ()
+        boundary_conditions = ()
+
+    class _Plan:
+        intent_summary = {
+            "geometry": {
+                "assembly_scope": {
+                    "fixture_record": {
+                        "name": "InstallationFixed",
+                        "bc_type": "ENCASTRE",
+                        "region": "InstallationFixed",
+                        "set_name": "InstallationFixed",
+                        "instance_name": "S_42873",
+                        "part_id": "BLADE",
+                        "target_scope": "part",
+                    },
+                },
+            },
+        }
+
+    boundary = _boundary_evidence_for_figures(_Plan(), _Intent())
+    reported = _report_bcs(boundary)
+    assert reported[0]["bc_type"] == "ENCASTRE"
+    assert "S_42873" in _review_bc_row(reported[0])
+    result = MeshQualityResult(
+        status="fail",
+        part_name="S_42873,S_80299",
+        metrics={"max_aspect_ratio": 91.5},
+        part_details=(
+            {"part_name": "S_42873", "status": "pass", "metrics": {"max_aspect_ratio": 4.0}, "violations": [], "failed_element_count": 0},
+            {"part_name": "S_80299", "status": "fail", "metrics": {"max_aspect_ratio": 91.5}, "violations": ["max_aspect_ratio"], "failed_element_count": 3},
+        ),
+    )
+    rows = _review_mesh_rows(result)
+    assert "4.0" in rows["mesh_S_42873"]
+    assert "91.5" in rows["mesh_S_80299"]
+
+
 def test_worst_part_verdict_wins_the_aggregate():
     from abaqus_ai_agent.agent import _combine_mesh_quality_results
 
@@ -310,6 +357,11 @@ def test_worst_part_verdict_wins_the_aggregate():
     assert combined.status == "fail"
     assert "Slider:inverted" in combined.violations
     assert "Base" in combined.part_name and "Slider" in combined.part_name
+    by_part = {item["part_name"]: item for item in combined.part_details}
+    assert by_part["Base"]["status"] == "pass"
+    assert by_part["Slider"]["violations"] == ["inverted"]
+    restored = MeshQualityResult.from_mapping(combined.to_dict())
+    assert {item["part_name"] for item in restored.part_details} == {"Base", "Slider"}
 
 
 def test_structured_result_payload_never_degrades_to_repr():
@@ -378,7 +430,7 @@ def test_result_items_sidecar_writes_to_the_bound_results_directory(tmp_path):
     assert "getcwd" not in script
 
     namespace = {}
-    payload = {"status": "pass", "kind": "mesh_quality", "job_name": "Job-1"}
+    payload = {"status": "pass", "kind": "mesh_quality", "job_name": "Job-1", "part": "S_42873"}
     exec(
         "result = %r\n" % (payload,) + script.split("print(result)")[1].lstrip(),
         namespace,
@@ -386,6 +438,15 @@ def test_result_items_sidecar_writes_to_the_bound_results_directory(tmp_path):
     written = bound / "Job-1.result_items.json"
     assert written.is_file()
     assert json.loads(written.read_text(encoding="utf-8"))["job_name"] == "Job-1"
+
+    second = {"status": "fail", "kind": "mesh_quality", "job_name": "Job-1", "part": "S_80299"}
+    exec(
+        "result = %r\n" % (second,) + script.split("print(result)")[1].lstrip(),
+        {},
+    )
+    items = json.loads(written.read_text(encoding="utf-8"))["items"]
+    assert [item.get("part") for item in items] == ["S_42873", "S_80299"]
+    assert items[1]["status"] == "fail"
 
 
 def test_unbound_sidecar_still_defaults_to_the_session_directory(tmp_path, monkeypatch):
@@ -449,6 +510,20 @@ def test_result_items_sidecar_is_atomic_and_bound(tmp_path, monkeypatch):
     }), encoding="utf-8")
     loaded = _load_result_items_sidecar(tmp_path, "Job-1")
     assert loaded["status"] == "pass"
+
+    target.write_text(json.dumps({
+        "schema": "result_items_v1",
+        "job_name": "Job-1",
+        "items": [
+            {"kind": "mesh_quality", "status": "pass", "job_name": "Job-1", "part": "S_42873"},
+            {"kind": "mesh_quality", "status": "fail", "job_name": "Job-1", "part": "S_80299", "metrics": {"max_aspect_ratio": 91.5}},
+        ],
+    }), encoding="utf-8")
+    from abaqus_ai_agent.agent import _load_result_item_sidecars
+
+    loaded_all = _load_result_item_sidecars(tmp_path, "Job-1")
+    assert [item["part"] for item in loaded_all] == ["S_42873", "S_80299"]
+    assert loaded_all[1]["metrics"]["max_aspect_ratio"] == 91.5
 
     foreign = tmp_path / "Other.result_items.json"
     foreign.write_text(json.dumps({"job_name": "Job-1", "items": [{"status": "pass"}]}), encoding="utf-8")

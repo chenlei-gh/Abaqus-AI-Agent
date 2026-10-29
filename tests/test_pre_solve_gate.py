@@ -324,6 +324,61 @@ def test_solve_requirement_phase_a_returns_review_report(tmp_path, monkeypatch):
     assert opened_urls[0] == report.resolve().as_uri()
     assert "FixedRoot" in html_text
     assert "TipLoad" in html_text
+
+
+def test_pre_solve_review_is_bilingual_and_does_not_invent_results(tmp_path):
+    """The review page is for a person, and it must not look like a solved report."""
+    from abaqus_ai_agent.contracts.approval import propose_candidate
+    from abaqus_ai_agent.reporting.review import render_pre_solve_review
+
+    shot = tmp_path / "setup_shot.png"
+    shot.write_bytes(b"not-a-real-png")
+    candidate = propose_candidate(
+        candidate_id="review-human",
+        run_id="run-review-human",
+        inp_sha256="b" * 64,
+        solver_config={"solver": "STANDARD"},
+        generator_version="test",
+    )
+    report = render_pre_solve_review(
+        tmp_path,
+        candidate,
+        sections={
+            "Model & mesh / 模型与网格": {
+                "model_name": "BladeModel",
+                "mesh_quality_status": "fail",
+                "mesh_S_80299": "status=fail metrics={'aspect': 91.5} failed=3",
+                "evidence_shot": "setup_shot.png",
+                "missing_shot": "missing_contour.png",
+            },
+            "Boundary conditions / 边界条件": {
+                "bc_0": "InstallationFixed ENCASTRE on S_42873 (part)",
+            },
+            "Loads / 载荷": {
+                "load_0": "TipLoad concentrated_force on TipFace",
+            },
+        },
+        notes=("Mesh quality is recorded, not a solved stress result.",),
+    )
+
+    text = report.read_text(encoding="utf-8")
+    assert "PRE-SOLVE REVIEW" in text
+    assert candidate.execution_manifest_hash in text
+    assert "Model &amp; mesh" in text
+    assert "求解前评审 / Pre-Solve Review" in text
+    assert "InstallationFixed" in text
+    assert "S_42873" in text
+    assert "status=fail" in text
+    assert "未求解，不在本页" in text
+    assert "示意图" in text
+    assert "不是求解结果，不是应力云图" in text
+    image_tag = text[text.find("<img "):text.find(">", text.find("<img ")) + 1]
+    assert text.count("<img ") == 1
+    assert "setup_shot.png" in image_tag
+    assert "missing_contour.png" not in image_tag
+    assert "von Mises" not in text
+    assert ".odb" not in text.lower()
+
 # --- duplicate-submission guard (crash window between submit and ledger write) ---
 
 

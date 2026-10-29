@@ -13,6 +13,15 @@ def _step_amplitude(value, default):
         raise ValueError("step amplitude must be RAMP or STEP")
     return value
 
+def _bounded_tet_virtual_topology(code):
+    # Reuse the existing text pre-check. It is not a new authorisation rule:
+    # ignoreEntity, repair, hand-picked entities and the sliver/angle/stair/blend
+    # merges stay denied exactly as they are denied before script generation.
+    from ..contracts.geometry_cleanup import _is_bounded_tet_virtual_topology
+
+    return _is_bounded_tet_virtual_topology(code, "createVirtualTopology")
+
+
 def action_to_script(action, cleanup_policies=None, include_guard=True):
     # Geometry cleanup policy is enforced here, at the single point every action
     # passes through before it becomes Abaqus script. Callers that never pass a
@@ -34,6 +43,17 @@ def action_to_script(action, cleanup_policies=None, include_guard=True):
         code = p["code"]
         if not include_guard:
             return code
+        # The compiler already screens this exact script and emits one guard for
+        # the composed deck. The execution path renders each action alone, so
+        # without this the same bounded tet call is installed under the default
+        # deny policy and blocks itself. This does not authorise any other
+        # virtual-topology call, and repair stays denied.
+        if cleanup_policies is None and _bounded_tet_virtual_topology(code):
+            from ..contracts.geometry_cleanup import GeometryCleanupPolicy
+
+            cleanup_policies = GeometryCleanupPolicy(
+                part="*", allow_virtual_topology=True, allow_repair=False,
+            )
         return render_geometry_guard(cleanup_policies, code) + "\n" + code
     if k == "material_elastic":
         return "model=mdb.models[%s]; mat=model.materials[%s] if %s in model.materials else model.Material(%s); mat.Elastic(table=((%r,%r),))" % (_q(m), _q(p["name"]), _q(p["name"]), _q(p["name"]), p["youngs_modulus"], p["poisson"])
@@ -729,7 +749,21 @@ def _result_item_sidecar(job_name, payload_expr, result_dir=None):
         "try:\n"
         "    _fd, _tmp = _tempfile.mkstemp(prefix='.result_items.', dir=_os.path.dirname(_target) or '.')\n"
         "    with _os.fdopen(_fd, 'w', encoding='utf-8') as _fh:\n"
-        "        _json.dump({'schema':'result_items_v1','job_name':%s,'items':[_payload]}, _fh, default=str)\n"
+        "        _existing = {'schema':'result_items_v1','job_name':%s,'items':[]}\n"
+        "        if _os.path.isfile(_target):\n"
+        "            try:\n"
+        "                with open(_target, 'r', encoding='utf-8') as _prior:\n"
+        "                    _loaded = _json.load(_prior)\n"
+        "                if isinstance(_loaded, dict) and str(_loaded.get('job_name') or '') == str(%s):\n"
+        "                    _existing = _loaded\n"
+        "            except Exception:\n"
+        "                pass\n"
+        "        _items = [item for item in (_existing.get('items') or ()) if isinstance(item, dict)]\n"
+        "        _part = _payload.get('part') or _payload.get('part_name')\n"
+        "        if _part:\n"
+        "            _items = [item for item in _items if (item.get('part') or item.get('part_name')) != _part]\n"
+        "        _items.append(_payload)\n"
+        "        _json.dump({'schema':'result_items_v1','job_name':%s,'items':_items}, _fh, default=str)\n"
         "        _fh.flush()\n"
         "        _os.fsync(_fh.fileno())\n"
         "    _os.replace(_tmp, _target)\n"
@@ -737,7 +771,11 @@ def _result_item_sidecar(job_name, payload_expr, result_dir=None):
         "    try: _os.remove(_tmp)\n"
         "    except Exception: pass\n"
         "    raise\n"
-    ) % (payload_expr, target_expr, repr(str(job_name or "job")), repr(str(job_name or "job")))
+    ) % (
+        payload_expr, target_expr, repr(str(job_name or "job")),
+        repr(str(job_name or "job")), repr(str(job_name or "job")),
+        repr(str(job_name or "job")),
+    )
 
 
 def _mesh_quality_script(model, p):

@@ -144,6 +144,51 @@ def test_raw_python_virtual_topology_is_blocked_under_the_default_policy(snippet
         action_to_script(python_action("Model-1", snippet))
 
 
+def test_execution_path_keeps_bounded_tet_virtual_topology_authorised():
+    """The runner renders one action without the compiler policy.
+
+    A bounded tet script must not be reinstalled under the default deny guard.
+    The same exception does not authorise repair, ignoreEntity, or an unmarked
+    createVirtualTopology call.
+    """
+    from abaqus_ai_agent.contracts.mesh_quality import tet_mesh_script
+
+    script = action_to_script(python_action("Model-1", tet_mesh_script("p", 2.5)))
+    assert "{'*': {'repair': False, 'virtual_topology': True}}" in script
+    assert "{'*': {'repair': False, 'virtual_topology': False}}" not in script
+
+    unmarked = (
+        "mdb.models['M'].parts['P'].createVirtualTopology("
+        "mergeShortEdges=True, shortEdgeThreshold=0.5)"
+    )
+    with pytest.raises(GeometryCleanupPolicyViolation):
+        action_to_script(python_action("Model-1", unmarked))
+    copied_marker = (
+        "_abqai_combined_vt = mdb.models['M'].parts['P'].createVirtualTopology("
+        "regions=r, mergeShortEdges=True, shortEdgeThreshold=0.5, "
+        "mergeSmallFaces=True, smallFaceAreaThreshold=0.25, "
+        "mergeSliverFaces=True)"
+    )
+    with pytest.raises(GeometryCleanupPolicyViolation):
+        action_to_script(python_action("Model-1", copied_marker))
+    repair = (
+        "_abqai_combined_vt = mdb.models['M'].parts['P'].createVirtualTopology("
+        "regions=r, mergeShortEdges=True, shortEdgeThreshold=0.5, "
+        "mergeSmallFaces=True, smallFaceAreaThreshold=0.25)\n"
+        "mdb.models['M'].parts['P'].repair()"
+    )
+    with pytest.raises(GeometryCleanupPolicyViolation):
+        action_to_script(python_action("Model-1", repair))
+    ignored = (
+        "_abqai_combined_vt = mdb.models['M'].parts['P'].createVirtualTopology("
+        "regions=r, mergeShortEdges=True, shortEdgeThreshold=0.5, "
+        "mergeSmallFaces=True, smallFaceAreaThreshold=0.25)\n"
+        "mdb.models['M'].parts['P'].ignoreEntity(entities=e)"
+    )
+    with pytest.raises(GeometryCleanupPolicyViolation):
+        action_to_script(python_action("Model-1", ignored))
+
+
 def test_raw_python_repair_passes_only_under_an_explicit_allow_repair_policy():
     policy = GeometryCleanupPolicy(part=DEFAULT_PART, allow_repair=True)
     code = "mdb.models['M'].parts['P'].repair()"

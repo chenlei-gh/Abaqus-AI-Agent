@@ -80,12 +80,16 @@ def test_tet_script_combines_cleanup_and_quality_gates_every_round():
     assert script.index("boundaryPreview=ON") < script.index("p.generateMesh()")
     assert "tet_boundary_preview_rejected" in script
     assert script.count("p.generateMesh()") == 1
-    assert script.count("generateMesh(regions=") == 4
-    assert script.count("criterion=ANALYSIS_CHECKS") == 5
+    assert script.count("generateMesh(regions=") == 6
+    assert script.count("criterion=ANALYSIS_CHECKS") == 9
     assert script.count("_abqai_rounds.append") == 5
     assert script.count("if not _abqai_quality_ok:") == 5
     assert all(("round=%d" % number) in script for number in range(1, 6))
     assert "_abqai_local_attempt = 6" not in script
+    assert "deletePreviewMesh()" in script
+    assert "elemShape=TRI" in script
+    assert "sizeGrowth=MAXIMUM" not in script
+    assert "_abqai_recovery" not in script
     assert str(TET_SHAPE_FACTOR_FLOOR) in script
     assert script.count("{part}") == 0
 
@@ -96,17 +100,26 @@ def test_later_rounds_expand_and_stop_after_five():
     assert positions == sorted(positions)
     assert "getElements()" in script
     assert "tet_local_host_cell_unresolved" in script
-    assert script.count("deleteMesh(regions=_abqai_local_cells)") == 4
-    assert script.count("generateMesh(regions=_abqai_local_cells)") == 4
+    assert script.count("deleteMesh(regions=_abqai_local_cells)") == 3
+    assert script.count("generateMesh(regions=_abqai_local_cells, boundaryPreview=ON)") == 3
+    assert script.count("generateMesh(regions=_abqai_local_cells)\n") == 3
     assert "tet_local_remesh_unchanged" in script
     assert "getAdjacentCells()" in script
+    assert "getCells()" in script
     assert "failed_host_faces_finer" in script
     assert "seedEdgeByBias(biasMethod=DOUBLE, endEdges=_abqai_local_seed_edges" in script
-    assert "sizeGrowth=MAXIMUM" in script
+    assert "sizeGrowth=MAXIMUM" not in script
     assert "float(2 ** (5 - 1))" not in script
     assert "getEdgeSeeds(edge=_abqai_edge, attribute=EDGE_SEEDING_METHOD)" in script
     assert "tet_fifth_local_remesh_failed" in script
-    assert script.index("tet_fifth_local_remesh_failed") > positions[-1]
+    assert "tet_fifth_boundary_stop" in script
+    assert script.index("tet_fifth_boundary_stop") > positions[-1]
+    assert script.index("_abqai_local_attempt = 5") < script.index("tet_fifth_boundary_stop")
+    assert "_abqai_local_seed_floor = _abqai_local_base_seed * 0.05" in script
+    assert "* 0.5" not in script.replace("* 0.05", "")
+    assert "mergeSliverFaces=True" not in script
+    assert "mergeThinStairFaces=True" not in script
+    assert "mergeSmallAngleFaces=True" not in script
     assert "deleteMesh()" not in script
     assert "deleteMesh(regions=_abqai_local_cells)" in script
     assert "seedPart(size=2.5, deviationFactor=0.05" not in script

@@ -165,6 +165,7 @@ class MeshQualityResult:
     created_at: Optional[str] = None
     unsupported_checks: Tuple[str, ...] = field(default_factory=tuple)
     execution_error: Optional[str] = None
+    part_details: Tuple[Dict[str, Any], ...] = field(default_factory=tuple)
 
     def __post_init__(self):
         if self.status not in MESH_QUALITY_STATUSES:
@@ -222,6 +223,7 @@ class MeshQualityResult:
             "created_at": self.created_at,
             "unsupported_checks": list(self.unsupported_checks),
             "execution_error": self.execution_error,
+            "part_details": [dict(item) for item in self.part_details],
         }
 
     @classmethod
@@ -264,6 +266,10 @@ class MeshQualityResult:
             created_at=data.get("created_at"),
             unsupported_checks=tuple(str(u) for u in unsupported),
             execution_error=data.get("execution_error"),
+            part_details=tuple(
+                dict(item) for item in (data.get("part_details") or ())
+                if isinstance(item, dict)
+            ),
         )
 
 
@@ -407,13 +413,18 @@ TET_CORNER_ANGLE_TOLERANCE_DEG = 30.0
 # features are eligible. Faces used by a load, boundary, or interaction surface
 # are excluded. Later attempts stay on CAD-linked local incremental remeshing.
 # Rounds 2 and 3 change the failed-host edge size; round 3 may add adjacent
-# cells. Rounds 4 and 5 do not keep dividing that seed: round 4 biases nodes
-# toward the ends of the failed-host edges, and round 5 changes only the
-# interior size growth of the located cells. No attempt glues tetrahedra
-# together or deletes the whole part mesh merely to repair a local region.
+# cells. Round 2 is the only half-seed. That seed must stay within the measured
+# wall and at least 5 percent of the part seed. Round 4 biases nodes toward the
+# ends of the failed-host edges. Round 5 does not change seeds or size growth:
+# it only checks triangles already on the latest failed-host faces and stops.
+# Rounds 2-4 preview those faces with boundaryPreview before interior meshing.
+# No attempt glues tetrahedra together, coarsens the seed, or deletes the
+# whole part mesh merely to repair a local region.
 # Sources: Virtual Topology, incremental meshing, biased edge seeding,
-# setMeshControls sizeGrowth, and Part.deleteMesh.
+# Part.deleteMesh, Part.deletePreviewMesh, Face.getCells, and Part.generateMesh
+# boundaryPreview.
 TET_SMALL_FACE_SEED_FRACTION = TET_SHORT_EDGE_SEED_FRACTION ** 2
+TET_LOCAL_SEED_FLOOR_FRACTION = 0.05
 
 
 def tet_partition_controls() -> Dict[str, Any]:
@@ -442,8 +453,10 @@ def tet_partition_controls() -> Dict[str, Any]:
         "max_mesh_rounds": 5,
         "local_seed_divisors": (2, 4),
         "round_4_scheme": "DOUBLE_BIAS_EDGE_ENDS",
-        "round_5_scheme": "SIZE_GROWTH_MAXIMUM",
-        "later_local_remesh": "ROUNDS_2_3_SEED_ROUND_4_BIAS_ROUND_5_GROWTH",
+        "round_5_scheme": "BOUNDARY_STOP_GATE",
+        "later_local_remesh": "ROUNDS_2_3_SEED_ROUND_4_BIAS_ROUND_5_STOP",
+        "boundary_gate": "TRI_PREVIEW_BEFORE_INTERIOR",
+        "local_seed_floor_fraction": TET_LOCAL_SEED_FLOOR_FRACTION,
         "quality_check_every_round": ("SHAPE_FACTOR", "ANALYSIS_CHECKS"),
         "repair": False,
     }
@@ -472,8 +485,10 @@ def _require_documented_tet_controls(controls):
         "max_mesh_rounds": 5,
         "local_seed_divisors": (2, 4),
         "round_4_scheme": "DOUBLE_BIAS_EDGE_ENDS",
-        "round_5_scheme": "SIZE_GROWTH_MAXIMUM",
-        "later_local_remesh": "ROUNDS_2_3_SEED_ROUND_4_BIAS_ROUND_5_GROWTH",
+        "round_5_scheme": "BOUNDARY_STOP_GATE",
+        "later_local_remesh": "ROUNDS_2_3_SEED_ROUND_4_BIAS_ROUND_5_STOP",
+        "boundary_gate": "TRI_PREVIEW_BEFORE_INTERIOR",
+        "local_seed_floor_fraction": TET_LOCAL_SEED_FLOOR_FRACTION,
         "quality_check_every_round": ("SHAPE_FACTOR", "ANALYSIS_CHECKS"),
         "repair": False,
     }
@@ -500,7 +515,8 @@ def assert_emitted_tet_script(script, controls):
         "technique=%s" % controls["technique"],
         "sizeGrowth=%s" % controls["size_growth"],
         "seedEdgeByBias(biasMethod=DOUBLE",
-        "sizeGrowth=MAXIMUM",
+        "elemShape=TRI",
+        "getCells()",
         "mergeShortEdges=%s" % controls["ignore_short_edges"],
         "mergeSmallFaces=%s" % controls["merge_small_faces"],
         "cornerAngleTolerance=%s" % controls["corner_angle_tolerance_deg"],
@@ -512,12 +528,24 @@ def assert_emitted_tet_script(script, controls):
     )
     missing = [item for item in required if item not in script]
     rounds = int(controls["max_mesh_rounds"])
+    # Five interior quality checks, plus one triangle gate on rounds 2-5.
+    boundary_gates = 4
     if script.count("_abqai_rounds.append") != rounds:
         missing.append("quality rounds != %d" % rounds)
-    if script.count("criterion=ANALYSIS_CHECKS") != rounds:
-        missing.append("analysis checks != %d" % rounds)
+    if script.count("criterion=ANALYSIS_CHECKS") != rounds + boundary_gates:
+        missing.append("analysis checks != %d" % (rounds + boundary_gates))
     if script.count("criterion=SHAPE_FACTOR") < rounds:
         missing.append("shape-factor checks < %d" % rounds)
+    if "deletePreviewMesh()" not in script:
+        missing.append("rejected boundary preview delete missing")
+    if "generateMesh(regions=_abqai_local_cells, boundaryPreview=ON)" not in script:
+        missing.append("local boundary preview missing")
+    if "_abqai_local_seed_floor = _abqai_local_base_seed * 0.05" not in script:
+        missing.append("round 2 five-percent seed floor missing")
+    if "sizeGrowth=MAXIMUM" in script or "_abqai_recovery" in script:
+        missing.append("retired round-5 growth or post-round recovery leaked")
+    if "* 0.5" in script.replace("* 0.05", ""):
+        missing.append("half-seed leaked outside round 2")
     for attempt, divisor in zip((2, 3), controls["local_seed_divisors"]):
         token = "float(2 ** (%d - 1))" % attempt
         if token not in script or int(divisor) != 2 ** (attempt - 1):
@@ -577,6 +605,7 @@ def _tet_round_quality_script(part_expr, attempt):
         "    local_seed_edge_count=globals().get('_abqai_local_seed_edge_count', None) if {attempt} > 1 else None,\n"
         "    local_seed_scope=globals().get('_abqai_local_seed_scope', None) if {attempt} > 1 else None,\n"
         "    local_scheme=globals().get('_abqai_local_scheme', None) if {attempt} > 1 else None,\n"
+        "    boundary_gate=globals().get('_abqai_boundary_gate') if {attempt} > 1 else None,\n"
         "    improved_vs_previous=_abqai_improved))\n"
     ).format(part=part_expr, attempt=attempt, floor=TET_SHAPE_FACTOR_FLOOR)
 
@@ -592,19 +621,28 @@ def tet_mesh_script(
     """At most five quality-gated tetrahedron mesh attempts.
 
     Round 1 combines short-edge, redundant-entity, and eligible small-face
-    virtual topology, then meshes the part. Rounds 2 and 3 seed the geometric
-    faces that contain the current failed elements at
-    ``part_size / 2**(round-1)``, delete only the located cells, and regenerate
-    that region. Round 3 adds untried face-adjacent cells before the finer
-    local seed. A single-cell part cannot expand, so round 3 only refines the
-    current failed-host faces.
+    virtual topology, previews the whole boundary as triangles, then meshes
+    the part. A rejected whole-part preview raises
+    ``tet_boundary_preview_rejected`` and does not enter local repair. The
+    triangle floor stays ``0.0001``, not the official triangle default ``0.01``.
 
-    Rounds 4 and 5 are different mechanisms, not smaller copies of round 3.
-    Round 4 keeps the current local size and moves nodes toward both ends of
-    the failed-host edges. Round 5 keeps those edge seeds and changes interior
-    growth to ``MAXIMUM`` on the located cells only. Every round checks both
-    SHAPE_FACTOR and ANALYSIS_CHECKS. A passing round stops. Round 5 is the
-    last attempt. Two unchanged or worse non-size rounds do not buy a sixth.
+    Rounds 2 and 3 seed the geometric faces that contain the current failed
+    elements at ``part_size / 2**(round-1)``. Round 2 is the only half-seed and
+    stops if that seed is below 5 percent of the part seed or coarser than a
+    measured wall. Round 3 adds untried face-adjacent cells before the finer
+    local seed. A single-cell part cannot expand, so round 3 only refines the
+    current failed-host faces. Round 4 keeps the current local size and moves
+    nodes toward both ends of the failed-host edges. Before interior meshing,
+    rounds 2-4 preview only those failed-host faces and check the triangles.
+    A rejected preview deletes the preview and does not generate the interior.
+
+    Round 5 is the stop gate. It relocates the latest failed elements and
+    checks triangles already on those faces. It does not delete the previous
+    mesh, change seeds, set size growth, or generate another mesh. A rejected
+    boundary stops immediately. An accepted boundary still leaves the previous
+    interior in place, so the following quality check stops if that interior
+    is still below the floor. There is no sixth round and no post-round
+    half-seed.
 
     Local remeshing never calls whole-part ``deleteMesh()`` and never changes
     the global part seed. It is unavailable for arbitrary 3D orphan meshes or
@@ -669,13 +707,14 @@ def tet_mesh_script(
             "if not _abqai_quality_ok:\n"
             "    if len(_abqai_rounds) > 1 and _abqai_rounds[-1]['mesh_fingerprint'] == _abqai_rounds[-2]['mesh_fingerprint']:\n"
             "        raise RuntimeError('tet_local_remesh_unchanged: attempt=%d region delete and regenerate did not change the mesh fingerprint' % (_abqai_local_attempt,))\n"
-            + indent(local_remesh_script(part_expr, attempt), 4)
+            + indent(local_remesh_script(part_expr, attempt, primary_wall_thickness=primary_wall_thickness), 4)
             + indent(_tet_round_quality_script(part_expr, attempt), 4)
             + (
                 "    if not _abqai_quality_ok:\n"
-                "        raise RuntimeError('tet_fifth_local_remesh_failed: shape=%d analysis=%d worst=%s rounds_4_5_improved=%s' % (\n"
+                "        raise RuntimeError('tet_fifth_local_remesh_failed: shape=%d analysis=%d worst=%s rounds_4_5_improved=%s boundary_gate=%s' % (\n"
                 "            len(_abqai_shape_failed), len(_abqai_analysis_failed), str(_abqai_shape_worst),\n"
-                "            str([_abqai_rounds[-2].get('improved_vs_previous'), _abqai_rounds[-1].get('improved_vs_previous')])))\n"
+                "            str([_abqai_rounds[-2].get('improved_vs_previous'), _abqai_rounds[-1].get('improved_vs_previous')]),\n"
+                "            str(globals().get('_abqai_boundary_gate'))))\n"
                 if attempt == 5 else ""
             )
         )
@@ -735,8 +774,10 @@ def tet_mesh_script(
         "{part}.setMeshControls(regions={part}.cells, elemShape={elem_shape}, "
         "technique={technique}, sizeGrowth={size_growth})\n"
         "{part}.generateMesh(boundaryPreview=ON)\n"
+        "if 'TRI' not in globals():\n"
+        "    from abaqusConstants import TRI\n"
         "_abqai_boundary = {part}.verifyMeshQuality(criterion=SHAPE_FACTOR, "
-        "threshold={floor}, elemShape=TET)\n"
+        "threshold={floor}, elemShape=TRI)\n"
         "_abqai_boundary_failed = len(_abqai_boundary.get('failedElements', ()))\n"
         "if _abqai_boundary_failed:\n"
         "    raise RuntimeError('tet_boundary_preview_rejected: ' + "

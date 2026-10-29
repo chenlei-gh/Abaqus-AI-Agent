@@ -117,11 +117,12 @@ def _record_payload(item):
 _EVIDENCE_PRODUCING_ACTIONS = frozenset({"mesh_quality"})
 
 
-def _load_result_items_sidecar(workdir, job_name):
-    """Read the atomic result-item fallback for one job.
+def _load_result_item_sidecars(workdir, job_name):
+    """Read every mesh-quality fallback item for one job.
 
     A missing file is not evidence. A file for another job, or a file that is
-    not valid JSON, is an execution error rather than a pass.
+    not valid JSON, is an execution error rather than a pass. One job can carry
+    one item per part; returning only the first item hides every later part.
     """
     if not workdir or not job_name:
         return None
@@ -136,11 +137,22 @@ def _load_result_items_sidecar(workdir, job_name):
         return {"status": "not_run", "execution_error": "result_items_unreadable", "job_name": job_name}
     if not isinstance(payload, dict) or str(payload.get("job_name") or "") != str(job_name):
         return {"status": "expired", "execution_error": "expired_result_items", "job_name": job_name}
-    items = payload.get("items") or ()
-    for item in items:
-        if isinstance(item, dict) and item.get("kind", "mesh_quality") == "mesh_quality":
-            return dict(item)
-    return None
+    items = [
+        dict(item) for item in (payload.get("items") or ())
+        if isinstance(item, dict) and item.get("kind", "mesh_quality") == "mesh_quality"
+    ]
+    return items or None
+
+
+def _load_result_items_sidecar(workdir, job_name):
+    """Read the first mesh-quality fallback item for one job.
+
+    Callers that need every part must use :func:`_load_result_item_sidecars`.
+    """
+    loaded = _load_result_item_sidecars(workdir, job_name)
+    if isinstance(loaded, dict) or not loaded:
+        return loaded
+    return loaded[0]
 
 
 def _decode_mesh_result_payload(raw):
@@ -225,7 +237,23 @@ def _combine_mesh_quality_results(results):
         part_name=",".join(parts) if parts else None,
         unsupported_checks=tuple(unsupported),
         execution_error=worst.execution_error,
+        part_details=tuple(_mesh_part_detail(item) for item in results),
     )
+
+
+def _mesh_part_detail(item):
+    """Keep one part's measured metrics after the gate collapses to the worst."""
+    return {
+        "part_name": item.part_name,
+        "status": item.status,
+        "metrics": dict(item.metrics),
+        "violations": list(item.violations),
+        "warnings": list(item.warnings),
+        "failed_element_count": item.failed_element_count,
+        "warning_element_count": item.warning_element_count,
+        "unsupported_checks": list(item.unsupported_checks),
+        "execution_error": item.execution_error,
+    }
 
 
 def _resolve_mesh_gate_status(mq_audit, acceptance):
@@ -476,6 +504,50 @@ def _report_loads(boundary):
     return tuple(rows)
 
 
+def _review_bc_row(item):
+    """One review-page boundary row. A fixture record must not render as empty."""
+    payload = item if isinstance(item, dict) else (_record_payload(item) or {})
+    if not payload:
+        return str(item)[:300]
+    name = payload.get("name") or payload.get("set_name") or "boundary"
+    kind = payload.get("bc_type") or payload.get("type") or "unspecified"
+    region = payload.get("region") or payload.get("instance_name") or payload.get("part_id") or "unspecified"
+    scope = payload.get("target_scope")
+    text = "%s %s on %s" % (name, kind, region)
+    if scope:
+        text += " (%s)" % scope
+    description = payload.get("description")
+    if description and description not in text:
+        text += ": %s" % description
+    return text[:300]
+
+
+def _review_mesh_rows(result):
+    """Show the gate verdict and every part metric the gate collapsed."""
+    if result is None:
+        return {"mesh_quality": None}
+    payload = result.to_dict() if hasattr(result, "to_dict") else {}
+    rows = {
+        "mesh_quality_status": payload.get("status"),
+        "mesh_quality_parts": payload.get("part_name"),
+        "mesh_quality_failed_elements": payload.get("failed_element_count"),
+    }
+    details = payload.get("part_details") or ()
+    if details:
+        for index, item in enumerate(details):
+            if not isinstance(item, dict):
+                continue
+            name = item.get("part_name") or ("part_%s" % index)
+            metrics = item.get("metrics") or {}
+            rows["mesh_%s" % name] = (
+                "status=%s metrics=%s failed=%s violations=%s"
+                % (item.get("status"), metrics, item.get("failed_element_count"), item.get("violations"))
+            )[:500]
+    else:
+        rows["mesh_quality"] = str(payload)[:400]
+    return rows
+
+
 def _report_bcs(boundary):
     """Installation fixture is the model restraint when no separate BC list exists."""
     rows = []
@@ -629,9 +701,13 @@ class AbaqusAIAgent:
 
         raw_results = list((results_by_type or {}).get("mesh_quality") or ())
         if not any(_decode_mesh_result_payload(item) for item in raw_results):
-            sidecar = _load_result_items_sidecar(workdir, getattr(plan, "job_name", None) if plan is not None else None)
-            if sidecar is not None:
+            sidecar = _load_result_item_sidecars(
+                workdir, getattr(plan, "job_name", None) if plan is not None else None,
+            )
+            if isinstance(sidecar, dict):
                 raw_results.append(sidecar)
+            elif sidecar:
+                raw_results.extend(sidecar)
         if not raw_results:
             return None
 
@@ -681,6 +757,7 @@ class AbaqusAIAgent:
             data["status"] = "expired"
             data["severity"] = "blocking"
             data["violations"] = list(combined.violations) + list(expired)
+            data["part_details"] = list(combined.part_details)
             return MeshQualityResult.from_mapping(data)
         return combined
 
@@ -1814,7 +1891,13 @@ class AbaqusAIAgent:
             if candidate is not None:
                 sel = (getattr(run, "metadata", {}) or {}).get("solver_selection")
                 loads = getattr(intent, "loads", ()) or ()
-                bcs = getattr(intent, "boundary_conditions", ()) or ()
+                boundary = _boundary_evidence_for_figures(plan, intent) or {}
+                reported_bcs = _report_bcs(boundary)
+                if not reported_bcs:
+                    reported_bcs = tuple(
+                        _record_payload(item) or {"value": str(item)[:300]}
+                        for item in (getattr(intent, "boundary_conditions", ()) or ())
+                    )
                 criteria_preview = list(criteria or ())
                 sections = {
                     "Model & mesh / 模型与网格": {
@@ -1822,7 +1905,7 @@ class AbaqusAIAgent:
                         "part_name": plan.part_name,
                         "unit_system": getattr(intent, "unit_system", None),
                         "mesh_requirements": str(getattr(intent, "mesh_requirements", "") or "") or None,
-                        "mesh_quality": str(mesh_quality_from_plan)[:400] if mesh_quality_from_plan else None,
+                        **_review_mesh_rows(mesh_quality_from_plan),
                     },
                     "Material / 材料": {
                         "material": str(effective_material)[:400] if effective_material else None,
@@ -1836,7 +1919,7 @@ class AbaqusAIAgent:
                         f"load_{i}": str(item)[:300] for i, item in enumerate(loads)
                     },
                     "Boundary conditions / 边界条件": {
-                        f"bc_{i}": str(item)[:300] for i, item in enumerate(bcs)
+                        f"bc_{i}": _review_bc_row(item) for i, item in enumerate(reported_bcs)
                     },
                     "Acceptance preview / 验收预览": {
                         f"criterion_{i}": str(item)[:300] for i, item in enumerate(criteria_preview)

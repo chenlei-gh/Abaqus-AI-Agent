@@ -2054,9 +2054,11 @@ def compile_intent_to_actions(
 
     # 11. Mesh Generation Actions
     # Tetrahedra use at most five quality-gated attempts: combined cleanup,
-    # then located local remeshes. Later rounds expand untried adjacent cells
-    # and refine only the current failed-host edge seed. A passing round stops
-    # immediately; there is no sixth round and no whole-part delete loop.
+    # then located local remeshes. Round 2 may halve the failed-host seed once,
+    # subject to wall thickness and the 5% floor. Later rounds expand untried
+    # adjacent cells or bias edge ends. Round 5 is only a boundary stop gate.
+    # A passing round stops immediately. There is no recovery after round 5,
+    # no sixth round, and no whole-part delete loop.
     from ..contracts.mesh_quality import tet_mesh_script
 
     def _append_part_mesh(target_expr, *, tetrahedral, edge_seed_lines=(), readback=""):

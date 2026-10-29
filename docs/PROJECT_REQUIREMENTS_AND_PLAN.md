@@ -291,8 +291,8 @@ flowchart TD
 * **已实现**：
   * 剖分前只读 `geometryValidity` 与 `checkGeometry(detailed=ON, level=20)`。官方写明 `checkGeometry` 失败时更新存储的有效性状态，不保证抛异常；所以必须在调用后再读 `geometryValidity`。无效几何回 CAD，不打开 `allow_repair`，不打开虚拟拓扑。
   * 第一轮把短边、冗余实体和未受保护小面合并为一次综合虚拟拓扑清理，再生成网格。小面面积阈值仍是 `(0.2*seed)^2`；已有载荷、边界或接触 surface/set 的面排除。禁止换种子循环，禁止 `algorithm=NON_DEFAULT`。
-  * 第一轮不合格时，第 2、3 轮用 `Face.getElements()` 定位当前失败单元的几何面，对这些面的边执行 `seedEdgeBySize(size=part_size/2**(round-1), constraint=FINER)`，再 `getEdgeSeeds` 回读。然后只 `deleteMesh(regions=cells)` 删已定位 Cell，再 `generateMesh(regions=cells)`。不调整件 `deleteMesh()`，不改全局 `seedPart`。任一轮合格立即停止。网格指纹与上一轮相同则判为未重划。
-  * 第 3 轮先把尚未纳入的面相邻 Cell 加入区域，再按当前失败宿主面细化局部边种子。尺寸除数只到 2、4，不再用 8、16 重复同一机制。单 Cell 无法扩大时只细化当前失败宿主面。第 4 轮不再缩小种子，改为 `seedEdgeByBias(biasMethod=DOUBLE, endEdges=failed host edges, minSize=上一轮局部尺寸, maxSize=零件种子, constraint=FINER)`，把节点移向边两端。第 5 轮不改边种子，只对已定位 Cell 设 `sizeGrowth=MAXIMUM` 后重划。找不到 CAD 宿主或宿主面、回读失败、方案与上一轮相同、指纹未变，或第 5 轮仍不合格时阻断。禁止第 6 轮。任意三维 orphan mesh 不承诺局部重划。
+  * 第一轮整件边界预览用 `elemShape=TRI`、门槛仍是 `0.0001`，不用三角形官方默认 `0.01`。预览失败抛 `tet_boundary_preview_rejected`，不转入局部修复。第一轮不合格时，第 2、3 轮用 `Face.getElements()` 定位当前失败单元的几何面；若失败单元只在面上、不在 `Cell.getElements()` 里，再用官方 `Face.getCells()` 回退到 CAD cell。对这些面的边执行 `seedEdgeBySize(size=part_size/2**(round-1), constraint=FINER)`，再 `getEdgeSeeds` 回读。半种子只在第 2 轮，且必须不大于已测主壁厚、不小于零件种子的 5%；任一不满足就在删网格前停止。然后只 `deleteMesh(regions=cells)` 删已定位 Cell，先 `generateMesh(regions=cells, boundaryPreview=ON)` 检查失败宿主面三角形，通过后才生成内部网格。预览失败调用 `deletePreviewMesh()`，不生成内部网格。不调整件 `deleteMesh()`，不改全局 `seedPart`。任一轮合格立即停止。网格指纹与上一轮相同则判为未重划。
+  * 第 3 轮先把尚未纳入的面相邻 Cell 加入区域，再按当前失败宿主面细化局部边种子。尺寸除数只到 2、4，不再用 8、16 重复同一机制。单 Cell 无法扩大时只细化当前失败宿主面。第 4 轮不再缩小种子，改为 `seedEdgeByBias(biasMethod=DOUBLE, endEdges=failed host edges, minSize=上一轮局部尺寸, maxSize=零件种子, constraint=FINER)`，把节点移向边两端。第 5 轮是停止门：按最新失败单元重定位宿主，只检查这些面上已有的边界三角形；不删第 4 轮网格，不改种子，不设 `sizeGrowth=MAXIMUM`，不再生成内部网格。边界不过、找不到三角形、边界过了但内部仍失败，都停止。禁止第 6 轮，禁止第 5 轮后再半种子。找不到 CAD 宿主或宿主面、回读失败、方案与上一轮相同、指纹未变，或第 5 轮仍不合格时阻断。任意三维 orphan mesh 不承诺局部重划。
   * 每一轮都同时检查 `ANALYSIS_CHECKS` 与 `SHAPE_FACTOR`，并记录 `_abqai_rounds` 的质量、局部区域和执行状态。六面体不发 `SHAPE_FACTOR`。`ANALYSIS_CHECKS` 不能单独当门禁。非四面体路径只播种一次，不得在 `seed_part` 之后再调一次 `seedPart`。
   * 失败、缺失质量结果、失败单元或形状因子低于 0.0001，在审批门之前返回 `SUBMISSION_BLOCKED`。
   * 同一 datacheck / 网格错误签名只允许一次重交。
@@ -389,6 +389,7 @@ flowchart TD
   * Body-5 在第 2 轮合格停止；Body-6 在第 1 轮合格停止。两者都没有触发第 4、5 轮。
   * 这只证明 Body-4 这一次的第 4 轮边端偏置把形状因子失败从 13 降到 0。它不证明第 5 轮 `sizeGrowth=MAXIMUM` 能减少失败单元，不是网格收敛，也不是求解验证。生产默认仍是 `NOT_SWITCHED`。
 * **当前状态**：**ROUND_4_MACHINE_PASS_ON_M1FA_BODY4_ROUND_5_NOT_TRIGGERED**（Body-4 第 4 轮边端偏置已把失败单元从 13 降到 0；第 5 轮仍未被这个 STEP 触发，未求解，未切换生产默认）。
+* **2026-10-29 第 5 轮改为边界停止门**：第 5 轮不再设 `sizeGrowth=MAXIMUM`，也不再在第 5 轮之后做一次局部半种子。半种子只留在第 2 轮现有的 `part_size/2`，并受主壁厚和零件种子 5% 下限约束。第 1 轮整件边界预览改为检查三角形，门槛仍是 `0.0001`。第 2、3、4 轮在生成内部网格前，只预览失败宿主面的三角形；不过就不生成内部网格。第 5 轮只重定位宿主并检查已有边界三角形，不删网格、不改种子、不再生成网格。`Face.getCells()` 只作为 `Cell.getElements()` 找不到边界三角形宿主时的回退，返回值是 cell id 元组。来源：Abaqus/CAE 2025 `Face.getCells`、`Part.generateMesh(boundaryPreview)`、`Part.deletePreviewMesh`、`Part.verifyMeshQuality`。这一条只改生产脚本契约，没有新的 CAE 真机证据，不能把旧的 Body-4 第 4 轮通过写成第 5 轮已验证。
 
 #### 需求 REQ-4.10：接触诊断只读已有 ODB
 * **提出日期**：2026-10-29

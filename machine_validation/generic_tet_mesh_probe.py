@@ -84,7 +84,7 @@ try:
         regions=(part.cells,),
         elemTypes=(mesh.ElemType(elemCode=C3D10, elemLibrary=STANDARD),),
     )
-    scope = {"p": part, "mdb": mdb, "mesh": mesh, "TET": TET, "FREE": FREE,
+    scope = {"p": part, "mdb": mdb, "mesh": mesh, "TET": TET, "TRI": TRI, "FREE": FREE,
              "MODERATE": MODERATE, "ON": ON, "SHAPE_FACTOR": SHAPE_FACTOR,
              "ANALYSIS_CHECKS": ANALYSIS_CHECKS, "SIZE": SIZE,
              "DEFAULT_SIZE": DEFAULT_SIZE, "FINER": FINER,
@@ -101,6 +101,8 @@ try:
         result["local_status"] = scope.get("_abqai_local_status")
         result["local_region_indices"] = scope.get("_abqai_local_region_indices")
         result["local_current_hosts"] = scope.get("_abqai_local_current_hosts")
+        result["boundary_gate"] = scope.get("_abqai_boundary_gate")
+        result["boundary_recovery"] = scope.get("_abqai_recovery")
     shape = part.verifyMeshQuality(criterion=SHAPE_FACTOR, threshold=0.0001, elemShape=TET)
     analysis = part.verifyMeshQuality(criterion=ANALYSIS_CHECKS)
     result.update({
