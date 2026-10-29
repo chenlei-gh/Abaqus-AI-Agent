@@ -969,3 +969,33 @@ def test_fmbd7_dual_flexible_four_bar_closed_loop_compiler_contract():
     assert idx_first_coupling < idx_first_wire, "Couplings must precede Wire Connectors"
     assert idx_first_wire < idx_step, "Connector elements must precede Step creation"
     assert idx_step < idx_job, "Step must precede Job creation"
+
+
+def test_mechanism_mesh_refuses_implicit_seed_and_tetrahedra():
+    graph = MechanismGraph("MeshLock")
+    graph.add_body("flex", body_type="flexible", part_name="FlexPart")
+    actions = graph.compile_to_actions("MeshLockModel")
+    assert "seed_part" not in [action.action_type for action in actions]
+    assert "generate_mesh" not in [action.action_type for action in actions]
+
+    graph.bodies["flex"] = graph.bodies["flex"].__class__(**dict(
+        graph.bodies["flex"].__dict__, mesh_size=0,
+    ))
+    with pytest.raises(ValueError, match="implicit 2.5 mm fallback"):
+        graph.compile_to_actions("MeshLockModel")
+
+    graph.bodies["flex"] = graph.bodies["flex"].__class__(**dict(
+        graph.bodies["flex"].__dict__, mesh_size=4.0, element_code="C3D10",
+    ))
+    with pytest.raises(ValueError, match="tet_mesh_script"):
+        graph.compile_to_actions("MeshLockModel")
+
+    graph.bodies["flex"] = graph.bodies["flex"].__class__(**dict(
+        graph.bodies["flex"].__dict__, mesh_size=4.0, element_code="C3D8R",
+    ))
+    actions = graph.compile_to_actions("MeshLockModel")
+    seeds = [action for action in actions if action.action_type == "seed_part"]
+    assert len(seeds) == 1
+    assert seeds[0].parameters["size"] == 4.0
+    assert "production_default=NOT_SWITCHED" in seeds[0].evidence
+    assert "tet_mesh_script" not in "".join(seeds[0].evidence)

@@ -419,10 +419,12 @@ TET_SMALL_FACE_SEED_FRACTION = TET_SHORT_EDGE_SEED_FRACTION ** 2
 def tet_partition_controls() -> Dict[str, Any]:
     """Documented controls for one free tetrahedron partition.
 
-    ``algorithm`` is intentionally absent. For free tetrahedra the only
-    documented algorithm value is ``NON_DEFAULT``, which selects the pre-6.4
-    mesher. Omitting the argument is how the default algorithm is selected.
-    ``sizeGrowth=MODERATE`` applies only to that default mesher.
+    ``tet_mesh_script`` and ``local_remesh_script`` read this dictionary.
+    A drift from the known production contract is a hard stop, not a second
+    mesher. ``algorithm`` is intentionally absent. For free tetrahedra the
+    only documented algorithm value is ``NON_DEFAULT``, which selects the
+    pre-6.4 mesher. Omitting the argument is how the default algorithm is
+    selected. ``sizeGrowth=MODERATE`` applies only to that default mesher.
     """
     return {
         "elem_shape": "TET",
@@ -445,6 +447,95 @@ def tet_partition_controls() -> Dict[str, Any]:
         "quality_check_every_round": ("SHAPE_FACTOR", "ANALYSIS_CHECKS"),
         "repair": False,
     }
+
+
+def _require_documented_tet_controls(controls):
+    """Refuse a tetrahedron script when the documented controls drift.
+
+    The emitted CAE text is generated from these values. Changing the
+    dictionary does not silently create another mesher: the known production
+    contract must still match, and the emitted text is checked against it.
+    """
+    expected = {
+        "elem_shape": "TET",
+        "technique": "FREE",
+        "size_growth": "MODERATE",
+        "algorithm": None,
+        "boundary_preview": True,
+        "ignore_short_edges": True,
+        "short_edge_seed_fraction": TET_SHORT_EDGE_SEED_FRACTION,
+        "corner_angle_tolerance_deg": TET_CORNER_ANGLE_TOLERANCE_DEG,
+        "merge_small_faces": True,
+        "combined_first_pass_cleanup": True,
+        "small_face_seed_fraction": TET_SMALL_FACE_SEED_FRACTION,
+        "local_incremental_remesh": "CAD_ASSOCIATED_CELLS",
+        "max_mesh_rounds": 5,
+        "local_seed_divisors": (2, 4),
+        "round_4_scheme": "DOUBLE_BIAS_EDGE_ENDS",
+        "round_5_scheme": "SIZE_GROWTH_MAXIMUM",
+        "later_local_remesh": "ROUNDS_2_3_SEED_ROUND_4_BIAS_ROUND_5_GROWTH",
+        "quality_check_every_round": ("SHAPE_FACTOR", "ANALYSIS_CHECKS"),
+        "repair": False,
+    }
+    mismatches = []
+    for key, value in expected.items():
+        if controls.get(key) != value:
+            mismatches.append("%s=%r expected %r" % (key, controls.get(key), value))
+    divisors = tuple(controls.get("local_seed_divisors") or ())
+    if divisors != tuple(2 ** (attempt - 1) for attempt in (2, 3)):
+        mismatches.append("local_seed_divisors must be 2**(attempt-1) for rounds 2 and 3")
+    if mismatches:
+        raise ValueError(
+            "tet partition controls drifted from the production script contract: "
+            + "; ".join(mismatches)
+        )
+    return controls
+
+
+def assert_emitted_tet_script(script, controls):
+    """The emitted tetrahedron script must be the documented control set."""
+    controls = _require_documented_tet_controls(controls)
+    required = (
+        "elemShape=%s" % controls["elem_shape"],
+        "technique=%s" % controls["technique"],
+        "sizeGrowth=%s" % controls["size_growth"],
+        "seedEdgeByBias(biasMethod=DOUBLE",
+        "sizeGrowth=MAXIMUM",
+        "mergeShortEdges=%s" % controls["ignore_short_edges"],
+        "mergeSmallFaces=%s" % controls["merge_small_faces"],
+        "cornerAngleTolerance=%s" % controls["corner_angle_tolerance_deg"],
+        "deleteMesh(regions=_abqai_local_cells)",
+        "generateMesh(regions=_abqai_local_cells)",
+        "boundaryPreview=ON",
+        "criterion=SHAPE_FACTOR",
+        "criterion=ANALYSIS_CHECKS",
+    )
+    missing = [item for item in required if item not in script]
+    rounds = int(controls["max_mesh_rounds"])
+    if script.count("_abqai_rounds.append") != rounds:
+        missing.append("quality rounds != %d" % rounds)
+    if script.count("criterion=ANALYSIS_CHECKS") != rounds:
+        missing.append("analysis checks != %d" % rounds)
+    if script.count("criterion=SHAPE_FACTOR") < rounds:
+        missing.append("shape-factor checks < %d" % rounds)
+    for attempt, divisor in zip((2, 3), controls["local_seed_divisors"]):
+        token = "float(2 ** (%d - 1))" % attempt
+        if token not in script or int(divisor) != 2 ** (attempt - 1):
+            missing.append("round %d divisor %s" % (attempt, divisor))
+    if "_abqai_local_attempt = %d" % (rounds + 1) in script:
+        missing.append("round beyond %d" % rounds)
+    if controls["algorithm"] is None and "algorithm=" in script:
+        missing.append("algorithm leaked into script")
+    if controls["repair"] is False and ".repair(" in script:
+        missing.append("repair leaked into script")
+    if "deleteMesh()" in script:
+        missing.append("whole-part deleteMesh")
+    if missing:
+        raise ValueError(
+            "emitted tet script does not match tet_partition_controls: "
+            + "; ".join(missing)
+        )
+    return script
 
 
 def _tet_round_quality_script(part_expr, attempt):
@@ -556,6 +647,7 @@ def tet_mesh_script(
         if not math.isfinite(float(value)) or float(value) <= 0.0:
             raise ValueError("tetrahedron %s must be a positive finite number, got %r" % (name, value))
 
+    controls = _require_documented_tet_controls(tet_partition_controls())
     from .local_remesh import local_remesh_script
 
     def indent(code, spaces):
@@ -566,13 +658,13 @@ def tet_mesh_script(
             for line in lines
         ) + ("\n" if code.endswith("\n") else "")
 
-    threshold = seed * TET_SHORT_EDGE_SEED_FRACTION
+    threshold = seed * float(controls["short_edge_seed_fraction"])
     face_area = threshold * threshold
     threshold_text = ("%.12f" % threshold).rstrip("0").rstrip(".")
     face_area_text = ("%.12f" % face_area).rstrip("0").rstrip(".")
     quality1 = _tet_round_quality_script(part_expr, 1)
     local_rounds = []
-    for attempt in range(2, 6):
+    for attempt in range(2, int(controls["max_mesh_rounds"]) + 1):
         local_rounds.append(
             "if not _abqai_quality_ok:\n"
             "    if len(_abqai_rounds) > 1 and _abqai_rounds[-1]['mesh_fingerprint'] == _abqai_rounds[-2]['mesh_fingerprint']:\n"
@@ -588,7 +680,7 @@ def tet_mesh_script(
             )
         )
     local_chain = "".join(local_rounds)
-    return (
+    script = (
         "def _abqai_mesh_fingerprint():\n"
         "    _abqai_labels = sorted(int(_abqai_element.label) for _abqai_element in {part}.elements)\n"
         "    _abqai_nodes = sorted(int(_abqai_node.label) for _abqai_node in {part}.nodes)\n"
@@ -623,15 +715,15 @@ def tet_mesh_script(
         "    if _abqai_region:\n"
         "        _abqai_combined_vt = {part}.createVirtualTopology(\n"
         "            regions=tuple(_abqai_region),\n"
-        "            mergeShortEdges=True, shortEdgeThreshold={threshold},\n"
-        "            mergeSmallFaces=True, smallFaceAreaThreshold={face_area},\n"
+        "            mergeShortEdges={merge_short}, shortEdgeThreshold={threshold},\n"
+        "            mergeSmallFaces={merge_small}, smallFaceAreaThreshold={face_area},\n"
         "            ignoreRedundantEntities=True, cornerAngleTolerance={angle},\n"
         "            mergeSliverFaces=False, mergeSmallAngleFaces=False,\n"
         "            mergeThinStairFaces=False, applyBlendControls=False)\n"
         "        _abqai_vt_status = 'applied_combined'\n"
         "    else:\n"
         "        _abqai_vt = {part}.createVirtualTopology(\n"
-        "            mergeShortEdges=True, shortEdgeThreshold={threshold},\n"
+        "            mergeShortEdges={merge_short}, shortEdgeThreshold={threshold},\n"
         "            ignoreRedundantEntities=True, cornerAngleTolerance={angle},\n"
         "            mergeSmallFaces=False, mergeSliverFaces=False,\n"
         "            mergeSmallAngleFaces=False, mergeThinStairFaces=False,\n"
@@ -640,8 +732,8 @@ def tet_mesh_script(
         "except Exception as _abqai_vt_exc:\n"
         "    _abqai_vt_status = 'no_entity_or_rejected'\n"
         "    print('virtual_topology_not_applied: ' + repr(_abqai_vt_exc))\n"
-        "{part}.setMeshControls(regions={part}.cells, elemShape=TET, "
-        "technique=FREE, sizeGrowth=MODERATE)\n"
+        "{part}.setMeshControls(regions={part}.cells, elemShape={elem_shape}, "
+        "technique={technique}, sizeGrowth={size_growth})\n"
         "{part}.generateMesh(boundaryPreview=ON)\n"
         "_abqai_boundary = {part}.verifyMeshQuality(criterion=SHAPE_FACTOR, "
         "threshold={floor}, elemShape=TET)\n"
@@ -660,12 +752,18 @@ def tet_mesh_script(
     ).format(
         part=part_expr,
         threshold=threshold_text,
-        angle=repr(TET_CORNER_ANGLE_TOLERANCE_DEG),
+        angle=repr(controls["corner_angle_tolerance_deg"]),
         floor=repr(TET_SHAPE_FACTOR_FLOOR),
         face_area=face_area_text,
+        elem_shape=controls["elem_shape"],
+        technique=controls["technique"],
+        size_growth=controls["size_growth"],
+        merge_short=controls["ignore_short_edges"],
+        merge_small=controls["merge_small_faces"],
         quality1=quality1,
         local_chain=local_chain,
     )
+    return assert_emitted_tet_script(script, controls)
 
 
 def mesh_submission_blockers(mesh_quality: Any) -> Tuple[str, ...]:

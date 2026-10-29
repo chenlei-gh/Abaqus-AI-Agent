@@ -44,6 +44,19 @@ def local_remesh_script(part_expr, attempt, previous_hosts="_abqai_local_host_in
         raise ValueError("local remesh attempt must be 2, 3, 4, or 5")
     if not str(part_expr).strip():
         raise ValueError("local remesh requires a part expression")
+    from .mesh_quality import _require_documented_tet_controls, tet_partition_controls
+
+    controls = _require_documented_tet_controls(tet_partition_controls())
+    if attempt > int(controls["max_mesh_rounds"]):
+        raise ValueError("local remesh attempt exceeds documented max_mesh_rounds")
+    if attempt in (2, 3):
+        expected = int(controls["local_seed_divisors"][attempt - 2])
+        if expected != 2 ** (attempt - 1):
+            raise ValueError("local seed divisor drifted from tet_partition_controls")
+    elif attempt == 4 and controls["round_4_scheme"] != "DOUBLE_BIAS_EDGE_ENDS":
+        raise ValueError("round 4 scheme drifted from tet_partition_controls")
+    elif attempt == 5 and controls["round_5_scheme"] != "SIZE_GROWTH_MAXIMUM":
+        raise ValueError("round 5 scheme drifted from tet_partition_controls")
     expansion = ""
     if attempt == 3:
         expansion = (

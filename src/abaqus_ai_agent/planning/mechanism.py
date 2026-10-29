@@ -15,6 +15,17 @@ import math
 from typing import Any, Dict, List, Optional, Sequence, Set, Tuple
 
 from ..contracts.action import AbaqusAction
+
+# Hex mechanism path. It is not the production tetrahedron quality chain and
+# must not invent a 2.5 mm seed or emit C3D4/C3D10 through seedPart alone.
+_MECHANISM_MESH_EVIDENCE = (
+    "mechanism_hex_mesh_is_not_production_default",
+    "production_default=NOT_SWITCHED",
+)
+_TET_ELEMENT_CODES = (
+    "C3D4", "C3D10", "C3D10M", "C3D10HS", "C3D4H", "C3D10H",
+    "DC3D4", "DC3D10", "C3D4T", "C3D10MT", "C3D10MHT",
+)
 from ..actions.builders import (
     connector_section,
     wire_connector,
@@ -604,6 +615,50 @@ class MechanismGraph:
 
         return "RP_" + body_name.upper()
 
+    def _mesh_actions(self, model_name: str, body: BodySpec) -> List[AbaqusAction]:
+        """Hex seed and generateMesh only. Not the production tet chain.
+
+        A missing size emits nothing. It is not replaced by 2.5 mm. A tetrahedron
+        code is refused here instead of being turned into a second 5-round mesher.
+        """
+        if body.mesh_size is None or not body.part_name:
+            return []
+        size = body.mesh_size
+        if isinstance(size, bool) or not isinstance(size, (int, float)) or not math.isfinite(float(size)) or float(size) <= 0.0:
+            raise ValueError(
+                "mechanism mesh_size must be an explicit positive finite seed; "
+                "refusing the implicit 2.5 mm fallback, got %r" % (size,)
+            )
+        code = str(body.element_code or "").strip().upper()
+        if code in _TET_ELEMENT_CODES or code.startswith(("C3D4", "C3D10", "DC3D4", "DC3D10")):
+            raise ValueError(
+                "mechanism mesh refuses tetrahedron element %s; "
+                "use the production tet_mesh_script chain, production_default stays NOT_SWITCHED"
+                % code
+            )
+        actions = [
+            seed_part(model_name, body.part_name, size=float(size)).with_conditions(
+                evidence=_MECHANISM_MESH_EVIDENCE,
+            )
+        ]
+        if body.element_code:
+            elem_reg = "mdb.models[%r].parts[%r].sets[%r]" % (
+                model_name, body.part_name, body.part_cells_set or "Cells",
+            )
+            actions.append(element_type(
+                model_name,
+                body.part_name,
+                region_expression=elem_reg,
+                elem_code=body.element_code,
+                library=body.element_library or "STANDARD",
+            ).with_conditions(evidence=_MECHANISM_MESH_EVIDENCE))
+        actions.append(
+            generate_mesh(model_name, body.part_name).with_conditions(
+                evidence=_MECHANISM_MESH_EVIDENCE,
+            )
+        )
+        return actions
+
     def compile_to_actions(
         self,
         model_name: str,
@@ -686,18 +741,7 @@ class MechanismGraph:
         # 2. Part-level Finite Element Meshing (Must precede Assembly Constraints!)
         # ---------------------------------------------------------------------
         for b in self.bodies.values():
-            if b.mesh_size is not None and b.part_name:
-                actions.append(seed_part(model_name, b.part_name, size=b.mesh_size))
-                if b.element_code:
-                    elem_reg = "mdb.models[%r].parts[%r].sets[%r]" % (model_name, b.part_name, b.part_cells_set or "Cells")
-                    actions.append(element_type(
-                        model_name,
-                        b.part_name,
-                        region_expression=elem_reg,
-                        elem_code=b.element_code,
-                        library=b.element_library or "STANDARD",
-                    ))
-                actions.append(generate_mesh(model_name, b.part_name))
+            actions.extend(self._mesh_actions(model_name, b))
 
         # ---------------------------------------------------------------------
         # 3. Assembly-level Reference Points & Multi-Ground Anchor BCs

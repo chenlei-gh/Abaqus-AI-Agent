@@ -1,16 +1,35 @@
-"""M1FA Body-1 mesh probe using the native suggested global size.
+"""Historical M1FA Body-1 mesh probe. Not a production mesh entry.
 
-No Job, no submit, no waitForCompletion. A missing or invalid
-DEFAULT_SIZE stops before any seed or mesh call. 2.5 mm is historical
-comparison only and is never used as a fallback.
+This file keeps the 2026-10-28 DEFAULT_SIZE evidence path. It does not call
+``tet_mesh_script`` and must not be rerun as the production mesher. A replay
+requires ``ABAQUS_AI_HISTORICAL_MESH_PROBE=1``. No Job, no submit, no
+waitForCompletion. A missing or invalid DEFAULT_SIZE stops before any seed
+or mesh call. 2.5 mm is historical comparison only and is never a fallback.
 """
+
+import os
+
+PRODUCTION_MESH_ENTRY = False
+HISTORICAL_REPLAY_ENV = "ABAQUS_AI_HISTORICAL_MESH_PROBE"
+
+
+def refuse_production_mesh_replay():
+    """Hard stop: this probe is evidence, not the production mesh chain."""
+    if os.environ.get(HISTORICAL_REPLAY_ENV) != "1":
+        raise RuntimeError(
+            "m1fa_default_size_probe is not a production mesh entry and "
+            "refuses to rerun without %s=1; use tet_mesh_script"
+            % HISTORICAL_REPLAY_ENV
+        )
+
+
+refuse_production_mesh_replay()
 
 from abaqus import mdb
 from abaqusConstants import *
 import auxImportGeom
 import json
 import math
-import os
 import time
 
 STEP = r"D:/AbaqusProjects/M1FA/M1FA_VENT_ASM_CTR_20261025.stp"
@@ -38,6 +57,7 @@ result = {
     "local_edge_seeds_requested": False,
     "edge_coverage": "NOT_REQUESTED",
     "production_default": "NOT_SWITCHED",
+    "production_mesh_entry": False,
     "not_mesh_convergence": True,
     "not_six_body_qualification": True,
 }

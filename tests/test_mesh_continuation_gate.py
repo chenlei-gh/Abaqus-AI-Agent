@@ -5,6 +5,8 @@ datacheck signature must not buy a second submission. Passing the continuation
 floor is not a convergence claim.
 """
 
+import os
+
 import pytest
 
 from abaqus_ai_agent.actions.builders import contact
@@ -13,11 +15,46 @@ from abaqus_ai_agent.contracts.action import AbaqusAction
 from abaqus_ai_agent.contracts.mesh_quality import (
     MeshQualityResult,
     TET_SHAPE_FACTOR_FLOOR,
+    _require_documented_tet_controls,
     mesh_submission_blockers,
     tet_mesh_script,
+    tet_partition_controls,
 )
 from abaqus_ai_agent.diagnostics.orchestrator import _datacheck_signature
 from abaqus_ai_agent.diagnostics.solver_patterns import DiagnosticIssue
+
+
+def test_partition_controls_drive_the_emitted_script():
+    controls = tet_partition_controls()
+    _require_documented_tet_controls(controls)
+    script = tet_mesh_script("p", 1.9)
+    assert script.count("_abqai_rounds.append") == controls["max_mesh_rounds"]
+    assert "elemShape=%s" % controls["elem_shape"] in script
+    assert "sizeGrowth=%s" % controls["size_growth"] in script
+    drifted = dict(controls, max_mesh_rounds=6)
+    with pytest.raises(ValueError, match="drifted from the production script contract"):
+        _require_documented_tet_controls(drifted)
+
+
+def test_historical_default_size_probe_is_not_a_production_entry():
+    probe = os.path.join(
+        os.path.dirname(__file__), "..", "machine_validation", "m1fa_default_size_probe.py",
+    )
+    text = open(probe, "r", encoding="utf-8").read()
+    assert "PRODUCTION_MESH_ENTRY = False" in text
+    assert "refuse_production_mesh_replay()" in text
+    body = text.split("refuse_production_mesh_replay()\n\nfrom abaqus import mdb", 1)[1]
+    assert "tet_mesh_script(" not in body
+    prefix = text.split("from abaqus import mdb", 1)[0]
+    with pytest.raises(RuntimeError, match="not a production mesh entry"):
+        exec(compile(prefix, probe, "exec"), {"__name__": "historical_probe"})
+    os.environ["ABAQUS_AI_HISTORICAL_MESH_PROBE"] = "1"
+    try:
+        namespace = {"__name__": "historical_probe"}
+        exec(compile(prefix, probe, "exec"), namespace)
+    finally:
+        os.environ.pop("ABAQUS_AI_HISTORICAL_MESH_PROBE", None)
+    assert namespace["PRODUCTION_MESH_ENTRY"] is False
 
 
 def test_tet_script_combines_cleanup_and_quality_gates_every_round():
