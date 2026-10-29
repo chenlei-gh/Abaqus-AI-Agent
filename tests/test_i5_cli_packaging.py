@@ -85,6 +85,7 @@ def test_cli_subprocess_packaging_smoke():
     assert "abaqus-ai-agent" in proc.stdout or "usage:" in proc.stdout
     assert "inspect" in proc.stdout
     assert "ask" in proc.stdout
+    assert "init" in proc.stdout
 
     proc_inspect = subprocess.run(
         [sys.executable, "-m", "abaqus_ai_agent.cli", "inspect", "--json"],

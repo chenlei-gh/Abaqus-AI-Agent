@@ -7,6 +7,7 @@ Provides a unified command-line tool for:
 4. diagnose: deterministic diagnosis of Abaqus solver artifacts (.msg, .sta, .dat, .log).
 5. report: render an HTML engineering report from evidence or AnalysisRun. Markdown is an explicit preview only.
 6. fmbd: inspect mechanism topology and action compilation plan for MBD/FMBD models.
+7. init: report the local launcher and, when asked, create a customer project layout.
 """
 
 import argparse
@@ -169,16 +170,60 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Output machine-readable JSON format.",
     )
 
+    # 11. init (local check; optional customer-project layout)
+    p_init = subparsers.add_parser(
+        "init",
+        help="Check the local launcher and optionally create a customer project layout.",
+    )
+    p_init.add_argument(
+        "--project",
+        default=None,
+        help="Customer project root. Omit to check only; nothing is created.",
+    )
+    p_init.add_argument(
+        "--name",
+        default=None,
+        help="Project name recorded with the layout. Defaults to the directory name.",
+    )
+    p_init.add_argument(
+        "--launcher",
+        default="abaqus",
+        help="Abaqus launcher command or path (default: abaqus). Same resolution as inspect.",
+    )
+    p_init.add_argument("--json", action="store_true", help="Output the check as JSON.")
+
     return parser
 
 
 # --- Handlers ---
 
-def handle_inspect(args: argparse.Namespace) -> int:
+EDITOR_RULE_FRAGMENT = {
+    "agent": {
+        "tool_permissions": {
+            "tools": {
+                "terminal": {
+                    "always_deny": [
+                        {"pattern": "abaqus(\\.bat)?[\"']?\\s+.*\\bjob="},
+                        {"pattern": "mdb\\.jobs\\[.*\\]\\.submit"},
+                        {"pattern": "mdb\\.Job\\.submit"},
+                    ]
+                },
+                "delete_path": {
+                    "always_deny": [
+                        {"pattern": "\\.lck$"},
+                    ]
+                },
+            }
+        }
+    }
+}
+
+
+def _probe_launcher(launcher: str) -> Dict[str, Any]:
+    """Resolve a launcher and probe ``information=release``. Does not submit a job."""
     import shutil
     import subprocess
 
-    launcher = args.launcher
     which_path = shutil.which(launcher)
 
     # Automatic fallback candidate paths on Windows if default not in PATH
@@ -201,7 +246,6 @@ def handle_inspect(args: argparse.Namespace) -> int:
     nogui_available = False
     solver_submit_capable = False
     version_info = "unavailable"
-    probe_output = ""
 
     if which_path:
         try:
@@ -214,7 +258,6 @@ def handle_inspect(args: argparse.Namespace) -> int:
                 timeout=15,
             )
             out = p.stdout.strip() or p.stderr.strip()
-            probe_output = out
             if p.returncode == 0:
                 version_probe_ok = True
                 runtime_startable = True
@@ -248,7 +291,7 @@ def handle_inspect(args: argparse.Namespace) -> int:
     else:
         runtime_mode = "HEADLESS_CONTRACT_FALLBACK"
 
-    data = {
+    return {
         "launcher": launcher,
         "located_path": which_path,
         "available": launcher_found,
@@ -265,6 +308,10 @@ def handle_inspect(args: argparse.Namespace) -> int:
         "python_version": sys.version.split()[0],
         "workdir_writable": os.access(".", os.W_OK),
     }
+
+
+def handle_inspect(args: argparse.Namespace) -> int:
+    data = _probe_launcher(args.launcher)
 
     if args.json:
         print(json.dumps(data, indent=2, ensure_ascii=False))
@@ -1474,6 +1521,101 @@ def handle_material(args: argparse.Namespace) -> int:
     return 1
 
 
+def handle_init(args: argparse.Namespace) -> int:
+    """Report the local checkout and optionally create a customer project layout.
+
+    A missing launcher is an offline host, not a failed install. A project root
+    inside the repository or its parent workspace is a failed init. This command
+    does not write editor settings and does not start a solver.
+    """
+    from .paths import (
+        create_external_project_context,
+        get_repo_root,
+        infer_customer_project_root,
+    )
+
+    repo = get_repo_root().resolve()
+    agents = repo / "AGENTS.md"
+    project_error = None
+    created = False
+    project = None
+    if args.project:
+        try:
+            ctx = create_external_project_context(
+                args.project,
+                project_name=args.name,
+                enforce_outside_repo=True,
+                ensure_dirs=True,
+            )
+        except (OSError, PermissionError, ValueError) as exc:
+            project_error = str(exc)
+        else:
+            created = True
+            project = {
+                "project_root": str(ctx.project_root),
+                "project_name": ctx.project_name,
+                "created": True,
+                "directories": {
+                    "input": str(ctx.input_dir),
+                    "working": str(ctx.working_dir),
+                    "solver": str(ctx.solver_dir),
+                    "evidence": str(ctx.evidence_dir),
+                    "delivery": str(ctx.delivery_dir),
+                },
+            }
+    else:
+        found = infer_customer_project_root(source_path=Path.cwd())
+        if found is not None:
+            project = {
+                "project_root": str(found),
+                "project_name": found.name,
+                "created": False,
+                "recognized_layout": True,
+            }
+
+    data = {
+        "repo_root": str(repo),
+        "agents_md": str(agents),
+        "agents_md_present": agents.is_file(),
+        "launcher": _probe_launcher(args.launcher),
+        "project": project,
+        "project_created": created,
+        "project_error": project_error,
+        "editor_rules": {
+            "written": False,
+            "scope": "user settings only; not project .zed/settings.json",
+            "fragment": EDITOR_RULE_FRAGMENT,
+        },
+        "solver_started": False,
+    }
+    if args.json:
+        print(json.dumps(data, indent=2, ensure_ascii=False))
+    else:
+        print("=== Abaqus AI Agent init ===")
+        print(f"Repository:            {data['repo_root']}")
+        print(f"AGENTS.md:             {data['agents_md']} ({'present' if data['agents_md_present'] else 'missing'})")
+        launcher = data["launcher"]
+        print(f"Launcher:              {launcher['located_path'] or 'NOT FOUND'}")
+        print(f"Runtime mode:          {launcher['runtime_mode']}")
+        if project_error:
+            print(f"Project:               REJECTED")
+            print(project_error)
+        elif project is None:
+            print("Project:               not requested")
+            print("Pass --project <path> to create input/working/solver/evidence/delivery outside this checkout.")
+        elif created:
+            print(f"Project:               created {project['project_root']}")
+            for name, path in project["directories"].items():
+                print(f"  {name + ':':<20} {path}")
+        else:
+            print(f"Project:               recognized {project['project_root']} (not modified)")
+        print("Editor rules:          not written")
+        print("Merge this fragment into the editor user settings. A project settings file cannot hold agent tool permissions.")
+        print(json.dumps(EDITOR_RULE_FRAGMENT, indent=2, ensure_ascii=True))
+        print("Solver started:        NO")
+    return 2 if project_error else 0
+
+
 def handle_approve(args: argparse.Namespace) -> int:
     """Approve the current execution candidate of a workdir (Phase A -> B)."""
     from .execution.approval_service import approve_current_candidate
@@ -1519,6 +1661,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         "approve": handle_approve,
         "assets": handle_assets,
         "material": handle_material,
+        "init": handle_init,
     }
 
     handler = handlers.get(args.subcommand)

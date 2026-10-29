@@ -313,3 +313,81 @@ def test_cli_ask_material_redirect(capsys):
     data = json.loads(captured.out)
     assert data["found"] is True
     assert data["identity"]["grade"] == "Ultramid A3WG6"
+
+
+def test_cli_init_check_only_creates_nothing(tmp_path, monkeypatch, capsys):
+    from unittest.mock import patch
+
+    monkeypatch.chdir(tmp_path)
+    with patch("abaqus_ai_agent.cli._probe_launcher", return_value={
+        "located_path": None,
+        "runtime_mode": "HEADLESS_CONTRACT_FALLBACK",
+        "launcher_found": False,
+    }):
+        ret = main(["init", "--json"])
+    assert ret == 0
+    data = json.loads(capsys.readouterr().out)
+    assert data["project"] is None
+    assert data["project_created"] is False
+    assert data["solver_started"] is False
+    assert data["editor_rules"]["written"] is False
+    assert data["agents_md_present"] is True
+    assert Path(data["agents_md"]).name == "AGENTS.md"
+    assert not (tmp_path / "input").exists()
+
+
+def test_cli_init_creates_external_project(tmp_path, capsys):
+    from unittest.mock import patch
+
+    project = tmp_path / "customer"
+    with patch("abaqus_ai_agent.cli._probe_launcher", return_value={
+        "located_path": None,
+        "runtime_mode": "HEADLESS_CONTRACT_FALLBACK",
+        "launcher_found": False,
+    }):
+        ret = main(["init", "--project", str(project), "--name", "customer", "--json"])
+    assert ret == 0
+    data = json.loads(capsys.readouterr().out)
+    assert data["project_created"] is True
+    assert data["project"]["project_name"] == "customer"
+    for name in ("input", "working", "solver", "evidence", "delivery"):
+        assert (project / name).is_dir()
+        assert Path(data["project"]["directories"][name]).is_dir()
+
+
+def test_cli_init_rejects_project_inside_checkout(capsys):
+    from unittest.mock import patch
+
+    with patch("abaqus_ai_agent.cli._probe_launcher", return_value={
+        "located_path": None,
+        "runtime_mode": "HEADLESS_CONTRACT_FALLBACK",
+        "launcher_found": False,
+    }):
+        ret = main(["init", "--project", str(ROOT), "--json"])
+    assert ret == 2
+    data = json.loads(capsys.readouterr().out)
+    assert data["project_created"] is False
+    assert data["project_error"]
+    assert "core workspace" in data["project_error"]
+
+
+def test_cli_init_probe_does_not_submit(tmp_path, monkeypatch, capsys):
+    from unittest.mock import MagicMock, patch
+
+    monkeypatch.chdir(tmp_path)
+    mock_proc = MagicMock()
+    mock_proc.returncode = 0
+    mock_proc.stdout = "Abaqus 2025\n"
+    mock_proc.stderr = ""
+    with patch("shutil.which", return_value=r"C:\SIMULIA\Commands\abaqus.bat"), patch(
+        "subprocess.run", return_value=mock_proc
+    ) as run:
+        ret = main(["init", "--json"])
+    assert ret == 0
+    run.assert_called_once()
+    command = run.call_args.args[0]
+    rendered = command if isinstance(command, str) else " ".join(command)
+    assert "information=release" in rendered
+    assert "job=" not in rendered
+    data = json.loads(capsys.readouterr().out)
+    assert data["solver_started"] is False

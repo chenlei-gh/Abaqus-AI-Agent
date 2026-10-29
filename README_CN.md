@@ -145,6 +145,19 @@ abaqus-ai-agent inspect --json
 
 打出版本字符串，只说明启动器能用，不说明许可证 token 有空闲。`inspect` 找不到启动器，表示这台机器离线，不是本包装失败。
 
+### 本地检查
+
+`init` 报告仓库和启动器。它不安装 Abaqus，不写编辑器设置，不扫盘，也不启动求解。找不到启动器表示这台机器离线，不是安装失败。
+
+```bat
+abaqus-ai-agent init
+abaqus-ai-agent init --project D:\customer\job-01
+```
+
+`--project` 必须在这个仓库外面，也必须在包含检出的那个目录外面。它创建 `input/`、`working/`、`solver/`、`evidence/`、`delivery/`。不传这个参数，什么都不创建。当前目录已经在这套布局里时，`init` 只指出工程位置，不改它。
+
+命令会打印一段 Zed 工具权限片段。用 Zed 的话，把它合并进编辑器的用户设置。项目里的 `.zed/settings.json` 放不下 `agent.tool_permissions`。仓库里的 `AGENTS.md` 是产品约定；父目录里的约定文件是本机编辑器布局，这条命令不写它。
+
 ## 试一次
 
 这一步路由需求，然后停止。它不启动 Abaqus，也是持续集成跑的那条命令。

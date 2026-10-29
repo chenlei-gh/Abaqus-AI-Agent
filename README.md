@@ -145,6 +145,19 @@ abaqus-ai-agent inspect --json
 
 A release string means the launcher runs. It does not mean a license token is free. An `inspect` run that finds no launcher means an offline host, not a broken install.
 
+### Local check
+
+`init` reports the checkout and the launcher. It does not install Abaqus, write editor settings, scan the disk, or start a solver. A missing launcher is an offline host, not a failed install.
+
+```bat
+abaqus-ai-agent init
+abaqus-ai-agent init --project D:\customer\job-01
+```
+
+`--project` must sit outside this repository and outside the directory that contains the checkout. It creates `input/`, `working/`, `solver/`, `evidence/`, and `delivery/`. Omit it and nothing is created. If the current directory is already inside that layout, `init` names the project and leaves it alone.
+
+The command prints a Zed tool-permission fragment. Merge it into the editor user settings if you use Zed. A project `.zed/settings.json` cannot hold `agent.tool_permissions`. `AGENTS.md` in this repository is the product instruction file; a parent-directory instruction file is a local editor layout, not something this command writes.
+
 ## Try it
 
 This routes a requirement and stops. It does not start Abaqus, and it is the same command continuous integration runs.
