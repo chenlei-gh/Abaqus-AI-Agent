@@ -8,7 +8,20 @@ from abaqus_ai_agent.contracts.intent import EngineeringIntent
 from abaqus_ai_agent.contracts.material import ElasticProperties, MaterialDefinition
 from abaqus_ai_agent.contracts.task import EngineeringTaskResult, TaskStatus
 from abaqus_ai_agent.execution.client import AbaqusExecutor
-from abaqus_ai_agent.planning.compiler import IntentGeometrySpec
+from abaqus_ai_agent.planning.compiler import IntentGeometrySpec, IntentMeshSpec
+
+# Explicit caller-supplied seed. Production refuses an implicit 2.5 mm fallback.
+_USER_MESH = {
+    "global_size": 2.5,
+    "size_source": "USER_SPECIFIED",
+    "primary_wall_thickness": 2.5,
+    "primary_wall_thickness_source": "USER_SPECIFIED",
+}
+_USER_MESH_SPEC = IntentMeshSpec(
+    global_size=2.5,
+    primary_wall_thickness=2.5,
+    primary_wall_thickness_source="USER_SPECIFIED",
+)
 
 
 class OdbBackedExecutor(AbaqusExecutor):
@@ -142,6 +155,7 @@ def test_solve_requirement_external_results_fail_closed_suspicious():
         loads=({"type": "concentrated_force", "region": "TipFace", "magnitude": 1000.0, "direction": "-Y"},),
         acceptance_criteria=({"name": "mises_limit", "value_key": "max_mises", "operator": "<=", "limit": 250.0, "unit": "MPa"},),
         metadata={"dimensions": {"shape": "cantilever_box", "length": 120.0, "width": 12.0, "height": 8.0}},
+        mesh_requirements=dict(_USER_MESH),
     )
 
     # Injected external result values without ODB backing
@@ -194,6 +208,7 @@ def test_solve_requirement_end_to_end_completed():
         metadata={
             "dimensions": {"shape": "cantilever_box", "length": 120.0, "width": 12.0, "height": 8.0},
         },
+        mesh_requirements=dict(_USER_MESH),
     )
 
     result = agent.solve_requirement(
@@ -252,9 +267,12 @@ def test_solve_requirement_natural_language_completed():
     agent = AbaqusAIAgent(executor)
     prompt = (
         "对长120mm宽12mm高8mm的悬臂梁端部施加1000N垂直载荷，"
-        "材料为结构钢，固定根部，校核最大Mises应力不超过250MPa。"
+        "材料为Q235，固定根部，校核最大Mises应力不超过250MPa。"
     )
-    result = agent.solve_requirement(prompt)
+    # The prompt names a material and no mesh size. Pass the seed explicitly
+    # so this case tests the NL solve loop, not the mesh gate. Do not invent
+    # 2.5 mm inside the production router.
+    result = agent.solve_requirement(prompt, mesh=_USER_MESH_SPEC)
 
     assert result.status == TaskStatus.COMPLETED
     assert result.is_completed is True
@@ -299,6 +317,7 @@ def test_solve_requirement_never_embeds_submit_in_plan_actions():
                "magnitude": 1000.0, "direction": "-Y"},),
         metadata={"dimensions": {"shape": "cantilever_box", "length": 120.0,
                                  "width": 12.0, "height": 8.0}},
+        mesh_requirements=dict(_USER_MESH),
     )
     result = agent.solve_requirement(
         requirement=intent, geometry=geom, material=mat, submit_job=True,

@@ -25,7 +25,7 @@ from abaqus_ai_agent.reporting.figure_selector import select_engineering_figures
 
 def _steel():
     return MaterialDefinition(
-        name="Steel",
+        name="LabSteel_Card",
         unit_system="MM_N_MPA",
         elastic=ElasticProperties(youngs_modulus=210000.0, poisson_ratio=0.3),
         density=7.85e-9,

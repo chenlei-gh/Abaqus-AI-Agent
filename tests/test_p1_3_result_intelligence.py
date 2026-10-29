@@ -355,6 +355,12 @@ def test_solve_requirement_delivers_result_intelligence():
         loads=({"type": "concentrated_force", "region": "TipFace", "magnitude": 1000.0, "direction": "-Y"},),
         acceptance_criteria=({"name": "mises_limit", "value_key": "max_mises", "operator": "<=", "limit": 250.0, "unit": "MPa"},),
         metadata={"dimensions": {"shape": "cantilever_box", "length": 120.0, "width": 12.0, "height": 8.0}},
+        mesh_requirements={
+            "global_size": 2.5,
+            "size_source": "USER_SPECIFIED",
+            "primary_wall_thickness": 2.5,
+            "primary_wall_thickness_source": "USER_SPECIFIED",
+        },
     )
 
     result = agent.solve_requirement(requirement=intent, geometry=geom, material=mat)

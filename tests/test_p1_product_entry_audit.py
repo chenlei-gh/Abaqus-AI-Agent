@@ -36,6 +36,16 @@ from abaqus_ai_agent.planning.compiler import (
 )
 from abaqus_ai_agent.validation.preflight import PreflightResult
 
+# Caller-supplied seed and wall. Production refuses an implicit 2.5 mm fallback,
+# and a seed coarser than the verified wall is truncated.
+_USER_MESH = {
+    "global_size": 2.5,
+    "size_source": "USER_SPECIFIED",
+    "primary_wall_thickness": 2.5,
+    "primary_wall_thickness_source": "USER_SPECIFIED",
+}
+_HARDENING_TABLE = ((250.0, 0.0), (300.0, 0.02))
+
 
 class MockExecutor(AbaqusExecutor):
     """Mock executor implementing AbaqusExecutor contract for non-solver unit audits."""
@@ -136,11 +146,12 @@ class TestP1ProductEntryAudit:
             analysis_type="linear_static",
             unit_system="MM_N_MPA",
             material={
-                "name": "Steel",
+                "name": "Q235",
                 "youngs_modulus": 210000.0,
                 "poisson_ratio": 0.3,
             },
             metadata={"geometry": IntentGeometrySpec(shape="cantilever_box", length=100.0, width=10.0, height=10.0)},
+            mesh_requirements=dict(_USER_MESH),
         )
         # Attempt to pass fake external results
         res = agent.solve_requirement(
@@ -168,11 +179,12 @@ class TestP1ProductEntryAudit:
             analysis_type="linear_static",
             unit_system="MM_N_MPA",
             material={
-                "name": "Steel",
+                "name": "Q235",
                 "youngs_modulus": 210000.0,
                 "poisson_ratio": 0.3,
             },
             metadata={"geometry": IntentGeometrySpec(shape="cantilever_box", length=100.0, width=10.0, height=10.0)},
+            mesh_requirements=dict(_USER_MESH),
         )
         # Mock preflight_plan to return a blocker
         def mock_preflight(actions):
@@ -246,13 +258,14 @@ class TestP1ProductEntryAudit:
             analysis_type="linear_static",
             unit_system="MM_N_MPA",
             material={
-                "name": "Steel",
+                "name": "Q235",
                 "youngs_modulus": 210000.0,
                 "poisson_ratio": 0.3,
             },
             metadata={"geometry": IntentGeometrySpec(shape="cantilever_box", length=100.0, width=10.0, height=10.0)},
             boundary_conditions=(IntentBoundarySpec(name="FixedRoot", bc_type="ENCASTRE", region="RootFace"),),
             loads=(IntentLoadSpec(name="TipLoad", load_type="concentrated_force", region="TipFace", magnitude=-1000.0),),
+            mesh_requirements=dict(_USER_MESH),
         )
 
         mock_run = MagicMock(spec=AnalysisRun)
@@ -301,7 +314,7 @@ class TestP1ProductEntryAudit:
             "analysis_type": capability_id,
             "unit_system": "MM_N_MPA",
             "material": {
-                "name": "Steel",
+                "name": "Q235",
                 "youngs_modulus": 210000.0,
                 "poisson_ratio": 0.3,
             },
@@ -310,6 +323,7 @@ class TestP1ProductEntryAudit:
             },
             "boundary_conditions": (IntentBoundarySpec(name="FixedRoot", bc_type="ENCASTRE", region="RootFace"),),
             "loads": (IntentLoadSpec(name="Load", load_type="concentrated_force", region="TipFace", magnitude=-1000.0),),
+            "mesh_requirements": dict(_USER_MESH),
         }
 
         # Specialized domain requirements
@@ -324,6 +338,11 @@ class TestP1ProductEntryAudit:
                 rigid_bodies=(RigidBodySpec(name="Crank", ref_point_name="RP_Crank", point_coords=(0.0, 0.0, 0.0), body_region="CrankFace"),),
                 flexible_interfaces=(),
             )
+        elif capability_id == "nonlinear_static":
+            # Material nonlinearity refuses a yield-only card. Supply a measured
+            # hardening point; do not accept ideal plasticity to bypass the gate.
+            intent_kwargs["material"] = dict(intent_kwargs["material"])
+            intent_kwargs["material"]["hardening_table"] = _HARDENING_TABLE
         elif capability_id == "bolt_pretension":
             from abaqus_ai_agent.contracts.procedure import BoltPretensionLifecycleSpec
             intent_kwargs["metadata"]["bolt_pretensions"] = [
@@ -409,10 +428,11 @@ class TestP1ProductEntryAudit:
             description="Equivalence Probe",
             analysis_type="linear_static",
             unit_system="MM_N_MPA",
-            material={"name": "Steel", "youngs_modulus": 210000.0, "poisson_ratio": 0.3},
+            material={"name": "Q235", "youngs_modulus": 210000.0, "poisson_ratio": 0.3},
             metadata={"geometry": IntentGeometrySpec(shape="cantilever_box", length=100.0, width=10.0, height=10.0)},
             boundary_conditions=(IntentBoundarySpec(name="FixedRoot", bc_type="ENCASTRE", region="RootFace"),),
             loads=(IntentLoadSpec(name="Load", load_type="concentrated_force", region="TipFace", magnitude=-1000.0),),
+            mesh_requirements=dict(_USER_MESH),
         )
 
         # Case A: Fully Authentic Success

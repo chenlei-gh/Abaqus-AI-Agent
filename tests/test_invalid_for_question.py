@@ -15,7 +15,7 @@ from abaqus_ai_agent.contracts.material import ElasticProperties, MaterialDefini
 from abaqus_ai_agent.contracts.task import TaskStatus
 from abaqus_ai_agent.engineering_status import EngineeringStatus
 from abaqus_ai_agent.execution.client import AbaqusExecutor
-from abaqus_ai_agent.planning.compiler import IntentGeometrySpec, IntentInteractionSpec
+from abaqus_ai_agent.planning.compiler import IntentGeometrySpec, IntentInteractionSpec, IntentMeshSpec
 from abaqus_ai_agent.validation.condition_fidelity import InvalidForQuestionError
 
 
@@ -73,6 +73,11 @@ class _OdbBackedExecutor(AbaqusExecutor):
 
 
 _GEOM = IntentGeometrySpec(shape="cantilever_box", length=120.0, width=12.0, height=8.0)
+_MESH = IntentMeshSpec(
+    global_size=2.5,
+    primary_wall_thickness=2.5,
+    primary_wall_thickness_source="USER_SPECIFIED",
+)
 _MAT = MaterialDefinition(
     name="Steel_Q235",
     unit_system="MM_N_MPA",
@@ -111,6 +116,7 @@ def test_compile_gate_marks_tie_only_separation_question_invalid():
         requirement=_separation_tie_intent(),
         geometry=_GEOM,
         material=_MAT,
+        mesh=_MESH,
     )
 
     assert result.status == TaskStatus.BLOCKED
@@ -319,6 +325,7 @@ def test_report_stage_diagnostic_path_marks_invalid_for_question(monkeypatch, tm
         requirement=intent,
         geometry=_GEOM,
         material=_MAT,
+        mesh=_MESH,
         workdir=str(workdir),
         project_context=ctx,
     )

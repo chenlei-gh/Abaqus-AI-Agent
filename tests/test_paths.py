@@ -329,10 +329,16 @@ def test_agent_solve_requirement_with_external_project_context(tmp_path, monkeyp
         analysis_type="linear_static",
         description="External project test",
         unit_system="MM_N_MPA",
-        material={"name": "Steel", "youngs_modulus": 210000.0, "poisson_ratio": 0.3},
+        material={"name": "Q235", "youngs_modulus": 210000.0, "poisson_ratio": 0.3},
         metadata={"geometry": {"shape": "cantilever_box", "length": 100.0, "width": 10.0, "height": 10.0}},
         loads=({"type": "concentrated_force", "region": "TipFace", "magnitude": 1000.0},),
         boundary_conditions=({"type": "encastre", "region": "RootFace"},),
+        mesh_requirements={
+            "global_size": 2.5,
+            "size_source": "USER_SPECIFIED",
+            "primary_wall_thickness": 2.5,
+            "primary_wall_thickness_source": "USER_SPECIFIED",
+        },
     )
 
     # 1. solve_requirement with project_context
@@ -611,10 +617,16 @@ def test_agent_production_mode_blocks_execution_in_repo_runs(tmp_path):
         analysis_type="linear_static",
         description="Production mode block test",
         unit_system="MM_N_MPA",
-        material={"name": "Steel", "youngs_modulus": 210000.0, "poisson_ratio": 0.3},
+        material={"name": "Q235", "youngs_modulus": 210000.0, "poisson_ratio": 0.3},
         metadata={"geometry": {"shape": "cantilever_box", "length": 100.0, "width": 10.0, "height": 10.0}},
         loads=({"type": "concentrated_force", "region": "TipFace", "magnitude": 1000.0},),
         boundary_conditions=({"type": "encastre", "region": "RootFace"},),
+        mesh_requirements={
+            "global_size": 2.5,
+            "size_source": "USER_SPECIFIED",
+            "primary_wall_thickness": 2.5,
+            "primary_wall_thickness_source": "USER_SPECIFIED",
+        },
     )
 
     # 1. No project_context and no workdir -> must fail closed, not invent a solver copy.

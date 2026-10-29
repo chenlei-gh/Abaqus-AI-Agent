@@ -351,7 +351,7 @@ def test_ga2a_viewport_click_to_compiler_action_plan_e2e():
     # 5. Compile into ActionPlan
     geom = IntentGeometrySpec(shape="cantilever_box", length=100.0, width=20.0, height=10.0)
     mat = MaterialDefinition(
-        name="Steel",
+        name="LabSteel_Card",
         unit_system="MM_N_MPA",
         elastic=ElasticProperties(youngs_modulus=210e3, poisson_ratio=0.3),
     )
@@ -374,7 +374,7 @@ def test_ga2a_viewport_click_to_compiler_action_plan_e2e():
 
     assert plan.model_name == "RaycastModel"
     assert plan.job_name == "RaycastJob"
-    assert "findAt(((50.0, 10.0, 0.0),))" in plan.cae_script
+    assert "_abqai_bind_region(a.instances['BeamPart-1'].faces, (((50.0, 10.0, 0.0),),), 'FIXED_ROOT')" in plan.cae_script
     assert "EncastreBC" in plan.cae_script
     assert "Pressure" in plan.cae_script
 

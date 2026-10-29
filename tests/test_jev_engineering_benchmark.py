@@ -20,6 +20,15 @@ from tools.jev_engineering_benchmark import (
 )
 
 
+def _step_mesh():
+    from abaqus_ai_agent.planning.compiler import IntentMeshSpec
+    return IntentMeshSpec(
+        global_size=2.5,
+        primary_wall_thickness=2.5,
+        primary_wall_thickness_source="USER_SPECIFIED",
+    )
+
+
 def test_jev_engineering_benchmark_suite_passes():
     """Verify that the 6-dimensional benchmark suite achieves 100% accuracy and 0% false negatives."""
     report = run_engineering_benchmark()
@@ -1062,7 +1071,7 @@ def test_compiler_fails_closed_on_unresolved_grounding_for_step_file():
     )
 
     with pytest.raises(ValueError, match="geometry relies on external STEP file"):
-        compile_engineering_intent(intent, geometry=step_geom, allow_missing_step_file=True)
+        compile_engineering_intent(intent, geometry=step_geom, allow_missing_step_file=True, mesh=_step_mesh())
 
 
 def test_compiler_step_file_grounding_gate_rejects_dummy_and_invalid_mappings():
@@ -1086,7 +1095,7 @@ def test_compiler_step_file_grounding_gate_rejects_dummy_and_invalid_mappings():
     # 1. Non-empty dummy dictionary that lacks the referenced regions
     dummy_grounded = {"UnrelatedFace": {"anchor_point": (0.0, 0.0, 0.0)}}
     with pytest.raises(ValueError, match="lack valid GroundedRegion mappings") as exc_info:
-        compile_engineering_intent(intent, geometry=step_geom, allow_missing_step_file=True, grounded_regions=dummy_grounded)
+        compile_engineering_intent(intent, geometry=step_geom, allow_missing_step_file=True, mesh=_step_mesh(), grounded_regions=dummy_grounded)
     assert "MountingHole" in str(exc_info.value)
     assert "LoadBearingEye" in str(exc_info.value)
 
@@ -1096,7 +1105,7 @@ def test_compiler_step_file_grounding_gate_rejects_dummy_and_invalid_mappings():
         "LoadBearingEye": {"anchor_points": []},         # Invalid: empty
     }
     with pytest.raises(ValueError, match="lack valid GroundedRegion mappings"):
-        compile_engineering_intent(intent, geometry=step_geom, allow_missing_step_file=True, grounded_regions=invalid_coords_grounded)
+        compile_engineering_intent(intent, geometry=step_geom, allow_missing_step_file=True, mesh=_step_mesh(), grounded_regions=invalid_coords_grounded)
 
     # 3. Explicitly unresolved dict
     unresolved_grounded = {
@@ -1104,7 +1113,7 @@ def test_compiler_step_file_grounding_gate_rejects_dummy_and_invalid_mappings():
         "LoadBearingEye": {"anchor_point": (10.0, 0.0, 0.0)},
     }
     with pytest.raises(ValueError, match="lack valid GroundedRegion mappings") as exc_unres:
-        compile_engineering_intent(intent, geometry=step_geom, allow_missing_step_file=True, grounded_regions=unresolved_grounded)
+        compile_engineering_intent(intent, geometry=step_geom, allow_missing_step_file=True, mesh=_step_mesh(), grounded_regions=unresolved_grounded)
     assert "MountingHole" in str(exc_unres.value)
 
 
@@ -1119,7 +1128,7 @@ def test_compiler_step_file_grounding_gate_accepts_valid_grounded_regions():
         description="Bracket with valid grounding",
         analysis_type="linear_static",
         unit_system="MM_N_MPA",
-        material={"name": "Steel", "elastic_modulus": 210000.0, "poisson_ratio": 0.3},
+        material={"name": "Q235", "elastic_modulus": 210000.0, "poisson_ratio": 0.3},
         boundary_conditions=({"type": "encastre", "region": "MountingHole"},),
         loads=({"type": "concentrated_force", "region": "LoadBearingEye", "magnitude": 1000.0},),
         metadata={
@@ -1132,7 +1141,7 @@ def test_compiler_step_file_grounding_gate_accepts_valid_grounded_regions():
     step_geom = IntentGeometrySpec(shape="step_file", step_file_path="/path/to/part.step")
 
     # Should not raise ValueError for missing/invalid grounded regions
-    plan = compile_engineering_intent(intent, geometry=step_geom, allow_missing_step_file=True)
+    plan = compile_engineering_intent(intent, geometry=step_geom, allow_missing_step_file=True, mesh=_step_mesh())
     assert plan is not None
     assert plan.model_name is not None
     assert len(plan.actions) > 0
@@ -1243,7 +1252,7 @@ def test_compiler_step_file_grounding_gate_rejects_unresolved_or_invalid_objects
         status="RESOLVED",
     )
     with pytest.raises(ValueError, match="lack valid GroundedRegion mappings") as exc1:
-        compile_engineering_intent(intent, geometry=step_geom, allow_missing_step_file=True, grounded_regions={"MountingHole": gr_not_found, "LoadBearingEye": gr_valid})
+        compile_engineering_intent(intent, geometry=step_geom, allow_missing_step_file=True, mesh=_step_mesh(), grounded_regions={"MountingHole": gr_not_found, "LoadBearingEye": gr_valid})
     assert "MountingHole" in str(exc1.value)
 
     # 2. Object with confidence <= 0.0
@@ -1256,7 +1265,7 @@ def test_compiler_step_file_grounding_gate_rejects_unresolved_or_invalid_objects
         status="RESOLVED",
     )
     with pytest.raises(ValueError, match="lack valid GroundedRegion mappings") as exc2:
-        compile_engineering_intent(intent, geometry=step_geom, allow_missing_step_file=True, grounded_regions={"MountingHole": gr_zero_conf, "LoadBearingEye": gr_valid})
+        compile_engineering_intent(intent, geometry=step_geom, allow_missing_step_file=True, mesh=_step_mesh(), grounded_regions={"MountingHole": gr_zero_conf, "LoadBearingEye": gr_valid})
     assert "MountingHole" in str(exc2.value)
 
 
@@ -1281,7 +1290,7 @@ def test_compiler_step_file_grounding_gate_rejects_nan_inf_bool_string_coordinat
     # NaN in anchor_point
     with pytest.raises(ValueError, match="lack valid GroundedRegion mappings"):
         compile_engineering_intent(
-            intent, geometry=step_geom, allow_missing_step_file=True,
+            intent, geometry=step_geom, allow_missing_step_file=True, mesh=_step_mesh(),
             grounded_regions={
                 "MountingHole": {"anchor_point": (0.0, float("nan"), 0.0)},
                 "LoadBearingEye": {"anchor_point": (10.0, 0.0, 0.0)},
@@ -1291,7 +1300,7 @@ def test_compiler_step_file_grounding_gate_rejects_nan_inf_bool_string_coordinat
     # Inf in anchor_points
     with pytest.raises(ValueError, match="lack valid GroundedRegion mappings"):
         compile_engineering_intent(
-            intent, geometry=step_geom, allow_missing_step_file=True,
+            intent, geometry=step_geom, allow_missing_step_file=True, mesh=_step_mesh(),
             grounded_regions={
                 "MountingHole": {"anchor_points": [(0.0, 0.0, float("inf"))]},
                 "LoadBearingEye": {"anchor_point": (10.0, 0.0, 0.0)},
@@ -1301,7 +1310,7 @@ def test_compiler_step_file_grounding_gate_rejects_nan_inf_bool_string_coordinat
     # Boolean in coordinates (bool is a subclass of int, must be rejected)
     with pytest.raises(ValueError, match="lack valid GroundedRegion mappings"):
         compile_engineering_intent(
-            intent, geometry=step_geom, allow_missing_step_file=True,
+            intent, geometry=step_geom, allow_missing_step_file=True, mesh=_step_mesh(),
             grounded_regions={
                 "MountingHole": {"anchor_point": (True, 0.0, 0.0)},
                 "LoadBearingEye": {"anchor_point": (10.0, 0.0, 0.0)},
@@ -1311,7 +1320,7 @@ def test_compiler_step_file_grounding_gate_rejects_nan_inf_bool_string_coordinat
     # String in coordinates
     with pytest.raises(ValueError, match="lack valid GroundedRegion mappings"):
         compile_engineering_intent(
-            intent, geometry=step_geom, allow_missing_step_file=True,
+            intent, geometry=step_geom, allow_missing_step_file=True, mesh=_step_mesh(),
             grounded_regions={
                 "MountingHole": {"anchor_point": ("0.0", 0.0, 0.0)},
                 "LoadBearingEye": {"anchor_point": (10.0, 0.0, 0.0)},
@@ -1330,7 +1339,7 @@ def test_compiler_step_file_grounding_gate_consumes_named_selectors_without_empt
         description="Bracket with named set and named surface mappings",
         analysis_type="linear_static",
         unit_system="MM_N_MPA",
-        material={"name": "Steel", "elastic_modulus": 210000.0, "poisson_ratio": 0.3},
+        material={"name": "Q235", "elastic_modulus": 210000.0, "poisson_ratio": 0.3},
         boundary_conditions=({"type": "encastre", "region": "FixedFace"},),
         loads=({"type": "pressure", "region": "PressureFace", "magnitude": 5.0},),
     )
@@ -1339,7 +1348,7 @@ def test_compiler_step_file_grounding_gate_consumes_named_selectors_without_empt
     # 1. Providing consumable named set for BC and named surface for Load
     plan = compile_engineering_intent(
         intent,
-        geometry=step_geom, allow_missing_step_file=True,
+        geometry=step_geom, allow_missing_step_file=True, mesh=_step_mesh(),
         grounded_regions={
             "FixedFace": {"set": "Hole_Fix_Set"},
             "PressureFace": {"surface": "Top_Pres_Surf"},
@@ -1356,7 +1365,7 @@ def test_compiler_step_file_grounding_gate_consumes_named_selectors_without_empt
     with pytest.raises(ValueError, match="lack valid GroundedRegion mappings"):
         compile_engineering_intent(
             intent,
-            geometry=step_geom, allow_missing_step_file=True,
+            geometry=step_geom, allow_missing_step_file=True, mesh=_step_mesh(),
             grounded_regions={
                 "FixedFace": {"faces": [1, 2]},  # raw unconsumable selector
                 "PressureFace": {"surface": "Top_Pres_Surf"},

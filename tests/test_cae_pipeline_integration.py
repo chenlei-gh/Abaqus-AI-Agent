@@ -496,7 +496,7 @@ def test_agent_solve_requirement_require_production_full_closure_and_delivery(tm
     agent = AbaqusAIAgent(executor)
     geom = IntentGeometrySpec(shape="cantilever_box", length=100.0, width=10.0, height=10.0)
     mat = MaterialDefinition(
-        name="Steel",
+        name="Q235",
         unit_system="MM_N_MPA",
         elastic=ElasticProperties(youngs_modulus=210000.0, poisson_ratio=0.3),
         density=7.85e-9,
@@ -510,6 +510,12 @@ def test_agent_solve_requirement_require_production_full_closure_and_delivery(tm
         acceptance_criteria=(
             {"name": "mises_limit", "value_key": "max_mises", "operator": "<=", "limit": 250.0, "unit": "MPa", "required": True},
         ),
+        mesh_requirements={
+            "global_size": 2.5,
+            "size_source": "USER_SPECIFIED",
+            "primary_wall_thickness": 2.5,
+            "primary_wall_thickness_source": "USER_SPECIFIED",
+        },
     )
 
     result = agent.solve_requirement(
@@ -691,7 +697,7 @@ def test_agent_report_stage_fidelity_blocks_formal_write_when_earlier_gates_bypa
     agent = AbaqusAIAgent(executor)
     geom = IntentGeometrySpec(shape="cantilever_box", length=100.0, width=10.0, height=10.0)
     mat = MaterialDefinition(
-        name="Steel",
+        name="Q235",
         unit_system="MM_N_MPA",
         elastic=ElasticProperties(youngs_modulus=210000.0, poisson_ratio=0.3),
         density=7.85e-9,
@@ -705,6 +711,12 @@ def test_agent_report_stage_fidelity_blocks_formal_write_when_earlier_gates_bypa
         acceptance_criteria=(
             {"name": "mises_limit", "value_key": "max_mises", "operator": "<=", "limit": 250.0, "unit": "MPa", "required": True},
         ),
+        mesh_requirements={
+            "global_size": 2.5,
+            "size_source": "USER_SPECIFIED",
+            "primary_wall_thickness": 2.5,
+            "primary_wall_thickness_source": "USER_SPECIFIED",
+        },
     )
 
     result = agent.solve_requirement(
@@ -741,7 +753,7 @@ def test_agent_solve_requirement_require_production_blocks_fake_odb(tmp_path: Pa
     agent = AbaqusAIAgent(executor)
     geom = IntentGeometrySpec(shape="cantilever_box", length=100.0, width=10.0, height=10.0)
     mat = MaterialDefinition(
-        name="Steel",
+        name="Q235",
         unit_system="MM_N_MPA",
         elastic=ElasticProperties(youngs_modulus=210000.0, poisson_ratio=0.3),
         density=7.85e-9,
@@ -755,6 +767,12 @@ def test_agent_solve_requirement_require_production_blocks_fake_odb(tmp_path: Pa
         acceptance_criteria=(
             {"name": "mises_limit", "value_key": "max_mises", "operator": "<=", "limit": 250.0, "unit": "MPa", "required": True},
         ),
+        mesh_requirements={
+            "global_size": 2.5,
+            "size_source": "USER_SPECIFIED",
+            "primary_wall_thickness": 2.5,
+            "primary_wall_thickness_source": "USER_SPECIFIED",
+        },
     )
 
     result = agent.solve_requirement(
@@ -1378,7 +1396,7 @@ def test_negative_p1_d_missing_required_criterion_blocks_task_completion_and_del
     agent = AbaqusAIAgent(executor)
     geom = IntentGeometrySpec(shape="cantilever_box", length=100.0, width=10.0, height=10.0)
     mat = MaterialDefinition(
-        name="Steel",
+        name="Q235",
         unit_system="MM_N_MPA",
         elastic=ElasticProperties(youngs_modulus=210000.0, poisson_ratio=0.3),
         density=7.85e-9,
@@ -1393,6 +1411,12 @@ def test_negative_p1_d_missing_required_criterion_blocks_task_completion_and_del
         acceptance_criteria=(
             {"name": "mises_limit", "value_key": "max_mises", "operator": "<=", "limit": 250.0, "unit": "MPa", "required": True},
         ),
+        mesh_requirements={
+            "global_size": 2.5,
+            "size_source": "USER_SPECIFIED",
+            "primary_wall_thickness": 2.5,
+            "primary_wall_thickness_source": "USER_SPECIFIED",
+        },
     )
 
     result = agent.solve_requirement(
@@ -1435,7 +1459,7 @@ def test_negative_p1_d_required_criterion_with_nan_inf_bool_or_unavailable_diagn
 
     geom = IntentGeometrySpec(shape="cantilever_box", length=100.0, width=10.0, height=10.0)
     mat = MaterialDefinition(
-        name="Steel",
+        name="Q235",
         unit_system="MM_N_MPA",
         elastic=ElasticProperties(youngs_modulus=210000.0, poisson_ratio=0.3),
         density=7.85e-9,
@@ -1449,6 +1473,12 @@ def test_negative_p1_d_required_criterion_with_nan_inf_bool_or_unavailable_diagn
         acceptance_criteria=(
             {"name": "mises_limit", "value_key": "max_mises", "field": "S", "operator": "<=", "limit": 250.0, "unit": "MPa", "required": True},
         ),
+        mesh_requirements={
+            "global_size": 2.5,
+            "size_source": "USER_SPECIFIED",
+            "primary_wall_thickness": 2.5,
+            "primary_wall_thickness_source": "USER_SPECIFIED",
+        },
     )
 
     # Sub-test 1: Test NaN, +inf, -inf, and True (bool) all block delivery

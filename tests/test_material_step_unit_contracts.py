@@ -28,13 +28,31 @@ def test_material_definition_semantics_and_actions():
     assert d["elastic"]["youngs_modulus"] == 210000.0
     assert d["plastic"]["yield_stress"] == 355.0
 
-    # Materialize into low-level Abaqus actions
+    # Yield-only (sy, 0) is not a hardening curve and must not emit *PLASTIC.
     actions = mat.to_actions("Model-1")
-    assert len(actions) == 3
+    assert len(actions) == 2
     types = [a.action_type for a in actions]
     assert "material_elastic" in types
     assert "material_density" in types
-    assert "material_plastic" in types
+    assert "material_plastic" not in types
+
+    hardened = MaterialDefinition(
+        name="StructuralSteel",
+        unit_system="MM_N_MPA",
+        elastic=ElasticProperties(youngs_modulus=210000.0, poisson_ratio=0.3),
+        density=7.85e-9,
+        plastic=PlasticProperties(
+            yield_stress=355.0,
+            plastic_strain=0.0,
+            hardening_table=((355.0, 0.0), (400.0, 0.02)),
+        ),
+    )
+    hard_actions = hardened.to_actions("Model-1")
+    assert len(hard_actions) == 3
+    hard_types = [a.action_type for a in hard_actions]
+    assert "material_elastic" in hard_types
+    assert "material_density" in hard_types
+    assert "material_plastic" in hard_types
 
     # Negative validation
     with pytest.raises(ValueError, match="Young's modulus must be positive"):

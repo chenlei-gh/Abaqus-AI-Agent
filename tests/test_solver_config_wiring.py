@@ -8,6 +8,7 @@ from abaqus_ai_agent.execution.jobs import JobController
 from abaqus_ai_agent.execution.solver_config import resolve_explicit_job_kwargs
 from abaqus_ai_agent.planning.compiler import (
     IntentGeometrySpec,
+    IntentMeshSpec,
     IntentStepSpec,
     compile_engineering_intent,
     compile_intent_to_actions,
@@ -15,8 +16,18 @@ from abaqus_ai_agent.planning.compiler import (
 
 
 GEOM = IntentGeometrySpec(shape="cantilever_box", length=10.0, width=2.0, height=2.0)
+MESH = IntentMeshSpec(
+    global_size=2.5,
+    primary_wall_thickness=2.5,
+    primary_wall_thickness_source="USER_SPECIFIED",
+)
+_MESH_REQUIREMENTS = {
+    "global_size": 2.5,
+    "primary_wall_thickness": 2.5,
+    "primary_wall_thickness_source": "USER_SPECIFIED",
+}
 MAT = MaterialDefinition(
-    name="Steel",
+    name="Q235",
     unit_system="MM_N_MPA",
     elastic=ElasticProperties(youngs_modulus=210000.0, poisson_ratio=0.3),
 )
@@ -38,13 +49,14 @@ def _intent(analysis_type):
         description="probe",
         analysis_type=analysis_type,
         material=MAT,
+        mesh_requirements=dict(_MESH_REQUIREMENTS),
         metadata={"dimensions": {"shape": "cantilever_box", "length": 10.0, "width": 2.0, "height": 2.0}},
     )
 
 
 @pytest.mark.parametrize("analysis_type,marker", list(_MARKERS.items()))
 def test_engineering_intent_keeps_declared_procedure(analysis_type, marker):
-    plan = compile_engineering_intent(_intent(analysis_type))
+    plan = compile_engineering_intent(_intent(analysis_type), mesh=MESH)
     assert marker in plan.cae_script
     if marker != "StaticStep":
         assert "StaticStep" not in plan.cae_script
@@ -58,11 +70,11 @@ def test_engineering_intent_keeps_declared_procedure(analysis_type, marker):
 ))
 def test_single_step_and_steps_paths_do_not_fall_back(step_type, marker):
     single = compile_intent_to_actions(
-        model_name="M", part_name="P", job_name="J", geometry=GEOM, material=MAT,
+        model_name="M", part_name="P", job_name="J", geometry=GEOM, material=MAT, mesh=MESH,
         step=IntentStepSpec(name="Step-1", step_type=step_type),
     )
     listed = compile_intent_to_actions(
-        model_name="M", part_name="P", job_name="J", geometry=GEOM, material=MAT,
+        model_name="M", part_name="P", job_name="J", geometry=GEOM, material=MAT, mesh=MESH,
         steps=(IntentStepSpec(name="Step-1", step_type=step_type),),
     )
     for plan in (single, listed):
@@ -72,7 +84,7 @@ def test_single_step_and_steps_paths_do_not_fall_back(step_type, marker):
 
 def test_procedure_path_still_emits_explicit_step():
     plan = compile_intent_to_actions(
-        model_name="M", part_name="P", job_name="J", geometry=GEOM, material=MAT,
+        model_name="M", part_name="P", job_name="J", geometry=GEOM, material=MAT, mesh=MESH,
         procedure=MultiStepProcedureSpec(steps=(
             StepDependency(name="Exp", procedure="explicit_dynamic", time_period=0.01),
         )),
@@ -84,7 +96,7 @@ def test_procedure_path_still_emits_explicit_step():
 def test_unknown_step_type_fails_closed():
     with pytest.raises(ValueError, match="unsupported step_type 'buckling'"):
         compile_intent_to_actions(
-            model_name="M", part_name="P", job_name="J", geometry=GEOM, material=MAT,
+            model_name="M", part_name="P", job_name="J", geometry=GEOM, material=MAT, mesh=MESH,
             step=IntentStepSpec(name="Step-1", step_type="buckling"),
         )
 

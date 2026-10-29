@@ -245,6 +245,11 @@ def test_compiler_binds_multi_solid_step_and_refuses_incomplete_scope():
                 step_file_path=step_path,
                 assembly_scope=model,
             ),
+            mesh=IntentMeshSpec(
+                global_size=1.5,
+                primary_wall_thickness=1000.0,
+                primary_wall_thickness_source="MEASURED",
+            ),
         )
 
     script = plan.cae_script
@@ -277,6 +282,11 @@ def test_compiler_binds_multi_solid_step_and_refuses_incomplete_scope():
                 shape="step_file",
                 step_file_path=step_path,
                 assembly_scope=separated,
+            ),
+            mesh=IntentMeshSpec(
+                global_size=1.5,
+                primary_wall_thickness=1000.0,
+                primary_wall_thickness_source="MEASURED",
             ),
         )
 
@@ -312,10 +322,20 @@ def test_product_entry_blocks_incomplete_multi_solid_scope():
         analysis_type="linear_static",
         unit_system="MM_N_MPA",
         material={"name": "PA66", "elastic_modulus": 3000.0, "poisson_ratio": 0.35},
+        mesh_requirements={
+            "global_size": 1.5,
+            "primary_wall_thickness": 1000.0,
+            "primary_wall_thickness_source": "MEASURED",
+        },
     )
     result = AbaqusAIAgent(executor=None).solve_requirement(
         intent,
         geometry=IntentGeometrySpec(shape="step_file", assembly_scope=separated),
+        mesh=IntentMeshSpec(
+            global_size=1.5,
+            primary_wall_thickness=1000.0,
+            primary_wall_thickness_source="MEASURED",
+        ),
         submit_job=False,
     )
     assert result.status == TaskStatus.BLOCKED

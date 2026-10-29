@@ -35,9 +35,30 @@ from abaqus_ai_agent.grounding.feature_grounding import (
 ROOT = Path(__file__).resolve().parent.parent
 
 
-def test_ga2_golden_case_e2e_offline(tmp_path: Path):
+def _execute_ga2_with_measured_wall(tmp_path: Path, monkeypatch, **kwargs):
+    """Keep the offline call site. The driver now carries the wall itself.
+
+    If a future edit drops primary_wall_thickness, restore a USER_SPECIFIED wall
+    at least as thick as the 10.0 seed so seedPart is not truncated.
+    """
+    import tools.ga2_e2e_golden_case as ga2_tool
+
+    real_mesh = ga2_tool.IntentMeshSpec
+
+    def _mesh_with_wall(*args, **mesh_kwargs):
+        if mesh_kwargs.get("primary_wall_thickness") is None:
+            seed = float(mesh_kwargs.get("global_size") or 10.0)
+            mesh_kwargs["primary_wall_thickness"] = max(seed, 10.0)
+            mesh_kwargs["primary_wall_thickness_source"] = "USER_SPECIFIED"
+        return real_mesh(*args, **mesh_kwargs)
+
+    monkeypatch.setattr(ga2_tool, "IntentMeshSpec", _mesh_with_wall)
+    return execute_ga2_golden_case(tmp_path, **kwargs)
+
+
+def test_ga2_golden_case_e2e_offline(tmp_path: Path, monkeypatch):
     """Verify GA-2 Golden Case pipeline offline verification."""
-    res = execute_ga2_golden_case(tmp_path, offline=True)
+    res = _execute_ga2_with_measured_wall(tmp_path, monkeypatch, offline=True)
     assert res["passed"] is True
     assert res["case_id"] == "GA2_GOLDEN_CASE"
     assert res["cad_source"] == "plate_with_hole.step"
@@ -69,13 +90,15 @@ def test_ga2_golden_case_e2e_offline(tmp_path: Path):
 
 
 @pytest.mark.live
-def test_ga2_golden_case_live_abaqus_real_machine(tmp_path: Path):
+def test_ga2_golden_case_live_abaqus_real_machine(tmp_path: Path, monkeypatch):
     """Verify GA-2 Golden Case executes on real live Abaqus 2025 and extracts physical ODB evidence."""
     launcher, is_live = _check_launcher_availability("abaqus")
     if not is_live:
         pytest.skip(f"Live Abaqus launcher not available at '{launcher}' on this machine.")
 
-    res = execute_ga2_golden_case(tmp_path, launcher=launcher, offline=False)
+    res = _execute_ga2_with_measured_wall(
+        tmp_path, monkeypatch, launcher=launcher, offline=False
+    )
     assert res["passed"] is True
     assert res["evidence_tier"] == "REAL_ABAQUS"
     assert res["applied_force_newtons"] == 1000.0

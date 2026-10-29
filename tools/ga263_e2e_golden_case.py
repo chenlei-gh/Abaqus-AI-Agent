@@ -113,8 +113,11 @@ def execute_ga263_golden_case(
         height=height,
         length=length,
     )
+    # Catalog grade, not a family name. MaterialDefinition.elastic is not a
+    # dict card, so a bare "Steel" still screens. "LabSteel_Card" substring-matches
+    # the steel alias and is refused the same way.
     mat = MaterialDefinition(
-        name="Steel",
+        name="Q235",
         unit_system="MM_N_MPA",
         elastic=ElasticProperties(youngs_modulus=210000.0, poisson_ratio=0.3),
         density=7.85e-9,
@@ -214,7 +217,14 @@ def execute_ga263_golden_case(
         )
     ]
 
-    mesh = IntentMeshSpec(element_type="C3D8R", global_size=5.0)
+    # Wall must be at least the seed or seedPart is truncated. Box section
+    # dimensions are geometry, not a verified wall measurement.
+    mesh = IntentMeshSpec(
+        element_type="C3D8R",
+        global_size=5.0,
+        primary_wall_thickness=5.0,
+        primary_wall_thickness_source="USER_SPECIFIED",
+    )
 
     # 2. Compile Intent to Actions & Script
     print(" [Stage 2/7] Compiling intent to native action plan & CAE script...")

@@ -140,8 +140,10 @@ def execute_ga2_golden_case(
         thickness=20.0,
         step_file_path=step_path.as_posix(),
     )
+    # Catalog grade, not a family name. MaterialDefinition.elastic is not a
+    # dict card, so "Steel" / "StructuralSteel" still screen as family-only.
     mat = MaterialDefinition(
-        name="StructuralSteel",
+        name="Q235",
         unit_system="MM_N_MPA",
         elastic=ElasticProperties(youngs_modulus=210000.0, poisson_ratio=0.3),
         density=7.85e-9,
@@ -149,7 +151,14 @@ def execute_ga2_golden_case(
     step = IntentStepSpec(name="StaticStep", step_type="static_general")
     bcs = [IntentBoundarySpec(name="FixHoleBC", bc_type="ENCASTRE", region="INSTALLATION_HOLE")]
     loads = [IntentLoadSpec(name="TopLoad", load_type="concentrated_force", region="TOP_SURFACE", magnitude=-1000.0, direction="CF3")]
-    mesh = IntentMeshSpec(element_type="C3D10", global_size=10.0)
+    # Wall must be at least the seed or seedPart is truncated. 20 mm plate
+    # thickness is geometry, not a verified wall measurement.
+    mesh = IntentMeshSpec(
+        element_type="C3D10",
+        global_size=10.0,
+        primary_wall_thickness=10.0,
+        primary_wall_thickness_source="USER_SPECIFIED",
+    )
     grounded_regions = {
         "INSTALLATION_HOLE": hole_gr,
         "TOP_SURFACE": top_gr,

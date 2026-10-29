@@ -218,6 +218,12 @@ def test_p1_multimodal_perception_to_solve_requirement_full_chain(tmp_path: Path
         material={"name": "Q235", "elastic_modulus": 210000.0, "poisson_ratio": 0.30},
         boundary_conditions=tuple(bc_specs),
         loads=tuple(load_specs),
+        mesh_requirements={
+            "global_size": 2.5,
+            "size_source": "USER_SPECIFIED",
+            "primary_wall_thickness": 2.5,
+            "primary_wall_thickness_source": "USER_SPECIFIED",
+        },
     )
 
     geom = IntentGeometrySpec(

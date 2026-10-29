@@ -132,9 +132,10 @@ def test_compile_grounded_intent_plate_with_hole():
     assert "CircleByCenterPerimeter" in script
     assert "elemShape=TET, technique=FREE" in script
     assert "elemCode=C3D10" in script
-    # Anchor points used in findAt
-    assert "findAt(((60.0, 50.0, 10.0),))" in script
-    assert "findAt(((25.0, 25.0, 20.0),))" in script
+    # Locator guard binds anchor points; the script must not rely on a bare findAt assignment.
+    assert "_abqai_bind_region" in script
+    assert "60.0, 50.0, 10.0" in script
+    assert "25.0, 25.0, 20.0" in script
     assert "EncastreBC" in script
     assert "Pressure" in script
 
@@ -192,10 +193,12 @@ def test_compile_multi_anchor_group_intent():
     )
 
     script = plan.cae_script
-    # Must contain both anchor points inside the findAt call for ALL_BOLTS
-    assert "findAt(((15.0, 15.0, 10.0),), ((85.0, 85.0, 10.0),))" in script
+    # Both ALL_BOLTS anchors are passed to the locator guard, not a bare findAt assignment.
+    assert "_abqai_bind_region" in script
+    assert "15.0, 15.0, 10.0" in script
+    assert "85.0, 85.0, 10.0" in script
     # Bottom face anchor
-    assert "findAt(((50.0, 50.0, 0.0),))" in script
+    assert "50.0, 50.0, 0.0" in script
     assert "EncastreBC" in script
     assert "Pressure" in script
 

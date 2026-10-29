@@ -132,13 +132,19 @@ def _build_test_intent() -> EngineeringIntent:
         analysis_type="linear_static",
         unit_system="MM_N_MPA",
         material={
-            "name": "Steel",
+            "name": "Q235",
             "youngs_modulus": 210000.0,
             "poisson_ratio": 0.3,
         },
         metadata={"geometry": IntentGeometrySpec(shape="cantilever_box", length=100.0, width=10.0, height=10.0)},
         boundary_conditions=(IntentBoundarySpec(name="FixedRoot", bc_type="ENCASTRE", region="RootFace"),),
         loads=(IntentLoadSpec(name="TipLoad", load_type="concentrated_force", region="TipFace", magnitude=-1000.0),),
+        mesh_requirements={
+            "global_size": 2.5,
+            "size_source": "USER_SPECIFIED",
+            "primary_wall_thickness": 2.5,
+            "primary_wall_thickness_source": "USER_SPECIFIED",
+        },
     )
 
 
@@ -490,6 +496,7 @@ def test_missing_required_criterion_field_extraction_invalidates_delivery(tmp_pa
         acceptance_criteria=(
             {"name": "RF", "required": True, "limit": 1000.0, "operator": "<="},
         ),
+        mesh_requirements=intent.mesh_requirements,
     )
 
     mock_run = MagicMock(spec=AnalysisRun)

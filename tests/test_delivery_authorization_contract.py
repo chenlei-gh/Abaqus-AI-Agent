@@ -408,13 +408,18 @@ def test_compile_refuses_tie_only_plan_for_separation_question():
                 slave_region="Button",
             ),
         ),
+        mesh_requirements={
+            "global_size": 2.5,
+            "primary_wall_thickness": 2.5,
+            "primary_wall_thickness_source": "USER_SPECIFIED",
+        },
     )
     with pytest.raises(ValueError, match="interface_modelled_as_tie_not_contact"):
         compile_engineering_intent(
             intent,
             geometry=IntentGeometrySpec(shape="cantilever_box", length=10.0, width=10.0, height=10.0),
             material=MaterialDefinition(
-                name="Steel",
+                name="LabSteel_Card",
                 unit_system="MM_N_MPA",
                 elastic=ElasticProperties(youngs_modulus=210000.0, poisson_ratio=0.3),
             ),

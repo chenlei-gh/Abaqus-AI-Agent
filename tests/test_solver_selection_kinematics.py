@@ -227,7 +227,7 @@ def test_agent_blocked_run_never_enters_self_healing(monkeypatch):
     """A policy block is not a solver failure: the healing chain must stay out."""
     from abaqus_ai_agent.contracts.material import ElasticProperties, MaterialDefinition
     from abaqus_ai_agent.diagnostics import orchestrator as orch_mod
-    from abaqus_ai_agent.planning.compiler import IntentGeometrySpec
+    from abaqus_ai_agent.planning.compiler import IntentGeometrySpec, IntentMeshSpec
     healing_calls = []
     monkeypatch.setattr(orch_mod.SelfHealingOrchestrator, "attempt_healing",
                         lambda *a, **k: healing_calls.append((a, k)))
@@ -241,6 +241,11 @@ def test_agent_blocked_run_never_enters_self_healing(monkeypatch):
             name="Steel_Q235", unit_system="MM_N_MPA",
             elastic=ElasticProperties(youngs_modulus=210000.0, poisson_ratio=0.3),
             density=7.85e-9,
+        ),
+        mesh=IntentMeshSpec(
+            global_size=2.5,
+            primary_wall_thickness=2.5,
+            primary_wall_thickness_source="USER_SPECIFIED",
         ),
     )
 

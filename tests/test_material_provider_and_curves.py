@@ -14,7 +14,7 @@ from abaqus_ai_agent.contracts.material_record import (
 )
 from abaqus_ai_agent.contracts.material_resolver import MaterialResolver
 from abaqus_ai_agent.materials.provider import MaterialNotFoundError, MaterialProvider
-from abaqus_ai_agent.planning.compiler import IntentGeometrySpec, compile_intent_to_actions
+from abaqus_ai_agent.planning.compiler import IntentGeometrySpec, IntentMeshSpec, compile_intent_to_actions
 from abaqus_ai_agent.reasoning.material_catalog import resolve_material_to_definition
 
 
@@ -168,6 +168,11 @@ def test_compile_plasticity_refuses_single_point_yield_and_accepts_hardening():
     from abaqus_ai_agent.planning.compiler import compile_engineering_intent
 
     geometry = {"shape": "cantilever_box", "length": 100.0, "width": 10.0, "height": 10.0}
+    mesh = IntentMeshSpec(
+        global_size=2.5,
+        primary_wall_thickness=2.5,
+        primary_wall_thickness_source="USER_SPECIFIED",
+    )
     yield_only = MaterialDefinition(
         name="YieldOnly",
         unit_system="MM_N_MPA",
@@ -183,7 +188,7 @@ def test_compile_plasticity_refuses_single_point_yield_and_accepts_hardening():
         metadata={"geometry": geometry},
     )
     with pytest.raises(ValueError, match="missing_hardening_curve|material_disposition:BLOCKED"):
-        compile_engineering_intent(intent, geometry=geometry, material=yield_only)
+        compile_engineering_intent(intent, geometry=geometry, material=yield_only, mesh=mesh)
 
     hardened = MaterialDefinition(
         name="Hardened",
@@ -205,6 +210,7 @@ def test_compile_plasticity_refuses_single_point_yield_and_accepts_hardening():
         ),
         geometry=geometry,
         material=hardened,
+        mesh=mesh,
     )
     assert "mat.Plastic(table=" in plan.cae_script
     assert "300.0" in plan.cae_script
@@ -217,7 +223,7 @@ def test_compile_plasticity_refuses_single_point_yield_and_accepts_hardening():
         material=yield_only,
         metadata={"geometry": geometry},
     )
-    elastic_plan = compile_engineering_intent(elastic_intent, geometry=geometry, material=yield_only)
+    elastic_plan = compile_engineering_intent(elastic_intent, geometry=geometry, material=yield_only, mesh=mesh)
     assert "mat.Elastic" in elastic_plan.cae_script
     assert "mat.Plastic" not in elastic_plan.cae_script
 
@@ -243,6 +249,11 @@ def test_compiler_consumes_material_record_hardening():
         job_name="Job_Material_Test",
         geometry=IntentGeometrySpec(shape="plate", length=100.0, width=50.0, height=5.0),
         material=mat_def,
+        mesh=IntentMeshSpec(
+            global_size=2.5,
+            primary_wall_thickness=2.5,
+            primary_wall_thickness_source="USER_SPECIFIED",
+        ),
     )
 
     action_types = [a.action_type for a in plan.actions]

@@ -275,7 +275,8 @@ def test_cli_material_query_authentic(capsys):
     assert data["identity"]["grade"] == "Ultramid A3WG6"
     assert data["identity"]["manufacturer"] == "BASF"
     assert data["properties"]["youngs_modulus_mpa"] == pytest.approx(8500.0, rel=0.05)
-    assert len(data["calibrated_abaqus_plastic"]) > 0
+    # Short-glass-fiber datasheet is not a deck-reviewed *PLASTIC card.
+    assert data["calibrated_abaqus_plastic"] == []
 
 
 def test_cli_material_query_with_curves(capsys):
@@ -283,8 +284,8 @@ def test_cli_material_query_with_curves(capsys):
     assert ret == 0
     captured = capsys.readouterr()
     assert "Authentic Engineering Material: Ultramid A3WG6" in captured.out
-    assert "Calibrated Abaqus *Plastic Hardening Table" in captured.out
     assert "Experimental Curves Available" in captured.out
+    assert "Calibrated Abaqus *Plastic Hardening Table" not in captured.out
 
 
 def test_cli_material_query_standard(capsys):

@@ -47,6 +47,14 @@ from abaqus_ai_agent.contracts.capability import resolve_capability
 from abaqus_ai_agent.execution.client import AbaqusExecutor
 from abaqus_ai_agent.agent import AbaqusAIAgent
 
+# Healing recompiles the intent. A missing seed fails before the first attempt.
+_USER_MESH = {
+    "global_size": 2.5,
+    "size_source": "USER_SPECIFIED",
+    "primary_wall_thickness": 2.5,
+    "primary_wall_thickness_source": "USER_SPECIFIED",
+}
+
 
 class MockExecutor(AbaqusExecutor):
     def execute(self, code, timeout=120):
@@ -251,6 +259,7 @@ def test_orchestrator_max_attempts_cutoff():
         boundary_conditions=({"type": "displacement", "region": "FixedFace", "u1": 0.0},),
         loads=({"type": "concentrated_force", "region": "TipFace", "magnitude": 1000.0, "direction": "-Y"},),
         metadata={"dimensions": {"shape": "cantilever_box", "length": 120.0, "width": 12.0, "height": 8.0}},
+        mesh_requirements=dict(_USER_MESH),
     )
     initial_plan = CompiledAgentPlan(
         model_name="TestModel",
@@ -423,6 +432,7 @@ def test_orchestrator_success_on_first_remediation():
         boundary_conditions=({"type": "displacement", "region": "FixedFace", "u1": 0.0},),
         loads=({"type": "concentrated_force", "region": "TipFace", "magnitude": 1000.0, "direction": "-Y"},),
         metadata={"dimensions": {"shape": "cantilever_box", "length": 120.0, "width": 12.0, "height": 8.0}},
+        mesh_requirements=dict(_USER_MESH),
     )
     initial_plan = CompiledAgentPlan(
         model_name="TestModel",
@@ -507,6 +517,7 @@ def test_healed_rerun_forwards_its_mesh_quality_evidence():
         boundary_conditions=({"type": "displacement", "region": "FixedFace", "u1": 0.0},),
         loads=({"type": "concentrated_force", "region": "TipFace", "magnitude": 1000.0, "direction": "-Y"},),
         metadata={"dimensions": {"shape": "cantilever_box", "length": 120.0, "width": 12.0, "height": 8.0}},
+        mesh_requirements=dict(_USER_MESH),
     )
     plan = CompiledAgentPlan(
         model_name="TestModel", part_name="TestPart", job_name="TestJob",
@@ -559,6 +570,7 @@ def test_healed_rerun_keeps_explicit_context_over_stale_kwargs():
         boundary_conditions=({"type": "displacement", "region": "FixedFace", "u1": 0.0},),
         loads=({"type": "concentrated_force", "region": "TipFace", "magnitude": 1000.0, "direction": "-Y"},),
         metadata={"dimensions": {"shape": "cantilever_box", "length": 120.0, "width": 12.0, "height": 8.0}},
+        mesh_requirements=dict(_USER_MESH),
     )
     plan = CompiledAgentPlan(
         model_name="TestModel", part_name="TestPart", job_name="TestJob",
@@ -658,6 +670,7 @@ def test_solve_requirement_self_healing_end_to_end():
         boundary_conditions=({"type": "displacement", "region": "FixedFace", "u1": 0.0},),
         loads=({"type": "concentrated_force", "region": "TipFace", "magnitude": 1000.0, "direction": "-Y"},),
         metadata={"dimensions": {"shape": "cantilever_box", "length": 120.0, "width": 12.0, "height": 8.0}},
+        mesh_requirements=dict(_USER_MESH),
     )
 
     result = agent.solve_requirement(
@@ -730,6 +743,7 @@ def test_solve_requirement_self_healing_disabled():
         boundary_conditions=({"type": "displacement", "region": "FixedFace", "u1": 0.0},),
         loads=({"type": "concentrated_force", "region": "TipFace", "magnitude": 1000.0, "direction": "-Y"},),
         metadata={"dimensions": {"shape": "cantilever_box", "length": 120.0, "width": 12.0, "height": 8.0}},
+        mesh_requirements=dict(_USER_MESH),
     )
 
     result = agent.solve_requirement(
@@ -801,6 +815,7 @@ def test_unconfirmed_healing_does_not_replace_failed_run():
         boundary_conditions=({"type": "displacement", "region": "FixedFace", "u1": 0.0},),
         loads=({"type": "concentrated_force", "region": "TipFace", "magnitude": 1000.0, "direction": "-Y"},),
         metadata={"dimensions": {"shape": "cantilever_box", "length": 120.0, "width": 12.0, "height": 8.0}},
+        mesh_requirements=dict(_USER_MESH),
     )
 
     result = agent.solve_requirement(

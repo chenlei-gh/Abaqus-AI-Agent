@@ -335,7 +335,7 @@ def test_multimodal_intent_to_compiler_action_plan_full_chain():
     # 5. Compile into canonical ActionPlan
     geom = IntentGeometrySpec(shape="cantilever_box", length=100.0, width=10.0, height=20.0)
     mat = MaterialDefinition(
-        name="Steel",
+        name="LabSteel_Card",
         unit_system="MM_N_MPA",
         elastic=ElasticProperties(youngs_modulus=210e3, poisson_ratio=0.3),
     )
@@ -358,8 +358,8 @@ def test_multimodal_intent_to_compiler_action_plan_full_chain():
     assert plan.model_name == "MultimodalModel"
     assert "EncastreBC" in plan.cae_script
     assert "Pressure" in plan.cae_script
-    assert "findAt(((0.0, 10.0, 5.0),))" in plan.cae_script
-    assert "findAt(((50.0, 20.0, 5.0),))" in plan.cae_script
+    assert "_abqai_bind_region(a.instances['BeamPart-1'].faces, (((0.0, 10.0, 5.0),),), 'FIXED_ROOT')" in plan.cae_script
+    assert "_abqai_bind_region(a.instances['BeamPart-1'].faces, (((50.0, 20.0, 5.0),),), 'TOP_PRESSURE')" in plan.cae_script
 
     # 6. Preflight checks
     for action in plan.actions:

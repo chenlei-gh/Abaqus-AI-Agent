@@ -17,6 +17,11 @@ def _intent(material, analysis="linear_static", description="check", metadata=No
         analysis_type=analysis,
         description=description,
         material=material,
+        mesh_requirements={
+            "global_size": 2.5,
+            "primary_wall_thickness": 2.5,
+            "primary_wall_thickness_source": "USER_SPECIFIED",
+        },
         metadata={"geometry": IntentGeometrySpec(), **(metadata or {})},
     )
 

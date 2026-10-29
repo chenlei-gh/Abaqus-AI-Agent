@@ -30,6 +30,11 @@ def _intent(description, kind="linear_static"):
         },
         boundary_conditions=({"type": "encastre", "region": "RootFace"},),
         loads=({"type": "concentrated_force", "region": "TipFace", "magnitude": 1000.0, "direction": "-Y"},),
+        mesh_requirements={
+            "global_size": 2.5,
+            "primary_wall_thickness": 2.5,
+            "primary_wall_thickness_source": "USER_SPECIFIED",
+        },
         metadata={"dimensions": {"shape": "cantilever_box", "length": 150.0, "width": 15.0, "height": 10.0}},
     )
 
