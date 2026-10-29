@@ -292,13 +292,12 @@ class SelfHealingOrchestrator:
                 if r not in all_remediations:
                     all_remediations.append(r)
 
-            # Model-changing remediations are proposals until the caller confirms.
-            # Diagnosis is still recorded; the original failed run stays authoritative.
+            # Model-changing remediations stay proposals. Confirmation authorizes
+            # a rerun of the same physical problem; it does not authorize adding
+            # a boundary, load, damping, material, or mesh to force convergence.
+            enriched_intent = SolverRemediator.apply_remediations(current_intent, healable_remediations)
             if not confirm_model_change:
                 break
-
-            # 4. Apply remediations to derive enriched intent
-            enriched_intent = SolverRemediator.apply_remediations(current_intent, healable_remediations)
 
             # 5. Recompile and preflight new plan
             try:

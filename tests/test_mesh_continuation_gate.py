@@ -20,42 +20,61 @@ from abaqus_ai_agent.diagnostics.orchestrator import _datacheck_signature
 from abaqus_ai_agent.diagnostics.solver_patterns import DiagnosticIssue
 
 
-def test_tet_script_uses_default_mesher_and_stops_on_boundary_preview():
+def test_tet_script_combines_cleanup_and_quality_gates_every_round():
     script = tet_mesh_script("p", 2.5)
+    compile(script, "<tet_mesh_script>", "exec")
     assert "sizeGrowth=MODERATE" in script
     assert "algorithm=" not in script
     assert "NON_DEFAULT" not in script
-    assert "createVirtualTopology(" in script
+    assert "_abqai_combined_vt = " in script
     assert "mergeShortEdges=True" in script
     assert "shortEdgeThreshold=0.5" in script
     assert "ignoreRedundantEntities=True" in script
-    assert "mergeSmallFaces=False" in script
     assert "mergeSmallFaces=True" in script
-    assert "_abqai_vt2 = " in script
     assert "smallFaceAreaThreshold=0.25" in script
-    assert "getElementFaces()" in script
-    assert "getFacesByFaceAngle(60.0)" in script
-    assert "getAdjacentElements()" in script
-    assert "findAt(" not in script
-    assert "getCurvature(" not in script
-    assert "evalAngle" not in script
+    assert "for _abqai_face in p.faces" in script
     assert "applyBlendControls=False" in script
     assert "mergeSliverFaces=False" in script
     assert ".repair(" not in script
     assert "ignoreEntity(" not in script
+    assert "deleteMesh()" not in script
+    assert "deleteMesh(regions=_abqai_local_cells)" in script
     assert script.index("createVirtualTopology(") < script.index("generateMesh(boundaryPreview=ON)")
-    assert script.index("generateMesh()") < script.index("_abqai_vt2 = ")
-    assert "generateMesh(boundaryPreview=ON)" in script
-    assert "SHAPE_FACTOR" in script
-    assert str(TET_SHAPE_FACTOR_FLOOR) in script
-    assert script.index("boundaryPreview=ON") < script.index("generateMesh()")
+    assert script.index("boundaryPreview=ON") < script.index("p.generateMesh()")
     assert "tet_boundary_preview_rejected" in script
-    assert "tet_secondary_face_merge_unavailable" in script
-    assert "no documented small host face" in script
-    assert "tet_secondary_face_merge_failed" in script
-    assert "worst=" in script
-    assert "no_entity_or_rejected" in script
-    assert script.count("createVirtualTopology(") == 2
+    assert script.count("p.generateMesh()") == 1
+    assert script.count("generateMesh(regions=") == 4
+    assert script.count("criterion=ANALYSIS_CHECKS") == 5
+    assert script.count("_abqai_rounds.append") == 5
+    assert script.count("if not _abqai_quality_ok:") == 5
+    assert all(("round=%d" % number) in script for number in range(1, 6))
+    assert "_abqai_local_attempt = 6" not in script
+    assert str(TET_SHAPE_FACTOR_FLOOR) in script
+    assert script.count("{part}") == 0
+
+
+def test_later_rounds_expand_and_stop_after_five():
+    script = tet_mesh_script("p", 2.5)
+    positions = [script.index("_abqai_local_attempt = %d" % number) for number in range(2, 6)]
+    assert positions == sorted(positions)
+    assert "getElements()" in script
+    assert "tet_local_host_cell_unresolved" in script
+    assert script.count("deleteMesh(regions=_abqai_local_cells)") == 4
+    assert script.count("generateMesh(regions=_abqai_local_cells)") == 4
+    assert "tet_local_remesh_unchanged" in script
+    assert "getAdjacentCells()" in script
+    assert "failed_host_faces_finer" in script
+    assert "seedEdgeByBias(biasMethod=DOUBLE, endEdges=_abqai_local_seed_edges" in script
+    assert "sizeGrowth=MAXIMUM" in script
+    assert "float(2 ** (5 - 1))" not in script
+    assert "getEdgeSeeds(edge=_abqai_edge, attribute=EDGE_SEEDING_METHOD)" in script
+    assert "tet_fifth_local_remesh_failed" in script
+    assert script.index("tet_fifth_local_remesh_failed") > positions[-1]
+    assert "deleteMesh()" not in script
+    assert "deleteMesh(regions=_abqai_local_cells)" in script
+    assert "seedPart(size=2.5, deviationFactor=0.05" not in script
+    with pytest.raises(ValueError, match="replaced by automatic"):
+        tet_mesh_script("p", 2.5, auxiliary_partition_script="p.PartitionCellByDatumPlane")
 
 
 def test_analysis_checks_pass_without_shape_evidence_is_not_a_stop_by_itself():

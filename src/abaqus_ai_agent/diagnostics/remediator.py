@@ -12,8 +12,17 @@ from ..contracts.intent import EngineeringIntent
 from .solver_patterns import DiagnosticIssue
 
 
+MODEL_CHANGING_CATEGORIES = (
+    RemediationCategory.BOUNDARY_CONDITION,
+    RemediationCategory.STEP_CONTROLS,
+    RemediationCategory.CONTACT_STABILIZATION,
+    RemediationCategory.DAMPING,
+    RemediationCategory.MESH_REFINEMENT,
+)
+
+
 class SolverRemediator:
-    """Generates and applies auditable engineering remediations based on diagnostic issues."""
+    """Generates auditable proposals. It does not apply model-changing fixes."""
 
     @classmethod
     def generate_remediations(
@@ -112,7 +121,8 @@ class SolverRemediator:
                     },
                     rationale=(
                         "Unconstrained rigid-body motion can singularize the stiffness matrix. "
-                        "Adding ENCASTRE changes the physical problem and requires explicit confirmation."
+                        "Adding ENCASTRE changes the physical problem. Confirmation does not authorize "
+                        "automatic boundary, load, damping, material, or mesh changes."
                     ),
                     risk_level=RemediationRisk.HIGH,
                 )
@@ -277,72 +287,22 @@ class SolverRemediator:
         intent: EngineeringIntent,
         remediations: Sequence[RemediationAction],
     ) -> EngineeringIntent:
-        """Derive an enriched EngineeringIntent incorporating the proposed remediations.
+        """Keep model-changing remediations as proposals.
 
-        Remediation categories are kept disjoint on purpose: step-level controls,
-        contact-level stabilization and the stabilization-energy acceptance
-        threshold are three different Abaqus control paths. Merging them into a
-        single ``step_controls`` bag made ``contact_damping`` look applied while
-        no contact control object ever received it.
+        ``confirm_model_change`` authorizes a rerun of the same physical problem.
+        It does not authorize adding a boundary, load, contact stabilization,
+        damping, material, or mesh "to make it converge".
         """
-        updated_bcs: list[Any] = list(intent.boundary_conditions or ())
         updated_metadata = dict(intent.metadata or {})
-        step_controls = dict(updated_metadata.get("step_controls", {}))
-        contact_stabilization = dict(updated_metadata.get("contact_stabilization", {}))
-        applied_records = list(updated_metadata.get("applied_remediations", []))
-
-        def absorb_threshold(parameters: Dict[str, Any], action_id: str) -> None:
-            ratio = parameters.pop("max_dissipation_ratio", None)
-            if ratio is None:
-                return
-            updated_metadata["stabilization_energy_threshold"] = float(ratio)
-            updated_metadata.setdefault(
-                "stabilization_energy_threshold_source", "remediation:%s" % action_id
-            )
-
+        proposals = list(updated_metadata.get("proposed_remediations", []))
         for rem in remediations:
-            if rem.category == RemediationCategory.BOUNDARY_CONDITION:
-                params = rem.parameters
-                reg = params.get("region", "FixedFace")
-                bc_name = params.get("name", "BC_Healed")
-                # Add or reinforce encastre boundary condition
-                updated_bcs.append({
-                    "name": bc_name,
-                    "type": "ENCASTRE",
-                    "region": reg,
-                })
-                applied_records.append(rem.to_dict())
-
-            elif rem.category == RemediationCategory.CONTACT_STABILIZATION:
-                params = dict(rem.parameters)
-                absorb_threshold(params, rem.action_id)
-                # ``stabilization_method`` is a StaticStep symbol; contact
-                # stabilization is driven by stabilizeChoice instead.
-                params.pop("stabilization_method", None)
-                if params.pop("contact_damping", False):
-                    contact_stabilization["stabilize_choice"] = "AUTOMATIC"
-                magnitude = params.pop("stabilization_magnitude", None)
-                if magnitude is not None:
-                    contact_stabilization["damp_factor"] = float(magnitude)
-                for key in ("stabilize_choice", "damp_coef", "damp_factor", "target_step"):
-                    if params.get(key) is not None:
-                        contact_stabilization[key] = params[key]
-                applied_records.append(rem.to_dict())
-
-            elif rem.category in (RemediationCategory.STEP_CONTROLS, RemediationCategory.DAMPING):
-                params = dict(rem.parameters)
-                absorb_threshold(params, rem.action_id)
-                step_controls.update(params)
-                applied_records.append(rem.to_dict())
-
-        updated_metadata["step_controls"] = step_controls
-        if contact_stabilization:
-            updated_metadata["contact_stabilization"] = contact_stabilization
-        updated_metadata["applied_remediations"] = applied_records
-
+            if rem.category in MODEL_CHANGING_CATEGORIES:
+                record = rem.to_dict()
+                record["applied"] = False
+                record["requires_new_engineering_decision"] = True
+                proposals.append(record)
+                continue
+        updated_metadata["proposed_remediations"] = proposals
+        updated_metadata["model_change_auto_apply"] = False
         from dataclasses import replace
-        return replace(
-            intent,
-            boundary_conditions=tuple(updated_bcs),
-            metadata=updated_metadata,
-        )
+        return replace(intent, metadata=updated_metadata)

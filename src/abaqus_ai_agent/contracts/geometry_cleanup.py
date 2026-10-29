@@ -38,12 +38,12 @@ VIRTUAL_TOPOLOGY_API_TOKENS = (
     "restoreIgnoredEntity",
     "createVirtualTopology",
 )
-# The tetrahedron partition may call only this method. The first call ignores
-# short edges. The second call, emitted only after a failed shape-factor check,
-# may merge small faces inside a region built by the same script. Selecting an
-# edge or a face by hand remains denied.
+# The tetrahedron partition may call only this method. The combined first-pass
+# call ignores short edges and may merge eligible small faces inside a region
+# built by the same script. Selecting an edge or a face by hand remains denied.
 TET_VIRTUAL_TOPOLOGY_MARKER = "_abqai_vt = "
 TET_SECONDARY_VIRTUAL_TOPOLOGY_MARKER = "_abqai_vt2 = "
+TET_COMBINED_VIRTUAL_TOPOLOGY_MARKER = "_abqai_combined_vt = "
 
 # Geometry-preparation tolerances do not delete or merge topological entities,
 # so they are not repair-class denials. They do change how the mesh is built, so
@@ -268,9 +268,9 @@ def _is_bounded_tet_virtual_topology(code, token):
 
     This is a text pre-check, not authorisation. The runtime guard still blocks
     ``ignoreEntity`` and any ``createVirtualTopology`` that is not a marked
-    call. A snippet that copies a marker but also selects entities by hand is
-    still denied. The secondary small-face merge is allowed only together with
-    its own marker.
+    # call. A snippet that copies a marker but also selects entities by hand is
+    # still denied. The combined or legacy secondary small-face merge is allowed
+    # only together with its corresponding marker.
     """
     if token != "createVirtualTopology":
         return False
@@ -289,7 +289,10 @@ def _is_bounded_tet_virtual_topology(code, token):
     if any(item in code for item in forbidden):
         return False
     if "mergeSmallFaces=True" in code:
-        return TET_SECONDARY_VIRTUAL_TOPOLOGY_MARKER in code
+        return (
+            TET_SECONDARY_VIRTUAL_TOPOLOGY_MARKER in code
+            or TET_COMBINED_VIRTUAL_TOPOLOGY_MARKER in code
+        )
     return True
 
 

@@ -326,10 +326,17 @@ def test_contact_opening_remediation_reaches_contact_metadata():
     intent = EngineeringIntent(id="i", kind="contact", description="gap closure")
     updated = SolverRemediator.apply_remediations(intent, remediations)
 
-    contact_stabilization = updated.metadata["contact_stabilization"]
-    assert contact_stabilization["stabilize_choice"] == "AUTOMATIC"
-    assert contact_stabilization["damp_factor"] == 1e-4
-    # Contact damping must not leak into the step-level control bag.
+    # REQ-4.13: confirmation cannot authorize writing contact stabilization.
+    # The parameters stay on an unapplied proposal.
+    proposals = [
+        item for item in updated.metadata["proposed_remediations"]
+        if item["category"] == "CONTACT_STABILIZATION"
+    ]
+    assert proposals
+    assert proposals[-1]["applied"] is False
+    assert proposals[-1]["parameters"]["contact_damping"] is True
+    assert proposals[-1]["parameters"]["stabilization_magnitude"] == 1e-4
+    assert proposals[-1]["parameters"]["max_dissipation_ratio"] == 0.05
+    assert "contact_stabilization" not in updated.metadata
     assert "contact_damping" not in updated.metadata.get("step_controls", {})
-    # The policy threshold travels with the action.
-    assert updated.metadata["stabilization_energy_threshold"] == 0.05
+    assert "stabilization_energy_threshold" not in updated.metadata

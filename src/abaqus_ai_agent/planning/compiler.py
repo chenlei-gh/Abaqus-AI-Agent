@@ -696,15 +696,30 @@ def compile_intent_to_actions(
             mx, my, mz = contact.master_point
             sx, sy, sz = contact.slave_point
             inst_lines.append(
-                f"main_faces = a.instances['{contact.master_instance}'].faces.findAt((({mx}, {my}, {mz}),))\n"
+                _guarded_find_at(
+                    f"a.instances['{contact.master_instance}'].faces",
+                    f"(({mx}, {my}, {mz}),)",
+                    contact.master_surface,
+                )
+                + f"main_faces = _abqai_bound\n"
                 f"a.Surface(side1Faces=main_faces, name='{contact.master_surface}')\n"
-                f"secondary_faces = a.instances['{contact.slave_instance}'].faces.findAt((({sx}, {sy}, {sz}),))\n"
+                + _guarded_find_at(
+                    f"a.instances['{contact.slave_instance}'].faces",
+                    f"(({sx}, {sy}, {sz}),)",
+                    contact.slave_surface,
+                )
+                + f"secondary_faces = _abqai_bound\n"
                 f"a.Surface(side1Faces=secondary_faces, name='{contact.slave_surface}')\n"
             )
         fixture = active_scope.fixture
         fx, fy, fz = fixture.point
         inst_lines.append(
-            f"fixed_faces = a.instances['{fixture.instance_name}'].faces.findAt((({fx}, {fy}, {fz}),))\n"
+            _guarded_find_at(
+                f"a.instances['{fixture.instance_name}'].faces",
+                f"(({fx}, {fy}, {fz}),)",
+                fixture.set_name,
+            )
+            + f"fixed_faces = _abqai_bound\n"
             f"a.Set(faces=fixed_faces, name='{fixture.set_name}')\n"
             f"mdb.models['{model_name}'].EncastreBC(name='{fixture.name}', createStepName='Initial', "
             f"region=a.sets['{fixture.set_name}'])\n"
@@ -729,13 +744,17 @@ def compile_intent_to_actions(
             f"a.Instance(name='Base-1', part=p_base, dependent=ON)\n"
             f"a.Instance(name='Slider-1', part=p_slider, dependent=ON)\n"
             f"a.translate(instanceList=('Slider-1',), vector=(0.0, 0.0, {base_l}))\n"
-            f"f_base_top = a.instances['Base-1'].faces.findAt((({base_w/2.0}, {base_h/2.0}, {base_l}),))\n"
+            + _guarded_find_at("a.instances['Base-1'].faces", f"(({base_w/2.0}, {base_h/2.0}, {base_l}),)", "BaseSurf")
+            + f"f_base_top = _abqai_bound\n"
             f"a.Surface(side1Faces=f_base_top, name='BaseSurf')\n"
-            f"f_slider_bot = a.instances['Slider-1'].faces.findAt(((45.0, {base_h/2.0}, {base_l}),))\n"
+            + _guarded_find_at("a.instances['Slider-1'].faces", f"((45.0, {base_h/2.0}, {base_l}),)", "SliderSurf")
+            + f"f_slider_bot = _abqai_bound\n"
             f"a.Surface(side1Faces=f_slider_bot, name='SliderSurf')\n"
-            f"f_base_bot = a.instances['Base-1'].faces.findAt((({base_w/2.0}, {base_h/2.0}, 0.0),))\n"
+            + _guarded_find_at("a.instances['Base-1'].faces", f"(({base_w/2.0}, {base_h/2.0}, 0.0),)", "BaseFixed")
+            + f"f_base_bot = _abqai_bound\n"
             f"a.Set(faces=f_base_bot, name='BaseFixed')\n"
-            f"f_slider_top = a.instances['Slider-1'].faces.findAt(((45.0, {base_h/2.0}, {2.0 * base_l}),))\n"
+            + _guarded_find_at("a.instances['Slider-1'].faces", f"((45.0, {base_h/2.0}, {2.0 * base_l}),)", "SliderTop")
+            + f"f_slider_top = _abqai_bound\n"
             f"a.Set(faces=f_slider_top, name='SliderTop')\n"
             f"a.Surface(side1Faces=f_slider_top, name='SliderTop_Surf')\n"
         )
@@ -1134,9 +1153,10 @@ def compile_intent_to_actions(
                 rp_pt_str = f"({rp_pt[0]}, {rp_pt[1]}, {rp_pt[2]})"
                 coupling_code = (
                     f"a = mdb.models['{model_name}'].rootAssembly\n"
-                    f"f = a.instances['{inst_name}'].faces\n"
-                    f"target_faces = f.findAt({find_at_str})\n"
-                    f"surf = a.Surface(side1Faces=target_faces, name='{m_spec.name}_Surf')\n"
+                    + _guarded_find_at_assignment(
+                        f"a.instances['{inst_name}'].faces", find_at_str, m_spec.name, "target_faces"
+                    )
+                    + f"surf = a.Surface(side1Faces=target_faces, name='{m_spec.name}_Surf')\n"
                     f"rp_feat = a.ReferencePoint(point={rp_pt_str})\n"
                     f"rp_ref = a.referencePoints[rp_feat.id]\n"
                     f"rp_set = a.Set(name='{m_spec.name}_RP_Set', referencePoints=(rp_ref,))\n"
@@ -1203,9 +1223,10 @@ def compile_intent_to_actions(
                 else:
                     bc_code = (
                         f"a = mdb.models['{model_name}'].rootAssembly\n"
-                        f"f = a.instances['{inst_name}'].faces\n"
-                        f"symm_faces = f.findAt({find_at_str})\n"
-                        f"region = a.Set(faces=symm_faces, name='{bc.region}')\n"
+                        + _guarded_find_at_assignment(
+                            f"a.instances['{inst_name}'].faces", find_at_str, bc.region, "symm_faces"
+                        )
+                        + f"region = a.Set(faces=symm_faces, name='{bc.region}')\n"
                         f"mdb.models['{model_name}'].{method_name}(name='{bc.name}', createStepName='{bc_step}', region=region)\n"
                     )
                     actions.append(builders.python_action(model_name, bc_code))
@@ -1246,9 +1267,10 @@ def compile_intent_to_actions(
                 else:
                     bc_code = (
                         f"a = mdb.models['{model_name}'].rootAssembly\n"
-                        f"f = a.instances['{inst_name}'].faces\n"
-                        f"fixed_faces = f.findAt({find_at_str})\n"
-                        f"region = a.Set(faces=fixed_faces, name='{bc.region}')\n"
+                        + _guarded_find_at_assignment(
+                            f"a.instances['{inst_name}'].faces", find_at_str, bc.region, "fixed_faces"
+                        )
+                        + f"region = a.Set(faces=fixed_faces, name='{bc.region}')\n"
                         f"mdb.models['{model_name}'].EncastreBC(name='{bc.name}', createStepName='{bc_step}', region=region)\n"
                     )
                     actions.append(builders.python_action(model_name, bc_code))
@@ -1279,9 +1301,10 @@ def compile_intent_to_actions(
                 else:
                     bc_code = (
                         f"a = mdb.models['{model_name}'].rootAssembly\n"
-                        f"f = a.instances['{inst_name}'].faces\n"
-                        f"target_faces = f.findAt({find_at_str})\n"
-                        f"region = a.Set(faces=target_faces, name='{bc.region}')\n"
+                        + _guarded_find_at_assignment(
+                            f"a.instances['{inst_name}'].faces", find_at_str, bc.region, "target_faces"
+                        )
+                        + f"region = a.Set(faces=target_faces, name='{bc.region}')\n"
                         f"mdb.models['{model_name}'].TemperatureBC(name='{bc.name}', createStepName='{bc_step}', "
                         f"region=region, distributionType=UNIFORM, magnitude={mag})\n"
                     )
@@ -1369,9 +1392,13 @@ def compile_intent_to_actions(
                 method_name = {"X": "XsymmBC", "Y": "YsymmBC", "Z": "ZsymmBC"}.get(plane, "XsymmBC")
                 bc_code = (
                     f"a = mdb.models['{model_name}'].rootAssembly\n"
-                    f"f = a.instances['{inst_name}'].faces\n"
-                    f"symm_faces = f.findAt(((0.0, {geometry.height/2.0}, {geometry.length/2.0}),))\n"
-                    f"region = a.Set(faces=symm_faces, name='{bc.region}')\n"
+                    + _guarded_find_at_assignment(
+                        f"a.instances['{inst_name}'].faces",
+                        f"((0.0, {geometry.height/2.0}, {geometry.length/2.0}),)",
+                        bc.region,
+                        "symm_faces",
+                    )
+                    + f"region = a.Set(faces=symm_faces, name='{bc.region}')\n"
                     f"mdb.models['{model_name}'].{method_name}(name='{bc.name}', createStepName='{bc_step}', region=region)\n"
                 )
                 actions.append(builders.python_action(model_name, bc_code))
@@ -1385,9 +1412,13 @@ def compile_intent_to_actions(
             elif bc.bc_type == "ENCASTRE":
                 bc_code = (
                     f"a = mdb.models['{model_name}'].rootAssembly\n"
-                    f"f = a.instances['{inst_name}'].faces\n"
-                    f"fixed_faces = f.findAt((({geometry.width/2.0}, {geometry.height/2.0}, 0.0),))\n"
-                    f"region = a.Set(faces=fixed_faces, name='{bc.region}')\n"
+                    + _guarded_find_at_assignment(
+                        f"a.instances['{inst_name}'].faces",
+                        f"(({geometry.width/2.0}, {geometry.height/2.0}, 0.0),)",
+                        bc.region,
+                        "fixed_faces",
+                    )
+                    + f"region = a.Set(faces=fixed_faces, name='{bc.region}')\n"
                     f"mdb.models['{model_name}'].EncastreBC(name='{bc.name}', createStepName='{bc_step}', region=region)\n"
                 )
                 actions.append(builders.python_action(model_name, bc_code))
@@ -1403,9 +1434,10 @@ def compile_intent_to_actions(
                 target_faces = f"(({geometry.width/2.0}, {geometry.height/2.0}, {z_loc}),)"
                 bc_code = (
                     f"a = mdb.models['{model_name}'].rootAssembly\n"
-                    f"f = a.instances['{inst_name}'].faces\n"
-                    f"disp_faces = f.findAt({target_faces})\n"
-                    f"region = a.Set(faces=disp_faces, name='{bc.region}')\n"
+                    + _guarded_find_at_assignment(
+                        f"a.instances['{inst_name}'].faces", target_faces, bc.region, "disp_faces"
+                    )
+                    + f"region = a.Set(faces=disp_faces, name='{bc.region}')\n"
                     f"mdb.models['{model_name}'].TemperatureBC(name='{bc.name}', createStepName='{bc_step}', "
                     f"region=region, distributionType=UNIFORM, magnitude={mag})\n"
                 )
@@ -1445,9 +1477,10 @@ def compile_intent_to_actions(
                     target_faces = f"(({geometry.width/2.0}, {geometry.height/2.0}, {z_loc}),)"
                     bc_code = (
                         f"a = mdb.models['{model_name}'].rootAssembly\n"
-                        f"f = a.instances['{inst_name}'].faces\n"
-                        f"disp_faces = f.findAt({target_faces})\n"
-                        f"region = a.Set(faces=disp_faces, name='{bc.region}')\n"
+                        + _guarded_find_at_assignment(
+                            f"a.instances['{inst_name}'].faces", target_faces, bc.region, "disp_faces"
+                        )
+                        + f"region = a.Set(faces=disp_faces, name='{bc.region}')\n"
                         f"mdb.models['{model_name}'].DisplacementBC(name='{bc.name}', createStepName='{bc_step}', "
                         f"region=region, {dof_str})\n"
                     )
@@ -1520,9 +1553,10 @@ def compile_intent_to_actions(
                 else:
                     load_code = (
                         f"a = mdb.models['{model_name}'].rootAssembly\n"
-                        f"f = a.instances['{inst_name}'].faces\n"
-                        f"target_faces = f.findAt({find_at_str})\n"
-                        f"surf = a.Surface(side1Faces=target_faces, name='{ld.region}_Surf')\n"
+                        + _guarded_find_at_assignment(
+                            f"a.instances['{inst_name}'].faces", find_at_str, ld.region, "target_faces"
+                        )
+                        + f"surf = a.Surface(side1Faces=target_faces, name='{ld.region}_Surf')\n"
                         f"mdb.models['{model_name}'].Pressure(name='{ld.name}', createStepName='{target_step}', "
                         f"region=surf, magnitude={ld.magnitude}{field_arg})\n"
                     )
@@ -1559,9 +1593,10 @@ def compile_intent_to_actions(
                         load_code = (
                             f"# Total force {ld.magnitude} N on face converted to equivalent surface pressure: {eq_pressure:.6f} MPa\n"
                             f"a = mdb.models['{model_name}'].rootAssembly\n"
-                            f"f = a.instances['{inst_name}'].faces\n"
-                            f"target_faces = f.findAt({find_at_str})\n"
-                            f"surf = a.Surface(side1Faces=target_faces, name='{ld.region}_Surf')\n"
+                            + _guarded_find_at_assignment(
+                                f"a.instances['{inst_name}'].faces", find_at_str, ld.region, "target_faces"
+                            )
+                            + f"surf = a.Surface(side1Faces=target_faces, name='{ld.region}_Surf')\n"
                             f"mdb.models['{model_name}'].Pressure(name='{ld.name}', createStepName='{target_step}', "
                             f"region=surf, magnitude={eq_pressure}{field_arg})\n"
                         )
@@ -1577,9 +1612,10 @@ def compile_intent_to_actions(
                     else:
                         load_code = (
                             f"a = mdb.models['{model_name}'].rootAssembly\n"
-                            f"v = a.instances['{inst_name}'].vertices\n"
-                            f"target_verts = v.findAt({find_at_str})\n"
-                            f"region = a.Set(vertices=target_verts, name='{ld.region}')\n"
+                            + _guarded_find_at_assignment(
+                                f"a.instances['{inst_name}'].vertices", find_at_str, ld.region, "target_verts"
+                            )
+                            + f"region = a.Set(vertices=target_verts, name='{ld.region}')\n"
                             f"mdb.models['{model_name}'].ConcentratedForce(name='{ld.name}', createStepName='{target_step}', "
                             f"region=region, cf3={ld.magnitude}{field_arg})\n"
                         )
@@ -1715,9 +1751,10 @@ def compile_intent_to_actions(
     actions.append(builders.python_action(model_name, "".join(diagnosis_lines)))
 
     # 11. Mesh Generation Actions
-    # Tetrahedra get one partition: default algorithm, moderate interior growth,
-    # boundary preview, then stop. A bad boundary never generates an interior
-    # mesh, and a failed partition is not retried with a smaller seed.
+    # Tetrahedra use at most five quality-gated attempts: combined cleanup,
+    # then located local remeshes. Later rounds expand untried adjacent cells
+    # and refine only the current failed-host edge seed. A passing round stops
+    # immediately; there is no sixth round and no whole-part delete loop.
     from ..contracts.mesh_quality import tet_mesh_script
 
     def _append_part_mesh(target_expr, *, tetrahedral, edge_seed_lines=(), readback=""):
@@ -1740,7 +1777,10 @@ def compile_intent_to_actions(
             ),
         ])
         if tetrahedral:
-            lines.append(tet_mesh_script(target_expr, mesh.global_size))
+            lines.append(tet_mesh_script(
+                target_expr, mesh.global_size,
+                deviation_factor=mesh.deviation_factor,
+            ))
         else:
             lines.append("%s.generateMesh()\n" % target_expr)
         actions.append(builders.python_action(model_name, "".join(lines)))
@@ -2068,6 +2108,25 @@ def _mesh_sizing_evidence(mesh: IntentMeshSpec) -> Dict[str, Any]:
         "explicit_stable_increment": "ESTIMATED_ONLY_NOT_SOLVER_REPORTED",
         "job_submitted_for_mesh_stage": False,
     }
+
+
+def _locator_guard_prefix() -> str:
+    from ..adapters.abaqus.locator_validation import locator_guard_script
+    return locator_guard_script()
+
+
+def _guarded_find_at(repository_expr: str, points_expr: str, label: str) -> str:
+    """Bind a region only after the CAE-side locator guard accepts the points."""
+    return (
+        f"{_locator_guard_prefix()}"
+        f"_abqai_bound = _abqai_bind_region({repository_expr}, {points_expr}, {label!r})\n"
+    )
+
+
+def _guarded_find_at_assignment(repository_expr: str, find_at_str: str, label: str, assign_name: str) -> str:
+    """Replace a raw findAt assignment with the pre-bind guard."""
+    points = f"({find_at_str},)" if find_at_str else "()"
+    return _guarded_find_at(repository_expr, points, label) + f"{assign_name} = _abqai_bound\n"
 
 
 def _extract_gr_pts_and_anchor(gr: Any) -> Tuple[Tuple[Tuple[float, float, float], ...], Optional[Tuple[float, float, float]]]:

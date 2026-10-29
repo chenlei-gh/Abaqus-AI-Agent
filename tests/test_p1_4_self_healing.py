@@ -139,14 +139,12 @@ def test_remediator_zero_pivot_singularity():
     assert bc_actions
     assert all(a.risk_level == RemediationRisk.HIGH for a in bc_actions)
 
-    # Apply remediation
+    # Confirmation does not authorize an automatic boundary change.
     remediated_intent = remediator.apply_remediations(intent, actions)
-    assert len(remediated_intent.boundary_conditions) >= 1
-    bc = remediated_intent.boundary_conditions[0]
-    if isinstance(bc, dict):
-        assert bc["type"] == "ENCASTRE"
-    else:
-        assert bc.bc_type == "ENCASTRE"
+    assert remediated_intent.boundary_conditions == intent.boundary_conditions
+    proposals = remediated_intent.metadata.get("proposed_remediations") or ()
+    assert proposals
+    assert all(item.get("applied") is False for item in proposals)
 
 
 def test_remediator_cutbacks_and_stabilization():
@@ -177,10 +175,11 @@ def test_remediator_cutbacks_and_stabilization():
     assert len(actions) >= 1
 
     remediated_intent = remediator.apply_remediations(intent, actions)
-    step_controls = remediated_intent.metadata.get("step_controls", {})
-    assert step_controls.get("max_num_inc", 0) >= 200
-    assert step_controls.get("stabilization_method") == "DAMPING_FACTOR"
-    assert step_controls.get("stabilization_magnitude", 0.0) > 0.0
+    assert "step_controls" not in remediated_intent.metadata
+    assert "contact_stabilization" not in remediated_intent.metadata
+    proposals = remediated_intent.metadata.get("proposed_remediations") or ()
+    assert any(item.get("category") == "STEP_CONTROLS" for item in proposals)
+    assert all(item.get("applied") is False for item in proposals)
 
 
 def test_remediator_license_denied_blocks_healing():
@@ -854,16 +853,18 @@ def test_remediator_contact_chatter_stabilization():
     assert "contact_damping" not in step_controls
     assert "stabilization_magnitude" not in step_controls
 
-    contact_stabilization = remediated.metadata.get("contact_stabilization", {})
-    assert contact_stabilization.get("stabilize_choice") == "AUTOMATIC"
-    assert contact_stabilization.get("damp_factor", 0.0) > 0.0
-    assert "stabilization_method" not in contact_stabilization
-
-    # The dissipation ratio becomes an explicit acceptance policy, not a default.
-    assert remediated.metadata.get("stabilization_energy_threshold") == 0.05
-    assert remediated.metadata.get("stabilization_energy_threshold_source", "").startswith(
-        "remediation:rem_contact_"
-    )
+    proposals = [
+        item for item in remediated.metadata.get("proposed_remediations", ())
+        if item["category"] == "CONTACT_STABILIZATION"
+    ]
+    assert proposals
+    contact_stabilization = proposals[-1]["parameters"]
+    assert proposals[-1]["applied"] is False
+    assert contact_stabilization.get("contact_damping") is True
+    assert contact_stabilization.get("stabilization_magnitude", 0.0) > 0.0
+    assert contact_stabilization.get("stabilization_method") == "DAMPING_FACTOR"
+    assert "contact_stabilization" not in remediated.metadata
+    assert "stabilization_energy_threshold" not in remediated.metadata
 
 
 def test_remediator_negative_eigenvalue():

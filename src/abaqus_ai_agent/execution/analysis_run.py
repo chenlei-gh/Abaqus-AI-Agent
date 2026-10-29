@@ -308,6 +308,34 @@ class AnalysisRunner:
         from ..diagnostics.solver_patterns import read_job_inp_text
         return read_job_inp_text(workdir=workdir, job_name=job_name)
 
+    def _contact_diagnostics_from_existing_odb(self, intent, path, odb_summary):
+        """Read contact fields from the ODB already produced by this run.
+
+        This opens the existing ODB read-only. It does not submit a job, invent
+        a pressure threshold, or treat a completed solve as contact evidence.
+        """
+        from ..contact_diagnostics import diagnose_contact_from_odb
+        from .odb import extract_contact_evidence
+
+        if not path:
+            return diagnose_contact_from_odb(intent, None)
+        step, step_reason = _contact_step_name(intent, odb_summary)
+        if not step:
+            return diagnose_contact_from_odb(intent, {
+                "step": None,
+                "fields": {},
+                "reason": step_reason or "contact_step_not_declared",
+            })
+        try:
+            raw = extract_contact_evidence(self.executor, path, step)
+        except Exception as exc:
+            return diagnose_contact_from_odb(intent, {
+                "step": step,
+                "fields": {},
+                "reason": "contact_odb_read_failed:%s" % exc.__class__.__name__,
+            })
+        return diagnose_contact_from_odb(intent, _decode_contact_evidence(raw))
+
     def _resolve_yield_strength(self, engineering_intent):
         """Finite yield from the intent material, or None. Never invents one."""
         if engineering_intent is None:
@@ -1399,11 +1427,44 @@ class AnalysisRunner:
                 fatigue if isinstance(fatigue, IntentFatigueSpec) else None
             )
 
+            from ..contact_diagnostics import contact_diagnostic_requested
+            from .convergence_loop import default_runner_convergence_note
+            from ..sensitivity import sensitivity_from_intent
+
+            if contact_diagnostics is None and contact_diagnostic_requested(engineering_intent):
+                contact_diagnostics = self._contact_diagnostics_from_existing_odb(
+                    engineering_intent, path, odb,
+                )
+            # A quality pass is a note, not a convergence object. The acceptance
+            # gate treats a missing ``converged`` attribute as failure, so this
+            # dict must not be passed there. The default runner also has no
+            # step_runner, so an explicit study is recorded and not executed.
+            convergence_note = None
+            if mesh_convergence is None:
+                convergence_note = default_runner_convergence_note(
+                    engineering_intent, mesh_quality,
+                )
+            sensitivity_note = None
+            if sensitivity is None:
+                sensitivity_note = sensitivity_from_intent(engineering_intent)
+            note_meta = {}
+            if convergence_note is not None:
+                note_meta["mesh_convergence_note"] = convergence_note
+            if sensitivity_note is not None:
+                note_meta["sensitivity_note"] = _structured_result_payload(sensitivity_note)
+            if note_meta:
+                run = run.with_state(run.state, metadata=dict(run.metadata, **note_meta))
+
             if not effective_criteria and numerical_verification is None and engineering_checks is None and mesh_quality is None and mesh_convergence is None and fatigue is None and fatigue_spec is None and contact_diagnostics is None and connector_kinematics is None and fmbd_dynamics is None and not getattr(engineering_intent, "connectors", None) and not getattr(engineering_intent, "fmbd", None) and sensitivity is None and uncertainty is None:
+                early_verification = {}
+                if time_coverage is not None:
+                    early_verification["time_coverage"] = time_coverage.to_dict()
+                early_verification.update(_note_verification_entries(
+                    convergence_note, sensitivity_note,
+                ))
                 return run.with_state(
                     AnalysisRunState.ODB_VALIDATED,
-                    verification=({"time_coverage": time_coverage.to_dict()}
-                                  if time_coverage is not None else None),
+                    verification=early_verification or None,
                 )
 
             extractions = ()
@@ -1877,6 +1938,11 @@ class AnalysisRunner:
                 verification_map["mesh_metrics"] = odb_check["mesh_metrics"]
             if mesh_convergence is not None:
                 verification_map["mesh_convergence"] = getattr(mesh_convergence, "to_dict", lambda: str(mesh_convergence))()
+            # Notes are independent keys. They must not reuse the convergence or
+            # sensitivity kinds, because those kinds are read as executed studies.
+            verification_map.update(_note_verification_entries(
+                locals().get("convergence_note"), locals().get("sensitivity_note"),
+            ))
             if fatigue is not None:
                 verification_map["fatigue"] = getattr(fatigue, "to_dict", lambda: str(fatigue))()
             if contact_diagnostics is not None:
@@ -2089,6 +2155,112 @@ def _record_solver_timing(profiler, wait_seconds, job_name, workdir):
         note = getattr(profiler, "internal_errors", None)
         if isinstance(note, list):
             note.append(f"solver timing not recorded: {exc!r}")
+
+
+def _declared_contact_step(intent):
+    """Return only a step the intent explicitly names. Never invent one."""
+    meta = getattr(intent, "metadata", None) or {}
+    if not isinstance(meta, dict):
+        return None
+    for key in ("contact_step", "contact_step_name"):
+        value = meta.get(key)
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+    expected = meta.get("expected_contact")
+    if isinstance(expected, dict):
+        for key in ("step", "step_name", "contact_step"):
+            value = expected.get(key)
+            if isinstance(value, str) and value.strip():
+                return value.strip()
+    return None
+
+
+def _odb_analysis_steps(odb_summary):
+    """Analysis steps only. Initial is not a contact result step."""
+    if not isinstance(odb_summary, dict):
+        return ()
+    steps = odb_summary.get("steps") or ()
+    return tuple(
+        str(name) for name in steps
+        if str(name).strip() and str(name).strip().lower() != "initial"
+    )
+
+
+def _contact_step_name(intent, odb_summary):
+    """Resolve the contact step without guessing.
+
+    An explicit declaration wins. If the ODB has exactly one analysis step, that
+    step may be used. Multiple undeclared steps are insufficient evidence: the
+    first or last step must not be selected, and a region must not be invented.
+    """
+    declared = _declared_contact_step(intent)
+    steps = _odb_analysis_steps(odb_summary)
+    if declared:
+        if steps and declared not in steps:
+            return None, "contact_step_not_in_odb"
+        return declared, None
+    if len(steps) == 1:
+        return steps[0], None
+    return None, "contact_step_not_declared"
+
+
+def _decode_contact_evidence(raw):
+    """Decode executor stdout into contact evidence. Never invent a region.
+
+    ``extract_contact_evidence`` returns field and history payloads as executor
+    text. Those strings must be decoded before diagnosis. A completed solve is
+    not substituted for a missing field.
+    """
+    from .odb import _decode_payload
+
+    payload = raw if isinstance(raw, dict) else _decode_payload(raw)
+    if not isinstance(payload, dict):
+        return {
+            "step": None,
+            "fields": {},
+            "history": {"status": "unavailable", "reason": "contact_evidence_undecodable"},
+            "reason": "contact_evidence_undecodable",
+        }
+    fields = {}
+    raw_fields = payload.get("fields") if isinstance(payload.get("fields"), dict) else {}
+    for name, value in raw_fields.items():
+        decoded = value if isinstance(value, dict) else _decode_payload(value)
+        if isinstance(decoded, dict):
+            fields[str(name)] = decoded
+        else:
+            fields[str(name)] = {
+                "status": "unavailable",
+                "reason": "contact_field_undecodable",
+                "field": str(name),
+            }
+    history = payload.get("history")
+    if not isinstance(history, dict):
+        history = _decode_payload(history)
+    if not isinstance(history, dict):
+        history = {"status": "unavailable", "reason": "contact_history_undecodable"}
+    region = payload.get("region")
+    if region is not None and not isinstance(region, str):
+        region = None
+    return {
+        "step": payload.get("step"),
+        "frame": payload.get("frame"),
+        "region": region,
+        "position": payload.get("position"),
+        "history_region": payload.get("history_region"),
+        "fields": fields,
+        "history": history,
+        "reason": payload.get("reason"),
+    }
+
+
+def _note_verification_entries(convergence_note, sensitivity_note):
+    """Record study notes under keys that are not executed-study kinds."""
+    entries = {}
+    if convergence_note is not None:
+        entries["mesh_convergence_note"] = _structured_result_payload(convergence_note)
+    if sensitivity_note is not None:
+        entries["sensitivity_note"] = _structured_result_payload(sensitivity_note)
+    return entries
 
 
 def _target_time_from_action_plan(action_plan):

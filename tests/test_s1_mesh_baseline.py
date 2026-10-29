@@ -43,10 +43,11 @@ def test_tet_mesh_script_rejects_missing_size():
         tet_mesh_script("p", None)
 
 
-def test_tet_mesh_script_keeps_short_edge_fraction_of_verified_seed():
+def test_tet_mesh_script_does_not_reseed_during_local_remesh():
     script = tet_mesh_script("p", 2.5)
     assert "shortEdgeThreshold=0.5" in script
-    assert "seedPart" not in script
+    assert script.count("seedPart(") == 0
+    assert "deviationFactor=0.05" not in script
 
 
 def test_retired_premesh_heuristic_is_not_a_production_entry():

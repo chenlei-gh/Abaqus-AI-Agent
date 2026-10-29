@@ -30,6 +30,145 @@ class AdaptiveConvergenceRun:
         return self.status == "CONVERGED" and self.convergence_result.converged
 
 
+@dataclass(frozen=True)
+class ConvergenceStudyRequest:
+    """An explicit request to spend extra solves on a result-convergence study."""
+    quantity: str
+    location: str
+    refinement_ratio: float
+    levels: int = 3
+    stress_key: str = ""
+    displacement_key: str = ""
+    singularity_locations: Tuple[str, ...] = ()
+
+    def __post_init__(self):
+        if not self.quantity or not self.location:
+            raise ValueError("quantity and location must be declared before a convergence study")
+        if not isinstance(self.levels, int) or self.levels < 3:
+            raise ValueError("a convergence study needs at least 3 levels")
+        if not math.isfinite(self.refinement_ratio) or not (0.0 < self.refinement_ratio < 1.0):
+            raise ValueError("refinement_ratio must be a fixed finite ratio in (0, 1)")
+
+
+def quality_pass_is_not_convergence(mesh_quality=None):
+    """Record that a mesh-quality pass is not a solution-convergence claim."""
+    return {
+        "status": "NOT_CONVERGENCE",
+        "converged": False,
+        "quality_pass_is_not_convergence": True,
+        "mesh_quality_status": getattr(mesh_quality, "status", None),
+        "reason": "element quality passing does not prove the result has converged",
+        "extra_solves": 0,
+        "acceptance_gate": "SKIPPED",
+    }
+
+
+def default_runner_convergence_note(intent, mesh_quality=None):
+    """Note recorded by the default runner. Never launches a solve.
+
+    The acceptance gate reads ``converged`` by attribute. This note is a dict,
+    so the runner must keep it out of that gate. A quality pass stays a note.
+    An explicit study without a caller-supplied step runner is recorded as not
+    executed; it is not silently treated as converged or as failed convergence.
+    """
+    request, reason = parse_convergence_study(intent)
+    if request is None and reason not in (None, "not_requested"):
+        note = quality_pass_is_not_convergence(mesh_quality)
+        note["study_refused"] = reason
+        note["explicit_request"] = True
+        return note
+    if request is None:
+        return quality_pass_is_not_convergence(mesh_quality)
+    return {
+        "status": "NOT_EXECUTED",
+        "converged": False,
+        "quality_pass_is_not_convergence": True,
+        "explicit_request": True,
+        "quantity": request.quantity,
+        "location": request.location,
+        "refinement_ratio": request.refinement_ratio,
+        "levels": request.levels,
+        "singularity_locations": request.singularity_locations,
+        "reason": "explicit convergence study requires a caller-supplied step_runner; the default runner does not add solves",
+        "extra_solves": 0,
+        "acceptance_gate": "SKIPPED",
+    }
+
+
+def parse_convergence_study(intent):
+    """Return a study request only when the intent explicitly asks for one.
+
+    Missing fields refuse the study. They never invent a quantity, a location,
+    or a refinement ratio, and they never launch a solve.
+    """
+    meta = getattr(intent, "metadata", None) or {}
+    if not isinstance(meta, dict):
+        return None, "not_requested"
+    raw = meta.get("mesh_convergence_study")
+    if raw is None:
+        return None, "not_requested"
+    if not isinstance(raw, dict) or not raw.get("requested"):
+        return None, "not_requested"
+    try:
+        request = ConvergenceStudyRequest(
+            quantity=str(raw.get("quantity") or ""),
+            location=str(raw.get("location") or ""),
+            refinement_ratio=float(raw.get("refinement_ratio")),
+            levels=int(raw.get("levels", 3)),
+            stress_key=str(raw.get("stress_key") or raw.get("quantity") or ""),
+            displacement_key=str(raw.get("displacement_key") or ""),
+            singularity_locations=tuple(str(item) for item in raw.get("singularity_locations") or ()),
+        )
+    except (TypeError, ValueError) as exc:
+        return None, "convergence_study_refused:%s" % exc
+    return request, None
+
+
+def run_explicit_convergence_study(intent, step_runner, base_mesh_spec):
+    """Run the controller only for a complete explicit request.
+
+    The default path must call ``quality_pass_is_not_convergence`` and must not
+    call this function. ``step_runner`` is the only place extra solves can occur.
+    """
+    request, reason = parse_convergence_study(intent)
+    if request is None:
+        return None, reason or "not_requested"
+    controller = AdaptiveMeshConvergenceController(
+        base_mesh_spec=base_mesh_spec,
+        max_levels=request.levels,
+        refinement_ratio=request.refinement_ratio,
+        refinement_target="local",
+        stress_key=request.stress_key,
+        displacement_key=request.displacement_key or request.stress_key,
+    )
+    outcome = controller.execute_loop(step_runner)
+    notes = tuple("singularity_reported:%s" % item for item in request.singularity_locations)
+    if request.singularity_locations and outcome.status == "CONVERGED":
+        # A declared singular location is reported separately. Numeric agreement
+        # at that location is not a convergence claim.
+        outcome = AdaptiveConvergenceRun(
+            status="SINGULARITY_REPORTED",
+            levels_executed=outcome.levels_executed,
+            final_mesh_spec=outcome.final_mesh_spec,
+            convergence_result=outcome.convergence_result,
+            probes=outcome.probes,
+            final_run=outcome.final_run,
+            diagnostics=outcome.diagnostics + notes,
+        )
+        return outcome, notes
+    if notes:
+        outcome = AdaptiveConvergenceRun(
+            status=outcome.status,
+            levels_executed=outcome.levels_executed,
+            final_mesh_spec=outcome.final_mesh_spec,
+            convergence_result=outcome.convergence_result,
+            probes=outcome.probes,
+            final_run=outcome.final_run,
+            diagnostics=outcome.diagnostics + notes,
+        )
+    return outcome, notes
+
+
 class AdaptiveMeshConvergenceController:
     """Controller that drives progressive mesh refinement until convergence or budget exhaustion."""
 

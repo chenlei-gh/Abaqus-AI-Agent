@@ -317,6 +317,89 @@ def contact_behavior_consistency(evidence, expected):
     )
 
 
+def resolve_expected_contact(intent):
+    """Return an explicit expectation, or None.
+
+    A contact pair, a contact load, or a completed solve is not an expectation.
+    The caller must declare ``metadata['expected_contact']``.
+    """
+    meta = getattr(intent, "metadata", None) or {}
+    if not isinstance(meta, dict):
+        return None
+    raw = meta.get("expected_contact")
+    if isinstance(raw, ExpectedContactBehavior):
+        return raw
+    if not isinstance(raw, dict) or not raw.get("declared"):
+        return None
+    regions = raw.get("expected_regions") or ()
+    outputs = raw.get("required_outputs") or ("CSTATUS", "CPRESS", "COPEN")
+    return ExpectedContactBehavior(
+        contact_required=bool(raw.get("contact_required", True)),
+        expected_state=str(raw.get("expected_state", "contact")),
+        expected_regions=tuple(str(item) for item in regions),
+        expected_separation=raw.get("expected_separation"),
+        allowed_initial_interference=raw.get("allowed_initial_interference"),
+        required_outputs=tuple(str(item) for item in outputs),
+    )
+
+
+def contact_diagnostic_requested(intent):
+    """True only when the intent explicitly asks for contact diagnosis."""
+    meta = getattr(intent, "metadata", None) or {}
+    if not isinstance(meta, dict):
+        return False
+    return bool(meta.get("contact_diagnostic_requested")) or "expected_contact" in meta
+
+
+def _insufficient(message):
+    return ContactDiagnosticReport((
+        ContactDiagnostic("contact_evidence_sufficiency", "insufficient_evidence", message=message),
+    ))
+
+
+def contact_fields_conflict(fields):
+    """Abaqus may combine overlapping surfaces: CPRESS max, COPEN min, CSTATUS composite.
+
+    A single field, or fields that disagree about availability, cannot prove contact.
+    """
+    if not isinstance(fields, dict):
+        return True
+    required = ("CSTATUS", "COPEN", "CPRESS")
+    statuses = []
+    for name in required:
+        field = fields.get(name)
+        if not isinstance(field, dict):
+            return True
+        statuses.append(field.get("status"))
+    if any(status != "available" for status in statuses):
+        return True
+    if len(set(statuses)) != 1:
+        return True
+    return False
+
+
+def diagnose_contact_from_odb(intent, odb_evidence):
+    """Diagnose contact from an already extracted ODB. Never launches a solve.
+
+    Missing expectation, missing fields, or conflicting fields are
+    ``insufficient_evidence``. They are not a pass.
+    """
+    if not contact_diagnostic_requested(intent):
+        return None
+    expected = resolve_expected_contact(intent)
+    if expected is None:
+        return _insufficient("contact diagnosis requested but no expected contact behavior was declared")
+    if not isinstance(odb_evidence, dict):
+        return _insufficient("contact ODB evidence is missing; a completed solve is not contact evidence")
+    fields = odb_evidence.get("fields") or {}
+    if contact_fields_conflict(fields):
+        return _insufficient(
+            "CSTATUS, COPEN, and CPRESS must all be available from the same ODB; "
+            "one field or a completed solve does not prove contact"
+        )
+    return diagnose_contact(odb_evidence, expected)
+
+
 def diagnose_contact(evidence, expected):
     """Run the bounded first-version contact diagnostic set."""
     sufficiency = contact_evidence_sufficiency(evidence, expected)

@@ -1,4 +1,4 @@
-from .contracts.sensitivity import SensitivityReport, SensitivityResult
+from .contracts.sensitivity import SensitivityCase, SensitivityReport, SensitivityResult
 
 
 def relative_change(value, baseline):
@@ -47,6 +47,70 @@ def build_sensitivity_cases(base_model, base_job, cases):
 def summarize_sensitivity_results(baseline, results):
     """Build a report from explicitly supplied run results."""
     return evaluate_sensitivity(baseline, tuple(results))
+
+
+def parse_sensitivity_request(intent):
+    """Accept only an explicit one-factor-at-a-time screening request.
+
+    A mesh-refinement curve is not a sensitivity study. Ranges are never invented.
+    Each case must change exactly one sourced factor.
+    """
+    meta = getattr(intent, "metadata", None) or {}
+    if not isinstance(meta, dict):
+        return None, "not_requested"
+    raw = meta.get("sensitivity_study")
+    if not isinstance(raw, dict) or not raw.get("requested"):
+        return None, "not_requested"
+    if raw.get("kind") == "mesh_refinement":
+        return None, "mesh_refinement_is_not_sensitivity"
+    cases = raw.get("cases") or ()
+    if not cases:
+        return None, "sensitivity_refused:no_sourced_cases"
+    accepted = []
+    for case in cases:
+        if not isinstance(case, dict):
+            return None, "sensitivity_refused:case_not_declared"
+        factors = case.get("factors") or case.get("parameters") or {}
+        if not isinstance(factors, dict) or len(factors) != 1:
+            return None, "sensitivity_refused:one_factor_only"
+        name = next(iter(factors))
+        spec = factors[name]
+        if not isinstance(spec, dict) or not spec.get("source") or "value" not in spec:
+            return None, "sensitivity_refused:missing_source:%s" % name
+        accepted.append({
+            "name": str(case.get("name") or name),
+            "factor": str(name),
+            "value": spec["value"],
+            "source": str(spec["source"]),
+            "scope": "local_screening",
+        })
+    return {
+        "requested": True,
+        "scope": "local_screening",
+        "baseline_frozen": True,
+        "cases": tuple(accepted),
+        "not_global_uncertainty": True,
+    }, None
+
+
+def sensitivity_from_intent(intent):
+    """Return a refusal or a frozen local-screening plan. Never launches a solve."""
+    plan, reason = parse_sensitivity_request(intent)
+    if plan is None and reason == "not_requested":
+        return None
+    if plan is None:
+        return SensitivityReport(
+            {},
+            (SensitivityResult(
+                case=SensitivityCase(name="rejected", parameters={}),
+                values={},
+                relative_changes={},
+                status="refused",
+                diagnostics=({'error': reason},),
+            ),),
+            (),
+        )
+    return plan
 
 
 def execute_sensitivity(executor, runner, model_name, job_name, baseline_values,

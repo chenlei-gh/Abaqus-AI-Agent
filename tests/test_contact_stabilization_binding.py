@@ -393,4 +393,10 @@ def test_contact_damping_never_reaches_step_controls_end_to_end():
     healed = SolverRemediator.apply_remediations(intent, actions)
 
     assert "contact_damping" not in healed.metadata.get("step_controls", {})
-    assert healed.metadata["contact_stabilization"]["stabilize_choice"] == "AUTOMATIC"
+    proposals = [
+        item for item in healed.metadata["proposed_remediations"]
+        if item["category"] == "CONTACT_STABILIZATION"
+    ]
+    assert proposals[-1]["applied"] is False
+    assert proposals[-1]["parameters"]["contact_damping"] is True
+    assert "contact_stabilization" not in healed.metadata
