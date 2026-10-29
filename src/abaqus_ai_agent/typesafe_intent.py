@@ -1459,41 +1459,98 @@ def build_typesafe_systemone_payload(
     }
 
 
-def build_part_screening_questions(solids: Sequence[Mapping[str, Any]]) -> Dict[str, Any]:
-    """One independent Noul per solid. Question ids stay in code.
+_SCREENING_INDEPENDENCE_RULE = (
+    "Judge each candidate independently. Do not retain a solid only because it shares the file."
+)
+_SCREENING_NOT_SUFFICIENT = (
+    "The solid merely exists in the same STEP file.",
+    "The solid is a fastener, cosmetic, or unrelated component and the requirement does not name it.",
+)
+_SCREENING_QUESTION = (
+    "Must {candidate} stay in this analysis because it is the named object, "
+    "or because removing it would remove the load path or the installation support?"
+)
+_SCREENING_TRUE = (
+    "The requirement names this solid, or the described load path or installation cannot be represented without it."
+)
+_SCREENING_FALSE = (
+    "The requirement does not need this solid; it is outside the named analysis object."
+)
+
+
+def _screening_candidate(solid: Mapping[str, Any]) -> Dict[str, Any]:
+    """Facts JEV may use. Same fields as the former per-question candidate object."""
+    solid_id = str(solid.get("solid_id") or "")
+    if not solid_id:
+        raise ValueError("each screening candidate needs a solid_id")
+    named = solid.get("source_name") or solid.get("label")
+    return {
+        "solid_id": solid_id,
+        "source_name": named or None,
+        "volume": solid.get("volume"),
+        "identity": "source_name" if named else "missing",
+    }
+
+
+def _part_screening_questions(count: int) -> Dict[str, Any]:
+    """One Noul per candidate index. Paths require the matching state."""
+    questions: Dict[str, Any] = {}
+    for index in range(count):
+        questions[f"part_{index}"] = {
+            "type": "noul",
+            "instructions": _SCREENING_QUESTION.format(
+                candidate=f"`candidates[{index}]`"
+            ),
+            "criteria": {
+                "true": _SCREENING_TRUE,
+                "false": _SCREENING_FALSE,
+            },
+        }
+    return questions
+
+
+def build_part_screening_request(
+    requirement: str,
+    solids: Sequence[Mapping[str, Any]],
+) -> Dict[str, Any]:
+    """One shared state plus one independent Noul per solid.
+
+    Shared facts live once in state. Each question points at its own
+    ``candidates[index]`` with a backticked path. Question ids stay in code
+    and are not sent to the model, so the question text keeps the full
+    judgment. Criteria stay on each Noul; they are the answer definition,
+    not shared evidence.
 
     JEV judges relevance to the requirement. It does not choose a body number,
     invent a mating face, or decide that an unlabeled solid may be analyzed.
     """
-    questions: Dict[str, Any] = {}
-    for index, solid in enumerate(solids):
-        solid_id = str(solid.get("solid_id") or "")
-        if not solid_id:
-            raise ValueError("each screening candidate needs a solid_id")
-        questions[f"part_{index}"] = {
-            "type": "noul",
-            "instructions": {
-                "question": (
-                    "Must `candidate` stay in this analysis because it is the named object, "
-                    "or because removing it would remove the load path or the installation support?"
-                ),
-                "candidate": {
-                    "solid_id": solid_id,
-                    "source_name": solid.get("source_name") or solid.get("label") or None,
-                    "volume": solid.get("volume"),
-                    "identity": "source_name" if solid.get("source_name") or solid.get("label") else "missing",
-                },
-                "not_sufficient": [
-                    "The solid merely exists in the same STEP file.",
-                    "The solid is a fastener, cosmetic, or unrelated component and the requirement does not name it.",
-                ],
+    prompt = requirement.strip()
+    if not prompt:
+        raise ValueError("part screening requires the analysis requirement")
+    if not solids:
+        raise ValueError("part screening requires the CAD solid inventory")
+    candidates = [_screening_candidate(solid) for solid in solids]
+    return {
+        "state": {
+            "requirement": prompt,
+            "policy": {
+                "rule": _SCREENING_INDEPENDENCE_RULE,
+                "not_sufficient": list(_SCREENING_NOT_SUFFICIENT),
             },
-            "criteria": {
-                "true": "The requirement names this solid, or the described load path or installation cannot be represented without it.",
-                "false": "The requirement does not need this solid; it is outside the named analysis object.",
-            },
-        }
-    return questions
+            "candidates": candidates,
+        },
+        "questions": _part_screening_questions(len(candidates)),
+    }
+
+
+def build_part_screening_questions(solids: Sequence[Mapping[str, Any]]) -> Dict[str, Any]:
+    """Questions half of :func:`build_part_screening_request`.
+
+    Paths are meaningless without the matching state. Callers that POST a
+    payload must use ``build_part_screening_request``.
+    """
+    candidates = [_screening_candidate(solid) for solid in solids]
+    return _part_screening_questions(len(candidates))
 
 
 @runtime_checkable
@@ -3130,13 +3187,11 @@ class EngineeringIntentRouter:
                     "Part screening in live mode requires a TypeSafe provider. "
                     "Refusing to treat an unlabeled solid as retained."
                 )
+            request = build_part_screening_request(prompt, solids)
             payload = {
                 "model": getattr(self.external_provider, "model", TYPESAFE_DEFAULT_MODEL),
-                "state": {
-                    "requirement": prompt,
-                    "rule": "Judge each candidate independently. Do not retain a solid only because it shares the file.",
-                },
-                "questions": build_part_screening_questions(solids),
+                "state": request["state"],
+                "questions": request["questions"],
             }
             raw = self.external_provider.judge_payload(payload, timeout=self.timeout)
             answers = raw.get("answers") if isinstance(raw, dict) else None

@@ -192,3 +192,132 @@ def test_typesafe_provider_configuration_contracts(monkeypatch):
     assert router_explicit.api_url == TYPESAFE_SYSTEMONE_DEFAULT_URL
     assert router_explicit.external_provider is not None
     assert router_explicit.external_provider.model == TYPESAFE_DEFAULT_MODEL
+
+
+def _screening_solids():
+    return (
+        {"solid_id": "S_HANDLE", "source_name": "Handle", "volume": 12.0},
+        {"solid_id": "S_PIN", "label": "Pin", "volume": 1.5},
+        {"solid_id": "S_COVER", "source_name": "Cover", "volume": 4.0},
+    )
+
+
+def _question_blob(payload):
+    import json
+
+    return json.dumps(payload["questions"])
+
+
+def test_part_screening_request_shares_facts_once():
+    """Shared policy and identities are stated once; each Noul only points at its row."""
+    import json
+
+    from abaqus_ai_agent.typesafe_intent import (
+        _SCREENING_FALSE,
+        _SCREENING_NOT_SUFFICIENT,
+        _SCREENING_QUESTION,
+        _SCREENING_TRUE,
+        build_part_screening_questions,
+        build_part_screening_request,
+    )
+
+    solids = _screening_solids()
+    request = build_part_screening_request("  Analyze the handle  ", solids)
+    encoded = json.dumps(request, sort_keys=True)
+
+    assert request["state"]["requirement"] == "Analyze the handle"
+    assert request["state"]["policy"]["not_sufficient"] == list(_SCREENING_NOT_SUFFICIENT)
+    assert request["state"]["candidates"] == [
+        {"solid_id": "S_HANDLE", "source_name": "Handle", "volume": 12.0, "identity": "source_name"},
+        {"solid_id": "S_PIN", "source_name": "Pin", "volume": 1.5, "identity": "source_name"},
+        {"solid_id": "S_COVER", "source_name": "Cover", "volume": 4.0, "identity": "source_name"},
+    ]
+    assert list(request["questions"]) == ["part_0", "part_1", "part_2"]
+    assert request["questions"] == build_part_screening_questions(solids)
+
+    for index, question in enumerate(request["questions"].values()):
+        assert question["type"] == "noul"
+        assert question["instructions"] == _SCREENING_QUESTION.format(
+            candidate=f"`candidates[{index}]`"
+        )
+        assert question["criteria"] == {"true": _SCREENING_TRUE, "false": _SCREENING_FALSE}
+        assert "not_sufficient" not in question["instructions"]
+        assert "solid_id" not in question["instructions"]
+
+    assert encoded.count("The solid merely exists in the same STEP file.") == 1
+    assert encoded.count("S_HANDLE") == 1
+    assert encoded.count("Judge each candidate independently") == 1
+    assert "`candidates[0]`" in request["questions"]["part_0"]["instructions"]
+    assert "`candidates[2]`" in request["questions"]["part_2"]["instructions"]
+
+
+def test_part_screening_request_rejects_missing_identity_and_empty_input():
+    from abaqus_ai_agent.typesafe_intent import build_part_screening_request
+
+    with pytest.raises(ValueError, match="solid_id"):
+        build_part_screening_request("Analyze the handle", [{"source_name": "Handle"}])
+    with pytest.raises(ValueError, match="CAD solid inventory"):
+        build_part_screening_request("Analyze the handle", [])
+    with pytest.raises(ValueError, match="analysis requirement"):
+        build_part_screening_request("   ", [{"solid_id": "S_HANDLE"}])
+
+
+class _CapturingScreenProvider:
+    model = "jev-test"
+
+    def __init__(self, answers):
+        self.answers = answers
+        self.payloads = []
+
+    def judge_payload(self, payload, timeout=5.0):
+        self.payloads.append(payload)
+        return {"answers": self.answers}
+
+
+def test_live_part_screen_keeps_answer_contract_without_calling_api():
+    """Payload is shared-state; answer ids and thresholds are unchanged. No live call."""
+    from abaqus_ai_agent.typesafe_intent import EngineeringIntentRouter, JevApiError
+
+    provider = _CapturingScreenProvider({
+        "part_0": {"noul": 0.91},
+        "part_1": {"probability": 0.05},
+        "part_2": {"noul": 0.5},
+    })
+    router = EngineeringIntentRouter(mode="live", external_provider=provider)
+    screen = router.screen_parts("Analyze the handle", _screening_solids())
+
+    assert len(provider.payloads) == 1
+    payload = provider.payloads[0]
+    assert payload["model"] == "jev-test"
+    assert payload["state"]["candidates"][0]["solid_id"] == "S_HANDLE"
+    assert "not_sufficient" not in _question_blob(payload)
+    by_id = {item.solid_id: item.disposition for item in screen.decisions}
+    assert by_id == {"S_HANDLE": "retain", "S_PIN": "exclude", "S_COVER": "pending"}
+    assert screen.decisions[0].confidence == 0.91
+    assert screen.decisions[1].confidence == 0.05
+
+    broken = _CapturingScreenProvider("not-a-dict")
+    with pytest.raises(JevApiError, match="did not contain answers"):
+        EngineeringIntentRouter(mode="live", external_provider=broken).screen_parts(
+            "Analyze the handle", _screening_solids()
+        )
+
+    unlabeled = _CapturingScreenProvider({"part_0": {"noul": 0.99}})
+    held = EngineeringIntentRouter(mode="live", external_provider=unlabeled).screen_parts(
+        "Analyze the handle",
+        ({"solid_id": "S_60", "volume": 1.0},),
+    )
+    assert held.decisions[0].disposition == "pending"
+    assert held.decisions[0].role == "identity_missing"
+
+
+def test_offline_part_screen_does_not_call_provider():
+    from abaqus_ai_agent.typesafe_intent import EngineeringIntentRouter
+
+    provider = _CapturingScreenProvider({})
+    router = EngineeringIntentRouter(mode="offline", external_provider=provider)
+    screen = router.screen_parts("Analyze the cover", (
+        {"solid_id": "S_COVER", "source_name": "Cover", "volume": 4.0},
+    ))
+    assert provider.payloads == []
+    assert screen.decisions[0].disposition == "pending"
