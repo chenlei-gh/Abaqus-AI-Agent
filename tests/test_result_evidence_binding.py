@@ -239,7 +239,7 @@ def test_compiler_emits_a_mesh_quality_action_after_generate_mesh():
         part_name="P",
         job_name="J",
         geometry=IntentGeometrySpec(shape="cantilever_box", length=10.0, width=5.0, height=5.0),
-        mesh=IntentMeshSpec(global_size=2.0, size_source="USER_SPECIFIED"),
+        mesh=IntentMeshSpec(global_size=2.0, size_source="USER_SPECIFIED", primary_wall_thickness=1000.0, primary_wall_thickness_source='MEASURED'),
         material=MaterialDefinition(
             name="Q235",
             unit_system="MM_N_MPA",

@@ -1,4 +1,4 @@
-﻿"""Boundary-geometry evidence: loads/BCs must carry where they act and which way
+"""Boundary-geometry evidence: loads/BCs must carry where they act and which way
 they point, so the report figures can show it on the real model view."""
 
 from types import SimpleNamespace
@@ -42,7 +42,7 @@ def _compile(loads, bcs, grounded_regions=None):
         step=IntentStepSpec(name="Step-1", step_type="static_general"),
         bcs=bcs,
         loads=loads,
-        mesh=IntentMeshSpec(element_type="C3D8R", global_size=3.0),
+        mesh=IntentMeshSpec(element_type="C3D8R", global_size=3.0, primary_wall_thickness=1000.0, primary_wall_thickness_source='MEASURED'),
         grounded_regions=grounded_regions,
     )
 

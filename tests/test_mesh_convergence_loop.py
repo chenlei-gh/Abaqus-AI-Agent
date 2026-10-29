@@ -81,7 +81,7 @@ def test_adaptive_mesh_convergence_controller_converges_in_loop():
     base_mesh = IntentMeshSpec(
         global_size=10.0,
         local_seeds=(LocalSeed(region_expression="HoleEdges", size=4.0),),
-    )
+     primary_wall_thickness=1000.0, primary_wall_thickness_source='MEASURED')
 
     controller = AdaptiveMeshConvergenceController(
         base_mesh_spec=base_mesh,
@@ -114,7 +114,7 @@ def test_adaptive_mesh_convergence_controller_converges_in_loop():
 
 
 def test_adaptive_mesh_convergence_controller_budget_exhaustion():
-    base_mesh = IntentMeshSpec(global_size=10.0)
+    base_mesh = IntentMeshSpec(global_size=10.0, primary_wall_thickness=1000.0, primary_wall_thickness_source='MEASURED')
     controller = AdaptiveMeshConvergenceController(
         base_mesh_spec=base_mesh,
         tolerance=0.01,  # Strict 1% threshold cannot be reached in 2 levels
@@ -315,7 +315,7 @@ def test_multi_level_convergence_threshold_validation():
 
 def test_adaptive_convergence_controller_detects_mesh_stagnation():
     # P1: Controller must detect stagnation when seed reaches min_seed_size
-    base_mesh = IntentMeshSpec(global_size=0.1)
+    base_mesh = IntentMeshSpec(global_size=0.1, primary_wall_thickness=1000.0, primary_wall_thickness_source='MEASURED')
     controller = AdaptiveMeshConvergenceController(
         base_mesh_spec=base_mesh,
         tolerance=0.01,
@@ -335,7 +335,7 @@ def test_adaptive_convergence_controller_detects_mesh_stagnation():
 
 def test_adaptive_convergence_controller_handles_corrupt_probe():
     # P1: Controller aborts on corrupt non-dict probe
-    base_mesh = IntentMeshSpec(global_size=5.0)
+    base_mesh = IntentMeshSpec(global_size=5.0, primary_wall_thickness=1000.0, primary_wall_thickness_source='MEASURED')
     controller = AdaptiveMeshConvergenceController(base_mesh_spec=base_mesh)
 
     def mock_bad_runner(level, spec):
@@ -348,7 +348,7 @@ def test_adaptive_convergence_controller_handles_corrupt_probe():
 
 
 def test_adaptive_mesh_convergence_controller_error_on_incomplete_evidence():
-    base_mesh = IntentMeshSpec(global_size=10.0)
+    base_mesh = IntentMeshSpec(global_size=10.0, primary_wall_thickness=1000.0, primary_wall_thickness_source='MEASURED')
     controller = AdaptiveMeshConvergenceController(
         base_mesh_spec=base_mesh,
         tolerance=0.05,
@@ -412,7 +412,7 @@ def test_multi_level_convergence_rejects_non_increasing_element_counts():
 
 def test_adaptive_convergence_controller_strict_validation():
     # P1-1: Controller constructor strictly rejects invalid parameters
-    base_mesh = IntentMeshSpec(global_size=10.0)
+    base_mesh = IntentMeshSpec(global_size=10.0, primary_wall_thickness=1000.0, primary_wall_thickness_source='MEASURED')
 
     with pytest.raises(ValueError, match="tolerance must be a positive finite float"):
         AdaptiveMeshConvergenceController(base_mesh_spec=base_mesh, tolerance=-0.05)

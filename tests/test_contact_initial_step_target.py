@@ -49,7 +49,7 @@ def _compile(*, interactions, step=None, steps=None, procedure=None,
         step=step,
         steps=steps,
         procedure=procedure,
-        mesh=IntentMeshSpec(global_size=2.5, size_source="USER_SPECIFIED"),
+        mesh=IntentMeshSpec(global_size=2.5, size_source="USER_SPECIFIED", primary_wall_thickness=1000.0, primary_wall_thickness_source='MEASURED'),
         interactions=interactions,
         contact_stabilization=STABILIZATION if contract is None else contract,
     )

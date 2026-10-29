@@ -340,7 +340,7 @@ def test_multimodal_intent_to_compiler_action_plan_full_chain():
         elastic=ElasticProperties(youngs_modulus=210e3, poisson_ratio=0.3),
     )
     step = IntentStepSpec(name="StaticStep", time_period=1.0)
-    mesh = IntentMeshSpec(global_size=5.0)
+    mesh = IntentMeshSpec(global_size=5.0, primary_wall_thickness=1000.0, primary_wall_thickness_source='MEASURED')
 
     plan = compile_intent_to_actions(
         model_name="MultimodalModel",

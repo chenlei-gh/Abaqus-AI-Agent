@@ -119,7 +119,7 @@ def test_compile_engineering_intent_with_string_material():
     )
     plan = compile_engineering_intent(
         intent,
-        mesh=IntentMeshSpec(global_size=3.0, size_source="USER_SPECIFIED"),
+        mesh=IntentMeshSpec(global_size=3.0, size_source="USER_SPECIFIED", primary_wall_thickness=1000.0, primary_wall_thickness_source='MEASURED'),
     )
     assert plan is not None
     assert plan.material is not None
@@ -145,7 +145,7 @@ def test_compile_intent_to_actions_with_string_and_dict():
     plan_str = compile_intent_to_actions(
         model_name="M1", part_name="P1", job_name="J1",
         geometry=geom, material="Aluminum_6061_T6",
-        mesh=IntentMeshSpec(global_size=3.0, size_source="USER_SPECIFIED"),
+        mesh=IntentMeshSpec(global_size=3.0, size_source="USER_SPECIFIED", primary_wall_thickness=1000.0, primary_wall_thickness_source='MEASURED'),
     )
     assert plan_str.material is not None
     assert plan_str.material.name == "Aluminum_6061_T6"
@@ -156,7 +156,7 @@ def test_compile_intent_to_actions_with_string_and_dict():
     plan_dict = compile_intent_to_actions(
         model_name="M2", part_name="P2", job_name="J2",
         geometry=geom, material={"name": "Steel_45"},
-        mesh=IntentMeshSpec(global_size=3.0, size_source="USER_SPECIFIED"),
+        mesh=IntentMeshSpec(global_size=3.0, size_source="USER_SPECIFIED", primary_wall_thickness=1000.0, primary_wall_thickness_source='MEASURED'),
     )
     assert plan_dict.material is not None
     assert plan_dict.material.name == "Steel_45"

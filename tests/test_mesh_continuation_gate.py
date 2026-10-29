@@ -177,7 +177,7 @@ def test_geometry_diagnosis_rereads_validity_after_check():
         step=IntentStepSpec(name="LoadingStep", step_type="static_general", nlgeom=False),
         bcs=[IntentBoundarySpec(name="FixedRoot", bc_type="ENCASTRE", region="RootFace")],
         loads=[IntentLoadSpec(name="VerticalTipLoad", load_type="concentrated_force", region="TipPoint", magnitude=-500.0, direction="CF2")],
-        mesh=IntentMeshSpec(element_type="C3D8R", global_size=3.0),
+        mesh=IntentMeshSpec(element_type="C3D8R", global_size=3.0, primary_wall_thickness=1000.0, primary_wall_thickness_source='MEASURED'),
     )
     script = plan.cae_script
     assert script.count("seedPart(") == 1

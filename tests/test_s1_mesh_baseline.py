@@ -22,20 +22,20 @@ from abaqus_ai_agent.reasoning.mesh_inference import (
 
 
 def test_empty_intent_mesh_spec_has_no_implicit_size():
-    spec = IntentMeshSpec()
+    spec = IntentMeshSpec(primary_wall_thickness=1000.0, primary_wall_thickness_source='MEASURED')
     assert spec.global_size is None
     assert spec.size_source is None
 
 
 def test_explicit_positive_size_is_marked_user_specified():
-    spec = IntentMeshSpec(global_size=3.0)
+    spec = IntentMeshSpec(global_size=3.0, primary_wall_thickness=1000.0, primary_wall_thickness_source='MEASURED')
     assert spec.global_size == 3.0
     assert spec.size_source == "USER_SPECIFIED"
 
 
 def test_size_source_without_size_is_rejected():
     with pytest.raises(ValueError, match="size_source requires a positive finite global_size"):
-        IntentMeshSpec(size_source="ABAQUS_DEFAULT_SIZE")
+        IntentMeshSpec(size_source="ABAQUS_DEFAULT_SIZE", primary_wall_thickness=1000.0, primary_wall_thickness_source='MEASURED')
 
 
 def test_tet_mesh_script_rejects_missing_size():

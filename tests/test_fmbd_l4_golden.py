@@ -153,7 +153,7 @@ def test_fmbd_l4_intent_compilation_and_preflight():
         material=MaterialDefinition(name="Q235", elastic=ElasticProperties(youngs_modulus=210000.0, poisson_ratio=0.3)),
         connectors=intent.connectors,
         fmbd=intent.fmbd,
-        mesh=IntentMeshSpec(global_size=3.0, size_source="USER_SPECIFIED"),
+        mesh=IntentMeshSpec(global_size=3.0, size_source="USER_SPECIFIED", primary_wall_thickness=1000.0, primary_wall_thickness_source='MEASURED'),
     )
 
     act_types = [a.action_type for a in plan.actions]

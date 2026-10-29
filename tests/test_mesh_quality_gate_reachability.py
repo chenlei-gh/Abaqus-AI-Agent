@@ -204,7 +204,7 @@ def test_compiled_quality_action_carries_shape_thresholds():
             unit_system="MM_N_MPA",
             elastic=ElasticProperties(youngs_modulus=210000.0, poisson_ratio=0.3),
         ),
-        mesh=IntentMeshSpec(global_size=3.0, size_source="USER_SPECIFIED"),
+        mesh=IntentMeshSpec(global_size=3.0, size_source="USER_SPECIFIED", primary_wall_thickness=1000.0, primary_wall_thickness_source='MEASURED'),
     ).actions
     params = next(a for a in actions if a.action_type == "mesh_quality").parameters
     configured = [name for name in SHAPE_THRESHOLD_FIELDS if params.get(name) is not None]
@@ -236,7 +236,7 @@ def test_explicit_mesh_thresholds_win_over_the_domain_default():
             max_aspect_ratio=3.0,
             min_angle=25.0,
             max_angle=150.0,
-        ),
+         primary_wall_thickness=1000.0, primary_wall_thickness_source='MEASURED'),
     ).actions
     params = next(a for a in actions if a.action_type == "mesh_quality").parameters
     assert params["max_aspect_ratio"] == 3.0

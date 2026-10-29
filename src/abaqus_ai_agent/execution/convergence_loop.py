@@ -252,6 +252,8 @@ class AdaptiveMeshConvergenceController:
             local_seeds=tuple(new_local_seeds),
             deviation_factor=current_spec.deviation_factor,
             element_library=current_spec.element_library,
+            primary_wall_thickness=current_spec.primary_wall_thickness,
+            primary_wall_thickness_source=current_spec.primary_wall_thickness_source,
         )
 
     def execute_loop(

@@ -368,7 +368,7 @@ def test_ga2a_viewport_click_to_compiler_action_plan_e2e():
         step=step,
         bcs=bcs,
         loads=loads,
-        mesh=IntentMeshSpec(global_size=5.0),
+        mesh=IntentMeshSpec(global_size=5.0, primary_wall_thickness=1000.0, primary_wall_thickness_source='MEASURED'),
         grounded_regions={"FIXED_ROOT": grounded_region},
     )
 

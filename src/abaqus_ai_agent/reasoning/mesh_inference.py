@@ -9,7 +9,7 @@ emits a production action.
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Any, Mapping, Optional, Sequence, Tuple
 
 from ..contracts.intent import EngineeringIntent
@@ -23,6 +23,13 @@ class MeshBaselineBlocked(ValueError):
 
 class MeshConstraintBlocked(ValueError):
     """Raised when a required local constraint cannot be executed."""
+
+
+PRIMARY_WALL_SOURCES = ("USER_SPECIFIED", "MEASURED")
+
+
+class PrimaryWallBlocked(ValueError):
+    """Raised when a seed is coarser than a verified primary wall, or the wall is missing."""
 
 
 _EDGE_INTENTS = {
@@ -92,6 +99,10 @@ class MeshSizeDecision:
     explicit_stable_increment_risk: Optional[Mapping[str, Any]] = None
     production_default: str = "NOT_SWITCHED"
     adaptive_capability: str = "EXCLUDED"
+    primary_wall_thickness: Optional[float] = None
+    primary_wall_source: Optional[str] = None
+    executable_baseline_size: Optional[float] = None
+    capped_local_seed_sizes: Tuple[float, ...] = ()
 
     def __post_init__(self):
         if self.status not in ("READY", "BLOCKED", "INVALID"):
@@ -135,6 +146,8 @@ def infer_mesh_specification(
                     element_type=str(etype),
                     global_size=float(size),
                     deviation_factor=float(intent.mesh_requirements.get("deviation_factor", 0.1)),
+                    primary_wall_thickness=intent.mesh_requirements.get("primary_wall_thickness"),
+                    primary_wall_thickness_source=intent.mesh_requirements.get("primary_wall_thickness_source"),
                 ), None
 
     raise MeshBaselineBlocked(
@@ -142,6 +155,35 @@ def infer_mesh_specification(
         "and ABAQUS_DEFAULT_SIZE has not been read for this part. "
         "Refusing the 2.5 mm fallback."
     )
+
+
+def resolve_primary_wall_thickness(
+    thickness: Optional[float],
+    source: Optional[str],
+) -> Tuple[Optional[float], Optional[str], Optional[UnsupportedConstraint]]:
+    """Accept only a traced positive wall. 7 mm, 10 mm, and 2.5 mm are not measurements."""
+    if thickness is None and source is None:
+        return None, None, UnsupportedConstraint(
+            "primary_wall",
+            "no USER_SPECIFIED or MEASURED primary wall thickness; refusing 7/10/2.5 mm and bounding-box fallbacks",
+            "MISSING_PRIMARY_WALL",
+        )
+    if source not in PRIMARY_WALL_SOURCES or not _positive(thickness):
+        return None, None, UnsupportedConstraint(
+            "primary_wall",
+            "primary wall thickness must be a positive finite USER_SPECIFIED or MEASURED value",
+            "INVALID_PRIMARY_WALL",
+        )
+    return float(thickness), source, None
+
+
+def cap_seed_to_primary_wall(seed: Optional[float], wall: Optional[float]) -> Optional[float]:
+    """Executable seed cannot be coarser than the verified primary wall."""
+    if not _positive(seed) or not _positive(wall):
+        return seed
+    if float(seed) > float(wall):
+        return float(wall)
+    return float(seed)
 
 
 def decide_mesh_sizing(
@@ -154,6 +196,9 @@ def decide_mesh_sizing(
     solver: str = "STANDARD",
     procedure: str = "static",
     partition_proven: bool = False,
+    primary_wall_thickness: Optional[float] = None,
+    primary_wall_source: Optional[str] = None,
+    local_seed_sizes: Sequence[float] = (),
 ) -> MeshSizeDecision:
     """Build the S2-S6 decision without emitting Abaqus actions.
 
@@ -165,6 +210,10 @@ def decide_mesh_sizing(
     unsupported = []
     edges = []
 
+    wall, wall_source, wall_error = resolve_primary_wall_thickness(
+        primary_wall_thickness, primary_wall_source,
+    )
+
     if baseline_source not in (None, "USER_SPECIFIED", "ABAQUS_DEFAULT_SIZE"):
         return MeshSizeDecision(
             baseline_size=None,
@@ -172,6 +221,8 @@ def decide_mesh_sizing(
             unsupported=(UnsupportedConstraint("baseline", "unrecognized size source", "INVALID"),),
             status="INVALID",
             adaptive_capability=_adaptive_status(solver, procedure, element_family),
+            primary_wall_thickness=wall,
+            primary_wall_source=wall_source,
         )
     if baseline_size is None or not _positive(baseline_size) or baseline_source is None:
         unsupported.append(UnsupportedConstraint(
@@ -179,6 +230,11 @@ def decide_mesh_sizing(
             "no verified USER_SPECIFIED or ABAQUS_DEFAULT_SIZE baseline",
             "MISSING_BASELINE",
         ))
+
+    executable = cap_seed_to_primary_wall(baseline_size, wall) if _positive(baseline_size) and wall else None
+    capped_locals = tuple(
+        float(cap_seed_to_primary_wall(item, wall)) for item in local_seed_sizes if _positive(item) and wall
+    )
 
     for feature in features:
         kind = _norm(feature.get("kind") or feature.get("feature"))
@@ -206,19 +262,30 @@ def decide_mesh_sizing(
         if isinstance(edge, UnsupportedConstraint):
             unsupported.append(edge)
         else:
+            if edge.size is not None:
+                edge = replace(edge, size=float(cap_seed_to_primary_wall(edge.size, wall)))
             edges.append(edge)
 
+    if wall_error is not None:
+        unsupported.append(wall_error)
+
     blocking = [item for item in unsupported if item.code != "NOT_REQUESTED"]
-    status = "READY" if not blocking and _positive(baseline_size) and baseline_source else "BLOCKED"
+    status = "READY" if not blocking and _positive(baseline_size) and baseline_source and wall else "BLOCKED"
+    if wall_error is not None and wall_error.code == "INVALID_PRIMARY_WALL":
+        status = "INVALID"
     return MeshSizeDecision(
         baseline_size=float(baseline_size) if _positive(baseline_size) else None,
         baseline_source=baseline_source if _positive(baseline_size) else None,
         edge_constraints=tuple(edges),
         unsupported=tuple(blocking),
         status=status,
-        explicit_stable_increment_risk=_explicit_risk(baseline_size, edges, solver),
+        explicit_stable_increment_risk=_explicit_risk(executable if executable is not None else baseline_size, edges, solver),
         production_default="NOT_SWITCHED",
         adaptive_capability=_adaptive_status(solver, procedure, element_family),
+        primary_wall_thickness=wall,
+        primary_wall_source=wall_source,
+        executable_baseline_size=float(executable) if executable is not None else None,
+        capped_local_seed_sizes=capped_locals,
     )
 
 

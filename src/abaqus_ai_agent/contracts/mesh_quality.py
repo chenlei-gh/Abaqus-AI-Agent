@@ -496,6 +496,7 @@ def tet_mesh_script(
     deviation_factor: Any = 0.1,
     min_size_factor: Any = 0.1,
     auxiliary_partition_script: Optional[str] = None,
+    primary_wall_thickness: Any = None,
 ) -> str:
     """At most five quality-gated tetrahedron mesh attempts.
 
@@ -535,6 +536,20 @@ def tet_mesh_script(
     seed = float(seed_size)
     if not math.isfinite(seed) or seed <= 0.0:
         raise ValueError("tetrahedron seed must be a positive finite number, got %r" % seed_size)
+    if primary_wall_thickness is not None:
+        if isinstance(primary_wall_thickness, bool) or not isinstance(primary_wall_thickness, (int, float)):
+            raise ValueError(
+                "primary_wall_thickness must be a positive finite measured wall, got %r" % primary_wall_thickness
+            )
+        wall = float(primary_wall_thickness)
+        if not math.isfinite(wall) or wall <= 0.0:
+            raise ValueError(
+                "primary_wall_thickness must be a positive finite measured wall, got %r" % primary_wall_thickness
+            )
+        if seed > wall:
+            raise ValueError(
+                "tetrahedron seed %s exceeds verified primary wall %s; refusing a coarser seed" % (seed, wall)
+            )
     for name, value in (("deviation_factor", deviation_factor), ("min_size_factor", min_size_factor)):
         if isinstance(value, bool) or not isinstance(value, (int, float)):
             raise ValueError("tetrahedron %s must be a positive finite number, got %r" % (name, value))

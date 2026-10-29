@@ -241,7 +241,7 @@ def test_declared_singularity_is_not_reported_as_converged():
             global_size=8.0,
             size_source="USER_SPECIFIED",
             local_seeds=(LocalSeed(region_expression="edge", size=4.0),),
-        ),
+         primary_wall_thickness=1000.0, primary_wall_thickness_source='MEASURED'),
     )
     assert len(calls) == 3
     assert outcome.status == "SINGULARITY_REPORTED"

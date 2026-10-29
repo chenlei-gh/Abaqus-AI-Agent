@@ -24,7 +24,7 @@ def test_compile_intent_to_actions_end_to_end():
     step = IntentStepSpec(name="LoadingStep", step_type="static_general", nlgeom=False)
     bcs = [IntentBoundarySpec(name="FixedRoot", bc_type="ENCASTRE", region="RootFace")]
     loads = [IntentLoadSpec(name="VerticalTipLoad", load_type="concentrated_force", region="TipPoint", magnitude=-500.0, direction="CF2")]
-    mesh = IntentMeshSpec(element_type="C3D8R", global_size=3.0)
+    mesh = IntentMeshSpec(element_type="C3D8R", global_size=3.0, primary_wall_thickness=1000.0, primary_wall_thickness_source='MEASURED')
 
     plan = compile_intent_to_actions(
         model_name="CompiledModel",
@@ -89,7 +89,7 @@ def test_compile_grounded_intent_plate_with_hole():
     step = IntentStepSpec(name="StaticStep", step_type="static_general")
     bcs = [IntentBoundarySpec(name="FixInstallationHole", bc_type="ENCASTRE", region="INSTALLATION_HOLE")]
     loads = [IntentLoadSpec(name="TopDownwardLoad", load_type="concentrated_force", region="TOP_SURFACE", magnitude=-1000.0, direction="CF3")]
-    mesh = IntentMeshSpec(element_type="C3D10", global_size=10.0)
+    mesh = IntentMeshSpec(element_type="C3D10", global_size=10.0, primary_wall_thickness=1000.0, primary_wall_thickness_source='MEASURED')
 
     grounded = {
         "INSTALLATION_HOLE": GroundedRegion(
@@ -158,7 +158,7 @@ def test_compile_multi_anchor_group_intent():
     step = IntentStepSpec(name="StaticStep", step_type="static_general")
     bcs = [IntentBoundarySpec(name="FixAllBolts", bc_type="ENCASTRE", region="ALL_BOLTS")]
     loads = [IntentLoadSpec(name="BottomPressure", load_type="pressure", region="BOTTOM_FACE", magnitude=5.0)]
-    mesh = IntentMeshSpec(element_type="C3D10", global_size=10.0)
+    mesh = IntentMeshSpec(element_type="C3D10", global_size=10.0, primary_wall_thickness=1000.0, primary_wall_thickness_source='MEASURED')
 
     grounded = {
         "ALL_BOLTS": GroundedRegion(
@@ -225,7 +225,7 @@ def test_compile_multi_step_procedure_dag():
         IntentLoadSpec(name="Preload", load_type="concentrated_force", region="TipFace", magnitude=1000.0, step="Step-Preload"),
         IntentLoadSpec(name="ServiceLoad", load_type="concentrated_force", region="TipFace", magnitude=500.0, step="Step-Service"),
     ]
-    mesh = IntentMeshSpec(element_type="C3D8R", global_size=5.0)
+    mesh = IntentMeshSpec(element_type="C3D8R", global_size=5.0, primary_wall_thickness=1000.0, primary_wall_thickness_source='MEASURED')
 
     plan = compile_intent_to_actions(
         model_name="MultiStepModel",
@@ -302,7 +302,7 @@ def test_compile_bolt_pretension_two_stage_lifecycle():
         steps=steps,
         bcs=bcs,
         bolt_pretensions=[bolt_spec],
-        mesh=IntentMeshSpec(global_size=3.0, size_source="USER_SPECIFIED"),
+        mesh=IntentMeshSpec(global_size=3.0, size_source="USER_SPECIFIED", primary_wall_thickness=1000.0, primary_wall_thickness_source='MEASURED'),
     )
 
     assert plan.intent_summary["bolt_pretensions_count"] == 1
@@ -354,7 +354,7 @@ def test_compile_moment_rp_coupling_strategy():
         step=step,
         bcs=bcs,
         moments=[moment_spec],
-        mesh=IntentMeshSpec(global_size=3.0, size_source="USER_SPECIFIED"),
+        mesh=IntentMeshSpec(global_size=3.0, size_source="USER_SPECIFIED", primary_wall_thickness=1000.0, primary_wall_thickness_source='MEASURED'),
     )
 
     assert plan.intent_summary["moments_count"] == 1
@@ -409,7 +409,7 @@ def test_compile_spatial_load_field():
         bcs=bcs,
         loads=loads,
         fields=[field_spec],
-        mesh=IntentMeshSpec(global_size=3.0, size_source="USER_SPECIFIED"),
+        mesh=IntentMeshSpec(global_size=3.0, size_source="USER_SPECIFIED", primary_wall_thickness=1000.0, primary_wall_thickness_source='MEASURED'),
     )
 
     assert plan.intent_summary["fields_count"] == 1
@@ -481,7 +481,7 @@ def test_compile_symmetry_bc_all_planes():
         step=step,
         bcs=bcs,
         grounded_regions=grounded,
-        mesh=IntentMeshSpec(global_size=3.0, size_source="USER_SPECIFIED"),
+        mesh=IntentMeshSpec(global_size=3.0, size_source="USER_SPECIFIED", primary_wall_thickness=1000.0, primary_wall_thickness_source='MEASURED'),
     )
 
     script = plan.cae_script
@@ -566,7 +566,7 @@ def test_compile_comprehensive_multi_physics_plan():
         fields=[field_spec],
         bolt_pretensions=[bolt_spec],
         moments=[moment_spec],
-        mesh=IntentMeshSpec(global_size=3.0, size_source="USER_SPECIFIED"),
+        mesh=IntentMeshSpec(global_size=3.0, size_source="USER_SPECIFIED", primary_wall_thickness=1000.0, primary_wall_thickness_source='MEASURED'),
     )
 
     # Summary asserts
@@ -620,7 +620,7 @@ def test_compile_engineering_intent_from_dict_intent():
 
     plan = compile_engineering_intent(
         intent,
-        mesh=IntentMeshSpec(global_size=3.0, size_source="USER_SPECIFIED"),
+        mesh=IntentMeshSpec(global_size=3.0, size_source="USER_SPECIFIED", primary_wall_thickness=1000.0, primary_wall_thickness_source='MEASURED'),
     )
     assert plan.model_name == "Model_INTENT_STATIC_001"
     assert plan.part_name == "MainPart"
@@ -662,7 +662,7 @@ def test_compile_engineering_intent_with_typed_specs():
         intent,
         geometry=geom,
         material=mat,
-        mesh=IntentMeshSpec(global_size=3.0, size_source="USER_SPECIFIED"),
+        mesh=IntentMeshSpec(global_size=3.0, size_source="USER_SPECIFIED", primary_wall_thickness=1000.0, primary_wall_thickness_source='MEASURED'),
     )
     assert "Pressure" in plan.cae_script
     assert "72000.0" in plan.cae_script
@@ -696,7 +696,7 @@ def test_compile_engineering_intent_advanced_l4_passthrough():
 
     plan = compile_engineering_intent(
         intent,
-        mesh=IntentMeshSpec(global_size=3.0, size_source="USER_SPECIFIED"),
+        mesh=IntentMeshSpec(global_size=3.0, size_source="USER_SPECIFIED", primary_wall_thickness=1000.0, primary_wall_thickness_source='MEASURED'),
     )
     # Compiler ensures S field output is enabled in CAE script and fatigue is in intent summary
     assert "fatigue" in plan.intent_summary
@@ -718,7 +718,7 @@ def test_compile_engineering_intent_fail_closed_missing_geometry():
     with pytest.raises(ValueError, match="missing geometry specification"):
         compile_engineering_intent(
             intent,
-            mesh=IntentMeshSpec(global_size=3.0, size_source="USER_SPECIFIED"),
+            mesh=IntentMeshSpec(global_size=3.0, size_source="USER_SPECIFIED", primary_wall_thickness=1000.0, primary_wall_thickness_source='MEASURED'),
         )
 
 
@@ -736,5 +736,5 @@ def test_compile_engineering_intent_fail_closed_missing_material():
     with pytest.raises(ValueError, match="missing material specification"):
         compile_engineering_intent(
             intent,
-            mesh=IntentMeshSpec(global_size=3.0, size_source="USER_SPECIFIED"),
+            mesh=IntentMeshSpec(global_size=3.0, size_source="USER_SPECIFIED", primary_wall_thickness=1000.0, primary_wall_thickness_source='MEASURED'),
         )

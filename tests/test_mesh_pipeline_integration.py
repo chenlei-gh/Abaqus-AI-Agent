@@ -91,13 +91,13 @@ def test_local_seed_builders_fail_closed_validation():
 
 def test_intent_mesh_spec_fail_closed():
     with pytest.raises(ValueError, match="global_size must be a positive finite number"):
-        IntentMeshSpec(global_size=0.0)
+        IntentMeshSpec(global_size=0.0, primary_wall_thickness=1000.0, primary_wall_thickness_source='MEASURED')
     with pytest.raises(ValueError, match="global_size must be a positive finite number"):
-        IntentMeshSpec(global_size=-1.0)
+        IntentMeshSpec(global_size=-1.0, primary_wall_thickness=1000.0, primary_wall_thickness_source='MEASURED')
     with pytest.raises(ValueError, match="deviation_factor must be in"):
-        IntentMeshSpec(deviation_factor=1.5)
+        IntentMeshSpec(deviation_factor=1.5, primary_wall_thickness=1000.0, primary_wall_thickness_source='MEASURED')
     with pytest.raises(ValueError, match="element_library must be STANDARD or EXPLICIT"):
-        IntentMeshSpec(element_library="OTHER")
+        IntentMeshSpec(element_library="OTHER", primary_wall_thickness=1000.0, primary_wall_thickness_source='MEASURED')
 
 
 def test_intent_mesh_spec_normalizes_local_seeds():
@@ -107,7 +107,7 @@ def test_intent_mesh_spec_normalizes_local_seeds():
             {"region_expression": "p.edges[0]", "size": 1.0, "constraint": "FREE"},
             LocalSeed(region_expression="p.edges[1]", number=5),
         ],
-    )
+     primary_wall_thickness=1000.0, primary_wall_thickness_source='MEASURED')
     assert len(spec.local_seeds) == 2
     assert isinstance(spec.local_seeds[0], LocalSeed)
     assert spec.local_seeds[0].size == 1.0
@@ -122,7 +122,7 @@ def test_compile_intent_to_actions_integrates_local_seeds():
             LocalSeed(region_expression="p.edges[0]", size=1.0, constraint="FIXED"),
             LocalSeed(region_expression="p.edges[1]", number=8, constraint="FREE"),
         ),
-    )
+     primary_wall_thickness=1000.0, primary_wall_thickness_source='MEASURED')
     plan = compile_intent_to_actions(
         model_name="M",
         part_name="P",
@@ -184,7 +184,7 @@ def test_compile_engineering_intent_blocks_unpartitioned_plan():
     with pytest.raises(ValueError, match="requires unexecuted geometric partitioning"):
         compile_engineering_intent(
             intent,
-            mesh=IntentMeshSpec(global_size=3.0, size_source="USER_SPECIFIED"),
+            mesh=IntentMeshSpec(global_size=3.0, size_source="USER_SPECIFIED", primary_wall_thickness=1000.0, primary_wall_thickness_source='MEASURED'),
         )
 
 
@@ -200,7 +200,11 @@ def test_compile_engineering_intent_accepts_mesh_specification():
         description="Test MeshSpecification input",
         material={"name": "Q235", "elastic_modulus": 210000.0, "poisson_ratio": 0.3},
         mesh_requirements=ms,
-        metadata={"geometry": {"shape": "cantilever_box", "length": 100.0, "width": 10.0, "height": 10.0}},
+        metadata={
+            "geometry": {"shape": "cantilever_box", "length": 100.0, "width": 10.0, "height": 10.0},
+            "primary_wall_thickness": 10.0,
+            "primary_wall_thickness_source": "MEASURED",
+        },
     )
     compiled = compile_engineering_intent(intent)
     mesh_script = "\n".join(
@@ -331,7 +335,7 @@ def test_two_blocks_contact_blocks_unsupported_local_seeds():
     mesh = IntentMeshSpec(
         global_size=5.0,
         local_seeds=(LocalSeed(region_expression="p.edges[0]", size=1.0),),
-    )
+     primary_wall_thickness=1000.0, primary_wall_thickness_source='MEASURED')
     with pytest.raises(ValueError, match="two_blocks_contact' does not currently support local_seeds"):
         compile_intent_to_actions(
             model_name="M",

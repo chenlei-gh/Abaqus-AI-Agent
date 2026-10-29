@@ -191,7 +191,7 @@ def test_step_assembly_script_keeps_every_part_contact_and_fixture(tmp_path=None
                 unit_system="MM_N_MPA",
                 elastic=ElasticProperties(youngs_modulus=3000.0, poisson_ratio=0.35),
             ),
-            mesh=IntentMeshSpec(element_type="C3D10", global_size=1.5),
+            mesh=IntentMeshSpec(element_type="C3D10", global_size=1.5, primary_wall_thickness=1000.0, primary_wall_thickness_source='MEASURED'),
         )
 
     script = plan.cae_script

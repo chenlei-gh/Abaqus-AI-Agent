@@ -190,6 +190,10 @@ class IntentMeshSpec:
     deviation_factor: float = 0.1
     element_library: str = "STANDARD"  # "STANDARD", "EXPLICIT"
     local_seeds: Tuple[LocalSeed, ...] = ()
+    # Verified primary wall. Seeds coarser than this are refused. Geometry
+    # thickness, 7 mm, 10 mm, and 2.5 mm are not measurements.
+    primary_wall_thickness: Optional[float] = None
+    primary_wall_thickness_source: Optional[str] = None
     # Quality thresholds passed to Part.verifyMeshQuality(). None means "no
     # explicit threshold", not "the check passed": the native criterion still
     # runs and its failed/warning element counts are recorded either way.
@@ -217,6 +221,15 @@ class IntentMeshSpec:
                 raise ValueError(
                     "size_source must be USER_SPECIFIED or ABAQUS_DEFAULT_SIZE, got %r" % (source,)
                 )
+        wall = self.primary_wall_thickness
+        wall_source = self.primary_wall_thickness_source
+        if wall is None and wall_source is None:
+            pass
+        elif wall_source not in ("USER_SPECIFIED", "MEASURED") or isinstance(wall, bool) or not isinstance(wall, (int, float)) or not math.isfinite(float(wall)) or float(wall) <= 0:
+            raise ValueError(
+                "primary_wall_thickness must be a positive finite USER_SPECIFIED or MEASURED value, got %r from %r"
+                % (wall, wall_source)
+            )
         if self.deviation_factor is None or not (0.0 <= float(self.deviation_factor) <= 1.0):
             raise ValueError(f"deviation_factor must be in [0, 1], got {self.deviation_factor!r}")
         lib_str = str(self.element_library).upper()
@@ -1780,29 +1793,34 @@ def compile_intent_to_actions(
             lines.append(tet_mesh_script(
                 target_expr, mesh.global_size,
                 deviation_factor=mesh.deviation_factor,
+                primary_wall_thickness=mesh.primary_wall_thickness,
             ))
         else:
             lines.append("%s.generateMesh()\n" % target_expr)
         actions.append(builders.python_action(model_name, "".join(lines)))
 
     tetrahedral_mesh = mesh.element_type.startswith("C3D10") or mesh.element_type.startswith("C3D4")
+    if geometry.shape == "step_assembly" and getattr(mesh, "local_seeds", None):
+        raise ValueError(
+            "step_assembly does not accept part-local seeds until each seed names its solid; "
+            "refusing to apply them to one part only"
+        )
+    if geometry.shape == "two_blocks_contact" and getattr(mesh, "local_seeds", None):
+        raise ValueError(
+            f"Geometry shape 'two_blocks_contact' does not currently support local_seeds; "
+            f"received {len(mesh.local_seeds)} local seed specification(s). Fail-closed to avoid silent omission."
+        )
+    # Cap every production seed to a verified primary wall before any seedPart
+    # or local seedEdgeBySize is emitted. Missing wall is not filled with
+    # 7/10/2.5 mm or a bounding-box ratio.
+    mesh, wall_evidence = _cap_mesh_to_primary_wall(mesh)
     if geometry.shape == "step_assembly":
-        if getattr(mesh, "local_seeds", None):
-            raise ValueError(
-                "step_assembly does not accept part-local seeds until each seed names its solid; "
-                "refusing to apply them to one part only"
-            )
         for part in active_scope.parts:
             _append_part_mesh(
                 "mdb.models['%s'].parts['%s']" % (model_name, part.name),
                 tetrahedral=tetrahedral_mesh,
             )
     elif geometry.shape == "two_blocks_contact":
-        if getattr(mesh, "local_seeds", None):
-            raise ValueError(
-                f"Geometry shape 'two_blocks_contact' does not currently support local_seeds; "
-                f"received {len(mesh.local_seeds)} local seed specification(s). Fail-closed to avoid silent omission."
-            )
         _append_part_mesh(
             "mdb.models['%s'].parts['Base']" % model_name,
             tetrahedral=tetrahedral_mesh,
@@ -2027,7 +2045,7 @@ def compile_intent_to_actions(
         "fmbd_specs_count": (len(fmbd.rigid_bodies) + len(fmbd.flexible_interfaces)) if fmbd else 0,
         "fmbd": fmbd.to_dict() if fmbd else None,
         "fatigue": fatigue.to_dict() if fatigue else None,
-        "mesh_sizing": _mesh_sizing_evidence(mesh),
+        "mesh_sizing": _mesh_sizing_evidence(mesh, wall_evidence),
     }
 
     return CompiledAgentPlan(
@@ -2060,12 +2078,18 @@ def _mesh_sizing_decision(intent: EngineeringIntent, mesh: IntentMeshSpec):
     meta = getattr(intent, "metadata", None) or {}
     features = list(meta.get("mesh_features") or ())
     intents = list(meta.get("mesh_analysis_intents") or ())
+    wall = mesh.primary_wall_thickness
+    wall_source = mesh.primary_wall_thickness_source
+    if wall is None and meta.get("primary_wall_thickness") is not None:
+        wall = meta.get("primary_wall_thickness")
+        wall_source = meta.get("primary_wall_thickness_source")
+    local_sizes = tuple(seed.size for seed in mesh.local_seeds if seed.size is not None)
     if not features and not mesh.local_seeds:
-        return MeshSizeDecision(
+        return decide_mesh_sizing(
             baseline_size=mesh.global_size,
             baseline_source=mesh.size_source,
-            status="READY",
-            adaptive_capability="EXCLUDED",
+            primary_wall_thickness=wall,
+            primary_wall_source=wall_source,
         )
     for seed in mesh.local_seeds:
         feature = getattr(seed, "feature", None)
@@ -2093,11 +2117,14 @@ def _mesh_sizing_decision(intent: EngineeringIntent, mesh: IntentMeshSpec):
         solver=solver,
         procedure=procedure,
         partition_proven=bool(meta.get("thickness_partition_proven")),
+        primary_wall_thickness=wall,
+        primary_wall_source=wall_source,
+        local_seed_sizes=local_sizes,
     )
 
 
-def _mesh_sizing_evidence(mesh: IntentMeshSpec) -> Dict[str, Any]:
-    return {
+def _mesh_sizing_evidence(mesh: IntentMeshSpec, wall_evidence: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    evidence = {
         "baseline_size": mesh.global_size,
         "baseline_source": mesh.size_source,
         "planned_edge_seeds": len(mesh.local_seeds),
@@ -2107,7 +2134,79 @@ def _mesh_sizing_evidence(mesh: IntentMeshSpec) -> Dict[str, Any]:
         "adaptive_remeshing": "EXCLUDED",
         "explicit_stable_increment": "ESTIMATED_ONLY_NOT_SOLVER_REPORTED",
         "job_submitted_for_mesh_stage": False,
+        "primary_wall_thickness": mesh.primary_wall_thickness,
+        "primary_wall_thickness_source": mesh.primary_wall_thickness_source,
     }
+    if wall_evidence:
+        evidence.update(wall_evidence)
+    return evidence
+
+
+def _cap_mesh_to_primary_wall(mesh: IntentMeshSpec):
+    """Refuse a production seed coarser than a verified primary wall.
+
+    Missing, invented, or geometry-template thickness is not a wall. 7 mm,
+    10 mm, 2.5 mm, and bounding-box ratios are not substituted here.
+    """
+    from ..reasoning.mesh_inference import (
+        PrimaryWallBlocked,
+        cap_seed_to_primary_wall,
+        resolve_primary_wall_thickness,
+    )
+
+    wall, source, error = resolve_primary_wall_thickness(
+        mesh.primary_wall_thickness,
+        mesh.primary_wall_thickness_source,
+    )
+    if error is not None:
+        raise PrimaryWallBlocked(
+            "Production mesh refused: %s. Seed %s is not emitted. "
+            "Refusing 7/10/2.5 mm and bounding-box fallbacks."
+            % (error.reason, mesh.global_size)
+        )
+    executable = float(cap_seed_to_primary_wall(mesh.global_size, wall))
+    capped_locals = []
+    changed_locals = []
+    for seed in mesh.local_seeds:
+        if seed.size is None:
+            capped_locals.append(seed)
+            continue
+        capped = float(cap_seed_to_primary_wall(seed.size, wall))
+        if capped != float(seed.size):
+            changed_locals.append({"requested": float(seed.size), "executable": capped})
+            capped_locals.append(replace(seed, size=capped))
+        else:
+            capped_locals.append(seed)
+    capped_mesh = mesh
+    if executable != float(mesh.global_size) or changed_locals:
+        capped_mesh = replace(
+            mesh,
+            global_size=executable,
+            local_seeds=tuple(capped_locals),
+        )
+    evidence = {
+        "requested_baseline_size": float(mesh.global_size),
+        "executable_baseline_size": executable,
+        "primary_wall_thickness": wall,
+        "primary_wall_thickness_source": source,
+        "seed_capped_to_primary_wall": executable != float(mesh.global_size) or bool(changed_locals),
+        "capped_local_seeds": changed_locals,
+    }
+    return capped_mesh, evidence
+
+
+def _copy_primary_wall_from_intent(intent: EngineeringIntent, mesh: IntentMeshSpec) -> IntentMeshSpec:
+    """Copy a traced wall from intent metadata. Geometry thickness is not a wall."""
+    if mesh.primary_wall_thickness is not None or mesh.primary_wall_thickness_source is not None:
+        return mesh
+    meta = getattr(intent, "metadata", None) or {}
+    if meta.get("primary_wall_thickness") is None and meta.get("primary_wall_thickness_source") is None:
+        return mesh
+    return replace(
+        mesh,
+        primary_wall_thickness=meta.get("primary_wall_thickness"),
+        primary_wall_thickness_source=meta.get("primary_wall_thickness_source"),
+    )
 
 
 def _locator_guard_prefix() -> str:
@@ -2913,6 +3012,8 @@ def compile_engineering_intent(
                 deviation_factor=float(m_req.get("deviation_factor", 0.1)),
                 element_library=m_req.get("element_library", "STANDARD"),
                 local_seeds=tuple(parsed_local_seeds),
+                primary_wall_thickness=m_req.get("primary_wall_thickness"),
+                primary_wall_thickness_source=m_req.get("primary_wall_thickness_source"),
             )
         else:
             raise TypeError(f"Unsupported mesh_requirements type: {type(intent.mesh_requirements)}")
@@ -2936,13 +3037,16 @@ def compile_engineering_intent(
                 "Fail-closed: cannot silently omit partition-dependent local mesh refinement."
             )
 
+    eff_mesh = _copy_primary_wall_from_intent(intent, eff_mesh)
     sizing_decision = _mesh_sizing_decision(intent, eff_mesh)
     if sizing_decision.status != "READY":
-        from ..reasoning.mesh_inference import MeshConstraintBlocked
+        from ..reasoning.mesh_inference import MeshConstraintBlocked, PrimaryWallBlocked
         reasons = "; ".join(
             "%s: %s" % (item.feature, item.reason) for item in sizing_decision.unsupported
         ) or "mesh sizing decision is not READY"
-        raise MeshConstraintBlocked(
+        wall_block = any(item.feature == "primary_wall" for item in sizing_decision.unsupported)
+        blocker = PrimaryWallBlocked if wall_block else MeshConstraintBlocked
+        raise blocker(
             "Required mesh constraint is not executable (%s). "
             "Refusing to emit a production mesh script." % reasons
         )

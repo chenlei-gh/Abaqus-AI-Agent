@@ -139,7 +139,7 @@ def test_fatigue_l4_full_agent_chain_golden(tmp_path):
         step=IntentStepSpec(name="Step-Cyclic", step_type="STATIC", time_period=1.0),
         bcs=[IntentBoundarySpec(name="FixedRoot", bc_type="ENCASTRE", region="Root")],
         loads=[IntentLoadSpec(name="CyclicTraction", load_type="PRESSURE", region="Tip", magnitude=50.0)],
-        mesh=IntentMeshSpec(global_size=5.0),
+        mesh=IntentMeshSpec(global_size=5.0, primary_wall_thickness=1000.0, primary_wall_thickness_source='MEASURED'),
         fatigue=intent.fatigue,
     )
 
