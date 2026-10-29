@@ -70,6 +70,7 @@ class InstallationFixture:
     point: Tuple[float, float, float]
     normal: Tuple[float, float, float]
     area: float
+    target_scope: str = "face"
 
 
 @dataclass(frozen=True)
@@ -217,6 +218,7 @@ def _fixture_record(fixture: InstallationFixture) -> dict:
         "point": list(fixture.point),
         "normal": list(fixture.normal),
         "area": fixture.area,
+        "target_scope": getattr(fixture, "target_scope", "face"),
         "description": "Installation fixture accepted by assembly scope",
     }
 
@@ -583,6 +585,8 @@ def build_assembly_scope(
     *,
     friction_coefficient: float = 0.15,
     fixture_face_id: Optional[str] = None,
+    fixture_part_id: Optional[str] = None,
+    fixture_target_scope: Optional[str] = None,
     allow_unverified_exterior_fixture: bool = False,
     requirement: Optional[Union[str, Mapping[str, object]]] = None,
     screen: Optional[AnalysisScreen] = None,
@@ -723,8 +727,39 @@ def build_assembly_scope(
         centroid = model.bounding_box.center
     fixture: Optional[InstallationFixture] = None
 
+    # Priority 0: Explicitly requested fixture_part_id (ground the entire part)
+    if fixture_part_id is not None:
+        target_part = next((p for p in parts if p.solid_id == fixture_part_id), None)
+        if target_part is not None:
+            rep = next(((f, n, pt) for p, f, n, pt in planar if p.solid_id == target_part.solid_id), None)
+            if rep is not None:
+                fixture = InstallationFixture(
+                    name="InstallationFixed",
+                    part_id=target_part.solid_id,
+                    instance_name=target_part.instance_name,
+                    face_id=rep[0].id,
+                    set_name="InstallationFixed",
+                    point=rep[2],
+                    normal=rep[1],
+                    area=float(rep[0].area or 0.0),
+                    target_scope="part",
+                )
+            else:
+                fixture = InstallationFixture(
+                    name="InstallationFixed",
+                    part_id=target_part.solid_id,
+                    instance_name=target_part.instance_name,
+                    face_id="",
+                    set_name="InstallationFixed",
+                    point=(0.0, 0.0, 0.0),
+                    normal=(0.0, 0.0, 1.0),
+                    area=0.0,
+                    target_scope="part",
+                )
+
     # Priority 1: Explicitly requested fixture_face_id
-    if fixture_face_id is not None:
+    if fixture is None and fixture_face_id is not None:
+        scope_kind = "part" if fixture_target_scope == "part" else "face"
         for part, face, normal, point in planar:
             if face.id == fixture_face_id:
                 fixture = InstallationFixture(
@@ -736,6 +771,7 @@ def build_assembly_scope(
                     point=point,
                     normal=normal,
                     area=float(face.area or 0.0),
+                    target_scope=scope_kind,
                 )
                 break
 

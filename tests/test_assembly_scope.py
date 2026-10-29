@@ -22,6 +22,7 @@ from abaqus_ai_agent.geometry.model import (
 )
 from abaqus_ai_agent.planning.compiler import (
     IntentGeometrySpec,
+    IntentLoadSpec,
     IntentMeshSpec,
     compile_intent_to_actions,
 )
@@ -538,6 +539,101 @@ def test_unmapped_body_index_still_refuses_to_compile_a_step_assembly():
             )
 
 
+def _assembly_plan_with_load(scope, model, load_region, grounded, *, mesh_wall=1000.0):
+    """Compile a mated two-part assembly whose load names one face."""
+    import tempfile as _tempfile
+
+    with _tempfile.TemporaryDirectory() as tmp:
+        step_path = os.path.join(tmp, "handle.stp")
+        with open(step_path, "w", encoding="utf-8") as handle:
+            handle.write("ISO-10303-21;\nEND-ISO-10303-21;\n")
+        return compile_intent_to_actions(
+            model_name="HandleAsm",
+            part_name="MustNotBeUsedAlone",
+            job_name="Job-Handle",
+            geometry=IntentGeometrySpec(
+                shape="step_assembly",
+                step_file_path=step_path,
+                assembly_scope=scope,
+            ),
+            material=MaterialDefinition(
+                name="PA66",
+                unit_system="MM_N_MPA",
+                elastic=ElasticProperties(youngs_modulus=3000.0, poisson_ratio=0.35),
+            ),
+            loads=(
+                IntentLoadSpec(
+                    name="PressTop",
+                    load_type="pressure",
+                    region=load_region,
+                    magnitude=2.5,
+                ),
+            ),
+            grounded_regions=grounded,
+            mesh=IntentMeshSpec(
+                element_type="C3D10",
+                global_size=1.5,
+                primary_wall_thickness=mesh_wall,
+                primary_wall_thickness_source="MEASURED",
+            ),
+        )
+
+
+def test_load_binds_to_the_instance_that_owns_its_face():
+    """A load must land on the part that owns the face, not on part one.
+
+    Both parts become their own instance, so reusing the first part's instance
+    name silently applies the pressure to the wrong body.
+    """
+    model = _mated_handle_model()
+    scope = build_assembly_scope(
+        model,
+        requirement={"include_solid_ids": ["S_HANDLE", "S_PIN"]},
+    )
+    # Parts are ordered by bodyNum: S_PIN is part one, S_HANDLE is part two.
+    assert [part.solid_id for part in scope.parts] == ["S_PIN", "S_HANDLE"]
+
+    grounded = {
+        "F_base_top": {
+            "anchor_points": [(20.0, 10.0, 30.0)],
+            "anchor_point": (20.0, 10.0, 30.0),
+            "entity_type": "face",
+            "entity_ids": ["F_base_top"],
+            "status": "RESOLVED",
+            "confidence": 1.0,
+        },
+    }
+    plan = _assembly_plan_with_load(scope, model, "F_base_top", grounded)
+    script = plan.cae_script
+
+    assert "a.instances['S_HANDLE-1'].faces" in script
+    load_action = next(
+        block for block in script.split("# Action:") if "PressTop" in block and "findAt" in block
+    )
+    assert "S_HANDLE-1" in load_action
+    assert "S_PIN-1" not in load_action
+
+
+def test_load_without_entity_ids_is_refused_in_a_multi_part_assembly():
+    """A bare point cannot identify its owner, so it must not fall back to part one."""
+    model = _mated_handle_model()
+    scope = build_assembly_scope(
+        model,
+        requirement={"include_solid_ids": ["S_HANDLE", "S_PIN"]},
+    )
+    grounded = {
+        "F_base_top": {
+            "anchor_points": [(20.0, 10.0, 30.0)],
+            "anchor_point": (20.0, 10.0, 30.0),
+            "entity_type": "face",
+            "status": "RESOLVED",
+            "confidence": 1.0,
+        },
+    }
+    with pytest.raises(ValueError, match="does not name a CAD entity"):
+        _assembly_plan_with_load(scope, model, "F_base_top", grounded)
+
+
 def _symmetrical_unlabelled_model():
     """Two mated blocks with no semantic face or part names."""
     vertices = (
@@ -927,6 +1023,142 @@ def test_numbered_solids_stay_pending_without_a_source_name():
     scope = build_assembly_scope(unlabeled, screen=screen)
     assert scope.parts == ()
     assert scope.is_complete is False
+
+
+def test_compiler_part_materials_pass_through():
+    """Different materials assigned per solid in assembly must pass through to CAE script."""
+    from abaqus_ai_agent.contracts.intent import EngineeringIntent
+    from abaqus_ai_agent.planning.compiler import compile_engineering_intent
+
+    model = _symmetrical_unlabelled_model()
+    part_materials = {
+        "SOLID_ALPHA": {"name": "POM", "elastic_modulus": 2800.0, "poisson_ratio": 0.35},
+        "SOLID_BETA": {"name": "PC_ABS", "elastic_modulus": 2400.0, "poisson_ratio": 0.38},
+    }
+
+    intent = EngineeringIntent(
+        id="MULTI_MAT",
+        kind="linear_static",
+        description="Multi-material assembly",
+        analysis_type="linear_static",
+        unit_system="MM_N_MPA",
+        material={"name": "FallbackMat", "elastic_modulus": 3000.0, "poisson_ratio": 0.35},
+        metadata={
+            "assembly_screen": screen_assembly_requirement(
+                model, {"include_solid_ids": ["SOLID_ALPHA", "SOLID_BETA"]},
+            ),
+            "assembly_fixture_face_id": "F_p1_1",
+            "part_materials": part_materials,
+        },
+    )
+
+    with tempfile.TemporaryDirectory() as tmp:
+        step_path = os.path.join(tmp, "blocks.stp")
+        with open(step_path, "w", encoding="utf-8") as handle:
+            handle.write("ISO-10303-21;\nEND-ISO-10303-21;\n")
+        plan = compile_engineering_intent(
+            intent,
+            geometry=IntentGeometrySpec(shape="step_file", step_file_path=step_path, assembly_scope=model),
+            mesh=IntentMeshSpec(
+                global_size=1.5,
+                primary_wall_thickness=1000.0,
+                primary_wall_thickness_source="MEASURED",
+            ),
+        )
+
+    script = plan.cae_script
+    assert "POM_Section" in script
+    assert "PC_ABS_Section" in script
+    assert "p_SOLID_ALPHA.SectionAssignment(region=reg_SOLID_ALPHA, sectionName='POM_Section')" in script
+    assert "p_SOLID_BETA.SectionAssignment(region=reg_SOLID_BETA, sectionName='PC_ABS_Section')" in script
+
+    assignments = {a["part"]: a["material"] for a in plan.material_assignments}
+    assert assignments["SOLID_ALPHA"] == "POM"
+    assert assignments["SOLID_BETA"] == "PC_ABS"
+
+
+def test_compiler_assembly_friction_coefficient_pass_through():
+    """Friction coefficient configured via assembly metadata must reach contact property."""
+    from abaqus_ai_agent.contracts.intent import EngineeringIntent
+    from abaqus_ai_agent.planning.compiler import compile_engineering_intent
+
+    model = _symmetrical_unlabelled_model()
+    intent = EngineeringIntent(
+        id="FRICTION_ENTRY",
+        kind="linear_static",
+        description="Assembly with custom friction",
+        analysis_type="linear_static",
+        unit_system="MM_N_MPA",
+        material={"name": "PA66", "elastic_modulus": 3000.0, "poisson_ratio": 0.35},
+        metadata={
+            "assembly_screen": screen_assembly_requirement(
+                model, {"include_solid_ids": ["SOLID_ALPHA", "SOLID_BETA"]},
+            ),
+            "assembly_fixture_face_id": "F_p1_1",
+            "assembly_friction_coefficient": 0.35,
+        },
+    )
+
+    with tempfile.TemporaryDirectory() as tmp:
+        step_path = os.path.join(tmp, "blocks.stp")
+        with open(step_path, "w", encoding="utf-8") as handle:
+            handle.write("ISO-10303-21;\nEND-ISO-10303-21;\n")
+        plan = compile_engineering_intent(
+            intent,
+            geometry=IntentGeometrySpec(shape="step_file", step_file_path=step_path, assembly_scope=model),
+            mesh=IntentMeshSpec(
+                global_size=1.5,
+                primary_wall_thickness=1000.0,
+                primary_wall_thickness_source="MEASURED",
+            ),
+        )
+
+    script = plan.cae_script
+    assert "TangentialBehavior" in script
+    assert "table=((0.35, ),)" in script
+
+
+def test_compiler_whole_part_fixture():
+    """Whole-part fixture must set EncastreBC over the entire instance cells/faces."""
+    from abaqus_ai_agent.contracts.intent import EngineeringIntent
+    from abaqus_ai_agent.planning.compiler import compile_engineering_intent
+
+    model = _symmetrical_unlabelled_model()
+    intent = EngineeringIntent(
+        id="WHOLE_PART_FIX",
+        kind="linear_static",
+        description="Assembly with whole-part fixture",
+        analysis_type="linear_static",
+        unit_system="MM_N_MPA",
+        material={"name": "PA66", "elastic_modulus": 3000.0, "poisson_ratio": 0.35},
+        metadata={
+            "assembly_screen": screen_assembly_requirement(
+                model, {"include_solid_ids": ["SOLID_ALPHA", "SOLID_BETA"]},
+            ),
+            "assembly_fixture_part_id": "SOLID_ALPHA",
+        },
+    )
+
+    with tempfile.TemporaryDirectory() as tmp:
+        step_path = os.path.join(tmp, "blocks.stp")
+        with open(step_path, "w", encoding="utf-8") as handle:
+            handle.write("ISO-10303-21;\nEND-ISO-10303-21;\n")
+        plan = compile_engineering_intent(
+            intent,
+            geometry=IntentGeometrySpec(shape="step_file", step_file_path=step_path, assembly_scope=model),
+            mesh=IntentMeshSpec(
+                global_size=1.5,
+                primary_wall_thickness=1000.0,
+                primary_wall_thickness_source="MEASURED",
+            ),
+        )
+
+    script = plan.cae_script
+    assert "_cells_fix = _inst_fix.cells" in script
+    assert "EncastreBC" in script
+    fixture_rec = plan.intent_summary["geometry"]["assembly_scope"]["fixture_record"]
+    assert fixture_rec["target_scope"] == "part"
+    assert fixture_rec["part_id"] == "SOLID_ALPHA"
 
 
 def test_scope_dict_keeps_part_identity_and_boundary_points():

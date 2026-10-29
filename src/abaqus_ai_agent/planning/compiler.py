@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import math
 import os
+import re
 from dataclasses import dataclass, field, replace
 from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple, Union
 
@@ -64,6 +65,12 @@ _MATERIAL_NONLINEAR_MARKERS = (
     "cyclic plastic",
     "\u5faa\u73af\u5851\u6027",
 )
+
+
+def _safe_py_var(prefix: str, name: str) -> str:
+    """Generate a clean Python identifier for script variables from part names."""
+    cleaned = re.sub(r"[^a-zA-Z0-9_]", "_", str(name))
+    return f"{prefix}_{cleaned}"
 
 
 def _plastic_has_hardening(material: Any) -> bool:
@@ -652,15 +659,16 @@ def compile_intent_to_actions(
             "if int(getattr(_step_file, 'numberOfParts', 0) or 0) < 1:\n"
             "    raise RuntimeError('STEP conversion produced no ACIS bodies')\n"
         ]
-        for index, part in enumerate(scope.parts):
+        for part in scope.parts:
             body_num = getattr(part, "step_body_index", None)
             if not isinstance(body_num, int) or body_num < 1:
                 raise ValueError(
                     f"step_assembly part {getattr(part, 'solid_id', part)} has no STEP body index; "
                     "refusing to guess bodyNum from part name or list position"
                 )
+            part_var = _safe_py_var("p", part.name)
             part_blocks.append(
-                f"p_{index} = mdb.models['{model_name}'].PartFromGeometryFile(\n"
+                f"{part_var} = mdb.models['{model_name}'].PartFromGeometryFile(\n"
                 f"    name='{part.name}', geometryFile=_step_file, bodyNum={body_num},\n"
                 f"    combine=False, dimensionality=THREE_D, type=DEFORMABLE_BODY)\n"
             )
@@ -741,13 +749,15 @@ def compile_intent_to_actions(
     used_assignments: List[Dict[str, str]] = []
     if geometry.shape == "step_assembly":
         assign_lines = []
-        for index, part in enumerate(active_scope.parts):
+        for part in active_scope.parts:
+            part_var = _safe_py_var("p", part.name)
+            reg_var = _safe_py_var("reg", part.name)
             part_material = part_material_by_solid.get(getattr(part, "solid_id", ""), material)
             part_section = sections_by_material[part_material.name]
             assign_lines.append(
-                f"p_{index} = mdb.models['{model_name}'].parts['{part.name}']\n"
-                f"reg_{index} = p_{index}.Set(cells=p_{index}.cells, name='AllCells')\n"
-                f"p_{index}.SectionAssignment(region=reg_{index}, sectionName='{part_section}')\n"
+                f"{part_var} = mdb.models['{model_name}'].parts['{part.name}']\n"
+                f"{reg_var} = {part_var}.Set(cells={part_var}.cells, name='AllCells')\n"
+                f"{part_var}.SectionAssignment(region={reg_var}, sectionName='{part_section}')\n"
             )
             used_assignments.append({
                 "material": part_material.name,
@@ -781,10 +791,11 @@ def compile_intent_to_actions(
             f"a = mdb.models['{model_name}'].rootAssembly\n",
             "a.DatumCsysByDefault(CARTESIAN)\n",
         ]
-        for index, part in enumerate(active_scope.parts):
+        for part in active_scope.parts:
+            part_var = _safe_py_var("p", part.name)
             inst_lines.append(
-                f"p_{index} = mdb.models['{model_name}'].parts['{part.name}']\n"
-                f"a.Instance(name='{part.instance_name}', part=p_{index}, dependent=ON)\n"
+                f"{part_var} = mdb.models['{model_name}'].parts['{part.name}']\n"
+                f"a.Instance(name='{part.instance_name}', part={part_var}, dependent=ON)\n"
             )
         for contact in active_scope.contacts:
             mx, my, mz = contact.master_point
@@ -807,17 +818,29 @@ def compile_intent_to_actions(
             )
         fixture = active_scope.fixture
         fx, fy, fz = fixture.point
-        inst_lines.append(
-            _guarded_find_at(
-                f"a.instances['{fixture.instance_name}'].faces",
-                f"(({fx}, {fy}, {fz}),)",
-                fixture.set_name,
+        if getattr(fixture, "target_scope", "face") == "part":
+            inst_lines.append(
+                f"_inst_fix = a.instances['{fixture.instance_name}']\n"
+                f"_cells_fix = _inst_fix.cells\n"
+                f"if len(_cells_fix) > 0:\n"
+                f"    a.Set(cells=_cells_fix, name='{fixture.set_name}')\n"
+                f"else:\n"
+                f"    a.Set(faces=_inst_fix.faces, name='{fixture.set_name}')\n"
+                f"mdb.models['{model_name}'].EncastreBC(name='{fixture.name}', createStepName='Initial', "
+                f"region=a.sets['{fixture.set_name}'])\n"
             )
-            + f"fixed_faces = _abqai_bound\n"
-            f"a.Set(faces=fixed_faces, name='{fixture.set_name}')\n"
-            f"mdb.models['{model_name}'].EncastreBC(name='{fixture.name}', createStepName='Initial', "
-            f"region=a.sets['{fixture.set_name}'])\n"
-        )
+        else:
+            inst_lines.append(
+                _guarded_find_at(
+                    f"a.instances['{fixture.instance_name}'].faces",
+                    f"(({fx}, {fy}, {fz}),)",
+                    fixture.set_name,
+                )
+                + f"fixed_faces = _abqai_bound\n"
+                f"a.Set(faces=fixed_faces, name='{fixture.set_name}')\n"
+                f"mdb.models['{model_name}'].EncastreBC(name='{fixture.name}', createStepName='Initial', "
+                f"region=a.sets['{fixture.set_name}'])\n"
+            )
         inst_name = active_scope.parts[0].instance_name
         inst_code = "".join(inst_lines)
     elif geometry.shape != "two_blocks_contact":
@@ -1459,6 +1482,9 @@ def compile_intent_to_actions(
             named_set, named_surf = _extract_gr_named_selector(gr)
             pts, _ = _extract_gr_pts_and_anchor(gr)
             find_at_str = ", ".join(f"(({p[0]}, {p[1]}, {p[2]}),)" for p in pts) if pts else ""
+            bc_inst = _resolve_region_instance(
+                gr, active_scope, inst_name, label=bc.region
+            )
             if bc.bc_type in ("SYMMETRY", "XSYMM", "YSYMM", "ZSYMM"):
                 method_name = {"X": "XsymmBC", "Y": "YsymmBC", "Z": "ZsymmBC"}.get(plane, "XsymmBC")
                 if named_set:
@@ -1479,7 +1505,7 @@ def compile_intent_to_actions(
                     bc_code = (
                         f"a = mdb.models['{model_name}'].rootAssembly\n"
                         + _guarded_find_at_assignment(
-                            f"a.instances['{inst_name}'].faces", find_at_str, bc.region, "symm_faces"
+                            f"a.instances['{bc_inst}'].faces", find_at_str, bc.region, "symm_faces"
                         )
                         + f"region = a.Set(faces=symm_faces, name='{bc.region}')\n"
                         f"mdb.models['{model_name}'].{method_name}(name='{bc.name}', createStepName='{bc_step}', region=region)\n"
@@ -1523,7 +1549,7 @@ def compile_intent_to_actions(
                     bc_code = (
                         f"a = mdb.models['{model_name}'].rootAssembly\n"
                         + _guarded_find_at_assignment(
-                            f"a.instances['{inst_name}'].faces", find_at_str, bc.region, "fixed_faces"
+                            f"a.instances['{bc_inst}'].faces", find_at_str, bc.region, "fixed_faces"
                         )
                         + f"region = a.Set(faces=fixed_faces, name='{bc.region}')\n"
                         f"mdb.models['{model_name}'].EncastreBC(name='{bc.name}', createStepName='{bc_step}', region=region)\n"
@@ -1557,7 +1583,7 @@ def compile_intent_to_actions(
                     bc_code = (
                         f"a = mdb.models['{model_name}'].rootAssembly\n"
                         + _guarded_find_at_assignment(
-                            f"a.instances['{inst_name}'].faces", find_at_str, bc.region, "target_faces"
+                            f"a.instances['{bc_inst}'].faces", find_at_str, bc.region, "target_faces"
                         )
                         + f"region = a.Set(faces=target_faces, name='{bc.region}')\n"
                         f"mdb.models['{model_name}'].TemperatureBC(name='{bc.name}', createStepName='{bc_step}', "
@@ -1787,6 +1813,9 @@ def compile_intent_to_actions(
             named_set, named_surf = _extract_gr_named_selector(gr)
             pts, anch = _extract_gr_pts_and_anchor(gr)
             find_at_str = ", ".join(f"(({p[0]}, {p[1]}, {p[2]}),)" for p in pts) if pts else ""
+            load_inst = _resolve_region_instance(
+                gr, active_scope, inst_name, label=ld.region
+            )
             if ld.load_type == "pressure":
                 if named_surf:
                     load_code = (
@@ -1824,7 +1853,7 @@ def compile_intent_to_actions(
                     load_code = (
                         f"a = mdb.models['{model_name}'].rootAssembly\n"
                         + _guarded_find_at_assignment(
-                            f"a.instances['{inst_name}'].faces", find_at_str, ld.region, "target_faces"
+                            f"a.instances['{load_inst}'].faces", find_at_str, ld.region, "target_faces"
                         )
                         + f"surf = a.Surface(side1Faces=target_faces, name='{ld.region}_Surf')\n"
                         f"mdb.models['{model_name}'].Pressure(name='{ld.name}', createStepName='{target_step}', "
@@ -1864,7 +1893,7 @@ def compile_intent_to_actions(
                             f"# Total force {ld.magnitude} N on face converted to equivalent surface pressure: {eq_pressure:.6f} MPa\n"
                             f"a = mdb.models['{model_name}'].rootAssembly\n"
                             + _guarded_find_at_assignment(
-                                f"a.instances['{inst_name}'].faces", find_at_str, ld.region, "target_faces"
+                                f"a.instances['{load_inst}'].faces", find_at_str, ld.region, "target_faces"
                             )
                             + f"surf = a.Surface(side1Faces=target_faces, name='{ld.region}_Surf')\n"
                             f"mdb.models['{model_name}'].Pressure(name='{ld.name}', createStepName='{target_step}', "
@@ -1883,7 +1912,7 @@ def compile_intent_to_actions(
                         load_code = (
                             f"a = mdb.models['{model_name}'].rootAssembly\n"
                             + _guarded_find_at_assignment(
-                                f"a.instances['{inst_name}'].vertices", find_at_str, ld.region, "target_verts"
+                                f"a.instances['{load_inst}'].vertices", find_at_str, ld.region, "target_verts"
                             )
                             + f"region = a.Set(vertices=target_verts, name='{ld.region}')\n"
                             f"mdb.models['{model_name}'].ConcentratedForce(name='{ld.name}', createStepName='{target_step}', "
@@ -2309,6 +2338,7 @@ def compile_intent_to_actions(
         "fmbd": fmbd.to_dict() if fmbd else None,
         "fatigue": fatigue.to_dict() if fatigue else None,
         "mesh_sizing": _mesh_sizing_evidence(mesh, wall_evidence),
+        "material_assignments": [dict(a) for a in used_assignments],
         "contact_loadings": [dict(record) for record in punch_records],
     }
 
@@ -2320,12 +2350,14 @@ def compile_intent_to_actions(
         cae_script=full_script,
         intent_summary=intent_summary,
         material=material,
-        # All section-assignment templates in this compiler bind the single
-        # resolved material to the part-wide 'AllCells' set.
         material_assignments=(
-            ({"material": material.name, "region": "AllCells"},)
-            if material is not None
-            else ()
+            tuple(used_assignments)
+            if used_assignments
+            else (
+                ({"material": material.name, "region": "AllCells"},)
+                if material is not None
+                else ()
+            )
         ),
     )
 
@@ -2557,6 +2589,45 @@ def _extract_gr_entity_ids(gr: Any) -> Tuple[str, ...]:
     if not raw:
         return ()
     return tuple(str(item) for item in raw)
+
+
+def _resolve_region_instance(
+    gr: Any,
+    active_scope: Any,
+    default_instance: str,
+    *,
+    label: str,
+) -> str:
+    """Instance that owns the region's CAD entity, proven through the assembly scope.
+
+    In a multi-part assembly every part becomes its own instance, so the first
+    part's instance name is not a default for the others: binding a load or a
+    boundary condition to it silently applies the condition to the wrong body.
+    The owner is therefore resolved from the grounded entity ids and an
+    unresolvable region is refused instead of being pointed at part one.
+    """
+    parts = tuple(getattr(active_scope, "parts", ()) or ()) if active_scope is not None else ()
+    if len(parts) < 2:
+        return default_instance
+    entity_ids = set(_extract_gr_entity_ids(gr))
+    if not entity_ids:
+        raise ValueError(
+            f"Region '{label}' does not name a CAD entity, so the instance that owns it "
+            "cannot be identified in a multi-part assembly. Ground the region with its "
+            "entity_ids; a bare point would be applied to whichever part '{default_instance}' "
+            "happens to be."
+        )
+    owners = [
+        str(getattr(part, "instance_name", ""))
+        for part in parts
+        if entity_ids.intersection(getattr(part, "face_ids", ()) or ())
+    ]
+    if len(owners) != 1:
+        raise ValueError(
+            f"Region '{label}' maps to {len(owners)} instances in the assembly scope "
+            f"({owners}); exactly one owning part is required to place this condition."
+        )
+    return owners[0]
 
 
 # Mirrors reporting.figure_selector._load_direction_vector. Kept local so the
@@ -2856,6 +2927,17 @@ def _explicit_assembly_inputs(intent: Optional[object]) -> dict:
     fixture_face_id = metadata.get("assembly_fixture_face_id")
     if fixture_face_id:
         inputs["fixture_face_id"] = str(fixture_face_id)
+    fixture_part_id = metadata.get("assembly_fixture_part_id")
+    if fixture_part_id:
+        inputs["fixture_part_id"] = str(fixture_part_id)
+    fixture_target_scope = metadata.get("assembly_fixture_target_scope") or metadata.get("assembly_fixture_scope")
+    if fixture_target_scope:
+        inputs["fixture_target_scope"] = str(fixture_target_scope)
+    friction_coefficient = metadata.get("assembly_friction_coefficient")
+    if friction_coefficient is None:
+        friction_coefficient = metadata.get("friction_coefficient")
+    if friction_coefficient is not None:
+        inputs["friction_coefficient"] = float(friction_coefficient)
     body_index = metadata.get("assembly_body_index")
     if body_index:
         inputs["body_index"] = body_index
@@ -2919,6 +3001,9 @@ def _bind_step_assembly_scope(
     screen: Optional[object] = None,
     judgments: Optional[object] = None,
     fixture_face_id: Optional[str] = None,
+    fixture_part_id: Optional[str] = None,
+    fixture_target_scope: Optional[str] = None,
+    friction_coefficient: Optional[float] = None,
     body_index: Optional[Mapping[str, int]] = None,
 ) -> IntentGeometrySpec:
     """Attach the requirement-screened scope, or refuse an unresolved inventory.
@@ -2953,13 +3038,18 @@ def _bind_step_assembly_scope(
     if body_index:
         model = _apply_explicit_body_index(model, body_index)
 
-    scope = build_assembly_scope(
-        model,
-        requirement=requirement,
-        screen=screen,
-        judgments=judgments,
-        fixture_face_id=fixture_face_id,
-    )
+    scope_kwargs = {
+        "requirement": requirement,
+        "screen": screen,
+        "judgments": judgments,
+        "fixture_face_id": fixture_face_id,
+        "fixture_part_id": fixture_part_id,
+        "fixture_target_scope": fixture_target_scope,
+    }
+    if friction_coefficient is not None:
+        scope_kwargs["friction_coefficient"] = friction_coefficient
+
+    scope = build_assembly_scope(model, **scope_kwargs)
     if not scope.is_complete:
         raise ValueError(
             "Multi-solid STEP inventory cannot be solved until the analysis requirement "
@@ -3454,6 +3544,9 @@ def compile_engineering_intent(
     eff_connectors = intent.connectors or None
     eff_fmbd = intent.fmbd
     eff_contact_stabilization = intent.metadata.get("contact_stabilization")
+    eff_part_materials = getattr(intent, "part_materials", None)
+    if not eff_part_materials and isinstance(getattr(intent, "metadata", None), dict):
+        eff_part_materials = intent.metadata.get("part_materials")
 
     compiled = compile_intent_to_actions(
         model_name=eff_model,
@@ -3480,6 +3573,7 @@ def compile_engineering_intent(
         contact_stabilization=eff_contact_stabilization,
         submit_job=submit_job,
         physics_domain=_resolve_physics_domain(intent),
+        part_materials=eff_part_materials,
         contact_loadings=tuple(getattr(intent, "contact_loadings", ()) or ()),
     )
 

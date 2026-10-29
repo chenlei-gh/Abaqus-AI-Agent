@@ -21,7 +21,7 @@ def audit_engineering_plausibility(
     checks: List[PlausibilityCheckResult] = []
 
     # 1. Kinematic Boundary Constraints & Rigid Body Motion Check
-    checks.append(_check_boundary_constraints(intent))
+    checks.append(_check_boundary_constraints(intent, geometry))
 
     # 2. Applied Load Plausibility & Direction Audit
     checks.extend(_check_applied_loads(intent))
@@ -35,10 +35,36 @@ def audit_engineering_plausibility(
     return tuple(checks)
 
 
-def _check_boundary_constraints(intent: EngineeringIntent) -> PlausibilityCheckResult:
+def _declared_assembly_fixture(intent: EngineeringIntent, geometry: Any = None) -> Optional[str]:
+    """Describe the installation fixture this model grounds itself with, if any.
+
+    A multi-part assembly states its constraint as an installation fixture (a
+    whole part or one face of it) rather than as an ``IntentBoundarySpec``: the
+    fixture is resolved against the screened STEP scope, not written per face.
+    Ignoring it made an assembly with an explicit fixture look like a model with
+    no constraints at all, which is not what the model says.
+    """
+    metadata = getattr(intent, "metadata", None) or {}
+    if not isinstance(metadata, dict):
+        metadata = {}
+    for key in ("assembly_fixture_part_id", "assembly_fixture_face_id"):
+        value = metadata.get(key)
+        if value:
+            return f"{key}={value}"
+    scope = getattr(geometry, "assembly_scope", None)
+    fixture = getattr(scope, "fixture", None)
+    if fixture is not None:
+        target = getattr(fixture, "part_id", "") or getattr(fixture, "face_id", "")
+        if target:
+            return f"assembly fixture on {target}"
+    return None
+
+
+def _check_boundary_constraints(intent: EngineeringIntent, geometry: Any = None) -> PlausibilityCheckResult:
     """Audit whether structural model has sufficient kinematic constraints against rigid body modes."""
     analysis = (intent.analysis_type or intent.kind or "").lower()
     bcs = intent.boundary_conditions or ()
+    fixture = _declared_assembly_fixture(intent, geometry)
 
     # Dynamics or pure thermal problems have different kinematics
     if "thermal" in analysis:
@@ -55,6 +81,14 @@ def _check_boundary_constraints(intent: EngineeringIntent) -> PlausibilityCheckR
         )
 
     # For static / stress analysis
+    if not bcs and fixture is not None:
+        return PlausibilityCheckResult(
+            check_name="rigid_body_constraint_check",
+            passed=True,
+            severity=PlausibilitySeverity.INFO,
+            message=f"Kinematic grounding supplied by the installation fixture ({fixture}).",
+            details={"boundary_conditions_count": 0, "assembly_fixture": fixture},
+        )
     if not bcs:
         if intent.loads:
             return PlausibilityCheckResult(
@@ -92,6 +126,18 @@ def _check_boundary_constraints(intent: EngineeringIntent) -> PlausibilityCheckR
         if isinstance(values, dict) and any(v == 0.0 for v in values.values()):
             has_fixed_or_encastre = True
             break
+
+    if not has_fixed_or_encastre and fixture is not None:
+        return PlausibilityCheckResult(
+            check_name="rigid_body_constraint_check",
+            passed=True,
+            severity=PlausibilitySeverity.INFO,
+            message=(
+                "Explicit boundary conditions are not fully grounded, but the installation "
+                f"fixture ({fixture}) grounds the assembly."
+            ),
+            details={"boundary_conditions_count": len(bcs), "assembly_fixture": fixture},
+        )
 
     if not has_fixed_or_encastre:
         return PlausibilityCheckResult(
