@@ -132,7 +132,7 @@ def main(argv=None):
         "ABAQUS_BAT",
         os.environ.get(
             "ABAQUS_COMMAND",
-            r"C:\SIMULIA\Commands\abaqus.bat" if os.path.exists(r"C:\SIMULIA\Commands\abaqus.bat") else "abaqus"
+            os.environ.get("ABAQUS_BAT") or os.environ.get("ABAQUS_COMMAND") or "abaqus"
         )
     )
     parser = argparse.ArgumentParser(description="Real ODB Fatigue Post-Processing Golden Case E2E")

@@ -5,7 +5,7 @@
   "job_name": "Official_Cantilever_7e7e7f",
   "timestamp_utc_start": "2026-10-28T02:48:42.110873+00:00",
   "timestamp_utc_end": "2026-10-28T02:48:59.909475+00:00",
-  "launcher": "C:\\SIMULIA\\Commands\\abaqus.bat",
+  "launcher": "<ABAQUS_LAUNCHER>",
   "workdir": "<PROJECT_ROOT>/runs/cantilever_benchmark_7e7e7fb1",
   "telemetry": {
     "launcher_duration_s": 16.294901900000696,

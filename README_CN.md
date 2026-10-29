@@ -133,9 +133,9 @@ python -m pytest tests -q -m unit
 
 真机求解需要一套已经装好、并且有许可证的 Abaqus。本仓库不配置许可证服务器、`custom_v6.env`，也不保证 token 空闲，并且不附带任何许可证。
 
-Abaqus 安装程序创建命令目录：Windows 上是 `C:\SIMULIA\Commands`，Linux 上是 `/var/DassaultSystemes/SIMULIA/Commands`。2025 的快捷命令是 `abq2025`；`abaqus` 是不带版本号的入口。
+把 Abaqus 命令目录加入 `PATH`，或把启动器路径写入 `ABAQUS_COMMAND` / `ABAQUS_BAT`。2025 的快捷命令是 `abq2025`；`abaqus` 是不带版本号的入口。
 
-启动器按这个顺序解析：显式路径，`PATH` 上的 `abaqus`，然后是 Windows 上的 `C:\SIMULIA\Commands\abaqus.BAT`。
+启动器只从显式路径、`ABAQUS_COMMAND` 或 `ABAQUS_BAT`，以及 `PATH` 上的 `abaqus` / `abaqus.bat` 解析。不再写死安装目录。
 
 ```bat
 where abaqus

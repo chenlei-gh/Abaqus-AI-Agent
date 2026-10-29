@@ -1,7 +1,7 @@
 {
   "case": "two_block_tied_cantilever_static",
   "command": [
-    "C:\\SIMULIA\\Commands\\abaqus.bat",
+    "<ABAQUS_LAUNCHER>",
     "cae",
     "noGUI=<REPO_ROOT>\\machine_validation\\tie_contact_e2e_script.py"
   ],

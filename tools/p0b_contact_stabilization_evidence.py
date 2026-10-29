@@ -85,7 +85,7 @@ def first_correction(stem: Path):
 def main() -> int:
     evidence = {
         "gate": "P0_B_CONTACT_STABILIZATION_CLOSED_LOOP",
-        "machine": "Abaqus/Standard 2025 (C:/SIMULIA/Commands/abaqus.bat)",
+        "machine": "Abaqus/Standard 2025",
         "cases": {},
         "verdicts": {},
         "corrections": {},

@@ -133,9 +133,9 @@ In `cmd` the quotes around `".[test]"` are required, because square brackets are
 
 A live solve needs an already installed, licensed Abaqus. This repository does not configure the license server, `custom_v6.env`, or token availability, and it ships no license.
 
-The Abaqus installer creates the command directory: `C:\SIMULIA\Commands` on Windows, `/var/DassaultSystemes/SIMULIA/Commands` on Linux. The 2025 shortcut is `abq2025`; `abaqus` is the unversioned entry point.
+Put the Abaqus command directory on `PATH`, or set `ABAQUS_COMMAND` or `ABAQUS_BAT` to the launcher. The 2025 shortcut is `abq2025`; `abaqus` is the unversioned entry point.
 
-The launcher is resolved in this order: an explicit path, `abaqus` on `PATH`, then `C:\SIMULIA\Commands\abaqus.BAT` on Windows.
+The launcher is resolved from an explicit path, `ABAQUS_COMMAND` or `ABAQUS_BAT`, then `abaqus` or `abaqus.bat` on `PATH`. No install directory is hardcoded.
 
 ```bat
 where abaqus

@@ -11,6 +11,7 @@ Validates the full chain:
 """
 
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -144,9 +145,10 @@ with open('%s', 'w') as f:
 
     import shutil
     has_launcher = bool(
-        shutil.which("abaqus")
+        os.environ.get("ABAQUS_BAT")
+        or os.environ.get("ABAQUS_COMMAND")
+        or shutil.which("abaqus")
         or shutil.which("abaqus.bat")
-        or Path(r"C:\SIMULIA\Commands\abaqus.bat").exists()
     )
     if has_launcher:
         executor = BatchExecutor(launcher="abaqus", workdir=str(run_dir))

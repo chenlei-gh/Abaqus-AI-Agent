@@ -43,7 +43,7 @@ def test_report_without_run_stamp_is_blocked(tmp_path, capsys):
     evidence.write_text(json.dumps({
         "title": "MS13L",
         "results": [{"name": "max_mises", "value": 120.0}],
-        "odb_path": "D:/Vault/Abaqus/Job_Case1.odb",
+        "odb_path": "<PROJECT_ROOT>/Job_Case1.odb",
     }), encoding="utf-8")
     out = tmp_path / "report.md"
     ret = main(["report", str(evidence), "-o", str(out)])

@@ -1,4 +1,5 @@
 import json
+import os
 import shutil
 from pathlib import Path
 import pytest
@@ -8,9 +9,10 @@ from tools.h6_image_intent_grounding_e2e import run_h6_grounding_e2e
 @pytest.mark.live
 def test_h6_image_intent_grounding_e2e():
     has_launcher = bool(
-        shutil.which("abaqus")
+        os.environ.get("ABAQUS_BAT")
+        or os.environ.get("ABAQUS_COMMAND")
+        or shutil.which("abaqus")
         or shutil.which("abaqus.bat")
-        or Path(r"C:\SIMULIA\Commands\abaqus.bat").exists()
     )
     if not has_launcher:
         pytest.skip("Live Abaqus launcher not available for H.6 E2E CAE execution")

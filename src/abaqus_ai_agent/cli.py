@@ -185,9 +185,7 @@ def handle_inspect(args: argparse.Namespace) -> int:
     if not which_path and sys.platform == "win32":
         candidates = [
             os.environ.get("ABAQUS_COMMAND"),
-            r"C:\SIMULIA\Commands\abaqus.bat",
-            r"C:\SIMULIA\Commands\abaqus.cmd",
-            r"C:\DassaultSystemes\Commands\abaqus.bat",
+            os.environ.get("ABAQUS_BAT"),
         ]
         for cand in candidates:
             if cand and os.path.isfile(cand):

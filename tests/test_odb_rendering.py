@@ -90,9 +90,9 @@ def test_generate_headless_viewer_script_syntax_and_api():
     ]
 
     script = generate_headless_viewer_script(
-        odb_path="D:/Vault/Abaqus/runs/job.odb",
+        odb_path="<PROJECT_ROOT>/runs/job.odb",
         requests=requests,
-        output_dir="D:/Vault/Abaqus/output",
+        output_dir="<PROJECT_ROOT>/output",
     )
 
     # 1. Essential Abaqus module imports

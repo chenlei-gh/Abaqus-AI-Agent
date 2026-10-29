@@ -5,7 +5,7 @@
   "script": "<REPO_ROOT>\\machine_validation\\general_contact_e2e_script.py",
   "case": "two_body_frictional_contact_sliding",
   "command": [
-    "C:\\SIMULIA\\Commands\\abaqus.bat",
+    "<ABAQUS_LAUNCHER>",
     "cae",
     "noGUI=<REPO_ROOT>\\machine_validation\\general_contact_e2e_script.py"
   ],

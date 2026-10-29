@@ -1,11 +1,11 @@
 {
   "case": "3d_cantilever_static",
   "command": [
-    "C:\\SIMULIA\\Commands\\abaqus.bat",
+    "<ABAQUS_LAUNCHER>",
     "cae",
     "noGUI=<REPO_ROOT>\\machine_validation\\machine_validation\\static_golden_e2e_script.py"
   ],
-  "launcher": "C:\\SIMULIA\\Commands\\abaqus.bat",
+  "launcher": "<ABAQUS_LAUNCHER>",
   "process_succeeded": true,
   "report": {
     "acceptance": {

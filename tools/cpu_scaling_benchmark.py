@@ -237,7 +237,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--increments", type=int, default=10, help="Standard fixed increments")
     parser.add_argument("--step-time", type=float, default=1e-3, help="Explicit step period (s)")
     parser.add_argument("--timeout", type=int, default=3600)
-    parser.add_argument("--launcher", default=os.environ.get("ABAQUS_LAUNCHER", r"C:\SIMULIA\Commands\abaqus.BAT"))
+    parser.add_argument("--launcher", default=os.environ.get("ABAQUS_LAUNCHER") or os.environ.get("ABAQUS_BAT") or "abaqus")
     parser.add_argument("--outdir", default="")
     parser.add_argument("--label", default="")
     parser.add_argument("--skip-warmup", action="store_true")

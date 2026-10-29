@@ -667,7 +667,7 @@ def main():
     script_path.write_text(script_content, encoding="utf-8")
 
     executor = BatchExecutor(
-        launcher=args.launcher or os.environ.get("ABAQUS_BAT", "C:/SIMULIA/Commands/abaqus.bat"),
+        launcher=args.launcher or os.environ.get("ABAQUS_BAT") or "abaqus",
         workdir=str(workdir),
     )
 
@@ -699,7 +699,7 @@ def main():
     evidence = {
         "status": "pass" if result.succeeded and report and report.get("status") == "pass" else "fail",
         "case": "mbd2_dual_rigid_body_revolute_connector",
-        "launcher": args.launcher or os.environ.get("ABAQUS_BAT", "C:/SIMULIA/Commands/abaqus.bat"),
+        "launcher": args.launcher or os.environ.get("ABAQUS_BAT") or "abaqus",
         "workdir": str(workdir),
         "script": str(script_path),
         "command": list(result.command) if result.command else [],

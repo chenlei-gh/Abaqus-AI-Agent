@@ -118,8 +118,8 @@ def test_wire_connector_validation_failures():
 
 def test_connector_inp_generation_static_check():
     """Static check verifying writeInput() outputs CONN3D2 and Connector Section keywords."""
-    abaqus_cmd = os.environ.get("ABAQUS_BAT", "C:/SIMULIA/Commands/abaqus.bat")
-    if not os.path.exists(abaqus_cmd):
+    abaqus_cmd = os.environ.get("ABAQUS_BAT") or os.environ.get("ABAQUS_COMMAND") or shutil.which("abaqus") or shutil.which("abaqus.bat")
+    if not abaqus_cmd or not os.path.exists(abaqus_cmd):
         pytest.skip("Abaqus executable not available on this machine")
 
     from abaqus_ai_agent.execution.batch import BatchExecutor

@@ -26,11 +26,11 @@
         "case_id": "smoke",
         "release": "Abaqus 2025",
         "runtime": {
-          "launcher": "C:\\SIMULIA\\Commands\\abaqus.bat",
+          "launcher": "<ABAQUS_LAUNCHER>",
           "workdir": "<REPO_ROOT>",
           "script": "<REPO_ROOT>\\machine_validation\\AIAgent_B28Smoke_script.py",
           "command": [
-            "C:\\SIMULIA\\Commands\\abaqus.bat",
+            "<ABAQUS_LAUNCHER>",
             "cae",
             "noGUI=<REPO_ROOT>\\machine_validation\\AIAgent_B28Smoke_script.py"
           ],
@@ -92,7 +92,7 @@
           }
         ],
         "provenance": {
-          "launcher": "C:\\SIMULIA\\Commands\\abaqus.bat",
+          "launcher": "<ABAQUS_LAUNCHER>",
           "script": "<REPO_ROOT>\\machine_validation\\AIAgent_B28Smoke_script.py",
           "workdir": "<REPO_ROOT>"
         }
@@ -113,11 +113,11 @@
         "case_id": "static_cantilever",
         "release": "Abaqus 2025",
         "runtime": {
-          "launcher": "C:\\SIMULIA\\Commands\\abaqus.bat",
+          "launcher": "<ABAQUS_LAUNCHER>",
           "workdir": "<REPO_ROOT>",
           "script": "<REPO_ROOT>\\machine_validation\\static_golden_e2e_script.py",
           "command": [
-            "C:\\SIMULIA\\Commands\\abaqus.bat",
+            "<ABAQUS_LAUNCHER>",
             "cae",
             "noGUI=<REPO_ROOT>\\machine_validation\\static_golden_e2e_script.py"
           ],
@@ -651,11 +651,11 @@
         "case_id": "mesh_convergence",
         "release": "Abaqus 2025",
         "runtime": {
-          "launcher": "C:\\SIMULIA\\Commands\\abaqus.bat",
+          "launcher": "<ABAQUS_LAUNCHER>",
           "workdir": "<REPO_ROOT>",
           "script": "<REPO_ROOT>\\machine_validation\\mesh_convergence_e2e_script.py",
           "command": [
-            "C:\\SIMULIA\\Commands\\abaqus.bat",
+            "<ABAQUS_LAUNCHER>",
             "cae",
             "noGUI=<REPO_ROOT>\\machine_validation\\mesh_convergence_e2e_script.py"
           ],
@@ -797,7 +797,7 @@
           }
         ],
         "provenance": {
-          "launcher": "C:\\SIMULIA\\Commands\\abaqus.bat",
+          "launcher": "<ABAQUS_LAUNCHER>",
           "script": "<REPO_ROOT>\\machine_validation\\mesh_convergence_e2e_script.py",
           "workdir": "<REPO_ROOT>"
         }
@@ -818,11 +818,11 @@
         "case_id": "tie_contact",
         "release": "Abaqus 2025",
         "runtime": {
-          "launcher": "C:\\SIMULIA\\Commands\\abaqus.bat",
+          "launcher": "<ABAQUS_LAUNCHER>",
           "workdir": "<REPO_ROOT>",
           "script": "<REPO_ROOT>\\machine_validation\\tie_contact_e2e_script.py",
           "command": [
-            "C:\\SIMULIA\\Commands\\abaqus.bat",
+            "<ABAQUS_LAUNCHER>",
             "cae",
             "noGUI=<REPO_ROOT>\\machine_validation\\tie_contact_e2e_script.py"
           ],
@@ -1426,11 +1426,11 @@
         "case_id": "implicit_dynamic",
         "release": "Abaqus 2025",
         "runtime": {
-          "launcher": "C:/SIMULIA/Commands/abaqus.bat",
+          "launcher": "<ABAQUS_LAUNCHER>",
           "workdir": "<REPO_ROOT>",
           "script": "<REPO_ROOT>\\machine_validation\\dynamic_golden_e2e_script.py",
           "command": [
-            "C:/SIMULIA/Commands/abaqus.bat",
+            "<ABAQUS_LAUNCHER>",
             "cae",
             "noGUI=<REPO_ROOT>\\machine_validation\\dynamic_golden_e2e_script.py"
           ],
@@ -1754,11 +1754,11 @@
         "case_id": "steady_thermal",
         "release": "Abaqus 2025",
         "runtime": {
-          "launcher": "C:/SIMULIA/Commands/abaqus.bat",
+          "launcher": "<ABAQUS_LAUNCHER>",
           "workdir": "<REPO_ROOT>\\machine_validation",
           "script": "<REPO_ROOT>\\machine_validation\\thermal_golden_e2e_script.py",
           "command": [
-            "C:/SIMULIA/Commands/abaqus.bat",
+            "<ABAQUS_LAUNCHER>",
             "cae",
             "noGUI=<REPO_ROOT>\\machine_validation\\thermal_golden_e2e_script.py"
           ],
@@ -2384,11 +2384,11 @@
         "case_id": "general_contact",
         "release": "Abaqus 2025",
         "runtime": {
-          "launcher": "C:/SIMULIA/Commands/abaqus.bat",
+          "launcher": "<ABAQUS_LAUNCHER>",
           "workdir": "<REPO_ROOT>\\machine_validation",
           "script": "<REPO_ROOT>\\machine_validation\\general_contact_e2e_script.py",
           "command": [
-            "C:/SIMULIA/Commands/abaqus.bat",
+            "<ABAQUS_LAUNCHER>",
             "cae",
             "noGUI=<REPO_ROOT>\\machine_validation\\general_contact_e2e_script.py"
           ],
@@ -2738,11 +2738,11 @@
         "case_id": "mbd1_rigid_pendulum",
         "release": "Abaqus 2025",
         "runtime": {
-          "launcher": "C:/SIMULIA/Commands/abaqus.bat",
+          "launcher": "<ABAQUS_LAUNCHER>",
           "workdir": "<REPO_ROOT>",
           "script": "<REPO_ROOT>\\machine_validation\\mbd_golden_e2e_script.py",
           "command": [
-            "C:/SIMULIA/Commands/abaqus.bat",
+            "<ABAQUS_LAUNCHER>",
             "cae",
             "noGUI=<REPO_ROOT>\\machine_validation\\mbd_golden_e2e_script.py"
           ],
@@ -3030,11 +3030,11 @@
         "case_id": "mbd2_double_pendulum",
         "release": "Abaqus 2025",
         "runtime": {
-          "launcher": "C:/SIMULIA/Commands/abaqus.bat",
+          "launcher": "<ABAQUS_LAUNCHER>",
           "workdir": "<REPO_ROOT>",
           "script": "<REPO_ROOT>\\machine_validation\\AIAgent_MBD2RevoluteGolden_script.py",
           "command": [
-            "C:/SIMULIA/Commands/abaqus.bat",
+            "<ABAQUS_LAUNCHER>",
             "cae",
             "noGUI=<REPO_ROOT>\\machine_validation\\AIAgent_MBD2RevoluteGolden_script.py"
           ],
@@ -3142,7 +3142,7 @@
         "case_id": "fmbd4_rigid_flexible",
         "release": "Abaqus 2025",
         "runtime": {
-          "launcher": "C:\\SIMULIA\\Commands\\abaqus.bat",
+          "launcher": "<ABAQUS_LAUNCHER>",
           "workdir": "<REPO_ROOT>",
           "script": "<REPO_ROOT>\\machine_validation\\FMBD4GoldenJob_fmbd4_script.py",
           "command": [],
@@ -3261,7 +3261,7 @@
         "case_id": "fmbd5_crank_slider",
         "release": "Abaqus 2025",
         "runtime": {
-          "launcher": "C:/SIMULIA/Commands/abaqus.bat",
+          "launcher": "<ABAQUS_LAUNCHER>",
           "workdir": "<REPO_ROOT>\\machine_validation",
           "script": "<REPO_ROOT>\\machine_validation\\FMBD5GoldenJob_fmbd5_script.py",
           "command": [],
@@ -3415,11 +3415,11 @@
         "case_id": "explicit_dynamic",
         "release": "Abaqus 2025",
         "runtime": {
-          "launcher": "C:\\SIMULIA\\Commands\\abaqus.bat",
+          "launcher": "<ABAQUS_LAUNCHER>",
           "workdir": "<REPO_ROOT>\\machine_validation",
           "script": "<REPO_ROOT>\\machine_validation\\explicit_golden_e2e_script.py",
           "command": [
-            "C:\\SIMULIA\\Commands\\abaqus.bat",
+            "<ABAQUS_LAUNCHER>",
             "cae",
             "noGUI=<REPO_ROOT>\\machine_validation\\explicit_golden_e2e_script.py"
           ],
@@ -3743,7 +3743,7 @@
         "case_id": "fatigue_real_odb",
         "release": "Abaqus 2025",
         "runtime": {
-          "launcher": "C:\\SIMULIA\\Commands\\abaqus.bat",
+          "launcher": "<ABAQUS_LAUNCHER>",
           "workdir": "<REPO_ROOT>\\machine_validation",
           "script": "",
           "command": [],

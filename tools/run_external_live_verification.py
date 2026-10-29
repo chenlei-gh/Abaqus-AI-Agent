@@ -2,7 +2,7 @@
 """Abaqus 2025 Live Real-Machine Verification Suite.
 
 Validates controlled INP editing, authentic solver execution, deep ODB extraction,
-and transactional rollback inside an isolated external project directory (e.g. D:\AbaqusProjects\Cantilever_Live_Verification).
+and transactional rollback inside an isolated external project directory.
 Guarantees ZERO contamination of the core Abaqus-AI-Agent codebase.
 """
 
@@ -27,8 +27,7 @@ from abaqus_ai_agent.execution.input_modes import edit_and_solve_user_inp, solve
 from abaqus_ai_agent.execution.solver import verify_authentic_odb_structure
 from abaqus_ai_agent.paths import ExternalProjectContext
 
-DEFAULT_PROJECT_ROOT = Path(r"D:\AbaqusProjects\Cantilever_Live_Verification")
-DEFAULT_LAUNCHER = r"C:\SIMULIA\Commands\abaqus.bat"
+DEFAULT_LAUNCHER = os.environ.get("ABAQUS_BAT") or os.environ.get("ABAQUS_COMMAND") or "abaqus"
 
 
 def compute_sha256(path: Path) -> str:
@@ -171,7 +170,7 @@ def odb_authenticity_validator(odb_file: Path, launcher: str) -> bool:
     return bool(chk.get("verified", False))
 
 
-def run_verification(project_root: Path = DEFAULT_PROJECT_ROOT, launcher: str = DEFAULT_LAUNCHER) -> Dict[str, Any]:
+def run_verification(project_root: Path, launcher: str = DEFAULT_LAUNCHER) -> Dict[str, Any]:
     print("=======================================================================")
     print("  Abaqus 2025 Live Real-Machine Verification Suite (External Isolated) ")
     print("=======================================================================")
@@ -419,7 +418,7 @@ def run_verification(project_root: Path = DEFAULT_PROJECT_ROOT, launcher: str = 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Abaqus 2025 Live Real-Machine Verification Runner")
-    parser.add_argument("--project-root", default=str(DEFAULT_PROJECT_ROOT), help="External project workspace")
+    parser.add_argument("--project-root", required=True, help="External project workspace")
     parser.add_argument("--launcher", default=DEFAULT_LAUNCHER, help="Abaqus launcher executable")
     args = parser.parse_args()
     run_verification(Path(args.project_root), args.launcher)

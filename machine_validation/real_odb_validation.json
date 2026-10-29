@@ -11,7 +11,7 @@
 
   "environment": {
     "abaqus_version": "Abaqus/Standard 2025",
-    "launcher": "C:/SIMULIA/Commands/abaqus.bat",
+    "launcher": "<ABAQUS_LAUNCHER>",
     "products_root": "/c/SIMULIA/EstProducts/2025",
     "license_server": "Flexnet server DESKTOP-9EAL2I4",
     "host_python": ".venv/Scripts/python.exe",
@@ -130,8 +130,8 @@
   },
 
   "reproduction": {
-    "generate_odb": ".venv/Scripts/python.exe tools/runtime_smoke.py --launcher \"C:/SIMULIA/Commands/abaqus.bat\" --workdir runs/odb_sample_run --job-name AIAgent_ODBSample --timeout 1800",
-    "verify_structure": "verify_authentic_odb_structure(path, launcher_cmd='C:/SIMULIA/Commands/abaqus.bat', required_step='Step-1')",
+    "generate_odb": ".venv/Scripts/python.exe tools/runtime_smoke.py --launcher \"<ABAQUS_LAUNCHER>\" --workdir runs/odb_sample_run --job-name AIAgent_ODBSample --timeout 1800",
+    "verify_structure": "verify_authentic_odb_structure(path, launcher_cmd='<ABAQUS_LAUNCHER>', required_step='Step-1')",
     "extraction_requires": "a customer project root OUTSIDE the repo with input/, working/, solver/, evidence/, delivery/ (paths.require_customer_project_context)",
     "note": "The cold extraction call fails with a production guard if the ODB lives inside the repository. Place the ODB under an external project root before extracting."
   }

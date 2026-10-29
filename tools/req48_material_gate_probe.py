@@ -27,7 +27,7 @@ from abaqus_ai_agent.planning.compiler import IntentGeometrySpec, compile_engine
 from abaqus_ai_agent.reasoning.material_catalog import classify_material_input
 
 
-LAUNCHER = os.environ.get("ABAQUS_BAT", r"C:\SIMULIA\Commands\abaqus.bat")
+LAUNCHER = os.environ.get("ABAQUS_BAT") or os.environ.get("ABAQUS_COMMAND") or "abaqus"
 WORK = ROOT / "runs" / "req48_material_gate"
 EVIDENCE = ROOT / "machine_validation" / "req48_material_gate_evidence.json"
 

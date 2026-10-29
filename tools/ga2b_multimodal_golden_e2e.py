@@ -509,7 +509,7 @@ odb.close()
 def main():
     parser = argparse.ArgumentParser(description="Run GA-2B Multimodal Golden Suite")
     parser.add_argument("--workdir", type=Path, default=ROOT / "runs" / "ga2b_multimodal_run")
-    parser.add_argument("--launcher", type=str, default="C:\\SIMULIA\\Commands\\abaqus.bat")
+    parser.add_argument("--launcher", type=str, default=os.environ.get("ABAQUS_BAT") or os.environ.get("ABAQUS_COMMAND") or "abaqus")
     args = parser.parse_args()
 
     launcher = resolve_default_launcher(args.launcher)

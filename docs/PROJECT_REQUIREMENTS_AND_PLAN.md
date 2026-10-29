@@ -244,7 +244,7 @@ flowchart TD
   * `solve_requirement`、`compile_engineering_intent`、`compile_intent_to_actions`、static/contact/mbd workflow 和 mechanism 编译都走同一分类器。
   * 验收层对材料非线性正式交付要求 `HARDENING_VERIFIED`。短玻纤、粘弹、蠕变、超弹、损伤缺对应数据时 `UNSUPPORTED`。
 * **明确不做**：不换外部材料平台；不把内置牌号升级为已鉴定的 CAMPUS / MMPDS 许用值；不把短玻纤压成各向同性 J2 并声称为材料鉴定；不把 `nlgeom` 当成材料非线性。
-* **真机证据（2026-10-28，Abaqus/CAE 2025，`C:\SIMULIA\Commands\abaqus.bat`）**：
+* **真机证据（2026-10-28，Abaqus/CAE 2025，`<ABAQUS_LAUNCHER>`）**：
   * 探针 `tools/req48_material_gate_probe.py` 走 `compile_engineering_intent()` 产出的脚本，`cae noGUI` 只 `writeInput`，不求解。四条路径全部通过，证据 `machine_validation/req48_material_gate_evidence.json`。
   * `Q235` + `linear_static` → `LINEAR_ELASTIC`；真机 deck 有 `*Elastic`，无 `*Plastic`。
   * 只给“钢”并请求塑性 → `SCREENING`，编译拒绝，未启动 CAE，未自动选 Q235。
@@ -299,8 +299,8 @@ flowchart TD
   * 实体重叠不得自动建接触，也不得用 `adjustMethod` / `adjustTolerance` 掩盖。
 * **明确不做**：不调用 `repair()`；不手选 `ignoreEntity`；不合并细长面、台阶面或圆角；不把坏四面体直接粘成孤立网格。只在第一轮按统一面积阈值合并未受保护小面，CAD 实体仍可恢复。局部轮次不整件删网格、不改变全局种子、不做第 6 轮；不把通过质量门禁说成已收敛；不改 M1FA 项目外的手工脚本。
 * **验收门槛**：零/负体积单元 0、`ANALYSIS_CHECKS.failedElements` 0、四面体 shape factor 不低于 0.0001。这只表示可以继续检查，不能声称一次得到最终高质量网格。
-* **真机证据（2026-10-28，Abaqus/CAE 2025，`C:\SIMULIA\Commands\abaqus.bat`）**：
-  * 几何 `D:/AbaqusProjects/M1FA/M1FA_VENT_ASM_CTR_20261025.stp`，种子 2.5 mm，不修几何，不换种子，不提交求解。证据 `machine_validation/m1fa_mesh_continuation_evidence.json`，原始日志 `D:/AbaqusProjects/M1FA/working/REQ49_MESH/probe.log`。
+* **真机证据（2026-10-28，Abaqus/CAE 2025，`<ABAQUS_LAUNCHER>`）**：
+  * 几何 `<RETIRED_RUN>/M1FA/M1FA_VENT_ASM_CTR_20261025.stp`，种子 2.5 mm，不修几何，不换种子，不提交求解。证据 `machine_validation/m1fa_mesh_continuation_evidence.json`，原始日志 `<RETIRED_RUN>/M1FA/working/REQ49_MESH/probe.log`。
   * STEP 有 6 个 body。门禁在 Body-1 失败后停止，总耗时 7.51 秒：导入 5.42 秒，边界预览 0.831 秒，内部网格 0.247 秒。
   * Body-1 几何有效，723 面，21765 个四面体。`ANALYSIS_CHECKS` 失败单元为 0，但 30 个单元低于形状因子 0.0001，最差 `1.607e-09`，状态 `BLOCKED`。警告单元 2044。
   * 旧基线来自 `diag_mesh.log` / `fixmesh.log` / `build.log`：6 体、C3D10、seed 2.5、97265 单元，43850 个坏单元，最差体积 `-1.093e+04`。一次剖分本来只要 19–24 秒；4.4 小时是坏网格被反复求解，不是一次剖分耗时。
@@ -328,7 +328,7 @@ flowchart TD
   * S4：网格阶段记录计划边数、覆盖状态和 Explicit 稳定增量风险估算。估算值标明不是求解器报告值，且不提交求解。
   * S5：对照状态固定为 `NOT_SWITCHED`。没有对照证据，不替换生产默认。
   * S6：只做能力判定。Standard 静力、准静力、热传导和官方支持的耦合过程，且单元形状为平面三角/四边、壳三角/四边或四面体时，状态是 `RESEARCH_ONLY`。Explicit、ALE 和不支持的六面体是 `EXCLUDED`。两者都不生成生产动作。
-* **2026-10-28 M1FA 原生建议尺寸复测，仍未 CLOSED**：同一 STEP、只剖分 Body-1、不创建 Job、不提交求解。完成以内核 flag 为准，不以启动器退出码为准。探针 `machine_validation/m1fa_default_size_probe.py`，原始结果 `D:/AbaqusProjects/M1FA/working/REQ49_MESH/m1fa_default_size_probe.json`，汇总 `machine_validation/m1fa_mesh_continuation_evidence.json`。
+* **2026-10-28 M1FA 原生建议尺寸复测，仍未 CLOSED**：同一 STEP、只剖分 Body-1、不创建 Job、不提交求解。完成以内核 flag 为准，不以启动器退出码为准。探针 `machine_validation/m1fa_default_size_probe.py`，原始结果 `<RETIRED_RUN>/M1FA/working/REQ49_MESH/m1fa_default_size_probe.json`，汇总 `machine_validation/m1fa_mesh_continuation_evidence.json`。
   * 官方 2025 接口是 `rootAssembly.getPartSeeds(region=instance, attribute=DEFAULT_SIZE)`，不是零件方法。本机读到 Body-1 建议尺寸 1.9 mm，来源 `ABAQUS_DEFAULT_SIZE`。`seedPart` 后回读 `SIZE` 也是 1.9。没有回退 2.5 mm。来源：[MeshAssembly.getPartSeeds](https://abqpy.readthedocs.io/projects/pyabaqus/en/stable/reference/mdb/model/mesh.html)。
   * 几何有效，723 面、1785 边。短边阈值随种子变为 0.38 mm，忽略 439 边、397 顶点，耗时 0.138 秒。导入 5.557 秒，边界预览 0.875 秒，内部网格 0.244 秒，总耗时 9.945 秒。
   * 单元 25005，节点 6781。`ANALYSIS_CHECKS` 失败单元 0，警告 1398。形状因子失败单元 12，最差 `6.085e-08`，门槛 `0.0001`，状态 `BLOCKED`。`ANALYSIS_CHECKS=0` 不是合格。
@@ -336,7 +336,7 @@ flowchart TD
   * 对照上次 2.5 mm 短边复测：单元 18494 → 25005，失败单元 6 → 12，最差形状因子 `4.090e-08` → `6.085e-08`，警告 722 → 1398，总耗时 7.66 → 9.945 秒。速度没有提升，质量门槛仍未达到，而且比历史 2.5 mm 对照更差。这不是网格收敛，也不是 6 体验证。
   * 没有分析意图，所以没有发孔、圆角、间隙局部种子。`edge_coverage=NOT_REQUESTED`，不能写成 S3 已验证。生产默认仍是 `NOT_SWITCHED`。
 * **2026-10-28 宿主面定位改正后重跑，仍未 CLOSED**：同一 STEP、只剖分 Body-1、不创建 Job、不提交求解。完成以内核 `default_size_completed.flag` 为准，不以启动器返回为准。探针已改为 `Face.getElements()` 定位宿主面；自动条件是面积不超过 `(0.2*seed)^2`，或该面有一条边不超过 `0.2*seed`。浅夹角相邻面仍用 `getFacesByFaceAngle(60)`。没有人工分类，没有第三次虚拟拓扑，没有缩小全局种子。
-  * 起动器先返回并检出 `cae` 许可证，`9998/9999` 仍可用。内核随后写出 flag 和 JSON。原始结果 `D:/AbaqusProjects/M1FA/working/REQ49_MESH/m1fa_default_size_probe.json`，汇总 `machine_validation/m1fa_mesh_continuation_evidence.json`。
+  * 起动器先返回并检出 `cae` 许可证，`9998/9999` 仍可用。内核随后写出 flag 和 JSON。原始结果 `<RETIRED_RUN>/M1FA/working/REQ49_MESH/m1fa_default_size_probe.json`，汇总 `machine_validation/m1fa_mesh_continuation_evidence.json`。
   * 几何有效。`DEFAULT_SIZE` 仍是 1.9 mm，来源 `ABAQUS_DEFAULT_SIZE`，回读 `SIZE` 也是 1.9。短边阈值 0.38 mm，小面面积阈值 0.1444 mm²。第一次虚拟拓扑忽略 439 边、397 顶点，耗时 0.146 秒。导入 5.553 秒，边界预览 0.871 秒且失败单元 0，内部网格 0.258 秒，总耗时 7.847 秒。
   * 单元 25005，节点 6781。`ANALYSIS_CHECKS` 失败单元 0，警告 1398。形状因子失败单元 12，最差 `6.085e-08`，门槛 `0.0001`。失败单元号是 396、1239、3253、7046、9187、9203、9383、12882、13782、16487、18214、21043。
   * 改正后的定位仍然找到 0 个合格宿主面、0 个可执行区域。二次虚拟拓扑没有执行，状态 `BLOCKED`，原因 `quality_below_floor_no_small_host_face`。这一次的 0 不再是 `MeshFace.label` 自比导致的定位失效；它只证明这 12 个失败单元没有落在面积不超过 0.1444 mm²、或带有不超过 0.38 mm 边的几何面上。不能把这些大面交给 `mergeSmallFaces`，也不能把坏四面体直接粘合。
@@ -360,7 +360,7 @@ flowchart TD
   * M1FA Body-1 真机第一轮：26892 单元，形状因子失败 4、最差 `3.493e-05`，`ANALYSIS_CHECKS` 失败 0、警告 920。与上一轮复测相比，最差值由 `9.602e-06` 改善到 `3.493e-05`，但仍低于 `0.0001`，不能判合格。
   * M1FA 第二轮已实际对宿主 Cell `[0]` 增量重划并重新检查，失败数、最差值和警告数均未改变。该 Body 只有一个几何 Cell，第三轮发现没有面相邻 Cell 可扩大，抛出 `tet_third_local_region_not_expanded`，保留第二轮网格并阻断，没有伪造第三次重复，也没有提交求解。
   * 多 Cell 邻域扩展由运行级离线测试覆盖：第三轮区域从 `[0]` 扩为 `[0, 1]`；单 Cell 第三次不会再次调用网格器。复杂多 Cell 模型的第三轮真机改善证据仍缺失，REQ-4.9 不 CLOSED。证据 `runs/generic_tet_mesh/three_round_native_result.json`、`runs/generic_tet_mesh/three_round_m1fa_body1_result.json`。
-* **2026-10-28 清空旧网格数据后独立复测**：按用户要求删除 30 个旧网格测试文件，范围仅为 `runs/generic_tet_mesh/` 与 `D:/AbaqusProjects/M1FA/working/REQ49_MESH/` 的生成物；保留 `.py` 探针、原始 STEP 及其他 CAE/INP/ODB。随后使用全新工作目录和新 Abaqus 内核重跑，结果文件 `runs/generic_tet_mesh/clean_m1fa_body1_result.json`。
+* **2026-10-28 清空旧网格数据后独立复测**：按用户要求删除 30 个旧网格测试文件，范围仅为 `runs/generic_tet_mesh/` 与 `<RETIRED_RUN>/M1FA/working/REQ49_MESH/` 的生成物；保留 `.py` 探针、原始 STEP 及其他 CAE/INP/ODB。随后使用全新工作目录和新 Abaqus 内核重跑，结果文件 `runs/generic_tet_mesh/clean_m1fa_body1_result.json`。
   * 新结果记录内核 PID 34356、实际工作目录、输入 STEP SHA-256、生产网格源码 SHA-256、局部重划源码 SHA-256 和探针源码 SHA-256。宿主 Python 独立重算这四项哈希，全部与真机 JSON 一致。
   * 干净复测仍是：第一轮 4 个失败单元、最差 `3.493e-05`；第二轮对 Cell `[0]` 局部重划后仍为 4 个、最差值不变；第三轮因无法扩大区域而在重划前阻断。26892 单元，`ANALYSIS_CHECKS` 失败 0、警告 920，状态 `BLOCKED`，未创建 Job、未提交求解。
   * 因此这次结果具有新的进程、空目录和哈希证据，且与清空前一致；它证明结果可复现，不证明网格合格。旧结果文件已按要求删除，当前有效原始结果以 `clean_m1fa_body1_result.json` 为准。
@@ -369,7 +369,7 @@ flowchart TD
   * 这一修正已用同一 M1FA Body-1 做干净复测。旧结果先删除，新工作目录 `runs/generic_tet_mesh/m1fa_region_delete_workdir`，新内核 PID 35988。结果 `runs/generic_tet_mesh/m1fa_region_delete_result.json`。
   * 第一轮仍是 26892 单元、46510 节点、形状因子失败 4、最差 `3.493e-05`、警告 920。第二轮已执行区域删除和重新生成，区域单元数回读为 26892，但网格指纹与第一轮逐项相同。生产函数因此抛出 `tet_second_local_remesh_unchanged`，没有把这次记成成功，也没有进入第三轮或提交求解。
   * 结论：空转检测生效，但单 Cell 整区域删除后按同一全局种子重划，得到的是同一网格。它没有改善 4 个失败单元。要让第三轮成为不同方案，必须先创建可扩大的局部几何区域，不能只重复删除唯一 Cell。REQ-4.9 仍不 CLOSED。
-* **2026-10-28 局部边种子真机验证**：同一套全局种子删除后重划会复制同一张网格。官方写明边种子覆盖零件种子，删网格不会删种子。来源：[Seeding an edge by size](file:///C:/Program%20Files/Dassault%20Systemes/SIMULIA2025doc/English/SIMACAECAERefMap/simacae-t-mgnedgebyszbtn.htm)、[Deleting a mesh](file:///C:/Program%20Files/Dassault%20Systemes/SIMULIA2025doc/English/SIMACAECAERefMap/simacae-t-mgndeletemesh.htm)。本机脚本接口是 `seedEdgeBySize(edges, size, deviationFactor, minSizeFactor, constraint)`，`FINER` 常量存在。
+* **2026-10-28 局部边种子真机验证**：同一套全局种子删除后重划会复制同一张网格。官方写明边种子覆盖零件种子，删网格不会删种子。来源：[Seeding an edge by size](Abaqus/CAE 2025 documentation, Seeding an edge by size)、[Deleting a mesh](Abaqus/CAE 2025 documentation, Deleting a mesh)。本机脚本接口是 `seedEdgeBySize(edges, size, deviationFactor, minSizeFactor, constraint)`，`FINER` 常量存在。
   * 旧网格生成物已删除。新工作目录 `runs/generic_tet_mesh/m1fa_local_edge_seed_workdir`，新内核 PID 15988。结果 `runs/generic_tet_mesh/m1fa_local_edge_seed_result.json`。宿主 Python 独立重算输入 STEP、生产网格源码、局部重划源码和探针源码的 SHA-256，四项都与 JSON 一致。没有创建 Job，没有提交求解。
   * 第一轮仍是 26892 单元、46510 节点、形状因子失败 4、最差 `3.493e-05`、警告 920。
   * 第二轮实际定位 18 条失败宿主面边，局部种子 0.95 mm，删除并重划唯一 Cell。指纹变为 27687 单元、47784 节点，证明这次不是空转。质量没有改善：失败单元 4 → 5，最差 `3.280e-08`，警告 1088。它因此不能停在第二轮。

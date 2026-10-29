@@ -849,13 +849,14 @@ def find_abaqus_executable(launcher_cmd: Optional[str] = None) -> Optional[str]:
         if shutil.which(launcher_cmd) or os.path.isfile(launcher_cmd):
             return launcher_cmd
         return None
-    cmd = shutil.which("abaqus")
-    if cmd:
-        return cmd
-    if os.name == "nt":
-        default_nt_path = Path("C:/SIMULIA/Commands/abaqus.BAT")
-        if default_nt_path.is_file():
-            return str(default_nt_path)
+    for name in ("abaqus", "abaqus.bat"):
+        cmd = shutil.which(name)
+        if cmd:
+            return cmd
+    for env_name in ("ABAQUS_COMMAND", "ABAQUS_BAT"):
+        configured = os.environ.get(env_name)
+        if configured and os.path.isfile(configured):
+            return configured
     return None
 
 

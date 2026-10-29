@@ -1,7 +1,7 @@
 {
   "case": "3d_cantilever_mesh_convergence",
   "command": [
-    "C:\\SIMULIA\\Commands\\abaqus.bat",
+    "<ABAQUS_LAUNCHER>",
     "cae",
     "noGUI=<REPO_ROOT>\\machine_validation\\mesh_convergence_e2e_script.py"
   ],

@@ -47,7 +47,7 @@ from abaqus_ai_agent.execution.parallel_experiment import ParallelRunSpec
 
 PROBLEM_REL = "test_assets/engineering_cases/case_07_jounce_bumper_self_contact/problem_statement.json"
 CASE_ID = "CASE_07_AUTOMOTIVE_JOUNCE_BUMPER"
-DEFAULT_PROJECT = Path("D:/AbaqusProjects/Case_07_Jounce_Bumper")
+DEFAULT_PROJECT = None
 
 # --- Problem-statement parameters (single source of truth) -------------------
 FREE_HEIGHT = 85.0
@@ -1123,8 +1123,8 @@ def derive_metrics(post: dict) -> dict:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Case 07 live jounce bumper qualification")
-    parser.add_argument("--launcher", default=os.environ.get("ABAQUS_BAT", "C:/SIMULIA/Commands/abq2025.bat"))
-    parser.add_argument("--project", default=str(DEFAULT_PROJECT))
+    parser.add_argument("--launcher", default=os.environ.get("ABAQUS_BAT") or os.environ.get("ABAQUS_COMMAND") or "abaqus")
+    parser.add_argument("--project", required=True, help="External Case 07 project directory")
     parser.add_argument("--timeout", type=int, default=5400)
     parser.add_argument("--skip-seat", action="store_true")
     parser.add_argument("--skip-compress", action="store_true")

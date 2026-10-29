@@ -51,7 +51,7 @@ from abaqus_ai_agent.execution.batch import resolve_default_launcher
 from abaqus_ai_agent.reporting.pipeline import DeterministicReportPipeline
 from abaqus_ai_agent.reporting.visualization_spec import VisualizationSpec
 
-DEFAULT_PROJECT = Path("D:/AbaqusProjects/Case_07_Jounce_Bumper")
+DEFAULT_PROJECT = None
 RUN_ID_PREFIX = "case07_live_"
 CASE_ID = "CASE_07_AUTOMOTIVE_JOUNCE_BUMPER"
 COMPRESS_STEP = "Step2Compression"
@@ -282,7 +282,7 @@ def generate_case_07_report(
             "(recorded=%s, live=%s). Re-run the driver." % (recorded_hash, output_hash)
         )
 
-    resolved_launcher = resolve_default_launcher(launcher or "C:/SIMULIA/Commands/abq2025.bat")
+    resolved_launcher = resolve_default_launcher(launcher or os.environ.get("ABAQUS_BAT") or "abaqus")
 
     metrics = summary.get("metrics") or {}
     results_info = [
@@ -388,7 +388,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(
         description="Render the Case 07 report from an existing solve (never re-solves)."
     )
-    parser.add_argument("--project", default=str(DEFAULT_PROJECT))
+    parser.add_argument("--project", required=True, help="External Case 07 project directory")
     parser.add_argument("--run-id", default=None)
     parser.add_argument("--launcher", default=None)
     parser.add_argument("--output-dir", default=None)

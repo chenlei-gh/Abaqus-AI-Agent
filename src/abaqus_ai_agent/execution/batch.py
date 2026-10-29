@@ -16,10 +16,6 @@ def resolve_default_launcher(launcher: str = "abaqus") -> str:
         return os.environ["ABAQUS_COMMAND"]
 
     if os.name == "nt" and launcher in ("abaqus", "abaqus.bat"):
-        # Check standard SIMULIA paths first
-        candidate = r"C:\SIMULIA\Commands\abaqus.bat"
-        if os.path.exists(candidate):
-            return candidate
         which_bat = shutil.which("abaqus.bat")
         if which_bat:
             return which_bat

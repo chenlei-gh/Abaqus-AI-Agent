@@ -67,8 +67,8 @@ def _sanitize_leak_patterns(text: str) -> str:
 
 def run_unified_validation() -> Dict[str, Any]:
     timestamp_start = datetime.datetime.now(datetime.timezone.utc).isoformat()
-    launcher = "C:/SIMULIA/Commands/abaqus.bat"
-    case07_dir = Path("D:/AbaqusProjects/Case_07_Jounce_Bumper")
+    launcher = os.environ.get("ABAQUS_BAT") or os.environ.get("ABAQUS_COMMAND") or "abaqus"
+    case07_dir = Path(os.environ["ABQAI_CASE07_PROJECT"])
     solver_dir = case07_dir / "solver"
 
     seat_odb = solver_dir / "case07_live_e7301de3_seat" / "C07SeatJob.odb"
@@ -818,4 +818,6 @@ print('__BULK_TEST_RESULT__' + json.dumps(res))
 
 
 if __name__ == "__main__":
+    if not os.environ.get("ABQAI_CASE07_PROJECT"):
+        raise SystemExit("ABQAI_CASE07_PROJECT is required; no external project path is built in")
     run_unified_validation()

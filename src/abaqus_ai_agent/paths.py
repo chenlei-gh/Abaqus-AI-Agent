@@ -172,8 +172,7 @@ def is_agent_or_repo_launch_dir(path: Union[str, Path]) -> bool:
 def get_core_workspace_root(repo_root: Optional[Path] = None) -> Path:
     """Return the core file tree that must not hold customer solver copies.
 
-    The product checkout is ``get_repo_root()``. The core workspace is its parent,
-    for example ``D:/Vault/Abaqus`` when the checkout is ``D:/Vault/Abaqus/Abaqus-AI-Agent``.
+    The product checkout is ``get_repo_root()``. The core workspace is its parent.
     A solver copy such as ``<core>/ms13l_project`` is still inside the core files even
     though it is outside the git repository.
     """

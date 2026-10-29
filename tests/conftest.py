@@ -97,15 +97,18 @@ def _probe_physical_abaqus_environment() -> tuple[str, bool, str]:
     import shutil
     import subprocess
 
-    launcher = shutil.which("abaqus") or shutil.which("abaqus.bat")
-    if not launcher and Path(r"C:\SIMULIA\Commands\abaqus.bat").exists():
-        launcher = r"C:\SIMULIA\Commands\abaqus.bat"
+    launcher = (
+        os.environ.get("ABAQUS_BAT")
+        or os.environ.get("ABAQUS_COMMAND")
+        or shutil.which("abaqus")
+        or shutil.which("abaqus.bat")
+    )
 
     if not launcher:
         return (
             "LAUNCHER_MISSING",
             False,
-            "Physical Abaqus launcher (abaqus/abaqus.bat) not found on PATH or default SIMULIA path",
+            "Physical Abaqus launcher not found in ABAQUS_BAT, ABAQUS_COMMAND, or PATH",
         )
 
     # Launcher exists; verify it responds to informational probe

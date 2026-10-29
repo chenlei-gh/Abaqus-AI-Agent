@@ -1,7 +1,7 @@
 {
   "schema_version": "p0b_contact_gate_hardening_v1",
   "verified_at": "2026-10-19",
-  "abaqus_version": "2025 (C:/SIMULIA/Commands/abaqus.bat)",
+  "abaqus_version": "2025 (<ABAQUS_LAUNCHER>)",
   "change": "CONTACT_OPENING contact-model evidence broadened from deck-only to layered deck -> .msg banner -> .dat keyword echo, with fail-closed suppression when no layer applies; .dat and .msg extraction windows fixed to head+tail so the evidence is reachable through the orchestrator.",
   "extraction_windows": {
     "problem": "Both extractors kept only the last 100 lines. The .dat keyword echo and model summary are at the head, and the real M_U_T001 .msg banner is at line 74 of 11673, so both solver-artifact evidence layers were unreachable through the product path.",

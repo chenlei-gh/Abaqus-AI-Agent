@@ -4,11 +4,11 @@
   "status": "IMPLEMENTED",
   "closed": false,
   "date": "2026-10-28",
-  "launcher": "C:\\SIMULIA\\Commands\\abaqus.bat",
+  "launcher": "<ABAQUS_LAUNCHER>",
   "abaqus": "Abaqus/CAE 2025",
-  "step": "D:/AbaqusProjects/M1FA/M1FA_VENT_ASM_CTR_20261025.stp",
-  "workdir": "D:/AbaqusProjects/M1FA/working/REQ49_MESH",
-  "source_log": "D:/AbaqusProjects/M1FA/working/REQ49_MESH/probe.log",
+  "step": "<RETIRED_RUN>/M1FA/M1FA_VENT_ASM_CTR_20261025.stp",
+  "workdir": "<RETIRED_RUN>/M1FA/working/REQ49_MESH",
+  "source_log": "<RETIRED_RUN>/M1FA/working/REQ49_MESH/probe.log",
   "solver_submitted": false,
   "repair": false,
   "seed_retries": 0,
@@ -21,9 +21,9 @@
   },
   "baseline": {
     "source": [
-      "D:/AbaqusProjects/M1FA/working/diag_mesh.log",
-      "D:/AbaqusProjects/M1FA/working/fixmesh.log",
-      "D:/AbaqusProjects/M1FA/working/build.log"
+      "<RETIRED_RUN>/M1FA/working/diag_mesh.log",
+      "<RETIRED_RUN>/M1FA/working/fixmesh.log",
+      "<RETIRED_RUN>/M1FA/working/build.log"
     ],
     "seed_mm": 2.5,
     "element_type": "C3D10",
@@ -71,7 +71,7 @@
   },
   "virtual_topology_retest": {
     "date": "2026-10-28",
-    "source": "D:/AbaqusProjects/M1FA/working/REQ49_MESH/m1fa_vt_retest.json",
+    "source": "<RETIRED_RUN>/M1FA/working/REQ49_MESH/m1fa_vt_retest.json",
     "completion_evidence": "script_completed",
     "return_code": 0,
     "settled": true,
@@ -109,7 +109,7 @@
   },
   "default_size_retest": {
     "date": "2026-10-28",
-    "source": "D:/AbaqusProjects/M1FA/working/REQ49_MESH/m1fa_default_size_probe.json",
+    "source": "<RETIRED_RUN>/M1FA/working/REQ49_MESH/m1fa_default_size_probe.json",
     "probe": "machine_validation/m1fa_default_size_probe.py",
     "completion_evidence": "script_completed",
     "seed_api": "Assembly.getPartSeeds",
@@ -155,9 +155,9 @@
   },
   "host_face_retest": {
     "date": "2026-10-28",
-    "source": "D:/AbaqusProjects/M1FA/working/REQ49_MESH/m1fa_default_size_probe.json",
-    "log": "D:/AbaqusProjects/M1FA/working/REQ49_MESH/default_size_probe.log",
-    "completion_flag": "D:/AbaqusProjects/M1FA/working/REQ49_MESH/default_size_completed.flag",
+    "source": "<RETIRED_RUN>/M1FA/working/REQ49_MESH/m1fa_default_size_probe.json",
+    "log": "<RETIRED_RUN>/M1FA/working/REQ49_MESH/default_size_probe.log",
+    "completion_flag": "<RETIRED_RUN>/M1FA/working/REQ49_MESH/default_size_completed.flag",
     "probe": "machine_validation/m1fa_default_size_probe.py",
     "completion_evidence": "kernel_flag_and_json",
     "launcher_return_is_not_completion": true,
@@ -228,7 +228,7 @@
     },
     "complex_step_body1": {
       "source": "runs/generic_tet_mesh/step_body1_result.json",
-      "geometry": "D:/AbaqusProjects/M1FA/M1FA_VENT_ASM_CTR_20261025.stp",
+      "geometry": "<RETIRED_RUN>/M1FA/M1FA_VENT_ASM_CTR_20261025.stp",
       "body": 1,
       "seed_mm": 1.9,
       "seed_source": "ABAQUS_DEFAULT_SIZE",
@@ -309,7 +309,7 @@
     "completion_evidence": "kernel_flag_and_json",
     "launcher_return_is_not_completion": true,
     "license": "cae checked out; 9998 of 9999 remained available",
-    "geometry": "D:/AbaqusProjects/M1FA/M1FA_VENT_ASM_CTR_20261025.stp",
+    "geometry": "<RETIRED_RUN>/M1FA/M1FA_VENT_ASM_CTR_20261025.stp",
     "body": 1,
     "bodies_meshed": 1,
     "seed_mm": 1.9,
@@ -444,7 +444,7 @@
       "removed_files": 30,
       "scopes": [
         "runs/generic_tet_mesh",
-        "D:/AbaqusProjects/M1FA/working/REQ49_MESH"
+        "<RETIRED_RUN>/M1FA/working/REQ49_MESH"
       ],
       "preserved": "Python probes, original STEP, and all CAE/INP/ODB files outside the mesh-test directories",
       "previous_mesh_result_json_deleted": true
@@ -453,7 +453,7 @@
     "completion_flag": "runs/generic_tet_mesh/clean_m1fa_body1_completed.flag",
     "completion_evidence": "new_kernel_flag_and_json",
     "kernel_pid": 34356,
-    "working_directory": "D:/Vault/Abaqus/Abaqus-AI-Agent/runs/generic_tet_mesh/clean_m1fa_body1_rerun_workdir",
+    "working_directory": "<REPO_ROOT>/runs/generic_tet_mesh/clean_m1fa_body1_rerun_workdir",
     "input_sha256": "48a6990bc1a7eb64de3ccf31085a53e20a506944c936a85cca0ef9edf201171b",
     "production_source_sha256": "8e9304b6afda62fe90565bfd6520b529fb270aa51360a76c2e1bca720b61a8fc",
     "local_remesh_source_sha256": "4dd82984e3cb051e4caa065d1f52c7d0a804a95c9651417a84b49270b542351f",

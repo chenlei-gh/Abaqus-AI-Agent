@@ -1,6 +1,6 @@
 {
   "gate": "P0_B_CONTACT_STABILIZATION_CLOSED_LOOP",
-  "machine": "Abaqus/Standard 2025 (C:/SIMULIA/Commands/abaqus.bat)",
+  "machine": "Abaqus/Standard 2025 (<ABAQUS_LAUNCHER>)",
   "cases": {
     "gap_closure_closed_loop": {
       "run_1_unstabilized": {

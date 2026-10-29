@@ -28,11 +28,11 @@ from abaqus_ai_agent.agent import AbaqusAIAgent
 from abaqus_ai_agent.paths import ExternalProjectContext
 
 agent = AbaqusAIAgent(executor=batch_executor)
-project_ctx = ExternalProjectContext.create(project_root=Path("D:/AbaqusProjects/GearAnalysis"))
+project_ctx = ExternalProjectContext.create(project_root=Path("<PROJECT_ROOT>"))
 
 # 1. 求解用户 INP，工作目录隔离在 GearAnalysis/solver/<run_id>/
 result = agent.solve_user_inp(
-    inp_path="D:/AbaqusProjects/GearAnalysis/input/gear_contact.inp",
+    inp_path="<PROJECT_ROOT>/input/gear_contact.inp",
     job_name="GearContactJob",
     project_context=project_ctx,
 )
@@ -50,11 +50,11 @@ from abaqus_ai_agent.agent import AbaqusAIAgent
 from abaqus_ai_agent.paths import ExternalProjectContext
 
 agent = AbaqusAIAgent(executor=None)
-project_ctx = ExternalProjectContext.create(project_root=Path("D:/AbaqusProjects/PostOnlyDemo"))
+project_ctx = ExternalProjectContext.create(project_root=Path("<PROJECT_ROOT>"))
 
 # 2. 纯只读提取，严禁启动求解进程
 post_res = agent.postprocess_user_odb(
-    odb_path="D:/AbaqusProjects/PostOnlyDemo/input/benchmark.odb",
+    odb_path="<PROJECT_ROOT>/input/benchmark.odb",
     project_context=project_ctx,
     requirements=[
         {"field_name": "S", "component": "Mises", "position": "INTEGRATION_POINT"},
@@ -74,11 +74,11 @@ from abaqus_ai_agent.agent import AbaqusAIAgent
 from abaqus_ai_agent.paths import ExternalProjectContext
 
 agent = AbaqusAIAgent(executor=ipc_executor)
-project_ctx = ExternalProjectContext.create(project_root=Path("D:/AbaqusProjects/BridgeCae"))
+project_ctx = ExternalProjectContext.create(project_root=Path("<PROJECT_ROOT>"))
 
 # 3. 在 working/ 下克隆工作副本，原件 BridgeCae/input/bridge.cae 受到只读保护
 cae_res = agent.prepare_user_cae(
-    cae_path="D:/AbaqusProjects/BridgeCae/input/bridge.cae",
+    cae_path="<PROJECT_ROOT>/input/bridge.cae",
     project_context=project_ctx,
     target_filename="bridge_run01.cae",
 )

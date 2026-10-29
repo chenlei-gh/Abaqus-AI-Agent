@@ -23,8 +23,8 @@ from __future__ import annotations
 import re
 from typing import Optional
 
-#: Default Windows install location, matching the other launcher resolvers.
-_WINDOWS_LAUNCHER = r"C:\SIMULIA\Commands\abaqus.bat"
+#: Shown only when no launcher can be discovered from PATH or the environment.
+_UNRESOLVED_LAUNCHER = "abaqus"
 
 _ODB_IMPORT_RE = re.compile(
     r"No module named '(?:odbAccess|abaqusConstants|abaqus|regionToolset|"
@@ -57,7 +57,7 @@ def _launcher() -> str:
             return found
     except Exception:
         pass
-    return _WINDOWS_LAUNCHER
+    return _UNRESOLVED_LAUNCHER
 
 
 def diagnose_environment(text: Optional[str], *, operation: str = "") -> str:

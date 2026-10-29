@@ -12,7 +12,7 @@
     "release": "2025",
     "release_id": "RELr427",
     "solver": "Abaqus/Explicit",
-    "launcher": "C:\\SIMULIA\\Commands\\abaqus.BAT"
+    "launcher": "<ABAQUS_LAUNCHER>"
   },
   "model": {
     "name": "Abaqus Example Problems 2.1.4 erode_proj_and_plate, plate refined in x/y",

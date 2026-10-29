@@ -1,11 +1,11 @@
 {
   "status": "pass",
   "case": "mbd2_dual_rigid_body_revolute_connector",
-  "launcher": "C:\\SIMULIA\\Commands\\abaqus.bat",
+  "launcher": "<ABAQUS_LAUNCHER>",
   "workdir": "<REPO_ROOT>\\machine_validation",
   "script": "<REPO_ROOT>\\machine_validation\\AIAgent_MBD2RevoluteGolden_script.py",
   "command": [
-    "C:\\SIMULIA\\Commands\\abaqus.bat",
+    "<ABAQUS_LAUNCHER>",
     "cae",
     "noGUI=<REPO_ROOT>\\machine_validation\\AIAgent_MBD2RevoluteGolden_script.py"
   ],

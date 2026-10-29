@@ -32,14 +32,16 @@ import json
 import math
 import time
 
-STEP = r"D:/AbaqusProjects/M1FA/M1FA_VENT_ASM_CTR_20261025.stp"
-OUT = r"D:/AbaqusProjects/M1FA/working/REQ49_MESH/m1fa_default_size_probe.json"
-LOG = r"D:/AbaqusProjects/M1FA/working/REQ49_MESH/default_size_probe.log"
-FLAG = r"D:/AbaqusProjects/M1FA/working/REQ49_MESH/default_size_completed.flag"
+STEP = "<RETIRED_RUN>/M1FA/M1FA_VENT_ASM_CTR_20261025.stp"
+OUT = "<RETIRED_RUN>/M1FA/working/REQ49_MESH/m1fa_default_size_probe.json"
+LOG = "<RETIRED_RUN>/M1FA/working/REQ49_MESH/default_size_probe.log"
+FLAG = "<RETIRED_RUN>/M1FA/working/REQ49_MESH/default_size_completed.flag"
 FLOOR = 0.0001
 FACE_ANGLE = 60.0
 
-os.makedirs(os.path.dirname(OUT), exist_ok=True)
+raise RuntimeError(
+    "m1fa_default_size_probe no longer opens or writes the external M1FA project"
+)
 result = {
     "schema": "m1fa_default_size_probe_v1",
     "step": STEP,

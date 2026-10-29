@@ -160,7 +160,7 @@ test_static_golden_e2e.py 等离线用例做的是脚本装配的 AST/结构检�
   做 AST 名称解析，残差名仅 `mdb` 与 abaqusConstants 符号，
   `build_cae_seed()` 完全覆盖；无任何片段引用 harness 配置名。
 
-真机验证（Abaqus 2025，工作目录 D:\AbaqusProjects，仓库外）：
+真机验证（Abaqus 2025，工作目录为仓库外一次性验证目录，路径已退役）：
 
 | 阶段 | 结果 | 证据 |
 |------|------|------|

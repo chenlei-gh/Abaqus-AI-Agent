@@ -13,7 +13,7 @@ import os
 import sys
 import time
 
-REPO = r"D:/Vault/Abaqus/Abaqus-AI-Agent"
+REPO = os.environ["ABQAI_REPO"]
 TAG = os.environ.get("ABQAI_TAG", "native_box")
 STEP = os.environ.get("ABQAI_STEP", "")
 BODY = int(os.environ.get("ABQAI_BODY", "1"))

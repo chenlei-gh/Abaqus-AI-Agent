@@ -9,7 +9,7 @@
   "job": "DynamicGoldenJob",
   "process_succeeded": true,
   "return_code": 0,
-  "launcher": "C:\\SIMULIA\\Commands\\abaqus.bat",
+  "launcher": "<ABAQUS_LAUNCHER>",
   "workdir": "<REPO_ROOT>",
   "odb": {
     "path": "<REPO_ROOT>\\machine_validation\\DynamicGoldenJob.odb",
@@ -18,7 +18,7 @@
   },
   "solver_status": "completed",
   "runtime": {
-    "launcher": "C:\\SIMULIA\\Commands\\abaqus.bat",
+    "launcher": "<ABAQUS_LAUNCHER>",
     "workdir": "<REPO_ROOT>",
     "process_succeeded": true,
     "return_code": 0,

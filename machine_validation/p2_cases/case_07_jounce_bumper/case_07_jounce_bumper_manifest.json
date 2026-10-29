@@ -23,7 +23,7 @@
   },
   "solver_evidence": {
     "run_id": "case07_live_e7301de3",
-    "launcher": "C:/SIMULIA/Commands/abaqus.bat",
+    "launcher": "<ABAQUS_LAUNCHER>",
     "seat_job": {
       "solver": "Abaqus/Standard",
       "step": "Step1Seating (0.50 mm interference seating)",

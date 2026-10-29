@@ -1,6 +1,6 @@
 {
   "command": [
-    "C:/SIMULIA/Commands/abaqus.bat",
+    "<ABAQUS_LAUNCHER>",
     "cae",
     "noGUI=<REPO_ROOT>\\runs\\runtime_smoke_run\\AIAgent_RuntimeSmoke_script.py"
   ],
@@ -17,7 +17,7 @@
     "required_outputs_present": true,
     "script_completed": true
   },
-  "launcher": "C:/SIMULIA/Commands/abaqus.bat",
+  "launcher": "<ABAQUS_LAUNCHER>",
   "process_succeeded": true,
   "return_code": 0,
   "script": "<REPO_ROOT>\\runs\\runtime_smoke_run\\AIAgent_RuntimeSmoke_script.py",

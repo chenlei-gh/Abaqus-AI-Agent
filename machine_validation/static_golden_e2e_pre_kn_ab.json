@@ -1,11 +1,11 @@
 {
   "case": "3d_cantilever_static",
   "command": [
-    "C:\\SIMULIA\\Commands\\abaqus.bat",
+    "<ABAQUS_LAUNCHER>",
     "cae",
-    "noGUI=D:\\AbaqusProjects\\static_golden_pre_kn\\static_golden_e2e_script.py"
+    "noGUI=<RETIRED_RUN>/static_golden_pre_kn\\static_golden_e2e_script.py"
   ],
-  "launcher": "C:\\SIMULIA\\Commands\\abaqus.bat",
+  "launcher": "<ABAQUS_LAUNCHER>",
   "process_succeeded": true,
   "report": {
     "acceptance": {
@@ -344,7 +344,7 @@
         "items": [
           {
             "kind": "odb_summary",
-            "locator": "D:\\AbaqusProjects\\static_golden_pre_kn\\StaticGoldenJob.odb",
+            "locator": "<RETIRED_RUN>/static_golden_pre_kn\\StaticGoldenJob.odb",
             "metadata": {},
             "source": "odb",
             "unit": "",
@@ -825,7 +825,7 @@
           "exists": true,
           "job_name": "StaticGoldenJob",
           "modified_time": 1793083984.26197,
-          "path": "D:\\AbaqusProjects\\static_golden_pre_kn\\StaticGoldenJob.inp",
+          "path": "<RETIRED_RUN>/static_golden_pre_kn\\StaticGoldenJob.inp",
           "size": 88163,
           "suffix": ".inp"
         },
@@ -833,7 +833,7 @@
           "exists": true,
           "job_name": "StaticGoldenJob",
           "modified_time": 1793083998.76717,
-          "path": "D:\\AbaqusProjects\\static_golden_pre_kn\\StaticGoldenJob.odb",
+          "path": "<RETIRED_RUN>/static_golden_pre_kn\\StaticGoldenJob.odb",
           "size": 350664,
           "suffix": ".odb"
         },
@@ -841,7 +841,7 @@
           "exists": true,
           "job_name": "StaticGoldenJob",
           "modified_time": 1793083998.63096,
-          "path": "D:\\AbaqusProjects\\static_golden_pre_kn\\StaticGoldenJob.sta",
+          "path": "<RETIRED_RUN>/static_golden_pre_kn\\StaticGoldenJob.sta",
           "size": 443,
           "suffix": ".sta"
         },
@@ -849,7 +849,7 @@
           "exists": true,
           "job_name": "StaticGoldenJob",
           "modified_time": 1793083998.63096,
-          "path": "D:\\AbaqusProjects\\static_golden_pre_kn\\StaticGoldenJob.msg",
+          "path": "<RETIRED_RUN>/static_golden_pre_kn\\StaticGoldenJob.msg",
           "size": 7996,
           "suffix": ".msg"
         },
@@ -857,7 +857,7 @@
           "exists": true,
           "job_name": "StaticGoldenJob",
           "modified_time": 1793083998.63096,
-          "path": "D:\\AbaqusProjects\\static_golden_pre_kn\\StaticGoldenJob.dat",
+          "path": "<RETIRED_RUN>/static_golden_pre_kn\\StaticGoldenJob.dat",
           "size": 9493,
           "suffix": ".dat"
         },
@@ -865,7 +865,7 @@
           "exists": true,
           "job_name": "StaticGoldenJob",
           "modified_time": 1793083999.51549,
-          "path": "D:\\AbaqusProjects\\static_golden_pre_kn\\StaticGoldenJob.log",
+          "path": "<RETIRED_RUN>/static_golden_pre_kn\\StaticGoldenJob.log",
           "size": 677,
           "suffix": ".log"
         },
@@ -873,7 +873,7 @@
           "exists": true,
           "job_name": "StaticGoldenJob",
           "modified_time": 1793083984.59047,
-          "path": "D:\\AbaqusProjects\\static_golden_pre_kn\\StaticGoldenJob.com",
+          "path": "<RETIRED_RUN>/static_golden_pre_kn\\StaticGoldenJob.com",
           "size": 3532,
           "suffix": ".com"
         },
@@ -881,7 +881,7 @@
           "exists": true,
           "job_name": "StaticGoldenJob",
           "modified_time": 1793083998.77017,
-          "path": "D:\\AbaqusProjects\\static_golden_pre_kn\\StaticGoldenJob.prt",
+          "path": "<RETIRED_RUN>/static_golden_pre_kn\\StaticGoldenJob.prt",
           "size": 1471,
           "suffix": ".prt"
         }
@@ -937,7 +937,7 @@
         },
         "state": "COMPLETED"
       },
-      "odb_path": "D:\\AbaqusProjects\\static_golden_pre_kn\\StaticGoldenJob.odb"
+      "odb_path": "<RETIRED_RUN>/static_golden_pre_kn\\StaticGoldenJob.odb"
     },
     "status": "pass",
     "theory": {
@@ -953,9 +953,9 @@
     }
   },
   "return_code": 0,
-  "script": "D:\\AbaqusProjects\\static_golden_pre_kn\\static_golden_e2e_script.py",
+  "script": "<RETIRED_RUN>/static_golden_pre_kn\\static_golden_e2e_script.py",
   "status": "pass",
   "stderr": "Abaqus License Manager checked out the following license:\n\"cae\" from Flexnet server DESKTOP-9EAL2I4\n<9998 out of 9999 licenses remain available>.\n",
   "stdout": "",
-  "workdir": "D:\\AbaqusProjects\\static_golden_pre_kn"
+  "workdir": "<RETIRED_RUN>/static_golden_pre_kn"
 }

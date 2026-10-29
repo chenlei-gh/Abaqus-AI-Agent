@@ -1,7 +1,7 @@
 {
   "requirement": "REQ-4.8",
   "claim": "Classifier disposition matches the deck Abaqus/CAE 2025 writes. This is not a solved plasticity qualification and not a catalog identification.",
-  "launcher": "C:\\SIMULIA\\Commands\\abaqus.bat",
+  "launcher": "<ABAQUS_LAUNCHER>",
   "solver_invoked": false,
   "cases": [
     {

@@ -1033,562 +1033,562 @@
     {
       "source_file": "machine_validation/b28_smoke.json",
       "line": 5,
-      "text": "\"noGUI=D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\\\\AIAgent_B28Smoke_script.py\""
+      "text": "\"noGUI=<REPO_ROOT>\\\\machine_validation\\\\AIAgent_B28Smoke_script.py\""
     },
     {
       "source_file": "machine_validation/b28_smoke.json",
       "line": 23,
-      "text": "\"script\": \"D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\\\\AIAgent_B28Smoke_script.py\","
+      "text": "\"script\": \"<REPO_ROOT>\\\\machine_validation\\\\AIAgent_B28Smoke_script.py\","
     },
     {
       "source_file": "machine_validation/dynamic_golden_e2e.json",
       "line": 4,
-      "text": "\"workdir\": \"D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\","
+      "text": "\"workdir\": \"<REPO_ROOT>\\\\machine_validation\","
     },
     {
       "source_file": "machine_validation/dynamic_golden_e2e.json",
       "line": 5,
-      "text": "\"script\": \"D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\\\\machine_validation\\\\dynamic_golden_e2e_script.py\","
+      "text": "\"script\": \"<REPO_ROOT>\\\\machine_validation\\\\machine_validation\\\\dynamic_golden_e2e_script.py\","
     },
     {
       "source_file": "machine_validation/dynamic_golden_e2e.json",
       "line": 10,
-      "text": "\"noGUI=D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\\\\machine_validation\\\\dynamic_golden_e2e_script.py\""
+      "text": "\"noGUI=<REPO_ROOT>\\\\machine_validation\\\\machine_validation\\\\dynamic_golden_e2e_script.py\""
     },
     {
       "source_file": "machine_validation/dynamic_golden_e2e.json",
       "line": 510,
-      "text": "\"odb_path\": \"D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\\\\DynamicGoldenJob.odb\""
+      "text": "\"odb_path\": \"<REPO_ROOT>\\\\machine_validation\\\\DynamicGoldenJob.odb\""
     },
     {
       "source_file": "machine_validation/explicit_golden_e2e.json",
       "line": 4,
-      "text": "\"workdir\": \"D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\","
+      "text": "\"workdir\": \"<REPO_ROOT>\\\\machine_validation\","
     },
     {
       "source_file": "machine_validation/explicit_golden_e2e.json",
       "line": 5,
-      "text": "\"script\": \"D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\\\\explicit_golden_e2e_script.py\","
+      "text": "\"script\": \"<REPO_ROOT>\\\\machine_validation\\\\explicit_golden_e2e_script.py\","
     },
     {
       "source_file": "machine_validation/explicit_golden_e2e.json",
       "line": 10,
-      "text": "\"noGUI=D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\\\\explicit_golden_e2e_script.py\""
+      "text": "\"noGUI=<REPO_ROOT>\\\\machine_validation\\\\explicit_golden_e2e_script.py\""
     },
     {
       "source_file": "machine_validation/explicit_golden_e2e.json",
       "line": 413,
-      "text": "\"odb_path\": \"D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\\\\ExplicitGoldenJob.odb\""
+      "text": "\"odb_path\": \"<REPO_ROOT>\\\\machine_validation\\\\ExplicitGoldenJob.odb\""
     },
     {
       "source_file": "machine_validation/fatigue_odb_golden_e2e.json",
       "line": 15,
-      "text": "\"path\": \"D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\\\\DynamicGoldenJob.odb\","
+      "text": "\"path\": \"<REPO_ROOT>\\\\machine_validation\\\\DynamicGoldenJob.odb\","
     },
     {
       "source_file": "machine_validation/fatigue_odb_golden_e2e.json",
       "line": 79,
-      "text": "\"odb_source\": \"D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\\\\DynamicGoldenJob.odb\","
+      "text": "\"odb_source\": \"<REPO_ROOT>\\\\machine_validation\\\\DynamicGoldenJob.odb\","
     },
     {
       "source_file": "machine_validation/fmbd4_rigid_flexible_golden_e2e.json",
       "line": 70,
-      "text": "\"path\": \"D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\\\\FMBD4GoldenJob.odb\""
+      "text": "\"path\": \"<REPO_ROOT>\\\\machine_validation\\\\FMBD4GoldenJob.odb\""
     },
     {
       "source_file": "machine_validation/fmbd4_rigid_flexible_golden_e2e.json",
       "line": 74,
-      "text": "\"path\": \"D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\\\\FMBD4GoldenJob_fmbd4_script.py\""
+      "text": "\"path\": \"<REPO_ROOT>\\\\machine_validation\\\\FMBD4GoldenJob_fmbd4_script.py\""
     },
     {
       "source_file": "machine_validation/fmbd4_rigid_flexible_golden_e2e.json",
       "line": 169,
-      "text": "\"odb_path\": \"D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\\\\FMBD4GoldenJob.odb\","
+      "text": "\"odb_path\": \"<REPO_ROOT>\\\\machine_validation\\\\FMBD4GoldenJob.odb\","
     },
     {
       "source_file": "machine_validation/fmbd4_rigid_flexible_golden_e2e.json",
       "line": 232,
-      "text": "\"odb_path\": \"D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\\\\FMBD4GoldenJob.odb\","
+      "text": "\"odb_path\": \"<REPO_ROOT>\\\\machine_validation\\\\FMBD4GoldenJob.odb\","
     },
     {
       "source_file": "machine_validation/fmbd4_rigid_flexible_golden_e2e.json",
       "line": 237,
-      "text": "\"script\": \"D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\\\\FMBD4GoldenJob_fmbd4_script.py\","
+      "text": "\"script\": \"<REPO_ROOT>\\\\machine_validation\\\\FMBD4GoldenJob_fmbd4_script.py\","
     },
     {
       "source_file": "machine_validation/fmbd4_rigid_flexible_golden_e2e.json",
       "line": 260,
-      "text": "\"workdir\": \"D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\""
+      "text": "\"workdir\": \"<REPO_ROOT>\\\\machine_validation\""
     },
     {
       "source_file": "machine_validation/fmbd5_crank_slider_golden_e2e.json",
       "line": 88,
-      "text": "\"path\": \"D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\\\\FMBD5GoldenJob.odb\""
+      "text": "\"path\": \"<REPO_ROOT>\\\\machine_validation\\\\FMBD5GoldenJob.odb\""
     },
     {
       "source_file": "machine_validation/fmbd5_crank_slider_golden_e2e.json",
       "line": 92,
-      "text": "\"path\": \"D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\\\\FMBD5GoldenJob_fmbd5_script.py\""
+      "text": "\"path\": \"<REPO_ROOT>\\\\machine_validation\\\\FMBD5GoldenJob_fmbd5_script.py\""
     },
     {
       "source_file": "machine_validation/fmbd5_crank_slider_golden_e2e.json",
       "line": 214,
-      "text": "\"odb_path\": \"D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\\\\FMBD5GoldenJob.odb\","
+      "text": "\"odb_path\": \"<REPO_ROOT>\\\\machine_validation\\\\FMBD5GoldenJob.odb\","
     },
     {
       "source_file": "machine_validation/fmbd5_crank_slider_golden_e2e.json",
       "line": 311,
-      "text": "\"odb_path\": \"D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\\\\FMBD5GoldenJob.odb\","
+      "text": "\"odb_path\": \"<REPO_ROOT>\\\\machine_validation\\\\FMBD5GoldenJob.odb\","
     },
     {
       "source_file": "machine_validation/fmbd5_crank_slider_golden_e2e.json",
       "line": 316,
-      "text": "\"script\": \"D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\\\\FMBD5GoldenJob_fmbd5_script.py\","
+      "text": "\"script\": \"<REPO_ROOT>\\\\machine_validation\\\\FMBD5GoldenJob_fmbd5_script.py\","
     },
     {
       "source_file": "machine_validation/fmbd5_crank_slider_golden_e2e.json",
       "line": 355,
-      "text": "\"workdir\": \"D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\""
+      "text": "\"workdir\": \"<REPO_ROOT>\\\\machine_validation\""
     },
     {
       "source_file": "machine_validation/ga3_real_machine_evidence.json",
       "line": 30,
-      "text": "\"source_path\": \"D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\\\\ga3_qualification_workdir\\\\G3_R1_Concurrency\\\\sa"
+      "text": "\"source_path\": \"<REPO_ROOT>\\\\machine_validation\\\\ga3_qualification_workdir\\\\G3_R1_Concurrency\\\\sa"
     },
     {
       "source_file": "machine_validation/ga3_real_machine_evidence.json",
       "line": 31,
-      "text": "\"target_path\": \"D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\\\\ga3_qualification_workdir\\\\G3_R1_Concurrency\\\\pr"
+      "text": "\"target_path\": \"<REPO_ROOT>\\\\machine_validation\\\\ga3_qualification_workdir\\\\G3_R1_Concurrency\\\\pr"
     },
     {
       "source_file": "machine_validation/ga3_real_machine_evidence.json",
       "line": 38,
-      "text": "\"source_path\": \"D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\\\\ga3_qualification_workdir\\\\G3_R1_Concurrency\\\\sa"
+      "text": "\"source_path\": \"<REPO_ROOT>\\\\machine_validation\\\\ga3_qualification_workdir\\\\G3_R1_Concurrency\\\\sa"
     },
     {
       "source_file": "machine_validation/ga3_real_machine_evidence.json",
       "line": 39,
-      "text": "\"target_path\": \"D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\\\\ga3_qualification_workdir\\\\G3_R1_Concurrency\\\\pr"
+      "text": "\"target_path\": \"<REPO_ROOT>\\\\machine_validation\\\\ga3_qualification_workdir\\\\G3_R1_Concurrency\\\\pr"
     },
     {
       "source_file": "machine_validation/ga3_real_machine_evidence.json",
       "line": 46,
-      "text": "\"source_path\": \"D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\\\\ga3_qualification_workdir\\\\G3_R1_Concurrency\\\\sa"
+      "text": "\"source_path\": \"<REPO_ROOT>\\\\machine_validation\\\\ga3_qualification_workdir\\\\G3_R1_Concurrency\\\\sa"
     },
     {
       "source_file": "machine_validation/ga3_real_machine_evidence.json",
       "line": 47,
-      "text": "\"target_path\": \"D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\\\\ga3_qualification_workdir\\\\G3_R1_Concurrency\\\\pr"
+      "text": "\"target_path\": \"<REPO_ROOT>\\\\machine_validation\\\\ga3_qualification_workdir\\\\G3_R1_Concurrency\\\\pr"
     },
     {
       "source_file": "machine_validation/ga3_real_machine_evidence.json",
       "line": 54,
-      "text": "\"source_path\": \"D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\\\\ga3_qualification_workdir\\\\G3_R1_Concurrency\\\\sa"
+      "text": "\"source_path\": \"<REPO_ROOT>\\\\machine_validation\\\\ga3_qualification_workdir\\\\G3_R1_Concurrency\\\\sa"
     },
     {
       "source_file": "machine_validation/ga3_real_machine_evidence.json",
       "line": 55,
-      "text": "\"target_path\": \"D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\\\\ga3_qualification_workdir\\\\G3_R1_Concurrency\\\\pr"
+      "text": "\"target_path\": \"<REPO_ROOT>\\\\machine_validation\\\\ga3_qualification_workdir\\\\G3_R1_Concurrency\\\\pr"
     },
     {
       "source_file": "machine_validation/ga3_real_machine_evidence.json",
       "line": 62,
-      "text": "\"source_path\": \"D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\\\\ga3_qualification_workdir\\\\G3_R1_Concurrency\\\\sa"
+      "text": "\"source_path\": \"<REPO_ROOT>\\\\machine_validation\\\\ga3_qualification_workdir\\\\G3_R1_Concurrency\\\\sa"
     },
     {
       "source_file": "machine_validation/ga3_real_machine_evidence.json",
       "line": 63,
-      "text": "\"target_path\": \"D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\\\\ga3_qualification_workdir\\\\G3_R1_Concurrency\\\\pr"
+      "text": "\"target_path\": \"<REPO_ROOT>\\\\machine_validation\\\\ga3_qualification_workdir\\\\G3_R1_Concurrency\\\\pr"
     },
     {
       "source_file": "machine_validation/ga3_real_machine_evidence.json",
       "line": 70,
-      "text": "\"source_path\": \"D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\\\\ga3_qualification_workdir\\\\G3_R1_Concurrency\\\\sa"
+      "text": "\"source_path\": \"<REPO_ROOT>\\\\machine_validation\\\\ga3_qualification_workdir\\\\G3_R1_Concurrency\\\\sa"
     },
     {
       "source_file": "machine_validation/ga3_real_machine_evidence.json",
       "line": 71,
-      "text": "\"target_path\": \"D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\\\\ga3_qualification_workdir\\\\G3_R1_Concurrency\\\\pr"
+      "text": "\"target_path\": \"<REPO_ROOT>\\\\machine_validation\\\\ga3_qualification_workdir\\\\G3_R1_Concurrency\\\\pr"
     },
     {
       "source_file": "machine_validation/ga3_real_machine_evidence.json",
       "line": 78,
-      "text": "\"source_path\": \"D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\\\\ga3_qualification_workdir\\\\G3_R1_Concurrency\\\\sa"
+      "text": "\"source_path\": \"<REPO_ROOT>\\\\machine_validation\\\\ga3_qualification_workdir\\\\G3_R1_Concurrency\\\\sa"
     },
     {
       "source_file": "machine_validation/ga3_real_machine_evidence.json",
       "line": 79,
-      "text": "\"target_path\": \"D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\\\\ga3_qualification_workdir\\\\G3_R1_Concurrency\\\\pr"
+      "text": "\"target_path\": \"<REPO_ROOT>\\\\machine_validation\\\\ga3_qualification_workdir\\\\G3_R1_Concurrency\\\\pr"
     },
     {
       "source_file": "machine_validation/ga3_real_machine_evidence.json",
       "line": 100,
-      "text": "\"source_path\": \"D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\\\\ga3_qualification_workdir\\\\G3_R1_Concurrency\\\\sa"
+      "text": "\"source_path\": \"<REPO_ROOT>\\\\machine_validation\\\\ga3_qualification_workdir\\\\G3_R1_Concurrency\\\\sa"
     },
     {
       "source_file": "machine_validation/ga3_real_machine_evidence.json",
       "line": 101,
-      "text": "\"target_path\": \"D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\\\\ga3_qualification_workdir\\\\G3_R1_Concurrency\\\\pr"
+      "text": "\"target_path\": \"<REPO_ROOT>\\\\machine_validation\\\\ga3_qualification_workdir\\\\G3_R1_Concurrency\\\\pr"
     },
     {
       "source_file": "machine_validation/ga3_real_machine_evidence.json",
       "line": 108,
-      "text": "\"source_path\": \"D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\\\\ga3_qualification_workdir\\\\G3_R1_Concurrency\\\\sa"
+      "text": "\"source_path\": \"<REPO_ROOT>\\\\machine_validation\\\\ga3_qualification_workdir\\\\G3_R1_Concurrency\\\\sa"
     },
     {
       "source_file": "machine_validation/ga3_real_machine_evidence.json",
       "line": 109,
-      "text": "\"target_path\": \"D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\\\\ga3_qualification_workdir\\\\G3_R1_Concurrency\\\\pr"
+      "text": "\"target_path\": \"<REPO_ROOT>\\\\machine_validation\\\\ga3_qualification_workdir\\\\G3_R1_Concurrency\\\\pr"
     },
     {
       "source_file": "machine_validation/ga3_real_machine_evidence.json",
       "line": 116,
-      "text": "\"source_path\": \"D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\\\\ga3_qualification_workdir\\\\G3_R1_Concurrency\\\\sa"
+      "text": "\"source_path\": \"<REPO_ROOT>\\\\machine_validation\\\\ga3_qualification_workdir\\\\G3_R1_Concurrency\\\\sa"
     },
     {
       "source_file": "machine_validation/ga3_real_machine_evidence.json",
       "line": 117,
-      "text": "\"target_path\": \"D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\\\\ga3_qualification_workdir\\\\G3_R1_Concurrency\\\\pr"
+      "text": "\"target_path\": \"<REPO_ROOT>\\\\machine_validation\\\\ga3_qualification_workdir\\\\G3_R1_Concurrency\\\\pr"
     },
     {
       "source_file": "machine_validation/ga3_real_machine_evidence.json",
       "line": 124,
-      "text": "\"source_path\": \"D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\\\\ga3_qualification_workdir\\\\G3_R1_Concurrency\\\\sa"
+      "text": "\"source_path\": \"<REPO_ROOT>\\\\machine_validation\\\\ga3_qualification_workdir\\\\G3_R1_Concurrency\\\\sa"
     },
     {
       "source_file": "machine_validation/ga3_real_machine_evidence.json",
       "line": 125,
-      "text": "\"target_path\": \"D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\\\\ga3_qualification_workdir\\\\G3_R1_Concurrency\\\\pr"
+      "text": "\"target_path\": \"<REPO_ROOT>\\\\machine_validation\\\\ga3_qualification_workdir\\\\G3_R1_Concurrency\\\\pr"
     },
     {
       "source_file": "machine_validation/ga3_real_machine_evidence.json",
       "line": 132,
-      "text": "\"source_path\": \"D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\\\\ga3_qualification_workdir\\\\G3_R1_Concurrency\\\\sa"
+      "text": "\"source_path\": \"<REPO_ROOT>\\\\machine_validation\\\\ga3_qualification_workdir\\\\G3_R1_Concurrency\\\\sa"
     },
     {
       "source_file": "machine_validation/ga3_real_machine_evidence.json",
       "line": 133,
-      "text": "\"target_path\": \"D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\\\\ga3_qualification_workdir\\\\G3_R1_Concurrency\\\\pr"
+      "text": "\"target_path\": \"<REPO_ROOT>\\\\machine_validation\\\\ga3_qualification_workdir\\\\G3_R1_Concurrency\\\\pr"
     },
     {
       "source_file": "machine_validation/ga3_real_machine_evidence.json",
       "line": 140,
-      "text": "\"source_path\": \"D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\\\\ga3_qualification_workdir\\\\G3_R1_Concurrency\\\\sa"
+      "text": "\"source_path\": \"<REPO_ROOT>\\\\machine_validation\\\\ga3_qualification_workdir\\\\G3_R1_Concurrency\\\\sa"
     },
     {
       "source_file": "machine_validation/ga3_real_machine_evidence.json",
       "line": 141,
-      "text": "\"target_path\": \"D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\\\\ga3_qualification_workdir\\\\G3_R1_Concurrency\\\\pr"
+      "text": "\"target_path\": \"<REPO_ROOT>\\\\machine_validation\\\\ga3_qualification_workdir\\\\G3_R1_Concurrency\\\\pr"
     },
     {
       "source_file": "machine_validation/ga3_real_machine_evidence.json",
       "line": 148,
-      "text": "\"source_path\": \"D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\\\\ga3_qualification_workdir\\\\G3_R1_Concurrency\\\\sa"
+      "text": "\"source_path\": \"<REPO_ROOT>\\\\machine_validation\\\\ga3_qualification_workdir\\\\G3_R1_Concurrency\\\\sa"
     },
     {
       "source_file": "machine_validation/ga3_real_machine_evidence.json",
       "line": 149,
-      "text": "\"target_path\": \"D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\\\\ga3_qualification_workdir\\\\G3_R1_Concurrency\\\\pr"
+      "text": "\"target_path\": \"<REPO_ROOT>\\\\machine_validation\\\\ga3_qualification_workdir\\\\G3_R1_Concurrency\\\\pr"
     },
     {
       "source_file": "machine_validation/ga3_real_machine_evidence.json",
       "line": 258,
-      "text": "\"persistence_file\": \"D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\\\\ga3_qualification_workdir\\\\G3_R4_CrashRecov"
+      "text": "\"persistence_file\": \"<REPO_ROOT>\\\\machine_validation\\\\ga3_qualification_workdir\\\\G3_R4_CrashRecov"
     },
     {
       "source_file": "machine_validation/general_contact_e2e.json",
       "line": 4,
-      "text": "\"workdir\": \"D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\","
+      "text": "\"workdir\": \"<REPO_ROOT>\\\\machine_validation\","
     },
     {
       "source_file": "machine_validation/general_contact_e2e.json",
       "line": 5,
-      "text": "\"script\": \"D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\\\\general_contact_e2e_script.py\","
+      "text": "\"script\": \"<REPO_ROOT>\\\\machine_validation\\\\general_contact_e2e_script.py\","
     },
     {
       "source_file": "machine_validation/general_contact_e2e.json",
       "line": 10,
-      "text": "\"noGUI=D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\\\\general_contact_e2e_script.py\""
+      "text": "\"noGUI=<REPO_ROOT>\\\\machine_validation\\\\general_contact_e2e_script.py\""
     },
     {
       "source_file": "machine_validation/general_contact_e2e.json",
       "line": 242,
-      "text": "\"odb_path\": \"D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\\\\GeneralContactJob.odb\","
+      "text": "\"odb_path\": \"<REPO_ROOT>\\\\machine_validation\\\\GeneralContactJob.odb\","
     },
     {
       "source_file": "machine_validation/golden_matrix_manifest.json",
       "line": 23,
-      "text": "\"evidence_file\": \"D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\\\\runtime_smoke.json\","
+      "text": "\"evidence_file\": \"<REPO_ROOT>\\\\machine_validation\\\\runtime_smoke.json\","
     },
     {
       "source_file": "machine_validation/golden_matrix_manifest.json",
       "line": 31,
-      "text": "\"script\": \"D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\\\\AIAgent_B28Smoke_script.py\","
+      "text": "\"script\": \"<REPO_ROOT>\\\\machine_validation\\\\AIAgent_B28Smoke_script.py\","
     },
     {
       "source_file": "machine_validation/golden_matrix_manifest.json",
       "line": 35,
-      "text": "\"noGUI=D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\\\\AIAgent_B28Smoke_script.py\""
+      "text": "\"noGUI=<REPO_ROOT>\\\\machine_validation\\\\AIAgent_B28Smoke_script.py\""
     },
     {
       "source_file": "machine_validation/golden_matrix_manifest.json",
       "line": 86,
-      "text": "\"path\": \"D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\\\\AIAgent_B28Smoke_script.py\","
+      "text": "\"path\": \"<REPO_ROOT>\\\\machine_validation\\\\AIAgent_B28Smoke_script.py\","
     },
     {
       "source_file": "machine_validation/golden_matrix_manifest.json",
       "line": 96,
-      "text": "\"script\": \"D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\\\\AIAgent_B28Smoke_script.py\","
+      "text": "\"script\": \"<REPO_ROOT>\\\\machine_validation\\\\AIAgent_B28Smoke_script.py\","
     },
     {
       "source_file": "machine_validation/golden_matrix_manifest.json",
       "line": 110,
-      "text": "\"evidence_file\": \"D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\\\\static_golden_e2e.json\","
+      "text": "\"evidence_file\": \"<REPO_ROOT>\\\\machine_validation\\\\static_golden_e2e.json\","
     },
     {
       "source_file": "machine_validation/golden_matrix_manifest.json",
       "line": 118,
-      "text": "\"script\": \"D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\\\\static_golden_e2e_script.py\","
+      "text": "\"script\": \"<REPO_ROOT>\\\\machine_validation\\\\static_golden_e2e_script.py\","
     },
     {
       "source_file": "machine_validation/golden_matrix_manifest.json",
       "line": 122,
-      "text": "\"noGUI=D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\\\\static_golden_e2e_script.py\""
+      "text": "\"noGUI=<REPO_ROOT>\\\\machine_validation\\\\static_golden_e2e_script.py\""
     },
     {
       "source_file": "machine_validation/golden_matrix_manifest.json",
       "line": 648,
-      "text": "\"evidence_file\": \"D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\\\\mesh_convergence_e2e.json\","
+      "text": "\"evidence_file\": \"<REPO_ROOT>\\\\machine_validation\\\\mesh_convergence_e2e.json\","
     },
     {
       "source_file": "machine_validation/golden_matrix_manifest.json",
       "line": 656,
-      "text": "\"script\": \"D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\\\\mesh_convergence_e2e_script.py\","
+      "text": "\"script\": \"<REPO_ROOT>\\\\machine_validation\\\\mesh_convergence_e2e_script.py\","
     },
     {
       "source_file": "machine_validation/golden_matrix_manifest.json",
       "line": 660,
-      "text": "\"noGUI=D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\\\\mesh_convergence_e2e_script.py\""
+      "text": "\"noGUI=<REPO_ROOT>\\\\machine_validation\\\\mesh_convergence_e2e_script.py\""
     },
     {
       "source_file": "machine_validation/golden_matrix_manifest.json",
       "line": 791,
-      "text": "\"path\": \"D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\\\\mesh_convergence_e2e_script.py\","
+      "text": "\"path\": \"<REPO_ROOT>\\\\machine_validation\\\\mesh_convergence_e2e_script.py\","
     },
     {
       "source_file": "machine_validation/golden_matrix_manifest.json",
       "line": 801,
-      "text": "\"script\": \"D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\\\\mesh_convergence_e2e_script.py\","
+      "text": "\"script\": \"<REPO_ROOT>\\\\machine_validation\\\\mesh_convergence_e2e_script.py\","
     },
     {
       "source_file": "machine_validation/golden_matrix_manifest.json",
       "line": 815,
-      "text": "\"evidence_file\": \"D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\\\\tie_contact_e2e.json\","
+      "text": "\"evidence_file\": \"<REPO_ROOT>\\\\machine_validation\\\\tie_contact_e2e.json\","
     },
     {
       "source_file": "machine_validation/golden_matrix_manifest.json",
       "line": 823,
-      "text": "\"script\": \"D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\\\\tie_contact_e2e_script.py\","
+      "text": "\"script\": \"<REPO_ROOT>\\\\machine_validation\\\\tie_contact_e2e_script.py\","
     },
     {
       "source_file": "machine_validation/golden_matrix_manifest.json",
       "line": 827,
-      "text": "\"noGUI=D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\\\\tie_contact_e2e_script.py\""
+      "text": "\"noGUI=<REPO_ROOT>\\\\machine_validation\\\\tie_contact_e2e_script.py\""
     },
     {
       "source_file": "machine_validation/golden_matrix_manifest.json",
       "line": 1423,
-      "text": "\"evidence_file\": \"D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\\\\dynamic_golden_e2e.json\","
+      "text": "\"evidence_file\": \"<REPO_ROOT>\\\\machine_validation\\\\dynamic_golden_e2e.json\","
     },
     {
       "source_file": "machine_validation/golden_matrix_manifest.json",
       "line": 1431,
-      "text": "\"script\": \"D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\\\\dynamic_golden_e2e_script.py\","
+      "text": "\"script\": \"<REPO_ROOT>\\\\machine_validation\\\\dynamic_golden_e2e_script.py\","
     },
     {
       "source_file": "machine_validation/golden_matrix_manifest.json",
       "line": 1435,
-      "text": "\"noGUI=D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\\\\dynamic_golden_e2e_script.py\""
+      "text": "\"noGUI=<REPO_ROOT>\\\\machine_validation\\\\dynamic_golden_e2e_script.py\""
     },
     {
       "source_file": "machine_validation/golden_matrix_manifest.json",
       "line": 1751,
-      "text": "\"evidence_file\": \"D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\\\\thermal_golden_e2e.json\","
+      "text": "\"evidence_file\": \"<REPO_ROOT>\\\\machine_validation\\\\thermal_golden_e2e.json\","
     },
     {
       "source_file": "machine_validation/golden_matrix_manifest.json",
       "line": 1758,
-      "text": "\"workdir\": \"D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\","
+      "text": "\"workdir\": \"<REPO_ROOT>\\\\machine_validation\","
     },
     {
       "source_file": "machine_validation/golden_matrix_manifest.json",
       "line": 1759,
-      "text": "\"script\": \"D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\\\\thermal_golden_e2e_script.py\","
+      "text": "\"script\": \"<REPO_ROOT>\\\\machine_validation\\\\thermal_golden_e2e_script.py\","
     },
     {
       "source_file": "machine_validation/golden_matrix_manifest.json",
       "line": 1763,
-      "text": "\"noGUI=D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\\\\thermal_golden_e2e_script.py\""
+      "text": "\"noGUI=<REPO_ROOT>\\\\machine_validation\\\\thermal_golden_e2e_script.py\""
     },
     {
       "source_file": "machine_validation/golden_matrix_manifest.json",
       "line": 1773,
-      "text": "\"path\": \"D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\\\\ThermalGoldenJob.odb\","
+      "text": "\"path\": \"<REPO_ROOT>\\\\machine_validation\\\\ThermalGoldenJob.odb\","
     },
     {
       "source_file": "machine_validation/golden_matrix_manifest.json",
       "line": 1934,
-      "text": "\"locator\": \"D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\\\\ThermalGoldenJob.odb\","
+      "text": "\"locator\": \"<REPO_ROOT>\\\\machine_validation\\\\ThermalGoldenJob.odb\","
     },
     {
       "source_file": "machine_validation/golden_matrix_manifest.json",
       "line": 2381,
-      "text": "\"evidence_file\": \"D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\\\\general_contact_e2e.json\","
+      "text": "\"evidence_file\": \"<REPO_ROOT>\\\\machine_validation\\\\general_contact_e2e.json\","
     },
     {
       "source_file": "machine_validation/golden_matrix_manifest.json",
       "line": 2388,
-      "text": "\"workdir\": \"D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\","
+      "text": "\"workdir\": \"<REPO_ROOT>\\\\machine_validation\","
     },
     {
       "source_file": "machine_validation/golden_matrix_manifest.json",
       "line": 2389,
-      "text": "\"script\": \"D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\\\\general_contact_e2e_script.py\","
+      "text": "\"script\": \"<REPO_ROOT>\\\\machine_validation\\\\general_contact_e2e_script.py\","
     },
     {
       "source_file": "machine_validation/golden_matrix_manifest.json",
       "line": 2393,
-      "text": "\"noGUI=D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\\\\general_contact_e2e_script.py\""
+      "text": "\"noGUI=<REPO_ROOT>\\\\machine_validation\\\\general_contact_e2e_script.py\""
     },
     {
       "source_file": "machine_validation/golden_matrix_manifest.json",
       "line": 2403,
-      "text": "\"path\": \"D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\\\\GeneralContactJob.odb\","
+      "text": "\"path\": \"<REPO_ROOT>\\\\machine_validation\\\\GeneralContactJob.odb\","
     },
     {
       "source_file": "machine_validation/golden_matrix_manifest.json",
       "line": 2735,
-      "text": "\"evidence_file\": \"D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\\\\mbd_golden_e2e.json\","
+      "text": "\"evidence_file\": \"<REPO_ROOT>\\\\machine_validation\\\\mbd_golden_e2e.json\","
     },
     {
       "source_file": "machine_validation/golden_matrix_manifest.json",
       "line": 2743,
-      "text": "\"script\": \"D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\\\\mbd_golden_e2e_script.py\","
+      "text": "\"script\": \"<REPO_ROOT>\\\\machine_validation\\\\mbd_golden_e2e_script.py\","
     },
     {
       "source_file": "machine_validation/golden_matrix_manifest.json",
       "line": 2747,
-      "text": "\"noGUI=D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\\\\mbd_golden_e2e_script.py\""
+      "text": "\"noGUI=<REPO_ROOT>\\\\machine_validation\\\\mbd_golden_e2e_script.py\""
     },
     {
       "source_file": "machine_validation/golden_matrix_manifest.json",
       "line": 3027,
-      "text": "\"evidence_file\": \"D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\\\\mbd2_revolute_golden_e2e.json\","
+      "text": "\"evidence_file\": \"<REPO_ROOT>\\\\machine_validation\\\\mbd2_revolute_golden_e2e.json\","
     },
     {
       "source_file": "machine_validation/golden_matrix_manifest.json",
       "line": 3035,
-      "text": "\"script\": \"D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\\\\AIAgent_MBD2RevoluteGolden_script.py\","
+      "text": "\"script\": \"<REPO_ROOT>\\\\machine_validation\\\\AIAgent_MBD2RevoluteGolden_script.py\","
     },
     {
       "source_file": "machine_validation/golden_matrix_manifest.json",
       "line": 3039,
-      "text": "\"noGUI=D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\\\\AIAgent_MBD2RevoluteGolden_script.py\""
+      "text": "\"noGUI=<REPO_ROOT>\\\\machine_validation\\\\AIAgent_MBD2RevoluteGolden_script.py\""
     },
     {
       "source_file": "machine_validation/golden_matrix_manifest.json",
       "line": 3049,
-      "text": "\"path\": \"D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\\\\MBD2GoldenJob.odb\","
+      "text": "\"path\": \"<REPO_ROOT>\\\\machine_validation\\\\MBD2GoldenJob.odb\","
     },
     {
       "source_file": "machine_validation/golden_matrix_manifest.json",
       "line": 3116,
-      "text": "\"path\": \"D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\\\\AIAgent_MBD2RevoluteGolden_script.py\","
+      "text": "\"path\": \"<REPO_ROOT>\\\\machine_validation\\\\AIAgent_MBD2RevoluteGolden_script.py\","
     },
     {
       "source_file": "machine_validation/golden_matrix_manifest.json",
       "line": 3120,
-      "text": "\"path\": \"D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\\\\MBD2GoldenJob.odb\","
+      "text": "\"path\": \"<REPO_ROOT>\\\\machine_validation\\\\MBD2GoldenJob.odb\","
     },
     {
       "source_file": "machine_validation/golden_matrix_manifest.json",
       "line": 3139,
-      "text": "\"evidence_file\": \"D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\\\\fmbd4_rigid_flexible_golden_e2e.json\","
+      "text": "\"evidence_file\": \"<REPO_ROOT>\\\\machine_validation\\\\fmbd4_rigid_flexible_golden_e2e.json\","
     },
     {
       "source_file": "machine_validation/golden_matrix_manifest.json",
       "line": 3147,
-      "text": "\"script\": \"D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\\\\FMBD4GoldenJob_fmbd4_script.py\","
+      "text": "\"script\": \"<REPO_ROOT>\\\\machine_validation\\\\FMBD4GoldenJob_fmbd4_script.py\","
     },
     {
       "source_file": "machine_validation/golden_matrix_manifest.json",
       "line": 3239,
-      "text": "\"path\": \"D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\\\\FMBD4GoldenJob_fmbd4_script.py\""
+      "text": "\"path\": \"<REPO_ROOT>\\\\machine_validation\\\\FMBD4GoldenJob_fmbd4_script.py\""
     },
     {
       "source_file": "machine_validation/golden_matrix_manifest.json",
       "line": 3258,
-      "text": "\"evidence_file\": \"D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\\\\fmbd5_crank_slider_golden_e2e.json\","
+      "text": "\"evidence_file\": \"<REPO_ROOT>\\\\machine_validation\\\\fmbd5_crank_slider_golden_e2e.json\","
     },
     {
       "source_file": "machine_validation/golden_matrix_manifest.json",
       "line": 3265,
-      "text": "\"workdir\": \"D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\","
+      "text": "\"workdir\": \"<REPO_ROOT>\\\\machine_validation\","
     },
     {
       "source_file": "machine_validation/golden_matrix_manifest.json",
       "line": 3266,
-      "text": "\"script\": \"D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\\\\FMBD5GoldenJob_fmbd5_script.py\","
+      "text": "\"script\": \"<REPO_ROOT>\\\\machine_validation\\\\FMBD5GoldenJob_fmbd5_script.py\","
     },
     {
       "source_file": "machine_validation/golden_matrix_manifest.json",
       "line": 3276,
-      "text": "\"path\": \"D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\\\\FMBD5GoldenJob.odb\","
+      "text": "\"path\": \"<REPO_ROOT>\\\\machine_validation\\\\FMBD5GoldenJob.odb\","
     },
     {
       "source_file": "machine_validation/golden_matrix_manifest.json",
       "line": 3388,
-      "text": "\"path\": \"D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\\\\FMBD5GoldenJob.odb\""
+      "text": "\"path\": \"<REPO_ROOT>\\\\machine_validation\\\\FMBD5GoldenJob.odb\""
     },
     {
       "source_file": "machine_validation/golden_matrix_manifest.json",
       "line": 3392,
-      "text": "\"path\": \"D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\\\\FMBD5GoldenJob_fmbd5_script.py\""
+      "text": "\"path\": \"<REPO_ROOT>\\\\machine_validation\\\\FMBD5GoldenJob_fmbd5_script.py\""
     },
     {
       "source_file": "machine_validation/golden_matrix_manifest.json",
       "line": 3412,
-      "text": "\"evidence_file\": \"D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\\\\explicit_golden_e2e.json\","
+      "text": "\"evidence_file\": \"<REPO_ROOT>\\\\machine_validation\\\\explicit_golden_e2e.json\","
     },
     {
       "source_file": "machine_validation/golden_matrix_manifest.json",
       "line": 3419,
-      "text": "\"workdir\": \"D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\","
+      "text": "\"workdir\": \"<REPO_ROOT>\\\\machine_validation\","
     },
     {
       "source_file": "machine_validation/golden_matrix_manifest.json",
       "line": 3420,
-      "text": "\"script\": \"D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\\\\explicit_golden_e2e_script.py\","
+      "text": "\"script\": \"<REPO_ROOT>\\\\machine_validation\\\\explicit_golden_e2e_script.py\","
     },
     {
       "source_file": "machine_validation/golden_matrix_manifest.json",
       "line": 3424,
-      "text": "\"noGUI=D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\\\\explicit_golden_e2e_script.py\""
+      "text": "\"noGUI=<REPO_ROOT>\\\\machine_validation\\\\explicit_golden_e2e_script.py\""
     },
     {
       "source_file": "machine_validation/golden_matrix_manifest.json",
       "line": 3434,
-      "text": "\"path\": \"D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\\\\ExplicitGoldenJob.odb\","
+      "text": "\"path\": \"<REPO_ROOT>\\\\machine_validation\\\\ExplicitGoldenJob.odb\","
     },
     {
       "source_file": "machine_validation/golden_matrix_manifest.json",
       "line": 3740,
-      "text": "\"evidence_file\": \"D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\\\\fatigue_odb_golden_e2e.json\","
+      "text": "\"evidence_file\": \"<REPO_ROOT>\\\\machine_validation\\\\fatigue_odb_golden_e2e.json\","
     },
     {
       "source_file": "machine_validation/golden_matrix_manifest.json",
       "line": 3747,
-      "text": "\"workdir\": \"D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\","
+      "text": "\"workdir\": \"<REPO_ROOT>\\\\machine_validation\","
     },
     {
       "source_file": "machine_validation/h1_engineering_report_evidence.json",
@@ -1608,72 +1608,72 @@
     {
       "source_file": "machine_validation/i1_case_matrix_summary.json",
       "line": 12,
-      "text": "\"evidence_file\": \"D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\\\\static_golden_e2e.json\","
+      "text": "\"evidence_file\": \"<REPO_ROOT>\\\\machine_validation\\\\static_golden_e2e.json\","
     },
     {
       "source_file": "machine_validation/i1_case_matrix_summary.json",
       "line": 523,
-      "text": "\"evidence_file\": \"D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\\\\thermal_golden_e2e.json\","
+      "text": "\"evidence_file\": \"<REPO_ROOT>\\\\machine_validation\\\\thermal_golden_e2e.json\","
     },
     {
       "source_file": "machine_validation/i1_case_matrix_summary.json",
       "line": 700,
-      "text": "\"locator\": \"D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\\\\ThermalGoldenJob.odb\","
+      "text": "\"locator\": \"<REPO_ROOT>\\\\machine_validation\\\\ThermalGoldenJob.odb\","
     },
     {
       "source_file": "machine_validation/i1_case_matrix_summary.json",
       "line": 1131,
-      "text": "\"evidence_file\": \"D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\\\\dynamic_golden_e2e.json\","
+      "text": "\"evidence_file\": \"<REPO_ROOT>\\\\machine_validation\\\\dynamic_golden_e2e.json\","
     },
     {
       "source_file": "machine_validation/i1_case_matrix_summary.json",
       "line": 1387,
-      "text": "\"evidence_file\": \"D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\\\\general_contact_e2e.json\","
+      "text": "\"evidence_file\": \"<REPO_ROOT>\\\\machine_validation\\\\general_contact_e2e.json\","
     },
     {
       "source_file": "machine_validation/i1_case_matrix_summary.json",
       "line": 1732,
-      "text": "\"evidence_file\": \"D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\\\\fatigue_odb_golden_e2e.json\","
+      "text": "\"evidence_file\": \"<REPO_ROOT>\\\\machine_validation\\\\fatigue_odb_golden_e2e.json\","
     },
     {
       "source_file": "machine_validation/i1_case_matrix_summary.json",
       "line": 1773,
-      "text": "\"odb_source\": \"D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\\\\DynamicGoldenJob.odb\","
+      "text": "\"odb_source\": \"<REPO_ROOT>\\\\machine_validation\\\\DynamicGoldenJob.odb\","
     },
     {
       "source_file": "machine_validation/i1_case_matrix_summary.json",
       "line": 1811,
-      "text": "\"evidence_file\": \"D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\\\\fmbd4_rigid_flexible_golden_e2e.json\","
+      "text": "\"evidence_file\": \"<REPO_ROOT>\\\\machine_validation\\\\fmbd4_rigid_flexible_golden_e2e.json\","
     },
     {
       "source_file": "machine_validation/i1_case_matrix_summary.json",
       "line": 1907,
-      "text": "\"evidence_file\": \"D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\\\\mesh_convergence_e2e.json\","
+      "text": "\"evidence_file\": \"<REPO_ROOT>\\\\machine_validation\\\\mesh_convergence_e2e.json\","
     },
     {
       "source_file": "machine_validation/i1_case_matrix_summary.json",
       "line": 1997,
-      "text": "\"script\": \"D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\\\\mesh_convergence_e2e_script.py\","
+      "text": "\"script\": \"<REPO_ROOT>\\\\machine_validation\\\\mesh_convergence_e2e_script.py\","
     },
     {
       "source_file": "machine_validation/i1_case_matrix_summary.json",
       "line": 2006,
-      "text": "\"evidence_file\": \"D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\\\\h5_solver_failure_diagnostics_evidence.json\","
+      "text": "\"evidence_file\": \"<REPO_ROOT>\\\\machine_validation\\\\h5_solver_failure_diagnostics_evidence.json\","
     },
     {
       "source_file": "machine_validation/i1_case_matrix_summary.json",
       "line": 2043,
-      "text": "\"evidence_file\": \"D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\\\\h6_image_intent_grounding_evidence.json\","
+      "text": "\"evidence_file\": \"<REPO_ROOT>\\\\machine_validation\\\\h6_image_intent_grounding_evidence.json\","
     },
     {
       "source_file": "machine_validation/i3_reproducibility_evidence.json",
       "line": 5,
-      "text": "\"run_a_source\": \"D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\\\\static_golden_e2e.json\","
+      "text": "\"run_a_source\": \"<REPO_ROOT>\\\\machine_validation\\\\static_golden_e2e.json\","
     },
     {
       "source_file": "machine_validation/i3_reproducibility_evidence.json",
       "line": 6,
-      "text": "\"run_b_source\": \"D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\\\\static_golden_run_b.json\","
+      "text": "\"run_b_source\": \"<REPO_ROOT>\\\\machine_validation\\\\static_golden_run_b.json\","
     },
     {
       "source_file": "machine_validation/i6_release_audit_evidence.json",
@@ -2013,552 +2013,552 @@
     {
       "source_file": "machine_validation/mbd2_revolute_golden_e2e.json",
       "line": 5,
-      "text": "\"workdir\": \"D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\","
+      "text": "\"workdir\": \"<REPO_ROOT>\\\\machine_validation\","
     },
     {
       "source_file": "machine_validation/mbd2_revolute_golden_e2e.json",
       "line": 6,
-      "text": "\"script\": \"D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\\\\AIAgent_MBD2RevoluteGolden_script.py\","
+      "text": "\"script\": \"<REPO_ROOT>\\\\machine_validation\\\\AIAgent_MBD2RevoluteGolden_script.py\","
     },
     {
       "source_file": "machine_validation/mbd2_revolute_golden_e2e.json",
       "line": 10,
-      "text": "\"noGUI=D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\\\\AIAgent_MBD2RevoluteGolden_script.py\""
+      "text": "\"noGUI=<REPO_ROOT>\\\\machine_validation\\\\AIAgent_MBD2RevoluteGolden_script.py\""
     },
     {
       "source_file": "machine_validation/mbd2_revolute_golden_e2e.json",
       "line": 45,
-      "text": "\"odb_path\": \"D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\\\\MBD2GoldenJob.odb\","
+      "text": "\"odb_path\": \"<REPO_ROOT>\\\\machine_validation\\\\MBD2GoldenJob.odb\","
     },
     {
       "source_file": "machine_validation/mbd_golden_e2e.json",
       "line": 4,
-      "text": "\"workdir\": \"D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\","
+      "text": "\"workdir\": \"<REPO_ROOT>\\\\machine_validation\","
     },
     {
       "source_file": "machine_validation/mbd_golden_e2e.json",
       "line": 5,
-      "text": "\"script\": \"D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\\\\machine_validation\\\\mbd_golden_e2e_script.py\","
+      "text": "\"script\": \"<REPO_ROOT>\\\\machine_validation\\\\machine_validation\\\\mbd_golden_e2e_script.py\","
     },
     {
       "source_file": "machine_validation/mbd_golden_e2e.json",
       "line": 10,
-      "text": "\"noGUI=D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\\\\machine_validation\\\\mbd_golden_e2e_script.py\""
+      "text": "\"noGUI=<REPO_ROOT>\\\\machine_validation\\\\machine_validation\\\\mbd_golden_e2e_script.py\""
     },
     {
       "source_file": "machine_validation/mbd_golden_e2e.json",
       "line": 391,
-      "text": "\"odb_path\": \"D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\\\\MBDGoldenJob.odb\""
+      "text": "\"odb_path\": \"<REPO_ROOT>\\\\machine_validation\\\\MBDGoldenJob.odb\""
     },
     {
       "source_file": "machine_validation/mesh_convergence_e2e.json",
       "line": 6,
-      "text": "\"noGUI=D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\\\\mesh_convergence_e2e_script.py\""
+      "text": "\"noGUI=<REPO_ROOT>\\\\machine_validation\\\\mesh_convergence_e2e_script.py\""
     },
     {
       "source_file": "machine_validation/mesh_convergence_e2e.json",
       "line": 335,
-      "text": "\"script\": \"D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\\\\mesh_convergence_e2e_script.py\","
+      "text": "\"script\": \"<REPO_ROOT>\\\\machine_validation\\\\mesh_convergence_e2e_script.py\","
     },
     {
       "source_file": "machine_validation/runtime_smoke.json",
       "line": 5,
-      "text": "\"noGUI=D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\\\\AIAgent_RuntimeSmoke_script.py\""
+      "text": "\"noGUI=<REPO_ROOT>\\\\machine_validation\\\\AIAgent_RuntimeSmoke_script.py\""
     },
     {
       "source_file": "machine_validation/runtime_smoke.json",
       "line": 23,
-      "text": "\"script\": \"D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\\\\AIAgent_RuntimeSmoke_script.py\","
+      "text": "\"script\": \"<REPO_ROOT>\\\\machine_validation\\\\AIAgent_RuntimeSmoke_script.py\","
     },
     {
       "source_file": "machine_validation/static_golden_e2e.json",
       "line": 6,
-      "text": "\"noGUI=D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\\\\static_golden_e2e_script.py\""
+      "text": "\"noGUI=<REPO_ROOT>\\\\machine_validation\\\\static_golden_e2e_script.py\""
     },
     {
       "source_file": "machine_validation/static_golden_e2e.json",
       "line": 654,
-      "text": "\"script\": \"D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\\\\static_golden_e2e_script.py\","
+      "text": "\"script\": \"<REPO_ROOT>\\\\machine_validation\\\\static_golden_e2e_script.py\","
     },
     {
       "source_file": "machine_validation/static_golden_run_b.json",
       "line": 6,
-      "text": "\"noGUI=D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\\\\machine_validation\\\\static_golden_e2e_script.py\""
+      "text": "\"noGUI=<REPO_ROOT>\\\\machine_validation\\\\machine_validation\\\\static_golden_e2e_script.py\""
     },
     {
       "source_file": "machine_validation/static_golden_run_b.json",
       "line": 299,
-      "text": "\"locator\": \"D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\\\\StaticGoldenJob.odb\","
+      "text": "\"locator\": \"<REPO_ROOT>\\\\machine_validation\\\\StaticGoldenJob.odb\","
     },
     {
       "source_file": "machine_validation/static_golden_run_b.json",
       "line": 614,
-      "text": "\"odb_path\": \"D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\\\\StaticGoldenJob.odb\""
+      "text": "\"odb_path\": \"<REPO_ROOT>\\\\machine_validation\\\\StaticGoldenJob.odb\""
     },
     {
       "source_file": "machine_validation/static_golden_run_b.json",
       "line": 630,
-      "text": "\"script\": \"D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\\\\machine_validation\\\\static_golden_e2e_script.py\","
+      "text": "\"script\": \"<REPO_ROOT>\\\\machine_validation\\\\machine_validation\\\\static_golden_e2e_script.py\","
     },
     {
       "source_file": "machine_validation/static_golden_run_b.json",
       "line": 634,
-      "text": "\"workdir\": \"D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\","
+      "text": "\"workdir\": \"<REPO_ROOT>\\\\machine_validation\","
     },
     {
       "source_file": "machine_validation/thermal_golden_e2e.json",
       "line": 4,
-      "text": "\"workdir\": \"D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\","
+      "text": "\"workdir\": \"<REPO_ROOT>\\\\machine_validation\","
     },
     {
       "source_file": "machine_validation/thermal_golden_e2e.json",
       "line": 5,
-      "text": "\"script\": \"D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\\\\thermal_golden_e2e_script.py\","
+      "text": "\"script\": \"<REPO_ROOT>\\\\machine_validation\\\\thermal_golden_e2e_script.py\","
     },
     {
       "source_file": "machine_validation/thermal_golden_e2e.json",
       "line": 10,
-      "text": "\"noGUI=D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\\\\thermal_golden_e2e_script.py\""
+      "text": "\"noGUI=<REPO_ROOT>\\\\machine_validation\\\\thermal_golden_e2e_script.py\""
     },
     {
       "source_file": "machine_validation/thermal_golden_e2e.json",
       "line": 90,
-      "text": "\"odb_path\": \"D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\\\\ThermalGoldenJob.odb\","
+      "text": "\"odb_path\": \"<REPO_ROOT>\\\\machine_validation\\\\ThermalGoldenJob.odb\","
     },
     {
       "source_file": "machine_validation/thermal_golden_e2e.json",
       "line": 262,
-      "text": "\"locator\": \"D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\\\\ThermalGoldenJob.odb\","
+      "text": "\"locator\": \"<REPO_ROOT>\\\\machine_validation\\\\ThermalGoldenJob.odb\","
     },
     {
       "source_file": "machine_validation/tier1_region_grounding_evidence.json",
       "line": 27,
-      "text": "\"workdir\": \"D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\","
+      "text": "\"workdir\": \"<REPO_ROOT>\\\\machine_validation\","
     },
     {
       "source_file": "machine_validation/tier2_bc_load_evidence.json",
       "line": 67,
-      "text": "\"workdir\": \"D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\","
+      "text": "\"workdir\": \"<REPO_ROOT>\\\\machine_validation\","
     },
     {
       "source_file": "machine_validation/tier3_unit_system_evidence.json",
       "line": 43,
-      "text": "\"workdir\": \"D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\","
+      "text": "\"workdir\": \"<REPO_ROOT>\\\\machine_validation\","
     },
     {
       "source_file": "machine_validation/tier4_material_evidence.json",
       "line": 39,
-      "text": "\"workdir\": \"D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\","
+      "text": "\"workdir\": \"<REPO_ROOT>\\\\machine_validation\","
     },
     {
       "source_file": "machine_validation/tier5_analysis_step_evidence.json",
       "line": 36,
-      "text": "\"workdir\": \"D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\","
+      "text": "\"workdir\": \"<REPO_ROOT>\\\\machine_validation\","
     },
     {
       "source_file": "machine_validation/tie_contact_e2e.json",
       "line": 6,
-      "text": "\"noGUI=D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\\\\tie_contact_e2e_script.py\""
+      "text": "\"noGUI=<REPO_ROOT>\\\\machine_validation\\\\tie_contact_e2e_script.py\""
     },
     {
       "source_file": "machine_validation/tie_contact_e2e.json",
       "line": 725,
-      "text": "\"script\": \"D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\\\\tie_contact_e2e_script.py\","
+      "text": "\"script\": \"<REPO_ROOT>\\\\machine_validation\\\\tie_contact_e2e_script.py\","
     },
     {
       "source_file": "machine_validation/legacy/golden_matrix_manifest.json",
       "line": 21,
-      "text": "\"evidence_file\": \"D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\\\\runtime_smoke.json\","
+      "text": "\"evidence_file\": \"<REPO_ROOT>\\\\machine_validation\\\\runtime_smoke.json\","
     },
     {
       "source_file": "machine_validation/legacy/golden_matrix_manifest.json",
       "line": 29,
-      "text": "\"script\": \"D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\\\\AIAgent_B28Smoke_script.py\","
+      "text": "\"script\": \"<REPO_ROOT>\\\\machine_validation\\\\AIAgent_B28Smoke_script.py\","
     },
     {
       "source_file": "machine_validation/legacy/golden_matrix_manifest.json",
       "line": 33,
-      "text": "\"noGUI=D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\\\\AIAgent_B28Smoke_script.py\""
+      "text": "\"noGUI=<REPO_ROOT>\\\\machine_validation\\\\AIAgent_B28Smoke_script.py\""
     },
     {
       "source_file": "machine_validation/legacy/golden_matrix_manifest.json",
       "line": 84,
-      "text": "\"path\": \"D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\\\\AIAgent_B28Smoke_script.py\","
+      "text": "\"path\": \"<REPO_ROOT>\\\\machine_validation\\\\AIAgent_B28Smoke_script.py\","
     },
     {
       "source_file": "machine_validation/legacy/golden_matrix_manifest.json",
       "line": 94,
-      "text": "\"script\": \"D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\\\\AIAgent_B28Smoke_script.py\","
+      "text": "\"script\": \"<REPO_ROOT>\\\\machine_validation\\\\AIAgent_B28Smoke_script.py\","
     },
     {
       "source_file": "machine_validation/legacy/golden_matrix_manifest.json",
       "line": 108,
-      "text": "\"evidence_file\": \"D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\\\\static_golden_e2e.json\","
+      "text": "\"evidence_file\": \"<REPO_ROOT>\\\\machine_validation\\\\static_golden_e2e.json\","
     },
     {
       "source_file": "machine_validation/legacy/golden_matrix_manifest.json",
       "line": 116,
-      "text": "\"script\": \"D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\\\\static_golden_e2e_script.py\","
+      "text": "\"script\": \"<REPO_ROOT>\\\\machine_validation\\\\static_golden_e2e_script.py\","
     },
     {
       "source_file": "machine_validation/legacy/golden_matrix_manifest.json",
       "line": 120,
-      "text": "\"noGUI=D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\\\\static_golden_e2e_script.py\""
+      "text": "\"noGUI=<REPO_ROOT>\\\\machine_validation\\\\static_golden_e2e_script.py\""
     },
     {
       "source_file": "machine_validation/legacy/golden_matrix_manifest.json",
       "line": 646,
-      "text": "\"evidence_file\": \"D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\\\\mesh_convergence_e2e.json\","
+      "text": "\"evidence_file\": \"<REPO_ROOT>\\\\machine_validation\\\\mesh_convergence_e2e.json\","
     },
     {
       "source_file": "machine_validation/legacy/golden_matrix_manifest.json",
       "line": 654,
-      "text": "\"script\": \"D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\\\\mesh_convergence_e2e_script.py\","
+      "text": "\"script\": \"<REPO_ROOT>\\\\machine_validation\\\\mesh_convergence_e2e_script.py\","
     },
     {
       "source_file": "machine_validation/legacy/golden_matrix_manifest.json",
       "line": 658,
-      "text": "\"noGUI=D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\\\\mesh_convergence_e2e_script.py\""
+      "text": "\"noGUI=<REPO_ROOT>\\\\machine_validation\\\\mesh_convergence_e2e_script.py\""
     },
     {
       "source_file": "machine_validation/legacy/golden_matrix_manifest.json",
       "line": 789,
-      "text": "\"path\": \"D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\\\\mesh_convergence_e2e_script.py\","
+      "text": "\"path\": \"<REPO_ROOT>\\\\machine_validation\\\\mesh_convergence_e2e_script.py\","
     },
     {
       "source_file": "machine_validation/legacy/golden_matrix_manifest.json",
       "line": 799,
-      "text": "\"script\": \"D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\\\\mesh_convergence_e2e_script.py\","
+      "text": "\"script\": \"<REPO_ROOT>\\\\machine_validation\\\\mesh_convergence_e2e_script.py\","
     },
     {
       "source_file": "machine_validation/legacy/golden_matrix_manifest.json",
       "line": 813,
-      "text": "\"evidence_file\": \"D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\\\\tie_contact_e2e.json\","
+      "text": "\"evidence_file\": \"<REPO_ROOT>\\\\machine_validation\\\\tie_contact_e2e.json\","
     },
     {
       "source_file": "machine_validation/legacy/golden_matrix_manifest.json",
       "line": 821,
-      "text": "\"script\": \"D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\\\\tie_contact_e2e_script.py\","
+      "text": "\"script\": \"<REPO_ROOT>\\\\machine_validation\\\\tie_contact_e2e_script.py\","
     },
     {
       "source_file": "machine_validation/legacy/golden_matrix_manifest.json",
       "line": 825,
-      "text": "\"noGUI=D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\\\\tie_contact_e2e_script.py\""
+      "text": "\"noGUI=<REPO_ROOT>\\\\machine_validation\\\\tie_contact_e2e_script.py\""
     },
     {
       "source_file": "machine_validation/legacy/golden_matrix_manifest.json",
       "line": 1421,
-      "text": "\"evidence_file\": \"D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\\\\dynamic_golden_e2e.json\","
+      "text": "\"evidence_file\": \"<REPO_ROOT>\\\\machine_validation\\\\dynamic_golden_e2e.json\","
     },
     {
       "source_file": "machine_validation/legacy/golden_matrix_manifest.json",
       "line": 1429,
-      "text": "\"script\": \"D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\\\\dynamic_golden_e2e_script.py\","
+      "text": "\"script\": \"<REPO_ROOT>\\\\machine_validation\\\\dynamic_golden_e2e_script.py\","
     },
     {
       "source_file": "machine_validation/legacy/golden_matrix_manifest.json",
       "line": 1433,
-      "text": "\"noGUI=D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\\\\dynamic_golden_e2e_script.py\""
+      "text": "\"noGUI=<REPO_ROOT>\\\\machine_validation\\\\dynamic_golden_e2e_script.py\""
     },
     {
       "source_file": "machine_validation/legacy/golden_matrix_manifest.json",
       "line": 1749,
-      "text": "\"evidence_file\": \"D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\\\\thermal_golden_e2e.json\","
+      "text": "\"evidence_file\": \"<REPO_ROOT>\\\\machine_validation\\\\thermal_golden_e2e.json\","
     },
     {
       "source_file": "machine_validation/legacy/golden_matrix_manifest.json",
       "line": 1756,
-      "text": "\"workdir\": \"D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\","
+      "text": "\"workdir\": \"<REPO_ROOT>\\\\machine_validation\","
     },
     {
       "source_file": "machine_validation/legacy/golden_matrix_manifest.json",
       "line": 1757,
-      "text": "\"script\": \"D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\\\\thermal_golden_e2e_script.py\","
+      "text": "\"script\": \"<REPO_ROOT>\\\\machine_validation\\\\thermal_golden_e2e_script.py\","
     },
     {
       "source_file": "machine_validation/legacy/golden_matrix_manifest.json",
       "line": 1761,
-      "text": "\"noGUI=D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\\\\thermal_golden_e2e_script.py\""
+      "text": "\"noGUI=<REPO_ROOT>\\\\machine_validation\\\\thermal_golden_e2e_script.py\""
     },
     {
       "source_file": "machine_validation/legacy/golden_matrix_manifest.json",
       "line": 1771,
-      "text": "\"path\": \"D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\\\\ThermalGoldenJob.odb\","
+      "text": "\"path\": \"<REPO_ROOT>\\\\machine_validation\\\\ThermalGoldenJob.odb\","
     },
     {
       "source_file": "machine_validation/legacy/golden_matrix_manifest.json",
       "line": 1932,
-      "text": "\"locator\": \"D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\\\\ThermalGoldenJob.odb\","
+      "text": "\"locator\": \"<REPO_ROOT>\\\\machine_validation\\\\ThermalGoldenJob.odb\","
     },
     {
       "source_file": "machine_validation/legacy/golden_matrix_manifest.json",
       "line": 2379,
-      "text": "\"evidence_file\": \"D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\\\\general_contact_e2e.json\","
+      "text": "\"evidence_file\": \"<REPO_ROOT>\\\\machine_validation\\\\general_contact_e2e.json\","
     },
     {
       "source_file": "machine_validation/legacy/golden_matrix_manifest.json",
       "line": 2386,
-      "text": "\"workdir\": \"D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\","
+      "text": "\"workdir\": \"<REPO_ROOT>\\\\machine_validation\","
     },
     {
       "source_file": "machine_validation/legacy/golden_matrix_manifest.json",
       "line": 2387,
-      "text": "\"script\": \"D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\\\\general_contact_e2e_script.py\","
+      "text": "\"script\": \"<REPO_ROOT>\\\\machine_validation\\\\general_contact_e2e_script.py\","
     },
     {
       "source_file": "machine_validation/legacy/golden_matrix_manifest.json",
       "line": 2391,
-      "text": "\"noGUI=D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\\\\general_contact_e2e_script.py\""
+      "text": "\"noGUI=<REPO_ROOT>\\\\machine_validation\\\\general_contact_e2e_script.py\""
     },
     {
       "source_file": "machine_validation/legacy/golden_matrix_manifest.json",
       "line": 2401,
-      "text": "\"path\": \"D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\\\\GeneralContactJob.odb\","
+      "text": "\"path\": \"<REPO_ROOT>\\\\machine_validation\\\\GeneralContactJob.odb\","
     },
     {
       "source_file": "machine_validation/legacy/golden_matrix_manifest.json",
       "line": 2733,
-      "text": "\"evidence_file\": \"D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\\\\mbd_golden_e2e.json\","
+      "text": "\"evidence_file\": \"<REPO_ROOT>\\\\machine_validation\\\\mbd_golden_e2e.json\","
     },
     {
       "source_file": "machine_validation/legacy/golden_matrix_manifest.json",
       "line": 2741,
-      "text": "\"script\": \"D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\\\\mbd_golden_e2e_script.py\","
+      "text": "\"script\": \"<REPO_ROOT>\\\\machine_validation\\\\mbd_golden_e2e_script.py\","
     },
     {
       "source_file": "machine_validation/legacy/golden_matrix_manifest.json",
       "line": 2745,
-      "text": "\"noGUI=D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\\\\mbd_golden_e2e_script.py\""
+      "text": "\"noGUI=<REPO_ROOT>\\\\machine_validation\\\\mbd_golden_e2e_script.py\""
     },
     {
       "source_file": "machine_validation/legacy/golden_matrix_manifest.json",
       "line": 3025,
-      "text": "\"evidence_file\": \"D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\\\\mbd2_revolute_golden_e2e.json\","
+      "text": "\"evidence_file\": \"<REPO_ROOT>\\\\machine_validation\\\\mbd2_revolute_golden_e2e.json\","
     },
     {
       "source_file": "machine_validation/legacy/golden_matrix_manifest.json",
       "line": 3033,
-      "text": "\"script\": \"D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\\\\AIAgent_MBD2RevoluteGolden_script.py\","
+      "text": "\"script\": \"<REPO_ROOT>\\\\machine_validation\\\\AIAgent_MBD2RevoluteGolden_script.py\","
     },
     {
       "source_file": "machine_validation/legacy/golden_matrix_manifest.json",
       "line": 3037,
-      "text": "\"noGUI=D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\\\\AIAgent_MBD2RevoluteGolden_script.py\""
+      "text": "\"noGUI=<REPO_ROOT>\\\\machine_validation\\\\AIAgent_MBD2RevoluteGolden_script.py\""
     },
     {
       "source_file": "machine_validation/legacy/golden_matrix_manifest.json",
       "line": 3047,
-      "text": "\"path\": \"D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\\\\MBD2GoldenJob.odb\","
+      "text": "\"path\": \"<REPO_ROOT>\\\\machine_validation\\\\MBD2GoldenJob.odb\","
     },
     {
       "source_file": "machine_validation/legacy/golden_matrix_manifest.json",
       "line": 3114,
-      "text": "\"path\": \"D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\\\\AIAgent_MBD2RevoluteGolden_script.py\","
+      "text": "\"path\": \"<REPO_ROOT>\\\\machine_validation\\\\AIAgent_MBD2RevoluteGolden_script.py\","
     },
     {
       "source_file": "machine_validation/legacy/golden_matrix_manifest.json",
       "line": 3118,
-      "text": "\"path\": \"D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\\\\MBD2GoldenJob.odb\","
+      "text": "\"path\": \"<REPO_ROOT>\\\\machine_validation\\\\MBD2GoldenJob.odb\","
     },
     {
       "source_file": "machine_validation/legacy/golden_matrix_manifest.json",
       "line": 3137,
-      "text": "\"evidence_file\": \"D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\\\\fmbd4_rigid_flexible_golden_e2e.json\","
+      "text": "\"evidence_file\": \"<REPO_ROOT>\\\\machine_validation\\\\fmbd4_rigid_flexible_golden_e2e.json\","
     },
     {
       "source_file": "machine_validation/legacy/golden_matrix_manifest.json",
       "line": 3145,
-      "text": "\"script\": \"D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\\\\FMBD4GoldenJob_fmbd4_script.py\","
+      "text": "\"script\": \"<REPO_ROOT>\\\\machine_validation\\\\FMBD4GoldenJob_fmbd4_script.py\","
     },
     {
       "source_file": "machine_validation/legacy/golden_matrix_manifest.json",
       "line": 3237,
-      "text": "\"path\": \"D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\\\\FMBD4GoldenJob_fmbd4_script.py\""
+      "text": "\"path\": \"<REPO_ROOT>\\\\machine_validation\\\\FMBD4GoldenJob_fmbd4_script.py\""
     },
     {
       "source_file": "machine_validation/legacy/golden_matrix_manifest.json",
       "line": 3256,
-      "text": "\"evidence_file\": \"D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\\\\fmbd5_crank_slider_golden_e2e.json\","
+      "text": "\"evidence_file\": \"<REPO_ROOT>\\\\machine_validation\\\\fmbd5_crank_slider_golden_e2e.json\","
     },
     {
       "source_file": "machine_validation/legacy/golden_matrix_manifest.json",
       "line": 3263,
-      "text": "\"workdir\": \"D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\","
+      "text": "\"workdir\": \"<REPO_ROOT>\\\\machine_validation\","
     },
     {
       "source_file": "machine_validation/legacy/golden_matrix_manifest.json",
       "line": 3264,
-      "text": "\"script\": \"D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\\\\FMBD5GoldenJob_fmbd5_script.py\","
+      "text": "\"script\": \"<REPO_ROOT>\\\\machine_validation\\\\FMBD5GoldenJob_fmbd5_script.py\","
     },
     {
       "source_file": "machine_validation/legacy/golden_matrix_manifest.json",
       "line": 3274,
-      "text": "\"path\": \"D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\\\\FMBD5GoldenJob.odb\","
+      "text": "\"path\": \"<REPO_ROOT>\\\\machine_validation\\\\FMBD5GoldenJob.odb\","
     },
     {
       "source_file": "machine_validation/legacy/golden_matrix_manifest.json",
       "line": 3386,
-      "text": "\"path\": \"D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\\\\FMBD5GoldenJob.odb\""
+      "text": "\"path\": \"<REPO_ROOT>\\\\machine_validation\\\\FMBD5GoldenJob.odb\""
     },
     {
       "source_file": "machine_validation/legacy/golden_matrix_manifest.json",
       "line": 3390,
-      "text": "\"path\": \"D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\\\\FMBD5GoldenJob_fmbd5_script.py\""
+      "text": "\"path\": \"<REPO_ROOT>\\\\machine_validation\\\\FMBD5GoldenJob_fmbd5_script.py\""
     },
     {
       "source_file": "machine_validation/legacy/golden_matrix_manifest.json",
       "line": 3410,
-      "text": "\"evidence_file\": \"D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\\\\explicit_golden_e2e.json\","
+      "text": "\"evidence_file\": \"<REPO_ROOT>\\\\machine_validation\\\\explicit_golden_e2e.json\","
     },
     {
       "source_file": "machine_validation/legacy/golden_matrix_manifest.json",
       "line": 3417,
-      "text": "\"workdir\": \"D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\","
+      "text": "\"workdir\": \"<REPO_ROOT>\\\\machine_validation\","
     },
     {
       "source_file": "machine_validation/legacy/golden_matrix_manifest.json",
       "line": 3418,
-      "text": "\"script\": \"D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\\\\explicit_golden_e2e_script.py\","
+      "text": "\"script\": \"<REPO_ROOT>\\\\machine_validation\\\\explicit_golden_e2e_script.py\","
     },
     {
       "source_file": "machine_validation/legacy/golden_matrix_manifest.json",
       "line": 3422,
-      "text": "\"noGUI=D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\\\\explicit_golden_e2e_script.py\""
+      "text": "\"noGUI=<REPO_ROOT>\\\\machine_validation\\\\explicit_golden_e2e_script.py\""
     },
     {
       "source_file": "machine_validation/legacy/golden_matrix_manifest.json",
       "line": 3432,
-      "text": "\"path\": \"D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\\\\ExplicitGoldenJob.odb\","
+      "text": "\"path\": \"<REPO_ROOT>\\\\machine_validation\\\\ExplicitGoldenJob.odb\","
     },
     {
       "source_file": "machine_validation/legacy/golden_matrix_manifest.json",
       "line": 3738,
-      "text": "\"evidence_file\": \"D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\\\\fatigue_odb_golden_e2e.json\","
+      "text": "\"evidence_file\": \"<REPO_ROOT>\\\\machine_validation\\\\fatigue_odb_golden_e2e.json\","
     },
     {
       "source_file": "machine_validation/legacy/golden_matrix_manifest.json",
       "line": 3745,
-      "text": "\"workdir\": \"D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\","
+      "text": "\"workdir\": \"<REPO_ROOT>\\\\machine_validation\","
     },
     {
       "source_file": "machine_validation/p2_cases/case_06_sheet_metal_manifest.json",
       "line": 26,
-      "text": "\"path\": \"D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\\\\p2_cases\\\\case_06_sheet_metal_submodeling\\\\case_06_glob"
+      "text": "\"path\": \"<REPO_ROOT>\\\\machine_validation\\\\p2_cases\\\\case_06_sheet_metal_submodeling\\\\case_06_glob"
     },
     {
       "source_file": "machine_validation/p2_cases/case_06_sheet_metal_manifest.json",
       "line": 32,
-      "text": "\"path\": \"D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\\\\p2_cases\\\\case_06_sheet_metal_submodeling\\\\case_06_glob"
+      "text": "\"path\": \"<REPO_ROOT>\\\\machine_validation\\\\p2_cases\\\\case_06_sheet_metal_submodeling\\\\case_06_glob"
     },
     {
       "source_file": "machine_validation/p2_cases/case_06_sheet_metal_manifest.json",
       "line": 38,
-      "text": "\"path\": \"D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\\\\p2_cases\\\\case_06_sheet_metal_submodeling\\\\case_06_glob"
+      "text": "\"path\": \"<REPO_ROOT>\\\\machine_validation\\\\p2_cases\\\\case_06_sheet_metal_submodeling\\\\case_06_glob"
     },
     {
       "source_file": "machine_validation/p2_cases/case_06_sheet_metal_manifest.json",
       "line": 44,
-      "text": "\"path\": \"D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\\\\p2_cases\\\\case_06_sheet_metal_submodeling\\\\case_06_glob"
+      "text": "\"path\": \"<REPO_ROOT>\\\\machine_validation\\\\p2_cases\\\\case_06_sheet_metal_submodeling\\\\case_06_glob"
     },
     {
       "source_file": "machine_validation/p2_cases/case_06_sheet_metal_manifest.json",
       "line": 50,
-      "text": "\"path\": \"D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\\\\p2_cases\\\\case_06_sheet_metal_submodeling\\\\case_06_glob"
+      "text": "\"path\": \"<REPO_ROOT>\\\\machine_validation\\\\p2_cases\\\\case_06_sheet_metal_submodeling\\\\case_06_glob"
     },
     {
       "source_file": "machine_validation/p2_cases/case_06_sheet_metal_manifest.json",
       "line": 56,
-      "text": "\"path\": \"D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\\\\p2_cases\\\\case_06_sheet_metal_submodeling\\\\case_06_glob"
+      "text": "\"path\": \"<REPO_ROOT>\\\\machine_validation\\\\p2_cases\\\\case_06_sheet_metal_submodeling\\\\case_06_glob"
     },
     {
       "source_file": "machine_validation/p2_cases/case_06_sheet_metal_manifest.json",
       "line": 62,
-      "text": "\"path\": \"D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\\\\p2_cases\\\\case_06_sheet_metal_submodeling\\\\case_06_weld"
+      "text": "\"path\": \"<REPO_ROOT>\\\\machine_validation\\\\p2_cases\\\\case_06_sheet_metal_submodeling\\\\case_06_weld"
     },
     {
       "source_file": "machine_validation/p2_cases/case_06_sheet_metal_manifest.json",
       "line": 68,
-      "text": "\"path\": \"D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\\\\p2_cases\\\\case_06_sheet_metal_submodeling\\\\case_06_weld"
+      "text": "\"path\": \"<REPO_ROOT>\\\\machine_validation\\\\p2_cases\\\\case_06_sheet_metal_submodeling\\\\case_06_weld"
     },
     {
       "source_file": "machine_validation/p2_cases/case_06_sheet_metal_manifest.json",
       "line": 74,
-      "text": "\"path\": \"D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\\\\p2_cases\\\\case_06_sheet_metal_submodeling\\\\case_06_weld"
+      "text": "\"path\": \"<REPO_ROOT>\\\\machine_validation\\\\p2_cases\\\\case_06_sheet_metal_submodeling\\\\case_06_weld"
     },
     {
       "source_file": "machine_validation/p2_cases/case_06_sheet_metal_manifest.json",
       "line": 80,
-      "text": "\"path\": \"D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\\\\p2_cases\\\\case_06_sheet_metal_submodeling\\\\case_06_weld"
+      "text": "\"path\": \"<REPO_ROOT>\\\\machine_validation\\\\p2_cases\\\\case_06_sheet_metal_submodeling\\\\case_06_weld"
     },
     {
       "source_file": "machine_validation/p2_cases/case_06_sheet_metal_manifest.json",
       "line": 86,
-      "text": "\"path\": \"D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\\\\p2_cases\\\\case_06_sheet_metal_submodeling\\\\case_06_weld"
+      "text": "\"path\": \"<REPO_ROOT>\\\\machine_validation\\\\p2_cases\\\\case_06_sheet_metal_submodeling\\\\case_06_weld"
     },
     {
       "source_file": "machine_validation/p2_cases/case_06_sheet_metal_manifest.json",
       "line": 92,
-      "text": "\"path\": \"D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\\\\p2_cases\\\\case_06_sheet_metal_submodeling\\\\case_06_weld"
+      "text": "\"path\": \"<REPO_ROOT>\\\\machine_validation\\\\p2_cases\\\\case_06_sheet_metal_submodeling\\\\case_06_weld"
     },
     {
       "source_file": "machine_validation/p2_cases/case_06_sheet_metal_submodeling/case_06_sheet_metal_manifest.json",
       "line": 26,
-      "text": "\"path\": \"D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\\\\p2_cases\\\\case_06_sheet_metal_submodeling\\\\case_06_glob"
+      "text": "\"path\": \"<REPO_ROOT>\\\\machine_validation\\\\p2_cases\\\\case_06_sheet_metal_submodeling\\\\case_06_glob"
     },
     {
       "source_file": "machine_validation/p2_cases/case_06_sheet_metal_submodeling/case_06_sheet_metal_manifest.json",
       "line": 32,
-      "text": "\"path\": \"D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\\\\p2_cases\\\\case_06_sheet_metal_submodeling\\\\case_06_glob"
+      "text": "\"path\": \"<REPO_ROOT>\\\\machine_validation\\\\p2_cases\\\\case_06_sheet_metal_submodeling\\\\case_06_glob"
     },
     {
       "source_file": "machine_validation/p2_cases/case_06_sheet_metal_submodeling/case_06_sheet_metal_manifest.json",
       "line": 38,
-      "text": "\"path\": \"D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\\\\p2_cases\\\\case_06_sheet_metal_submodeling\\\\case_06_glob"
+      "text": "\"path\": \"<REPO_ROOT>\\\\machine_validation\\\\p2_cases\\\\case_06_sheet_metal_submodeling\\\\case_06_glob"
     },
     {
       "source_file": "machine_validation/p2_cases/case_06_sheet_metal_submodeling/case_06_sheet_metal_manifest.json",
       "line": 44,
-      "text": "\"path\": \"D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\\\\p2_cases\\\\case_06_sheet_metal_submodeling\\\\case_06_glob"
+      "text": "\"path\": \"<REPO_ROOT>\\\\machine_validation\\\\p2_cases\\\\case_06_sheet_metal_submodeling\\\\case_06_glob"
     },
     {
       "source_file": "machine_validation/p2_cases/case_06_sheet_metal_submodeling/case_06_sheet_metal_manifest.json",
       "line": 50,
-      "text": "\"path\": \"D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\\\\p2_cases\\\\case_06_sheet_metal_submodeling\\\\case_06_glob"
+      "text": "\"path\": \"<REPO_ROOT>\\\\machine_validation\\\\p2_cases\\\\case_06_sheet_metal_submodeling\\\\case_06_glob"
     },
     {
       "source_file": "machine_validation/p2_cases/case_06_sheet_metal_submodeling/case_06_sheet_metal_manifest.json",
       "line": 56,
-      "text": "\"path\": \"D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\\\\p2_cases\\\\case_06_sheet_metal_submodeling\\\\case_06_glob"
+      "text": "\"path\": \"<REPO_ROOT>\\\\machine_validation\\\\p2_cases\\\\case_06_sheet_metal_submodeling\\\\case_06_glob"
     },
     {
       "source_file": "machine_validation/p2_cases/case_06_sheet_metal_submodeling/case_06_sheet_metal_manifest.json",
       "line": 62,
-      "text": "\"path\": \"D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\\\\p2_cases\\\\case_06_sheet_metal_submodeling\\\\case_06_weld"
+      "text": "\"path\": \"<REPO_ROOT>\\\\machine_validation\\\\p2_cases\\\\case_06_sheet_metal_submodeling\\\\case_06_weld"
     },
     {
       "source_file": "machine_validation/p2_cases/case_06_sheet_metal_submodeling/case_06_sheet_metal_manifest.json",
       "line": 68,
-      "text": "\"path\": \"D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\\\\p2_cases\\\\case_06_sheet_metal_submodeling\\\\case_06_weld"
+      "text": "\"path\": \"<REPO_ROOT>\\\\machine_validation\\\\p2_cases\\\\case_06_sheet_metal_submodeling\\\\case_06_weld"
     },
     {
       "source_file": "machine_validation/p2_cases/case_06_sheet_metal_submodeling/case_06_sheet_metal_manifest.json",
       "line": 74,
-      "text": "\"path\": \"D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\\\\p2_cases\\\\case_06_sheet_metal_submodeling\\\\case_06_weld"
+      "text": "\"path\": \"<REPO_ROOT>\\\\machine_validation\\\\p2_cases\\\\case_06_sheet_metal_submodeling\\\\case_06_weld"
     },
     {
       "source_file": "machine_validation/p2_cases/case_06_sheet_metal_submodeling/case_06_sheet_metal_manifest.json",
       "line": 80,
-      "text": "\"path\": \"D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\\\\p2_cases\\\\case_06_sheet_metal_submodeling\\\\case_06_weld"
+      "text": "\"path\": \"<REPO_ROOT>\\\\machine_validation\\\\p2_cases\\\\case_06_sheet_metal_submodeling\\\\case_06_weld"
     },
     {
       "source_file": "machine_validation/p2_cases/case_06_sheet_metal_submodeling/case_06_sheet_metal_manifest.json",
       "line": 86,
-      "text": "\"path\": \"D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\\\\p2_cases\\\\case_06_sheet_metal_submodeling\\\\case_06_weld"
+      "text": "\"path\": \"<REPO_ROOT>\\\\machine_validation\\\\p2_cases\\\\case_06_sheet_metal_submodeling\\\\case_06_weld"
     },
     {
       "source_file": "machine_validation/p2_cases/case_06_sheet_metal_submodeling/case_06_sheet_metal_manifest.json",
       "line": 92,
-      "text": "\"path\": \"D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\machine_validation\\\\p2_cases\\\\case_06_sheet_metal_submodeling\\\\case_06_weld"
+      "text": "\"path\": \"<REPO_ROOT>\\\\machine_validation\\\\p2_cases\\\\case_06_sheet_metal_submodeling\\\\case_06_weld"
     },
     {
       "source_file": "README.md",
@@ -3135,7 +3135,7 @@
     {
       "source_file": "tests/test_odb_rendering.py",
       "line": 93,
-      "text": "odb_path=\"D:/Vault/Abaqus/runs/job.odb\","
+      "text": "odb_path=\"<WORKSPACE_ROOT>/runs/job.odb\","
     },
     {
       "source_file": "tests/test_p0_acceptance_kernel.py",
@@ -4584,12 +4584,12 @@
     {
       "source_file": "deliverables/manifest.json",
       "line": 12,
-      "text": "\"path\": \"D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\deliverables\\\\qualifications\\\\case_01\\\\report.html\","
+      "text": "\"path\": \"<REPO_ROOT>\\\\deliverables\\\\qualifications\\\\case_01\\\\report.html\","
     },
     {
       "source_file": "deliverables/qualifications/case_01/case_01_manifest.json",
       "line": 6,
-      "text": "\"path\": \"D:\\\\Vault\\\\Abaqus\\\\Abaqus-AI-Agent\\\\deliverables\\\\qualifications\\\\case_01\\\\report.html\","
+      "text": "\"path\": \"<REPO_ROOT>\\\\deliverables\\\\qualifications\\\\case_01\\\\report.html\","
     },
     {
       "source_file": "README.md",

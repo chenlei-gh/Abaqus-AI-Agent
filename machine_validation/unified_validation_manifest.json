@@ -3,7 +3,7 @@
   "generated_at_utc": "2026-10-21T09:10:14.313071+00:00",
   "purpose": "Authoritative physical evidence manifest with SHA-256 integrity hash verification (not cryptographic signature) for cross-phase validation checklist MV-01 through MV-11.",
   "environment": {
-    "launcher": "C:/SIMULIA/Commands/abaqus.bat",
+    "launcher": "<ABAQUS_LAUNCHER>",
     "host_hardware": {
       "system": "Windows",
       "release": "11",
@@ -14,23 +14,23 @@
       "physical_cpu_count": null,
       "total_memory_bytes": 136854630400
     },
-    "project_root": "D:\\AbaqusProjects\\Case_07_Jounce_Bumper",
+    "project_root": "<RETIRED_RUN>/Case_07_Jounce_Bumper",
     "abaqus_release_probe": "Abaqus 2025 establishing products (launch verified)"
   },
   "artifacts_under_test": {
     "seat_job": {
-      "odb_path": "D:\\AbaqusProjects\\Case_07_Jounce_Bumper\\solver\\case07_live_e7301de3_seat\\C07SeatJob.odb",
+      "odb_path": "<RETIRED_RUN>/Case_07_Jounce_Bumper\\solver\\case07_live_e7301de3_seat\\C07SeatJob.odb",
       "odb_bytes": 3087028,
       "odb_sha256": "b46166dbefed735da714b906a838e1d5d8c01802ceeee537cbabff191fe40bef",
-      "log_path": "D:\\AbaqusProjects\\Case_07_Jounce_Bumper\\solver\\case07_live_e7301de3_seat\\C07SeatJob.log",
-      "sta_path": "D:\\AbaqusProjects\\Case_07_Jounce_Bumper\\solver\\case07_live_e7301de3_seat\\C07SeatJob.sta"
+      "log_path": "<RETIRED_RUN>/Case_07_Jounce_Bumper\\solver\\case07_live_e7301de3_seat\\C07SeatJob.log",
+      "sta_path": "<RETIRED_RUN>/Case_07_Jounce_Bumper\\solver\\case07_live_e7301de3_seat\\C07SeatJob.sta"
     },
     "compress_job": {
-      "odb_path": "D:\\AbaqusProjects\\Case_07_Jounce_Bumper\\solver\\case07_live_e7301de3_compress\\C07CompressJob.odb",
+      "odb_path": "<RETIRED_RUN>/Case_07_Jounce_Bumper\\solver\\case07_live_e7301de3_compress\\C07CompressJob.odb",
       "odb_bytes": 7672716,
       "odb_sha256": "1566fa78bc40795708de37c4a874258a6afb9f4aebe69f690a296444a62ff179",
-      "log_path": "D:\\AbaqusProjects\\Case_07_Jounce_Bumper\\solver\\case07_live_e7301de3_compress\\C07CompressJob.log",
-      "sta_path": "D:\\AbaqusProjects\\Case_07_Jounce_Bumper\\solver\\case07_live_e7301de3_compress\\C07CompressJob.sta"
+      "log_path": "<RETIRED_RUN>/Case_07_Jounce_Bumper\\solver\\case07_live_e7301de3_compress\\C07CompressJob.log",
+      "sta_path": "<RETIRED_RUN>/Case_07_Jounce_Bumper\\solver\\case07_live_e7301de3_compress\\C07CompressJob.sta"
     }
   },
   "results": {
@@ -52,7 +52,7 @@
       "status": "PASS",
       "objective": "Engineering-scale authentic ODB structural verification and negative mutant defense",
       "evidence": {
-        "target_odb": "D:\\AbaqusProjects\\Case_07_Jounce_Bumper\\solver\\case07_live_e7301de3_compress\\C07CompressJob.odb",
+        "target_odb": "<RETIRED_RUN>/Case_07_Jounce_Bumper\\solver\\case07_live_e7301de3_compress\\C07CompressJob.odb",
         "target_bytes": 7672716,
         "positive_verified": true,
         "steps": [

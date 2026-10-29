@@ -1,11 +1,11 @@
 {
   "status": "pass",
-  "launcher": "C:\\SIMULIA\\Commands\\abaqus.bat",
+  "launcher": "<ABAQUS_LAUNCHER>",
   "workdir": "<REPO_ROOT>\\machine_validation",
   "script": "<REPO_ROOT>\\machine_validation\\machine_validation\\mbd_golden_e2e_script.py",
   "case": "rigid_body_physical_pendulum_mbd",
   "command": [
-    "C:\\SIMULIA\\Commands\\abaqus.bat",
+    "<ABAQUS_LAUNCHER>",
     "cae",
     "noGUI=<REPO_ROOT>\\machine_validation\\machine_validation\\mbd_golden_e2e_script.py"
   ],

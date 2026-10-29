@@ -94,7 +94,7 @@
   ],
   "case_id": "fmbd5_crank_slider",
   "job_name": "FMBD5GoldenJob",
-  "launcher": "C:\\SIMULIA\\Commands\\abaqus.bat",
+  "launcher": "<ABAQUS_LAUNCHER>",
   "process_succeeded": true,
   "provenance": {
     "action_count": 45,

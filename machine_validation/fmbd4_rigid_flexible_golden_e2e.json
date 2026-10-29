@@ -76,7 +76,7 @@
   ],
   "case_id": "fmbd4_rigid_flexible",
   "job_name": "FMBD4GoldenJob",
-  "launcher": "C:\\SIMULIA\\Commands\\abaqus.bat",
+  "launcher": "<ABAQUS_LAUNCHER>",
   "process_succeeded": true,
   "provenance": {
     "action_count": 26,
