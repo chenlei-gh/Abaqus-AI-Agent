@@ -785,6 +785,23 @@ def compile_intent_to_actions(
         used_assignments.append({"material": material.name, "region": "AllCells"})
     actions.append(builders.python_action(model_name, sec_assign_code))
 
+    # Geometric surfaces created before mesh. Virtual topology replaces the
+    # faces they hold, so each record is rebound once after the last part mesh.
+    geometric_surfaces: List[Tuple[str, str, Tuple[Tuple[float, float, float], ...]]] = []
+
+    def _remember_geometric_surface(name, instance, points):
+        cleaned = tuple(
+            (float(point[0]), float(point[1]), float(point[2]))
+            for point in points or ()
+            if _is_valid_3d_point(point)
+        )
+        if not name or not instance or not cleaned:
+            return
+        geometric_surfaces[:] = [
+            item for item in geometric_surfaces if item[0] != name
+        ]
+        geometric_surfaces.append((str(name), str(instance), cleaned))
+
     # 4. Assembly Instance
     if geometry.shape == "step_assembly":
         inst_lines = [
@@ -800,6 +817,12 @@ def compile_intent_to_actions(
         for contact in active_scope.contacts:
             mx, my, mz = contact.master_point
             sx, sy, sz = contact.slave_point
+            _remember_geometric_surface(
+                contact.master_surface, contact.master_instance, ((mx, my, mz),),
+            )
+            _remember_geometric_surface(
+                contact.slave_surface, contact.slave_instance, ((sx, sy, sz),),
+            )
             inst_lines.append(
                 _guarded_find_at(
                     f"a.instances['{contact.master_instance}'].faces",
@@ -875,6 +898,9 @@ def compile_intent_to_actions(
             f"a.Set(faces=f_slider_top, name='SliderTop')\n"
             f"a.Surface(side1Faces=f_slider_top, name='SliderTop_Surf')\n"
         )
+        _remember_geometric_surface("BaseSurf", "Base-1", ((base_w / 2.0, base_h / 2.0, base_l),))
+        _remember_geometric_surface("SliderSurf", "Slider-1", ((45.0, base_h / 2.0, base_l),))
+        _remember_geometric_surface("SliderTop_Surf", "Slider-1", ((45.0, base_h / 2.0, 2.0 * base_l),))
     actions.append(builders.python_action(model_name, inst_code))
 
     # 4b. Contact-driven loading (rigid punch)
@@ -969,6 +995,10 @@ def compile_intent_to_actions(
             + f"_punch_target = _abqai_bound\n"
             f"a.Surface(side1Faces=_punch_target, name='{target_surface}')\n",
         ))
+        _remember_geometric_surface(
+            target_surface, target_instance,
+            ((target_point[0], target_point[1], target_point[2]),),
+        )
 
         punch_interactions.append(IntentInteractionSpec(
             name="%s_Contact" % resolved.name,
@@ -1429,6 +1459,9 @@ def compile_intent_to_actions(
                     find_at_str = f"(({rp_pt[0]}, {rp_pt[1]}, {rp_pt[2]}),)"
 
                 rp_pt_str = f"({rp_pt[0]}, {rp_pt[1]}, {rp_pt[2]})"
+                _remember_geometric_surface(
+                    "%s_Surf" % m_spec.name, inst_name, pts if gr is not None else (rp_pt,),
+                )
                 coupling_code = (
                     f"a = mdb.models['{model_name}'].rootAssembly\n"
                     + _guarded_find_at_assignment(
@@ -1817,12 +1850,13 @@ def compile_intent_to_actions(
                 gr, active_scope, inst_name, label=ld.region
             )
             if ld.load_type == "pressure":
+                pressure_arg, pressure_distribution = _pressure_distribution_args(ld)
                 if named_surf:
                     load_code = (
                         f"a = mdb.models['{model_name}'].rootAssembly\n"
                         f"surf = a.surfaces['{named_surf}']\n"
                         f"mdb.models['{model_name}'].Pressure(name='{ld.name}', createStepName='{target_step}', "
-                        f"region=surf, magnitude={ld.magnitude}{field_arg})\n"
+                        f"region=surf, magnitude={ld.magnitude}{pressure_arg})\n"
                     )
                     actions.append(builders.python_action(model_name, load_code))
                     actions.append(builders.pressure_load(
@@ -1832,13 +1866,14 @@ def compile_intent_to_actions(
                         magnitude=ld.magnitude,
                         step=target_step,
                         field=ld.field,
+                        distribution=pressure_distribution or None,
                     ))
                 elif named_set:
                     load_code = (
                         f"a = mdb.models['{model_name}'].rootAssembly\n"
                         f"surf = a.Surface(side1Faces=a.sets['{named_set}'].faces, name='{ld.region}_Surf')\n"
                         f"mdb.models['{model_name}'].Pressure(name='{ld.name}', createStepName='{target_step}', "
-                        f"region=surf, magnitude={ld.magnitude}{field_arg})\n"
+                        f"region=surf, magnitude={ld.magnitude}{pressure_arg})\n"
                     )
                     actions.append(builders.python_action(model_name, load_code))
                     actions.append(builders.pressure_load(
@@ -1848,8 +1883,10 @@ def compile_intent_to_actions(
                         magnitude=ld.magnitude,
                         step=target_step,
                         field=ld.field,
+                        distribution=pressure_distribution or None,
                     ))
                 else:
+                    _remember_geometric_surface("%s_Surf" % ld.region, load_inst, pts)
                     load_code = (
                         f"a = mdb.models['{model_name}'].rootAssembly\n"
                         + _guarded_find_at_assignment(
@@ -1857,7 +1894,7 @@ def compile_intent_to_actions(
                         )
                         + f"surf = a.Surface(side1Faces=target_faces, name='{ld.region}_Surf')\n"
                         f"mdb.models['{model_name}'].Pressure(name='{ld.name}', createStepName='{target_step}', "
-                        f"region=surf, magnitude={ld.magnitude}{field_arg})\n"
+                        f"region=surf, magnitude={ld.magnitude}{pressure_arg})\n"
                     )
                     actions.append(builders.python_action(model_name, load_code))
                     actions.append(builders.pressure_load(
@@ -1867,6 +1904,7 @@ def compile_intent_to_actions(
                         magnitude=ld.magnitude,
                         step=target_step,
                         field=ld.field,
+                        distribution=pressure_distribution or None,
                     ))
             elif ld.load_type == "concentrated_force":
                 if named_set:
@@ -1887,26 +1925,37 @@ def compile_intent_to_actions(
                 else:
                     entity_type = _extract_gr_entity_type(gr)
                     if entity_type.lower() == "face":
-                        face_area = _total_force_face_area(geometry, anch)
-                        eq_pressure = abs(ld.magnitude) / face_area
+                        if ld.field:
+                            raise ValueError(
+                                "face total force '%s' cannot combine TOTAL_FORCE with field '%s'"
+                                % (ld.name, ld.field)
+                            )
+                        # A face force has always been applied into the face:
+                        # the previous pressure conversion used abs(magnitude).
+                        # Abaqus reads a negative pressure as acting out of the
+                        # surface, so passing the raw sign through would reverse
+                        # the load. Keep the historical direction, and let
+                        # direction tokens carry direction for face loads.
+                        total_force = abs(ld.magnitude)
+                        _remember_geometric_surface("%s_Surf" % ld.region, load_inst, pts)
                         load_code = (
-                            f"# Total force {ld.magnitude} N on face converted to equivalent surface pressure: {eq_pressure:.6f} MPa\n"
+                            f"# Total force {total_force} N applied with distributionType=TOTAL_FORCE\n"
                             f"a = mdb.models['{model_name}'].rootAssembly\n"
                             + _guarded_find_at_assignment(
                                 f"a.instances['{load_inst}'].faces", find_at_str, ld.region, "target_faces"
                             )
                             + f"surf = a.Surface(side1Faces=target_faces, name='{ld.region}_Surf')\n"
                             f"mdb.models['{model_name}'].Pressure(name='{ld.name}', createStepName='{target_step}', "
-                            f"region=surf, magnitude={eq_pressure}{field_arg})\n"
+                            f"region=surf, magnitude={total_force}, distributionType=TOTAL_FORCE)\n"
                         )
                         actions.append(builders.python_action(model_name, load_code))
                         actions.append(builders.pressure_load(
                             model=model_name,
                             name=ld.name,
                             region_expression=f"mdb.models['{model_name}'].rootAssembly.surfaces['{ld.region}_Surf']",
-                            magnitude=eq_pressure,
+                            magnitude=total_force,
                             step=target_step,
-                            field=ld.field,
+                            distribution="TOTAL_FORCE",
                         ))
                     else:
                         load_code = (
@@ -1936,15 +1985,20 @@ def compile_intent_to_actions(
             actions.append(builders.python_action(model_name, load_code))
         else:
             if ld.load_type == "pressure":
+                pressure_arg, pressure_distribution = _pressure_distribution_args(ld)
                 z_loc = geometry.length if "TOP" in ld.region.upper() else 0.0
                 target_faces = f"(({geometry.width/2.0}, {geometry.height/2.0}, {z_loc}),)"
+                _remember_geometric_surface(
+                    "%s_Surf" % ld.region, inst_name,
+                    ((geometry.width / 2.0, geometry.height / 2.0, z_loc),),
+                )
                 load_code = (
                     f"a = mdb.models['{model_name}'].rootAssembly\n"
                     f"f = a.instances['{inst_name}'].faces\n"
                     f"target_faces = f.findAt({target_faces})\n"
                     f"surf = a.Surface(side1Faces=target_faces, name='{ld.region}_Surf')\n"
                     f"mdb.models['{model_name}'].Pressure(name='{ld.name}', createStepName='{target_step}', "
-                    f"region=surf, magnitude={ld.magnitude}{field_arg})\n"
+                    f"region=surf, magnitude={ld.magnitude}{pressure_arg})\n"
                 )
                 actions.append(builders.python_action(model_name, load_code))
                 actions.append(builders.pressure_load(
@@ -1954,6 +2008,7 @@ def compile_intent_to_actions(
                     magnitude=ld.magnitude,
                     step=target_step,
                     field=ld.field,
+                    distribution=pressure_distribution or None,
                 ))
             elif ld.load_type == "concentrated_force":
                 load_code = (
@@ -1986,6 +2041,13 @@ def compile_intent_to_actions(
                 find_at_str = f"(({geometry.width / 2.0}, {geometry.height / 2.0}, {geometry.length / 2.0}),)"
 
             bolt_surf_name = f"{b_spec.name}_BoltSection"
+            if gr is not None:
+                _remember_geometric_surface(bolt_surf_name, inst_name, pts)
+            else:
+                _remember_geometric_surface(
+                    bolt_surf_name, inst_name,
+                    ((geometry.width / 2.0, geometry.height / 2.0, geometry.length / 2.0),),
+                )
             bolt_code = (
                 f"a = mdb.models['{model_name}'].rootAssembly\n"
                 f"f = a.instances['{inst_name}'].faces\n"
@@ -2159,6 +2221,16 @@ def compile_intent_to_actions(
             edge_seed_lines=edge_seed_lines,
             readback="required" if edge_seed_lines else "",
         )
+
+    # Virtual topology runs inside each part mesh and replaces faces held by
+    # surfaces created above. Rebind once, after the last part, under the
+    # original names so contact and loads keep their references. A later part's
+    # topology pass would undo a rebind placed at the end of an earlier script.
+    if tetrahedral_mesh and geometric_surfaces:
+        actions.append(builders.python_action(
+            model_name,
+            _post_mesh_surface_rebind_script(model_name, geometric_surfaces),
+        ))
 
     # 11b. Mesh Quality Verification Action
     #
@@ -2574,6 +2646,43 @@ def _extract_gr_target_semantic(gr: Any) -> str:
     return str(getattr(gr, "target_semantic", ""))
 
 
+def _pressure_is_total_force(ld: Any) -> bool:
+    """True when a pressure load states its magnitude as a resultant force in N.
+
+    ``distributionType=TOTAL_FORCE`` means the number is the total force over
+    the selected surface, not a pressure in MPa. Treating it as a pressure
+    scales the applied load by the face area, which is what this distinction
+    exists to prevent.
+    """
+    return str(getattr(ld, "distribution_type", "") or "").upper() == "TOTAL_FORCE"
+
+
+def _pressure_distribution_args(ld: Any) -> Tuple[str, str]:
+    """Return (script clause, builder token) for a pressure load's distribution.
+
+    An analytical field and a total force are mutually exclusive intents; one
+    of them would silently win, so the combination is refused instead of
+    compiled.
+    """
+    declared = str(getattr(ld, "distribution_type", "") or "").upper()
+    field = getattr(ld, "field", None)
+    if declared in ("", "UNIFORM"):
+        if field:
+            return ", distributionType=FIELD, field='%s'" % field, ""
+        return "", ""
+    if declared == "TOTAL_FORCE":
+        if field:
+            raise ValueError(
+                "pressure load '%s' cannot combine distributionType=TOTAL_FORCE with field '%s'"
+                % (getattr(ld, "name", "?"), field)
+            )
+        return ", distributionType=TOTAL_FORCE", "TOTAL_FORCE"
+    raise ValueError(
+        "pressure load '%s' declares unsupported distributionType '%s'"
+        % (getattr(ld, "name", "?"), declared)
+    )
+
+
 def _extract_gr_entity_type(gr: Any) -> str:
     """Helper to extract entity_type from GroundedRegion or dict."""
     if gr is None:
@@ -2667,24 +2776,39 @@ def _direction_token_vector(raw: Any) -> Optional[Tuple[float, float, float]]:
     return _DIRECTION_TOKEN_VECTORS.get(str(raw or "").strip().upper())
 
 
-def _total_force_face_area(geometry: IntentGeometrySpec, anchor: Optional[Tuple[float, float, float]]) -> float:
-    """Area (mm^2) of the face a total concentrated force is distributed over."""
-    if geometry.shape == "l_bracket":
-        thick = geometry.thickness if geometry.thickness and geometry.thickness > 0 else 10.0
-        wid = geometry.width if geometry.width and geometry.width > 0 else 20.0
-        anch_pt = anchor if anchor else (0.0, 0.0, 0.0)
-        if abs(anch_pt[1] - (geometry.height or 100.0)) < 1.0 or abs(anch_pt[0] - (geometry.length or 100.0)) < 1.0:
-            face_area = thick * wid
-        else:
-            face_area = (geometry.length or 100.0) * wid
-    elif geometry.shape == "plate_with_hole":
-        p_width = geometry.width if geometry.width > 0 else 100.0
-        p_height = geometry.height if geometry.height > 20.0 else (geometry.length if geometry.length > 20.0 else 100.0)
-        p_radius = geometry.radius if geometry.radius is not None else 10.0
-        face_area = (p_width * p_height) - (math.pi * p_radius**2)
-    else:
-        face_area = (geometry.width if geometry.width > 0 else 10.0) * (geometry.height if geometry.height > 0 else 10.0)
-    return face_area if face_area > 0 else 1.0
+def _post_mesh_surface_rebind_script(
+    model_name: str,
+    surfaces: Sequence[Tuple[str, str, Sequence[Tuple[float, float, float]]]],
+) -> str:
+    """Rebuild geometric surfaces after the last virtual-topology pass.
+
+    Abaqus keeps a contact or load attached to a surface name. Replacing the
+    surface under that name restores the attachment. An empty findAt raises;
+    it must not create a zero-face surface. The emitted body stays on the
+    Python 2 subset Abaqus/CAE still runs.
+    """
+    rows = []
+    for name, instance, points in surfaces:
+        point_text = ", ".join(
+            "(%.12g, %.12g, %.12g)" % (point[0], point[1], point[2]) for point in points
+        )
+        # The trailing comma keeps a lone point a one-element sequence of
+        # points. Without it "((x, y, z))" is just the coordinate triple, and
+        # the guard's loop walks three floats instead of one point.
+        rows.append("    (%r, %r, (%s,))," % (name, instance, point_text))
+    table = "\n".join(rows)
+    return (
+        "# Rebind geometric surfaces after the last virtual-topology pass.\n"
+        "a = mdb.models[%r].rootAssembly\n"
+        "_abqai_rebind_surfaces = (\n%s\n)\n"
+        "%s"
+        "for _abqai_name, _abqai_instance, _abqai_points in _abqai_rebind_surfaces:\n"
+        "    if _abqai_name in a.surfaces.keys():\n"
+        "        del a.surfaces[_abqai_name]\n"
+        "    _abqai_faces = _abqai_bind_region(\n"
+        "        a.instances[_abqai_instance].faces, _abqai_points, _abqai_name)\n"
+        "    a.Surface(side1Faces=_abqai_faces, name=_abqai_name)\n"
+    ) % (model_name, table, _locator_guard_prefix())
 
 
 def _fallback_region_point(
@@ -2758,13 +2882,14 @@ def _boundary_geometry_evidence(
         if ld.load_type == "pressure":
             # Pressure acts along the surface normal; the CF-token direction
             # field does not describe it and must not become an arrow.
-            pass
+            if _pressure_is_total_force(ld):
+                item["distribution"] = "TOTAL_FORCE"
         else:
             vector = _direction_token_vector(ld.direction)
             if vector is not None:
                 item["direction_vector"] = vector
         if ld.load_type == "concentrated_force" and gr is not None and str(entity_type).lower() == "face":
-            item["area"] = _total_force_face_area(geometry, anch)
+            item["distribution"] = "TOTAL_FORCE"
         load_items.append(item)
     bc_items = []
     for bc in bcs or ():

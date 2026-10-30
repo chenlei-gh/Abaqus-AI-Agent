@@ -2,12 +2,14 @@
 
 import os
 import tempfile
+from types import SimpleNamespace
 
 import pytest
 
 from abaqus_ai_agent.capability_boundary import CapabilityStatus
 from abaqus_ai_agent.contracts.material import ElasticProperties, MaterialDefinition
 from abaqus_ai_agent.geometry.assembly_scope import build_assembly_scope, screen_assembly_requirement
+from abaqus_ai_agent.grounding.feature_grounding import GroundedRegion
 from abaqus_ai_agent.geometry.cad_ingestion import classify_cad_model, ingest_cad_file
 from abaqus_ai_agent.geometry.model import (
     CadBoundingBox,
@@ -217,6 +219,110 @@ def test_step_assembly_script_keeps_every_part_contact_and_fixture(tmp_path=None
     assert "InstallationFixed" in script
     assert "parts['MustNotBeUsedAlone']" not in script
     assert plan.intent_summary["geometry"]["assembly_scope"]["part_count"] == 2
+
+
+def test_geometric_surfaces_rebind_after_the_last_virtual_topology():
+    model = _mated_handle_model()
+    scope = build_assembly_scope(
+        model,
+        requirement={"include_solid_ids": ["S_HANDLE", "S_PIN"]},
+    )
+    with tempfile.TemporaryDirectory() as tmp:
+        step_path = os.path.join(tmp, "handle.stp")
+        with open(step_path, "w", encoding="utf-8") as handle:
+            handle.write("ISO-10303-21;\nEND-ISO-10303-21;\n")
+        plan = compile_intent_to_actions(
+            model_name="HandleAsm",
+            part_name="MustNotBeUsedAlone",
+            job_name="Job-Handle",
+            geometry=IntentGeometrySpec(
+                shape="step_assembly",
+                step_file_path=step_path,
+                assembly_scope=scope,
+            ),
+            material=MaterialDefinition(
+                name="PA66",
+                unit_system="MM_N_MPA",
+                elastic=ElasticProperties(youngs_modulus=3000.0, poisson_ratio=0.35),
+            ),
+            mesh=IntentMeshSpec(
+                element_type="C3D10",
+                global_size=1.5,
+                primary_wall_thickness=1000.0,
+                primary_wall_thickness_source="MEASURED",
+            ),
+            loads=[IntentLoadSpec(
+                name="Press",
+                load_type="concentrated_force",
+                region="PressFace",
+                magnitude=180.0,
+                direction="CF3",
+            )],
+            grounded_regions={
+                "PressFace": GroundedRegion(
+                    target_semantic="PRESS_FACE",
+                    entity_type="Face",
+                    entity_ids=("F_base_top",),
+                    anchor_point=(20.0, 10.0, 30.0),
+                    anchor_points=((20.0, 10.0, 30.0),),
+                ),
+            },
+        )
+
+    script = plan.cae_script
+    last_topology = script.rfind("createVirtualTopology")
+    rebind = script.rfind("_abqai_rebind_surfaces")
+    assert last_topology > 0
+    assert rebind > last_topology
+    assert "del a.surfaces[_abqai_name]" in script
+    assert "Contact_1_Secondary" in script
+    assert "distributionType=TOTAL_FORCE" in script
+    assert "magnitude=180.0" in script
+    assert "converted to equivalent surface pressure" not in script
+    assert script.rfind("writeInput") > rebind
+
+
+def test_rebind_table_keeps_a_lone_point_a_one_element_sequence():
+    """"((x, y, z))"" is the coordinate triple, not a tuple of points.
+
+    The guard walks ``points`` and rejects an integer entry with
+    ``integer_id_or_bad_point``. A missing trailing comma makes that walk
+    start on a float, so the rebind body has to be executed, not just
+    string-matched.
+    """
+    from abaqus_ai_agent.planning.compiler import _post_mesh_surface_rebind_script
+
+    script = _post_mesh_surface_rebind_script(
+        "Asm", [("TOP_SURFACE_Surf", "Plate-1", ((25.0, 25.0, 20.0),))]
+    )
+    table_line = [line for line in script.splitlines() if "TOP_SURFACE_Surf" in line][0]
+    assert table_line.rstrip().endswith(",") and "20)" in table_line
+
+    recorded = {}
+
+    class _Repository:
+        def findAt(self, coordinates):
+            recorded["coordinates"] = coordinates
+            return (FD,)
+
+    class _Instance:
+        faces = _Repository()
+
+    class _Assembly:
+        instances = {"Plate-1": _Instance()}
+        surfaces = {"TOP_SURFACE_Surf": object()}
+
+        def Surface(self, side1Faces, name):
+            recorded["faces"] = side1Faces
+            recorded["name"] = name
+
+    FD = object()
+    namespace = {"mdb": SimpleNamespace(models={"Asm": SimpleNamespace(rootAssembly=_Assembly())})}
+    exec(script, namespace)
+
+    assert recorded["coordinates"] == ((25.0, 25.0, 20.0),)
+    assert recorded["faces"] == (FD,)
+    assert recorded["name"] == "TOP_SURFACE_Surf"
 
 
 def test_compiler_binds_multi_solid_step_and_refuses_incomplete_scope():

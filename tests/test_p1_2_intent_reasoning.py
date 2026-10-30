@@ -154,6 +154,27 @@ def test_grossly_unphysical_load_magnitude_flagged():
     assert "exceeds 100x material yield strength" in stress_check.message
 
 
+def test_total_force_pressure_is_not_multiplied_by_area():
+    """A resultant declared in N must enter the audit as N, not as MPa*area.
+
+    The area that Abaqus binds can differ from the CAD estimate, so a pressure
+    declared as TOTAL_FORCE is already the load. Scaling it again makes an
+    ordinary 180 N press-out look like a unit-scaling error.
+    """
+    intent = EngineeringIntent(
+        id="T5b", kind="linear_static", analysis_type="linear_static",
+        description="Knob press-out stated as a face resultant",
+        boundary_conditions=(("encastre", "Blade"),),
+        loads=(({"type": "pressure", "magnitude": 180.0, "region": "PressPhi10",
+                   "distribution_type": "TOTAL_FORCE"}),),
+    )
+    mat = {"name": "POM", "yield_strength": 65.0}
+    checks = audit_engineering_plausibility(intent, material=mat)
+    stress_check = next(c for c in checks if c.check_name == "stress_magnitude_plausibility")
+    assert stress_check.passed
+    assert stress_check.severity == PlausibilitySeverity.INFO
+
+
 def test_unit_system_consistency_flags_si_pascal_in_mm_model():
     intent = EngineeringIntent(
         id="T6", kind="linear_static", analysis_type="linear_static",

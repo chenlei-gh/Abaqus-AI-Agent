@@ -503,7 +503,15 @@ def _load_script(action):
     name, step = p["name"], p.get("step", "Step-1")
     if action.action_type == "pressure_load":
         amp = ", amplitude=%s" % _q(p["amplitude"]) if p.get("amplitude") else ""
-        field_arg = ", distributionType=FIELD, field=%s" % _q(p["field"]) if p.get("field") else ""
+        distribution = p.get("distribution")
+        if distribution and p.get("field"):
+            raise ValueError("pressure_load cannot combine distributionType=%s with a field" % distribution)
+        if distribution:
+            field_arg = ", distributionType=%s" % distribution
+        elif p.get("field"):
+            field_arg = ", distributionType=FIELD, field=%s" % _q(p["field"])
+        else:
+            field_arg = ""
         return "mdb.models[%s].Pressure(name=%s, createStepName=%s, region=%s, magnitude=%r%s%s)" % (_q(m), _q(name), _q(step), region, p["magnitude"], amp, field_arg)
     if action.action_type == "bolt_load":
         datum_axis = p.get("datum_axis") or p.get("datumAxis")

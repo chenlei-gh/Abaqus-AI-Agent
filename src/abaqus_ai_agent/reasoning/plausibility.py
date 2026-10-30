@@ -283,14 +283,19 @@ def _check_stress_magnitude_plausibility(
         if isinstance(ld, dict):
             mag = ld.get("magnitude")
             l_type = str(ld.get("type") or ld.get("load_type", "concentrated_force")).lower()
+            distribution = str(ld.get("distribution_type", "") or "").upper()
         else:
             mag = getattr(ld, "magnitude", None)
             l_type = str(getattr(ld, "load_type", None) or getattr(ld, "type", "concentrated_force")).lower()
+            distribution = str(getattr(ld, "distribution_type", "") or "").upper()
 
         if mag is not None:
             try:
                 val = abs(float(mag))
-                if l_type in ("pressure", "surface_traction"):
+                # A pressure declared as TOTAL_FORCE already is the resultant in
+                # N; multiplying it by the area would inflate the load by that
+                # factor and turn a normal press-out into a unit-error alarm.
+                if l_type in ("pressure", "surface_traction") and distribution != "TOTAL_FORCE":
                     # Pressure (MPa) * Area (mm2) = Force (N)
                     total_force_n += val * area_mm2
                 else:

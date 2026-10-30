@@ -1,6 +1,9 @@
 from types import SimpleNamespace
 
-from abaqus_ai_agent.adapters.abaqus.locator_validation import validate_locator
+from abaqus_ai_agent.adapters.abaqus.locator_validation import (
+    locator_guard_script,
+    validate_locator,
+)
 from abaqus_ai_agent.contracts.geometry import GeometryCandidate
 
 
@@ -95,3 +98,91 @@ def test_locator_validation_rejects_unknown_type():
     result = validate_locator(SimpleNamespace(), c)
     assert not result.valid
     assert result.reason == "unsupported_entity_type"
+
+
+class GeomSequence:
+    """Stand-in for an Abaqus FaceArray: indexable, not a tuple or list."""
+
+    def __init__(self, items):
+        self.items = tuple(items)
+
+    def __len__(self):
+        return len(self.items)
+
+    def __getitem__(self, index):
+        return self.items[index]
+
+    def __iter__(self):
+        return iter(self.items)
+
+
+def test_locator_validation_rejects_empty_geom_sequence():
+    instance = SimpleNamespace(faces=Repo([], result=GeomSequence(())))
+    result = validate_locator(instance, candidate())
+    assert not result.valid
+    assert result.reason == "findAt_empty"
+
+
+def test_locator_validation_rejects_none_findat():
+    instance = SimpleNamespace(faces=Repo([], result=None))
+    result = validate_locator(instance, candidate())
+    assert not result.valid
+    assert result.reason == "findAt_empty"
+
+
+def test_locator_validation_accepts_single_item_geom_sequence():
+    face = object()
+    instance = SimpleNamespace(faces=Repo([face], result=GeomSequence((face,))))
+    result = validate_locator(instance, candidate())
+    assert result.valid
+    assert result.reason == "validated"
+
+
+def _bind(script, repository, points, label):
+    namespace = {"repository": repository}
+    exec(script, namespace)
+    return namespace["_abqai_bind_region"](repository, points, label)
+
+
+def test_generated_guard_rejects_empty_sequence_before_surface():
+    class Faces:
+        def findAt(self, coordinates):
+            return GeomSequence(())
+
+    script = locator_guard_script()
+    assert "findAt_empty" in script
+    try:
+        region = _bind(script, Faces(), ((1.0, 2.0, 3.0),), "Contact_7_Main")
+    except RuntimeError as exc:
+        assert str(exc) == "Contact_7_Main: findAt_empty"
+    else:
+        raise AssertionError("empty GeomSequence was accepted: %r" % (region,))
+
+
+def test_generated_guard_accepts_one_face_and_rejects_two():
+    face = object()
+    other = object()
+
+    class OneFace:
+        def findAt(self, coordinates):
+            return GeomSequence((face,))
+
+    class TwoFaces:
+        def findAt(self, coordinates):
+            return GeomSequence((face, other))
+
+    class BareFace:
+        def findAt(self, coordinates):
+            return face
+
+    # Downstream calls such as a.Set(faces=...) and a.Surface(side1Faces=...)
+    # reject a bare Face, so a single hit must come back as a sequence.
+    assert tuple(_bind(locator_guard_script(), OneFace(), ((1.0, 2.0, 3.0),), "Contact_1_Main")) == (face,)
+    assert tuple(_bind(locator_guard_script(), BareFace(), ((1.0, 2.0, 3.0),), "Contact_1_Main")) == (face,)
+    try:
+        _bind(locator_guard_script(), TwoFaces(), ((1.0, 2.0, 3.0),), "Contact_1_Main")
+    except RuntimeError as exc:
+        assert str(exc) == "Contact_1_Main: findAt_not_unique"
+    else:
+        raise AssertionError("non-unique GeomSequence was accepted")
+    assert "isinstance(found, (tuple, list))" not in locator_guard_script()

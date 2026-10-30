@@ -66,8 +66,54 @@ def test_grounded_load_carries_point_direction_and_area():
     assert item["point"] == (120.0, 4.0, 6.0)
     assert item["direction_vector"] == (0.0, 1.0, 0.0)
     assert item["entity_ids"] == ("F_7",)
-    # cantilever_box face: width * height = 12 * 8 = 96 mm^2
-    assert item["area"] == pytest.approx(96.0)
+    # Host geometry width*height is not the face Abaqus binds. Do not record it
+    # as the loaded area; TOTAL_FORCE keeps the requested resultant instead.
+    assert "area" not in item
+    assert item["distribution"] == "TOTAL_FORCE"
+
+
+def test_pressure_declared_as_total_force_compiles_as_a_resultant():
+    """A pressure load stating a resultant in N must not become a MPa pressure.
+
+    ``distributionType=TOTAL_FORCE`` means the number is the whole force over
+    the surface. Compiling it without that clause divides the intent by the face
+    area, so the deck applies a different load than the one declared.
+    """
+    gr = GroundedRegion(
+        target_semantic="PRESS_FACE",
+        entity_type="Face",
+        entity_ids=("F_press",),
+        anchor_point=(6.0, 4.0, 120.0),
+    )
+    loads = [IntentLoadSpec(
+        name="Press", load_type="pressure", region="PressFace",
+        magnitude=180.0, distribution_type="TOTAL_FORCE",
+    )]
+    plan = _compile(loads, [], grounded_regions={"PressFace": gr})
+
+    script = plan.cae_script
+    assert "distributionType=TOTAL_FORCE" in script
+    assert "magnitude=180.0" in script
+    item = plan.intent_summary["boundary_geometry"]["loads"][0]
+    assert item["distribution"] == "TOTAL_FORCE"
+
+
+def test_total_force_pressure_cannot_also_declare_a_field():
+    loads = [IntentLoadSpec(
+        name="Press", load_type="pressure", region="TopSurface",
+        magnitude=180.0, distribution_type="TOTAL_FORCE", field="GradField",
+    )]
+    with pytest.raises(ValueError, match="TOTAL_FORCE"):
+        _compile(loads, [])
+
+
+def test_uniform_pressure_keeps_no_distribution_clause():
+    loads = [IntentLoadSpec(
+        name="TopPressure", load_type="pressure", region="TopSurface", magnitude=2.0,
+    )]
+    plan = _compile(loads, [])
+    assert "distributionType=TOTAL_FORCE" not in plan.cae_script
+    assert "distribution" not in plan.intent_summary["boundary_geometry"]["loads"][0]
 
 
 def test_fallback_points_match_the_compiled_findat_coordinates():

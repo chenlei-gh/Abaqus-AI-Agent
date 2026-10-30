@@ -24,6 +24,25 @@ def test_pressure_script():
     assert "100.0" in preview(action)
 
 
+def test_total_force_pressure_does_not_emit_a_field():
+    action = pressure_load(
+        "Model-1", "P", "a.surfaces['LOAD']", 180.0, distribution="TOTAL_FORCE",
+    )
+    code = preview(action)
+    assert "distributionType=TOTAL_FORCE" in code
+    assert "magnitude=180.0" in code
+    assert "distributionType=FIELD" not in code
+
+
+def test_total_force_and_field_are_rejected():
+    action = pressure_load(
+        "Model-1", "P", "a.surfaces['LOAD']", 180.0,
+        distribution="TOTAL_FORCE", field="GradField",
+    )
+    with pytest.raises(ValueError, match="cannot combine"):
+        preview(action)
+
+
 def test_raw_python_is_unbounded_escape_hatch():
     action = python_action("Model-1", "print(list(mdb.models.keys()))")
     script = preview(action)
